@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: RubyAnita2018
+      POSTGRES_DB: cricksy_scorer
+    ports:
+      - "5555:5432"   # host:container
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cricksy_scorer"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

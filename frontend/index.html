@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Cricksy Scorer – live cricket scoring with real-time scorecards."
+    />
+    <meta name="theme-color" content="#2c3e50" />
+    <title>Cricksy Scorer</title>
+    <style>
+      /* keep it simple: let Vue render everything */
+      html, body, #app { height: 100%; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #0f1115;
+      }
+      /* tiny non-blocking fallback so you don't see a blank page for a split second */
+      #app::before {
+        content: "Loading Cricksy…";
+        display: block;
+        color: #aab2c0;
+        text-align: center;
+        padding: 2rem 0;
+      }
+      #app.loaded::before { display: none; }
+    </style>
+  </head>
+  <body>
+    <!-- Vue mount point (leave empty; Vue will render the app) -->
+    <div id="app"></div>
+
+    <!-- Vite entry -->
+    <script type="module" src="/src/main.ts"></script>
+    <script>
+      // When the bundle is loaded, mark #app as 'loaded' to remove the tiny fallback
+      window.addEventListener('DOMContentLoaded', () => {
+        const el = document.getElementById('app');
+        if (el) el.classList.add('loaded');
+      });
+    </script>
+  </body>
+</html>

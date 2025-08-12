@@ -1,0 +1,45 @@
+# FastAPI and ASGI server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+
+# Database migrations
+alembic==1.12.1
+
+# Data validation and serialization
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# HTTP and form handling
+python-multipart==0.0.6
+httpx==0.25.2
+
+# CORS middleware (handled by FastAPI/Starlette)
+# No extra package needed
+
+# Environment variables
+python-dotenv==1.0.0
+
+# Date and time handling
+python-dateutil==2.8.2
+
+# JSON handling
+orjson==3.9.10
+
+# Logging
+structlog==23.2.0
+
+# Development and testing (optional but recommended)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+
+# Security
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0

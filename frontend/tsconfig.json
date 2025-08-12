@@ -1,0 +1,25 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.app.json" }
+  ],
+  "compilerOptions": {
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "exactOptionalPropertyTypes": true,
+
+    /* ---- Aliases to unify types ---- */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@/types": ["src/types/index.ts"],
+      "@/types/live": ["src/types/index.ts"]
+    }
+  }
+}
