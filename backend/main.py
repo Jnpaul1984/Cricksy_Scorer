@@ -17,7 +17,8 @@ from typing import (
     Union,
     cast,
 )
-
+from pathlib import Path
+from starlette.staticfiles import StaticFiles
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -181,8 +182,15 @@ _fastapi.add_middleware(
 )
 
 # --- PR 7: Static files for logos/sponsors ---
-STATIC_DIR = os.getenv("STATIC_DIR", "static")
-_fastapi.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# Resolve to backend/static
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = Path(os.getenv("STATIC_DIR", BASE_DIR / "static")).resolve()
+
+# Create if missing (avoids RuntimeError)
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
+_fastapi.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 
 # ================================================================
 # DB dependency (async)

@@ -1,160 +1,154 @@
-# 🏏 Cricksy Scorer UI
+🏏 Cricksy Scorer UI
+Cricksy Scorer is a professional cricket scoring frontend built with Vue.js 3 and TypeScript, designed for schools, clubs, and custom games. It provides real-time scoring, flexible match setups, and engaging viewer experiences, all optimized for tablets and mobile devices.
 
-Professional cricket scoring application frontend built with Vue.js 3, designed specifically for school cricket matches.
+Key Features (MVP – PR14)
+Scoring & Match Control
+Multi-Format Support
 
-## Features
+Limited-overs & multi-day matches.
 
-- **Real-time Scoring**: Score deliveries instantly with intuitive controls
-- **Detailed Statistics**: Comprehensive batting and bowling scorecards
-- **School-Focused**: Designed for 25-over school cricket matches
-- **Mobile Friendly**: Works perfectly on tablets and mobile devices
-- **Professional Design**: Clean, modern interface with accessibility features
+User-defined overs/days (no hardcoding of formats).
 
-## Technology Stack
+Mid-match overs reduction for weather delays (Duckworth–Lewis support planned).
 
-- **Vue.js 3** with Composition API
-- **TypeScript** for type safety
-- **Vite** for fast development and optimized builds
-- **Vue Router** for client-side routing
-- **Pinia** for state management
-- **Pico CSS** for base styling
-- **ESLint & Prettier** for code quality
+Flexible Dismissals
 
-## Project Structure
+All cricket dismissal types supported (incl. rare ones like hit wicket, timed out, obstructing field).
 
-```
+Mid-over bowler changes & “Retired Hurt” handling.
+
+Strike & Bowler Logic
+
+Automatic striker/non-striker rotation based on runs/extras.
+
+Mid-over bowler replacement without breaking stats.
+
+Offline-First Scoring
+Scores queue when offline and sync automatically on reconnection.
+
+“Pending” banner to alert scorers when disconnected.
+
+Role-Based Access
+Scorer — Full match control.
+
+Commentary — Live commentary feed without affecting scoring.
+
+Analytics — View live dot ball %, boundary counts, wickets.
+
+Viewer — Watch live score updates in <1s via WebSockets.
+
+UI Enhancements
+Sponsor Slots — Upload PNG/JPG, auto-resize with aspect ratio preservation, fallback placeholders if missing.
+
+Event Animations — Automatic banners for boundaries, wickets, and ducks.
+
+Undo Last Ball — Fully restores match state and strike.
+
+Player Role Badges — Captain and wicketkeeper shown in team lists.
+
+Mobile-Friendly Layout Toggle — Condensed view for tablet/phone scorers.
+
+Technology Stack
+Vue.js 3 (Composition API) + TypeScript
+
+Vite for fast development
+
+Vue Router for navigation
+
+Pinia for state management
+
+Pico CSS for lightweight styling
+
+Socket.IO Client for real-time updates
+
+ESLint & Prettier for code quality
+
+Project Structure
+csharp
+Copy
+Edit
 cricksy-scorer-ui/
 ├── public/                 # Static assets
 ├── src/
-│   ├── components/         # Vue components
-│   │   ├── common/        # Shared components
-│   │   ├── game/          # Game-related components
-│   │   └── scoring/       # Scoring components
-│   ├── views/             # Page components
-│   ├── stores/            # Pinia stores
-│   ├── types/             # TypeScript definitions
-│   ├── utils/             # Utility functions
-│   ├── assets/            # Styles and assets
-│   ├── router/            # Vue Router configuration
-│   ├── App.vue            # Root component
-│   └── main.ts            # Application entry point
+│   ├── components/
+│   │   ├── common/         # Shared UI components
+│   │   ├── game/           # Game-specific UI
+│   │   └── scoring/        # Scoring panel & tools
+│   ├── views/              # Full-page views
+│   ├── stores/             # Pinia state stores
+│   ├── types/              # TypeScript type defs
+│   ├── utils/              # Utility functions
+│   ├── assets/             # CSS, images
+│   ├── router/             # Vue Router config
+│   ├── App.vue             # Root component
+│   └── main.ts             # Entry point
 ├── package.json
-├── vite.config.ts         # Vite configuration
-└── tsconfig.json          # TypeScript configuration
-```
+├── vite.config.ts
+└── tsconfig.json
+Development Setup
+Prerequisites
 
-## Development Setup
+Node.js 18+
 
-### Prerequisites
+npm or yarn
 
-- Node.js 18+ 
-- npm or yarn
-- Backend API running on http://localhost:8000
+Backend API running on <http://localhost:8000>
 
-### Installation
+Installation
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd cricksy-scorer-ui
-   ```
+bash
+Copy
+Edit
+git clone <repository-url>
+cd cricksy-scorer-ui
+npm install
+npm run dev
+Navigate to <http://localhost:3000>.
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+Scripts
 
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
+npm run dev — Start dev server with HMR
 
-4. Open your browser and navigate to `http://localhost:3000`
+npm run build — Production build
 
-### Available Scripts
+npm run preview — Preview production build locally
 
-- `npm run dev` - Start development server with hot reload
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build locally
-- `npm run type-check` - Run TypeScript type checking
-- `npm run lint` - Run ESLint
-- `npm run format` - Format code with Prettier
+npm run type-check — TypeScript checks
 
-## API Integration
+npm run lint — ESLint
 
-The frontend is configured to proxy API requests to the FastAPI backend:
+npm run format — Prettier
 
-- Development: `http://localhost:8000`
-- API calls are made to `/api/*` and automatically proxied
+API Integration
+Development: Proxied to FastAPI backend at <http://localhost:8000>
 
-## Configuration
+API calls to /api/* handled via Vite proxy
 
-### Environment Variables
+Testing Readiness (Post-PR14)
+We have locked the codebase and prepared for structured MVP testing:
 
-Create a `.env` file for environment-specific configuration:
+Test Execution Sheet — All core features, role-based flows, and edge cases documented.
 
-```env
-VITE_API_BASE_URL=http://localhost:8000
-VITE_APP_TITLE=Cricksy Scorer
-```
+Bug Tracker — Severity/priority triage ready for investor demo stabilization.
 
-### Vite Configuration
+Demo Dataset — Pre-seeded matches, players, and sponsor logos for realistic presentation.
 
-The `vite.config.ts` file includes:
+Browser Support
+Chrome/Chromium 88+
 
-- Path aliases (`@/` for `src/`)
-- API proxy configuration
-- Build optimizations
-- Development server settings
+Firefox 85+
 
-## Code Style
+Safari 14+
 
-This project uses:
+Edge 88+
 
-- **ESLint** for code linting
-- **Prettier** for code formatting
-- **TypeScript** strict mode
-- **Vue 3 Composition API** patterns
+Next Steps After MVP
+Duckworth–Lewis calculation integration.
 
-## Browser Support
+Advanced analytics dashboards.
 
-- Chrome/Chromium 88+
-- Firefox 85+
-- Safari 14+
-- Edge 88+
+Custom animations for special match moments.
 
-## Contributing
+Dockerfile for containerized deployment.
 
-1. Follow the existing code style
-2. Write TypeScript with strict typing
-3. Use Vue 3 Composition API
-4. Add proper error handling
-5. Include responsive design
-6. Test on multiple devices
-
-## Deployment
-
-### Production Build
-
-```bash
-npm run build
-```
-
-The built files will be in the `dist/` directory.
-
-### Docker Deployment
-
-A Dockerfile will be provided in future versions for containerized deployment.
-
-## License
-
-This project is licensed under the MIT License.
-
-## Support
-
-For support and questions, please contact the development team.
-
----
-
-Built with ❤️ for school cricket programs
-
+Built with ❤️ for cricket scorers, schools, and clubs.

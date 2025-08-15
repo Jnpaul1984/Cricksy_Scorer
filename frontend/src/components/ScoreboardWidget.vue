@@ -78,6 +78,15 @@ import EventOverlay from '@/components/EventOverlay.vue'
 import AnalyticsStrip from '@/components/AnalyticsStrip.vue'
 import { useHighlights, type Snapshot as HiSnapshot } from '@/composables/useHighlights'
 
+// ---------- Cricksy placeholders (served by FastAPI /static) ----------  // NEW
+const PLACEHOLDER_SPONSORS: Sponsor[] = [                                  // NEW
+  { id: 'cricksy-1', name: 'Cricksy Full',     logoUrl: '/static/sponsors/cricksy_original.png',        clickUrl: '#' }, // NEW
+  { id: 'cricksy-2', name: 'Cricksy Clear',    logoUrl: '/static/sponsors/cricksy_transparent.png',     clickUrl: '#' }, // NEW
+  { id: 'cricksy-3', name: 'Cricksy Circle',   logoUrl: '/static/sponsors/cricksy_circle_fixed.png',    clickUrl: '#' }, // NEW
+  { id: 'cricksy-4', name: 'Cricksy Mono W',   logoUrl: '/static/sponsors/cricksy_monochrome_white.png',clickUrl: '#' }, // NEW
+  { id: 'cricksy-5', name: 'Cricksy Mono B',   logoUrl: '/static/sponsors/cricksy_monochrome_black.png',clickUrl: '#' }, // NEW
+]                                                                                                       // NEW
+
 // ---------- Props ----------
 const props = withDefaults(defineProps<{
   // Scoreboard basics
@@ -92,7 +101,8 @@ const props = withDefaults(defineProps<{
   sponsorsUrl?: string
   sponsorRotateMs?: number
   sponsorClickable?: boolean
-
+  // NEW ↓
+  usePlaceholderSponsors?: boolean
   // Animations
   enableAnimations?: boolean
   animationDurationMs?: number
@@ -106,6 +116,8 @@ const props = withDefaults(defineProps<{
   sponsorsUrl: '',
   sponsorRotateMs: 8000,
   sponsorClickable: false,
+   // NEW ↓
+  usePlaceholderSponsors: true,
   enableAnimations: true,
   animationDurationMs: 1800,
 })
@@ -136,8 +148,12 @@ const snapshot = ref<ApiSnapshot | null>(null)
 // Sponsors data when fetched from URL
 const sponsorsFromUrl = ref<Sponsor[]>([])
 const resolvedSponsors = computed<Sponsor[]>(() => {
-  return (props.sponsors && props.sponsors.length) ? props.sponsors : sponsorsFromUrl.value
+  // Priority: explicit props.sponsors → fetched → Cricksy placeholders (if enabled)
+  if (props.sponsors && props.sponsors.length) return props.sponsors
+  if (sponsorsFromUrl.value.length) return sponsorsFromUrl.value
+  return props.usePlaceholderSponsors ? PLACEHOLDER_SPONSORS : []
 })
+
 
 // ---------- Highlights state ----------
 const prevSnap = ref<HiSnapshot | null>(null)
