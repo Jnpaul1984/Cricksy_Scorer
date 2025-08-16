@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /* --- Vue & Router --- */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useRoute, useRouter, RouterLink } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 /* --- Stores --- */
 import { useGameStore } from '@/stores/gameStore'
@@ -13,6 +13,55 @@ import BattingCard from '@/components/BattingCard.vue'
 import BowlingCard from '@/components/BowlingCard.vue'
 import CompactPad from '@/components/CompactPad.vue'
 import PresenceBar from '@/components/PresenceBar.vue'
+
+// ---- Minimal domain types used locally (keep it small) ----
+type Player = { id: string; name: string }
+
+type Team = {
+  name: string
+  players: Player[]
+  playing_xi?: string[]
+}
+
+
+
+type BatCardEntry = {
+  player_id: string
+  player_name: string
+  runs: number
+  balls_faced: number
+  fours: number
+  sixes: number
+  strike_rate: number
+  how_out?: string
+  is_out: boolean
+}
+
+type BowlCardEntry = {
+  player_id: string
+  player_name: string
+  overs_bowled: number
+  maidens: number
+  runs_conceded: number
+  wickets_taken: number
+  economy: number
+}
+
+
+type DeliveryRowForTable = {
+  over_number: number
+  ball_number: number
+  runs_scored: number
+  striker_id: string          // <-- required
+  non_striker_id: string      // <-- required
+  bowler_id: string           // <-- required
+  extra?: 'wd' | 'nb' | 'b' | 'lb'
+  is_wicket?: boolean
+  commentary?: string
+  dismissed_player_id?: string | null
+  at_utc?: string
+}
+
 
 /* ========== ROUTE + STORE ========== */
 const route = useRoute()
@@ -45,10 +94,26 @@ function loadXIForGame(id: string) {
   xiLoaded.value = true
 }
 
+
 /* ========== SELECTION STATE ========== */
 const selectedStriker = ref<string>('')
 const selectedNonStriker = ref<string>('')
 const selectedBowler = ref<string>('')
+
+// NEW: keep the store's selection in sync with the view
+watch([selectedStriker, selectedNonStriker, selectedBowler], ([s, n, b]) => {
+  // If your store exposes actions:
+  if (typeof (gameStore as any).setSelectedStriker === 'function') {
+    gameStore.setSelectedStriker(s || null)
+    gameStore.setSelectedNonStriker(n || null)
+    gameStore.setSelectedBowler(b || null)
+  } else {
+    // Fallback if you store these directly (uncomment if needed)
+    // gameStore.uiState.selectedStrikerId = s || null
+    // gameStore.uiState.selectedNonStrikerId = n || null
+    // gameStore.uiState.selectedBowlerId  = b || null
+  }
+})
 
 /* ========== CONNECTION / OFFLINE QUEUE ========== */
 const liveReady = computed(() => gameStore.connectionStatus === 'connected')
@@ -58,63 +123,163 @@ const pendingForThisGame = computed(() =>
 const pendingCount = computed(() => pendingForThisGame.value.length)
 
 /* ========== ROSTERS (FILTERED BY XI) ========== */
-const battingPlayers = computed(() => {
+const battingPlayers = computed<Player[]>(() => {
   const g = gameStore.currentGame
   if (!g) return []
-  const isA = g.batting_team_name === g.team_a.name
-  const team = isA ? g.team_a : g.team_b
-  const set = isA ? xiA.value : xiB.value
-  const list = team.players || []
-  return set ? list.filter(p => set.has(p.id)) : list
-})
-const bowlingPlayers = computed(() => {
-  const g = gameStore.currentGame
-  if (!g) return []
-  const isA = g.bowling_team_name === g.team_a.name
-  const team = isA ? g.team_a : g.team_b
-  const set = isA ? xiA.value : xiB.value
-  const list = team.players || []
-  return set ? list.filter(p => set.has(p.id)) : list
+
+  const battingIsA = g.batting_team_name === g.team_a?.name
+  const team = (battingIsA ? g.team_a : g.team_b) as unknown as Team | undefined
+  const all = team?.players ?? []
+
+  // While XI is loading, show everyone so selects aren't disabled
+  if (!xiLoaded.value) return all
+
+  // Prefer locally persisted XI, then server-provided playing_xi, then everyone
+  const xiSet =
+    (battingIsA ? xiA.value : xiB.value) ??
+    (team?.playing_xi && team.playing_xi.length
+      ? new Set(team.playing_xi)
+      : null)
+
+  return xiSet ? all.filter((p) => xiSet.has(p.id)) : all
 })
 
+const bowlingPlayers = computed<Player[]>(() => {
+  const g = gameStore.currentGame
+  if (!g) return []
+
+  const bowlingIsA = g.bowling_team_name === g.team_a?.name
+  const team = (bowlingIsA ? g.team_a : g.team_b) as unknown as Team | undefined
+  const all = team?.players ?? []
+
+  if (!xiLoaded.value) return all
+
+  const xiSet =
+    (bowlingIsA ? xiA.value : xiB.value) ??
+    (team?.playing_xi && team.playing_xi.length
+      ? new Set(team.playing_xi)
+      : null)
+
+  return xiSet ? all.filter((p) => xiSet.has(p.id)) : all
+})
+
+
 /* Can score? */
+// CHANGE: also prevent same batter in both roles
 const canScore = computed(() =>
-  Boolean(
-    selectedStriker.value &&
-      selectedNonStriker.value &&
-      selectedBowler.value &&
-      selectedStriker.value !== selectedNonStriker.value &&
-      !gameStore.isLoading
-  )
+  !!selectedStriker.value &&
+  !!selectedNonStriker.value &&
+  selectedStriker.value !== selectedNonStriker.value &&
+  !!selectedBowler.value
 )
+watch([selectedStriker, selectedNonStriker, selectedBowler, canScore], 
+  ([s,n,b,c]) => {
+    console.debug('[ScoringView] selections', { striker:s, nonStriker:n, bowler:b, canScore:c });
+  }
+)
+
+
+
 
 /* Names for status text */
 const selectedStrikerName = computed(
-  () => battingPlayers.value.find(p => p.id === selectedStriker.value)?.name || ''
+  () => battingPlayers.value.find((p: Player) => p.id === selectedStriker.value)?.name || ''
 )
 const selectedBowlerName = computed(
-  () => bowlingPlayers.value.find(p => p.id === selectedBowler.value)?.name || ''
+  () => bowlingPlayers.value.find((p: Player) => p.id === selectedBowler.value)?.name || ''
 )
 
-/* Scorecards + deliveries */
-const battingEntries = computed(() =>
-  gameStore.currentGame ? Object.values(gameStore.currentGame.batting_scorecard) : []
+
+
+
+
+const battingEntries = computed<BatCardEntry[]>(() =>
+  gameStore.battingRows.map((r: any) => ({
+    player_id: r.id,
+    player_name: r.player_name ?? r.name,              // <-- use player_name
+    runs: r.runs ?? 0,
+    balls_faced: r.balls_faced ?? r.balls ?? 0,
+    fours: r.fours ?? 0,
+    sixes: r.sixes ?? 0,
+    strike_rate: r.strike_rate ?? r.sr ?? 0,
+    how_out: r.how_out ?? r.howOut,
+    is_out: r.is_out ?? r.isOut ?? false,
+  }))
 )
-const bowlingEntries = computed(() =>
-  gameStore.currentGame ? Object.values(gameStore.currentGame.bowling_scorecard) : []
+
+const bowlingEntries = computed<BowlCardEntry[]>(() =>
+  gameStore.bowlingRows.map((r: any) => ({
+    player_id: r.id,
+    player_name: r.player_name ?? r.name,
+    // Coerce to a number. If your source is "10.3" (overs.balls notation),
+    // parseFloat keeps the same display semantics the card likely expects.
+    overs_bowled: typeof r.overs === 'number' ? r.overs : (parseFloat(r.overs) || 0),
+    maidens: Number(r.maidens) || 0,
+    runs_conceded: Number(r.runs_conceded ?? r.runs) || 0,
+    wickets_taken: Number(r.wickets ?? r.wkts) || 0,
+    economy: Number(r.economy ?? r.econ) || 0,
+  }))
 )
-const deliveries = computed(() => gameStore.currentGame?.deliveries || [])
+
+
+
+
+
+const deliveries = computed<DeliveryRowForTable[]>(() => {
+  const list = gameStore.currentGame?.deliveries ?? []
+
+  const parseOverBall = (overLike: unknown, ballLike: unknown) => {
+    if (typeof ballLike === 'number') {
+      return {
+        over: Math.max(0, Math.floor(Number(overLike) || 0)),
+        ball: ballLike,
+      }
+    }
+    if (typeof overLike === 'string') {
+      const [o, b] = overLike.split('.')
+      return { over: Number(o) || 0, ball: Number(b) || 0 }
+    }
+    if (typeof overLike === 'number') {
+      const over = Math.floor(overLike)
+      const ball = Math.max(0, Math.round((overLike - over) * 10))
+      return { over, ball }
+    }
+    return { over: 0, ball: 0 }
+  }
+
+  return list.map((d: any) => {
+    const { over, ball } = parseOverBall(d.over_number ?? d.over, d.ball_number ?? d.ball)
+    return {
+      over_number: over,
+      ball_number: ball,
+      runs_scored: Number(d.runs_scored ?? d.runs) || 0,
+      striker_id: String(d.striker_id ?? ''),          // <-- force string
+      non_striker_id: String(d.non_striker_id ?? ''),  // <-- force string
+      bowler_id: String(d.bowler_id ?? ''),            // <-- force string
+      extra: d.extra,
+      is_wicket: !!d.is_wicket,
+      commentary: d.commentary,
+      dismissed_player_id: d.dismissed_player_id ?? null,
+      at_utc: d.at_utc,
+    }
+  })
+})
+
+
+
 
 /* Name lookup for DeliveryTable */
 function playerNameById(id?: string | null): string {
-  if (!id || !gameStore.currentGame) return ''
-  const { team_a, team_b } = gameStore.currentGame
+  if (!id) return ''
+  const g = gameStore.currentGame
+  if (!g) return ''
   return (
-    team_a.players.find(p => p.id === id)?.name ||
-    team_b.players.find(p => p.id === id)?.name ||
+    g.team_a.players.find(p => p.id === id)?.name ??
+    g.team_b.players.find(p => p.id === id)?.name ??
     ''
   )
 }
+
 
 /* Tiny toast */
 type ToastType = 'success' | 'error' | 'info'
@@ -149,7 +314,7 @@ const logo = ref<string>('') // e.g. '/static/league-logo.svg'
 const height = ref<number>(180)
 
 /** API base for sponsorsUrl (absolute URL recommended for cross-origin embeds) */
-const apiBase = (import.meta as any).env?.VITE_API_BASE || window.location.origin
+const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || window.location.origin
 const sponsorsUrl = computed(() =>
   gameId.value ? `${apiBase}/games/${encodeURIComponent(gameId.value)}/sponsors` : ''
 )
@@ -214,7 +379,6 @@ onMounted(async () => {
   const id = gameId.value
   if (!id) return router.replace('/')
 
-  // load game + live, then XI
   try {
     await gameStore.loadGame(id)
     gameStore.initLive(id)
@@ -225,21 +389,21 @@ onMounted(async () => {
 
   loadXIForGame(id)
 
-  // initial selections (respect XI filtering)
-  const g = gameStore.currentGame
-  if (g) {
-    const preStriker = g.current_striker_id || ''
-    const preNon = g.current_non_striker_id || ''
-    if (preStriker && battingPlayers.value.some(p => p.id === preStriker)) {
-      selectedStriker.value = preStriker
-    }
-    if (preNon && battingPlayers.value.some(p => p.id === preNon)) {
-      selectedNonStriker.value = preNon
-    }
+  // Push initial selections into the store once (if you use actions)
+  if (typeof (gameStore as any).setSelectedStriker === 'function') {
+    gameStore.setSelectedStriker(selectedStriker.value || null)
+    gameStore.setSelectedNonStriker(selectedNonStriker.value || null)
+    gameStore.setSelectedBowler(selectedBowler.value || null)
+  } else {
+    // Fallback if you set UI state directly:
+    // gameStore.uiState.selectedStrikerId = selectedStriker.value || null
+    // gameStore.uiState.selectedNonStrikerId = selectedNonStriker.value || null
+    // gameStore.uiState.selectedBowlerId = selectedBowler.value || null
   }
-
-  // If you keep theme/title/Logo in a store or query, hydrate here.
 })
+
+
+
 
 onUnmounted(() => {
   if (toastTimer) window.clearTimeout(toastTimer)
@@ -248,24 +412,22 @@ onUnmounted(() => {
 
 /* Keep selections valid when innings flips or XI loads */
 watch([battingPlayers, bowlingPlayers, xiLoaded], () => {
-  if (selectedStriker.value && !battingPlayers.value.find(p => p.id === selectedStriker.value)) {
+  if (selectedStriker.value && !battingPlayers.value.find((p: Player) => p.id === selectedStriker.value)) {
     selectedStriker.value = ''
   }
-  if (selectedNonStriker.value && !battingPlayers.value.find(p => p.id === selectedNonStriker.value)) {
+  if (selectedNonStriker.value && !battingPlayers.value.find((p: Player) => p.id === selectedNonStriker.value)) {
     selectedNonStriker.value = ''
   }
-  if (selectedBowler.value && !bowlingPlayers.value.find(p => p.id === selectedBowler.value)) {
+  if (selectedBowler.value && !bowlingPlayers.value.find((p: Player) => p.id === selectedBowler.value)) {
     selectedBowler.value = ''
   }
 })
 
-/* React to team swap */
 watch(
-  () =>
-    gameStore.currentGame && [
-      gameStore.currentGame?.batting_team_name,
-      gameStore.currentGame?.bowling_team_name
-    ],
+  () => [
+    gameStore.currentGame?.batting_team_name,
+    gameStore.currentGame?.bowling_team_name
+  ],
   () => {
     if (selectedStriker.value && !battingPlayers.value.find(p => p.id === selectedStriker.value)) {
       selectedStriker.value = ''
@@ -278,6 +440,8 @@ watch(
     }
   }
 )
+
+
 
 /* Reconnect + flush controls */
 function reconnect() {
@@ -310,24 +474,168 @@ function flushNow() {
 
       <div class="right">
         <!-- Example quick settings (optional) -->
-        <select v-model="theme" class="sel" aria-label="Theme">
+        <select v-model="theme" class="sel" aria-label="Theme" name="theme">  <!-- ADD name -->
           <option value="auto">Theme: Auto</option>
           <option value="dark">Theme: Dark</option>
           <option value="light">Theme: Light</option>
         </select>
-        <input v-model="title" class="inp" type="text" placeholder="Embed title (optional)" aria-label="Embed title" />
-        <input v-model="logo" class="inp" type="url" placeholder="Logo URL (optional)" aria-label="Logo URL" />
+
+        <input v-model="title"
+              class="inp"
+              type="text"
+              name="embedTitle"       
+              placeholder="Embed title (optional)"
+              aria-label="Embed title" />
+
+        <input v-model="logo"
+              class="inp"
+              type="url"
+              name="logoUrl"           
+              placeholder="Logo URL (optional)"
+              aria-label="Logo URL" />
+
         <button class="btn btn-primary" @click="shareOpen = true">Share</button>
       </div>
     </header>
 
     <!-- Your scoring UI goes here -->
     <main class="content">
-      <!-- Put your existing scoring widgets/panels here -->
-      <div class="placeholder">
-        <p>👋 Your scoring UI lives here. The Share button above will generate an iframe embed for the current game.</p>
-      </div>
+      <!-- Connection/queue indicator -->
+      <PresenceBar
+        class="mb-3"
+        :game-id="gameId"
+        :status="gameStore.connectionStatus"
+        :pending="pendingCount"
+      />
+
+      <ScoringPanel
+        :game-id="gameId"
+        :can-score="canScore"
+        :striker-id="selectedStriker"
+        :non-striker-id="selectedNonStriker"
+        :bowler-id="selectedBowler"
+        :batting-players="battingPlayers"
+        @swap="swapBatsmen"
+        @scored="onScored"
+        @error="onError"
+      />
+      <!-- DEV: remove me once working -->
+      <pre class="dev-debug">
+      canScore: {{ canScore }}
+      striker: {{ selectedStriker }}
+      nonStriker: {{ selectedNonStriker }}
+      bowler: {{ selectedBowler }}
+      battingPlayers: {{ battingPlayers.length }} | bowlingPlayers: {{ bowlingPlayers.length }}
+      </pre>
+
+
+      <!-- Player selectors -->
+      <section class="selectors card">
+        <div class="row">
+          <!-- Striker -->
+          <div class="col">
+            <label class="lbl" for="sel-striker">Striker</label>
+            <select
+              id="sel-striker"
+              name="striker"
+              class="sel"
+              v-model="selectedStriker"
+              :disabled="battingPlayers.length === 0"
+              title="Choose striker"
+              aria-describedby="sel-striker-hint"
+            >
+              <option disabled value="">Choose striker</option>
+              <option v-for="p in battingPlayers" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+            <small id="sel-striker-hint" class="hint">Pick a batter on strike</small>
+          </div>
+
+          <!-- Non‑striker -->
+          <div class="col">
+            <label class="lbl" for="sel-nonstriker">Non‑striker</label>
+            <select
+              id="sel-nonstriker"
+              name="nonStriker"
+              class="sel"
+              v-model="selectedNonStriker"
+              :disabled="battingPlayers.length === 0"
+              title="Choose non-striker"
+              aria-describedby="sel-nonstriker-hint"
+            >
+              <option disabled value="">Choose non‑striker</option>
+              <option v-for="p in battingPlayers" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+            <small id="sel-nonstriker-hint" class="hint">Pick the other batter</small>
+          </div>
+
+          <!-- Bowler -->
+          <div class="col">
+            <label class="lbl" for="sel-bowler">Bowler</label>
+            <select
+              id="sel-bowler"
+              name="bowler" 
+              class="sel"
+              v-model="selectedBowler"
+              :disabled="bowlingPlayers.length === 0"
+              title="Choose bowler"
+              aria-describedby="sel-bowler-hint"
+            >
+              <option disabled value="">Choose bowler</option>
+              <option v-for="p in bowlingPlayers" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+            <small id="sel-bowler-hint" class="hint">Pick current bowler</small>
+          </div>
+
+          <div class="col align-end">
+            <button class="btn" :disabled="!canScore" @click="swapBatsmen" aria-label="Swap striker and non‑striker">
+              Swap Batters
+            </button>
+            <!-- DEBUG: live selection state -->
+            <div class="debug" style="margin-top:8px;font-size:12px;color:#6b7280">
+              canScore: <b>{{ String(canScore) }}</b>
+              &nbsp;|&nbsp; S: {{ selectedStriker || '∅' }}
+              &nbsp;|&nbsp; NS: {{ selectedNonStriker || '∅' }}
+              &nbsp;|&nbsp; B: {{ selectedBowler || '∅' }}
+              &nbsp;|&nbsp; battingPlayers: {{ battingPlayers.length }}
+              &nbsp;|&nbsp; bowlingPlayers: {{ bowlingPlayers.length }}
+            </div>          
+          </div>
+        </div>
+      </section>
+
+
+      <!-- Scoring + Scorecards -->
+      <section class="grid2">
+        <div class="left">
+          <!-- Your compact scoring pad -->
+          <CompactPad
+            :game-id="gameId"                  
+            :striker-id="selectedStriker"
+            :non-striker-id="selectedNonStriker"
+            :bowler-id="selectedBowler"
+            :can-score="canScore"              
+            @scored="onScored"                 
+            @error="onError"
+          />
+
+
+          <!-- Deliveries (over by over) -->
+          <DeliveryTable
+            :deliveries="deliveries"
+            :player-name-by-id="playerNameById"
+            class="mt-3"
+          />
+        </div>
+
+        <div class="right">
+          <!-- Batting & Bowling summary cards -->
+          <BattingCard :entries="battingEntries" class="mb-3" />
+          <BowlingCard :entries="bowlingEntries" />
+
+        </div>
+      </section>
     </main>
+
 
     <!-- Share & Monetize Modal -->
     <div v-if="shareOpen" class="backdrop" @click.self="closeShare" role="dialog" aria-modal="true" aria-labelledby="share-title">
@@ -403,6 +711,15 @@ function flushNow() {
   border-radius: 12px;
   color: #6b7280;
   background: rgba(0,0,0,.02);
+}
+.dev-debug {
+  background: #111827;
+  color: #e5e7eb;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  margin: 8px 0;
 }
 
 /* Controls */

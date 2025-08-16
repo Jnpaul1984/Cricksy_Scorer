@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineProps, defineEmits } from 'vue'
+import { ref, computed } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
 import type { ScoreDeliveryRequest } from '@/types'
 
@@ -20,8 +20,33 @@ const emit = defineEmits<{
 
 const gameStore = useGameStore()
 
+/** Local UI state */
+const submitting = ref(false)
+const isDisabled = computed(() => submitting.value || !props.canScore)
+
+/** Main action */
 async function score(runs: number) {
-  if (!props.canScore) return
+  console.log('[RunButtons] CLICK', { runs });
+
+  if (!gameStore?.submitDelivery) {
+    console.error('[RunButtons] gameStore.submitDelivery is undefined!');
+  }
+
+  if (!props.canScore) {
+    console.warn('[RunButtons] blocked: canScore=false', {
+      strikerId: props.strikerId,
+      nonStrikerId: props.nonStrikerId,
+      bowlerId: props.bowlerId,
+    });
+    return;
+  }
+
+  if (submitting.value) {
+    console.warn('[RunButtons] blocked: already submitting');
+    return;
+  }
+
+  submitting.value = true;
   try {
     const payload: ScoreDeliveryRequest = {
       striker_id: props.strikerId,
@@ -30,32 +55,44 @@ async function score(runs: number) {
       runs_scored: runs,
       is_wicket: false,
       commentary: props.commentary ?? ''
-    } as unknown as ScoreDeliveryRequest
+    } as ScoreDeliveryRequest;
 
-    await gameStore.submitDelivery(props.gameId, payload)
-    emit('scored', payload)
-    if (runs % 2 === 1) emit('swap')
+    console.log('[RunButtons] SUBMIT', payload);
+    const res = await gameStore.submitDelivery(props.gameId, payload);
+    console.log('[RunButtons] OK', res);
+
+    emit('scored', payload);
+    if (runs % 2 === 1) emit('swap');
   } catch (e: any) {
-    console.error(e)
-    emit('error', e?.message || 'Failed to score runs')
+    console.error('[RunButtons] FAIL', e);
+    emit('error', e?.message || 'Failed to score runs');
+  } finally {
+    submitting.value = false;
   }
 }
+
 </script>
 
 <template>
-  <div class="runs-section">
+  <div class="runs-section" role="group" aria-label="Runs Scored">
     <h4>Runs Scored</h4>
+
     <div class="runs-buttons">
       <button
         v-for="runs in [0,1,2,3,4,5,6]"
         :key="runs"
+        type="button"
         @click="score(runs)"
-        :disabled="!canScore"
+        :disabled="isDisabled"
+        :aria-disabled="isDisabled ? 'true' : 'false'"
+        :title="isDisabled ? 'Select striker, non‑striker (different) and bowler first' : `Record ${runs} run${runs===1?'':'s'}`"
         :class="['run-button', `runs-${runs}`]"
       >
         {{ runs }}
       </button>
     </div>
+
+    <p v-if="submitting" class="submitting">Saving…</p>
   </div>
 </template>
 
@@ -72,4 +109,5 @@ async function score(runs: number) {
 .runs-5{background:linear-gradient(135deg,#e83e8c 0%,#c2185b 100%)}
 .runs-6{background:linear-gradient(135deg,#dc3545 0%,#c82333 100%)}
 .run-button:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.submitting{margin-top:.5rem;text-align:center;font-size:.9rem;opacity:.8}
 </style>

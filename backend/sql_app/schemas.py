@@ -1,11 +1,17 @@
+from __future__ import annotations
+from uuid import UUID
 from pydantic import BaseModel, Field
-from typing import Any, List, Dict, Literal, Optional
+from pydantic import field_validator
+from pydantic.config import ConfigDict
+from typing import Any, List, Dict, Literal, Optional, Sequence, Mapping, Union, TypeAlias, cast
 from enum import Enum
 
+TeamItem: TypeAlias = Union[str, UUID, Mapping[str, object]]
 # ===================================================================
 # Base & Re-usable Models
 # ===================================================================
 
+    
 class Player(BaseModel):
     """Represents a single player with their ID and name."""
     id: str
@@ -15,6 +21,51 @@ class Team(BaseModel):
     """Represents a team with its name and a list of Player objects."""
     name: str
     players: List[Player]
+
+class PlayingXIRequest(BaseModel):
+    # Make all the fields explicit so router access is typed
+    team_a: List[str] = Field(default_factory=list)
+    team_b: List[str] = Field(default_factory=list)
+    captain_a: Optional[str] = None
+    keeper_a: Optional[str] = None
+    captain_b: Optional[str] = None
+    keeper_b: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("team_a", "team_b", mode="before")
+    @classmethod
+    def _normalize_team(cls, v: object) -> List[str]:
+        if v is None:
+            return []
+        if not isinstance(v, (list, tuple)):
+            raise TypeError("team must be a list or tuple")
+
+        # Tell the checker exactly what we're iterating
+        items: Sequence[TeamItem] = cast(Sequence[TeamItem], v)
+
+        out: List[str] = []
+        for item in items:
+            # simple id/UUID cases
+            if isinstance(item, (str, UUID)):
+                out.append(str(item))
+                continue
+
+            # mapping case: item is Mapping[str, object] here
+            pid_obj = item.get("id") or item.get("player_id")
+            if isinstance(pid_obj, (str, UUID)):
+                out.append(str(pid_obj))
+            else:
+                raise TypeError("dict must include 'id' or 'player_id' as str/UUID")
+
+        return out
+
+
+
+    
+class PlayingXIResponse(BaseModel):
+    ok: bool
+    game_id: UUID
 
 # Delivery ledger entry (what we store/return per ball)
 class Delivery(BaseModel):
@@ -74,8 +125,9 @@ class GameContributor(GameContributorIn):
 class GameCreate(BaseModel):
     team_a_name: str
     team_b_name: str
-    players_a: List[str] = Field(..., min_length=2)
-    players_b: List[str] = Field(..., min_length=2)
+    players_a: List[str] = Field(default=..., min_length=2)
+    players_b: List[str] = Field(default=..., min_length=2)
+
 
     # Flexible match config
     match_type: Literal["limited", "multi_day", "custom"] = "limited"
@@ -92,7 +144,7 @@ class ScoreDelivery(BaseModel):
     striker_id: str
     non_striker_id: str
     bowler_id: str
-    runs_scored: int = Field(..., ge=0, le=6)
+    runs_scored: int = Field(default=..., ge=0, le=6)
     extra: Optional[str] = None
     is_wicket: bool = False
 
@@ -121,7 +173,7 @@ class TeamRoleUpdate(BaseModel):
 # ===================================================================
 
 class Game(BaseModel):
-    game_id: str = Field(..., alias='id')
+    game_id: str = Field(default=..., alias='id')
 
     # Teams (stored as JSON in DB)
     team_a: Team

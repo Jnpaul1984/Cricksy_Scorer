@@ -4,6 +4,11 @@
  * - REST actions (create/load/score/next-innings)
  * - Socket live snapshots
  * - Offline queue (enqueue while disconnected, flush on reconnect)
+ * - Option B additions:
+ *   • Map live snapshots into currentGame
+ *   • Central commentary feed + postCommentary action
+ *   • Shaped scorecard rows for components
+ *   • Small strike/wicket UX helpers
  */
 
 import { defineStore } from 'pinia'
@@ -44,6 +49,9 @@ function makeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+/* Commentary (Option B) */
+type CommentaryItem = { id: string; at: number; over?: string; text: string; author?: string }
+
 export const useGameStore = defineStore('game', () => {
   /* ========================================================================
    * Reactive State
@@ -73,6 +81,9 @@ export const useGameStore = defineStore('game', () => {
   const connectionStatus = ref<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
   const lastLiveAt = ref<number | null>(null)
   const liveSnapshot = ref<Snapshot | null>(null)
+
+  /* Commentary feed (Option B) */
+  const commentaryFeed = ref<CommentaryItem[]>([])
 
   /* Offline queue */
   const offlineEnabled = ref(true)
@@ -168,6 +179,39 @@ export const useGameStore = defineStore('game', () => {
   })
 
   /* ========================================================================
+   * Shaped scorecards for components (Option B)
+   * ====================================================================== */
+  const battingRows = computed(() => {
+    const g = currentGame.value
+    if (!g || !g.batting_scorecard) return []
+    return Object.values(g.batting_scorecard).map((row) => ({
+      id: row.player_id,
+      name: row.player_name,
+      runs: row.runs,
+      balls: row.balls,
+      fours: row.fours,
+      sixes: row.sixes,
+      sr: row.strike_rate,
+      howOut: row.how_out,
+      isOut: row.is_out,
+    }))
+  })
+
+  const bowlingRows = computed(() => {
+    const g = currentGame.value
+    if (!g || !g.bowling_scorecard) return []
+    return Object.values(g.bowling_scorecard).map((row) => ({
+      id: row.player_id,
+      name: row.player_name,
+      overs: row.overs,
+      maidens: row.maidens,
+      runs: row.runs_conceded,
+      wkts: row.wickets,
+      econ: row.economy,
+    }))
+  })
+
+  /* ========================================================================
    * UI helpers
    * ====================================================================== */
   function setLoading(v: boolean) {
@@ -183,12 +227,64 @@ export const useGameStore = defineStore('game', () => {
   /* ========================================================================
    * LIVE socket handlers
    * ====================================================================== */
+  // Merge a partial live snapshot into the current game (reactive-safe)
+  function applySnapshotToGame(s: Snapshot) {
+    if (!currentGame.value) return
+    // Use `any` to avoid TS complaining if Snapshot doesn't list every field
+    const g: any = currentGame.value
+    const snap: any = s
+
+    // Core scoreboard
+    if (snap.total_runs != null) g.total_runs = snap.total_runs
+    if (snap.total_wickets != null) g.total_wickets = snap.total_wickets
+    if (snap.overs_completed != null) g.overs_completed = snap.overs_completed
+    if (snap.balls_this_over != null) g.balls_this_over = snap.balls_this_over
+    if (snap.current_inning != null) g.current_inning = snap.current_inning
+    if (snap.status != null) g.status = snap.status
+    if (snap.target != null) g.target = snap.target
+
+    // Which team is batting/bowling (affects selectors & cards)
+    if (snap.batting_team_name != null) g.batting_team_name = snap.batting_team_name
+    if (snap.bowling_team_name != null) g.bowling_team_name = snap.bowling_team_name
+
+    // Live rosters/scorecards
+    if (snap.batting_scorecard) g.batting_scorecard = snap.batting_scorecard
+    if (snap.bowling_scorecard) g.bowling_scorecard = snap.bowling_scorecard
+
+    // New deliveries (if your server emits them)
+    if (Array.isArray(snap.deliveries)) g.deliveries = snap.deliveries
+
+    // Optional convenience fields your backend might send
+    if (snap.current_striker_id != null) g.current_striker_id = snap.current_striker_id
+    if (snap.current_non_striker_id != null) g.current_non_striker_id = snap.current_non_striker_id
+  }
+
   function handleStateUpdate(payload: StateUpdatePayload) {
     if (!liveGameId.value || payload.id !== liveGameId.value) return
     liveSnapshot.value = payload.snapshot
     lastLiveAt.value = Date.now()
-    // Optionally: map snapshot into currentGame if you want
+    applySnapshotToGame(payload.snapshot)
   }
+
+ 
+const handleCommentary = (msg: {
+  id: string
+  at: number
+  text: string
+  over?: string
+  author?: string
+  game_id: string
+}) => {
+  if (!liveGameId.value || msg.game_id !== liveGameId.value) return
+  commentaryFeed.value.unshift({
+    id: msg.id,
+    at: msg.at,
+    over: msg.over,
+    text: msg.text,
+    author: msg.author,
+  })
+  if (commentaryFeed.value.length > 200) commentaryFeed.value.pop()
+}
 
   async function initLive(id: string) {
     liveGameId.value = id
@@ -203,7 +299,29 @@ export const useGameStore = defineStore('game', () => {
         if (liveGameId.value) flushQueue(liveGameId.value).catch(() => {})
       })
 
+      
+
       onSocket<StateUpdatePayload>('state:update', handleStateUpdate)
+      onSocket('commentary:new', handleCommentary)  // <-- pass handler
+      // Commentary: server-sent live commentary lines (Option B)
+      onSocket<{
+        id: string
+        at: number
+        text: string
+        over?: string
+        author?: string
+        game_id: string
+      }>('commentary:new', (msg) => {
+        if (!liveGameId.value || msg.game_id !== liveGameId.value) return
+        commentaryFeed.value.unshift({
+          id: msg.id,
+          at: msg.at,
+          over: msg.over,
+          text: msg.text,
+          author: msg.author,
+        })
+        if (commentaryFeed.value.length > 200) commentaryFeed.value.pop()
+      })
     } catch (e) {
       connectionStatus.value = 'error'
       console.error('Socket error:', e)
@@ -212,6 +330,7 @@ export const useGameStore = defineStore('game', () => {
 
   function stopLive() {
     offSocket<StateUpdatePayload>('state:update', handleStateUpdate)
+    offSocket('commentary:new', handleCommentary) // <-- pass same handler
     disconnectSocket()
     connectionStatus.value = 'disconnected'
     isLive.value = false
@@ -411,6 +530,21 @@ export const useGameStore = defineStore('game', () => {
     uiState.value.scoringDisabled = disabled
   }
 
+  /* Optional small UX helpers (Option B) */
+  function afterRunsApplied(runs: number, isExtra?: boolean) {
+    // For basic setups, wides/no-balls don't change strike; byes/leg-byes do.
+    // Here we only rotate on odd legal runs (not extras). Adjust if needed.
+    if (runs % 2 === 1 && !isExtra) {
+      swapBatsmen()
+    }
+  }
+
+  function afterWicketApplied(dismissed_player_id: string) {
+    if (uiState.value.selectedStrikerId === dismissed_player_id) {
+      uiState.value.selectedStrikerId = null
+    }
+  }
+
   /* Convenience actions that the UI can call */
   async function scoreRuns(gameId: string, runs: number) {
     if (
@@ -427,7 +561,9 @@ export const useGameStore = defineStore('game', () => {
       runs_scored: runs,
       is_wicket: false,
     } as unknown as ScoreDeliveryRequest
-    return submitDelivery(gameId, payload)
+    const res = await submitDelivery(gameId, payload)
+    afterRunsApplied(runs, false)
+    return res
   }
 
   async function scoreExtra(gameId: string, code: 'wd' | 'nb' | 'b' | 'lb', runs = 1) {
@@ -446,7 +582,10 @@ export const useGameStore = defineStore('game', () => {
       extra: code,
       is_wicket: false,
     } as unknown as ScoreDeliveryRequest
-    return submitDelivery(gameId, payload)
+    const res = await submitDelivery(gameId, payload)
+    // For simplicity, consider extras as not rotating strike here
+    afterRunsApplied(runs, true)
+    return res
   }
 
   async function scoreWicket(
@@ -472,8 +611,28 @@ export const useGameStore = defineStore('game', () => {
       dismissed_player_id: dismissed_player_id ?? uiState.value.selectedStrikerId,
       commentary: commentary ?? '',
     } as unknown as ScoreDeliveryRequest
-    return submitDelivery(gameId, payload)
+    const res = await submitDelivery(gameId, payload)
+    afterWicketApplied(payload.dismissed_player_id!)
+    return res
   }
+
+  /* Commentary action (Option B) */
+  async function postCommentary(gameId: string, text: string, over?: string) {
+    const tempId = makeId()
+    const tempItem: CommentaryItem = { id: tempId, at: Date.now(), text, over }
+    commentaryFeed.value.unshift(tempItem)
+
+    try {
+      // Assumes you’ve added apiService.postCommentary(gameId, { text, over })
+      await apiService.postCommentary(gameId, { text, over })
+      return { ok: true }
+    } catch (e) {
+      // Roll back optimistic insert on failure
+      commentaryFeed.value = commentaryFeed.value.filter((c) => c.id !== tempId)
+      throw e
+    }
+  }
+  
 
   /* Utility */
   function clearError() {
@@ -488,6 +647,13 @@ export const useGameStore = defineStore('game', () => {
     liveSnapshot.value = null
     isLive.value = false
     liveGameId.value = null
+    commentaryFeed.value = []
+  }
+
+  /* Optional: merge partial patches into currentGame */
+  function mergeGamePatch(patch: Partial<GameState>) {
+    if (!currentGame.value) return
+    currentGame.value = { ...currentGame.value, ...patch }
   }
 
   /* ========================================================================
@@ -525,6 +691,10 @@ export const useGameStore = defineStore('game', () => {
     targetDisplay,
     runsRequired,
 
+    // Shaped scorecards (Option B)
+    battingRows,
+    bowlingRows,
+
     // Live
     isLive,
     liveGameId,
@@ -533,6 +703,10 @@ export const useGameStore = defineStore('game', () => {
     liveSnapshot,
     initLive,
     stopLive,
+
+    // Commentary (Option B)
+    commentaryFeed,
+    postCommentary,
 
     // Offline
     offlineEnabled,
@@ -564,5 +738,6 @@ export const useGameStore = defineStore('game', () => {
     // Utils
     clearError,
     clearGame,
+    mergeGamePatch,
   }
 })

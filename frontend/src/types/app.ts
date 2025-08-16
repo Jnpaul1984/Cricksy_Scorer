@@ -5,7 +5,7 @@
  * state management, routing, and UI interactions.
  */
 
-import type { Player, BattingScorecardEntry, BowlingScorecardEntry } from './api';
+import type { Player, BattingScorecardEntry, BowlingScorecardEntry } from '@/types';
 
 // ============================================================================
 // ENUMS FOR BETTER TYPE SAFETY

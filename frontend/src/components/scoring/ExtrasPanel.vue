@@ -18,10 +18,14 @@ const emit = defineEmits<{
 }>()
 
 const gameStore = useGameStore()
-const byeRuns = ref(1)
-const legByeRuns = ref(1)
+const byeRuns = ref<number>(1)
+const legByeRuns = ref<number>(1)
 
-async function score(extra: 'wd'|'nb'|'b'|'lb', runs = 1) {
+/**
+ * Record an extra delivery
+ * extra: 'wd' (wide), 'nb' (no-ball), 'b' (bye), 'lb' (leg-bye)
+ */
+async function score(extra: 'wd' | 'nb' | 'b' | 'lb', runs: number = 1) {
   if (!props.canScore) return
   try {
     const payload: ScoreDeliveryRequest = {
@@ -32,7 +36,7 @@ async function score(extra: 'wd'|'nb'|'b'|'lb', runs = 1) {
       extra,
       is_wicket: false,
       commentary: props.commentary ?? ''
-    } as unknown as ScoreDeliveryRequest
+    }
 
     await gameStore.submitDelivery(props.gameId, payload)
     emit('scored', payload)
@@ -53,18 +57,32 @@ async function score(extra: 'wd'|'nb'|'b'|'lb', runs = 1) {
     </div>
 
     <div class="extras-row">
-      <label>Byes (B):</label>
-      <select v-model.number="byeRuns" :disabled="!canScore">
+      <label for="sel-byes">Byes (B):</label>
+      <select
+        id="sel-byes"
+        v-model.number="byeRuns"
+        :disabled="!canScore"
+        title="Byes"
+        aria-describedby="sel-byes-hint"
+      >
         <option v-for="n in [1,2,3,4]" :key="'b-'+n" :value="n">{{ n }}</option>
       </select>
+      <small id="sel-byes-hint" class="sr-only">Choose number of byes</small>
       <button class="extra-button bye" :disabled="!canScore" @click="score('b', byeRuns)">Add</button>
     </div>
 
     <div class="extras-row">
-      <label>Leg Byes (LB):</label>
-      <select v-model.number="legByeRuns" :disabled="!canScore">
+      <label for="sel-leg-byes">Leg Byes (LB):</label>
+      <select
+        id="sel-leg-byes"
+        v-model.number="legByeRuns"
+        :disabled="!canScore"
+        title="Leg byes"
+        aria-describedby="sel-leg-byes-hint"
+      >
         <option v-for="n in [1,2,3,4]" :key="'lb-'+n" :value="n">{{ n }}</option>
       </select>
+      <small id="sel-leg-byes-hint" class="sr-only">Choose number of leg byes</small>
       <button class="extra-button leg-bye" :disabled="!canScore" @click="score('lb', legByeRuns)">Add</button>
     </div>
   </div>
@@ -82,4 +100,12 @@ async function score(extra: 'wd'|'nb'|'b'|'lb', runs = 1) {
 .extras-row{display:flex;align-items:center;gap:.5rem;margin:.5rem 0}
 .extras-row label{color:#fff;opacity:.8;min-width:110px}
 .extras-row select{padding:.5rem;border-radius:8px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.3)}
+/* screen-reader only helper (keeps audit happy without visual noise) */
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 1px, 1px);
+  white-space: nowrap; border: 0;
+}
 </style>

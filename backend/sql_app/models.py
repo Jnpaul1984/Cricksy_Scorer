@@ -1,3 +1,4 @@
+from typing import List, Optional
 from sqlalchemy import (
     Column, Integer, String, JSON, Boolean, Text, Enum as SAEnum,
     ForeignKey, Index, DateTime, func
@@ -6,7 +7,7 @@ from sqlalchemy.orm import relationship
 from .database import Base
 import enum
 import uuid
-
+from pydantic import BaseModel
 class Game(Base):
     __tablename__ = "games"
 
@@ -53,6 +54,17 @@ class Game(Base):
     target = Column(Integer, nullable=True)
     result = Column(String, nullable=True)
 
+class PlayingXIRequest(BaseModel):
+    team_a: List[uuid.UUID]
+    team_b: List[uuid.UUID]
+    captain_a: Optional[uuid.UUID] = None
+    keeper_a: Optional[uuid.UUID] = None
+    captain_b: Optional[uuid.UUID] = None
+    keeper_b: Optional[uuid.UUID] = None
+
+class PlayingXIResponse(BaseModel):
+    ok: bool
+    game_id: uuid.UUID
 # ===== Game Staff / Contributors (NEW) =====
 
 class GameContributorRoleEnum(str, enum.Enum):

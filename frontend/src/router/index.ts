@@ -14,9 +14,10 @@ const router = createRouter({
       component: () => import('@/views/TeamSelectionView.vue'),
     },
     {
-      path: '/game/:gameId',
-      name: 'game',
+      path: '/game/:gameId/scoring',
+      name: 'GameScoringView',
       component: () => import('@/views/GameScoringView.vue'),
+      props: true,
     },
     // --- New: Viewer routes ---
     {

@@ -3,7 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useGameStore } from '@/stores/gameStore'
 
-type XI = { team_a_xi: string[]; team_b_xi: string[] }
+type XI = {
+  keeper_b: string | null;
+  captain_a: string | null;
+  keeper_a: string | null;
+  captain_b: string | null; team_a_xi: string[]; team_b_xi: string[] 
+}
 const KEY = (id: string) => `cricksy.xi.${id}`
 
 const route = useRoute()
@@ -21,7 +26,51 @@ const teamB = computed(() => game.currentGame?.team_b)
 const selectedA = ref<Set<string>>(new Set())
 const selectedB = ref<Set<string>>(new Set())
 
-const canContinue = computed(() => selectedA.value.size === 11 && selectedB.value.size === 11)
+// NEW: role selections
+const captainA = ref<string | null>(null)
+const keeperA  = ref<string | null>(null)
+const captainB = ref<string | null>(null)
+const keeperB  = ref<string | null>(null)
+
+// (optional) require roles to be chosen before continuing
+const canContinue = computed(() =>
+  selectedA.value.size === 11 &&
+  selectedB.value.size === 11 &&
+  !!captainA.value && !!keeperA.value &&
+  !!captainB.value && !!keeperB.value
+)
+
+// Flatten sets to arrays (used for payload and dropdowns)
+const xiAList = computed(() => Array.from(selectedA.value))
+const xiBList = computed(() => Array.from(selectedB.value))
+
+const xi = {
+  team_a_xi: xiAList.value,
+  team_b_xi: xiBList.value,
+  captain_a: captainA.value,
+  keeper_a:  keeperA.value,
+  captain_b: captainB.value,
+  keeper_b:  keeperB.value,
+}
+localStorage.setItem(KEY(gameId.value), JSON.stringify(xi))
+
+// teamA/teamB already exist as computed(() => game.currentGame?.team_a / team_b)
+function nameFromId(id: string, team: any) {
+  const arr = team?.players ?? []
+  const found = Array.isArray(arr) ? arr.find((p: any) => p?.id === id) : undefined
+  return found?.name ?? id
+}
+
+// Basic in‑UI guard to keep roles within the XI
+function validateRoles(): string | null {
+  if (xiAList.value.length !== 11 || xiBList.value.length !== 11) return 'Each XI must be 11 players.'
+  if (captainA.value && !selectedA.value.has(captainA.value)) return 'Team A captain must be in Team A XI.'
+  if (keeperA.value  && !selectedA.value.has(keeperA.value))  return 'Team A wicket‑keeper must be in Team A XI.'
+  if (captainB.value && !selectedB.value.has(captainB.value)) return 'Team B captain must be in Team B XI.'
+  if (keeperB.value  && !selectedB.value.has(keeperB.value))  return 'Team B wicket‑keeper must be in Team B XI.'
+  return null
+}
+
 
 function loadSavedXI() {
   try {
@@ -30,6 +79,11 @@ function loadSavedXI() {
     const obj = JSON.parse(raw) as XI
     if (Array.isArray(obj.team_a_xi)) selectedA.value = new Set(obj.team_a_xi)
     if (Array.isArray(obj.team_b_xi)) selectedB.value = new Set(obj.team_b_xi)
+    if (obj.captain_a) captainA.value = obj.captain_a
+    if (obj.keeper_a)  keeperA.value  = obj.keeper_a
+    if (obj.captain_b) captainB.value = obj.captain_b
+    if (obj.keeper_b)  keeperB.value  = obj.keeper_b
+
   } catch {}
 }
 
@@ -61,43 +115,65 @@ function toggleB(id: string) {
   selectedB.value = new Set(selectedB.value)
 }
 
-async function persistXIIfSupported(xi: XI) {
-  // Optional best-effort persist (ignore if your backend doesn’t support it)
+async function persistXIIfSupported() {
   try {
     const base = (import.meta as any).env.VITE_API_BASE_URL?.replace(/\/+$/, '')
     if (!base) return
+
+    const payload = {
+      team_a: xiAList.value,
+      team_b: xiBList.value,
+      captain_a: captainA.value,
+      keeper_a:  keeperA.value,
+      captain_b: captainB.value,
+      keeper_b:  keeperB.value,
+    }
+
     const res = await fetch(`${base}/games/${encodeURIComponent(gameId.value)}/playing-xi`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(xi),
+      body: JSON.stringify(payload),
     })
+    // If server returns 400 with "Unknown players..." the UI XI contains an ID not in the squads
+    // Let the caller handle errors; no silent swallow here
     if (!res.ok) {
-      // Allow 404/405/501 etc. to pass silently; the step is optional server-side
-      return
+      const body = await res.json().catch(() => ({}))
+      throw new Error(`Failed to set XI: ${res.status} ${JSON.stringify(body)}`)
     }
-  } catch {
-    // network issues? fine, we still move on because XI is stored locally
+  } catch (e) {
+    // Surface the error to the caller
+    throw e
   }
 }
+
 
 async function continueToScoring() {
   if (!canContinue.value || saving.value) return
   saving.value = true
   errorMsg.value = null
+
   try {
-    const xi: XI = {
-      team_a_xi: Array.from(selectedA.value),
-      team_b_xi: Array.from(selectedB.value),
-    }
+    // NEW: validate roles on the client
+    const v = validateRoles()
+    if (v) throw new Error(v)
+
+    // Save XI locally (your existing code)
+    const xi = { team_a_xi: xiAList.value, team_b_xi: xiBList.value }
     localStorage.setItem(KEY(gameId.value), JSON.stringify(xi))
-    await persistXIIfSupported(xi)
-    await router.push({ name: 'game', params: { gameId: gameId.value } })
+
+    // NEW: send XI + roles to backend
+    await persistXIIfSupported()
+
+    // (Your existing navigation to scoring)
+    await game.loadGame(gameId.value) // optional refresh if you want captain/keeper reflected immediately
+    router.push({ name: 'GameScoringView', params: { gameId: gameId.value } })
   } catch (e: any) {
     errorMsg.value = e?.message || 'Failed to continue'
   } finally {
     saving.value = false
   }
 }
+
 
 onMounted(async () => {
   if (!gameId.value) return router.replace('/')
@@ -141,7 +217,27 @@ onMounted(async () => {
           </li>
         </ul>
       </section>
-
+    <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div>
+        <label class="block text-sm font-medium mb-1">Team A Captain</label>
+        <select v-model="captainA" class="w-full border rounded p-2" :disabled="xiAList.length === 0">
+          <option :value="null" disabled>Select captain</option>
+          <option v-for="pid in xiAList" :key="pid" :value="pid">
+            {{ nameFromId(pid, teamA) }}
+          </option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Team A Wicket‑keeper</label>
+        <select v-model="keeperA" class="w-full border rounded p-2" :disabled="xiAList.length === 0">
+          <option :value="null" disabled>Select wicket‑keeper</option>
+          <option v-for="pid in xiAList" :key="pid" :value="pid">
+            {{ nameFromId(pid, teamA) }}
+          </option>
+        </select>
+      </div>
+    </div>
+  
       <section class="team">
         <h3>{{ teamB?.name || 'Team B' }}</h3>
         <p class="hint">Pick 11 players ({{ selectedB.size }}/11)</p>
@@ -157,6 +253,27 @@ onMounted(async () => {
           </li>
         </ul>
       </section>
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div>
+        <label class="block text-sm font-medium mb-1">Team B Captain</label>
+        <select v-model="captainB" class="w-full border rounded p-2" :disabled="xiBList.length === 0">
+          <option :value="null" disabled>Select captain</option>
+          <option v-for="pid in xiBList" :key="pid" :value="pid">
+            {{ nameFromId(pid, teamB) }}
+          </option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Team B Wicket‑keeper</label>
+        <select v-model="keeperB" class="w-full border rounded p-2" :disabled="xiBList.length === 0">
+          <option :value="null" disabled>Select wicket‑keeper</option>
+          <option v-for="pid in xiBList" :key="pid" :value="pid">
+            {{ nameFromId(pid, teamB) }}
+          </option>
+        </select>
+      </div>
+    </div>
+
     </div>
 
     <div v-if="errorMsg" class="error">❌ {{ errorMsg }}</div>

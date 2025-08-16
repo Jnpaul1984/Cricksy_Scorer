@@ -59,7 +59,10 @@
 html {
   font-size: 16px;
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%; /* prefix first */
+  text-size-adjust: 100%;
 }
+
 
 body {
   font-family: var(--font-family-primary);
@@ -163,8 +166,10 @@ body {
   text-decoration: none;
   cursor: pointer;
   transition: all var(--transition-normal);
+  -webkit-user-select: none; /* prefix first */
   user-select: none;
 }
+
 
 .btn:disabled {
   opacity: 0.6;

@@ -18,7 +18,6 @@ from typing import (
     cast,
 )
 from pathlib import Path
-from starlette.staticfiles import StaticFiles
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -29,7 +28,7 @@ from sqlalchemy.exc import IntegrityError
 from fastapi import UploadFile, File, Form
 from datetime import datetime, timezone
 import json
-
+from routes.games_router import router as games_router
 # ---- App modules ----
 from sql_app import crud, schemas, models
 from sql_app.database import SessionLocal
@@ -192,6 +191,7 @@ STATIC_DIR.mkdir(parents=True, exist_ok=True)
 _fastapi.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
+_fastapi.include_router(games_router)
 # ================================================================
 # DB dependency (async)
 # ================================================================

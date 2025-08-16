@@ -1,145 +1,177 @@
-// src/types/index.ts
+// frontend/src/types/index.ts
 
-export type Player = { id: string; name: string }
+/** Core domain types */
+export type ID = string;
 
-export type Team = {
-  name: string
-  players: Player[]
+export type MatchType = 'limited' | 'multi_day' | 'custom';
+export type MatchStatus = 'not_started' | 'in_progress' | 'innings_break' | 'completed';
+
+export type ExtraCode = 'wd' | 'nb' | 'b' | 'lb';
+
+/** Player & Team */
+export interface Player {
+  id: ID;
+  name: string;
 }
 
-export type BattingScorecardEntry = {
-  player_id: string
-  player_name: string
+export interface Team {
+  name: string;
+  players: Player[];
+}
+
+/** Scorecard entries (snake_case to match current store usage) */
+export interface BattingScorecardEntry {
+  player_id: ID;
+  player_name: string;
+
+  runs: number;
+  balls: number;
+  fours: number;
+  sixes: number;
+  strike_rate: number;
+
+  how_out?: string; // e.g. "c Smith b Khan", "lbw", "run out", etc.
+  is_out: boolean;
+}
+
+export interface BowlingScorecardEntry {
+  player_id: ID;
+  player_name: string;
+
+  // Overs can be "3.4" – represent as string for safety, but number is ok too
+  overs: string | number;
+  maidens: number;
+
+  runs_conceded: number;
+  wickets: number;
+  economy: number;
+}
+
+export interface Delivery {
+  over: number        // or string if you display "10.3"
+  ball: number        // 1..6 (or 0..5)
+  striker_id: string
+  non_striker_id: string
+  bowler_id: string
   runs: number
-  balls_faced: number
-  is_out: boolean
-}
-
-export type BowlingScorecardEntry = {
-  player_id: string
-  player_name: string
-  overs_bowled: number
-  runs_conceded: number
-  wickets_taken: number
-}
-
-export type ExtraCode = 'wd' | 'nb' | 'b' | 'lb' // wide, no-ball, byes, leg byes
-export type DismissalCode =
-  | 'bowled'
-  | 'caught'
-  | 'lbw'
-  | 'stumped'
-  | 'run_out'
-  | 'hit_wicket'
-  | 'obstructing_the_field'
-  | 'hit_ball_twice'
-  | 'timed_out'
-  | 'retired_out'
-  | 'handled_ball'
-
-export type Delivery = {
-  over_number: number
-  ball_number: number
-  bowler_id: string
-  striker_id: string
-  non_striker_id: string
-  runs_scored: number
-  is_extra?: boolean
-  extra_type?: ExtraCode | null
+  extra?: 'wd' | 'nb' | 'b' | 'lb'
   is_wicket?: boolean
-  dismissal_type?: DismissalCode | null
+  dismissal_type?: string
   dismissed_player_id?: string | null
-  commentary?: string | null
-  fielder_id?: string | null // backend may or may not send this yet
-}
-
-export type GameState = {
-  id: string // ✅ fixes created.id usage
-  // teams
-  team_a: Team
-  team_b: Team
-
-  // config
-  match_type: 'limited' | 'multi_day' | 'custom'
-  overs_limit: number | null
-  days_limit: number | null
-  overs_per_day?: number | null
-  dls_enabled: boolean
-  interruptions: Array<Record<string, string | null>>
-
-  toss_winner_team: string
-  decision: 'bat' | 'bowl'
-  batting_team_name: string
-  bowling_team_name: string
-
-  // status
-  status: string
-  current_inning: number
-  total_runs: number
-  total_wickets: number
-  overs_completed: number
-  balls_this_over: number
-  current_striker_id: string | null
-  current_non_striker_id: string | null
-  target: number | null
-  result: string | null
-
-  // timelines & scorecards
-  deliveries: Delivery[]
-  batting_scorecard: Record<string, BattingScorecardEntry>
-  bowling_scorecard: Record<string, BowlingScorecardEntry>
-}
-
-export type CreateGameRequest = {
-  team_a_name: string
-  team_b_name: string
-  players_a: string[]
-  players_b: string[]
-  match_type: 'limited' | 'multi_day' | 'custom'
-  overs_limit?: number | null
-  days_limit?: number | null
-  overs_per_day?: number | null
-  dls_enabled: boolean
-  interruptions: Array<Record<string, string | null>>
-  toss_winner_team: string
-  decision: 'bat' | 'bowl'
-}
-
-export type ScoreDeliveryRequest = {
-  striker_id: string
-  non_striker_id: string
-  bowler_id: string
-  runs_scored: number
-  is_wicket: boolean
-  extra?: ExtraCode
-  dismissal_type?: DismissalCode
-  dismissed_player_id?: string
   commentary?: string
-  fielder_id?: string
+  at_utc?: string     // optional timestamp
+}
+/** Full game state stored in the store */
+export interface GameState {
+  id: ID;
+
+  match_type: MatchType;
+  status: MatchStatus;
+
+  // teams
+  team_a: Team;
+  team_b: Team;
+
+  // batting/bowling context
+  batting_team_name: string;
+  bowling_team_name: string;
+
+  deliveries?: Delivery[];
+  // current innings and score
+  current_inning: number; // 1 | 2 | 3 | 4 (support multi-day)
+  total_runs: number;
+  total_wickets: number;
+  overs_completed: number; // if you store "10.3" as string, change to string | number
+  balls_this_over: number;
+
+  // chase context (optional)
+  target?: number | null;
+
+  // per-player scorecards (keyed by player_id or any stable key)
+  batting_scorecard: Record<string, BattingScorecardEntry>;
+  bowling_scorecard: Record<string, BowlingScorecardEntry>;
 }
 
-/** Socket snapshot payloads from backend `state:update` */
-export type Snapshot = {
-  id: string
-  status: string
-  score: { runs: number; wickets: number; overs: number }
-  batsmen: {
-    striker: { id: string | null; name: string; runs: number; balls: number; is_out: boolean }
-    non_striker: { id: string | null; name: string; runs: number; balls: number; is_out: boolean }
-  }
-  over: { completed: number; balls_this_over: number }
-  last_delivery: Delivery
+/** Live snapshot payload that comes over the socket */
+export interface Snapshot {
+  // mirror only the fields you actually use in GameStore.applySnapshotToGame
+  total_runs: number;
+  total_wickets: number;
+  overs_completed: number;
+  balls_this_over: number;
+  current_inning: number;
+  status?: MatchStatus;
+  target?: number | null;
+  deliveries?: Delivery[];
+  current_striker_id?: ID;
+  current_non_striker_id?: ID;
+  current_bowler_id?: ID;
+  batting_team_name: string;
+  bowling_team_name: string;
+
+  batting_scorecard: Record<string, BattingScorecardEntry>;
+  bowling_scorecard: Record<string, BowlingScorecardEntry>;
 }
 
-export type StateUpdatePayload = { id: string; snapshot: Snapshot }
+/** State update envelope from the server */
+export interface StateUpdatePayload {
+  id: ID;           // game id
+  snapshot: Snapshot;
+}
 
-/** UI-only shape the store uses */
-export type UIState = {
-  loading: boolean
-  error: string | null
-  selectedStrikerId: string | null
-  selectedNonStrikerId: string | null
-  selectedBowlerId: string | null
-  scoringDisabled: boolean
-  activeScorecardTab: 'batting' | 'bowling'
+/** UI state kept in the store (used by GameStore.ts) */
+export interface UIState {
+  loading: boolean;
+  error: string | null;
+
+  selectedStrikerId: ID | null;
+  selectedNonStrikerId: ID | null;
+  selectedBowlerId: ID | null;
+
+  scoringDisabled: boolean;
+  activeScorecardTab: 'batting' | 'bowling';
+}
+
+/** Requests sent to the backend */
+export interface CreateGameRequest {
+  match_type: MatchType;
+
+  team_a: {
+    name: string;
+    players: { id: ID; name: string }[];
+  };
+  team_b: {
+    name: string;
+    players: { id: ID; name: string }[];
+  };
+
+  // optional match setup fields — include/omit based on your backend
+  overs?: number;                 // for limited overs
+  days?: number;                  // for multi-day
+  toss_winner?: 'A' | 'B';
+  elected_to_bat?: 'A' | 'B';
+  start_time_utc?: string;        // ISO string
+}
+
+
+export interface ScoreDeliveryRequest {
+  striker_id: ID;
+  non_striker_id: ID;
+  bowler_id: ID;
+
+  runs_scored: number;
+  is_wicket: boolean;
+
+  // optional fields depending on event
+  extra?: ExtraCode;                  // 'wd' | 'nb' | 'b' | 'lb'
+  dismissal_type?: string;            // e.g., 'bowled', 'lbw', 'run_out'
+  dismissed_player_id?: ID | null;
+  commentary?: string;
+}
+
+/** API error normalizer shape (if you need it elsewhere) */
+export interface ApiErrorShape {
+  message: string;
+  code?: string | number;
+  details?: unknown;
 }
