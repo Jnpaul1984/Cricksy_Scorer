@@ -14,7 +14,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-/* Types — single source of truth */
+/* Types — single source of truth (your existing /types barrel) */
 import type {
   GameState,
   CreateGameRequest,
@@ -28,11 +28,21 @@ import type {
   UIState,
 } from '@/types'
 
-/* API helpers */
+/* If you have a centralized apiService, keep using it for CRUD */
 import { apiService, getErrorMessage } from '@/utils/api'
 
-/* Socket helpers (generic typed on/off) */
-import { on as onSocket, off as offSocket, connectSocket, disconnectSocket } from '@/utils/socket'
+/* Socket helpers (now including joinGame + emit) */
+import {
+  on as onSocket,
+  off as offSocket,
+  connectSocket,
+  disconnectSocket,
+  joinGame as joinGameSocket,
+  emit as emitSocket,
+} from '@/utils/socket'
+
+/* Score payload from the deliveries endpoint (services/api) */
+import type { ScoreUpdatePayload, BatterLine, BowlerLine } from '@/services/api'
 
 /* ===== Local helpers ===== */
 type PendingStatus = 'queued' | 'flushing' | 'failed'
@@ -227,10 +237,78 @@ export const useGameStore = defineStore('game', () => {
   /* ========================================================================
    * LIVE socket handlers
    * ====================================================================== */
+
+  // Convert "14.3" -> { overs_completed: 14, balls_this_over: 3 }
+  function splitOvers(oversStr?: string): { overs_completed: number; balls_this_over: number } {
+    if (!oversStr) return { overs_completed: 0, balls_this_over: 0 };
+    const [o, b] = oversStr.split('.');
+    const oi = Number.isFinite(Number(o)) ? Number(o) : 0;
+    const bi = Number.isFinite(Number(b)) ? Number(b) : 0;
+    return { overs_completed: oi, balls_this_over: bi };
+  }
+
+
+  // Map ScoreUpdatePayload (server snapshot) into your Snapshot shape
+  function mapScorePayloadToSnapshot(p: ScoreUpdatePayload): Snapshot {
+  const { score, batting, bowling } = p;
+
+  const battingCard: Record<string, BattingScorecardEntry> = {};
+  batting.forEach((b) => {
+    battingCard[b.player_id] = {
+      player_id: b.player_id,
+      player_name: b.name,
+      runs: b.runs,
+      balls: b.balls,
+      fours: b.fours,
+      sixes: b.sixes,
+      strike_rate: b.strike_rate,
+      // If your backend sends how_out/is_out, map them here. Using placeholders:
+      how_out: b.is_striker ? 'not out' : undefined as unknown as string,
+      is_out: false,
+    };
+  });
+
+  const bowlingCard: Record<string, BowlingScorecardEntry> = {};
+  bowling.forEach((bw) => {
+    bowlingCard[bw.player_id] = {
+      player_id: bw.player_id,
+      player_name: bw.name,
+      overs: bw.overs,
+      maidens: bw.maidens,
+      runs_conceded: bw.runs,
+      wickets: bw.wickets,
+      economy: bw.econ,
+    };
+  });
+
+  const { overs_completed, balls_this_over } = splitOvers(score.overs);
+
+  // If Team JSON in GameState has no `id`, don’t try to resolve names by id.
+  // Keep current names from `currentGame` so types stay `string`.
+  const battingTeamName =
+    currentGame.value?.batting_team_name ?? (currentGame.value?.team_a?.name || '') as string;
+  const bowlingTeamName =
+    currentGame.value?.bowling_team_name ?? (currentGame.value?.team_b?.name || '') as string;
+
+  const snap: Snapshot = {
+    total_runs: score.runs,
+    total_wickets: score.wickets,
+    overs_completed,
+    balls_this_over,
+    current_inning: score.innings_no,
+    batting_team_name: battingTeamName,
+    bowling_team_name: bowlingTeamName,
+    batting_scorecard: battingCard,
+    bowling_scorecard: bowlingCard,
+  };
+  return snap;
+}
+
+  
+
   // Merge a partial live snapshot into the current game (reactive-safe)
   function applySnapshotToGame(s: Snapshot) {
     if (!currentGame.value) return
-    // Use `any` to avoid TS complaining if Snapshot doesn't list every field
     const g: any = currentGame.value
     const snap: any = s
 
@@ -266,25 +344,32 @@ export const useGameStore = defineStore('game', () => {
     applySnapshotToGame(payload.snapshot)
   }
 
- 
-const handleCommentary = (msg: {
-  id: string
-  at: number
-  text: string
-  over?: string
-  author?: string
-  game_id: string
-}) => {
-  if (!liveGameId.value || msg.game_id !== liveGameId.value) return
-  commentaryFeed.value.unshift({
-    id: msg.id,
-    at: msg.at,
-    over: msg.over,
-    text: msg.text,
-    author: msg.author,
-  })
-  if (commentaryFeed.value.length > 200) commentaryFeed.value.pop()
-}
+  function handleScoreUpdate(payload: ScoreUpdatePayload) {
+    if (!liveGameId.value) return
+    const snap = mapScorePayloadToSnapshot(payload)
+    liveSnapshot.value = { ...(liveSnapshot.value || {}), ...snap }
+    lastLiveAt.value = Date.now()
+    applySnapshotToGame(snap)
+  }
+
+  const handleCommentary = (msg: {
+    id: string
+    at: number
+    text: string
+    over?: string
+    author?: string
+    game_id: string
+  }) => {
+    if (!liveGameId.value || msg.game_id !== liveGameId.value) return
+    commentaryFeed.value.unshift({
+      id: msg.id,
+      at: msg.at,
+      over: msg.over,
+      text: msg.text,
+      author: msg.author,
+    })
+    if (commentaryFeed.value.length > 200) commentaryFeed.value.pop()
+  }
 
   async function initLive(id: string) {
     liveGameId.value = id
@@ -294,31 +379,30 @@ const handleCommentary = (msg: {
     try {
       connectSocket()
 
+      // Join the game room (prefer helper; fall back to plain emit if needed)
+      if (typeof joinGameSocket === 'function') {
+        joinGameSocket(id)
+      } else {
+        emitSocket('join_game', { game_id: id })
+      }
+
+      // Connection ack
       onSocket('hello', () => {
         connectionStatus.value = 'connected'
         if (liveGameId.value) flushQueue(liveGameId.value).catch(() => {})
       })
 
-      
+      // Live updates
+      onSocket('state:update', handleStateUpdate)
+      onSocket('score:update', handleScoreUpdate)
 
-      onSocket<StateUpdatePayload>('state:update', handleStateUpdate)
-      onSocket('commentary:new', handleCommentary)  // <-- pass handler
-      // Commentary: server-sent live commentary lines (Option B)
-      onSocket<{
-        id: string
-        at: number
-        text: string
-        over?: string
-        author?: string
-        game_id: string
-      }>('commentary:new', (msg) => {
-        if (!liveGameId.value || msg.game_id !== liveGameId.value) return
+      // Commentary (server payload: { game_id, text, at })
+      onSocket('commentary:new', (payload: { game_id: string; text: string; at: string }) => {
+        if (!liveGameId.value || payload.game_id !== liveGameId.value) return
         commentaryFeed.value.unshift({
-          id: msg.id,
-          at: msg.at,
-          over: msg.over,
-          text: msg.text,
-          author: msg.author,
+          id: makeId(),
+          at: Date.parse(payload.at) || Date.now(),
+          text: payload.text,
         })
         if (commentaryFeed.value.length > 200) commentaryFeed.value.pop()
       })
@@ -328,9 +412,12 @@ const handleCommentary = (msg: {
     }
   }
 
+
+
   function stopLive() {
-    offSocket<StateUpdatePayload>('state:update', handleStateUpdate)
-    offSocket('commentary:new', handleCommentary) // <-- pass same handler
+    offSocket('state:update', handleStateUpdate)
+    offSocket('score:update', handleScoreUpdate)
+    offSocket('commentary:new') // no handler needed since we inlined it
     disconnectSocket()
     connectionStatus.value = 'disconnected'
     isLive.value = false
@@ -532,8 +619,6 @@ const handleCommentary = (msg: {
 
   /* Optional small UX helpers (Option B) */
   function afterRunsApplied(runs: number, isExtra?: boolean) {
-    // For basic setups, wides/no-balls don't change strike; byes/leg-byes do.
-    // Here we only rotate on odd legal runs (not extras). Adjust if needed.
     if (runs % 2 === 1 && !isExtra) {
       swapBatsmen()
     }
@@ -623,7 +708,6 @@ const handleCommentary = (msg: {
     commentaryFeed.value.unshift(tempItem)
 
     try {
-      // Assumes you’ve added apiService.postCommentary(gameId, { text, over })
       await apiService.postCommentary(gameId, { text, over })
       return { ok: true }
     } catch (e) {
@@ -632,7 +716,6 @@ const handleCommentary = (msg: {
       throw e
     }
   }
-  
 
   /* Utility */
   function clearError() {
