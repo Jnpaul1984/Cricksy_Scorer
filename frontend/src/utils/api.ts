@@ -1,108 +1,248 @@
 // src/utils/api.ts
-import type {
-  GameState,
-  CreateGameRequest,
-  ScoreDeliveryRequest,
-} from '@/types'
+// Single, canonical API client aligned with FastAPI backend & the Pinia game store.
 
-/**
- * Base API URL (no trailing slash).
- * Configure in .env as VITE_API_BASE_URL="http://localhost:8000"
- */
-const BASE_URL =
-  (import.meta?.env?.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, '') ||
-  'http://localhost:8000'
+export const API_BASE =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE) ||
+  (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '') ||
+  '';
 
-/**
- * Small typed fetch wrapper that:
- * - sets JSON headers
- * - throws on non-OK responses with a useful message
- * - returns T (parsed JSON) or `undefined` for empty 204 responses
- */
+function url(path: string) {
+  if (!API_BASE) return path;
+  const base = API_BASE.replace(/\/+$/, '');
+  const p = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${p}`;
+}
+
+export function getErrorMessage(err: unknown): string {
+  if (!err) return 'Unknown error';
+  if (typeof err === 'string') return err;
+  if (err instanceof Error) return err.message || 'Error';
+  try {
+    const anyErr = err as any;
+    if (anyErr?.detail) return String(anyErr.detail);
+    if (anyErr?.message) return String(anyErr.message);
+    if (anyErr?.response?.data?.detail) return String(anyErr.response.data.detail);
+  } catch {}
+  return 'Request failed';
+}
+
+export type TossDecision = 'bat' | 'bowl'
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(url(path), {
     headers: {
-      'Content-Type': 'application/json',
+      ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...(init?.headers || {}),
     },
-    credentials: 'include', // change to 'omit' if you don't use cookies
     ...init,
-  })
-
+  });
   if (!res.ok) {
-    let msg = `${res.status} ${res.statusText}`
-    try {
-      const body = await res.json()
-      if (body?.detail) msg = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)
-      if (body?.message) msg = body.message
-      // Fall through to throw with msg below
-    } catch {
-      // ignore JSON parse errors
-    }
-    throw new Error(msg)
+    let detail: any = undefined;
+    try { detail = await res.json(); } catch {}
+    const msg = detail?.detail || `${res.status} ${res.statusText}`;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
   }
-
-  // Handle 204/empty body
-  const text = await res.text()
-  return text ? (JSON.parse(text) as T) : (undefined as unknown as T)
+  if (res.status === 204) return undefined as unknown as T;
+  return (await res.json()) as T;
 }
 
-/** Public helper the store uses to normalize unknown errors into strings */
-export function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message
-  if (typeof err === 'string') return err
-  try {
-    return JSON.stringify(err)
-  } catch {
-    return 'Unknown error'
-  }
+/* ----------------------------- Types (client) ----------------------------- */
+
+// Create game — mirrors backend CreateGameRequest in main.py
+export type MatchType = 'limited' | 'multi_day' | 'custom';
+export type Decision = 'bat' | 'bowl';
+
+export interface CreateGameRequest {
+  team_a_name: string;
+  team_b_name: string;
+  players_a: string[]; // names
+  players_b: string[]; // names
+  match_type?: MatchType;
+  overs_limit?: number | null;
+  days_limit?: number | null;
+  overs_per_day?: number | null;
+  dls_enabled?: boolean;
+  interruptions?: Array<Record<string, string | null>>;
+  toss_winner_team: string; // must equal team_a_name or team_b_name
+  decision: TossDecision; // 'bat' or 'bowl'
 }
 
-/**
- * API surface used by the Pinia store.
- * NOTE: Adjust endpoint paths if your backend routes differ.
- */
+export interface GameMinimal {
+  id: string;
+  team_a_name: string;
+  team_b_name: string;
+  match_type: MatchType;
+  overs_limit: number | null;
+  days_limit: number | null;
+  dls_enabled: boolean;
+  decision: TossDecision
+  // plus many more fields the backend returns; we keep it loose for UI
+  [k: string]: any;
+}
+
+// Score a delivery — mirrors backend schemas.ScoreDelivery in main.py
+export interface ScoreDeliveryRequest {
+  striker_id: string;
+  non_striker_id: string;
+  bowler_id: string;
+  runs_scored: number;
+  extra?: 'wd' | 'nb' | 'b' | 'lb'; // wire as backend expects: 'wd'|'nb' or 'wide'|'no_ball'—server accepts both
+  is_wicket?: boolean;
+  dismissal_type?: string | null;
+  dismissed_player_id?: string | null;
+  commentary?: string | null;
+  fielder_id?: string | null;
+}
+
+// Snapshot — shape can vary; we keep it open but document common fields
+export interface Snapshot {
+  id?: string;
+  status?: string;
+  score?: { runs: number; wickets: number; overs: number | string };
+  total_runs?: number;
+  total_wickets?: number;
+  overs_completed?: number;
+  balls_this_over?: number;
+  current_inning?: number;
+  batting_team_name?: string;
+  bowling_team_name?: string;
+  batting_scorecard?: Record<string, any>;
+  bowling_scorecard?: Record<string, any>;
+  last_delivery?: Record<string, any> | null;
+  [k: string]: any;
+}
+
+export interface OversLimitBody { overs_limit: number; }
+
+export type TeamSide = 'A' | 'B';
+export interface TeamRoleUpdate {
+  side: TeamSide;
+  captain_id?: string | null;
+  wicket_keeper_id?: string | null;
+}
+
+export interface ContributorIn {
+  user_id: string;
+  role: 'SCORER' | 'COMMENTATOR' | 'ANALYST' | 'VIEWER';
+  display_name?: string | null;
+}
+export interface Contributor {
+  id: number;
+  game_id: string;
+  user_id: string;
+  role: ContributorIn['role'];
+  display_name?: string | null;
+}
+
+export interface SponsorCreateBody {
+  name: string;
+  logo: File; // svg/png/webp, <=5MB
+  click_url?: string | null;
+  weight?: number; // 1..5
+  surfaces?: string[]; // defaults to ["all"]
+  start_at?: string | null; // ISO-8601
+  end_at?: string | null;   // ISO-8601
+}
+export interface SponsorRow {
+  id: number;
+  name: string;
+  logoUrl: string;
+  clickUrl?: string | null;
+  weight: number;
+  surfaces: string[];
+}
+export interface SponsorImpressionIn {
+  game_id: string;
+  sponsor_id: string | number;
+  at?: string | null; // ISO time
+}
+export interface SponsorImpressionsOut {
+  inserted: number;
+  ids: number[];
+}
+
+/* ----------------------------- API surface ------------------------------- */
+
 export const apiService = {
-  /** Create a new game */
-  async createGame(payload: CreateGameRequest): Promise<GameState> {
-    return request<GameState>('/games', {
+  /* Games */
+  createGame: (body: CreateGameRequest) =>
+    request<GameMinimal>('/games', { method: 'POST', body: JSON.stringify(body) }),
+
+  getGame: (gameId: string) =>
+    request<GameMinimal>(`/games/${encodeURIComponent(gameId)}`),
+
+  getSnapshot: (gameId: string) =>
+    request<Snapshot>(`/games/${encodeURIComponent(gameId)}/snapshot`),
+
+  /* Scoring */
+  scoreDelivery: (gameId: string, body: ScoreDeliveryRequest) =>
+    request<Snapshot>(`/games/${encodeURIComponent(gameId)}/deliveries`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  undoLast: (gameId: string) =>
+    request<Snapshot>(`/games/${encodeURIComponent(gameId)}/undo-last`, {
+      method: 'POST',
+    }),
+
+  setOversLimit: (gameId: string, body: OversLimitBody) =>
+    request<{ id: string; overs_limit: number }>(
+      `/games/${encodeURIComponent(gameId)}/overs-limit`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+
+  setTeamRoles: (gameId: string, body: TeamRoleUpdate) =>
+    request<{ ok: true; team_roles: any }>(
+      `/games/${encodeURIComponent(gameId)}/team-roles`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+
+  /* Contributors */
+  addContributor: (gameId: string, body: ContributorIn) =>
+    request<Contributor>(`/games/${encodeURIComponent(gameId)}/contributors`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  listContributors: (gameId: string) =>
+    request<Contributor[]>(`/games/${encodeURIComponent(gameId)}/contributors`),
+
+  removeContributor: (gameId: string, contribId: number) =>
+    request<{ ok: true }>(`/games/${encodeURIComponent(gameId)}/contributors/${contribId}`, {
+      method: 'DELETE',
+    }),
+
+  /* Sponsors */
+  uploadSponsor: (body: SponsorCreateBody) => {
+    const form = new FormData();
+    form.append('name', body.name);
+    form.append('logo', body.logo);
+    if (body.click_url != null) form.append('click_url', body.click_url);
+    if (body.weight != null) form.append('weight', String(body.weight));
+    if (body.surfaces) form.append('surfaces', JSON.stringify(body.surfaces));
+    if (body.start_at) form.append('start_at', body.start_at);
+    if (body.end_at) form.append('end_at', body.end_at);
+    return request<any>('/sponsors', { method: 'POST', body: form });
+  },
+
+  getGameSponsors: (gameId: string) =>
+    request<SponsorRow[]>(`/games/${encodeURIComponent(gameId)}/sponsors`),
+
+  logSponsorImpressions: (payload: SponsorImpressionIn | SponsorImpressionIn[]) =>
+    request<SponsorImpressionsOut>('/sponsor_impressions', {
       method: 'POST',
       body: JSON.stringify(payload),
-    })
-  },
+    }),
 
-  /** Load a game by id */
-  async getGame(id: string): Promise<GameState> {
-    return request<GameState>(`/games/${encodeURIComponent(id)}`, {
-      method: 'GET',
-    })
-  },
+  /* Health */
+  healthz: () => request<{ status: 'ok' }>('/healthz'),
 
-  /** Score a single delivery */
-  async scoreDelivery(id: string, body: ScoreDeliveryRequest): Promise<GameState> {
-    // If your backend path is different, e.g. `/games/{id}/deliveries`, update it here.
-    return request<GameState>(`/games/${encodeURIComponent(id)}/score-delivery`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    })
+  /* Optional placeholder (backend route not present yet) */
+  // This will 404 until you add a backend route; the store calls it only if you wire a UI button.
+  startNextInnings: async (gameId: string) => {
+    throw new Error('startNextInnings endpoint not implemented on server');
   },
+};
 
-  /** Start or advance to the next innings */
-  async startNextInnings(id: string): Promise<GameState> {
-    return request<GameState>(`/games/${encodeURIComponent(id)}/next-innings`, {
-      method: 'POST',
-    })
-  },
-
-  /** Add a commentary line (used by store.postCommentary) */
-  async postCommentary(
-    id: string,
-    body: { text: string; over?: string }
-  ): Promise<{ ok: true } | void> {
-    // Update the path if your backend uses a different route.
-    return request<{ ok: true }>(`/games/${encodeURIComponent(id)}/commentary`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    })
-  },
-}
+export default apiService;

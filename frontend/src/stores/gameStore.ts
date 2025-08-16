@@ -1,37 +1,34 @@
-/**
- * Game Store for Cricksy Scorer
- * - Central game state + UI state
- * - REST actions (create/load/score/next-innings)
- * - Socket live snapshots
- * - Offline queue (enqueue while disconnected, flush on reconnect)
- * - Option B additions:
- *   • Map live snapshots into currentGame
- *   • Central commentary feed + postCommentary action
- *   • Shaped scorecard rows for components
- *   • Small strike/wicket UX helpers
- */
+// src/stores/gameStore.ts
+// Full rewrite with TS fixes:
+// - Typed-safe wrappers for socket event names (allowing custom events like 'score:update').
+// - Removed unused @ts-expect-error and guarded optional startNextInnings call.
+// - Matches src/utils/api.ts shapes.
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-/* Types — single source of truth (your existing /types barrel) */
+// ---- UI domain types
 import type {
   GameState,
-  CreateGameRequest,
-  ScoreDeliveryRequest,
   Player,
   Team,
   BattingScorecardEntry,
   BowlingScorecardEntry,
-  Snapshot,
-  StateUpdatePayload,
+  Snapshot as UiSnapshot,
   UIState,
+  MatchType,
+  MatchStatus,
 } from '@/types'
 
-/* If you have a centralized apiService, keep using it for CRUD */
+// ---- API client & wire types
 import { apiService, getErrorMessage } from '@/utils/api'
+import type {
+  CreateGameRequest as ApiCreateGameRequest,
+  ScoreDeliveryRequest as ApiScoreDeliveryRequest,
+  Snapshot as ApiSnapshot,
+} from '@/utils/api'
 
-/* Socket helpers (now including joinGame + emit) */
+// ---- Socket helpers
 import {
   on as onSocket,
   off as offSocket,
@@ -41,31 +38,143 @@ import {
   emit as emitSocket,
 } from '@/utils/socket'
 
-/* Score payload from the deliveries endpoint (services/api) */
-import type { ScoreUpdatePayload, BatterLine, BowlerLine } from '@/services/api'
+// Create loose wrappers so we can subscribe to custom events not present in ServerToClientEvents
+const on = onSocket as unknown as (event: string, handler: (...args: any[]) => void) => void
+const off = offSocket as unknown as (event: string, handler?: (...args: any[]) => void) => void
 
-/* ===== Local helpers ===== */
+// ---------------------------------------------------------------------------
+// Local helpers & types
+// ---------------------------------------------------------------------------
+
 type PendingStatus = 'queued' | 'flushing' | 'failed'
-type PendingDelivery = {
+interface PendingDelivery {
   id: string
   gameId: string
-  payload: ScoreDeliveryRequest
+  payload: ApiScoreDeliveryRequest
   createdAt: number
   tries: number
   status: PendingStatus
 }
 
-function makeId() {
+function makeId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-/* Commentary (Option B) */
-type CommentaryItem = { id: string; at: number; over?: string; text: string; author?: string }
+interface CommentaryItem { id: string; at: number; over?: string; text: string; author?: string }
+
+interface ScoreUpdatePayloadSlim {
+  game_id?: string
+  score?: { runs: number; wickets: number; overs: string | number; innings_no?: number }
+  batting?: Array<{ player_id: string; name: string; runs: number; balls?: number; fours?: number; sixes?: number; strike_rate?: number; is_striker?: boolean }>
+  bowling?: Array<{ player_id: string; name: string; overs?: number | string; maidens?: number; runs: number; wickets: number; econ?: number }>
+}
+
+function splitOvers(overs: string | number | undefined): { overs_completed: number; balls_this_over: number } {
+  if (overs == null) return { overs_completed: 0, balls_this_over: 0 }
+  if (typeof overs === 'number') {
+    const whole = Math.trunc(overs)
+    const frac = Math.round((overs - whole) * 10)
+    return { overs_completed: whole, balls_this_over: frac }
+  }
+  const [o, b] = String(overs).split('.')
+  const oi = Number.isFinite(Number(o)) ? Number(o) : 0
+  const bi = Number.isFinite(Number(b)) ? Number(b) : 0
+  return { overs_completed: oi, balls_this_over: bi }
+}
+
+function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
+  const overAny = s?.over?.completed ?? s?.overs_completed ?? 0
+  const ballsAny = s?.over?.balls_this_over ?? s?.balls_this_over ?? 0
+  return {
+    total_runs: Number(s?.total_runs ?? s?.score?.runs ?? 0),
+    total_wickets: Number(s?.total_wickets ?? s?.score?.wickets ?? 0),
+    overs_completed: Number(overAny),
+    balls_this_over: Number(ballsAny),
+    current_inning: Number(s?.current_inning ?? 1),
+    batting_team_name: String(s?.batting_team_name ?? s?.teams?.batting?.name ?? ''),
+    bowling_team_name: String(s?.bowling_team_name ?? s?.teams?.bowling?.name ?? ''),
+    batting_scorecard: (s?.batting_scorecard ?? {}) as Record<string, BattingScorecardEntry>,
+    bowling_scorecard: (s?.bowling_scorecard ?? {}) as Record<string, BowlingScorecardEntry>,
+    current_striker_id: s?.current_striker_id ?? null,
+    current_non_striker_id: s?.current_non_striker_id ?? null,
+    target: s?.target ?? null,
+    status: s?.status ?? undefined,
+  }
+}
+
+function normalizeServerSnapshot(s: any): UiSnapshot {
+  const total_runs = s?.total_runs ?? s?.score?.runs ?? 0
+  const total_wickets = s?.total_wickets ?? s?.score?.wickets ?? 0
+  const ocRaw: string | number | undefined = s?.over?.completed ?? s?.overs_completed ?? s?.score?.overs
+  const { overs_completed, balls_this_over } = splitOvers(ocRaw)
+
+  return {
+    total_runs,
+    total_wickets,
+    overs_completed,
+    balls_this_over: s?.balls_this_over ?? s?.over?.balls_this_over ?? balls_this_over,
+    current_inning: Number(s?.current_inning ?? 1),
+    batting_team_name: s?.batting_team_name ?? s?.teams?.batting?.name ?? '',
+    bowling_team_name: s?.bowling_team_name ?? s?.teams?.bowling?.name ?? '',
+    batting_scorecard: (s?.batting_scorecard ?? {}) as Record<string, BattingScorecardEntry>,
+    bowling_scorecard: (s?.bowling_scorecard ?? {}) as Record<string, BowlingScorecardEntry>,
+    current_striker_id: s?.current_striker_id ?? null,
+    current_non_striker_id: s?.current_non_striker_id ?? null,
+    target: s?.target ?? null,
+    status: s?.status ?? undefined,
+  }
+}
+
+function coerceGameFromApi(raw: any): GameState {
+  const teamA: Team = {
+    name: String(raw?.team_a?.name ?? raw?.team_a_name ?? 'Team A'),
+    players: (raw?.team_a?.players ?? raw?.players_a ?? []).map((p: any) => ({ id: String(p?.id), name: String(p?.name) })),
+  }
+  const teamB: Team = {
+    name: String(raw?.team_b?.name ?? raw?.team_b_name ?? 'Team B'),
+    players: (raw?.team_b?.players ?? raw?.players_b ?? []).map((p: any) => ({ id: String(p?.id), name: String(p?.name) })),
+  }
+
+  const toDecision = (v: unknown): 'bat' | 'bowl' => (v === 'bowl' ? 'bowl' : 'bat')
+
+  return {
+    id: String(raw?.id ?? raw?.game_id ?? ''),
+    match_type: (raw?.match_type as MatchType) ?? 'limited',
+    status: (raw?.status as MatchStatus) ?? 'in_progress',
+    team_a: teamA,
+    team_b: teamB,
+    dls_enabled: Boolean(raw?.dls_enabled ?? false),
+    interruptions: raw?.interruptions ?? [],
+    toss_winner_team: String(raw?.toss_winner_team ?? ''),
+    decision: toDecision(raw?.decision),
+    batting_team_name: String(raw?.batting_team_name ?? teamA.name),
+    bowling_team_name: String(raw?.bowling_team_name ?? teamB.name),
+
+    current_inning: Number(raw?.current_inning ?? 1),
+    total_runs: Number(raw?.total_runs ?? 0),
+    total_wickets: Number(raw?.total_wickets ?? 0),
+    overs_completed: Number(raw?.overs_completed ?? 0),
+    balls_this_over: Number(raw?.balls_this_over ?? 0),
+    current_striker_id: raw?.current_striker_id ?? null,
+    current_non_striker_id: raw?.current_non_striker_id ?? null,
+    target: raw?.target ?? null,
+    result: raw?.result ?? null,
+
+    // roles
+    team_a_captain_id: raw?.team_a_captain_id ?? null,
+    team_a_keeper_id: raw?.team_a_keeper_id ?? null,
+    team_b_captain_id: raw?.team_b_captain_id ?? null,
+    team_b_keeper_id: raw?.team_b_keeper_id ?? null,
+
+    batting_scorecard: (raw?.batting_scorecard ?? {}) as Record<string, BattingScorecardEntry>,
+    bowling_scorecard: (raw?.bowling_scorecard ?? {}) as Record<string, BowlingScorecardEntry>,
+  } as GameState
+}
 
 export const useGameStore = defineStore('game', () => {
-  /* ========================================================================
-   * Reactive State
-   * ====================================================================== */
+  // ========================================================================
+  // Reactive State
+  // ========================================================================
   const currentGame = ref<GameState | null>(null)
 
   const uiState = ref<UIState>({
@@ -85,293 +194,235 @@ export const useGameStore = defineStore('game', () => {
     startInnings: false,
   })
 
-  /* Live sockets */
   const isLive = ref(false)
   const liveGameId = ref<string | null>(null)
   const connectionStatus = ref<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
   const lastLiveAt = ref<number | null>(null)
-  const liveSnapshot = ref<Snapshot | null>(null)
+  const liveSnapshot = ref<UiSnapshot | null>(null)
 
-  /* Commentary feed (Option B) */
   const commentaryFeed = ref<CommentaryItem[]>([])
 
-  /* Offline queue */
   const offlineEnabled = ref(true)
   const offlineQueue = ref<PendingDelivery[]>([])
   const isFlushing = ref(false)
   const QKEY = 'cricksy.offline.queue.v1'
 
-  function loadQueue() {
+  function loadQueue(): void {
     try {
       const raw = localStorage.getItem(QKEY)
-      offlineQueue.value = raw ? JSON.parse(raw) : []
+      offlineQueue.value = raw ? (JSON.parse(raw) as PendingDelivery[]) : []
     } catch {
       offlineQueue.value = []
     }
   }
-  function saveQueue() {
+  function saveQueue(): void {
     try {
       localStorage.setItem(QKEY, JSON.stringify(offlineQueue.value))
-    } catch {}
+    } catch {
+      /* noop */
+    }
   }
   loadQueue()
 
-  /* ========================================================================
-   * Simple proxies expected by views
-   * ====================================================================== */
-  const isLoading = computed(() => uiState.value.loading)
-  const error = computed(() => uiState.value.error)
+  // ========================================================================
+  // Proxies & Status
+  // ========================================================================
+  const isLoading = computed<boolean>(() => uiState.value.loading)
+  const error = computed<string | null>(() => uiState.value.error)
 
-  /* ========================================================================
-   * Status flags
-   * ====================================================================== */
-  const isGameActive = computed(() => currentGame.value?.status === 'in_progress')
-  const isInningsBreak = computed(() => currentGame.value?.status === 'innings_break')
-  const isGameCompleted = computed(() => currentGame.value?.status === 'completed')
-  const isFirstInnings = computed(() => currentGame.value?.current_inning === 1)
-  const isSecondInnings = computed(() => currentGame.value?.current_inning === 2)
+  const isGameActive = computed<boolean>(() => currentGame.value?.status === 'in_progress')
+  const isInningsBreak = computed<boolean>(() => currentGame.value?.status === 'innings_break')
+  const isGameCompleted = computed<boolean>(() => currentGame.value?.status === 'completed')
+  const isFirstInnings = computed<boolean>(() => (currentGame.value?.current_inning ?? 1) === 1)
+  const isSecondInnings = computed<boolean>(() => (currentGame.value?.current_inning ?? 1) === 2)
 
-  /* ========================================================================
-   * Teams & players
-   * ====================================================================== */
+  // ========================================================================
+  // Teams & Players
+  // ========================================================================
   const battingTeam = computed<Team | null>(() => {
-    if (!currentGame.value) return null
-    return currentGame.value.batting_team_name === currentGame.value.team_a.name
-      ? currentGame.value.team_a
-      : currentGame.value.team_b
+    const g = currentGame.value
+    if (!g) return null
+    return g.batting_team_name === g.team_a.name ? g.team_a : g.team_b
   })
 
   const bowlingTeam = computed<Team | null>(() => {
-    if (!currentGame.value) return null
-    return currentGame.value.bowling_team_name === currentGame.value.team_a.name
-      ? currentGame.value.team_a
-      : currentGame.value.team_b
+    const g = currentGame.value
+    if (!g) return null
+    return g.bowling_team_name === g.team_a.name ? g.team_a : g.team_b
   })
 
   const availableBatsmen = computed<Player[]>(() => {
     const team = battingTeam.value
-    if (!team || !currentGame.value) return []
-    const card: Record<string, BattingScorecardEntry> = currentGame.value.batting_scorecard || {}
+    const g = currentGame.value
+    if (!team || !g) return []
+    const card = (g.batting_scorecard || {}) as Record<string, BattingScorecardEntry>
     return team.players.filter((p) => !card[p.id]?.is_out)
   })
 
-  const availableBowlers = computed<Player[]>(() => {
-    const team = bowlingTeam.value
-    return team ? team.players : []
-  })
+  const availableBowlers = computed<Player[]>(() => bowlingTeam.value ? bowlingTeam.value.players : [])
 
-  /* ========================================================================
-   * Score helpers
-   * ====================================================================== */
-  const currentOver = computed(() => {
-    if (!currentGame.value) return '0.0'
-    const o = currentGame.value.overs_completed ?? 0
-    const b = currentGame.value.balls_this_over ?? 0
+  // ========================================================================
+  // Score helpers
+  // ========================================================================
+  const currentOver = computed<string>(() => {
+    const g = currentGame.value
+    if (!g) return '0.0'
+    const o = g.overs_completed ?? 0
+    const b = g.balls_this_over ?? 0
     return `${o}.${b}`
   })
 
-  const scoreDisplay = computed(() => {
-    if (!currentGame.value) return '0/0 (0.0)'
-    const r = currentGame.value.total_runs ?? 0
-    const w = currentGame.value.total_wickets ?? 0
+  const scoreDisplay = computed<string>(() => {
+    const g = currentGame.value
+    if (!g) return '0/0 (0.0)'
+    const r = g.total_runs ?? 0
+    const w = g.total_wickets ?? 0
     return `${r}/${w} (${currentOver.value})`
   })
 
-  const targetDisplay = computed(() => {
-    if (!currentGame.value || currentGame.value.target == null) return ''
-    return `Target: ${currentGame.value.target}`
+  const targetDisplay = computed<string>(() => {
+    const g = currentGame.value
+    if (!g || g.target == null) return ''
+    return `Target: ${g.target}`
   })
 
-  const runsRequired = computed(() => {
-    if (!currentGame.value || currentGame.value.target == null) return null
-    const req = currentGame.value.target - (currentGame.value.total_runs ?? 0)
+  const runsRequired = computed<number | null>(() => {
+    const g = currentGame.value
+    if (!g || g.target == null) return null
+    const req = g.target - (g.total_runs ?? 0)
     return req > 0 ? req : 0
   })
 
-  /* ========================================================================
-   * Shaped scorecards for components (Option B)
-   * ====================================================================== */
+  // ========================================================================
+  // Scorecards (defensive shaping)
+  // ========================================================================
   const battingRows = computed(() => {
     const g = currentGame.value
-    if (!g || !g.batting_scorecard) return []
-    return Object.values(g.batting_scorecard).map((row) => ({
-      id: row.player_id,
-      name: row.player_name,
-      runs: row.runs,
-      balls: row.balls,
-      fours: row.fours,
-      sixes: row.sixes,
-      sr: row.strike_rate,
-      howOut: row.how_out,
-      isOut: row.is_out,
-    }))
+    if (!g || !g.batting_scorecard) return [] as Array<{ id: string; name: string; runs: number; balls: number; fours: number; sixes: number; sr: number; howOut?: string; isOut: boolean }>
+    const rows = Object.values(g.batting_scorecard as Record<string, any>)
+    return rows.map((row) => {
+      const runs = Number(row.runs ?? 0)
+      const balls = Number(row.balls ?? row.balls_faced ?? 0)
+      const fours = Number(row.fours ?? 0)
+      const sixes = Number(row.sixes ?? 0)
+      const sr = typeof row.strike_rate === 'number' ? row.strike_rate : (balls > 0 ? Number(((runs * 100) / balls).toFixed(2)) : 0)
+      return {
+        id: String(row.player_id),
+        name: String(row.player_name || ''),
+        runs,
+        balls,
+        fours,
+        sixes,
+        sr,
+        howOut: row.how_out,
+        isOut: Boolean(row.is_out),
+      }
+    })
   })
 
   const bowlingRows = computed(() => {
     const g = currentGame.value
-    if (!g || !g.bowling_scorecard) return []
-    return Object.values(g.bowling_scorecard).map((row) => ({
-      id: row.player_id,
-      name: row.player_name,
-      overs: row.overs,
-      maidens: row.maidens,
-      runs: row.runs_conceded,
-      wkts: row.wickets,
-      econ: row.economy,
-    }))
+    if (!g || !g.bowling_scorecard) return [] as Array<{ id: string; name: string; overs: number; maidens: number; runs: number; wkts: number; econ: number }>
+    const rows = Object.values(g.bowling_scorecard as Record<string, any>)
+    return rows.map((row) => {
+      const overs = Number(row.overs ?? row.overs_bowled ?? 0)
+      const maidens = Number(row.maidens ?? 0)
+      const runs_conceded = Number(row.runs_conceded ?? row.runs ?? 0)
+      const wkts = Number(row.wickets ?? row.wickets_taken ?? 0)
+      const econ = typeof row.economy === 'number' ? row.economy : (overs > 0 ? Number((runs_conceded / overs).toFixed(2)) : 0)
+      return { id: String(row.player_id), name: String(row.player_name || ''), overs, maidens, runs: runs_conceded, wkts, econ }
+    })
   })
 
-  /* ========================================================================
-   * UI helpers
-   * ====================================================================== */
-  function setLoading(v: boolean) {
-    uiState.value.loading = v
-  }
-  function setError(msg: string | null) {
-    uiState.value.error = msg
-  }
-  function setOperationLoading(key: keyof typeof operationLoading.value, v: boolean) {
-    operationLoading.value[key] = v
-  }
+  function mapScorePayloadToSnapshot(p: ScoreUpdatePayloadSlim): UiSnapshot {
+    const score = p?.score ?? { runs: 0, wickets: 0, overs: '0.0' }
+    const { overs_completed, balls_this_over } = splitOvers(score.overs)
 
-  /* ========================================================================
-   * LIVE socket handlers
-   * ====================================================================== */
+    const battingCard: Record<string, BattingScorecardEntry> = {}
+    for (const b of p?.batting ?? []) {
+      battingCard[String(b.player_id)] = {
+        player_id: String(b.player_id),
+        player_name: String(b.name),
+        runs: Number(b.runs ?? 0),
+        balls_faced: Number(b.balls ?? 0),
+        is_out: Boolean((b as any).is_out ?? false),
+        fours: Number(b.fours ?? 0),
+        sixes: Number(b.sixes ?? 0),
+        strike_rate: typeof b.strike_rate === 'number' ? b.strike_rate : undefined,
+      }
+    }
 
-  // Convert "14.3" -> { overs_completed: 14, balls_this_over: 3 }
-  function splitOvers(oversStr?: string): { overs_completed: number; balls_this_over: number } {
-    if (!oversStr) return { overs_completed: 0, balls_this_over: 0 };
-    const [o, b] = oversStr.split('.');
-    const oi = Number.isFinite(Number(o)) ? Number(o) : 0;
-    const bi = Number.isFinite(Number(b)) ? Number(b) : 0;
-    return { overs_completed: oi, balls_this_over: bi };
-  }
+    const bowlingCard: Record<string, BowlingScorecardEntry> = {}
+    for (const bw of p?.bowling ?? []) {
+      const oversNum = typeof bw.overs === 'number' ? bw.overs : (bw.overs != null ? Number(bw.overs) : 0)
+      bowlingCard[String(bw.player_id)] = {
+        player_id: String(bw.player_id),
+        player_name: String(bw.name),
+        overs_bowled: oversNum,
+        runs_conceded: Number(bw.runs ?? 0),
+        wickets_taken: Number(bw.wickets ?? 0),
+        maidens: Number(bw.maidens ?? 0),
+        economy: typeof bw.econ === 'number' ? bw.econ : undefined,
+      }
+    }
 
-
-  // Map ScoreUpdatePayload (server snapshot) into your Snapshot shape
-  function mapScorePayloadToSnapshot(p: ScoreUpdatePayload): Snapshot {
-  const { score, batting, bowling } = p;
-
-  const battingCard: Record<string, BattingScorecardEntry> = {};
-  batting.forEach((b) => {
-    battingCard[b.player_id] = {
-      player_id: b.player_id,
-      player_name: b.name,
-      runs: b.runs,
-      balls: b.balls,
-      fours: b.fours,
-      sixes: b.sixes,
-      strike_rate: b.strike_rate,
-      // If your backend sends how_out/is_out, map them here. Using placeholders:
-      how_out: b.is_striker ? 'not out' : undefined as unknown as string,
-      is_out: false,
-    };
-  });
-
-  const bowlingCard: Record<string, BowlingScorecardEntry> = {};
-  bowling.forEach((bw) => {
-    bowlingCard[bw.player_id] = {
-      player_id: bw.player_id,
-      player_name: bw.name,
-      overs: bw.overs,
-      maidens: bw.maidens,
-      runs_conceded: bw.runs,
-      wickets: bw.wickets,
-      economy: bw.econ,
-    };
-  });
-
-  const { overs_completed, balls_this_over } = splitOvers(score.overs);
-
-  // If Team JSON in GameState has no `id`, don’t try to resolve names by id.
-  // Keep current names from `currentGame` so types stay `string`.
-  const battingTeamName =
-    currentGame.value?.batting_team_name ?? (currentGame.value?.team_a?.name || '') as string;
-  const bowlingTeamName =
-    currentGame.value?.bowling_team_name ?? (currentGame.value?.team_b?.name || '') as string;
-
-  const snap: Snapshot = {
-    total_runs: score.runs,
-    total_wickets: score.wickets,
-    overs_completed,
-    balls_this_over,
-    current_inning: score.innings_no,
-    batting_team_name: battingTeamName,
-    bowling_team_name: bowlingTeamName,
-    batting_scorecard: battingCard,
-    bowling_scorecard: bowlingCard,
-  };
-  return snap;
-}
-
-  
-
-  // Merge a partial live snapshot into the current game (reactive-safe)
-  function applySnapshotToGame(s: Snapshot) {
-    if (!currentGame.value) return
-    const g: any = currentGame.value
-    const snap: any = s
-
-    // Core scoreboard
-    if (snap.total_runs != null) g.total_runs = snap.total_runs
-    if (snap.total_wickets != null) g.total_wickets = snap.total_wickets
-    if (snap.overs_completed != null) g.overs_completed = snap.overs_completed
-    if (snap.balls_this_over != null) g.balls_this_over = snap.balls_this_over
-    if (snap.current_inning != null) g.current_inning = snap.current_inning
-    if (snap.status != null) g.status = snap.status
-    if (snap.target != null) g.target = snap.target
-
-    // Which team is batting/bowling (affects selectors & cards)
-    if (snap.batting_team_name != null) g.batting_team_name = snap.batting_team_name
-    if (snap.bowling_team_name != null) g.bowling_team_name = snap.bowling_team_name
-
-    // Live rosters/scorecards
-    if (snap.batting_scorecard) g.batting_scorecard = snap.batting_scorecard
-    if (snap.bowling_scorecard) g.bowling_scorecard = snap.bowling_scorecard
-
-    // New deliveries (if your server emits them)
-    if (Array.isArray(snap.deliveries)) g.deliveries = snap.deliveries
-
-    // Optional convenience fields your backend might send
-    if (snap.current_striker_id != null) g.current_striker_id = snap.current_striker_id
-    if (snap.current_non_striker_id != null) g.current_non_striker_id = snap.current_non_striker_id
+    return {
+      total_runs: Number(score.runs ?? 0),
+      total_wickets: Number(score.wickets ?? 0),
+      overs_completed,
+      balls_this_over,
+      current_inning: Number(score.innings_no ?? currentGame.value?.current_inning ?? 1),
+      batting_team_name: currentGame.value?.batting_team_name ?? '',
+      bowling_team_name: currentGame.value?.bowling_team_name ?? '',
+      batting_scorecard: battingCard,
+      bowling_scorecard: bowlingCard,
+      current_striker_id: currentGame.value?.current_striker_id ?? null,
+      current_non_striker_id: currentGame.value?.current_non_striker_id ?? null,
+      target: currentGame.value?.target ?? null,
+      status: currentGame.value?.status ?? undefined,
+    }
   }
 
-  function handleStateUpdate(payload: StateUpdatePayload) {
+  function applySnapshotToGame(s: UiSnapshot): void {
+    const g = currentGame.value as GameState | null
+    if (!g || !s) return
+    if (s.total_runs != null) g.total_runs = s.total_runs
+    if (s.total_wickets != null) g.total_wickets = s.total_wickets
+    if (s.overs_completed != null) g.overs_completed = s.overs_completed
+    if (s.balls_this_over != null) g.balls_this_over = s.balls_this_over
+    if (s.current_inning != null) g.current_inning = s.current_inning
+    if (s.status != null) g.status = s.status
+    if (s.target != null) g.target = s.target
+    if (s.batting_team_name != null) g.batting_team_name = s.batting_team_name
+    if (s.bowling_team_name != null) g.bowling_team_name = s.bowling_team_name
+    if (s.batting_scorecard) g.batting_scorecard = s.batting_scorecard
+    if (s.bowling_scorecard) g.bowling_scorecard = s.bowling_scorecard
+    if (s.current_striker_id != null) g.current_striker_id = s.current_striker_id
+    if (s.current_non_striker_id != null) g.current_non_striker_id = s.current_non_striker_id
+  }
+
+  function handleStateUpdate(payload: { id: string; snapshot: any }): void {
     if (!liveGameId.value || payload.id !== liveGameId.value) return
-    liveSnapshot.value = payload.snapshot
-    lastLiveAt.value = Date.now()
-    applySnapshotToGame(payload.snapshot)
-  }
-
-  function handleScoreUpdate(payload: ScoreUpdatePayload) {
-    if (!liveGameId.value) return
-    const snap = mapScorePayloadToSnapshot(payload)
-    liveSnapshot.value = { ...(liveSnapshot.value || {}), ...snap }
+    const snap = normalizeServerSnapshot(payload.snapshot)
+    liveSnapshot.value = snap
     lastLiveAt.value = Date.now()
     applySnapshotToGame(snap)
   }
 
-  const handleCommentary = (msg: {
-    id: string
-    at: number
-    text: string
-    over?: string
-    author?: string
-    game_id: string
-  }) => {
+  function handleScoreUpdate(payload: ScoreUpdatePayloadSlim): void {
+    const snap = mapScorePayloadToSnapshot(payload)
+    liveSnapshot.value = { ...(liveSnapshot.value || ({} as UiSnapshot)), ...snap }
+    lastLiveAt.value = Date.now()
+    applySnapshotToGame(snap)
+  }
+
+  const handleCommentary = (msg: { id: string; at: number; text: string; over?: string; author?: string; game_id: string }): void => {
     if (!liveGameId.value || msg.game_id !== liveGameId.value) return
-    commentaryFeed.value.unshift({
-      id: msg.id,
-      at: msg.at,
-      over: msg.over,
-      text: msg.text,
-      author: msg.author,
-    })
+    commentaryFeed.value.unshift({ id: msg.id, at: msg.at, over: msg.over, text: msg.text, author: msg.author })
     if (commentaryFeed.value.length > 200) commentaryFeed.value.pop()
   }
 
-  async function initLive(id: string) {
+  async function initLive(id: string): Promise<void> {
     liveGameId.value = id
     connectionStatus.value = 'connecting'
     isLive.value = true
@@ -379,31 +430,23 @@ export const useGameStore = defineStore('game', () => {
     try {
       connectSocket()
 
-      // Join the game room (prefer helper; fall back to plain emit if needed)
       if (typeof joinGameSocket === 'function') {
         joinGameSocket(id)
       } else {
-        emitSocket('join_game', { game_id: id })
+        emitSocket('join', { game_id: id } as any)
       }
 
-      // Connection ack
-      onSocket('hello', () => {
+      on('presence:init', (p: { game_id: string; members: Array<{ sid: string; role: string; name: string }> }) => {
+        if (!liveGameId.value || p.game_id !== liveGameId.value) return
         connectionStatus.value = 'connected'
-        if (liveGameId.value) flushQueue(liveGameId.value).catch(() => {})
+        if (liveGameId.value) void flushQueue(liveGameId.value)
       })
 
-      // Live updates
-      onSocket('state:update', handleStateUpdate)
-      onSocket('score:update', handleScoreUpdate)
-
-      // Commentary (server payload: { game_id, text, at })
-      onSocket('commentary:new', (payload: { game_id: string; text: string; at: string }) => {
+      on('state:update', handleStateUpdate as any)
+      on('score:update', handleScoreUpdate as any)
+      on('commentary:new', (payload: { game_id: string; text: string; at: string }) => {
         if (!liveGameId.value || payload.game_id !== liveGameId.value) return
-        commentaryFeed.value.unshift({
-          id: makeId(),
-          at: Date.parse(payload.at) || Date.now(),
-          text: payload.text,
-        })
+        commentaryFeed.value.unshift({ id: makeId(), at: Date.parse(payload.at) || Date.now(), text: payload.text })
         if (commentaryFeed.value.length > 200) commentaryFeed.value.pop()
       })
     } catch (e) {
@@ -412,47 +455,38 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-
-
-  function stopLive() {
-    offSocket('state:update', handleStateUpdate)
-    offSocket('score:update', handleScoreUpdate)
-    offSocket('commentary:new') // no handler needed since we inlined it
+  function stopLive(): void {
+    off('state:update', handleStateUpdate as any)
+    off('score:update', handleScoreUpdate as any)
+    off('presence:init')
+    off('presence:update')
     disconnectSocket()
     connectionStatus.value = 'disconnected'
     isLive.value = false
     liveGameId.value = null
   }
 
-  /* Also flush when the browser regains network */
   let listenersBound = false
-  function bindNetworkListeners() {
+  function bindNetworkListeners(): void {
     if (listenersBound) return
     listenersBound = true
     window.addEventListener('online', () => {
-      if (liveGameId.value) flushQueue(liveGameId.value).catch(() => {})
+      if (liveGameId.value) void flushQueue(liveGameId.value)
     })
   }
   bindNetworkListeners()
 
-  /* ========================================================================
-   * Offline queue
-   * ====================================================================== */
-  function enqueueDelivery(gameId: string, payload: ScoreDeliveryRequest) {
-    const item: PendingDelivery = {
-      id: makeId(),
-      gameId,
-      payload,
-      createdAt: Date.now(),
-      tries: 0,
-      status: 'queued',
-    }
+  // ========================================================================
+  // Offline queue
+  // ========================================================================
+  function enqueueDelivery(gameId: string, payload: ApiScoreDeliveryRequest): string {
+    const item: PendingDelivery = { id: makeId(), gameId, payload, createdAt: Date.now(), tries: 0, status: 'queued' }
     offlineQueue.value.push(item)
     saveQueue()
     return item.id
   }
 
-  async function flushQueue(gameId: string) {
+  async function flushQueue(gameId: string): Promise<void> {
     if (isFlushing.value) return
     if (connectionStatus.value !== 'connected') return
 
@@ -467,13 +501,14 @@ export const useGameStore = defineStore('game', () => {
         saveQueue()
 
         try {
-          await apiService.scoreDelivery(item.gameId, item.payload)
+          const snap = await apiService.scoreDelivery(gameId, item.payload)
+          applySnapshotToGame(coerceSnapshot(snap))
           offlineQueue.value = offlineQueue.value.filter((q) => q.id !== item.id)
           saveQueue()
-        } catch (e) {
+        } catch {
           item.status = 'failed'
           saveQueue()
-          break // preserve order on failure
+          break
         }
       }
     } finally {
@@ -481,79 +516,91 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-  /* ========================================================================
-   * Actions: Game lifecycle
-   * ====================================================================== */
-  async function createNewGame(payload: CreateGameRequest) {
-    setOperationLoading('createGame', true)
-    setError(null)
+  // ========================================================================
+  // Actions: Game lifecycle
+  // ========================================================================
+  async function createNewGame(payload: ApiCreateGameRequest): Promise<any> {
+    operationLoading.value.createGame = true
+    uiState.value.error = null
     try {
-      setLoading(true)
+      uiState.value.loading = true
       const game = await apiService.createGame(payload)
-      currentGame.value = game
+      currentGame.value = coerceGameFromApi(game)
+      try {
+        const snap = await apiService.getSnapshot(String((game as any).id ?? (game as any).game_id))
+        if (snap) applySnapshotToGame(coerceSnapshot(snap))
+      } catch {}
       return game
     } catch (e) {
-      setError(getErrorMessage(e))
+      uiState.value.error = getErrorMessage(e)
       throw e
     } finally {
-      setLoading(false)
-      setOperationLoading('createGame', false)
+      uiState.value.loading = false
+      operationLoading.value.createGame = false
     }
   }
 
-  async function loadGame(gameId: string) {
-    setOperationLoading('loadGame', true)
-    setError(null)
+  async function loadGame(gameId: string): Promise<any> {
+    operationLoading.value.loadGame = true
+    uiState.value.error = null
     try {
-      setLoading(true)
+      uiState.value.loading = true
       const game = await apiService.getGame(gameId)
-      currentGame.value = game
+      currentGame.value = coerceGameFromApi(game)
+      try {
+        const snap = await apiService.getSnapshot(gameId)
+        if (snap) applySnapshotToGame(coerceSnapshot(snap))
+      } catch {}
       return game
     } catch (e) {
-      setError(getErrorMessage(e))
+      uiState.value.error = getErrorMessage(e)
       throw e
     } finally {
-      setLoading(false)
-      setOperationLoading('loadGame', false)
+      uiState.value.loading = false
+      operationLoading.value.loadGame = false
     }
   }
 
-  async function scoreDelivery(gameId: string, delivery: ScoreDeliveryRequest) {
-    setOperationLoading('scoreDelivery', true)
-    setError(null)
+  async function scoreDelivery(gameId: string, delivery: ApiScoreDeliveryRequest): Promise<ApiSnapshot> {
+    operationLoading.value.scoreDelivery = true
+    uiState.value.error = null
     try {
-      setLoading(true)
-      const updated = await apiService.scoreDelivery(gameId, delivery)
-      currentGame.value = updated
-      return updated
+      uiState.value.loading = true
+      const snap = await apiService.scoreDelivery(gameId, delivery)
+      applySnapshotToGame(coerceSnapshot(snap))
+      return snap
     } catch (e) {
-      setError(getErrorMessage(e))
+      uiState.value.error = getErrorMessage(e)
       throw e
     } finally {
-      setLoading(false)
-      setOperationLoading('scoreDelivery', false)
+      uiState.value.loading = false
+      operationLoading.value.scoreDelivery = false
     }
   }
 
-  async function startNextInnings(gameId: string) {
-    setOperationLoading('startInnings', true)
-    setError(null)
+  async function startNextInnings(gameId: string): Promise<UiSnapshot | undefined> {
+    operationLoading.value.startInnings = true
+    uiState.value.error = null
     try {
-      setLoading(true)
-      const updated = await apiService.startNextInnings(gameId)
-      currentGame.value = updated
-      return updated
+      uiState.value.loading = true
+      const svc: any = apiService as any
+      if (typeof svc.startNextInnings !== 'function') {
+        throw new Error('Start next innings is not implemented on the server yet.')
+      }
+      const snap = await svc.startNextInnings(gameId)
+      const coerced = coerceSnapshot(snap)
+      applySnapshotToGame(coerced)
+      return coerced
     } catch (e) {
-      setError(getErrorMessage(e))
+      uiState.value.error = getErrorMessage(e)
       throw e
     } finally {
-      setLoading(false)
-      setOperationLoading('startInnings', false)
+      uiState.value.loading = false
+      operationLoading.value.startInnings = false
     }
   }
 
-  /* Smart submit: queue when offline, post when online */
-  async function submitDelivery(gameId: string, payload: ScoreDeliveryRequest) {
+  async function submitDelivery(gameId: string, payload: ApiScoreDeliveryRequest): Promise<any> {
     const onlineAndLive = connectionStatus.value === 'connected'
     if (!onlineAndLive && offlineEnabled.value) {
       enqueueDelivery(gameId, payload)
@@ -562,113 +609,84 @@ export const useGameStore = defineStore('game', () => {
     return scoreDelivery(gameId, payload)
   }
 
-  /* ========================================================================
-   * Selection & convenience
-   * ====================================================================== */
+  // ========================================================================
+  // Selection & convenience
+  // ========================================================================
   const selectedStriker = computed<Player | null>(() => {
     const id = uiState.value.selectedStrikerId
     const team = battingTeam.value
-    return id && team ? team.players.find((p) => p.id === id) || null : null
+    return id && team ? (team.players.find((p) => p.id === id) ?? null) : null
   })
   const selectedNonStriker = computed<Player | null>(() => {
     const id = uiState.value.selectedNonStrikerId
     const team = battingTeam.value
-    return id && team ? team.players.find((p) => p.id === id) || null : null
+    return id && team ? (team.players.find((p) => p.id === id) ?? null) : null
   })
   const selectedBowler = computed<Player | null>(() => {
     const id = uiState.value.selectedBowlerId
     const team = bowlingTeam.value
-    return id && team ? team.players.find((p) => p.id === id) || null : null
+    return id && team ? (team.players.find((p) => p.id === id) ?? null) : null
   })
 
-  const canScore = computed(
-    () =>
-      Boolean(
-        currentGame.value &&
-          currentGame.value.status === 'in_progress' &&
-          uiState.value.selectedStrikerId &&
-          uiState.value.selectedNonStrikerId &&
-          uiState.value.selectedBowlerId &&
-          uiState.value.selectedStrikerId !== uiState.value.selectedNonStrikerId &&
-          !uiState.value.loading &&
-          !uiState.value.scoringDisabled,
-      ),
-  )
+  const canScore = computed<boolean>(() => Boolean(
+    currentGame.value &&
+    currentGame.value.status === 'in_progress' &&
+    uiState.value.selectedStrikerId &&
+    uiState.value.selectedNonStrikerId &&
+    uiState.value.selectedBowlerId &&
+    uiState.value.selectedStrikerId !== uiState.value.selectedNonStrikerId &&
+    !uiState.value.loading &&
+    !uiState.value.scoringDisabled,
+  ))
 
-  function setSelectedStriker(playerId: string | null) {
-    uiState.value.selectedStrikerId = playerId
-  }
-  function setSelectedNonStriker(playerId: string | null) {
-    uiState.value.selectedNonStrikerId = playerId
-  }
-  function setSelectedBowler(playerId: string | null) {
-    uiState.value.selectedBowlerId = playerId
-  }
-  function swapBatsmen() {
+  function setSelectedStriker(playerId: string | null): void { uiState.value.selectedStrikerId = playerId }
+  function setSelectedNonStriker(playerId: string | null): void { uiState.value.selectedNonStrikerId = playerId }
+  function setSelectedBowler(playerId: string | null): void { uiState.value.selectedBowlerId = playerId }
+  function swapBatsmen(): void {
     const a = uiState.value.selectedStrikerId
     const b = uiState.value.selectedNonStrikerId
     uiState.value.selectedStrikerId = b
     uiState.value.selectedNonStrikerId = a
   }
-  function setActiveScorecardTab(tab: 'batting' | 'bowling') {
-    uiState.value.activeScorecardTab = tab
+  function setActiveScorecardTab(tab: 'batting' | 'bowling'): void { uiState.value.activeScorecardTab = tab }
+  function setScoringDisabled(disabled: boolean): void { uiState.value.scoringDisabled = disabled }
+
+  function afterRunsApplied(runs: number, isExtra?: boolean): void {
+    if (runs % 2 === 1 && !isExtra) swapBatsmen()
   }
-  function setScoringDisabled(disabled: boolean) {
-    uiState.value.scoringDisabled = disabled
+  function afterWicketApplied(dismissed_player_id: string): void {
+    if (uiState.value.selectedStrikerId === dismissed_player_id) uiState.value.selectedStrikerId = null
   }
 
-  /* Optional small UX helpers (Option B) */
-  function afterRunsApplied(runs: number, isExtra?: boolean) {
-    if (runs % 2 === 1 && !isExtra) {
-      swapBatsmen()
-    }
-  }
-
-  function afterWicketApplied(dismissed_player_id: string) {
-    if (uiState.value.selectedStrikerId === dismissed_player_id) {
-      uiState.value.selectedStrikerId = null
-    }
-  }
-
-  /* Convenience actions that the UI can call */
-  async function scoreRuns(gameId: string, runs: number) {
-    if (
-      !uiState.value.selectedStrikerId ||
-      !uiState.value.selectedNonStrikerId ||
-      !uiState.value.selectedBowlerId
-    ) {
+  async function scoreRuns(gameId: string, runs: number): Promise<any> {
+    if (!uiState.value.selectedStrikerId || !uiState.value.selectedNonStrikerId || !uiState.value.selectedBowlerId) {
       throw new Error('Cannot score runs - missing selected players')
     }
-    const payload: ScoreDeliveryRequest = {
+    const payload: ApiScoreDeliveryRequest = {
       striker_id: uiState.value.selectedStrikerId,
       non_striker_id: uiState.value.selectedNonStrikerId,
       bowler_id: uiState.value.selectedBowlerId,
       runs_scored: runs,
       is_wicket: false,
-    } as unknown as ScoreDeliveryRequest
+    }
     const res = await submitDelivery(gameId, payload)
     afterRunsApplied(runs, false)
     return res
   }
 
-  async function scoreExtra(gameId: string, code: 'wd' | 'nb' | 'b' | 'lb', runs = 1) {
-    if (
-      !uiState.value.selectedStrikerId ||
-      !uiState.value.selectedNonStrikerId ||
-      !uiState.value.selectedBowlerId
-    ) {
+  async function scoreExtra(gameId: string, code: 'wd' | 'nb' | 'b' | 'lb', runs = 1): Promise<any> {
+    if (!uiState.value.selectedStrikerId || !uiState.value.selectedNonStrikerId || !uiState.value.selectedBowlerId) {
       throw new Error('Cannot score extra - missing selected players')
     }
-    const payload: ScoreDeliveryRequest = {
+    const payload: ApiScoreDeliveryRequest = {
       striker_id: uiState.value.selectedStrikerId,
       non_striker_id: uiState.value.selectedNonStrikerId,
       bowler_id: uiState.value.selectedBowlerId,
       runs_scored: runs,
       extra: code,
       is_wicket: false,
-    } as unknown as ScoreDeliveryRequest
+    }
     const res = await submitDelivery(gameId, payload)
-    // For simplicity, consider extras as not rotating strike here
     afterRunsApplied(runs, true)
     return res
   }
@@ -678,15 +696,11 @@ export const useGameStore = defineStore('game', () => {
     dismissal_type: string,
     dismissed_player_id?: string | null,
     commentary?: string,
-  ) {
-    if (
-      !uiState.value.selectedStrikerId ||
-      !uiState.value.selectedNonStrikerId ||
-      !uiState.value.selectedBowlerId
-    ) {
+  ): Promise<any> {
+    if (!uiState.value.selectedStrikerId || !uiState.value.selectedNonStrikerId || !uiState.value.selectedBowlerId) {
       throw new Error('Cannot score wicket - missing selected players')
     }
-    const payload: ScoreDeliveryRequest = {
+    const payload: ApiScoreDeliveryRequest = {
       striker_id: uiState.value.selectedStrikerId,
       non_striker_id: uiState.value.selectedNonStrikerId,
       bowler_id: uiState.value.selectedBowlerId,
@@ -695,33 +709,14 @@ export const useGameStore = defineStore('game', () => {
       dismissal_type,
       dismissed_player_id: dismissed_player_id ?? uiState.value.selectedStrikerId,
       commentary: commentary ?? '',
-    } as unknown as ScoreDeliveryRequest
+    }
     const res = await submitDelivery(gameId, payload)
     afterWicketApplied(payload.dismissed_player_id!)
     return res
   }
 
-  /* Commentary action (Option B) */
-  async function postCommentary(gameId: string, text: string, over?: string) {
-    const tempId = makeId()
-    const tempItem: CommentaryItem = { id: tempId, at: Date.now(), text, over }
-    commentaryFeed.value.unshift(tempItem)
-
-    try {
-      await apiService.postCommentary(gameId, { text, over })
-      return { ok: true }
-    } catch (e) {
-      // Roll back optimistic insert on failure
-      commentaryFeed.value = commentaryFeed.value.filter((c) => c.id !== tempId)
-      throw e
-    }
-  }
-
-  /* Utility */
-  function clearError() {
-    setError(null)
-  }
-  function clearGame() {
+  function clearError(): void { uiState.value.error = null }
+  function clearGame(): void {
     currentGame.value = null
     uiState.value.selectedStrikerId = null
     uiState.value.selectedNonStrikerId = null
@@ -732,16 +727,11 @@ export const useGameStore = defineStore('game', () => {
     liveGameId.value = null
     commentaryFeed.value = []
   }
-
-  /* Optional: merge partial patches into currentGame */
-  function mergeGamePatch(patch: Partial<GameState>) {
+  function mergeGamePatch(patch: Partial<GameState>): void {
     if (!currentGame.value) return
     currentGame.value = { ...currentGame.value, ...patch }
   }
 
-  /* ========================================================================
-   * Expose API
-   * ====================================================================== */
   return {
     // State
     currentGame,
@@ -774,7 +764,7 @@ export const useGameStore = defineStore('game', () => {
     targetDisplay,
     runsRequired,
 
-    // Shaped scorecards (Option B)
+    // Shaped scorecards
     battingRows,
     bowlingRows,
 
@@ -787,9 +777,8 @@ export const useGameStore = defineStore('game', () => {
     initLive,
     stopLive,
 
-    // Commentary (Option B)
+    // Commentary
     commentaryFeed,
-    postCommentary,
 
     // Offline
     offlineEnabled,
