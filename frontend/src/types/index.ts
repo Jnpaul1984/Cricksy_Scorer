@@ -51,13 +51,14 @@ export interface Delivery {
   striker_id: string
   non_striker_id: string
   runs_scored: number
-  is_extra: boolean
-  extra_type: string | null
   is_wicket: boolean
   dismissal_type: string | null
   dismissed_player_id: string | null
   commentary: string | null
   fielder_id: string | null
+  // NEW optional fields for live appending
+  extra_type?: 'wd' | 'nb' | 'b' | 'lb' | null
+  at_utc?: string | null
 }
 /** Full game state stored in the store */
 export interface GameState {
@@ -100,7 +101,7 @@ export interface GameState {
   team_b_keeper_id: string | null
 
   // ledger & scorecards
-  deliveries: Delivery[]
+  deliveries: Array<Delivery>
   batting_scorecard: Record<string, BattingScorecardEntry>
   bowling_scorecard: Record<string, BowlingScorecardEntry>
 }

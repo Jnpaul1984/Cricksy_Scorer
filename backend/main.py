@@ -403,6 +403,63 @@ def _coerce_bowling_entry(  # pyright: ignore[reportUnusedFunction]
         )
     return schemas.BowlingScorecardEntry(player_id="", player_name="", overs_bowled=0.0, runs_conceded=0, wickets_taken=0)
 
+def _rebuild_scorecards_from_deliveries(g: GameState) -> None:
+    """
+    Recompute batting_scorecard and bowling_scorecard from g.deliveries
+    for the CURRENT batting/bowling teams. Totals (runs/wkts/overs) are
+    left as-is — we just rebuild the per-player rows.
+    """
+    # Figure current sides
+    batting_team = g.team_a if g.batting_team_name == g.team_a["name"] else g.team_b
+    bowling_team = g.team_b if batting_team is g.team_a else g.team_a
+
+    bat = _mk_batting_scorecard(batting_team)
+    bowl = _mk_bowling_scorecard(bowling_team)
+
+    # To compute overs per bowler, count legal balls
+    balls_by_bowler: Dict[str, int] = defaultdict(int)
+
+    for d_any in g.deliveries or []:
+        d: Dict[str, Any] = d_any.model_dump() if isinstance(d_any, BaseModel) else d_any
+        striker = d.get("striker_id")
+        bowler  = d.get("bowler_id")
+        runs    = int(d.get("runs_scored") or 0)
+        extra   = d.get("extra_type")  # 'wd'|'nb'|'b'|'lb'|None
+        wicket  = bool(d.get("is_wicket"))
+        dismissed_player_id = d.get("dismissed_player_id")
+        dismissal_type = (d.get("dismissal_type") or "").strip().lower() or None
+
+        # Batter updates
+        if striker in bat:
+            # Balls faced: wides/no-balls do NOT count; byes/leg-byes DO
+            if extra not in ("wd", "nb"):
+                bat[striker]["balls_faced"] += 1
+            # Runs for batter only when off the bat (no extra)
+            if extra is None:
+                bat[striker]["runs"] += runs
+
+        # Out state
+        if wicket and dismissed_player_id and dismissed_player_id in bat:
+            bat[dismissed_player_id]["is_out"] = True
+
+        # Bowler updates
+        if bowler in bowl:
+            # Legal ball increments balls -> overs
+            if extra not in ("wd", "nb"):
+                balls_by_bowler[bowler] += 1
+            # Runs conceded: wides & no-balls ARE charged; byes/leg-byes are NOT
+            if extra in (None, "wd", "nb"):
+                bowl[bowler]["runs_conceded"] += runs
+            # Credit wicket if applicable to bowler
+            if wicket and dismissal_type in _CREDIT_BOWLER:
+                bowl[bowler]["wickets_taken"] += 1
+
+    # Finish overs
+    for bid, balls in balls_by_bowler.items():
+        bowl[bid]["overs_bowled"] = _bowling_balls_to_overs(balls)
+
+    g.batting_scorecard = bat
+    g.bowling_scorecard = bowl
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5MB
 
@@ -627,7 +684,7 @@ def _snapshot_from_game(
                 "is_out": _bat_entry(g, g.current_non_striker_id).get("is_out", False),
             },
         },
-        "over": {"completed": g.overs_completed, "balls_this_over": g.balls_this_over},
+        "overs": f"{g.overs_completed}.{g.balls_this_over}",
         "last_delivery": last_delivery_out,
         "batting_scorecard": g.batting_scorecard,
         "bowling_scorecard": g.bowling_scorecard,
@@ -751,6 +808,8 @@ async def add_delivery(
     except Exception:
         g.deliveries = [del_dict]  # type: ignore[assignment]
 
+    g.deliveries = (g.deliveries or []) + [del_dict]
+    _rebuild_scorecards_from_deliveries(g)
     updated = await crud.update_game(db, game_model=db_game)
     u = cast(GameState, updated)
     snapshot = _snapshot_from_game(u, del_dict)
@@ -790,9 +849,10 @@ async def undo_last_delivery(game_id: str, db: AsyncSession = Depends(get_db)) -
             is_wicket=bool(d.get("is_wicket")),
             dismissal_type=d.get("dismissal_type"),
             dismissed_player_id=d.get("dismissed_player_id"),
-        )
+        )    
     updated = await crud.update_game(db, game_model=game)
     u = cast(GameState, updated)
+    _rebuild_scorecards_from_deliveries(u)
     last = u.deliveries[-1] if u.deliveries else None
     snapshot = _snapshot_from_game(u, last)
 
@@ -835,6 +895,7 @@ async def get_snapshot(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict
         raise HTTPException(status_code=404, detail="Game not found")
 
     g = cast(GameState, game)
+    _rebuild_scorecards_from_deliveries(g)
     last = g.deliveries[-1] if g.deliveries else None
     snap = _snapshot_from_game(g, last)
 
