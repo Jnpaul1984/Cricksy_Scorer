@@ -26,7 +26,7 @@ export function getErrorMessage(err: unknown): string {
   return 'Request failed';
 }
 
-export type TossDecision = 'bat' | 'bowl'
+export type TossDecision = 'bat' | 'bowl';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url(path), {
@@ -36,12 +36,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
     ...init,
   });
+
   if (!res.ok) {
+    // Try to surface backend-provided detail (e.g., 409 gate messages)
     let detail: any = undefined;
-    try { detail = await res.json(); } catch {}
+    try {
+      detail = await res.json();
+    } catch {}
     const msg = detail?.detail || `${res.status} ${res.statusText}`;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    // Throw a rich Error message string; callers can parse or display directly
+    const err = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    // @ts-expect-error enrich error for callers that check .status / .detail
+    err.status = res.status;
+    // @ts-expect-error
+    err.detail = detail?.detail ?? null;
+    throw err;
   }
+
   if (res.status === 204) return undefined as unknown as T;
   return (await res.json()) as T;
 }
@@ -75,7 +86,7 @@ export interface GameMinimal {
   overs_limit: number | null;
   days_limit: number | null;
   dls_enabled: boolean;
-  decision: TossDecision
+  decision: TossDecision;
   // plus many more fields the backend returns; we keep it loose for UI
   [k: string]: any;
 }
@@ -86,7 +97,7 @@ export interface ScoreDeliveryRequest {
   non_striker_id: string;
   bowler_id: string;
   runs_scored: number;
-  extra?: 'wd' | 'nb' | 'b' | 'lb'; // wire as backend expects: 'wd'|'nb' or 'wide'|'no_ball'—server accepts both
+  extra?: 'wd' | 'nb' | 'b' | 'lb'; // server accepts wire codes
   is_wicket?: boolean;
   dismissal_type?: string | null;
   dismissed_player_id?: string | null;
@@ -109,10 +120,17 @@ export interface Snapshot {
   batting_scorecard?: Record<string, any>;
   bowling_scorecard?: Record<string, any>;
   last_delivery?: Record<string, any> | null;
+
+  // Gate flags (NEW)
+  needs_new_batter?: boolean;
+  needs_new_over?: boolean;
+
   [k: string]: any;
 }
 
-export interface OversLimitBody { overs_limit: number; }
+export interface OversLimitBody {
+  overs_limit: number;
+}
 
 export type TeamSide = 'A' | 'B';
 export interface TeamRoleUpdate {
@@ -161,6 +179,14 @@ export interface SponsorImpressionsOut {
   ids: number[];
 }
 
+// New endpoint bodies (minimal)
+export interface StartOverBody {
+  bowler_id: string;
+}
+export interface ReplaceBatterBody {
+  new_batter_id: string;
+}
+
 /* ----------------------------- API surface ------------------------------- */
 
 export const apiService = {
@@ -197,6 +223,20 @@ export const apiService = {
       `/games/${encodeURIComponent(gameId)}/team-roles`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
+
+  // NEW: Start a new over (gate action)
+  startOver: (gameId: string, bowler_id: string) =>
+    request<Snapshot>(`/games/${encodeURIComponent(gameId)}/overs/start`, {
+      method: 'POST',
+      body: JSON.stringify({ bowler_id } as StartOverBody),
+    }),
+
+  // NEW: Replace the next batter (gate action)
+  replaceBatter: (gameId: string, new_batter_id: string) =>
+    request<Snapshot>(`/games/${encodeURIComponent(gameId)}/batters/replace`, {
+      method: 'POST',
+      body: JSON.stringify({ new_batter_id } as ReplaceBatterBody),
+    }),
 
   /* Contributors */
   addContributor: (gameId: string, body: ContributorIn) =>

@@ -1,8 +1,4 @@
 // src/stores/gameStore.ts
-// Full rewrite with TS fixes:
-// - Typed-safe wrappers for socket event names (allowing custom events like 'score:update').
-// - Removed unused @ts-expect-error and guarded optional startNextInnings call.
-// - Matches src/utils/api.ts shapes.
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
@@ -38,7 +34,16 @@ import {
   emit as emitSocket,
 } from '@/utils/socket'
 
-// Create loose wrappers so we can subscribe to custom events not present in ServerToClientEvents
+// ---- Cricket math helpers
+import {
+  isLegalBall,
+  fmtEconomy,
+  oversDisplayFromBalls,
+  oversNotationToFloat,
+} from '@/utils/cricket'
+
+
+// Loose wrappers so we can listen to custom events
 const on = onSocket as unknown as (event: string, handler: (...args: any[]) => void) => void
 const off = offSocket as unknown as (event: string, handler?: (...args: any[]) => void) => void
 
@@ -83,8 +88,11 @@ function splitOvers(overs: string | number | undefined): { overs_completed: numb
 }
 
 function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
+  
   const overAny = s?.over?.completed ?? s?.overs_completed ?? 0
   const ballsAny = s?.over?.balls_this_over ?? s?.balls_this_over ?? 0
+
+  
   return {
     total_runs: Number(s?.total_runs ?? s?.score?.runs ?? 0),
     total_wickets: Number(s?.total_wickets ?? s?.score?.wickets ?? 0),
@@ -94,7 +102,7 @@ function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
     batting_team_name: String(s?.batting_team_name ?? s?.teams?.batting?.name ?? ''),
     bowling_team_name: String(s?.bowling_team_name ?? s?.teams?.bowling?.name ?? ''),
 
-    // IMPORTANT: leave undefined if the server didn't send the cards
+    // Leave undefined if server didn’t send them so we don’t blow away existing
     batting_scorecard: (s?.batting_scorecard !== undefined ? s.batting_scorecard : undefined) as any,
     bowling_scorecard: (s?.bowling_scorecard !== undefined ? s.bowling_scorecard : undefined) as any,
 
@@ -102,6 +110,13 @@ function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
     current_non_striker_id: s?.current_non_striker_id ?? null,
     target: s?.target ?? null,
     status: s?.status ?? undefined,
+
+    // Runtime bowling context (mirror if present)
+    current_bowler_id: s?.current_bowler_id ?? s?.currentBowlerId ?? null,
+    last_ball_bowler_id: s?.last_ball_bowler_id ?? s?.lastBallBowlerId ?? null,
+    current_over_balls: Number(s?.current_over_balls ?? s?.currentOverBalls ?? s?.balls_this_over ?? 0),
+    mid_over_change_used: Boolean(s?.mid_over_change_used ?? s?.midOverChangeUsed ?? false),
+    balls_bowled_total: Number(s?.balls_bowled_total ?? s?.ballsBowledTotal ?? 0),
     last_delivery: s?.last_delivery
       ? {
           over_number: Number(s.last_delivery.over_number ?? s.last_delivery.over ?? 0),
@@ -115,6 +130,8 @@ function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
           extra_type: (s.last_delivery.extra_type ?? s.last_delivery.extra ?? null) as 'wd' | 'nb' | 'b' | 'lb' | null,
           dismissal_type: s.last_delivery.dismissal_type ?? null,
           dismissed_player_id: s.last_delivery.dismissed_player_id ?? null,
+          needs_new_batter: Boolean(s?.needs_new_batter ?? false),
+          needs_new_over: Boolean(s?.needs_new_over ?? false),
           commentary: s.last_delivery.commentary ?? null,
           fielder_id: s.last_delivery.fielder_id ?? null,
           at_utc: s.last_delivery.at_utc ?? null,
@@ -123,12 +140,11 @@ function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
   } as UiSnapshot
 }
 
-
 function mergeScorecard<T extends Record<string, any>>(
   prev: Record<string, T> | undefined,
   patch: Record<string, Partial<T>> | undefined
 ): Record<string, T> | undefined {
-  if (!patch) return prev;              // nothing to merge
+  if (!patch) return prev
   const next: Record<string, T> = { ...(prev || {}) } as any
   for (const [id, row] of Object.entries(patch)) {
     next[id] = { ...(next[id] as any), ...(row as any) } as T
@@ -139,7 +155,8 @@ function mergeScorecard<T extends Record<string, any>>(
 function normalizeServerSnapshot(s: any): UiSnapshot {
   const total_runs = s?.total_runs ?? s?.score?.runs ?? 0
   const total_wickets = s?.total_wickets ?? s?.score?.wickets ?? 0
-  const ocRaw: string | number | undefined = s?.over?.completed ?? s?.overs_completed ?? s?.score?.overs
+  const ocRaw: string | number | undefined =
+  s?.over?.completed ?? s?.overs_completed ?? s?.score?.overs ?? s?.overs
   const { overs_completed, balls_this_over } = splitOvers(ocRaw)
 
   return {
@@ -154,9 +171,33 @@ function normalizeServerSnapshot(s: any): UiSnapshot {
     bowling_scorecard: (s?.bowling_scorecard ?? {}) as Record<string, BowlingScorecardEntry>,
     current_striker_id: s?.current_striker_id ?? null,
     current_non_striker_id: s?.current_non_striker_id ?? null,
+
+    // runtime bowling fields
+    current_bowler_id: s?.current_bowler_id ?? s?.currentBowlerId ?? null,
+    last_ball_bowler_id: s?.last_ball_bowler_id ?? s?.lastBallBowlerId ?? null,
+    current_over_balls: Number(s?.current_over_balls ?? s?.currentOverBalls ?? s?.balls_this_over ?? 0),
+    mid_over_change_used: Boolean(s?.mid_over_change_used ?? s?.midOverChangeUsed ?? false),
+    balls_bowled_total: Number(s?.balls_bowled_total ?? s?.ballsBowledTotal ?? 0),
+    needs_new_batter: Boolean(s?.needs_new_batter ?? false),
+    needs_new_over: Boolean(s?.needs_new_over ?? false),
     target: s?.target ?? null,
     status: s?.status ?? undefined,
   }
+}
+
+function offBatRuns(d: any): number {
+  const ex = (d.extra_type ?? d.extra ?? null) as 'wd' | 'nb' | 'b' | 'lb' | null
+  // wides/byes/leg-byes never credit the batter
+  if (ex === 'wd' || ex === 'b' || ex === 'lb') return 0
+
+  // no-ball: batter may have runs off the bat; prefer explicit field if present
+  if (ex === 'nb') {
+    // If backend sends runs_off_bat, use it; else assume runs_scored is *off-bat only* (server adds the +1 nb)
+    return Number(d.runs_off_bat ?? d.runs_scored ?? d.runs ?? 0)
+  }
+
+  // normal ball
+  return Number(d.runs_off_bat ?? d.runs_scored ?? d.runs ?? 0)
 }
 
 function coerceGameFromApi(raw: any): GameState {
@@ -199,7 +240,7 @@ function coerceGameFromApi(raw: any): GameState {
     team_b_captain_id: raw?.team_b_captain_id ?? null,
     team_b_keeper_id: raw?.team_b_keeper_id ?? null,
 
-    // deliveries (now include is_extra + fielder_id)
+    // deliveries
     deliveries: Array.isArray(raw?.deliveries)
       ? raw.deliveries.map((d: any) => ({
           over_number: Number(d.over_number ?? d.over ?? 0),
@@ -223,7 +264,6 @@ function coerceGameFromApi(raw: any): GameState {
     bowling_scorecard: (raw?.bowling_scorecard ?? {}) as Record<string, BowlingScorecardEntry>,
   } as GameState
 }
-
 
 export const useGameStore = defineStore('game', () => {
   // ========================================================================
@@ -253,6 +293,12 @@ export const useGameStore = defineStore('game', () => {
   const connectionStatus = ref<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
   const lastLiveAt = ref<number | null>(null)
   const liveSnapshot = ref<UiSnapshot | null>(null)
+  const needsNewBatter = computed(() =>
+    Boolean(liveSnapshot.value?.needs_new_batter ?? (currentGame.value as any)?.needs_new_batter ?? false)
+  )
+  const needsNewOver = computed(() =>
+    Boolean(liveSnapshot.value?.needs_new_over ?? (currentGame.value as any)?.needs_new_over ?? false)
+  )
 
   const commentaryFeed = ref<CommentaryItem[]>([])
 
@@ -272,9 +318,7 @@ export const useGameStore = defineStore('game', () => {
   function saveQueue(): void {
     try {
       localStorage.setItem(QKEY, JSON.stringify(offlineQueue.value))
-    } catch {
-      /* noop */
-    }
+    } catch { /* noop */ }
   }
   loadQueue()
 
@@ -303,6 +347,37 @@ export const useGameStore = defineStore('game', () => {
     const g = currentGame.value
     if (!g) return null
     return g.bowling_team_name === g.team_a.name ? g.team_a : g.team_b
+  })
+  const bowlingTeamPlayers = computed<Player[]>(() => bowlingTeam.value?.players ?? [])
+
+  // Minimal score object
+  const score = computed(() => ({
+    runs: Number(currentGame.value?.total_runs ?? 0),
+    wickets: Number(currentGame.value?.total_wickets ?? 0),
+  }))
+
+  // Current-innings deliveries passthrough
+  const currentInningsDeliveries = computed(() =>
+    Array.isArray(currentGame.value?.deliveries) ? currentGame.value!.deliveries : []
+  )
+
+  // Optional: pre-aggregated bowling stats by player (runs/balls)
+  const bowlingStatsByPlayer = computed<Record<string, { runsConceded: number; balls: number }>>(() => {
+    const delivs: any[] = Array.isArray(currentInningsDeliveries.value) ? (currentInningsDeliveries.value as any[]) : []
+    const map: Record<string, { runsConceded: number; balls: number }> = {}
+
+    for (const d of delivs) {
+      const id = String(d.bowler_id || '')
+      if (!id) continue
+      if (!map[id]) map[id] = { runsConceded: 0, balls: 0 }
+
+      const offBat = Number(d.runs_scored ?? d.runs_off_bat ?? d.runs ?? 0)
+      const extras = Number((d.extras && d.extras.total) ?? 0)
+      map[id].runsConceded += offBat + extras
+      if (isLegalBall(d)) map[id].balls += 1
+    }
+
+    return map
   })
 
   const availableBatsmen = computed<Player[]>(() => {
@@ -352,46 +427,162 @@ export const useGameStore = defineStore('game', () => {
   // ========================================================================
   const battingRows = computed(() => {
     const g = currentGame.value
-    if (!g || !g.batting_scorecard) return [] as Array<{ id: string; name: string; runs: number; balls: number; fours: number; sixes: number; sr: number; howOut?: string; isOut: boolean }>
-    const rows = Object.values(g.batting_scorecard as Record<string, any>)
-    return rows.map((row) => {
-      const runs = Number(row.runs ?? 0)
-      const balls = Number(row.balls ?? row.balls_faced ?? 0)
+    if (!g || !g.batting_scorecard) {
+      return [] as Array<{
+        id: string; name: string; runs: number; balls: number; fours: number; sixes: number; sr: number; howOut?: string; isOut: boolean
+      }>
+    }
+
+    const delivs: any[] = Array.isArray(currentInningsDeliveries.value) ? (currentInningsDeliveries.value as any[]) : []
+
+    return Object.values(g.batting_scorecard as Record<string, any>).map((row: any) => {
+      const id = String(row.player_id)
+      const name = String(row.player_name || '')
+
+      // Legal balls actually faced on strike for this batter
+      const balls = delivs.filter(d =>
+        String(d.striker_id || '') === id && isLegalBall(d)
+      ).length
+
+      // Prefer off-bat sum from deliveries when we have any entries for this batter; else card value
+      const runsFromDelivs = delivs
+        .filter(d => String(d.striker_id || '') === id)
+        .reduce((a, d) => a + offBatRuns(d), 0)
+
+
+      const hasAnyForBatter = delivs.some(d => String(d.striker_id || '') === id)
+      const runs = hasAnyForBatter ? runsFromDelivs : Number(row.runs ?? 0)
+
       const fours = Number(row.fours ?? 0)
       const sixes = Number(row.sixes ?? 0)
-      const sr = typeof row.strike_rate === 'number' ? row.strike_rate : (balls > 0 ? Number(((runs * 100) / balls).toFixed(2)) : 0)
+      const sr = balls > 0 ? Number(((runs * 100) / balls).toFixed(1)) : 0
+
       return {
-        id: String(row.player_id),
-        name: String(row.player_name || ''),
-        runs,
-        balls,
-        fours,
-        sixes,
-        sr,
+        id, name, runs, balls, fours, sixes, sr,
         howOut: row.how_out,
         isOut: Boolean(row.is_out),
       }
     })
   })
+  
+  const extrasBreakdown = computed(() => {
+    type D = {
+      extra_type?: 'wd' | 'nb' | 'b' | 'lb' | null
+      extra?: 'wd' | 'nb' | 'b' | 'lb' | null
+      runs_scored?: number
+      runs?: number
+    }
+
+    const delivs = (currentInningsDeliveries.value ?? []) as D[]
+
+    let wides = 0, no_balls = 0, byes = 0, leg_byes = 0, penalty = 0
+
+    for (const d of delivs) {
+      const ex = (d.extra_type ?? d.extra ?? null) as D['extra_type']
+      const r = Number(d.runs_scored ?? d.runs ?? 0)
+
+      if (ex === 'wd') {
+        // wides are all extras; if server sent 0/undefined, count as 1
+        wides += r || 1
+      } else if (ex === 'nb') {
+        // only the 1 penalty is an extra; off-bat runs go to batter
+        no_balls += 1
+      } else if (ex === 'b') {
+        byes += r
+      } else if (ex === 'lb') {
+        leg_byes += r
+      }
+    }
+
+    const total = wides + no_balls + byes + leg_byes + penalty
+    return { wides, no_balls, byes, leg_byes, penalty, total }
+  })
+
 
   const bowlingRows = computed(() => {
     const g = currentGame.value
-    if (!g || !g.bowling_scorecard) return [] as Array<{ id: string; name: string; overs: number; maidens: number; runs: number; wkts: number; econ: number }>
-    const rows = Object.values(g.bowling_scorecard as Record<string, any>)
-    return rows.map((row) => {
-      const overs = Number(row.overs ?? row.overs_bowled ?? 0)
+    if (!g || !g.bowling_scorecard) {
+      return [] as Array<{ id: string; name: string; overs: string; maidens: number; runs: number; wkts: number; econ: number | string }>
+    }
+
+    return Object.values(g.bowling_scorecard as Record<string, any>).map((row: any) => {
+      const id = String(row.player_id)
+      const name = String(row.player_name || '')
       const maidens = Number(row.maidens ?? 0)
-      const runs_conceded = Number(row.runs_conceded ?? row.runs ?? 0)
       const wkts = Number(row.wickets ?? row.wickets_taken ?? 0)
-      const econ = typeof row.economy === 'number' ? row.economy : (overs > 0 ? Number((runs_conceded / overs).toFixed(2)) : 0)
-      return { id: String(row.player_id), name: String(row.player_name || ''), overs, maidens, runs: runs_conceded, wkts, econ }
+
+      const stats = bowlingStatsByPlayer.value[id]
+
+      // balls from deliveries if we have them; else from overs notation on the card
+      const balls = typeof stats?.balls === 'number'
+        ? stats.balls
+        : Math.round(oversNotationToFloat(row.overs ?? row.overs_bowled ?? 0) * 6)
+
+      // runs conceded from deliveries if we have them; else from the card
+      const runs = typeof stats?.runsConceded === 'number'
+        ? stats.runsConceded
+        : Number(row.runs_conceded ?? row.runs ?? 0)
+
+      const oversText = oversDisplayFromBalls(Math.max(0, balls | 0))
+      const econ = balls > 0 ? Number(fmtEconomy(runs, balls)) : (typeof row.economy === 'number' ? row.economy : '—')
+
+      return { id, name, overs: oversText, maidens, runs, wkts, econ }
     })
   })
 
-  function mapScorePayloadToSnapshot(p: ScoreUpdatePayloadSlim): UiSnapshot {
-    const score = p?.score ?? { runs: 0, wickets: 0, overs: '0.0' }
-    const { overs_completed, balls_this_over } = splitOvers(score.overs)
 
+  // Merge liveSnapshot + game for simple access in views
+    const state = computed(() => {
+      const g: any = currentGame.value || {}
+      const s: any = liveSnapshot.value || {}
+      return {
+        balls_this_over: Number(g.balls_this_over ?? s.balls_this_over ?? 0),
+        current_bowler_id: s.current_bowler_id ?? g.current_bowler_id ?? null,
+        last_ball_bowler_id: s.last_ball_bowler_id ?? g.last_ball_bowler_id ?? null,
+        current_over_balls: Number(s.current_over_balls ?? g.current_over_balls ?? g.balls_this_over ?? 0),
+        mid_over_change_used: Boolean(s.mid_over_change_used ?? g.mid_over_change_used ?? false),
+        balls_bowled_total: Number(s.balls_bowled_total ?? g.balls_bowled_total ?? 0),
+        needs_new_batter: Boolean(s.needs_new_batter ?? false),
+        needs_new_over: Boolean(s.needs_new_over ?? false),
+      }
+    })
+
+
+  function mapScorePayloadToSnapshot(p: ScoreUpdatePayloadSlim): UiSnapshot {
+    const slim = p?.score ?? { runs: 0, wickets: 0, overs: '0.0' }
+
+    // Prefer a non-zero overs source
+    const fromScore = splitOvers(slim.overs)
+    const fromRoot  = splitOvers((p as any)?.overs)   // e.g. "0.1" that your server sends at root
+    let overs_completed = 0
+    let balls_this_over = 0
+
+    // helper: true if either part is non-zero
+    const has = (x: {overs_completed:number; balls_this_over:number}) =>
+      x.overs_completed > 0 || x.balls_this_over > 0
+
+    if (has(fromRoot)) {
+      overs_completed = fromRoot.overs_completed
+      balls_this_over = fromRoot.balls_this_over
+    } else if (has(fromScore)) {
+      overs_completed = fromScore.overs_completed
+      balls_this_over = fromScore.balls_this_over
+    } else if ((p as any)?.last_delivery) {
+      const ld = (p as any).last_delivery
+      overs_completed = Number(ld.over_number ?? ld.over ?? 0)
+      balls_this_over = Number(ld.ball_number ?? ld.ball ?? 0)
+    } else if (liveSnapshot.value != null) {
+      // Do not regress if the event is empty; coerce to numbers and keep previous if undefined
+      overs_completed = Number(
+        (liveSnapshot.value as Partial<UiSnapshot>).overs_completed ?? overs_completed
+      )
+      balls_this_over = Number(
+        (liveSnapshot.value as Partial<UiSnapshot>).balls_this_over ?? balls_this_over
+      )
+    }
+
+
+    // Build cards (unchanged)
     const battingCard: Record<string, BattingScorecardEntry> = {}
     for (const b of p?.batting ?? []) {
       battingCard[String(b.player_id)] = {
@@ -421,11 +612,11 @@ export const useGameStore = defineStore('game', () => {
     }
 
     return {
-      total_runs: Number(score.runs ?? 0),
-      total_wickets: Number(score.wickets ?? 0),
+      total_runs: Number(slim.runs ?? 0),
+      total_wickets: Number(slim.wickets ?? 0),
       overs_completed,
       balls_this_over,
-      current_inning: Number(score.innings_no ?? currentGame.value?.current_inning ?? 1),
+      current_inning: Number(slim.innings_no ?? currentGame.value?.current_inning ?? 1),
       batting_team_name: currentGame.value?.batting_team_name ?? '',
       bowling_team_name: currentGame.value?.bowling_team_name ?? '',
       batting_scorecard: battingCard,
@@ -437,45 +628,66 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+
+  function deliveryKey(d: any): string {
+    // Robust key so score:=slim and snapshot versions dedupe
+    const o = Number(d.over_number ?? d.over ?? 0)
+    const b = Number(d.ball_number ?? d.ball ?? 0)
+    const s = String(d.striker_id ?? '')
+    const bow = String(d.bowler_id ?? '')
+    const rs = Number(d.runs_scored ?? d.runs ?? 0)
+    const ex = String(d.extra_type ?? d.extra ?? '')
+    return `${o}|${b}|${s}|${bow}|${rs}|${ex}`
+  }
+
   function applySnapshotToGame(s: UiSnapshot): void {
-  const g = currentGame.value as GameState | null
-  if (!g || !s) return
+    const g = currentGame.value as GameState | null
+    if (!g || !s) return
 
-  if (s.total_runs != null) g.total_runs = s.total_runs
-  if (s.total_wickets != null) g.total_wickets = s.total_wickets
-  if (s.overs_completed != null) g.overs_completed = s.overs_completed
-  if (s.balls_this_over != null) g.balls_this_over = s.balls_this_over
-  if (s.current_inning != null) g.current_inning = s.current_inning
-  if (s.status != null) g.status = s.status
-  if (s.target != null) g.target = s.target
-  if (s.batting_team_name != null) g.batting_team_name = s.batting_team_name
-  if (s.bowling_team_name != null) g.bowling_team_name = s.bowling_team_name
+    if (s.total_runs != null) g.total_runs = s.total_runs
+    if (s.total_wickets != null) g.total_wickets = s.total_wickets
+    if (s.overs_completed != null) g.overs_completed = s.overs_completed
+    if (s.balls_this_over != null) g.balls_this_over = s.balls_this_over
+    if (s.current_inning != null) g.current_inning = s.current_inning
+    if (s.status != null) g.status = s.status
+    if (s.target != null) g.target = s.target
+    if (s.batting_team_name != null) g.batting_team_name = s.batting_team_name
+    if (s.bowling_team_name != null) g.bowling_team_name = s.bowling_team_name
 
-  // Only update cards if the snapshot actually contained them.
-  // Merge row-by-row so partial payloads work and reactivity is preserved.
-  if (s.batting_scorecard && Object.keys(s.batting_scorecard).length > 0) {
-    g.batting_scorecard = mergeScorecard(g.batting_scorecard as any, s.batting_scorecard as any) as any
+    // Merge cards only if present
+    if (s.batting_scorecard && Object.keys(s.batting_scorecard).length > 0) {
+      g.batting_scorecard = mergeScorecard(g.batting_scorecard as any, s.batting_scorecard as any) as any
+    }
+    if (s.bowling_scorecard && Object.keys(s.bowling_scorecard).length > 0) {
+      g.bowling_scorecard = mergeScorecard(g.bowling_scorecard as any, s.bowling_scorecard as any) as any
+    }
+
+    // Runtime bowling context
+    const nextCurrentBowlerId =
+      (s as any).current_bowler_id ?? (currentGame.value as any).current_bowler_id ?? null
+    ;(currentGame.value as any).current_bowler_id = nextCurrentBowlerId
+
+    const nextLastBallBowlerId =
+      (s as any).last_ball_bowler_id ?? (currentGame.value as any).last_ball_bowler_id ?? null
+    ;(currentGame.value as any).last_ball_bowler_id = nextLastBallBowlerId
+
+    if ((s as any).current_over_balls != null) (currentGame.value as any).current_over_balls = (s as any).current_over_balls
+    if ((s as any).mid_over_change_used != null) (currentGame.value as any).mid_over_change_used = (s as any).mid_over_change_used
+    if ((s as any).balls_bowled_total != null) (currentGame.value as any).balls_bowled_total = (s as any).balls_bowled_total
+
+    // Append last_delivery if new (stronger dedupe)
+    const ld = (s as any).last_delivery as GameState['deliveries'][number] | null | undefined
+    if (ld) {
+      if (!Array.isArray(g.deliveries)) g.deliveries = []
+      const k = deliveryKey(ld)
+      const exists = g.deliveries.some(d => deliveryKey(d) === k)
+      if (!exists) g.deliveries.push(ld)
+    }
   }
-  if (s.bowling_scorecard && Object.keys(s.bowling_scorecard).length > 0) {
-    g.bowling_scorecard = mergeScorecard(g.bowling_scorecard as any, s.bowling_scorecard as any) as any
-  }
 
-  const ld = (s as any).last_delivery as GameState['deliveries'][number] | null | undefined
-  if (ld) {
-    if (!Array.isArray(g.deliveries)) g.deliveries = []
-    const exists = g.deliveries.some(d =>
-      d.over_number === ld.over_number &&
-      d.ball_number === ld.ball_number &&
-      d.striker_id === ld.striker_id &&
-      d.bowler_id === ld.bowler_id
-    )
-    if (!exists) g.deliveries.push(ld)
-  }
-}
-
-  
-
-
+  // -------------------------------------------------------------------------
+  // Socket handlers
+  // -------------------------------------------------------------------------
   function handleStateUpdate(payload: { id: string; snapshot: any }): void {
     if (!liveGameId.value || payload.id !== liveGameId.value) return
     const snap = normalizeServerSnapshot(payload.snapshot)
@@ -490,7 +702,7 @@ export const useGameStore = defineStore('game', () => {
     lastLiveAt.value = Date.now()
     applySnapshotToGame(snap)
 
-    // Enrich a moment later with full snapshot (debounced single-flight is fine if you want)
+    // Enrich with full snapshot (cards, targets, etc.)
     try {
       if (liveGameId.value) {
         const full = await apiService.getSnapshot(liveGameId.value)
@@ -499,12 +711,14 @@ export const useGameStore = defineStore('game', () => {
     } catch { /* ignore */ }
   }
 
-
   const handleCommentary = (msg: { id: string; at: number; text: string; over?: string; author?: string; game_id: string }): void => {
     if (!liveGameId.value || msg.game_id !== liveGameId.value) return
     commentaryFeed.value.unshift({ id: msg.id, at: msg.at, over: msg.over, text: msg.text, author: msg.author })
     if (commentaryFeed.value.length > 200) commentaryFeed.value.pop()
   }
+
+  let presenceInitHandler: ((p: { game_id: string; members: Array<{ sid: string; role: string; name: string }> }) => void) | null = null
+  let commentaryHandler: ((payload: { game_id: string; text: string; at: string }) => void) | null = null
 
   async function initLive(id: string): Promise<void> {
     liveGameId.value = id
@@ -520,19 +734,22 @@ export const useGameStore = defineStore('game', () => {
         emitSocket('join', { game_id: id } as any)
       }
 
-      on('presence:init', (p: { game_id: string; members: Array<{ sid: string; role: string; name: string }> }) => {
+      presenceInitHandler = (p) => {
         if (!liveGameId.value || p.game_id !== liveGameId.value) return
         connectionStatus.value = 'connected'
         if (liveGameId.value) void flushQueue(liveGameId.value)
-      })
+      }
 
-      on('state:update', handleStateUpdate as any)
-      on('score:update', handleScoreUpdate as any)
-      on('commentary:new', (payload: { game_id: string; text: string; at: string }) => {
+      commentaryHandler = (payload) => {
         if (!liveGameId.value || payload.game_id !== liveGameId.value) return
         commentaryFeed.value.unshift({ id: makeId(), at: Date.parse(payload.at) || Date.now(), text: payload.text })
         if (commentaryFeed.value.length > 200) commentaryFeed.value.pop()
-      })
+      }
+
+      on('presence:init', presenceInitHandler)
+      on('state:update', handleStateUpdate as any)
+      on('score:update', handleScoreUpdate as any)
+      on('commentary:new', commentaryHandler)
     } catch (e) {
       connectionStatus.value = 'error'
       console.error('Socket error:', e)
@@ -540,15 +757,26 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function stopLive(): void {
-    off('state:update', handleStateUpdate as any)
-    off('score:update', handleScoreUpdate as any)
-    off('presence:init')
-    off('presence:update')
-    disconnectSocket()
-    connectionStatus.value = 'disconnected'
-    isLive.value = false
-    liveGameId.value = null
+    // Remove using the same references, with null guards
+    if (presenceInitHandler) {
+      off('presence:init', presenceInitHandler!);
+      presenceInitHandler = null;
+    }
+    if (commentaryHandler) {
+      off('commentary:new', commentaryHandler!);
+      commentaryHandler = null;
+    }
+
+    off('state:update', handleStateUpdate as any);
+    off('score:update', handleScoreUpdate as any);
+
+    disconnectSocket();
+    connectionStatus.value = 'disconnected';
+    isLive.value = false;
+    liveGameId.value = null;
   }
+
+
 
   let listenersBound = false
   function bindNetworkListeners(): void {
@@ -646,29 +874,37 @@ export const useGameStore = defineStore('game', () => {
   }
 
   async function scoreDelivery(gameId: string, delivery: ApiScoreDeliveryRequest): Promise<ApiSnapshot> {
-  operationLoading.value.scoreDelivery = true
-  uiState.value.error = null
-  try {
-    uiState.value.loading = true
-    const snap = await apiService.scoreDelivery(gameId, delivery)
-    // Apply the minimal/partial snapshot first so UI is instant
-    applySnapshotToGame(coerceSnapshot(snap))
-
-    // Enrich with full snapshot (cards, targets, etc.)
+    operationLoading.value.scoreDelivery = true
+    uiState.value.error = null
     try {
-      const full = await apiService.getSnapshot(gameId)
-      if (full) applySnapshotToGame(coerceSnapshot(full))
-    } catch { /* non-fatal */ }
+      uiState.value.loading = true
+      const snap = await apiService.scoreDelivery(gameId, delivery)
+      applySnapshotToGame(coerceSnapshot(snap))
 
-    return snap
-  } catch (e) {
-    uiState.value.error = getErrorMessage(e)
-    throw e
-  } finally {
-    uiState.value.loading = false
-    operationLoading.value.scoreDelivery = false
+      try {
+        const full = await apiService.getSnapshot(gameId)
+        if (full) applySnapshotToGame(coerceSnapshot(full))
+      } catch { /* non-fatal */ }
+
+      return snap
+    } catch (e: any) {
+      // NEW: if server rejected due to gate (409), pull the latest snapshot so flags arrive
+      const status = e?.status ?? e?.response?.status
+      if (status === 409) {
+        try {
+          const full = await apiService.getSnapshot(gameId)
+          if (full) applySnapshotToGame(coerceSnapshot(full))
+        } catch {/* ignore */}
+      }
+      uiState.value.error = getErrorMessage(e)
+      throw e
+    } finally {
+      uiState.value.loading = false
+      operationLoading.value.scoreDelivery = false
+    }
   }
-}
+
+
   async function startNextInnings(gameId: string): Promise<UiSnapshot | undefined> {
     operationLoading.value.startInnings = true
     uiState.value.error = null
@@ -719,16 +955,32 @@ export const useGameStore = defineStore('game', () => {
     return id && team ? (team.players.find((p) => p.id === id) ?? null) : null
   })
 
-  const canScore = computed<boolean>(() => Boolean(
-    currentGame.value &&
-    currentGame.value.status === 'in_progress' &&
-    uiState.value.selectedStrikerId &&
-    uiState.value.selectedNonStrikerId &&
-    uiState.value.selectedBowlerId &&
-    uiState.value.selectedStrikerId !== uiState.value.selectedNonStrikerId &&
-    !uiState.value.loading &&
-    !uiState.value.scoringDisabled,
-  ))
+    const canScore = computed<boolean>(() => Boolean(
+      currentGame.value &&
+      currentGame.value.status === 'in_progress' &&
+      uiState.value.selectedStrikerId &&
+      uiState.value.selectedNonStrikerId &&
+      uiState.value.selectedBowlerId &&
+      uiState.value.selectedStrikerId !== uiState.value.selectedNonStrikerId &&
+      !uiState.value.loading &&
+      !uiState.value.scoringDisabled &&
+      !needsNewBatter.value &&
+      !needsNewOver.value
+    ))
+    console.table({
+      hasGame: !!currentGame.value,
+      inProgress: currentGame.value?.status === 'in_progress',
+      strikerSet: !!uiState.value.selectedStrikerId,
+      nonStrikerSet: !!uiState.value.selectedNonStrikerId,
+      bowlerSet: !!uiState.value.selectedBowlerId,
+      differentBatters: uiState.value.selectedStrikerId !== uiState.value.selectedNonStrikerId,
+      notLoading: !uiState.value.loading,
+      notDisabled: !uiState.value.scoringDisabled,
+      needsNewBatter: needsNewBatter.value,
+      needsNewOver: needsNewOver.value,
+    })
+
+
 
   function setSelectedStriker(playerId: string | null): void { uiState.value.selectedStrikerId = playerId }
   function setSelectedNonStriker(playerId: string | null): void { uiState.value.selectedNonStrikerId = playerId }
@@ -769,6 +1021,7 @@ export const useGameStore = defineStore('game', () => {
     if (!uiState.value.selectedStrikerId || !uiState.value.selectedNonStrikerId || !uiState.value.selectedBowlerId) {
       throw new Error('Cannot score extra - missing selected players')
     }
+
     const payload: ApiScoreDeliveryRequest = {
       striker_id: uiState.value.selectedStrikerId,
       non_striker_id: uiState.value.selectedNonStrikerId,
@@ -777,9 +1030,56 @@ export const useGameStore = defineStore('game', () => {
       extra: code,
       is_wicket: false,
     }
+
     const res = await submitDelivery(gameId, payload)
-    afterRunsApplied(runs, true)
+
+    // Rotation rules:
+    // - wides: swap on odd wides (runs)
+    // - byes/leg-byes: swap on odd runs (they physically ran)
+    // - no-ball:
+    //     * if runs>0 we treat them as off-bat runs (server adds +1 NB) -> swap on odd 'runs'
+    //     * if runs===0 (pure NB), no swap
+    if (code === 'wd' || code === 'b' || code === 'lb') {
+      if (runs % 2 === 1) swapBatsmen()
+    } else if (code === 'nb') {
+      if (runs > 0 && runs % 2 === 1) swapBatsmen()
+    }
+
     return res
+  }
+
+
+  async function replaceBatter(newBatterId: string): Promise<void> {
+    if (!liveGameId.value) throw new Error('No live game to update');
+    try {
+      // Disable scoring while we perform the gate
+      setScoringDisabled(true);
+      const snap = await apiService.replaceBatter(liveGameId.value, newBatterId);
+      applySnapshotToGame(coerceSnapshot(snap));
+      // (Optional) fetch full snapshot for card consistency
+      try {
+        const full = await apiService.getSnapshot(liveGameId.value);
+        if (full) applySnapshotToGame(coerceSnapshot(full));
+      } catch { /* non-fatal */ }
+    } finally {
+      setScoringDisabled(false);
+    }
+  }
+
+  async function startNewOver(bowlerId: string): Promise<void> {
+    if (!liveGameId.value) throw new Error('No live game to update');
+    try {
+      setScoringDisabled(true);
+      const snap = await apiService.startOver(liveGameId.value, bowlerId);
+      applySnapshotToGame(coerceSnapshot(snap));
+      // (Optional) fetch full snapshot for card consistency
+      try {
+        const full = await apiService.getSnapshot(liveGameId.value);
+        if (full) applySnapshotToGame(coerceSnapshot(full));
+      } catch { /* non-fatal */ }
+    } finally {
+      setScoringDisabled(false);
+    }
   }
 
   async function scoreWicket(
@@ -858,6 +1158,8 @@ export const useGameStore = defineStore('game', () => {
     // Shaped scorecards
     battingRows,
     bowlingRows,
+    extrasBreakdown,
+    
 
     // Live
     isLive,
@@ -867,7 +1169,11 @@ export const useGameStore = defineStore('game', () => {
     liveSnapshot,
     initLive,
     stopLive,
-
+    
+    // Gate flags for UI
+    canScore,
+    needsNewBatter,
+    needsNewOver,
     // Commentary
     commentaryFeed,
 
@@ -879,11 +1185,20 @@ export const useGameStore = defineStore('game', () => {
     flushQueue,
     submitDelivery,
 
+    // Convenience for views
+    state,
+    bowlingTeamPlayers,
+    score,
+    currentInningsDeliveries,
+    bowlingStatsByPlayer,
+
     // Actions
     createNewGame,
     loadGame,
     scoreDelivery,
     startNextInnings,
+    replaceBatter,
+    startNewOver,
 
     // Selections
     setSelectedStriker,
@@ -893,12 +1208,10 @@ export const useGameStore = defineStore('game', () => {
     setActiveScorecardTab,
     setScoringDisabled,
 
-    // Convenience
+    // Utils
     scoreRuns,
     scoreExtra,
     scoreWicket,
-
-    // Utils
     clearError,
     clearGame,
     mergeGamePatch,

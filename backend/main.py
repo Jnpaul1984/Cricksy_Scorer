@@ -17,6 +17,7 @@ from typing import (
     Union,
     cast,
     Literal,
+    Mapping,
 )
 from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException
@@ -26,6 +27,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, update, or_, and_
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.attributes import flag_modified
 from fastapi import UploadFile, File, Form
 from datetime import datetime, timezone
 import json
@@ -150,7 +152,12 @@ class GameState(Protocol):
     current_non_striker_id: Optional[str]
     target: Optional[int]
     result: Optional[str]
-
+    current_bowler_id: Optional[str]
+    last_ball_bowler_id: Optional[str]
+    current_over_balls: int
+    mid_over_change_used: bool
+    pending_new_batter: bool
+    pending_new_over: bool
     # team roles
     team_a_captain_id: Optional[str]
     team_a_keeper_id: Optional[str]
@@ -162,6 +169,12 @@ class GameState(Protocol):
     batting_scorecard: Dict[str, BattingEntryDict]
     bowling_scorecard: Dict[str, BowlingEntryDict]
 
+class StartOverBody(BaseModel):
+    bowler_id: str
+
+class MidOverChangeBody(BaseModel):
+    new_bowler_id: str
+    reason: Literal["injury", "other"] = "injury"
 
 # ================================================================
 # FastAPI + Socket.IO wiring
@@ -208,11 +221,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 # ================================================================
 # Helpers: core utilities
 # ================================================================
-
 def _mk_players(names: List[str]) -> List[PlayerDict]:
     """Create ephemeral player dicts with UUIDs for a brand-new match context."""
     return [{"id": str(uuid.uuid4()), "name": n} for n in names]
-
 
 def _mk_batting_scorecard(team: TeamDict) -> Dict[str, BattingEntryDict]:
     return {
@@ -226,7 +237,6 @@ def _mk_batting_scorecard(team: TeamDict) -> Dict[str, BattingEntryDict]:
         for p in team["players"]
     }
 
-
 def _mk_bowling_scorecard(team: TeamDict) -> Dict[str, BowlingEntryDict]:
     return {
         p["id"]: {
@@ -239,7 +249,6 @@ def _mk_bowling_scorecard(team: TeamDict) -> Dict[str, BowlingEntryDict]:
         for p in team["players"]
     }
 
-
 def _player_name(team_a: TeamDict, team_b: TeamDict, pid: Optional[str]) -> str:
     """Look up a player's display name across both team lists."""
     if not pid:
@@ -250,25 +259,66 @@ def _player_name(team_a: TeamDict, team_b: TeamDict, pid: Optional[str]) -> str:
                 return p["name"]
     return ""
 
-
 def _bowling_balls_to_overs(balls: int) -> float:
     """
-    Convert an integer ball count to a decimal representation of overs (1 decimal place).
-    Example: 8 balls -> 1.2 (read as 1 over + 2 balls).
+    Convert legal ball count to cricket-style decimal overs (X.Y),
+    where Y is the balls remainder [0..5]. Never round.
     """
-    return round(balls / 6.0, 1)
+    return float(f"{balls // 6}.{balls % 6}")
+
+# ================================================================
+# Helpers: bowling constraints
+# ================================================================
+def _can_start_over(g: GameState, bowler_id: str) -> Optional[str]:
+    if g.current_over_balls not in (0, None) or g.balls_this_over != 0:
+        return "Cannot start a new over while an over is in progress."
+    last_id = getattr(g, "last_ball_bowler_id", None)
+    if last_id and bowler_id == last_id:
+        return "Selected bowler delivered the last ball of the previous over and cannot bowl consecutive overs."
+    return None
+
+def _apply_mid_over_change(g: GameState, new_bowler_id: str) -> Optional[str]:
+    if not g.current_bowler_id:
+        return "No active bowler to replace."
+    if g.mid_over_change_used:
+        return "Mid-over change already used once this over."
+    if new_bowler_id == g.current_bowler_id:
+        return "Replacement bowler must be different."
+    if g.balls_this_over >= 6:
+        return "Over is already complete."
+    g.current_bowler_id = new_bowler_id
+    g.mid_over_change_used = True
+    return None
+
+
+
+def _compute_snapshot_flags(g: GameState) -> Dict[str, bool]:
+    """Return UI gating flags derived from current runtime state."""
+    # Identify if one of the current batters is out and must be replaced
+    need_new_batter = False
+    if g.current_striker_id:
+        e = g.batting_scorecard.get(g.current_striker_id) or {}
+        if isinstance(e, BaseModel):
+            e = e.model_dump()
+        need_new_batter = bool(e.get("is_out", False))
+    if not need_new_batter and g.current_non_striker_id:
+        e2 = g.batting_scorecard.get(g.current_non_striker_id) or {}
+        if isinstance(e2, BaseModel):
+            e2 = e2.model_dump()
+        need_new_batter = bool(e2.get("is_out", False))
+
+    # New over is required when over just ended (balls_this_over == 0)
+    # and there was at least one ball previously AND no active bowler selected
+    have_any_balls = (len(_dedup_deliveries(g)) > 0)
+    need_new_over = bool(g.balls_this_over == 0 and have_any_balls and not getattr(g, "current_bowler_id", None))
+
+    return {"needs_new_batter": need_new_batter, "needs_new_over": need_new_over}
 
 # ================================================================
 # Helpers: dismissal / extras rules
 # ================================================================
 # Bowler gets credit for these modes:
-_CREDIT_BOWLER = {
-    "bowled",
-    "caught",
-    "lbw",
-    "stumped",
-    "hit_wicket",
-}
+_CREDIT_BOWLER = {"bowled", "caught", "lbw", "stumped", "hit_wicket"}
 
 # Team wicket only (no bowler credit):
 _CREDIT_TEAM = {
@@ -285,24 +335,188 @@ _INVALID_ON_NO_BALL = {"bowled", "caught", "lbw", "stumped", "hit_wicket"}
 # On a WIDE, these are invalid (stumped *is allowed* on a wide):
 _INVALID_ON_WIDE = {"bowled", "lbw"}
 
-
 def _is_no_ball(extra: Optional[str]) -> bool:
     return (extra or "").strip().lower() in {"no_ball", "nb"}
 
-
 def _is_wide(extra: Optional[str]) -> bool:
     return (extra or "").strip().lower() in {"wide", "wd"}
-
 
 def is_legal_delivery(extra: Optional[str]) -> bool:
     x: str = (extra or "").strip().lower()
     return x not in {"wide", "wd", "no_ball", "nb"}
 
-
-def _rotate_strike_on_runs(runs: int) -> bool:
+def _rotate_strike_on_runs(runs: int) -> bool: # type: ignore
     return (runs % 2) == 1
 
+# ================================================================
+# NEW: normalization + dedupe + totals recompute
+# ================================================================
+def _norm_extra(x: Optional[str]) -> Optional[str]: # type: ignore
+    """
+    Normalize extra types to: None | 'wd' | 'nb' | 'b' | 'lb'
+    """
+    if not x:
+        return None
+    s = (str(x) or "").strip().lower()
+    if s in {"wide", "wd"}:
+        return "wd"
+    if s in {"no_ball", "nb"}:
+        return "nb"
+    if s in {"b", "bye"}:
+        return "b"
+    if s in {"lb", "leg_bye", "leg-bye"}:
+        return "lb"
+    return None
 
+def _dedup_deliveries(g: GameState) -> List[Dict[str, Any]]:
+    """
+    Collapse duplicates by (over_number, ball_number), keeping the last occurrence, preserving order.
+    Useful if client double-sends or an undo/redo races.
+    """
+    if not g.deliveries:
+        return []
+    deliveries: Sequence[Union[BaseModel, Mapping[str, Any]]] = cast(
+        Sequence[Union[BaseModel, Mapping[str, Any]]],
+        g.deliveries,
+    )
+    seen: Dict[tuple[int, int], Dict[str, Any]] = {}
+    order: List[tuple[int, int]] = []
+    for d_any in deliveries:
+        d: Dict[str, Any] = (
+            d_any.model_dump()
+            if isinstance(d_any, BaseModel)
+            else dict(d_any)
+        )
+        over_no = int(d.get("over_number") or 0)
+        ball_no = int(d.get("ball_number") or 0)
+        k = (over_no, ball_no)
+        if k not in seen:
+            order.append(k)
+        seen[k] = d  # last write wins
+    return [seen[k] for k in order]
+
+def _recompute_totals_and_runtime(g: GameState) -> None:
+    """
+    Recompute totals and runtime-only fields from the deliveries ledger,
+    without assuming the ORM instance already has runtime attributes.
+    This function is idempotent and safe on a bare models.Game row.
+    """
+    # ---- Ensure required runtime attributes exist (for legacy rows) ----
+    if not hasattr(g, "total_runs"):
+        g.total_runs = 0
+    if not hasattr(g, "total_wickets"):
+        g.total_wickets = 0
+    if not hasattr(g, "overs_completed"):
+        g.overs_completed = 0
+    if not hasattr(g, "balls_this_over"):
+        g.balls_this_over = 0
+    if not hasattr(g, "current_over_balls"):
+        g.current_over_balls = 0
+    if not hasattr(g, "mid_over_change_used"):
+        g.mid_over_change_used = False
+    if not hasattr(g, "current_bowler_id"):
+        g.current_bowler_id = None
+    if not hasattr(g, "last_ball_bowler_id"):
+        g.last_ball_bowler_id = None
+
+    total_runs: int = 0
+    total_wkts: int = 0
+    legal_balls: int = 0
+    cur_over_bowler: Optional[str] = None
+    last_legal_bowler: Optional[str] = None
+
+
+    # ---- Walk the (possibly mixed) ledger safely ----
+    deliveries2: Sequence[Union[BaseModel, Mapping[str, Any]]] = cast(
+        Sequence[Union[BaseModel, Mapping[str, Any]]],
+        getattr(g, "deliveries", []) or [],
+    )
+    for d_any in deliveries2:
+        d: Dict[str, Any] = (
+            d_any.model_dump()
+            if isinstance(d_any, BaseModel)
+            else dict(d_any)
+        )
+        runs: int = int(d.get("runs_scored") or 0)
+        raw_extra: Optional[Any] = d.get("extra_type")
+        x: Optional[str] = _norm_extra(raw_extra)
+
+
+        # Team total:
+        # wd/nb: 1 penalty + any bat runs
+        # b/lb: just those runs (legal ball)
+        # None: pure bat runs (legal ball)
+        if x == "wd":
+            total_runs += 1 + runs
+        elif x == "nb":
+            total_runs += 1 + runs
+        elif x in ("b", "lb"):
+            total_runs += runs
+            legal_balls += 1
+            cur_over_bowler = d.get("bowler_id")
+            last_legal_bowler = cur_over_bowler
+        else:
+            total_runs += runs
+            legal_balls += 1
+            cur_over_bowler = d.get("bowler_id")
+            last_legal_bowler = cur_over_bowler
+
+        # Wickets count only if a dismissal type string is present
+        if d.get("is_wicket") and (d.get("dismissal_type") or "").strip():
+            total_wkts += 1
+
+    # Overs/balls derived from legal deliveries
+    g.overs_completed = legal_balls // 6
+    g.balls_this_over = legal_balls % 6
+    g.current_over_balls = g.balls_this_over
+
+    g.total_runs = total_runs
+    g.total_wickets = total_wkts
+
+    # Bowler pointers
+    g.last_ball_bowler_id = last_legal_bowler
+    g.current_bowler_id = cur_over_bowler if g.balls_this_over > 0 else None
+
+def _extras_breakdown(g: GameState) -> Dict[str, int]:
+    """Return wides / no_balls / byes / leg_byes / penalty / total from the ledger."""
+    wides = no_balls = byes = leg_byes = penalty = 0
+    deliveries3: Sequence[Union[BaseModel, Mapping[str, Any]]] = cast(
+        Sequence[Union[BaseModel, Mapping[str, Any]]],
+        getattr(g, "deliveries", []) or [],
+    )
+    for d_any in deliveries3:
+        d: Dict[str, Any] = (
+            d_any.model_dump()
+            if isinstance(d_any, BaseModel)
+            else dict(d_any)
+        )
+        x = _norm_extra(d.get("extra_type"))
+        r = int(d.get("runs_scored") or 0)
+        if x == "wd":
+            # wides are all extras; r may be 1..5 (boundary wides, overthrows on a wide, etc.)
+            wides += max(1, r) if r else 1
+        elif x == "nb":
+            # the "1" no-ball penalty; off-bat runs are *not* extras
+            no_balls += 1
+        elif x == "b":
+            byes += r
+        elif x == "lb":
+            leg_byes += r
+    total = wides + no_balls + byes + leg_byes + penalty
+    return {
+        "wides": wides,
+        "no_balls": no_balls,
+        "byes": byes,
+        "leg_byes": leg_byes,
+        "penalty": penalty,
+        "total": total,
+    }
+
+
+
+# ================================================================
+# Ensure/Coerce entries
+# ================================================================
 def _ensure_batting_entry(g: GameState, batter_id: str) -> BattingEntryDict:
     e_any: Any = g.batting_scorecard.get(batter_id)
     if isinstance(e_any, BaseModel):
@@ -331,7 +545,6 @@ def _ensure_batting_entry(g: GameState, batter_id: str) -> BattingEntryDict:
 
     g.batting_scorecard[batter_id] = e
     return e
-
 
 def _ensure_bowling_entry(g: GameState, bowler_id: str) -> BowlingEntryDict:
     e_any: Any = g.bowling_scorecard.get(bowler_id)
@@ -362,7 +575,6 @@ def _ensure_bowling_entry(g: GameState, bowler_id: str) -> BowlingEntryDict:
     g.bowling_scorecard[bowler_id] = e
     return e
 
-
 def _coerce_batting_entry(  # pyright: ignore[reportUnusedFunction]
     x: Any, team_a: TeamDict, team_b: TeamDict
 ) -> schemas.BattingScorecardEntry:
@@ -379,7 +591,6 @@ def _coerce_batting_entry(  # pyright: ignore[reportUnusedFunction]
             is_out=bool(x_dict.get("is_out", False)),
         )
     return schemas.BattingScorecardEntry(player_id="", player_name="", runs=0, balls_faced=0, is_out=False)
-
 
 def _coerce_bowling_entry(  # pyright: ignore[reportUnusedFunction]
     x: Any, team_a: TeamDict, team_b: TeamDict
@@ -403,66 +614,76 @@ def _coerce_bowling_entry(  # pyright: ignore[reportUnusedFunction]
         )
     return schemas.BowlingScorecardEntry(player_id="", player_name="", overs_bowled=0.0, runs_conceded=0, wickets_taken=0)
 
+# ================================================================
+# Rebuild scorecards FROM LEDGER (authoritative)
+# ================================================================
 def _rebuild_scorecards_from_deliveries(g: GameState) -> None:
-    """
-    Recompute batting_scorecard and bowling_scorecard from g.deliveries
-    for the CURRENT batting/bowling teams. Totals (runs/wkts/overs) are
-    left as-is — we just rebuild the per-player rows.
-    """
-    # Figure current sides
     batting_team = g.team_a if g.batting_team_name == g.team_a["name"] else g.team_b
     bowling_team = g.team_b if batting_team is g.team_a else g.team_a
 
     bat = _mk_batting_scorecard(batting_team)
     bowl = _mk_bowling_scorecard(bowling_team)
 
-    # To compute overs per bowler, count legal balls
     balls_by_bowler: Dict[str, int] = defaultdict(int)
 
-    for d_any in g.deliveries or []:
-        d: Dict[str, Any] = d_any.model_dump() if isinstance(d_any, BaseModel) else d_any
+    deliveries4: Sequence[Union[BaseModel, Mapping[str, Any]]] = cast(
+        Sequence[Union[BaseModel, Mapping[str, Any]]],
+        g.deliveries or [],
+    )
+    for d_any in deliveries4:
+        d: Dict[str, Any] = (
+            d_any.model_dump()
+            if isinstance(d_any, BaseModel)
+            else dict(d_any)
+        )
+
         striker = d.get("striker_id")
         bowler  = d.get("bowler_id")
         runs    = int(d.get("runs_scored") or 0)
-        extra   = d.get("extra_type")  # 'wd'|'nb'|'b'|'lb'|None
+        x       = _norm_extra(d.get("extra_type"))
         wicket  = bool(d.get("is_wicket"))
-        dismissed_player_id = d.get("dismissed_player_id")
         dismissal_type = (d.get("dismissal_type") or "").strip().lower() or None
 
-        # Batter updates
+        # --- Batter updates ---
         if striker in bat:
-            # Balls faced: wides/no-balls do NOT count; byes/leg-byes DO
-            if extra not in ("wd", "nb"):
+            if x not in ("wd", "nb"):
                 bat[striker]["balls_faced"] += 1
-            # Runs for batter only when off the bat (no extra)
-            if extra is None:
+            # CREDIT runs to batter
+            if x is None:
+                bat[striker]["runs"] += runs
+            elif x == "nb":
                 bat[striker]["runs"] += runs
 
-        # Out state
-        if wicket and dismissed_player_id and dismissed_player_id in bat:
-            bat[dismissed_player_id]["is_out"] = True
+        # If a wicket fell, mark the dismissed player out
+        if wicket and dismissal_type:
+            out_pid = str(d.get("dismissed_player_id") or striker or "")
+            if out_pid in bat:
+                bat[out_pid]["is_out"] = True
 
-        # Bowler updates
+        # --- Bowler updates ---
         if bowler in bowl:
-            # Legal ball increments balls -> overs
-            if extra not in ("wd", "nb"):
+            if x not in ("wd", "nb"):
                 balls_by_bowler[bowler] += 1
-            # Runs conceded: wides & no-balls ARE charged; byes/leg-byes are NOT
-            if extra in (None, "wd", "nb"):
+            # wides / no-balls: 1 penalty + bat runs; plain bat runs otherwise
+            if x in ("wd", "nb"):
+                bowl[bowler]["runs_conceded"] += 1 + runs
+            elif x is None:
                 bowl[bowler]["runs_conceded"] += runs
-            # Credit wicket if applicable to bowler
+            # b/lb don't add to bowler
             if wicket and dismissal_type in _CREDIT_BOWLER:
                 bowl[bowler]["wickets_taken"] += 1
 
-    # Finish overs
     for bid, balls in balls_by_bowler.items():
         bowl[bid]["overs_bowled"] = _bowling_balls_to_overs(balls)
 
     g.batting_scorecard = bat
     g.bowling_scorecard = bowl
 
-MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5MB
 
+# ================================================================
+# Misc helpers
+# ================================================================
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5MB
 
 def _detect_image_ext(data: bytes, content_type: Optional[str], filename: Optional[str]) -> Optional[str]:
     """Return 'svg' | 'png' | 'webp' if valid, else None."""
@@ -481,7 +702,6 @@ def _detect_image_ext(data: bytes, content_type: Optional[str], filename: Option
         return "webp"
     return None
 
-
 def _parse_iso_dt(s: Optional[str]) -> Optional[datetime]:
     """Parse ISO-8601; assume UTC if naive."""
     if not s:
@@ -496,7 +716,6 @@ def _parse_iso_dt(s: Optional[str]) -> Optional[datetime]:
         return dt
     except Exception:
         return None
-
 
 def _iso_or_none(dt: Any) -> Optional[str]:
     """Return isoformat string if dt is a datetime (or None if not)."""
@@ -521,17 +740,17 @@ class CreateGameRequest(BaseModel):
     toss_winner_team: str
     decision: Literal["bat", "bowl"]
 
-
 class OversLimitBody(BaseModel):
     overs_limit: int
 
+class NextBatterBody(BaseModel):
+    batter_id: str
 
 # ------- PR 10: Sponsor Impression logging -------
 class SponsorImpressionIn(BaseModel):
     game_id: str
     sponsor_id: str
     at: Optional[str] = None  # ISO-8601; defaults to now(UTC) when omitted
-
 
 class SponsorImpressionsOut(BaseModel):
     inserted: int
@@ -540,7 +759,6 @@ class SponsorImpressionsOut(BaseModel):
 # ================================================================
 # Core helpers for scoring, replay, and snapshot
 # ================================================================
-
 def _bat_entry(g: GameState, pid: Optional[str]) -> BattingEntryDict:
     if not pid:
         return {"player_id": "", "player_name": "", "runs": 0, "balls_faced": 0, "is_out": False}
@@ -550,7 +768,6 @@ def _bat_entry(g: GameState, pid: Optional[str]) -> BattingEntryDict:
     if isinstance(e_any, dict):
         return cast(BattingEntryDict, e_any)
     return {"player_id": pid, "player_name": _player_name(g.team_a, g.team_b, pid), "runs": 0, "balls_faced": 0, "is_out": False}
-
 
 def _reset_runtime_and_scorecards(g: GameState) -> None:
     g.total_runs = 0
@@ -566,6 +783,25 @@ def _reset_runtime_and_scorecards(g: GameState) -> None:
     g.batting_scorecard = _mk_batting_scorecard(batting_team)
     g.bowling_scorecard = _mk_bowling_scorecard(bowling_team)
 
+# ------------------------------------------------
+# Close an over: clear current bowler and mark last
+# ------------------------------------------------
+def _complete_over_runtime(g: GameState, bowler_id: Optional[str]) -> None:
+    """
+    Called exactly when an over finishes (after ball 6 of the over).
+    - Records who bowled the last legal ball of the finished over
+    - Clears current_bowler_id to force selection for the next over
+    - Resets per-over bookkeeping
+    """
+    # last legal ball’s bowler is the over’s bowler
+    if bowler_id:
+        g.last_ball_bowler_id = bowler_id
+
+    # over is finished -> next over requires explicit bowler
+    g.current_bowler_id = None
+    g.current_over_balls = 0
+    g.mid_over_change_used = False
+
 
 def _score_one(
     g: GameState,
@@ -579,34 +815,47 @@ def _score_one(
     dismissal_type: Optional[str],
     dismissed_player_id: Optional[str],
 ) -> DeliveryKwargs:
+    # Ensure runtime fields exist
     if g.current_striker_id is None:
         g.current_striker_id = striker_id
     if g.current_non_striker_id is None:
         g.current_non_striker_id = non_striker_id
+    if getattr(g, "current_bowler_id", None) is None:
+        g.current_bowler_id = bowler_id
+    if not hasattr(g, "pending_new_batter"):
+        g.pending_new_batter = False
+    if not hasattr(g, "pending_new_over"):
+        g.pending_new_over = False
 
+    bowler_id = g.current_bowler_id or bowler_id
     runs = int(runs_scored or 0)
     is_nb = _is_no_ball(extra)
     is_wd = _is_wide(extra)
     legal = not (is_nb or is_wd)
 
-    # Totals
-    g.total_runs = int(g.total_runs + runs)
+    # capture the display over/ball *before* we mutate runtime
+    delivery_over_number = int(g.overs_completed)
+    delivery_ball_number = int(g.balls_this_over + (1 if legal else 0))
 
-    # Batting
+    # --- Batting runtime (only what scorecards need immediately) ---
     bs = _ensure_batting_entry(g, striker_id)
-    bs["runs"] = int(bs.get("runs", 0) + runs)
     if legal:
         bs["balls_faced"] = int(bs.get("balls_faced", 0) + 1)
+    if extra is None:
+        bs["runs"] = int(bs.get("runs", 0) + runs)
+    elif is_nb:
+        # Off-bat runs on a no-ball go to the batter; ball does NOT count
+        bs["runs"] = int(bs.get("runs", 0) + runs)
 
-    # Bowling
+    # --- Bowling runtime (overs for current bowler on legal balls) ---
     bw = _ensure_bowling_entry(g, bowler_id)
-    bw["runs_conceded"] = int(bw.get("runs_conceded", 0) + runs)
     if legal:
         prev_balls = int(round(float(bw.get("overs_bowled", 0.0)) * 6))
         bw["overs_bowled"] = _bowling_balls_to_overs(prev_balls + 1)
+        g.current_over_balls = int(getattr(g, "current_over_balls", 0) + 1)
 
-    # Dismissal
-    dismissal: Optional[str] = (dismissal_type or "").strip().lower() or None
+    # --- Dismissal normalization ---
+    dismissal = (dismissal_type or "").strip().lower() or None
     if dismissal:
         if is_nb and dismissal in _INVALID_ON_NO_BALL:
             dismissal = None
@@ -615,35 +864,51 @@ def _score_one(
 
     out_happened = bool(is_wicket and dismissal)
     out_player_id = dismissed_player_id or striker_id
-
     if out_happened and out_player_id:
         out_entry = _ensure_batting_entry(g, out_player_id)
         out_entry["is_out"] = True
-        g.total_wickets = int(g.total_wickets + 1)
-
+        # Block next ball until a new batter is provided
+        g.pending_new_batter = True
         if dismissal in _CREDIT_BOWLER:
             bw2 = _ensure_bowling_entry(g, bowler_id)
             bw2["wickets_taken"] = int(bw2.get("wickets_taken", 0) + 1)
 
-    # Over/ball progression + strike
+    # --- Strike rotation + over progression (runtime only) ---
+    rotate_runs = 0
+    if extra is None:
+        rotate_runs = runs
+    elif extra in ("b", "lb"):
+        rotate_runs = runs
+    elif is_nb:
+        rotate_runs = runs
+    elif is_wd:
+        rotate_runs = runs
+
+    if (rotate_runs % 2) == 1:
+        g.current_striker_id, g.current_non_striker_id = g.current_non_striker_id, g.current_striker_id
+
     if legal:
         g.balls_this_over = int(g.balls_this_over + 1)
-        if _rotate_strike_on_runs(runs):
-            g.current_striker_id, g.current_non_striker_id = g.current_non_striker_id, g.current_striker_id
         if g.balls_this_over >= 6:
             g.overs_completed = int(g.overs_completed + 1)
             g.balls_this_over = 0
+            # End of over -> force new over selection
+            g.pending_new_over = True
+            # clear current bowler so client must pick one
+            g.current_bowler_id = None
+            # swap strike at end of over
             g.current_striker_id, g.current_non_striker_id = g.current_non_striker_id, g.current_striker_id
+            _complete_over_runtime(g, bowler_id)
 
     return {
-        "over_number": int(g.overs_completed),
-        "ball_number": int(g.balls_this_over),
+        "over_number": delivery_over_number,
+        "ball_number": delivery_ball_number,
         "bowler_id": str(bowler_id),
         "striker_id": str(striker_id),
         "non_striker_id": str(non_striker_id),
         "runs_scored": int(runs),
         "is_extra": extra is not None,
-        "extra_type": extra,
+        "extra_type": (extra or None),
         "is_wicket": out_happened,
         "dismissal_type": dismissal,
         "dismissed_player_id": out_player_id if out_happened else None,
@@ -656,13 +921,39 @@ def _snapshot_from_game(
     g: GameState,
     last_delivery: Optional[Union[schemas.Delivery, Dict[str, Any]]],
 ) -> Dict[str, Any]:
-    last_delivery_out: Optional[Dict[str, Any]]
+    # Prepare last_delivery dict
     if last_delivery is None:
         last_delivery_out = None
     elif isinstance(last_delivery, BaseModel):
-        last_delivery_out = last_delivery.model_dump()   # already Dict[str, Any]
+        last_delivery_out = last_delivery.model_dump()
     else:
-        last_delivery_out = last_delivery                # already Dict[str, Any]
+        last_delivery_out = last_delivery
+
+    # Default last_delivery to last entry in deduped ledger if still None
+    if last_delivery_out is None:
+        dl = _dedup_deliveries(g)
+        last_delivery_out = dl[-1] if dl else None
+
+    # If there is an over in progress, current bowler is the last legal bowler we saw.
+    # If not, keep it None so the UI prompts to start the next over.
+    cur_bowler_id: Optional[str] = None
+    if g.balls_this_over > 0:
+        # use whatever runtime computed
+        cur_bowler_id = getattr(g, "current_bowler_id", None)
+        if not cur_bowler_id:
+            # fallback to last legal ball
+            for d in reversed(_dedup_deliveries(g)):
+                if is_legal_delivery(d.get("extra_type")):
+                    cur_bowler_id = str(d.get("bowler_id") or "")
+                    break
+
+    # Prompt flags for the UI
+    needs_new_over = (g.balls_this_over == 0 and (g.overs_completed > 0 or (g.deliveries or [])))
+    # If a wicket just fell and the dismissed player is currently in one of the striker slots,
+    # we need a replacement batter selection.
+    cur_striker_out = _bat_entry(g, g.current_striker_id).get("is_out", False)
+    cur_non_striker_out = _bat_entry(g, g.current_non_striker_id).get("is_out", False)
+    needs_new_batter = bool(cur_striker_out or cur_non_striker_out)
 
     snapshot: Dict[str, Any] = {
         "id": g.id,
@@ -684,16 +975,23 @@ def _snapshot_from_game(
                 "is_out": _bat_entry(g, g.current_non_striker_id).get("is_out", False),
             },
         },
+        "current_bowler": {
+            "id": cur_bowler_id,
+            "name": _player_name(g.team_a, g.team_b, cur_bowler_id),
+        },
         "overs": f"{g.overs_completed}.{g.balls_this_over}",
         "last_delivery": last_delivery_out,
         "batting_scorecard": g.batting_scorecard,
         "bowling_scorecard": g.bowling_scorecard,
+        "extras": _extras_breakdown(g),
         "batting_team_name": g.batting_team_name,
         "bowling_team_name": g.bowling_team_name,
         "current_inning": g.current_inning,
+        # NEW hints to drive UI prompts:
+        "needs_new_over": needs_new_over,
+        "needs_new_batter": needs_new_batter,
     }
     return snapshot
-
 
 
 # ================================================================
@@ -703,7 +1001,6 @@ def _snapshot_from_game(
 async def options_games() -> Dict[str, str]:
     payload: Dict[str, str] = {"message": "OK"}
     return payload
-
 
 @_fastapi.post("/games", response_model=schemas.Game)  # type: ignore[name-defined]
 async def create_game(
@@ -763,7 +1060,6 @@ async def create_game(
 
     return db_game  # Pydantic orm_mode -> schemas.Game
 
-
 @_fastapi.get("/games/{game_id}", response_model=schemas.Game)  # type: ignore[name-defined]
 async def get_game(game_id: str, db: AsyncSession = Depends(get_db)):
     db_game = await crud.get_game(db, game_id=game_id)
@@ -771,6 +1067,76 @@ async def get_game(game_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Game not found")
     return db_game
 
+# ------------------------------------------------
+# Start a new over with selected bowler
+# ------------------------------------------------
+@_fastapi.post("/games/{game_id}/overs/start")
+async def start_over(
+    game_id: str,
+    body: StartOverBody,
+    db: AsyncSession = Depends(get_db),
+):
+    db_game = await crud.get_game(db, game_id=game_id)
+    if not db_game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    g = cast(GameState, db_game)
+    if getattr(g, "current_over_balls", None) is None:
+        g.current_over_balls = 0
+    if getattr(g, "mid_over_change_used", None) is None:
+        g.mid_over_change_used = False
+    if not hasattr(g, "current_bowler_id"):
+        g.current_bowler_id = None
+    if not hasattr(g, "last_ball_bowler_id"):
+        g.last_ball_bowler_id = None
+    if getattr(g, "pending_new_over", None) is None:
+        g.pending_new_over = False
+
+    err = _can_start_over(g, body.bowler_id)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    g.current_bowler_id = body.bowler_id
+    g.current_over_balls = 0
+    g.mid_over_change_used = False
+    g.pending_new_over = False
+
+    _rebuild_scorecards_from_deliveries(g)
+    _recompute_totals_and_runtime(g)
+
+    updated = await crud.update_game(db, game_model=db_game)
+    u = cast(GameState, updated)
+    snap = _snapshot_from_game(u, None)
+    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
+    return {"ok": True, "current_bowler_id": g.current_bowler_id}
+
+
+# ------------------------------------------------
+# Mid-over bowler replacement (injury, etc.)
+# ------------------------------------------------
+@_fastapi.post("/games/{game_id}/overs/change_bowler")
+async def change_bowler_mid_over(
+    game_id: str,
+    body: MidOverChangeBody,
+    db: AsyncSession = Depends(get_db),
+):
+    db_game = await crud.get_game(db, game_id=game_id)
+    if not db_game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    g = cast(GameState, db_game)
+    if not g.current_bowler_id:
+        raise HTTPException(status_code=400, detail="No active bowler for this over")
+
+    err = _apply_mid_over_change(g, body.new_bowler_id)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    updated = await crud.update_game(db, game_model=db_game)  # <-- pass ORM row
+    u = cast(GameState, updated)
+    snap = _snapshot_from_game(u, None)
+    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
+    return {"ok": True, "current_bowler_id": g.current_bowler_id}
 
 # ================================================================
 # PR 1 — Record a delivery (with dismissal rules)
@@ -778,7 +1144,7 @@ async def get_game(game_id: str, db: AsyncSession = Depends(get_db)):
 @_fastapi.post("/games/{game_id}/deliveries")
 async def add_delivery(
     game_id: str,
-    delivery: schemas.ScoreDelivery,  # matches your schema
+    delivery: schemas.ScoreDelivery,
     db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     db_game = await crud.get_game(db, game_id=game_id)
@@ -787,34 +1153,163 @@ async def add_delivery(
 
     g = cast(GameState, db_game)
 
-    # Score one ball
+    # Rebuild runtime from ledger to make correct gating decisions
+    _rebuild_scorecards_from_deliveries(g)
+    _recompute_totals_and_runtime(g)
+    flags = _compute_snapshot_flags(g)
+
+    # UI/State guards
+    if flags["needs_new_batter"]:
+        raise HTTPException(status_code=409, detail="Select a new batter before scoring the next ball.")
+    if flags["needs_new_over"]:
+        raise HTTPException(status_code=409, detail="Start a new over and select a bowler before scoring.")
+
+    # No consecutive overs by same bowler (when over has just started)
+    last_id = getattr(g, "last_ball_bowler_id", None)
+    if g.balls_this_over == 0 and last_id and delivery.bowler_id == last_id:
+        raise HTTPException(status_code=400, detail="Bowler cannot bowl consecutive overs")
+
+    off_bat = getattr(delivery, "runs_off_bat", None)
+    runs_scored = int(off_bat) if off_bat is not None else int(delivery.runs_scored or 0)
+
+    # Score one ball (runtime update)
     kwargs: DeliveryKwargs = _score_one(
         g,
         striker_id=delivery.striker_id,
         non_striker_id=delivery.non_striker_id,
         bowler_id=delivery.bowler_id,
-        runs_scored=int(delivery.runs_scored or 0),
+        runs_scored=runs_scored,
         extra=getattr(delivery, "extra", None),
         is_wicket=bool(getattr(delivery, "is_wicket", False)),
         dismissal_type=getattr(delivery, "dismissal_type", None),
         dismissed_player_id=getattr(delivery, "dismissed_player_id", None),
     )
 
-    # Validate and store as JSON-safe dict
+    # Append once
     del_dict: Dict[str, Any] = schemas.Delivery(**kwargs).model_dump()
+    if not isinstance(g.deliveries, list):  # type: ignore
+        g.deliveries = []  # type: ignore[assignment]
+        flag_modified(db_game, "deliveries")
+    g.deliveries.append(del_dict)
+    if getattr(g, "current_over_balls", None) is None:
+        g.current_over_balls = 0
+    if getattr(g, "mid_over_change_used", None) is None:
+        g.mid_over_change_used = False
+    if not hasattr(g, "current_bowler_id"):
+        g.current_bowler_id = None
+    if not hasattr(g, "last_ball_bowler_id"):
+        g.last_ball_bowler_id = None
+    flag_modified(db_game, "deliveries")
 
-    try:
-        g.deliveries.append(del_dict)
-    except Exception:
-        g.deliveries = [del_dict]  # type: ignore[assignment]
-
-    g.deliveries = (g.deliveries or []) + [del_dict]
+    # Rebuild scorecards from the authoritative ledger
     _rebuild_scorecards_from_deliveries(g)
+    _recompute_totals_and_runtime(g)
+    flag_modified(db_game, "batting_scorecard")
+    flag_modified(db_game, "bowling_scorecard")
+
+    # Persist
     updated = await crud.update_game(db, game_model=db_game)
     u = cast(GameState, updated)
-    snapshot = _snapshot_from_game(u, del_dict)
-    await sio.emit("state:update", {"id": game_id, "snapshot": snapshot}, room=game_id)
-    return snapshot
+
+    # Build snapshot from the persisted row + flags
+    last = u.deliveries[-1] if u.deliveries else None
+    snap = _snapshot_from_game(u, last)
+    final_flags = _compute_snapshot_flags(u)
+    snap["needs_new_batter"] = final_flags["needs_new_batter"]
+    snap["needs_new_over"] = final_flags["needs_new_over"]
+
+    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
+    return snap
+
+
+class ReplaceBatterBody(BaseModel):
+    new_batter_id: str
+
+@_fastapi.post("/games/{game_id}/batters/replace")
+async def replace_batter(
+    game_id: str,
+    body: ReplaceBatterBody,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    db_game = await crud.get_game(db, game_id=game_id)
+    if not db_game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    g = cast(GameState, db_game)
+
+    # Ensure latest state
+    _rebuild_scorecards_from_deliveries(g)
+    _recompute_totals_and_runtime(g)
+
+    # Determine which current batter is out
+    def _is_out(pid: Optional[str]) -> bool:
+        if not pid:
+            return False
+        e = g.batting_scorecard.get(pid) or {}
+        if isinstance(e, BaseModel):
+            e = e.model_dump()
+        return bool(e.get("is_out", False))
+
+    if _is_out(g.current_striker_id):
+        g.current_striker_id = body.new_batter_id
+    elif _is_out(g.current_non_striker_id):
+        g.current_non_striker_id = body.new_batter_id
+    else:
+        raise HTTPException(status_code=409, detail="No striker or non-striker requires replacement.")
+
+    # Ensure scorecard entry exists for the incoming batter
+    _ensure_batting_entry(g, body.new_batter_id)
+
+    flag_modified(db_game, "batting_scorecard")
+    updated = await crud.update_game(db, game_model=db_game)
+    u = cast(GameState, updated)
+
+    # Respond with fresh snapshot + flags
+    last = _dedup_deliveries(u)[-1] if u.deliveries else None
+    snap = _snapshot_from_game(u, last)
+    flags = _compute_snapshot_flags(u)
+    snap["needs_new_batter"] = flags["needs_new_batter"]
+    snap["needs_new_over"] = flags["needs_new_over"]
+
+    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
+    return snap
+
+
+@_fastapi.post("/games/{game_id}/next-batter")
+async def set_next_batter(
+    game_id: str,
+    body: NextBatterBody,
+    db: AsyncSession = Depends(get_db),
+):
+    db_game = await crud.get_game(db, game_id=game_id)
+    if not db_game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    g = cast(GameState, db_game)
+    if getattr(g, "pending_new_batter", None) is None:
+        g.pending_new_batter = False
+
+    # If no replacement is required, no-op
+    if not g.pending_new_batter:
+        return {"ok": True, "message": "No replacement batter required"}
+
+    # Choose where to insert the new batter:
+    # Convention: new batter always becomes the striker after a wicket
+    g.current_striker_id = body.batter_id
+
+    # make sure entry exists
+    _ensure_batting_entry(g, body.batter_id)
+
+    g.pending_new_batter = False
+
+    _rebuild_scorecards_from_deliveries(g)
+    _recompute_totals_and_runtime(g)
+
+    updated = await crud.update_game(db, game_model=db_game)
+    u = cast(GameState, updated)
+    snap = _snapshot_from_game(u, None)
+    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
+    return {"ok": True, "current_striker_id": g.current_striker_id}
+
 
 
 # ================================================================
@@ -822,23 +1317,26 @@ async def add_delivery(
 # ================================================================
 @_fastapi.post("/games/{game_id}/undo-last")
 async def undo_last_delivery(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
-    game = await crud.get_game(db, game_id=game_id)
-    if not game:
+    db_game = await crud.get_game(db, game_id=game_id)
+    if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    g = cast(GameState, game)
+    g = cast(GameState, db_game)
     if not g.deliveries:
         raise HTTPException(status_code=409, detail="Nothing to undo")
 
-    # Remove last delivery from ledger
     g.deliveries = g.deliveries[:-1]  # type: ignore[assignment]
-
-    # Reset runtime & scorecards, then replay remaining ledger
     _reset_runtime_and_scorecards(g)
-    for d_any in g.deliveries:
-        # deliveries are Dict[str, Any] by protocol; if ORM objects slip in, coerce to dict
-        d: Dict[str, Any] = d_any.model_dump() if isinstance(d_any, BaseModel) else d_any
-
+    deliveries5: Sequence[Union[BaseModel, Mapping[str, Any]]] = cast(
+        Sequence[Union[BaseModel, Mapping[str, Any]]],
+        g.deliveries,
+    )
+    for d_any in deliveries5:
+        d: Dict[str, Any] = (
+            d_any.model_dump()
+            if isinstance(d_any, BaseModel)
+            else dict(d_any)
+        )
         _ = _score_one(
             g,
             striker_id=str(d.get("striker_id", "")),
@@ -849,8 +1347,9 @@ async def undo_last_delivery(game_id: str, db: AsyncSession = Depends(get_db)) -
             is_wicket=bool(d.get("is_wicket")),
             dismissal_type=d.get("dismissal_type"),
             dismissed_player_id=d.get("dismissed_player_id"),
-        )    
-    updated = await crud.update_game(db, game_model=game)
+        )
+
+    updated = await crud.update_game(db, game_model=db_game)  # <-- pass ORM row
     u = cast(GameState, updated)
     _rebuild_scorecards_from_deliveries(u)
     last = u.deliveries[-1] if u.deliveries else None
@@ -869,21 +1368,19 @@ async def set_overs_limit(
     body: OversLimitBody,
     db: AsyncSession = Depends(get_db),
 ):
-    game = await crud.get_game(db, game_id=game_id)
-    if not game:
+    db_game = await crud.get_game(db, game_id=game_id)
+    if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    g = cast(GameState, game)
+    g = cast(GameState, db_game)
     bowled_balls = g.overs_completed * 6 + g.balls_this_over
     new_limit_balls = int(body.overs_limit) * 6
-
     if new_limit_balls < bowled_balls:
         raise HTTPException(status_code=400, detail="New limit is less than overs already bowled")
 
     g.overs_limit = int(body.overs_limit)
-    updated = await crud.update_game(db, game_model=game)
+    updated = await crud.update_game(db, game_model=db_game)  # <-- pass ORM row
     return {"id": game_id, "overs_limit": cast(GameState, updated).overs_limit}
-
 
 # ================================================================
 # PR 5 — GET game snapshot (viewer bootstrap)
@@ -895,9 +1392,27 @@ async def get_snapshot(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict
         raise HTTPException(status_code=404, detail="Game not found")
 
     g = cast(GameState, game)
+    # Ensure runtime fields exist
+    if getattr(g, "current_over_balls", None) is None:
+        g.current_over_balls = 0
+    if getattr(g, "mid_over_change_used", None) is None:
+        g.mid_over_change_used = False
+    if not hasattr(g, "current_bowler_id"):
+        g.current_bowler_id = None
+    if not hasattr(g, "last_ball_bowler_id"):
+        g.last_ball_bowler_id = None
+
+    # Always rebuild from ledger
     _rebuild_scorecards_from_deliveries(g)
-    last = g.deliveries[-1] if g.deliveries else None
+    _recompute_totals_and_runtime(g)
+
+    last = _dedup_deliveries(g)[-1] if g.deliveries else None
     snap = _snapshot_from_game(g, last)
+
+    # UI gating flags
+    flags = _compute_snapshot_flags(g)
+    snap["needs_new_batter"] = flags["needs_new_batter"]
+    snap["needs_new_over"] = flags["needs_new_over"]
 
     # Enrich for bootstrap (team names + player lists)
     snap["teams"] = {
@@ -912,6 +1427,43 @@ async def get_snapshot(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict
 
 
 # ================================================================
+# OPTIONAL — Explicitly set openers (quality-of-life)
+# ================================================================
+@_fastapi.post("/games/{game_id}/openers")
+async def set_openers(
+    game_id: str,
+    body: Dict[str, str],
+    db: AsyncSession = Depends(get_db),
+):
+    # Fetch ORM row
+    db_game = await crud.get_game(db, game_id=game_id)
+    if not db_game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    # Cast for cricket-logic ergonomics (same object instance)
+    g = cast(GameState, db_game)
+
+    striker_id = str(body.get("striker_id") or "")
+    non_striker_id = str(body.get("non_striker_id") or "")
+
+    g.current_striker_id = striker_id
+    g.current_non_striker_id = non_striker_id
+
+    # IMPORTANT: pass the ORM object to CRUD, not the GameState-typed alias
+    updated = await crud.update_game(db, game_model=db_game)
+
+    # Cast the updated ORM row back to GameState for snapshotting
+    u = cast(GameState, updated)
+
+    _rebuild_scorecards_from_deliveries(u)
+    _recompute_totals_and_runtime(u)
+
+    snap = _snapshot_from_game(u, None)
+    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
+    return snap
+
+
+# ================================================================
 # Team Roles (captain / wicket-keeper)
 # ================================================================
 @_fastapi.post("/games/{game_id}/team-roles")
@@ -920,16 +1472,12 @@ async def set_team_roles(
     payload: schemas.TeamRoleUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    game = await crud.get_game(db, game_id=game_id)
-    if not game:
+    db_game = await crud.get_game(db, game_id=game_id)
+    if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    g = cast(GameState, game)
-    # Validate role ids are on the correct team
-    if payload.side == schemas.TeamSide.A:
-        players = g.team_a.get("players", [])
-    else:
-        players = g.team_b.get("players", [])
+    g = cast(GameState, db_game)
+    players = (g.team_a.get("players", []) if payload.side == schemas.TeamSide.A else g.team_b.get("players", []))
     player_ids = {p["id"] for p in players}
 
     if payload.captain_id and payload.captain_id not in player_ids:
@@ -937,7 +1485,6 @@ async def set_team_roles(
     if payload.wicket_keeper_id and payload.wicket_keeper_id not in player_ids:
         raise HTTPException(status_code=400, detail="wicket_keeper_id not in team players")
 
-    # Update DB columns directly
     if payload.side == schemas.TeamSide.A:
         g.team_a_captain_id = payload.captain_id
         g.team_a_keeper_id = payload.wicket_keeper_id
@@ -945,7 +1492,7 @@ async def set_team_roles(
         g.team_b_captain_id = payload.captain_id
         g.team_b_keeper_id = payload.wicket_keeper_id
 
-    await crud.update_game(db, game_model=game)
+    await crud.update_game(db, game_model=db_game)  # <-- pass ORM row
     return {
         "ok": True,
         "team_roles": {
@@ -953,7 +1500,6 @@ async def set_team_roles(
             "B": {"captain_id": g.team_b_captain_id, "wicket_keeper_id": g.team_b_keeper_id},
         },
     }
-
 
 # ================================================================
 # PR 8 — Sponsor upload endpoint
@@ -982,7 +1528,7 @@ async def create_sponsor(
     if ext is None:
         raise HTTPException(status_code=400, detail="Only SVG, PNG or WebP images are allowed")
 
-    # Surfaces parsing — ensure a list[str] WITHOUT generator-typed vars
+    # Surfaces parsing — ensure a list[str]
     try:
         parsed_any: Any = json.loads(surfaces) if surfaces else ["all"]
     except Exception:
@@ -992,7 +1538,6 @@ async def create_sponsor(
         raise HTTPException(status_code=400, detail="surfaces must be a JSON array of strings")
 
     parsed_list: List[Any] = cast(List[Any], parsed_any)
-    # Validate items explicitly (avoid `x` in a generator)
     for itm in parsed_list:
         if not isinstance(itm, str):
             raise HTTPException(status_code=400, detail="surfaces must be a JSON array of strings")
@@ -1041,7 +1586,6 @@ async def create_sponsor(
         "created_at": _iso_or_none(rec.created_at),
         "updated_at": _iso_or_none(rec.updated_at),
     }
-
 
 # ================================================================
 # PR 9 — Per-game sponsors lineup (time-gated, v1 global)
@@ -1103,7 +1647,6 @@ async def get_game_sponsors(
             }
         )
     return out
-
 
 # ================================================================
 # PR 10 — Impression logging (proof-of-play)
@@ -1170,7 +1713,6 @@ async def log_sponsor_impressions(
         ids=[cast(int, r.id) for r in rows],
     )
 
-
 # ================================================================
 # Game Contributors (scorer / commentary / analytics)
 # ================================================================
@@ -1222,7 +1764,6 @@ async def add_contributor(
         display_name=cast(Optional[str], rec.display_name),
     )
 
-
 @_fastapi.get("/games/{game_id}/contributors", response_model=List[schemas.GameContributor])
 async def list_contributors(
     game_id: str,
@@ -1243,7 +1784,6 @@ async def list_contributors(
         for r in rows
     ]
 
-
 @_fastapi.delete("/games/{game_id}/contributors/{contrib_id}")
 async def remove_contributor(
     game_id: str,
@@ -1263,7 +1803,6 @@ async def remove_contributor(
         raise HTTPException(status_code=404, detail="Contributor not found")
 
     return {"ok": True}
-
 
 # ================================================================
 # Presence store + join/leave handlers
@@ -1322,7 +1861,6 @@ async def disconnect(sid: str) -> None:
     _SID_ROOMS.pop(sid, None)
     return None
 
-
 # ================================================================
 # Health
 # ================================================================
@@ -1330,11 +1868,9 @@ async def disconnect(sid: str) -> None:
 async def healthz() -> Dict[str, str]:
     return {"status": "ok"}
 
-
 # ================================================================
 # Local dev entrypoint (optional)
 # ================================================================
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)  # pyright: ignore[reportUnknownMemberType]
-

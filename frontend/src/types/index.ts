@@ -32,7 +32,6 @@ export interface BattingScorecardEntry {
   strike_rate?: number
 }
 
-
 export interface BowlingScorecardEntry {
   player_id: string
   player_name: string
@@ -60,6 +59,7 @@ export interface Delivery {
   extra_type?: 'wd' | 'nb' | 'b' | 'lb' | null
   at_utc?: string | null
 }
+
 /** Full game state stored in the store */
 export interface GameState {
   id: string
@@ -125,10 +125,13 @@ export interface Snapshot {
   bowling_scorecard?: Record<string, BowlingScorecardEntry>
   last_delivery?: Delivery | null
 
+  // NEW gate flags
+  needs_new_batter?: boolean
+  needs_new_over?: boolean
+
   // allow extra keys without breaking the UI
   [k: string]: any
 }
-
 
 /** State update envelope from the server */
 export interface StateUpdatePayload {
@@ -159,7 +162,6 @@ export interface CreateGameRequest {
   start_time_utc?: string;        // ISO string
 }
 
-
 export interface ScoreDeliveryRequest {
   striker_id: ID;
   non_striker_id: ID;
@@ -175,7 +177,6 @@ export interface ScoreDeliveryRequest {
   commentary?: string;
 }
 
-
 /** UI state kept in the store (used by GameStore.ts) */
 export interface UIState {
   loading: boolean;
@@ -188,6 +189,7 @@ export interface UIState {
   scoringDisabled: boolean;
   activeScorecardTab: 'batting' | 'bowling';
 }
+
 /** API error normalizer shape (if you need it elsewhere) */
 export interface ApiErrorShape {
   message: string;
