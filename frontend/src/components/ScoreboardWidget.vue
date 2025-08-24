@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { fmtSR, fmtEconomy, oversDisplayFromBalls } from '@/utils/cricket'
 import { useGameStore } from '@/stores/gameStore'
 import { storeToRefs } from 'pinia'
-
+import { useHighlights, type Snapshot as HL } from '@/composables/useHighlights'
 /* ------------------------------------------------------------------ */
 /* Props                                                               */
 /* ------------------------------------------------------------------ */
@@ -39,6 +39,7 @@ const {
   state,
   battingRowsXI,   // <— use these
   bowlingRowsXI,
+  liveSnapshot,
 } = storeToRefs(gameStore)
 
 /* ---------------------- */
@@ -222,6 +223,81 @@ const parTxt = computed(() => {
   return typeof p?.par === 'number' ? String(p.par) : null
 })
 
+// === Highlights (FOUR/SIX/WICKET/DUCK/50/100) =========================
+const enableHighlights = ref(true)   // make a prop later if you want
+const highlightMs = ref(1800)
+const {
+  current: highlight,              // <- 'FOUR' | 'SIX' | 'WICKET' | 'DUCK' | 'FIFTY' | 'HUNDRED' | null
+  enqueueFromSnapshots,
+  reset: resetHighlights,
+} = useHighlights(enableHighlights, highlightMs)
+
+const prevHL = ref<HL | null>(null)
+
+// map your Pinia/live snapshot to the useHighlights Snapshot shape
+function mapToHL(s: any): HL {
+  const g: any = currentGame.value || {}
+  const card = (g.batting_scorecard || {}) as Record<string, any>
+
+  const findName = (id?: string | null): string => {
+    if (!id) return ''
+    const tA = g.team_a?.players || []
+    const tB = g.team_b?.players || []
+    return (
+      tA.find((p:any)=>String(p.id)===String(id))?.name ||
+      tB.find((p:any)=>String(p.id)===String(id))?.name ||
+      card[String(id)]?.player_name ||
+      ''
+    )
+  }
+
+  const mkBatter = (id?: string | null) => {
+    if (!id) return undefined
+    const row = card[String(id)] || {}
+    return {
+      id: String(id),
+      name: findName(id),
+      runs: Number(row?.runs ?? 0),
+      balls: Number(row?.balls_faced ?? row?.balls ?? 0),
+      out: Boolean(row?.is_out),
+    }
+  }
+
+  const ld = s?.last_delivery
+  const runsOffBat = Number(ld?.runs_scored ?? ld?.runs ?? 0)
+  const isExtra = Boolean(ld?.is_extra ?? (ld?.extra_type != null))
+  const lastBall = ld
+    ? {
+        runs: runsOffBat,
+        // count only off-the-bat 4/6 as boundaries; tweak if you want “wide four” etc.
+        isBoundary4: !isExtra && runsOffBat === 4,
+        isBoundary6: !isExtra && runsOffBat === 6,
+        isWicket: Boolean(ld?.is_wicket),
+        dismissedBatterId: ld?.dismissed_player_id ? String(ld.dismissed_player_id) : undefined,
+      }
+    : undefined
+
+  return {
+    total: {
+      runs: Number(s?.total_runs ?? g.total_runs ?? 0),
+      wickets: Number(s?.total_wickets ?? g.total_wickets ?? 0),
+    },
+    striker: mkBatter(s?.current_striker_id ?? g.current_striker_id),
+    nonStriker: mkBatter(s?.current_non_striker_id ?? g.current_non_striker_id),
+    lastBall,
+  }
+}
+
+// enqueue on every live snapshot change (skip first paint)
+watch(liveSnapshot, (next) => {
+  if (!next) return
+  const nextHL = mapToHL(next)
+  if (prevHL.value) enqueueFromSnapshots(prevHL.value, nextHL)
+  prevHL.value = nextHL
+}, { deep: true })
+
+onUnmounted(() => { resetHighlights() })
+
 /* ----------------------------- */
 /* Striker / Non-striker / Bowler */
 /* ----------------------------- */
@@ -296,6 +372,16 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
 
 <template>
   <section class="board" :data-theme="theme">
+    <!-- Highlight overlay -->
+    <div v-if="highlight" class="hl-banner" aria-live="polite">
+      <span v-if="highlight==='FOUR'">FOUR!</span>
+      <span v-else-if="highlight==='SIX'">SIX!</span>
+      <span v-else-if="highlight==='WICKET'">WICKET!</span>
+      <span v-else-if="highlight==='DUCK'">DUCK!</span>
+      <span v-else-if="highlight==='FIFTY'">FIFTY!</span>
+      <span v-else-if="highlight==='HUNDRED'">HUNDRED!</span>
+    </div>
+
     <!-- Side rails -->
     <aside v-if="leftSponsor" class="sponsor-rail rail-left">
       <component :is="sponsorHref(leftSponsor) ? 'a' : 'div'"
@@ -597,4 +683,21 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
 .balls { display:flex; flex-wrap: wrap; gap:6px; }
 .ball { min-width: 28px; height: 28px; display:grid; place-items:center; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:rgba(0,0,0,.18); font-weight:800; font-size:12px; }
 :where([data-theme="light"]) .ball { background:#f9fafb; border-color:#e5e7eb; }
+/* Highlight toast */
+.hl-banner{
+  position:absolute; top:12px; right:12px; z-index:5;
+  padding:6px 10px; border-radius:10px;
+  background: rgba(34,211,238,.14);
+  border:1px solid rgba(34,211,238,.35);
+  color:#22d3ee; font-weight:900; letter-spacing:.04em; font-size:16px;
+  animation: hl-pop 800ms ease, hl-fade 1800ms ease forwards;
+  pointer-events:none;
+}
+@keyframes hl-pop { from{ transform:scale(.92); opacity:.4 } to{ transform:scale(1); opacity:1 } }
+@keyframes hl-fade { 0%{opacity:1} 70%{opacity:1} 100%{opacity:0} }
+
+:where([data-theme="light"]) .hl-banner{
+  background:#e8fbfe; border-color:#a5ecf6; color:#0e7490;
+}
+
 </style>

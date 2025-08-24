@@ -645,6 +645,7 @@ const bowlingRowsXI = computed(() => {
     return Number(row?.runs_conceded ?? row?.runs ?? 0)
   }
 
+  
   // consider union of XI ids that appear in either card or stats
   const ids = new Set<string>()
   Object.keys(card).forEach(id => { if (xiIds.has(id)) ids.add(id) })
@@ -668,6 +669,14 @@ const bowlingRowsXI = computed(() => {
     rows.push({ id, name, overs: oversText, maidens, runs, wkts, econ })
   }
   return rows
+})
+
+// Players on the current fielding team who are NOT in the XI
+const fieldingBench = computed<Player[]>(() => {
+  const team = bowlingTeam.value
+  if (!team) return []
+  const xiIds = new Set((bowlingXI.value || []).map(p => p.id))
+  return (team.players || []).filter(p => !xiIds.has(p.id))
 })
 
 // --- Helpers to resolve XI ids for batting/bowling sides
@@ -1245,6 +1254,7 @@ async function postDeliveryAuthoritative(
     dismissal_type?: string,
     dismissed_player_id?: string | null,
     commentary?: string,
+    fielder_id?: string, 
   }
 ): Promise<any> {
   // Pull ids from server snapshot first; fall back to game / UI selectors only if needed
@@ -1273,6 +1283,7 @@ async function postDeliveryAuthoritative(
     commentary: opts.commentary,
   } as ApiScoreDeliveryRequest
 
+  if (opts.fielder_id) (payload as any).fielder_id = opts.fielder_id
   // Encoding rules:
   // - legal ball:      extra=null, runs_scored = off-bat runs
   // - no-ball:         extra='nb',  runs_off_bat = off-bat runs (server adds +1)
@@ -1744,19 +1755,24 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
 }
 
   async function scoreWicket(
-    gameId: string,
-    dismissal_type: string,
-    dismissed_player_id?: string | null,
-    commentary?: string,
-  ): Promise<any> {
-    return postDeliveryAuthoritative(gameId, {
-      extra: null,
-      is_wicket: true,
-      dismissal_type,
-      dismissed_player_id: dismissed_player_id ?? uiState.value.selectedStrikerId,
-      commentary,
-    })
-  }
+  gameId: string,
+  dismissal_type: string,
+  dismissed_player_id?: string | null,
+  commentary?: string,
+  fielderId?: string
+): Promise<any> {
+  const needsFielder = ['caught', 'run_out', 'stumped'].includes(String(dismissal_type))
+
+  return postDeliveryAuthoritative(gameId, {
+    extra: null,
+    is_wicket: true,
+    dismissal_type,
+    dismissed_player_id: dismissed_player_id ?? uiState.value.selectedStrikerId,
+    commentary,
+    ...(needsFielder && fielderId ? { fielder_id: fielderId } as any : {})
+  })
+}
+
 
 
   function clearError(): void { uiState.value.error = null }
@@ -1826,7 +1842,7 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     bowlingRosterXI,
     fieldingSubs,
     fielderRosterAll,
-    
+    fieldingBench,
 
     // Live
     isLive,

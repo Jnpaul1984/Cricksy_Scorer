@@ -43,6 +43,25 @@ const extraRuns = ref<number>(1)   // used for wd (≥1) and b/lb (≥0)
 const isWicket = ref(false)
 const dismissal = ref<string | null>(null)
 const dismissedId = ref<string | null>(null)
+// --- Fielder (XI + subs) for wicket events ---
+const selectedFielderId = ref<UUID>('' as UUID)
+
+// Does this dismissal type require a fielder?
+const needsFielder = computed<boolean>(() => {
+  const t = (dismissal.value || '').toLowerCase()
+  return t === 'caught' || t === 'run_out' || t === 'stumped'
+})
+
+// Mark which ids belong to the XI so we can label subs in the dropdown
+const bowlingXIIds = computed<Set<UUID>>(() => new Set(bowlingRosterXI.value.map(p => p.id)))
+
+// Reset fielder when wicket toggled off / dismissal changes to a non-fielder type
+watch(isWicket, (on) => {
+  if (!on) { dismissal.value = null; selectedFielderId.value = '' as UUID }
+})
+watch(dismissal, (t) => {
+  if (!needsFielder.value) selectedFielderId.value = '' as UUID
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -60,11 +79,16 @@ const gameId = computed<string>(() => (route.params.gameId as string) || (route.
 const canSubmitSimple = computed(() => {
   if (!gameId.value || needsNewOverLive.value || needsNewBatterLive.value) return false
   if (!selectedStriker.value || !selectedNonStriker.value || !selectedBowler.value) return false
+
+  // If it's a wicket that needs a fielder, require one
+  if (isWicket.value && needsFielder.value && !selectedFielderId.value) return false
+
   if (extra.value === 'nb') return offBat.value >= 0
   if (extra.value === 'wd') return extraRuns.value >= 1
   if (extra.value === 'b' || extra.value === 'lb') return extraRuns.value >= 0
   return offBat.value >= 0 // legal
 })
+
 
 async function submitSimple() {
   if (needsNewOverLive.value)  { openStartOver();   onError('Start the next over first'); return }
@@ -75,7 +99,9 @@ async function submitSimple() {
       await gameStore.scoreWicket(
         gameId.value,
         (dismissal.value || 'bowled'),
-        (dismissedId.value || undefined)
+        (dismissedId.value || undefined),
+        undefined, // commentary (optional)
+        (needsFielder.value ? (selectedFielderId.value || undefined) : undefined)
       )
     } else if (extra.value === 'nb') {
       await gameStore.scoreExtra(gameId.value, 'nb', offBat.value)
@@ -94,6 +120,7 @@ async function submitSimple() {
     isWicket.value = false
     dismissal.value = null
     dismissedId.value = null
+    selectedFielderId.value = '' as UUID   // ✅ clear fielder
     onScored()
   } catch (e: any) {
     onError(e?.message || 'Scoring failed')
@@ -141,6 +168,19 @@ const reduceInnings = ref<1 | 2>(currentInnings.value)
 const oversNew = ref<number | null>(null)
 const reducingOvers = ref(false)
 const computingPar = ref(false)
+// --- Optional "Fielding subs" management card ---
+const showSubsCard = ref<boolean>(false)
+const SUBS_CARD_KEY = 'cricksy.ui.showSubsCard'
+
+onMounted(() => {
+  try {
+    const saved = localStorage.getItem(SUBS_CARD_KEY)
+    if (saved != null) showSubsCard.value = saved === '1'
+  } catch {}
+})
+watch(showSubsCard, (v) => {
+  try { localStorage.setItem(SUBS_CARD_KEY, v ? '1' : '0') } catch {}
+})
 
 const canReduce = computed(() => oversNew.value != null && oversNew.value! > 0)
 
@@ -791,8 +831,18 @@ async function confirmChangeBowler(): Promise<void> {
             <button class="btn" @click="jumpToReduceOvers">Reduce overs…</button>
             <small class="hint">Adjust match or innings limit.</small>
           </div>
+
+          <!-- NEW: toggle for subs card -->
+          <div class="col">
+            <label class="lbl" style="display:flex; align-items:center; gap:6px;">
+              <input type="checkbox" v-model="showSubsCard" />
+              Fielding subs card
+            </label>
+            <small class="hint">Lists eligible substitute fielders.</small>
+          </div>
         </div>
       </section>
+
 
       <!-- Gate banners -->
       <div v-if="needsNewBatterLive || needsNewOverLive" class="placeholder mb-3" role="status" aria-live="polite">
@@ -853,8 +903,28 @@ async function confirmChangeBowler(): Promise<void> {
               <option value="stumped">Stumped</option>
               <option value="hit_wicket">Hit wicket</option>
             </select>
-            <input v-if="isWicket" v-model="dismissedId" placeholder="Dismissed player id" class="inp" />
-          </div>
+           <!-- NEW: Fielder (XI + subs) when needed -->
+          <select
+            v-if="isWicket && needsFielder"
+            v-model="selectedFielderId"
+            class="sel"
+            aria-label="Select fielder"
+          >
+            <option disabled value="">Select fielder…</option>
+            <option v-for="p in fielderOptions" :key="p.id" :value="p.id">
+              {{ p.name }}{{ bowlingXIIds.has(p.id) ? '' : ' (sub)' }}
+            </option>
+          </select>
+          <small
+            v-if="isWicket && needsFielder && selectedFielderId && !bowlingXIIds.has(selectedFielderId)"
+            class="hint"
+          >
+            Sub fielder will be credited.
+          </small>
+          <!-- /NEW -->
+
+          <input v-if="isWicket" v-model="dismissedId" placeholder="Dismissed player id" class="inp" />
+        </div>
 
           <!-- Submit -->
           <div class="col" style="display:flex; gap:8px;">
@@ -880,9 +950,27 @@ async function confirmChangeBowler(): Promise<void> {
 
         <div class="right">
           <div class="scorecards-grid">
-            <BattingCard :entries="battingEntries" />
-
+            <<BattingCard :entries="battingEntries" />
+            
             <BowlingCard :entries="bowlingEntries" />
+
+            <!-- NEW: compact fielding subs card -->
+            <div v-if="showSubsCard" class="card subs-card">
+              <div class="subs-hdr">
+                <h4>Fielding subs</h4>
+                <span class="count" v-if="fieldingSubs?.length">{{ fieldingSubs.length }}</span>
+              </div>
+
+              <ul class="subs-list" v-if="fieldingSubs && fieldingSubs.length">
+                <li v-for="p in fieldingSubs" :key="p.id" class="subs-row">
+                  <span class="name">{{ p.name }}</span>
+                  <span class="chip">SUB</span>
+                </li>
+              </ul>
+              <div v-else class="empty">
+                <small class="hint">No subs on the bench.</small>
+              </div>
+            </div>
 
             <!-- Extras / DLS / Reduce Overs -->
             <div class="card extras-card">
@@ -1179,6 +1267,43 @@ async function confirmChangeBowler(): Promise<void> {
 }
 .scorecards-grid > * { align-self: start; }
 .scorecards-grid .card, .scorecards-grid .extras-card { height: 100%; }
+
+.subs-card {
+  padding: 12px;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 12px;
+}
+.subs-card h4 { margin: 0; font-size: 14px; }
+.subs-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.subs-hdr .count {
+  font-size: 12px; color: #6b7280;
+}
+.subs-list {
+  list-style: none; padding: 0; margin: 0;
+  display: grid; gap: 6px;
+}
+.subs-row {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 13px; padding: 4px 0;
+  border-bottom: 1px dashed rgba(0,0,0,.06);
+}
+.subs-row:last-child { border-bottom: 0; }
+.subs-row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip {
+  font-size: 10px; font-weight: 700; letter-spacing: .02em;
+  padding: 2px 6px; border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: rgba(0,0,0,.04); color: #374151;
+}
+.subs-card .empty { padding: 6px 0; }
+
+/* Light mode polish */
+@media (prefers-color-scheme: light) {
+  .chip { border-color: #e5e7eb; background: #f3f4f6; color: #374151; }
+}
 
 .dls-card {
   margin-top: 12px;
