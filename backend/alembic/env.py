@@ -6,7 +6,7 @@ from sql_app.models import Base
 from alembic import context
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
-
+import sql_app.models
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -54,7 +54,7 @@ def run_migrations_offline() -> None:
 
 def do_run_migrations(connection):
     """Helper function to run the migrations."""
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True, compare_server_default=True,)
     with context.begin_transaction():
         context.run_migrations()
 

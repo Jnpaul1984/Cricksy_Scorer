@@ -17,14 +17,12 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e:'swap'): void
   (e:'scored'): void
   (e:'error', message: string): void
 }>()
 
 const note = ref('')
 
-function onSwap() { emit('swap') }
 function onScored() { emit('scored') }
 function onError(m: string) { emit('error', m) }
 </script>
@@ -43,7 +41,6 @@ function onError(m: string) { emit('error', m) }
         :bowler-id="bowlerId"
         :can-score="canScore"
         :commentary="note"
-        @swap="onSwap"
         @scored="onScored"
         @error="onError"
       />

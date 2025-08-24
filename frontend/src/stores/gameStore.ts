@@ -42,7 +42,8 @@ import {
   oversNotationToFloat,
 } from '@/utils/cricket'
 
-
+import { getDlsPreview, postDlsApply, patchReduceOvers, type DLSPreviewOut } from '@/utils/api'
+import type { Interruption as ApiInterruption } from '@/utils/api'
 // Loose wrappers so we can listen to custom events
 const on = onSocket as unknown as (event: string, handler: (...args: any[]) => void) => void
 const off = offSocket as unknown as (event: string, handler?: (...args: any[]) => void) => void
@@ -88,11 +89,9 @@ function splitOvers(overs: string | number | undefined): { overs_completed: numb
 }
 
 function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
-  
   const overAny = s?.over?.completed ?? s?.overs_completed ?? 0
   const ballsAny = s?.over?.balls_this_over ?? s?.balls_this_over ?? 0
 
-  
   return {
     total_runs: Number(s?.total_runs ?? s?.score?.runs ?? 0),
     total_wickets: Number(s?.total_wickets ?? s?.score?.wickets ?? 0),
@@ -102,7 +101,6 @@ function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
     batting_team_name: String(s?.batting_team_name ?? s?.teams?.batting?.name ?? ''),
     bowling_team_name: String(s?.bowling_team_name ?? s?.teams?.bowling?.name ?? ''),
 
-    // Leave undefined if server didn’t send them so we don’t blow away existing
     batting_scorecard: (s?.batting_scorecard !== undefined ? s.batting_scorecard : undefined) as any,
     bowling_scorecard: (s?.bowling_scorecard !== undefined ? s.bowling_scorecard : undefined) as any,
 
@@ -111,12 +109,17 @@ function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
     target: s?.target ?? null,
     status: s?.status ?? undefined,
 
-    // Runtime bowling context (mirror if present)
-    current_bowler_id: s?.current_bowler_id ?? s?.currentBowlerId ?? null,
-    last_ball_bowler_id: s?.last_ball_bowler_id ?? s?.lastBallBowlerId ?? null,
+    // ✅ top-level “gate” flags
+    needs_new_batter: Boolean(s?.needs_new_batter ?? false),
+    needs_new_over: Boolean(s?.needs_new_over ?? false),
+
+    // runtime bowling context
+    current_bowler_id: s?.current_bowler_id ?? s?.currentBowlerId ?? s?.current_bowler?.id ?? null,
+    last_ball_bowler_id: s?.last_ball_bowler_id ?? s?.lastBallBowlerId ?? s?.last_ball_bowler?.id ?? null,
     current_over_balls: Number(s?.current_over_balls ?? s?.currentOverBalls ?? s?.balls_this_over ?? 0),
     mid_over_change_used: Boolean(s?.mid_over_change_used ?? s?.midOverChangeUsed ?? false),
     balls_bowled_total: Number(s?.balls_bowled_total ?? s?.ballsBowledTotal ?? 0),
+
     last_delivery: s?.last_delivery
       ? {
           over_number: Number(s.last_delivery.over_number ?? s.last_delivery.over ?? 0),
@@ -130,8 +133,6 @@ function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
           extra_type: (s.last_delivery.extra_type ?? s.last_delivery.extra ?? null) as 'wd' | 'nb' | 'b' | 'lb' | null,
           dismissal_type: s.last_delivery.dismissal_type ?? null,
           dismissed_player_id: s.last_delivery.dismissed_player_id ?? null,
-          needs_new_batter: Boolean(s?.needs_new_batter ?? false),
-          needs_new_over: Boolean(s?.needs_new_over ?? false),
           commentary: s.last_delivery.commentary ?? null,
           fielder_id: s.last_delivery.fielder_id ?? null,
           at_utc: s.last_delivery.at_utc ?? null,
@@ -139,6 +140,8 @@ function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
       : null,
   } as UiSnapshot
 }
+
+
 
 function mergeScorecard<T extends Record<string, any>>(
   prev: Record<string, T> | undefined,
@@ -173,8 +176,8 @@ function normalizeServerSnapshot(s: any): UiSnapshot {
     current_non_striker_id: s?.current_non_striker_id ?? null,
 
     // runtime bowling fields
-    current_bowler_id: s?.current_bowler_id ?? s?.currentBowlerId ?? null,
-    last_ball_bowler_id: s?.last_ball_bowler_id ?? s?.lastBallBowlerId ?? null,
+    current_bowler_id: s?.current_bowler_id ?? s?.currentBowlerId ?? s?.current_bowler?.id ?? null,
+    last_ball_bowler_id: s?.last_ball_bowler_id ?? s?.lastBallBowlerId ?? s?.last_ball_bowler?.id ?? null,
     current_over_balls: Number(s?.current_over_balls ?? s?.currentOverBalls ?? s?.balls_this_over ?? 0),
     mid_over_change_used: Boolean(s?.mid_over_change_used ?? s?.midOverChangeUsed ?? false),
     balls_bowled_total: Number(s?.balls_bowled_total ?? s?.ballsBowledTotal ?? 0),
@@ -189,16 +192,10 @@ function offBatRuns(d: any): number {
   const ex = (d.extra_type ?? d.extra ?? null) as 'wd' | 'nb' | 'b' | 'lb' | null
   // wides/byes/leg-byes never credit the batter
   if (ex === 'wd' || ex === 'b' || ex === 'lb') return 0
-
-  // no-ball: batter may have runs off the bat; prefer explicit field if present
-  if (ex === 'nb') {
-    // If backend sends runs_off_bat, use it; else assume runs_scored is *off-bat only* (server adds the +1 nb)
-    return Number(d.runs_off_bat ?? d.runs_scored ?? d.runs ?? 0)
-  }
-
-  // normal ball
-  return Number(d.runs_off_bat ?? d.runs_scored ?? d.runs ?? 0)
+  // for nb, server wants runs_scored to be OFF-BAT runs
+  return Number(d.runs_scored ?? d.runs ?? 0)
 }
+
 
 function coerceGameFromApi(raw: any): GameState {
   const teamA: Team = {
@@ -223,6 +220,7 @@ function coerceGameFromApi(raw: any): GameState {
     decision: toDecision(raw?.decision),
     batting_team_name: String(raw?.batting_team_name ?? teamA.name),
     bowling_team_name: String(raw?.bowling_team_name ?? teamB.name),
+    overs_limit: Number(raw?.overs_limit ?? 0) as any,
 
     current_inning: Number(raw?.current_inning ?? 1),
     total_runs: Number(raw?.total_runs ?? 0),
@@ -265,11 +263,30 @@ function coerceGameFromApi(raw: any): GameState {
   } as GameState
 }
 
+
 export const useGameStore = defineStore('game', () => {
   // ========================================================================
   // Reactive State
   // ========================================================================
   const currentGame = ref<GameState | null>(null)
+  
+  const dlsPanel = ref<{ method: 'DLS'; par?: number; target?: number } | null>(null)
+  
+  const dlsPreview = ref<DLSPreviewOut | null>(null)
+  const dlsApplied = ref(false)
+  const dlsKind = computed<'odi' | 't20'>(() => {
+    const g = currentGame.value
+    const limit = Number((g as any)?.overs_limit ?? 0)
+    return limit >= 40 ? 'odi' : 't20'
+  })
+
+  // Keeps currentGame.overs_limit in sync if the object actually contains it
+  function syncOversLimitFrom(obj: any): void {
+    if (!currentGame.value) return
+    if (obj && Object.prototype.hasOwnProperty.call(obj, 'overs_limit')) {
+      ;(currentGame.value as any).overs_limit = Number(obj.overs_limit ?? 0)
+    }
+  }
 
   const uiState = ref<UIState>({
     loading: false,
@@ -371,9 +388,13 @@ export const useGameStore = defineStore('game', () => {
       if (!id) continue
       if (!map[id]) map[id] = { runsConceded: 0, balls: 0 }
 
-      const offBat = Number(d.runs_scored ?? d.runs_off_bat ?? d.runs ?? 0)
-      const extras = Number((d.extras && d.extras.total) ?? 0)
-      map[id].runsConceded += offBat + extras
+      const offBat = offBatRuns(d)
+      const ex = (d.extra_type ?? d.extra ?? null) as 'wd' | 'nb' | 'b' | 'lb' | null
+      let extrasConceded = 0
+      if (ex === 'wd') extrasConceded += Number(d.runs_scored ?? d.runs ?? 1) || 1
+      else if (ex === 'nb') extrasConceded += 1
+      else if (ex === 'b' || ex === 'lb') extrasConceded += Number(d.runs_scored ?? d.runs ?? 0)
+      map[id].runsConceded += offBat + extrasConceded
       if (isLegalBall(d)) map[id].balls += 1
     }
 
@@ -390,6 +411,7 @@ export const useGameStore = defineStore('game', () => {
 
   const availableBowlers = computed<Player[]>(() => bowlingTeam.value ? bowlingTeam.value.players : [])
 
+  
   // ========================================================================
   // Score helpers
   // ========================================================================
@@ -422,37 +444,36 @@ export const useGameStore = defineStore('game', () => {
     return req > 0 ? req : 0
   })
 
+  // ⬇️ ADD: DLS convenience getters
+const isChase = computed<boolean>(() =>
+  (liveSnapshot.value?.current_inning ?? currentGame.value?.current_inning ?? 1) >= 2
+)
+
+const dls = computed(() => dlsPanel.value)
+const dlsPar = computed<number | null>(() => dlsPanel.value?.par ?? null)
+const dlsTarget = computed<number | null>(() => dlsPanel.value?.target ?? null)
+const dlsAheadBy = computed<number | null>(() => {
+  if (!isChase.value) return null
+  const par = dlsPanel.value?.par
+  if (par == null) return null
+  const runsNow = liveSnapshot.value?.total_runs ?? currentGame.value?.total_runs ?? 0
+  return runsNow - par // + ahead, - behind, 0 level
+})
+
   // ========================================================================
   // Scorecards (defensive shaping)
   // ========================================================================
   const battingRows = computed(() => {
     const g = currentGame.value
-    if (!g || !g.batting_scorecard) {
-      return [] as Array<{
-        id: string; name: string; runs: number; balls: number; fours: number; sixes: number; sr: number; howOut?: string; isOut: boolean
-      }>
-    }
-
-    const delivs: any[] = Array.isArray(currentInningsDeliveries.value) ? (currentInningsDeliveries.value as any[]) : []
+    if (!g || !g.batting_scorecard) return [] as Array<{
+      id: string; name: string; runs: number; balls: number; fours: number; sixes: number; sr: number; howOut?: string; isOut: boolean
+    }>
 
     return Object.values(g.batting_scorecard as Record<string, any>).map((row: any) => {
       const id = String(row.player_id)
       const name = String(row.player_name || '')
-
-      // Legal balls actually faced on strike for this batter
-      const balls = delivs.filter(d =>
-        String(d.striker_id || '') === id && isLegalBall(d)
-      ).length
-
-      // Prefer off-bat sum from deliveries when we have any entries for this batter; else card value
-      const runsFromDelivs = delivs
-        .filter(d => String(d.striker_id || '') === id)
-        .reduce((a, d) => a + offBatRuns(d), 0)
-
-
-      const hasAnyForBatter = delivs.some(d => String(d.striker_id || '') === id)
-      const runs = hasAnyForBatter ? runsFromDelivs : Number(row.runs ?? 0)
-
+      const runs = Number(row.runs ?? 0)
+      const balls = Number(row.balls_faced ?? row.balls ?? 0)
       const fours = Number(row.fours ?? 0)
       const sixes = Number(row.sixes ?? 0)
       const sr = balls > 0 ? Number(((runs * 100) / balls).toFixed(1)) : 0
@@ -464,6 +485,7 @@ export const useGameStore = defineStore('game', () => {
       }
     })
   })
+
   
   const extrasBreakdown = computed(() => {
     type D = {
@@ -547,7 +569,312 @@ export const useGameStore = defineStore('game', () => {
       }
     })
 
+    // --- XI helpers -------------------------------------------------------------
+function playingXI(team: Team | null): Player[] {
+  if (!team) return []
+  // OPTIONAL: if you keep explicit XI ids, prefer them:
+  // const xiIds: string[] | undefined = (currentGame.value as any)?.[team.name === currentGame.value?.team_a.name ? 'team_a_xi_ids' : 'team_b_xi_ids']
+  // if (Array.isArray(xiIds) && xiIds.length) {
+  //   const map = new Map(team.players.map(p => [p.id, p]))
+  //   return xiIds.map(id => map.get(String(id))).filter(Boolean) as Player[]
+  // }
+  return (team.players || []).slice(0, 11)  // default: first 11 in order
+}
 
+const battingXI = computed<Player[]>(() => playingXI(battingTeam.value))
+const bowlingXI = computed<Player[]>(() => playingXI(bowlingTeam.value))
+
+function makeBattingRow(p: Player, row: any) {
+  const runs = Number(row?.runs ?? 0)
+  const balls = Number(row?.balls_faced ?? row?.balls ?? 0)
+  const fours = Number(row?.fours ?? 0)
+  const sixes = Number(row?.sixes ?? 0)
+  const sr = balls > 0 ? Number(((runs * 100) / balls).toFixed(1)) : 0
+  return {
+    id: p.id,
+    name: p.name,
+    runs, balls, fours, sixes, sr,
+    howOut: row?.how_out,
+    isOut: Boolean(row?.is_out),
+  }
+}
+
+/** Show only batters up to the highest position that has appeared (in or out). */
+const battingRowsXI = computed(() => {
+  const g = currentGame.value
+  const xi = battingXI.value
+  if (!g || !xi.length) return [] as Array<{ id:string; name:string; runs:number; balls:number; fours:number; sixes:number; sr:number; howOut?:string; isOut:boolean }>
+  const card = (g.batting_scorecard ?? {}) as Record<string, any>
+
+  // anyone currently batting
+  const included = new Set<string>()
+  if (g.current_striker_id) included.add(String(g.current_striker_id))
+  if (g.current_non_striker_id) included.add(String(g.current_non_striker_id))
+
+  // anyone who has faced a ball or got out
+  for (const [id, row] of Object.entries(card)) {
+    const balls = Number(row?.balls_faced ?? row?.balls ?? 0)
+    if (balls > 0 || row?.is_out) included.add(String(id))
+  }
+
+  // cap list at the highest XI index that’s included.
+  let maxIdx = -1
+  xi.forEach((p, idx) => { if (included.has(p.id)) maxIdx = Math.max(maxIdx, idx) })
+  // Before first ball, default to openers
+  if (maxIdx < 0) maxIdx = Math.min(1, xi.length - 1)
+
+  const upto = xi.slice(0, maxIdx + 1)
+  return upto.map(p => makeBattingRow(p, card[p.id] || {}))
+})
+
+/** Only bowlers who’ve actually bowled (≥1 legal ball), limited to XI. */
+const bowlingRowsXI = computed(() => {
+  const g = currentGame.value
+  if (!g) return [] as Array<{ id:string; name:string; overs:string; maidens:number; runs:number; wkts:number; econ:number|string }>
+  const xiIds = new Set(bowlingXI.value.map(p => p.id))
+  const statsMap = bowlingStatsByPlayer.value
+  const card = (g.bowling_scorecard ?? {}) as Record<string, any>
+
+  function ballsFrom(row:any, id:string) {
+    if (typeof statsMap[id]?.balls === 'number') return statsMap[id].balls
+    const o = row?.overs ?? row?.overs_bowled ?? 0
+    return Math.round(oversNotationToFloat(o) * 6)
+  }
+  function runsFrom(row:any, id:string) {
+    if (typeof statsMap[id]?.runsConceded === 'number') return statsMap[id].runsConceded
+    return Number(row?.runs_conceded ?? row?.runs ?? 0)
+  }
+
+  // consider union of XI ids that appear in either card or stats
+  const ids = new Set<string>()
+  Object.keys(card).forEach(id => { if (xiIds.has(id)) ids.add(id) })
+  Object.keys(statsMap).forEach(id => { if (xiIds.has(id)) ids.add(id) })
+
+  const rows = [] as Array<{ id:string; name:string; overs:string; maidens:number; runs:number; wkts:number; econ:number|string }>
+  for (const id of ids) {
+    const row = card[id] || {}
+    const balls = ballsFrom(row, id)
+    const hasBowled = balls > 0
+    if (!hasBowled) continue
+
+    const runs = runsFrom(row, id)
+    const maidens = Number(row?.maidens ?? 0)
+    const wkts = Number(row?.wickets ?? row?.wickets_taken ?? 0)
+    const oversText = oversDisplayFromBalls(Math.max(0, balls | 0))
+    const econ = balls > 0 ? Number(fmtEconomy(runs, balls)) : (typeof row?.economy === 'number' ? row.economy : '—')
+
+    // find name from XI
+    const name = (bowlingXI.value.find(p => p.id === id)?.name) || String(row?.player_name || '')
+    rows.push({ id, name, overs: oversText, maidens, runs, wkts, econ })
+  }
+  return rows
+})
+
+// --- Helpers to resolve XI ids for batting/bowling sides
+function resolveXIForTeam(team: Team | null | undefined, sideKey: 'A' | 'B'): Set<string> {
+  if (!team) return new Set<string>()
+  // prefer explicit XI if present on the team or game
+  const g: any = currentGame.value as any
+  const explicit: string[] =
+    (team as any)?.playing_xi
+    ?? (sideKey === 'A' ? g?.team_a_xi_ids : g?.team_b_xi_ids)
+    ?? []
+  if (Array.isArray(explicit) && explicit.length) return new Set(explicit.map(String))
+  // fallback: first 11 from roster order
+  return new Set((team.players || []).slice(0, 11).map(p => String(p.id)))
+}
+
+function sideOf(teamName: string | undefined): 'A' | 'B' | null {
+  const g = currentGame.value
+  if (!g || !teamName) return null
+  if (teamName === g.team_a.name) return 'A'
+  if (teamName === g.team_b.name) return 'B'
+  return null
+}
+
+// ---------- UI rosters ----------
+const battingRosterXI = computed<Player[]>(() => {
+  const g = currentGame.value
+  if (!g) return []
+  const battingIsA = sideOf(g.batting_team_name) === 'A'
+  const team = battingIsA ? g.team_a : g.team_b
+  const xi = resolveXIForTeam(team, battingIsA ? 'A' : 'B')
+  return (team.players || []).filter(p => xi.has(p.id))
+})
+
+const bowlingRosterXI = computed<Player[]>(() => {
+  const g = currentGame.value
+  if (!g) return []
+  const bowlingIsA = sideOf(g.bowling_team_name) === 'A'
+  const team = bowlingIsA ? g.team_a : g.team_b
+  const xi = resolveXIForTeam(team, bowlingIsA ? 'A' : 'B')
+  return (team.players || []).filter(p => xi.has(p.id))
+})
+
+/** Fielding subs = players on fielding team who are NOT in the XI (for catches/run-outs). */
+const fieldingSubs = computed<Player[]>(() => {
+  const g = currentGame.value
+  if (!g) return []
+  const bowlingIsA = sideOf(g.bowling_team_name) === 'A'
+  const team = bowlingIsA ? g.team_a : g.team_b
+  const xi = resolveXIForTeam(team, bowlingIsA ? 'A' : 'B')
+  return (team.players || []).filter(p => !xi.has(p.id))
+})
+
+/** If you want one list that contains XI + subs specifically for fielder pickers: */
+const fielderRosterAll = computed<Player[]>(() => {
+  const g = currentGame.value
+  if (!g) return []
+  const bowlingIsA = sideOf(g.bowling_team_name) === 'A'
+  const team = bowlingIsA ? g.team_a : g.team_b
+  return team.players || []
+})
+
+// ---------- Interruptions ----------
+type Interruption = ApiInterruption
+
+const interruptions = ref<Interruption[]>([])
+const interruptionsLoading = ref(false)
+const interruptionsError = ref<string | null>(null)
+const interBusy = ref(false)
+
+function isInterruptionOpen(it: any) {
+  const end = it?.ended_at ?? it?.endedAt ?? it?.end ?? null
+  // open if null / "" / undefined (many APIs omit until closed)
+  return end == null || end === ''
+}
+
+
+
+function normalizeInterruption(it: any): Interruption {
+  const endPresent =
+    Object.prototype.hasOwnProperty.call(it, 'ended_at') ||
+    Object.prototype.hasOwnProperty.call(it, 'endedAt') ||
+    Object.prototype.hasOwnProperty.call(it, 'end')
+
+  const endVal =
+    Object.prototype.hasOwnProperty.call(it, 'ended_at') ? it.ended_at :
+    Object.prototype.hasOwnProperty.call(it, 'endedAt') ? it.endedAt :
+    Object.prototype.hasOwnProperty.call(it, 'end')     ? it.end :
+    undefined
+
+  return {
+    id: String(it.id ?? it._id ?? makeId()),
+    kind: String(it.kind ?? it.type ?? 'weather'),
+    note: it.note ?? it.notes ?? '',
+    started_at: it.started_at ?? it.startedAt ?? it.start ?? null,
+    ended_at: endPresent ? (endVal ?? null) : undefined,
+  }
+}
+
+/** 
+ * Dedupe + throttle network calls so socket bursts don’t spam the API.
+ * - Reuses an in-flight request
+ * - Returns cache when called again within INTER_MIN_MS
+ */
+const INTER_MIN_MS = 6000
+let interLastFetch = 0
+let interInFlight: Promise<Interruption[]> | null = null
+
+async function fetchInterruptions(gameId?: string, opts: { force?: boolean } = {}): Promise<Interruption[]> {
+  const id = gameId ?? liveGameId.value ?? currentGame.value?.id
+  if (!id) return interruptions.value
+
+  const now = Date.now()
+
+  // short-circuit to cache if recently fetched
+  if (!opts.force && (now - interLastFetch) < INTER_MIN_MS && interruptions.value.length) {
+    return interruptions.value
+  }
+
+  // dedupe concurrent callers
+  if (interInFlight) return interInFlight
+
+  interruptionsLoading.value = true
+  interruptionsError.value = null
+
+  interInFlight = (async () => {
+    try {
+      const raw = await apiService.getInterruptions(id)
+      const list = (Array.isArray(raw) ? raw : []).map(normalizeInterruption)
+      interruptions.value = list
+      if (currentGame.value && 'interruptions' in (currentGame.value as any)) {
+        ;(currentGame.value as any).interruptions = list
+      }
+      interLastFetch = Date.now()
+      return list
+    } catch (e: any) {
+      interruptionsError.value = getErrorMessage(e)
+      return interruptions.value
+    } finally {
+      interruptionsLoading.value = false
+      interInFlight = null
+    }
+  })()
+
+  return interInFlight
+}
+
+// Backward-compatible helper
+function refreshInterruptions(opts: { force?: boolean } = {}) {
+  return fetchInterruptions(undefined, opts)
+}
+
+// Instant UI hide when server tells us it ended (before next fetch)
+function optimisticallyCloseCurrentInterruption() {
+  const list = interruptions.value.slice()
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (isInterruptionOpen(list[i])) { list[i] = { ...list[i], ended_at: undefined }; break }
+  }
+  interruptions.value = list
+  if (currentGame.value && 'interruptions' in (currentGame.value as any)) {
+    ;(currentGame.value as any).interruptions = list
+  }
+}
+
+const currentInterruption = computed<Interruption | null>(() => {
+  const list = interruptions.value || []
+  for (let i = list.length - 1; i >= 0; i--) if (isInterruptionOpen(list[i])) return list[i]
+  return null
+})
+const hasOpenInterruption = computed<boolean>(() => !!currentInterruption.value)
+
+// Admin controls (idempotent)
+async function startInterruption(
+  kind: 'weather' | 'injury' | 'light' | 'other' | string = 'weather',
+  note?: string
+) {
+  const id = liveGameId.value ?? currentGame.value?.id
+  if (!id || interBusy.value) return
+  interBusy.value = true
+  try {
+    await apiService.openInterruption(id, kind, note)
+  } catch (e: any) {
+    const msg = (e?.message || '').toLowerCase()
+    if (!msg.includes('already active')) throw e
+  } finally {
+    await refreshInterruptions({ force: true })
+    interBusy.value = false
+  }
+}
+
+async function stopInterruptionAction(kind?: 'weather' | 'injury' | 'light' | 'other') {
+  const id = liveGameId.value ?? currentGame.value?.id
+  if (!id || interBusy.value) return
+  interBusy.value = true
+  try {
+    await apiService.stopInterruption(id, kind)
+  } catch (e: any) {
+    const msg = (e?.message || '').toLowerCase()
+    if (!msg.includes('no active interruption')) throw e
+  } finally {
+    await refreshInterruptions({ force: true })
+    interBusy.value = false
+  }
+}
+
+
+  
   function mapScorePayloadToSnapshot(p: ScoreUpdatePayloadSlim): UiSnapshot {
     const slim = p?.score ?? { runs: 0, wickets: 0, overs: '0.0' }
 
@@ -653,6 +980,8 @@ export const useGameStore = defineStore('game', () => {
     if (s.target != null) g.target = s.target
     if (s.batting_team_name != null) g.batting_team_name = s.batting_team_name
     if (s.bowling_team_name != null) g.bowling_team_name = s.bowling_team_name
+    if ((s as any).needs_new_batter != null) (currentGame.value as any).needs_new_batter = Boolean((s as any).needs_new_batter)
+    if ((s as any).needs_new_over   != null) (currentGame.value as any).needs_new_over   = Boolean((s as any).needs_new_over)
 
     // Merge cards only if present
     if (s.batting_scorecard && Object.keys(s.batting_scorecard).length > 0) {
@@ -662,6 +991,22 @@ export const useGameStore = defineStore('game', () => {
       g.bowling_scorecard = mergeScorecard(g.bowling_scorecard as any, s.bowling_scorecard as any) as any
     }
 
+    if (s.current_striker_id !== undefined && s.current_striker_id !== null) {
+      g.current_striker_id = s.current_striker_id
+      // reflect in UI selectors if they differ
+      uiState.value.selectedStrikerId = s.current_striker_id
+    }
+    if (s.current_non_striker_id !== undefined && s.current_non_striker_id !== null) {
+      g.current_non_striker_id = s.current_non_striker_id
+      uiState.value.selectedNonStrikerId = s.current_non_striker_id
+    }
+
+    // 🔧 bowler from snapshot should drive scoring gate
+    const nextBowler = (s as any).current_bowler_id ?? null
+    if (nextBowler !== null) {
+      ;(currentGame.value as any).current_bowler_id = nextBowler
+      uiState.value.selectedBowlerId = nextBowler
+    }
     // Runtime bowling context
     const nextCurrentBowlerId =
       (s as any).current_bowler_id ?? (currentGame.value as any).current_bowler_id ?? null
@@ -694,22 +1039,47 @@ export const useGameStore = defineStore('game', () => {
     liveSnapshot.value = snap
     lastLiveAt.value = Date.now()
     applySnapshotToGame(snap)
+
+    syncOversLimitFrom(payload.snapshot)
+    // NEW: pick up DLS panel if server included one on the snapshot
+    if (payload?.snapshot?.dls && payload.snapshot.dls.method === 'DLS') {
+      dlsPanel.value = {
+        method: 'DLS',
+        par: typeof payload.snapshot.dls.par === 'number' ? payload.snapshot.dls.par : undefined,
+        target: typeof payload.snapshot.dls.target === 'number' ? payload.snapshot.dls.target : undefined,
+      }
+    }
   }
+
 
   async function handleScoreUpdate(payload: ScoreUpdatePayloadSlim): Promise<void> {
-    const snap = mapScorePayloadToSnapshot(payload)
-    liveSnapshot.value = { ...(liveSnapshot.value || ({} as UiSnapshot)), ...snap }
-    lastLiveAt.value = Date.now()
-    applySnapshotToGame(snap)
+  const snap = mapScorePayloadToSnapshot(payload)
+  liveSnapshot.value = { ...(liveSnapshot.value || ({} as UiSnapshot)), ...snap }
+  lastLiveAt.value = Date.now()
+  applySnapshotToGame(snap)
 
-    // Enrich with full snapshot (cards, targets, etc.)
-    try {
-      if (liveGameId.value) {
-        const full = await apiService.getSnapshot(liveGameId.value)
-        if (full) applySnapshotToGame(coerceSnapshot(full))
+  // Enrich with full snapshot (cards, targets, DLS, etc.)
+  try {
+    if (liveGameId.value) {
+      const full = await apiService.getSnapshot(liveGameId.value)
+      if (full) {
+        applySnapshotToGame(coerceSnapshot(full))
+        if ((full as any)?.dls?.method === 'DLS') {
+          dlsPanel.value = {
+            method: 'DLS',
+            par: typeof (full as any).dls.par === 'number' ? (full as any).dls.par : undefined,
+            target: typeof (full as any).dls.target === 'number' ? (full as any).dls.target : undefined,
+          }
+        }
+        if (currentGame.value) {
+          (currentGame.value as any).overs_limit = Number((full as any)?.overs_limit ?? (currentGame.value as any).overs_limit ?? 0)
+        }
       }
-    } catch { /* ignore */ }
+    }
+  } catch {
+    /* ignore */
   }
+}
 
   const handleCommentary = (msg: { id: string; at: number; text: string; over?: string; author?: string; game_id: string }): void => {
     if (!liveGameId.value || msg.game_id !== liveGameId.value) return
@@ -746,10 +1116,20 @@ export const useGameStore = defineStore('game', () => {
         if (commentaryFeed.value.length > 200) commentaryFeed.value.pop()
       }
 
+      interUpdateHandler = async (p) => {
+        if (!liveGameId.value || !p || !p.game_id || p.game_id !== liveGameId.value) return
+        await refreshInterruptions({ force: true })
+      }
+      interEndedHandler = () => optimisticallyCloseCurrentInterruption()
+
       on('presence:init', presenceInitHandler)
       on('state:update', handleStateUpdate as any)
       on('score:update', handleScoreUpdate as any)
       on('commentary:new', commentaryHandler)
+      on('interruptions:update', interUpdateHandler)
+      on('interruption:ended', interEndedHandler)
+
+      void refreshInterruptions()
     } catch (e) {
       connectionStatus.value = 'error'
       console.error('Socket error:', e)
@@ -766,15 +1146,20 @@ export const useGameStore = defineStore('game', () => {
       off('commentary:new', commentaryHandler!);
       commentaryHandler = null;
     }
+    if (interUpdateHandler) { off('interruptions:update', interUpdateHandler); interUpdateHandler = null }
+    if (interEndedHandler)  { off('interruption:ended',  interEndedHandler);  interEndedHandler  = null }
 
     off('state:update', handleStateUpdate as any);
     off('score:update', handleScoreUpdate as any);
+    
 
     disconnectSocket();
     connectionStatus.value = 'disconnected';
     isLive.value = false;
     liveGameId.value = null;
   }
+  let interUpdateHandler: ((p: { game_id?: string }) => void) | null = null
+  let interEndedHandler: (() => void) | null = null
 
 
 
@@ -799,79 +1184,188 @@ export const useGameStore = defineStore('game', () => {
   }
 
   async function flushQueue(gameId: string): Promise<void> {
-    if (isFlushing.value) return
-    if (connectionStatus.value !== 'connected') return
+  if (isFlushing.value) return
+  if (connectionStatus.value !== 'connected') return
 
-    isFlushing.value = true
-    try {
-      for (const item of [...offlineQueue.value]) {
-        if (item.gameId !== gameId) continue
-        if (item.status === 'flushing') continue
+  isFlushing.value = true
+  try {
+    for (const item of [...offlineQueue.value]) {
+      if (item.gameId !== gameId) continue
+      if (item.status === 'flushing') continue
 
-        item.status = 'flushing'
-        item.tries += 1
-        saveQueue()
+      item.status = 'flushing'
+      item.tries += 1
+      saveQueue()
 
+      try {
+        const snap = await apiService.scoreDelivery(gameId, item.payload)
+        applySnapshotToGame(coerceSnapshot(snap))
+
+        // Pull authoritative snapshot and update DLS panel if present
         try {
-          const snap = await apiService.scoreDelivery(gameId, item.payload)
-          applySnapshotToGame(coerceSnapshot(snap))
-          offlineQueue.value = offlineQueue.value.filter((q) => q.id !== item.id)
-          saveQueue()
-        } catch {
-          item.status = 'failed'
-          saveQueue()
-          break
-        }
+          const full = await apiService.getSnapshot(gameId)
+          if (full) {
+            applySnapshotToGame(coerceSnapshot(full))
+            syncOversLimitFrom(full)
+            if ((full as any)?.dls?.method === 'DLS') {
+              dlsPanel.value = {
+                method: 'DLS',
+                par: typeof (full as any).dls.par === 'number' ? (full as any).dls.par : undefined,
+                target: typeof (full as any).dls.target === 'number' ? (full as any).dls.target : undefined,
+              }
+
+            }
+          }
+        } catch { /* ignore */ }
+
+        offlineQueue.value = offlineQueue.value.filter((q) => q.id !== item.id)
+        saveQueue()
+      } catch {
+        item.status = 'failed'
+        saveQueue()
+        break
       }
-    } finally {
-      isFlushing.value = false
     }
+  } finally {
+    isFlushing.value = false
   }
+}
+        
+     
+// ========================================================================
+// Central scoring helper (ALWAYS uses ids from the latest snapshot)
+// ========================================================================
+async function postDeliveryAuthoritative(
+  gameId: string,
+  opts: {
+    extra: null | 'wd' | 'nb' | 'b' | 'lb',
+    runs_scored?: number,
+    runs_off_bat?: number | null,
+    is_wicket?: boolean,
+    dismissal_type?: string,
+    dismissed_player_id?: string | null,
+    commentary?: string,
+  }
+): Promise<any> {
+  // Pull ids from server snapshot first; fall back to game / UI selectors only if needed
+  const sId  = liveSnapshot.value?.current_striker_id
+           ?? currentGame.value?.current_striker_id
+           ?? uiState.value.selectedStrikerId
+  const nsId = liveSnapshot.value?.current_non_striker_id
+           ?? currentGame.value?.current_non_striker_id
+           ?? uiState.value.selectedNonStrikerId
+  const bow  = liveSnapshot.value?.current_bowler_id
+           ?? (currentGame.value as any)?.current_bowler_id
+           ?? uiState.value.selectedBowlerId
+
+  if (!sId || !nsId || !bow) {
+    throw new Error('Missing striker/non-striker/bowler from snapshot')
+  }
+
+  const payload: ApiScoreDeliveryRequest = {
+    striker_id: sId,
+    non_striker_id: nsId,
+    bowler_id: bow,
+    extra: opts.extra,
+    is_wicket: Boolean(opts.is_wicket),
+    dismissal_type: opts.dismissal_type,
+    dismissed_player_id: opts.dismissed_player_id ?? undefined,
+    commentary: opts.commentary,
+  } as ApiScoreDeliveryRequest
+
+  // Encoding rules:
+  // - legal ball:      extra=null, runs_scored = off-bat runs
+  // - no-ball:         extra='nb',  runs_off_bat = off-bat runs (server adds +1)
+  // - byes/leg-byes:   extra='b'|'lb', runs_scored = extras count
+  // - wides:           extra='wd', runs_scored = *runs actually RUN* on the wide (0 for a plain wide)
+  if (opts.extra === 'nb') {
+    payload.runs_off_bat = opts.runs_off_bat ?? opts.runs_scored ?? 0
+  } else {
+    payload.runs_scored = opts.runs_scored ?? 0
+  }
+
+  // Uses offline queue if needed and applies snapshot on success
+  return submitDelivery(gameId, payload)
+}
 
   // ========================================================================
   // Actions: Game lifecycle
   // ========================================================================
-  async function createNewGame(payload: ApiCreateGameRequest): Promise<any> {
-    operationLoading.value.createGame = true
-    uiState.value.error = null
+ async function createNewGame(payload: ApiCreateGameRequest): Promise<any> {
+  operationLoading.value.createGame = true
+  uiState.value.error = null
+  try {
+    uiState.value.loading = true
+
+    // ✅ actually create the game (you were missing this)
+    const game = await apiService.createGame(payload)
+    currentGame.value = coerceGameFromApi(game)
+    interruptions.value = ((currentGame.value as any)?.interruptions ?? []).map(normalizeInterruption)
+
+    // Pull a fresh snapshot & wire DLS panel if present
     try {
-      uiState.value.loading = true
-      const game = await apiService.createGame(payload)
-      currentGame.value = coerceGameFromApi(game)
-      try {
-        const snap = await apiService.getSnapshot(String((game as any).id ?? (game as any).game_id))
-        if (snap) applySnapshotToGame(coerceSnapshot(snap))
-      } catch {}
-      return game
-    } catch (e) {
-      uiState.value.error = getErrorMessage(e)
-      throw e
-    } finally {
-      uiState.value.loading = false
-      operationLoading.value.createGame = false
-    }
+      const snap = await apiService.getSnapshot(String((game as any).id ?? (game as any).game_id))
+      if (snap) {
+        applySnapshotToGame(coerceSnapshot(snap))
+        
+        syncOversLimitFrom(snap)
+        
+        if ((snap as any)?.dls?.method === 'DLS') {
+          dlsPanel.value = {
+            method: 'DLS',
+            par: typeof (snap as any).dls.par === 'number' ? (snap as any).dls.par : undefined,
+            target: typeof (snap as any).dls.target === 'number' ? (snap as any).dls.target : undefined,
+          }
+        }
+      }
+    } catch { /* ignore */ }
+
+    return game
+  } catch (e) {
+    uiState.value.error = getErrorMessage(e)
+    throw e
+  } finally {
+    uiState.value.loading = false
+    operationLoading.value.createGame = false
   }
+}
+
 
   async function loadGame(gameId: string): Promise<any> {
-    operationLoading.value.loadGame = true
-    uiState.value.error = null
+  operationLoading.value.loadGame = true
+  uiState.value.error = null
+  try {
+    uiState.value.loading = true
+
+    const game = await apiService.getGame(gameId)
+    currentGame.value = coerceGameFromApi(game)
+    interruptions.value = ((currentGame.value as any)?.interruptions ?? []).map(normalizeInterruption)
+    // Pull a fresh snapshot & wire DLS panel if present
     try {
-      uiState.value.loading = true
-      const game = await apiService.getGame(gameId)
-      currentGame.value = coerceGameFromApi(game)
-      try {
-        const snap = await apiService.getSnapshot(gameId)
-        if (snap) applySnapshotToGame(coerceSnapshot(snap))
-      } catch {}
-      return game
-    } catch (e) {
-      uiState.value.error = getErrorMessage(e)
-      throw e
-    } finally {
-      uiState.value.loading = false
-      operationLoading.value.loadGame = false
-    }
+      const snap = await apiService.getSnapshot(gameId)
+      if (snap) {
+        applySnapshotToGame(coerceSnapshot(snap))
+        syncOversLimitFrom(snap)
+        if ((snap as any)?.dls?.method === 'DLS') {
+          dlsPanel.value = {
+            method: 'DLS',
+            par: typeof (snap as any).dls.par === 'number' ? (snap as any).dls.par : undefined,
+            target: typeof (snap as any).dls.target === 'number' ? (snap as any).dls.target : undefined,
+          }
+        }
+      }
+      void refreshInterruptions()
+    } catch { /* ignore */ }
+
+    return game
+  } catch (e) {
+    uiState.value.error = getErrorMessage(e)
+    throw e
+  } finally {
+    uiState.value.loading = false
+    operationLoading.value.loadGame = false
   }
+}
 
   async function scoreDelivery(gameId: string, delivery: ApiScoreDeliveryRequest): Promise<ApiSnapshot> {
     operationLoading.value.scoreDelivery = true
@@ -880,11 +1374,19 @@ export const useGameStore = defineStore('game', () => {
       uiState.value.loading = true
       const snap = await apiService.scoreDelivery(gameId, delivery)
       applySnapshotToGame(coerceSnapshot(snap))
-
+      syncOversLimitFrom(snap)
       try {
         const full = await apiService.getSnapshot(gameId)
         if (full) applySnapshotToGame(coerceSnapshot(full))
-      } catch { /* non-fatal */ }
+        if ((full as any)?.dls?.method === 'DLS') {
+          dlsPanel.value = {
+            method: 'DLS',
+            par: typeof (full as any).dls.par === 'number' ? (full as any).dls.par : undefined,
+            target: typeof (full as any).dls.target === 'number' ? (full as any).dls.target : undefined,
+          }
+        }
+
+        } catch { /* non-fatal */ }
 
       return snap
     } catch (e: any) {
@@ -894,7 +1396,15 @@ export const useGameStore = defineStore('game', () => {
         try {
           const full = await apiService.getSnapshot(gameId)
           if (full) applySnapshotToGame(coerceSnapshot(full))
-        } catch {/* ignore */}
+          if ((full as any)?.dls?.method === 'DLS') {
+            dlsPanel.value = {
+              method: 'DLS',
+              par: typeof (full as any).dls.par === 'number' ? (full as any).dls.par : undefined,
+              target: typeof (full as any).dls.target === 'number' ? (full as any).dls.target : undefined,
+            }
+          }
+
+          } catch {/* ignore */}
       }
       uiState.value.error = getErrorMessage(e)
       throw e
@@ -904,6 +1414,30 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  // inside defineStore, near other actions
+async function changeBowlerMidOver(gameId: string, newBowlerId: string, reason: 'injury' | 'other' = 'injury') {
+  if (!gameId) throw new Error('Missing gameId')
+  setScoringDisabled(true)
+  try {
+    const svc: any = apiService as any
+    if (typeof svc.changeBowlerMidOver !== 'function') {
+      // thin fallback if your client hasn't got it typed
+      await fetch(`/games/${gameId}/bowling/mid-over-change`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bowler_id: newBowlerId, reason }),
+      }).then(r => { if (!r.ok) throw r })
+    } else {
+      await svc.changeBowlerMidOver(gameId, newBowlerId, reason)
+    }
+
+    // Pull authoritative snapshot so gates/cards/bowler sync
+    const full = await apiService.getSnapshot(gameId)
+    if (full) applySnapshotToGame(coerceSnapshot(full))
+  } finally {
+    setScoringDisabled(false)
+  }
+}
 
   async function startNextInnings(gameId: string): Promise<UiSnapshot | undefined> {
     operationLoading.value.startInnings = true
@@ -917,6 +1451,7 @@ export const useGameStore = defineStore('game', () => {
       const snap = await svc.startNextInnings(gameId)
       const coerced = coerceSnapshot(snap)
       applySnapshotToGame(coerced)
+      syncOversLimitFrom(snap)
       return coerced
     } catch (e) {
       uiState.value.error = getErrorMessage(e)
@@ -955,18 +1490,34 @@ export const useGameStore = defineStore('game', () => {
     return id && team ? (team.players.find((p) => p.id === id) ?? null) : null
   })
 
-    const canScore = computed<boolean>(() => Boolean(
-      currentGame.value &&
-      currentGame.value.status === 'in_progress' &&
-      uiState.value.selectedStrikerId &&
-      uiState.value.selectedNonStrikerId &&
-      uiState.value.selectedBowlerId &&
-      uiState.value.selectedStrikerId !== uiState.value.selectedNonStrikerId &&
-      !uiState.value.loading &&
-      !uiState.value.scoringDisabled &&
+   const canScore = computed<boolean>(() => {
+    const g  = currentGame.value
+    const s  = state.value
+    const ui = uiState.value
+
+    const statusOk =
+      !!g && ['in_progress', 'live', 'started'].includes(String(g.status || ''))
+
+    const haveBatters =
+      !!ui.selectedStrikerId &&
+      !!ui.selectedNonStrikerId &&
+      ui.selectedStrikerId !== ui.selectedNonStrikerId
+
+    const serverHasBowler = !!s.current_bowler_id
+    const bowlerMatches =
+      !ui.selectedBowlerId ? false : ui.selectedBowlerId === s.current_bowler_id
+
+    const gatesClear =
       !needsNewBatter.value &&
-      !needsNewOver.value
-    ))
+      !needsNewOver.value &&
+      !ui.loading &&
+      !ui.scoringDisabled
+
+    return Boolean(statusOk && haveBatters && serverHasBowler && bowlerMatches && gatesClear)
+  })
+
+
+  
     console.table({
       hasGame: !!currentGame.value,
       inProgress: currentGame.value?.status === 'in_progress',
@@ -985,68 +1536,33 @@ export const useGameStore = defineStore('game', () => {
   function setSelectedStriker(playerId: string | null): void { uiState.value.selectedStrikerId = playerId }
   function setSelectedNonStriker(playerId: string | null): void { uiState.value.selectedNonStrikerId = playerId }
   function setSelectedBowler(playerId: string | null): void { uiState.value.selectedBowlerId = playerId }
-  function swapBatsmen(): void {
-    const a = uiState.value.selectedStrikerId
-    const b = uiState.value.selectedNonStrikerId
-    uiState.value.selectedStrikerId = b
-    uiState.value.selectedNonStrikerId = a
-  }
   function setActiveScorecardTab(tab: 'batting' | 'bowling'): void { uiState.value.activeScorecardTab = tab }
   function setScoringDisabled(disabled: boolean): void { uiState.value.scoringDisabled = disabled }
 
-  function afterRunsApplied(runs: number, isExtra?: boolean): void {
-    if (runs % 2 === 1 && !isExtra) swapBatsmen()
-  }
-  function afterWicketApplied(dismissed_player_id: string): void {
-    if (uiState.value.selectedStrikerId === dismissed_player_id) uiState.value.selectedStrikerId = null
-  }
+  
+  
 
   async function scoreRuns(gameId: string, runs: number): Promise<any> {
-    if (!uiState.value.selectedStrikerId || !uiState.value.selectedNonStrikerId || !uiState.value.selectedBowlerId) {
-      throw new Error('Cannot score runs - missing selected players')
-    }
-    const payload: ApiScoreDeliveryRequest = {
-      striker_id: uiState.value.selectedStrikerId,
-      non_striker_id: uiState.value.selectedNonStrikerId,
-      bowler_id: uiState.value.selectedBowlerId,
-      runs_scored: runs,
-      is_wicket: false,
-    }
-    const res = await submitDelivery(gameId, payload)
-    afterRunsApplied(runs, false)
-    return res
+    // legal off-bat runs; server will rotate on odd runs
+    return postDeliveryAuthoritative(gameId, { extra: null, runs_scored: runs })
   }
+
 
   async function scoreExtra(gameId: string, code: 'wd' | 'nb' | 'b' | 'lb', runs = 1): Promise<any> {
-    if (!uiState.value.selectedStrikerId || !uiState.value.selectedNonStrikerId || !uiState.value.selectedBowlerId) {
-      throw new Error('Cannot score extra - missing selected players')
-    }
-
-    const payload: ApiScoreDeliveryRequest = {
-      striker_id: uiState.value.selectedStrikerId,
-      non_striker_id: uiState.value.selectedNonStrikerId,
-      bowler_id: uiState.value.selectedBowlerId,
-      runs_scored: runs,
-      extra: code,
-      is_wicket: false,
-    }
-
-    const res = await submitDelivery(gameId, payload)
-
-    // Rotation rules:
-    // - wides: swap on odd wides (runs)
-    // - byes/leg-byes: swap on odd runs (they physically ran)
-    // - no-ball:
-    //     * if runs>0 we treat them as off-bat runs (server adds +1 NB) -> swap on odd 'runs'
-    //     * if runs===0 (pure NB), no swap
-    if (code === 'wd' || code === 'b' || code === 'lb') {
-      if (runs % 2 === 1) swapBatsmen()
-    } else if (code === 'nb') {
-      if (runs > 0 && runs % 2 === 1) swapBatsmen()
-    }
-
-    return res
+  if (code === 'nb') {
+    // off-bat runs on a no-ball
+    return postDeliveryAuthoritative(gameId, { extra: 'nb', runs_off_bat: runs })
   }
+  if (code === 'wd') {
+    // UI passes total wides (incl. the automatic 1). Convert to "runs actually run".
+    const ran = Math.max(0, runs - 1)
+    return postDeliveryAuthoritative(gameId, { extra: 'wd', runs_scored: ran })
+  }
+  // byes / leg-byes: send extras count as-is
+  return postDeliveryAuthoritative(gameId, { extra: code, runs_scored: runs })
+}
+
+
 
 
   async function replaceBatter(newBatterId: string): Promise<void> {
@@ -1060,6 +1576,14 @@ export const useGameStore = defineStore('game', () => {
       try {
         const full = await apiService.getSnapshot(liveGameId.value);
         if (full) applySnapshotToGame(coerceSnapshot(full));
+        if ((full as any)?.dls?.method === 'DLS') {
+          dlsPanel.value = {
+            method: 'DLS',
+            par: typeof (full as any).dls.par === 'number' ? (full as any).dls.par : undefined,
+            target: typeof (full as any).dls.target === 'number' ? (full as any).dls.target : undefined,
+          }
+        }
+
       } catch { /* non-fatal */ }
     } finally {
       setScoringDisabled(false);
@@ -1070,17 +1594,154 @@ export const useGameStore = defineStore('game', () => {
     if (!liveGameId.value) throw new Error('No live game to update');
     try {
       setScoringDisabled(true);
-      const snap = await apiService.startOver(liveGameId.value, bowlerId);
-      applySnapshotToGame(coerceSnapshot(snap));
-      // (Optional) fetch full snapshot for card consistency
-      try {
-        const full = await apiService.getSnapshot(liveGameId.value);
-        if (full) applySnapshotToGame(coerceSnapshot(full));
-      } catch { /* non-fatal */ }
+
+      // 1) tell server to start the over (no snapshot merging here)
+      await apiService.startOver(liveGameId.value, bowlerId);
+
+      // 2) immediately fetch a fresh snapshot (authoritative)
+      const full = await apiService.getSnapshot(liveGameId.value);
+      
+      if (full) applySnapshotToGame(coerceSnapshot(full));
+      uiState.value.selectedBowlerId = bowlerId
+      
+      if ((full as any)?.dls?.method === 'DLS') {
+        dlsPanel.value = {
+          method: 'DLS',
+          par: typeof (full as any).dls.par === 'number' ? (full as any).dls.par : undefined,
+          target: typeof (full as any).dls.target === 'number' ? (full as any).dls.target : undefined,
+        }
+      }
+
     } finally {
       setScoringDisabled(false);
     }
   }
+
+  /**
+ * Reduce overs mid-match (e.g., weather). Server persists & emits snapshot.
+ * Also refreshes full snapshot (which may include DLS panel).
+ */
+async function reduceOvers(gameId: string, oversLimit: number): Promise<void> {
+  if (!gameId) throw new Error('Missing gameId')
+  setScoringDisabled(true)
+  try {
+    const svc: any = apiService as any
+    if (typeof svc.setOversLimit === 'function') {
+      await svc.setOversLimit(gameId, oversLimit)     // POST /games/{id}/overs-limit
+    } else {
+      // Optional ultra-thin fallback if your apiService doesn’t have it yet:
+      await fetch(`/games/${gameId}/overs-limit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ overs_limit: oversLimit })
+      }).then(r => { if (!r.ok) throw r })
+    }
+
+    // Pull authoritative snapshot (may include dls panel)
+    const full = await apiService.getSnapshot(gameId)
+    if (full) {
+      applySnapshotToGame(coerceSnapshot(full))
+      syncOversLimitFrom(full)
+      if ((full as any)?.dls?.method === 'DLS') {
+        dlsPanel.value = {
+          method: 'DLS',
+          par: typeof (full as any).dls.par === 'number' ? (full as any).dls.par : undefined,
+          target: typeof (full as any).dls.target === 'number' ? (full as any).dls.target : undefined,
+        }
+      }
+    }
+  } finally {
+    setScoringDisabled(false)
+  }
+}
+
+/**
+ * Compute revised target per DLS. Typically called between innings or after a reduction.
+ * Sets currentGame.target so your target UI updates immediately.
+ */
+async function dlsRevisedTarget(
+  gameId: string,
+  kind: 'odi' | 't20',
+  innings: 1 | 2,
+  max_overs?: number
+): Promise<{ R1_total: number; R2_total: number; S1: number; target: number }> {
+  const svc: any = apiService as any
+  let res: any
+  if (typeof svc.dlsRevisedTarget === 'function') {
+    res = await svc.dlsRevisedTarget(gameId, { kind, innings, max_overs })
+  } else {
+    res = await fetch(`/games/${gameId}/dls/revised-target`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, innings, max_overs })
+    }).then(r => r.json())
+  }
+
+  // Update UI target and DLS panel
+  if (currentGame.value) currentGame.value.target = Number(res?.target ?? currentGame.value.target)
+  dlsPanel.value = { method: 'DLS', target: Number(res?.target) }
+
+  return res
+}
+
+/**
+ * Compute live par (second innings). Good for “are we ahead/behind?” panels.
+ */
+async function dlsParNow(
+  gameId: string,
+  kind: 'odi' | 't20',
+  innings: 1 | 2,
+  max_overs?: number
+): Promise<{ R1_total: number; R2_used: number; S1: number; par: number; ahead_by: number }> {
+  const svc: any = apiService as any
+  let res: any
+  if (typeof svc.dlsParNow === 'function') {
+    res = await svc.dlsParNow(gameId, { kind, innings, max_overs })
+  } else {
+    res = await fetch(`/games/${gameId}/dls/par`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, innings, max_overs })
+    }).then(r => r.json())
+  }
+
+  // Update DLS panel in the store so UI shows it live
+  dlsPanel.value = { method: 'DLS', par: Number(res?.par) }
+  return res
+}
+
+// ⬇️ ADD inside the same defineStore body (not in the return yet)
+
+async function fetchDlsPreview(gameId: string, G50 = 245) {
+  dlsPreview.value = await getDlsPreview(gameId, G50)
+  return dlsPreview.value
+}
+
+async function applyDls(gameId: string, G50 = 245) {
+  const res = await postDlsApply(gameId, G50)
+  dlsPreview.value = res as any
+  dlsApplied.value = Boolean((res as any)?.applied)
+
+  // Optional: refresh game & snapshot so targets/DLS panel propagate
+  await loadGame(gameId)
+  try {
+    const full = await apiService.getSnapshot(gameId)
+    if (full) applySnapshotToGame(coerceSnapshot(full))
+  } catch { /* ignore */ }
+
+  return res
+}
+
+/** If you want the innings-specific reducer your snippet had: */
+async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: number) {
+  const res = await patchReduceOvers(gameId, innings, newOvers)
+  await loadGame(gameId)
+  try {
+    const full = await apiService.getSnapshot(gameId)
+    if (full) applySnapshotToGame(coerceSnapshot(full))
+  } catch { /* ignore */ }
+  return res
+}
 
   async function scoreWicket(
     gameId: string,
@@ -1088,23 +1749,15 @@ export const useGameStore = defineStore('game', () => {
     dismissed_player_id?: string | null,
     commentary?: string,
   ): Promise<any> {
-    if (!uiState.value.selectedStrikerId || !uiState.value.selectedNonStrikerId || !uiState.value.selectedBowlerId) {
-      throw new Error('Cannot score wicket - missing selected players')
-    }
-    const payload: ApiScoreDeliveryRequest = {
-      striker_id: uiState.value.selectedStrikerId,
-      non_striker_id: uiState.value.selectedNonStrikerId,
-      bowler_id: uiState.value.selectedBowlerId,
-      runs_scored: 0,
+    return postDeliveryAuthoritative(gameId, {
+      extra: null,
       is_wicket: true,
       dismissal_type,
       dismissed_player_id: dismissed_player_id ?? uiState.value.selectedStrikerId,
-      commentary: commentary ?? '',
-    }
-    const res = await submitDelivery(gameId, payload)
-    afterWicketApplied(payload.dismissed_player_id!)
-    return res
+      commentary,
+    })
   }
+
 
   function clearError(): void { uiState.value.error = null }
   function clearGame(): void {
@@ -1117,7 +1770,13 @@ export const useGameStore = defineStore('game', () => {
     isLive.value = false
     liveGameId.value = null
     commentaryFeed.value = []
+
+    // ⬇️ ADD: reset DLS bits
+    dlsPanel.value = null
+    dlsPreview.value = null
+    dlsApplied.value = false
   }
+
   function mergeGamePatch(patch: Partial<GameState>): void {
     if (!currentGame.value) return
     currentGame.value = { ...currentGame.value, ...patch }
@@ -1156,9 +1815,17 @@ export const useGameStore = defineStore('game', () => {
     runsRequired,
 
     // Shaped scorecards
-    battingRows,
-    bowlingRows,
+    battingRows,          // keep old for compatibility
+    bowlingRows,          // keep old for compatibility
+    battingRowsXI,        // NEW
+    bowlingRowsXI,        // NEW
+    battingXI,            // optional export if you want
+    bowlingXI, 
     extrasBreakdown,
+    battingRosterXI,
+    bowlingRosterXI,
+    fieldingSubs,
+    fielderRosterAll,
     
 
     // Live
@@ -1197,14 +1864,49 @@ export const useGameStore = defineStore('game', () => {
     loadGame,
     scoreDelivery,
     startNextInnings,
+    changeBowlerMidOver,
     replaceBatter,
     startNewOver,
+
+    // DLS panel
+    dlsPanel,
+
+    // State
+    dlsPreview,
+    dlsApplied,
+    // DLS getters
+    dls,
+    isChase,
+    dlsPar,
+    dlsTarget,
+    dlsAheadBy,
+    dlsKind,
+    // DLS actions
+    fetchDlsPreview,
+    applyDls,
+    // If you kept the innings-specific version:
+    reduceOversForInnings,
+
+    // Interruptions
+    interruptions,
+    interruptionsLoading,
+    interruptionsError,
+    currentInterruption,
+    hasOpenInterruption,
+    refreshInterruptions,
+    startInterruption,
+    stopInterruption: stopInterruptionAction,
+    optimisticallyCloseCurrentInterruption,
+
+    // DLS actions
+    reduceOvers,
+    dlsRevisedTarget,
+    dlsParNow,
 
     // Selections
     setSelectedStriker,
     setSelectedNonStriker,
     setSelectedBowler,
-    swapBatsmen,
     setActiveScorecardTab,
     setScoringDisabled,
 

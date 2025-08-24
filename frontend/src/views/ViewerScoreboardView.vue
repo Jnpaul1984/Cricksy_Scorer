@@ -16,6 +16,8 @@
       :title="`Match ${gameId.slice(0, 8)}…`"
       :theme="prefTheme"
       :api-base="apiBase"
+      interruptions-mode="auto"  
+      :poll-ms="5000"
     />
   </main>
 </template>

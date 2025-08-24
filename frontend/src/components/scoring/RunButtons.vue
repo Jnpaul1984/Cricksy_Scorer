@@ -14,7 +14,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'scored', payload: ScoreDeliveryRequest): void
-  (e: 'swap'): void
   (e: 'error', message: string): void
 }>()
 
@@ -26,27 +25,22 @@ const isDisabled = computed(() => submitting.value || !props.canScore)
 
 /** Main action */
 async function score(runs: number) {
-  console.log('[RunButtons] CLICK', { runs });
-
-  if (!gameStore?.submitDelivery) {
-    console.error('[RunButtons] gameStore.submitDelivery is undefined!');
-  }
+  console.log('[RunButtons] CLICK', { runs })
 
   if (!props.canScore) {
     console.warn('[RunButtons] blocked: canScore=false', {
       strikerId: props.strikerId,
       nonStrikerId: props.nonStrikerId,
       bowlerId: props.bowlerId,
-    });
-    return;
+    })
+    return
   }
-
   if (submitting.value) {
-    console.warn('[RunButtons] blocked: already submitting');
-    return;
+    console.warn('[RunButtons] blocked: already submitting')
+    return
   }
 
-  submitting.value = true;
+  submitting.value = true
   try {
     const payload: ScoreDeliveryRequest = {
       striker_id: props.strikerId,
@@ -55,22 +49,21 @@ async function score(runs: number) {
       runs_scored: runs,
       is_wicket: false,
       commentary: props.commentary ?? ''
-    } as ScoreDeliveryRequest;
+    }
 
-    console.log('[RunButtons] SUBMIT', payload);
-    const res = await gameStore.submitDelivery(props.gameId, payload);
-    console.log('[RunButtons] OK', res);
+    console.log('[RunButtons] SUBMIT', payload)
+    const res = await gameStore.submitDelivery(props.gameId, payload)
+    console.log('[RunButtons] OK', res)
 
-    emit('scored', payload);
-    if (runs % 2 === 1) emit('swap');
+    // No manual swap here — rotation handled by server + snapshot/store merge
+    emit('scored', payload)
   } catch (e: any) {
-    console.error('[RunButtons] FAIL', e);
-    emit('error', e?.message || 'Failed to score runs');
+    console.error('[RunButtons] FAIL', e)
+    emit('error', e?.message || 'Failed to score runs')
   } finally {
-    submitting.value = false;
+    submitting.value = false
   }
 }
-
 </script>
 
 <template>
@@ -85,7 +78,7 @@ async function score(runs: number) {
         @click="score(runs)"
         :disabled="isDisabled"
         :aria-disabled="isDisabled ? 'true' : 'false'"
-        :title="isDisabled ? 'Select striker, non‑striker (different) and bowler first' : `Record ${runs} run${runs===1?'':'s'}`"
+        :title="isDisabled ? 'Select striker, non-striker (different) and bowler first' : `Record ${runs} run${runs===1?'':'s'}`"
         :class="['run-button', `runs-${runs}`]"
       >
         {{ runs }}

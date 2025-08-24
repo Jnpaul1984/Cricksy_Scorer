@@ -1,12 +1,13 @@
 from __future__ import annotations
 from uuid import UUID
 from pydantic import BaseModel, Field
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic.config import ConfigDict
 from typing import Any, List, Dict, Literal, Optional, Sequence, Mapping, Union, TypeAlias, cast
 from enum import Enum
 
 TeamItem: TypeAlias = Union[str, UUID, Mapping[str, object]]
+ExtraCode = Literal['wd', 'nb', 'b', 'lb']
 # ===================================================================
 # Base & Re-usable Models
 # ===================================================================
@@ -74,14 +75,18 @@ class Delivery(BaseModel):
     bowler_id: str
     striker_id: str
     non_striker_id: str
-    runs_scored: int
+
+    # Store a clear breakdown per ball (new fields, backwards compat with runs_scored)
+    runs_off_bat: int = 0                  # off the bat (used on legal and nb)
+    extra_type: Optional[ExtraCode] = None # 'wd' | 'nb' | 'b' | 'lb' | None
+    extra_runs: int = 0                    # extra count (wides/byes/leg-byes)
+    runs_scored: int = 0                   # derived total for the ball, kept for compat
+
     is_extra: bool
-    extra_type: Optional[str] = None
     is_wicket: bool
     dismissal_type: Optional[str] = None
     dismissed_player_id: Optional[str] = None
     commentary: Optional[str] = None
-    # Optional in earlier versions; we include it for richer events
     fielder_id: Optional[str] = None
 
 class BattingScorecardEntry(BaseModel):
@@ -140,15 +145,26 @@ class GameCreate(BaseModel):
     toss_winner_team: str
     decision: Literal["bat", "bowl"]
 
+class InterruptionStart(BaseModel):
+    inning: int = Field(ge=1, le=2)
+    kind: Literal["rain", "bad_light", "other"] = "rain"
+    note: Optional[str] = None
+
+class InterruptionEnd(BaseModel):
+    interruption_id: str
+    overs_reduced_to: Optional[int] = Field(default=None, ge=1, le=50)
+
 class ScoreDelivery(BaseModel):
     striker_id: str
     non_striker_id: str
     bowler_id: str
-    runs_scored: int = Field(default=..., ge=0, le=6)
-    extra: Optional[str] = None
-    is_wicket: bool = False
+    bowler_name: Optional[str] = None
+    # Inputs (mutually exclusive by mode)
+    runs_scored: Optional[int] = Field(None, ge=0, le=6)  # used for legal balls or wd/b/lb
+    runs_off_bat: Optional[int] = Field(None, ge=0, le=6) # required for nb
+    extra: Optional[ExtraCode] = None
 
-    # Full dismissal picker
+    is_wicket: bool = False
     dismissal_type: Optional[Literal[
         "bowled", "caught", "lbw", "run_out", "stumped", "hit_wicket",
         "obstructing_the_field", "hit_ball_twice", "timed_out",
@@ -156,7 +172,28 @@ class ScoreDelivery(BaseModel):
     ]] = None
     dismissed_player_id: Optional[str] = None
     fielder_id: Optional[str] = None
+    fielder_name: Optional[str] = None
     commentary: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _validate_mode(self):
+        if self.extra == "nb":
+            if self.runs_off_bat is None:
+                raise ValueError("runs_off_bat is required when extra == 'nb'")
+            # ignore runs_scored for nb; we derive it
+            self.runs_scored = None
+        elif self.extra in ("wd", "b", "lb"):
+            if self.runs_scored is None:
+                raise ValueError("runs_scored is required when extra in {'wd','b','lb'}")
+            if self.runs_off_bat not in (None, 0):
+                raise ValueError("runs_off_bat must be 0/None unless extra == 'nb'")
+        else:
+            # legal ball
+            self.extra = None
+            self.runs_scored = self.runs_scored or 0
+            if self.runs_off_bat not in (None, 0):
+                raise ValueError("runs_off_bat must be 0/None on a legal ball")
+        return self
 
 # Team roles payload
 class TeamSide(str, Enum):
