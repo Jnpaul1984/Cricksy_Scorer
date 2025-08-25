@@ -120,11 +120,23 @@ defineExpose({
 })
 
 /* ---------------------------------- */
-/* Sponsors (unchanged)               */
+/* Sponsors (robust parsing)          */
 /* ---------------------------------- */
 type SponsorLike =
   | string
-  | { name?: string; logoUrl?: string; clickUrl?: string; image_url?: string; img?: string; link_url?: string; url?: string; alt?: string }
+  | {
+      name?: string
+      logoUrl?: string
+      clickUrl?: string
+      image_url?: string
+      img?: string
+      link_url?: string
+      url?: string
+      alt?: string
+      rail?: 'left' | 'right' | 'badge'    // NEW: optional explicit placement
+      maxPx?: number | string               // NEW: optional per-logo max size
+      size?: number | string                // alias if you prefer
+    }
 
 const base = computed(() =>
   props.apiBase?.replace(/\/$/, '') || window.location.origin.replace(/\/$/, '')
@@ -132,16 +144,27 @@ const base = computed(() =>
 const resolvedSponsorsUrl = computed(() =>
   props.sponsorsUrl || `${base.value}/games/${encodeURIComponent(props.gameId)}/sponsors`
 )
+const sponsorsBase = computed<URL | null>(() => {
+  try { return new URL(resolvedSponsorsUrl.value, window.location.href) } catch { return null }
+})
 const sponsors = ref<SponsorLike[]>([])
 const sponsorsLoading = ref(false)
 
 function toAbsolute(url: string): string {
   if (!url) return ''
   if (/^(https?:)?\/\//i.test(url) || /^(data|blob):/i.test(url)) return url
-  if (url.startsWith('/')) return `${base.value}${url}`.replace(/([^:]\/)\/+/g, '$1')
-  if (url.startsWith('static/')) return `${base.value}/${url}`.replace(/([^:]\/)\/+/g, '$1')
+  try { if (sponsorsBase.value) return new URL(url, sponsorsBase.value).toString() } catch {}
+  const originBase = (props.apiBase?.replace(/\/$/, '') || window.location.origin.replace(/\/$/, ''))
+  if (url.startsWith('/')) return `${originBase}${url}`.replace(/([^:]\/)\/+/g, '$1')
+  if (url.startsWith('static/')) return `${originBase}/${url}`.replace(/([^:]\/)\/+/g, '$1')
   return url
 }
+
+const logoUrl = computed(() => toAbsolute(props.logo || ''))
+const logoOk = ref(true)
+function onLogoErr() { logoOk.value = false }
+
+// --- helpers ---
 function sponsorImg(s: SponsorLike): string {
   const raw = typeof s === 'string' ? s : (s.logoUrl || s.image_url || s.img || '')
   return toAbsolute(raw)
@@ -154,26 +177,102 @@ function sponsorAlt(s: SponsorLike): string {
   if (typeof s === 'string') return 'Sponsor'
   return (s as any).alt || (s as any).name || 'Sponsor'
 }
-const leftSponsor  = computed(() => sponsors.value?.[0] ?? null)
-const rightSponsor = computed(() => sponsors.value?.[1] ?? null)
-const badgeSponsor = computed(() => sponsors.value?.[2] ?? sponsors.value?.[0] ?? null)
+
+// NEW: read a per-item max size, fallback to the CSS default
+function railMaxPx(s: SponsorLike | null, fallback = 72): string {
+  if (!s || typeof s === 'string') return `${fallback}px`
+  const raw = (s as any).maxPx ?? (s as any).size
+  if (raw == null) return `${fallback}px`
+  const n = typeof raw === 'string' ? parseInt(raw, 10) : Number(raw)
+  return Number.isFinite(n) && n > 0 ? `${n}px` : `${fallback}px`
+}
+
+// --- choose left/right (explicit rail beats index order) ---
+const leftSponsor = computed(() =>
+  sponsors.value.find(s => typeof s !== 'string' && (s as any).rail === 'left')
+  ?? sponsors.value?.[0] ?? null
+)
+const rightSponsor = computed(() =>
+  sponsors.value.find(s => typeof s !== 'string' && (s as any).rail === 'right')
+  ?? sponsors.value?.[1] ?? null
+)
+const badgeSponsor = computed(() =>
+  sponsors.value.find(s => typeof s !== 'string' && (s as any).rail === 'badge')
+  ?? sponsors.value?.[2] ?? sponsors.value?.[0] ?? null
+)
+
+// Accept {items:[]}, {sponsors:[]}, {data:[]}, or [] directly
+function normalizeSponsors(raw: any): SponsorLike[] {
+  const arr = Array.isArray(raw?.items) ? raw.items
+    : Array.isArray(raw?.sponsors)     ? raw.sponsors
+    : Array.isArray(raw?.data)         ? raw.data
+    : Array.isArray(raw)               ? raw
+    : []
+
+  return arr
+    .map((it: any) => {
+      if (typeof it === 'string') return it
+      const logo = it.logoUrl || it.image_url || it.img || it.logo || it.path || it.src
+      const link = it.clickUrl || it.link_url || it.url
+      const alt  = it.alt || it.name
+      return { logoUrl: logo, clickUrl: link, alt }
+    })
+    .filter((it: SponsorLike) =>
+      typeof it === 'string' ? true : Boolean((it as any).logoUrl))
+}
 
 async function loadSponsors() {
   sponsorsLoading.value = true
   try {
-    const r = await fetch(resolvedSponsorsUrl.value, { cache: 'no-store' })
-    if (!r.ok) { sponsors.value = []; return }
-    const data = await r.json()
-    const arr = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : [])
-    sponsors.value = arr
-  } catch {
-    sponsors.value = []
+    const apiOrigin = base.value.replace(/\/$/, '')
+    const raw = (resolvedSponsorsUrl.value || '').replace(/^\s+|\s+$/g, '')
+
+    // Build candidates: user-provided first, then common mounts
+    const candidates: string[] = []
+    const absolutize = (p: string) =>
+      /^https?:\/\//i.test(p) || p.startsWith('//')
+        ? p
+        : p.startsWith('/') ? `${apiOrigin}${p}` : `${apiOrigin}/${p}`
+
+    if (raw) candidates.push(absolutize(raw))
+    // helpful fallbacks for your setup
+    candidates.push(
+      `${apiOrigin}/sponsors/cricksy/sponsors.json`,
+      `${apiOrigin}/cricksy/sponsors.json`,
+      `${apiOrigin}/static/sponsors/cricksy/sponsors.json`
+    )
+
+    let lastErr: any = null
+    for (const url of candidates) {
+      try {
+        console.info('[Sponsors] GET', url)
+        const res = await fetch(url, { cache: 'no-store', mode: 'cors', headers: { Accept: 'application/json' } })
+        const ct = res.headers.get('content-type') || ''
+        if (!res.ok || !ct.includes('application/json')) {
+          const preview = (await res.text()).slice(0, 200)
+          console.warn('[Sponsors] skip', url, res.status, ct, preview)
+          continue
+        }
+        const data = await res.json()
+        const arr = normalizeSponsors(data)
+        sponsors.value = arr
+        console.info('[Sponsors] parsed', arr)
+        return
+      } catch (e) { lastErr = e }
+    }
+
+    console.error('[Sponsors] failed all candidates', lastErr)
+    sponsors.value = []  // render without sponsors
   } finally {
     sponsorsLoading.value = false
   }
 }
+
+
+
 watch(resolvedSponsorsUrl, () => { void loadSponsors() })
 onMounted(() => { void loadSponsors() })
+
 
 /* ----------------- */
 /* Small UI helpers  */
@@ -382,40 +481,45 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
       <span v-else-if="highlight==='HUNDRED'">HUNDRED!</span>
     </div>
 
-    <!-- Side rails -->
-    <aside v-if="leftSponsor" class="sponsor-rail rail-left">
-      <component :is="sponsorHref(leftSponsor) ? 'a' : 'div'"
-                 :href="sponsorHref(leftSponsor)"
-                 target="_blank" rel="noopener"
-                 class="rail-link">
+    <aside v-if="leftSponsor" class="sponsor-rail rail-left rail-large">
+      <component
+        :is="sponsorHref(leftSponsor) ? 'a' : 'div'"
+        :href="sponsorHref(leftSponsor)"
+        target="_blank"
+        rel="noopener"
+        class="rail-link"
+      >
         <img :src="sponsorImg(leftSponsor)" :alt="sponsorAlt(leftSponsor)" />
       </component>
     </aside>
 
-    <aside v-if="rightSponsor" class="sponsor-rail rail-right">
-      <component :is="sponsorHref(rightSponsor) ? 'a' : 'div'"
-                 :href="sponsorHref(rightSponsor)"
-                 target="_blank" rel="noopener"
-                 class="rail-link">
-        <img :src="sponsorImg(rightSponsor)" :alt="sponsorAlt(rightSponsor)" />
-      </component>
-    </aside>
+    
 
-    <header class="hdr">
-      <img v-if="logo" class="brand" :src="logo" alt="Logo" />
-      <h3>{{ title || 'Live Scoreboard' }}</h3>
-      <span class="pill live">● LIVE</span>
+   <header class="hdr">
+    <!-- brand/logo in header -->
+    <img
+      v-if="logoUrl && logoOk"
+      class="brand"
+      :src="logoUrl"
+      alt="Logo"
+      @error="onLogoErr"
+      :key="logoUrl"
+    />
 
-      <!-- Small badge -->
-      <a v-if="badgeSponsor"
-         class="badge-sponsor"
-         :href="sponsorHref(badgeSponsor)"
-         target="_blank" rel="noopener"
-         :aria-label="`Presented by ${sponsorAlt(badgeSponsor)}`">
-        <span class="badge-label">Presented by</span>
-        <img :src="sponsorImg(badgeSponsor)" :alt="sponsorAlt(badgeSponsor)" />
-      </a>
-    </header>
+    <h3>{{ title || 'Live Scoreboard' }}</h3>
+    <span class="pill live">● LIVE</span>
+
+    <!-- Presented by badge -->
+    <a v-if="badgeSponsor"
+      class="badge-sponsor"
+      :href="sponsorHref(badgeSponsor)"
+      target="_blank" rel="noopener"
+      :aria-label="`Presented by ${sponsorAlt(badgeSponsor)}`">
+      <span class="badge-label">Presented by</span>
+      <img :src="sponsorImg(badgeSponsor)" :alt="sponsorAlt(badgeSponsor)" />
+    </a>
+  </header>
+
 
     <div v-if="props.canControl && !showInterruptionBanner" class="ctrl-row" style="margin:8px 0;">
       <button class="btn" :disabled="interBusy" @click="startDelay('weather')">
@@ -444,18 +548,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
           {{ interBusy ? 'Resuming…' : 'Resume play' }}
         </button>
       </div>
-
-      <!-- Sponsors bar -->
-      <div v-if="sponsors.length" class="sponsor-bar" aria-label="Sponsors">
-        <div class="track">
-          <template v-for="(s, i) in sponsors" :key="i">
-            <a v-if="sponsorHref(s)" :href="sponsorHref(s)" target="_blank" rel="noopener">
-              <img :src="sponsorImg(s)" :alt="sponsorAlt(s)" />
-            </a>
-            <img v-else :src="sponsorImg(s)" :alt="sponsorAlt(s)" />
-          </template>
-        </div>
-      </div>
+      
 
       <div class="topline">
         <div class="teams">
@@ -566,28 +659,81 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
 
 
 <style scoped>
-.brand { height: 22px; width: auto; opacity: .9; }
+/* Header logo */
+.brand { height: 30px; width: auto; opacity: .9; }
 
-.sponsor-bar {
-  margin-top: 12px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255,255,255,.08);
-  overflow: hidden;
+/* Board: only space for a single LARGE left rail */
+.board {
+  position: relative;
+  width: min(980px, 96vw);
+  margin: 0 auto;
+  padding-left: 180px;   /* space for big left rail */
+  padding-right: 0;      /* no right rail */
 }
-.sponsor-bar .track {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  flex-wrap: nowrap;
+
+/* Single LEFT sponsor rail (large) */
+.sponsor-rail {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(0,0,0,.14);
+  border: 1px solid rgba(255,255,255,.06);
+  z-index: 3;
 }
-.sponsor-bar img {
-  height: 28px;
-  width: auto;
+.rail-left { left: 12px; }
+
+/* Large panel sizing */
+.rail-large { width: 160px; }
+.rail-large img {
+  max-width: 144px;
+  max-height: 144px;
+  object-fit: contain;
   display: block;
-  opacity: 0.9;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.25));
 }
-:where([data-theme="light"]) .sponsor-bar { border-top-color: #e5e7eb; }
+.rail-link { text-decoration: none; }
 
+/* Light theme variants */
+:where([data-theme="light"]) .sponsor-rail { background: #f9fafb; border-color: #e5e7eb; }
+
+/* Mobile/Tablet: dock the large rail at the top and shrink a bit */
+@media (max-width: 1100px) {
+  .board { padding-left: 0; padding-top: 96px; }
+
+  .sponsor-rail {
+    top: 10px;
+    left: 12px;
+    transform: none;
+    padding: 8px 10px;
+  }
+  .rail-large { width: auto; }
+  .rail-large img { max-width: 120px; max-height: 60px; }
+
+  /* Keep highlight toast clear of the rail */
+  .hl-banner { top: 96px; right: 12px; }
+}
+
+/* Presented-by badge in header */
+.badge-sponsor {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.10);
+  border: 1px solid rgba(255,255,255,.10);
+  text-decoration: none;
+}
+.badge-sponsor .badge-label { font-size: 11px; color: #9ca3af; font-weight: 700; letter-spacing: .02em; }
+.badge-sponsor img { height: 20px; width: auto; display: block; }
+:where([data-theme="light"]) .badge-sponsor { background: #f3f4f6; border-color: #e5e7eb; }
+
+/* --- Existing UI styles (unchanged) --- */
 .interrupt-banner{
   display:flex; align-items:center; gap:8px;
   padding:8px 10px; margin-bottom:10px;
@@ -613,43 +759,6 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
 }
 .info-strip .lbl{ font-size:12px; color:#9ca3af; }
 :where([data-theme="light"]) .info-strip .cell{ background:#f9fafb; border-color:#e5e7eb; }
-
-.board { position: relative; width: min(980px, 96vw); margin: 0 auto; }
-.sponsor-rail {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 88px;
-  display: grid;
-  place-items: center;
-  padding: 8px;
-  border-radius: 12px;
-  background: rgba(0,0,0,.14);
-  border: 1px solid rgba(255,255,255,.06);
-}
-.rail-left  { left: -100px; }
-.rail-right { right: -100px; }
-.sponsor-rail img { max-width: 72px; max-height: 72px; object-fit: contain; display: block; filter: drop-shadow(0 2px 6px rgba(0,0,0,.25)); }
-.rail-link { text-decoration: none; }
-
-.badge-sponsor {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(0,0,0,.10);
-  border: 1px solid rgba(255,255,255,.10);
-  text-decoration: none;
-}
-.badge-sponsor .badge-label { font-size: 11px; color: #9ca3af; font-weight: 700; letter-spacing: .02em; }
-.badge-sponsor img { height: 20px; width: auto; display: block; }
-
-:where([data-theme="light"]) .sponsor-rail { background: #f9fafb; border-color: #e5e7eb; }
-:where([data-theme="light"]) .badge-sponsor { background: #f3f4f6; border-color: #e5e7eb; }
-
-@media (max-width: 1100px) { .sponsor-rail { display: none; } }
 
 .hdr { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
 .pill.live { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #10b98122; color: #10b981; border: 1px solid #10b98155; }
@@ -683,6 +792,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
 .balls { display:flex; flex-wrap: wrap; gap:6px; }
 .ball { min-width: 28px; height: 28px; display:grid; place-items:center; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:rgba(0,0,0,.18); font-weight:800; font-size:12px; }
 :where([data-theme="light"]) .ball { background:#f9fafb; border-color:#e5e7eb; }
+
 /* Highlight toast */
 .hl-banner{
   position:absolute; top:12px; right:12px; z-index:5;
@@ -699,5 +809,4 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
 :where([data-theme="light"]) .hl-banner{
   background:#e8fbfe; border-color:#a5ecf6; color:#0e7490;
 }
-
 </style>

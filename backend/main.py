@@ -217,6 +217,31 @@ class MidOverChangeBody(BaseModel):
     new_bowler_id: str
     reason: Literal["injury", "other"] = "injury"
 
+from typing import List, Literal, TypedDict
+
+# If you're on Python < 3.11:
+# from typing_extensions import TypedDict, NotRequired
+# class SponsorItem(TypedDict, total=False):
+#     ...
+
+class SponsorItem(TypedDict, total=False):
+    name: str
+    logoUrl: str
+    clickUrl: str
+    image_url: str
+    img: str
+    link_url: str
+    url: str
+    alt: str
+    rail: Literal["left", "right", "badge"]
+    maxPx: int | str
+    size: int | str
+
+class SponsorsManifest(TypedDict):
+    items: List[SponsorItem]
+
+
+
 # ================================================================
 # FastAPI + Socket.IO wiring
 # ================================================================
@@ -244,12 +269,13 @@ _fastapi.add_middleware(
 # --- PR 7: Static files for logos/sponsors ---
 # Resolve to backend/static
 BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = Path(os.getenv("STATIC_DIR", BASE_DIR / "static")).resolve()
+STATIC_DIR = Path(__file__).parent / "static" / "sponsors"
 
+BASE = Path("backend/static/sponsors")
 # Create if missing (avoids RuntimeError)
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
-_fastapi.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+_fastapi.mount("/sponsors", StaticFiles(directory=STATIC_DIR), name="sponsors")
 
 # Keep your separate games router mounted
 _fastapi.include_router(games_router, prefix="/legacy")
@@ -2372,7 +2398,17 @@ async def get_game_sponsors(
         )
     return out
 
-
+@_fastapi.get("/static/sponsors/{brand}/manifest.json")
+def sponsors_manifest(brand: str) -> SponsorsManifest:
+    items: List[SponsorItem] = [
+        {"logoUrl": f"/static/sponsors/{brand}/Cricksy.png",       "alt": "Cricksy",           "rail": "left",  "maxPx": 120},
+        {"logoUrl": f"/static/sponsors/{brand}/Cricksy_no_bg.png", "alt": "Cricksy (no bg)",   "rail": "right", "maxPx": 140},
+        {"logoUrl": f"/static/sponsors/{brand}/Cricksy_mono.png",  "alt": "Presented by Cricksy"},
+        { "logoUrl": "/static/sponsors/cricksy/Cricksy_outline.png",         "alt": "Cricksy outline" },
+        { "logoUrl": "/static/sponsors/cricksy/Cricksy_Black_&_white.png",   "alt": "Cricksy B/W" },
+        { "logoUrl": "/static/sponsors/cricksy/Cricksy_colored_circle.png",  "alt": "Cricksy circle" },
+    ]
+    return {"items": items}
 # ================================================================
 # PR 10 — Impression logging (proof-of-play)
 # ================================================================

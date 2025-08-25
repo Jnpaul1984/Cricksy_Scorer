@@ -225,7 +225,9 @@ const weatherNote = ref<string>('')
 function openWeather() { weatherDlg.value?.showModal() }
 function closeWeather() { weatherDlg.value?.close() }
 
-const apiBase: string = (import.meta as any).env?.VITE_API_BASE || window.location.origin
+const apiBase =
+  (import.meta as any).env?.VITE_API_BASE?.replace(/\/$/, '') ||
+  (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin).replace(/\/$/, '')
 
 // Store is the single writer; no manual refresh calls here.
 async function startWeatherDelay() {
@@ -501,7 +503,10 @@ const title = ref<string>('Live Scoreboard')
 const logo = ref<string>('')
 const height = ref<number>(180)
 
-const sponsorsUrl = computed<string>(() => (gameId.value ? `${apiBase}/games/${encodeURIComponent(gameId.value)}/sponsors` : ''))
+// script setup
+
+const sponsorsUrl = ref<string>(`${apiBase}/sponsors/cricksy/sponsors.json`)
+
 
 const embedUrl = computed<string>(() => {
   const routerMode = (import.meta as any).env?.VITE_ROUTER_MODE ?? 'history'
@@ -734,7 +739,6 @@ async function confirmChangeBowler(): Promise<void> {
     <main class="content">
       <!-- Live scoreboard preview — widget reads from store; interruptions polling disabled -->
       <ScoreboardWidget
-        class="mb-3"
         :game-id="gameId"
         :theme="theme"
         :title="title"
@@ -950,7 +954,7 @@ async function confirmChangeBowler(): Promise<void> {
 
         <div class="right">
           <div class="scorecards-grid">
-            <<BattingCard :entries="battingEntries" />
+            <BattingCard :entries="battingEntries" />
             
             <BowlingCard :entries="bowlingEntries" />
 
