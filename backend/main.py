@@ -19,6 +19,9 @@ from typing import (
     Literal,
     Mapping,
     runtime_checkable,
+    NotRequired,
+    Tuple,
+    TypeAlias,
 )
 from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -71,7 +74,7 @@ class SocketIOServer(Protocol):
 # Types & Protocols
 # ================================================================
 Number = Union[int, float]
-
+BALLS_PER_OVER = 6
 class PlayerDict(TypedDict):
     id: str
     name: str
@@ -87,6 +90,9 @@ class BattingEntryDict(TypedDict):
     runs: int
     balls_faced: int
     is_out: bool
+    fours: NotRequired[int]
+    sixes: NotRequired[int]
+    how_out: NotRequired[str]
 
 class BowlingEntryDict(TypedDict):
     player_id: str
@@ -104,7 +110,7 @@ class DeliveryDict(TypedDict, total=False):
     runs_off_bat: int
     runs_scored: int
     is_extra: bool
-    extra_type: Optional[schemas.ExtraCode]
+    extra_type: Optional[str]
     extra_runs: int
     is_wicket: bool
     dismissal_type: Optional[str]
@@ -183,7 +189,7 @@ class GameState(Protocol):
     bowling_team_name: str
 
     # status
-    status: str
+    status: Union[str, models.GameStatus]
     current_inning: int
     total_runs: int
     total_wickets: int
@@ -192,6 +198,7 @@ class GameState(Protocol):
     current_striker_id: Optional[str]
     current_non_striker_id: Optional[str]
     target: Optional[int]
+    first_inning_summary: Optional[Dict[str, Any]]
     result: Optional[str]
     current_bowler_id: Optional[str]
     last_ball_bowler_id: Optional[str]
@@ -199,6 +206,14 @@ class GameState(Protocol):
     mid_over_change_used: bool
     pending_new_batter: bool
     pending_new_over: bool
+
+    # ✅ missing runtime fields
+    balls_bowled_total: int
+    innings_history: List[Dict[str, Any]]
+    needs_new_innings: bool
+    needs_new_over: bool
+    needs_new_batter: bool
+
     # team roles
     team_a_captain_id: Optional[str]
     team_a_keeper_id: Optional[str]
@@ -206,9 +221,14 @@ class GameState(Protocol):
     team_b_keeper_id: Optional[str]
 
     # timelines & scorecards (JSON-safe)
-    deliveries: Sequence[Any] 
+    deliveries: Sequence[Any]
     batting_scorecard: Dict[str, BattingEntryDict]
     bowling_scorecard: Dict[str, BowlingEntryDict]
+
+    # ✅ persistence
+    async def save(self) -> None: ...
+
+
 
 class StartOverBody(BaseModel):
     bowler_id: str
@@ -303,6 +323,9 @@ def _mk_batting_scorecard(team: TeamDict) -> Dict[str, BattingEntryDict]:
             "runs": 0,
             "balls_faced": 0,
             "is_out": False,
+            "fours": 0,         # new
+            "sixes": 0,         # new
+            "how_out": "",      # new
         }
         for p in team["players"]
     }
@@ -326,7 +349,9 @@ def _bowling_balls_to_overs(balls: int) -> float:
     Convert legal ball count to cricket-style decimal overs (X.Y),
     where Y is the balls remainder [0..5]. Never round.
     """
-    return float(f"{balls // 6}.{balls % 6}")
+    overs = balls // 6
+    rem = balls % 6
+    return overs + rem / 10.0
 
 # AFTER
 def _player_name(team_a: TeamDict, team_b: TeamDict, pid: Optional[str]) -> Optional[str]:
@@ -453,7 +478,7 @@ _INVALID_ON_NO_BALL = {"bowled", "caught", "lbw", "stumped", "hit_wicket"}
 # On a WIDE, these are invalid (stumped *is allowed* on a wide):
 _INVALID_ON_WIDE = {"bowled", "lbw"}
 
-def is_legal_delivery(extra: Optional[schemas.ExtraCode]) -> bool:
+def is_legal_delivery(extra: Optional[str]) -> bool:
     return extra not in {"wd", "nb"}
 
 
@@ -461,10 +486,25 @@ def is_legal_delivery(extra: Optional[schemas.ExtraCode]) -> bool:
 def _rotate_strike_on_runs(runs: int) -> bool: # type: ignore
     return (runs % 2) == 1
 
+# --- Type narrowing for extras (fixes Pylance str|None → ExtraCode|None) ---
+ExtraCode = schemas.ExtraCode  # alias for readability
+
+_EXTRA_MAP: Mapping[str, ExtraCode] = {
+    "wd": "wd",
+    "nb": "nb",
+    "b":  "b",
+    "lb": "lb",
+}
+
+def _as_extra_code(x: Optional[str]) -> Optional[ExtraCode]:
+    if x is None:
+        return None
+    return _EXTRA_MAP.get(x)
+
 # ================================================================
 # NEW: normalization + dedupe + totals recompute
 # ================================================================
-def _norm_extra(x: Any) -> Optional[schemas.ExtraCode]:
+def _norm_extra(x: Any) -> Optional[str]:
     """
     Normalize to: None | 'wd' | 'nb' | 'b' | 'lb'
     """
@@ -472,41 +512,133 @@ def _norm_extra(x: Any) -> Optional[schemas.ExtraCode]:
         return None
     s = (str(x) or "").strip().lower()
     if s in {"wide", "wd"}:
-        return cast(schemas.ExtraCode, "wd")
+        return "wd"
     if s in {"no_ball", "nb"}:
-        return cast(schemas.ExtraCode, "nb")
+        return "nb"
     if s in {"b", "bye"}:
-        return cast(schemas.ExtraCode, "b")
+        return "b"
     if s in {"lb", "leg_bye", "leg-bye"}:
-        return cast(schemas.ExtraCode, "lb")
+        return "lb"
     return None
 
-def _dedup_deliveries(g: GameState) -> List[Dict[str, Any]]:
-    """
-    Collapse duplicates by (over_number, ball_number), keeping the last occurrence, preserving order.
-    Useful if client double-sends or an undo/redo races.
-    """
-    if not g.deliveries:
-        return []
-    deliveries: Sequence[Union[BaseModel, Mapping[str, Any]]] = cast(
-        Sequence[Union[BaseModel, Mapping[str, Any]]],
-        g.deliveries,
-    )
-    seen: Dict[tuple[int, int], Dict[str, Any]] = {}
-    order: List[tuple[int, int]] = []
-    for d_any in deliveries:
-        d: Dict[str, Any] = (
-            d_any.model_dump()
-            if isinstance(d_any, BaseModel)
-            else dict(d_any)
+
+
+def _deliveries_for_current_innings(g: GameState) -> List[Dict[str, Any]]:
+    """Return deliveries filtered to the current innings when 'inning' is present; otherwise return as-is."""
+    raw = getattr(g, "deliveries", []) or []
+    rows: List[Dict[str, Any]] = []
+    has_innings_flag = False
+    for d_any in raw:
+        d = d_any.model_dump() if isinstance(d_any, BaseModel) else dict(d_any)
+        if "inning" in d:
+            has_innings_flag = True
+        rows.append(d)
+    if not has_innings_flag:
+        return rows
+    cur = int(getattr(g, "current_inning", 1) or 1)
+    return [d for d in rows if int(d.get("inning", cur) or cur) == cur]
+
+def _sum_runs_for_innings(g: GameState, inning: int) -> int:
+    total = 0
+    for d_any in getattr(g, "deliveries", []) or []:
+        d = d_any.model_dump() if isinstance(d_any, BaseModel) else dict(d_any)
+        try:
+            inn = int(d.get("inning", 1))
+        except Exception:
+            inn = 1
+        if inn == int(inning):
+            total += int(d.get("runs_scored") or 0)
+    return total
+
+def _team1_runs(g: GameState) -> int:
+    fis_any: Any = getattr(g, "first_inning_summary", None)
+    if isinstance(fis_any, dict) and "runs" in fis_any:
+        try:
+            return int(cast(Any, fis_any["runs"]))
+        except Exception:
+            pass
+    return _sum_runs_for_innings(g, 1)
+
+
+async def _maybe_close_innings(g: GameState) -> None:
+    """Close the current innings if overs exhausted or all out."""
+    balls_limit = (g.overs_limit or 0) * 6
+    balls_bowled = g.balls_bowled_total or 0
+
+    if g.status == models.GameStatus.innings_break:
+        return
+
+    all_out = (g.total_wickets >= 10)
+    overs_exhausted = (balls_limit > 0 and balls_bowled >= balls_limit)
+
+    if all_out or overs_exhausted:
+        if not hasattr(g, "innings_history"):
+            g.innings_history = []
+
+
+        # ✅ Only archive if not already archived
+        already_archived = any(
+            inn.get("inning_no") == g.current_inning for inn in g.innings_history
         )
+        if not already_archived:
+            g.innings_history.append({
+                "inning_no": g.current_inning or 1,
+                "batting_team": g.batting_team_name,
+                "bowling_team": g.bowling_team_name,
+                "runs": g.total_runs,
+                "wickets": g.total_wickets,
+                "overs": f"{g.overs_completed}.{g.balls_this_over}",
+                "batting_scorecard": g.batting_scorecard,
+                "bowling_scorecard": g.bowling_scorecard,
+                "deliveries": g.deliveries,
+                "closed_at": datetime.now(timezone.utc).isoformat(),  # ✅ TZ-aware
+            })
+
+        g.status = models.GameStatus.innings_break
+        g.needs_new_innings = True
+        g.needs_new_over = False
+        g.needs_new_batter = False
+        g.current_striker_id = None
+        g.current_non_striker_id = None
+        g.current_bowler_id = None
+
+        await g.save()
+
+
+# Key used in _dedup_deliveries: (over, ball, subindex) where subindex is int for illegal (wd/nb) or "L" for legal.
+BallKey: TypeAlias = Tuple[int, int, Union[int, Literal["L"]]]
+
+def _dedup_deliveries(g: GameState) -> List[Dict[str, Any]]:
+    deliveries = _deliveries_for_current_innings(g)
+    if not deliveries:
+        return []
+
+    # Use the module-level alias instead of a local type alias
+    seen: Dict[BallKey, Dict[str, Any]] = {}
+    order: List[BallKey] = []
+    illegal_seq: Dict[Tuple[int, int], int] = defaultdict(int)
+
+    for d_any in deliveries:
+        d: Dict[str, Any] = (d_any.model_dump() if isinstance(d_any, BaseModel) else dict(d_any))
         over_no = int(d.get("over_number") or 0)
         ball_no = int(d.get("ball_number") or 0)
-        k = (over_no, ball_no)
+        x = _norm_extra(d.get("extra_type"))
+
+        k: BallKey
+        if x in ("wd", "nb"):
+            k = (over_no, ball_no, illegal_seq[(over_no, ball_no)])
+            illegal_seq[(over_no, ball_no)] += 1
+        else:
+            k = (over_no, ball_no, "L")
+
         if k not in seen:
             order.append(k)
-        seen[k] = d  # last write wins
+        seen[k] = d
+
     return [seen[k] for k in order]
+
+
+
 
 def _recompute_totals_and_runtime(g: GameState) -> None:
     """
@@ -544,12 +676,7 @@ def _recompute_totals_and_runtime(g: GameState) -> None:
 
     
 
-    deliveries2: Sequence[Union[BaseModel, Mapping[str, Any]]] = cast(
-        Sequence[Union[BaseModel, Mapping[str, Any]]],
-        getattr(g, "deliveries", []) or [],
-    )
-    for d_any in deliveries2:
-        d = d_any.model_dump() if isinstance(d_any, BaseModel) else dict(d_any)
+    for d in _dedup_deliveries(g):
         x = _norm_extra(d.get("extra_type"))
         off = int(d.get("runs_off_bat") or 0)
         ex  = int(d.get("extra_runs") or 0)
@@ -594,14 +721,7 @@ def _recompute_totals_and_runtime(g: GameState) -> None:
 def _extras_breakdown(g: GameState) -> Dict[str,int]:
     wides = no_balls = byes = leg_byes = penalty = 0
 
-    deliveries3: Sequence[Union[BaseModel, Mapping[str, Any]]] = cast(
-        Sequence[Union[BaseModel, Mapping[str, Any]]],
-        getattr(g, "deliveries", []) or [],
-    )
-    for d_any in deliveries3:
-        d: Dict[str, Any] = (
-            d_any.model_dump() if isinstance(d_any, BaseModel) else dict(d_any)
-        )
+    for d in _dedup_deliveries(g):
         x = _norm_extra(d.get("extra_type"))
         ex = int(d.get("extra_runs") or 0)
 
@@ -683,6 +803,9 @@ def _ensure_batting_entry(g: GameState, batter_id: str) -> BattingEntryDict:
         e["balls_faced"] = 0
     if "is_out" not in e:
         e["is_out"] = False
+    if "fours" not in e:   e["fours"] = 0
+    if "sixes" not in e:   e["sixes"] = 0
+    if "how_out" not in e: e["how_out"] = ""
 
     g.batting_scorecard[batter_id] = e
     return e
@@ -767,17 +890,7 @@ def _rebuild_scorecards_from_deliveries(g: GameState) -> None:
 
     balls_by_bowler: Dict[str, int] = defaultdict(int)
 
-    deliveries4: Sequence[Union[BaseModel, Mapping[str, Any]]] = cast(
-        Sequence[Union[BaseModel, Mapping[str, Any]]],
-        g.deliveries or [],
-    )
-    for d_any in deliveries4:
-        d: Dict[str, Any] = (
-            d_any.model_dump()
-            if isinstance(d_any, BaseModel)
-            else dict(d_any)
-        )
-
+    for d in _dedup_deliveries(g):
         striker = d.get("striker_id")
         bowler  = d.get("bowler_id")
         x   = _norm_extra(d.get("extra_type"))
@@ -792,13 +905,30 @@ def _rebuild_scorecards_from_deliveries(g: GameState) -> None:
                 bat[striker]["balls_faced"] += 1
             # credit only off-the-bat runs
             bat[striker]["runs"] += off
+            # boundaries on off-the-bat (incl. nb+4/6)
+            if off == 4: bat[striker]["fours"] = int(bat[striker].get("fours", 0)) + 1
+            if off == 6: bat[striker]["sixes"] = int(bat[striker].get("sixes", 0)) + 1
 
-
-        # Mark dismissed player out on scorecard
+        # Mark dismissed player out on scorecard & store how_out text
         if wicket and dismissal_type:
             out_pid = str(d.get("dismissed_player_id") or striker or "")
             if out_pid in bat:
                 bat[out_pid]["is_out"] = True
+                fld = _player_name(g.team_a, g.team_b, d.get("fielder_id")) or ""
+                blr = _player_name(g.team_a, g.team_b, bowler) or ""
+                # simple, readable notation:
+                if dismissal_type == "caught":
+                    bat[out_pid]["how_out"] = f"c {fld} b {blr}".strip()
+                elif dismissal_type == "lbw":
+                    bat[out_pid]["how_out"] = f"lbw b {blr}".strip()
+                elif dismissal_type == "bowled":
+                    bat[out_pid]["how_out"] = f"b {blr}".strip()
+                elif dismissal_type == "stumped":
+                    bat[out_pid]["how_out"] = f"st {fld} b {blr}".strip()
+                elif dismissal_type == "run_out":
+                    bat[out_pid]["how_out"] = f"run out ({fld})".strip()
+                else:
+                    bat[out_pid]["how_out"] = dismissal_type
 
         # --- Bowler updates ---
         if bowler in bowl:
@@ -887,6 +1017,11 @@ class OversLimitBody(BaseModel):
 
 class NextBatterBody(BaseModel):
     batter_id: str
+
+class StartInningsBody(BaseModel):
+    striker_id: Optional[str] = None
+    non_striker_id: Optional[str] = None
+    opening_bowler_id: Optional[str] = None
 
 # ------- PR 10: Sponsor Impression logging -------
 class SponsorImpressionIn(BaseModel):
@@ -1001,8 +1136,7 @@ def _score_one(
     g.total_runs += team_add
     # capture the display over/ball *before* we mutate runtime
     delivery_over_number = int(g.overs_completed)
-    delivery_ball_number = int(g.balls_this_over + (1 if legal else 0))
-
+    delivery_ball_number = int(g.balls_this_over + 1)
     # --- Batting runtime (only what scorecards need immediately) ---
     bs = _ensure_batting_entry(g, striker_id)
     if legal:
@@ -1084,7 +1218,7 @@ def _score_one(
         "non_striker_id": str(pre_non_striker),
 
         "runs_off_bat": int(off_bat_runs),
-        "extra_type": extra_norm,
+        "extra_type": _as_extra_code(extra_norm),
         "extra_runs": int(extra_runs),
         "runs_scored": int(team_add),
 
@@ -1129,8 +1263,8 @@ def _dls_panel_for(g: GameState) -> DlsPanel:
             interruptions=interruptions,
         )
 
-        # NOTE: If you later store inns-1 score separately, prefer that.
-        S1 = int(getattr(g, "total_runs", 0))
+        # Team 1 score (use persisted summary or compute from innings 1).
+        S1 = _team1_runs(g)
 
         # Team 2 resource start (for target) and live used (for par)
         R_start = env.table.R(float(overs_limit_opt), 0)
@@ -1193,10 +1327,12 @@ def _snapshot_from_game(
             if is_legal_delivery(_norm_extra(d.get("extra_type"))):
                 cur_bowler_id = str(d.get("bowler_id") or "")
                 break
-
+    
+    is_break = str(getattr(g, "status", "")) == "innings_break"
     flags = _compute_snapshot_flags(g)
-    needs_new_over = flags["needs_new_over"]
+    needs_new_over = False if is_break else flags["needs_new_over"]
     needs_new_batter = flags["needs_new_batter"]
+    needs_new_innings = bool(getattr(g, "needs_new_innings", False) or is_break)
 
     # Analyst bits
     extras_totals = _extras_breakdown(g)
@@ -1211,6 +1347,7 @@ def _snapshot_from_game(
             "overs": g.overs_completed,
         },
         "overs": f"{g.overs_completed}.{g.balls_this_over}",
+        "balls_bowled_total": g.overs_completed * 6 + g.balls_this_over,
         "batsmen": {
             "striker": {
                 "id": g.current_striker_id,
@@ -1245,10 +1382,13 @@ def _snapshot_from_game(
         "batting_team_name": g.batting_team_name,
         "bowling_team_name": g.bowling_team_name,
         "current_inning": g.current_inning,
-
+        "target": getattr(g, "target", None),
+        "first_inning_summary": getattr(g, "first_inning_summary", None),
+        
         # UI flags
         "needs_new_over": needs_new_over,
         "needs_new_batter": needs_new_batter,
+        "needs_new_innings": needs_new_innings,   # <-- add this
 
         # DLS panel
         "dls": _dls_panel_for(g),
@@ -1328,6 +1468,74 @@ async def get_game(game_id: str, db: AsyncSession = Depends(get_db)):
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
     return db_game
+
+@_fastapi.post("/games/{game_id}/innings/start")
+async def start_next_innings(
+    game_id: str,
+    striker_id: Optional[str] = None,
+    non_striker_id: Optional[str] = None,
+    opening_bowler_id: Optional[str] = None,
+) -> models.Game:
+    g = await models.Game.get(game_id)
+    if not g:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    if g.status != models.GameStatus.innings_break or not g.needs_new_innings:
+        raise HTTPException(status_code=400, detail="No new innings to start")
+
+    prev_batting_team = g.batting_team_name
+    prev_bowling_team = g.bowling_team_name
+
+    # ✅ Skip duplicate archive (if already pushed by _maybe_close_innings)
+    last_archived = g.innings_history[-1]["inning_no"] if g.innings_history else None
+    if last_archived != g.current_inning:
+        g.innings_history.append({
+            "inning_no": g.current_inning,
+            "batting_team": prev_batting_team,
+            "bowling_team": prev_bowling_team,
+            "runs": g.total_runs,
+            "wickets": g.total_wickets,
+            "overs": f"{g.overs_completed}.{g.balls_this_over}",
+            "batting_scorecard": g.batting_scorecard,
+            "bowling_scorecard": g.bowling_scorecard,
+            "deliveries": g.deliveries,
+            "closed_at": datetime.now(timezone.utc).isoformat(),  # ✅ TZ-aware
+        })
+
+    # ✅ Bump innings
+    g.current_inning = (g.current_inning or 1) + 1
+    g.status = models.GameStatus.in_progress
+    g.needs_new_innings = False
+    g.innings_start_at = datetime.now(timezone.utc)  # ✅ TZ-aware
+
+    # ✅ Reset state
+    g.total_runs = 0
+    g.total_wickets = 0
+    g.overs_completed = 0
+    g.balls_this_over = 0
+    g.deliveries = []
+
+    # ✅ Rotate batting/bowling
+    g.batting_team_name, g.bowling_team_name = prev_bowling_team, prev_batting_team
+
+    # ✅ Fresh scorecards
+    g.batting_scorecard = _mk_batting_scorecard(
+        g.team_a if g.batting_team_name == g.team_a["name"] else g.team_b
+    )
+    g.bowling_scorecard = _mk_bowling_scorecard(
+        g.team_b if g.batting_team_name == g.team_a["name"] else g.team_a
+    )
+
+    g.current_striker_id = striker_id
+    g.current_non_striker_id = non_striker_id
+    g.current_bowler_id = opening_bowler_id
+    g.needs_new_over = opening_bowler_id is None
+    g.needs_new_batter = striker_id is None or non_striker_id is None
+
+    await g.save()
+    return g
+
+
 
 # ------------------------------------------------
 # Start a new over with selected bowler
@@ -1600,7 +1808,7 @@ async def add_delivery(
             non_striker_id=delivery.non_striker_id,
             bowler_id=delivery.bowler_id,
             runs_scored=off_bat,       # off-bat on no-ball
-            extra="nb",
+            extra="nb",  # literal is fine; make it explicit for Pylance
             is_wicket=bool(delivery.is_wicket),
             dismissal_type=delivery.dismissal_type,
             dismissed_player_id=delivery.dismissed_player_id,
@@ -1613,7 +1821,7 @@ async def add_delivery(
             non_striker_id=delivery.non_striker_id,
             bowler_id=delivery.bowler_id,
             runs_scored=extra_runs,    # extras count
-            extra=x,
+            extra=_as_extra_code(x),
             is_wicket=bool(delivery.is_wicket),
             dismissal_type=delivery.dismissal_type,
             dismissed_player_id=delivery.dismissed_player_id,
@@ -1634,6 +1842,7 @@ async def add_delivery(
 
     # --- Append to ledger once --------------------------------------------------
     del_dict: Dict[str, Any] = schemas.Delivery(**kwargs).model_dump()
+    del_dict["inning"] = int(getattr(g, "current_inning", 1) or 1)
     if not isinstance(g.deliveries, list):  # type: ignore
         g.deliveries = []  # type: ignore[assignment]
         flag_modified(db_game, "deliveries")
@@ -1654,6 +1863,7 @@ async def add_delivery(
     # --- Rebuild scorecards from authoritative ledger --------------------------
     _rebuild_scorecards_from_deliveries(g)
     _recompute_totals_and_runtime(g)
+    await _maybe_close_innings(g)
     flag_modified(db_game, "batting_scorecard")
     flag_modified(db_game, "bowling_scorecard")
 
@@ -1664,9 +1874,10 @@ async def add_delivery(
     # --- Build snapshot + final flags ------------------------------------------
     last = u.deliveries[-1] if u.deliveries else None
     snap = _snapshot_from_game(u, last)
-    final_flags = _compute_snapshot_flags(u)
-    snap["needs_new_batter"] = final_flags["needs_new_batter"]
-    snap["needs_new_over"] = final_flags["needs_new_over"]
+    is_break = str(getattr(u, "status", "")) == "innings_break" or bool(getattr(u, "needs_new_innings", False))
+    if is_break:
+        snap["needs_new_over"] = False
+        snap["needs_new_innings"] = True
 
     # Ensure ID fields present for frontend
     cur_bowler_from_obj: Optional[str] = None
@@ -1816,7 +2027,7 @@ async def undo_last_delivery(game_id: str, db: AsyncSession = Depends(get_db)) -
             non_striker_id=str(d.get("non_striker_id", "")),
             bowler_id=str(d.get("bowler_id", "")),
             runs_scored=rs,
-            extra=x,
+            extra=_as_extra_code(x),
             is_wicket=bool(d.get("is_wicket")),
             dismissal_type=d.get("dismissal_type"),
             dismissed_player_id=d.get("dismissed_player_id"),
@@ -1867,8 +2078,8 @@ async def dls_revised_target(game_id: str, body: DLSRequest, db: AsyncSession = 
         interruptions=interruptions,
     )
 
-    # Team 1 score (at the end of inns 1 you’ll pass actual S1; if called earlier, use current)
-    S1 = int(getattr(g, "total_runs", 0))
+    # Team 1 score (use persisted summary or compute from innings 1)
+    S1 = _team1_runs(g)
 
     # Team 2 resources (available) = R(u,w) at start (w=0, u=M2)
     M2 = int(body.max_overs or (g.overs_limit or (50 if body.kind == "odi" else 20)))
@@ -1899,7 +2110,7 @@ async def dls_par_now(game_id: str, body: DLSRequest, db: AsyncSession = Depends
         deliveries=deliveries_m,
         interruptions=list(getattr(g, "interruptions", [])),
     )
-    S1 = int(getattr(g, "total_runs", 0))  # score to chase
+    S1 = _team1_runs(g)  # score to chase
 
     # Team 2 “used so far” during chase
     # Use current (balls bowled, wickets) from runtime fields:
@@ -1987,8 +2198,10 @@ async def get_snapshot(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict
 
     # UI gating flags
     flags = _compute_snapshot_flags(g)
+    is_break = str(getattr(g, "status","")) == "innings_break" or bool(getattr(g, "needs_new_innings", False))
     snap["needs_new_batter"] = flags["needs_new_batter"]
-    snap["needs_new_over"] = flags["needs_new_over"]
+    snap["needs_new_over"] = False if is_break else flags["needs_new_over"]
+    snap["needs_new_innings"] = is_break
 
     # Interruption records + mini cards
     snap["interruptions"] = cast(List[InterruptionRec], getattr(g, "interruptions", []) or [])
@@ -2148,6 +2361,9 @@ async def get_recent_deliveries(
     out: List[Dict[str, Any]] = []
     for d_any in ledger:
         try:
+            # ensure the literal type matches the schema
+            if "extra_type" in d_any:
+                d_any["extra_type"] = _as_extra_code(cast(Optional[str], d_any.get("extra_type")))
             d_kw = cast(DeliveryKwargs, d_any)            # <-- silences “unknown argument type”
             model = schemas.Delivery(**d_kw)
             out.append(model.model_dump())                # Pydantic v2

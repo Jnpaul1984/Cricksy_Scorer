@@ -30,11 +30,13 @@ from .database import Base
 # -----------------------------
 
 class GameStatus(str, enum.Enum):
-    not_started = "not_started"
-    in_progress = "in_progress"
-    completed = "completed"
-    abandoned = "abandoned"
-
+    not_started   = "not_started"
+    started       = "started"        # <-- add
+    in_progress   = "in_progress"
+    innings_break = "innings_break"  # <-- add
+    live          = "live"           # <-- add (your code checks for this)
+    completed     = "completed"
+    abandoned     = "abandoned"
 
 # Keep existing contributor roles
 class GameContributorRoleEnum(str, enum.Enum):

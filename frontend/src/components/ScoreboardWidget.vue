@@ -290,20 +290,104 @@ function elapsedSince(iso?: string | null): string {
 /* ----------------------------- */
 /* Derived scoreboard from store */
 /* ----------------------------- */
-const runs   = computed(() => Number(currentGame.value?.total_runs ?? 0))
-const wkts   = computed(() => Number(currentGame.value?.total_wickets ?? 0))
-const oversC = computed(() => Number(currentGame.value?.overs_completed ?? 0))
-const ballsO = computed(() => Number(currentGame.value?.balls_this_over ?? 0))
-const ballsBowled = computed(() => oversC.value * 6 + ballsO.value)
+const sAny = computed(() => (state.value || {}) as any)
+
+// All deliveries (model or live state), newest last
+const allDeliveries = computed<any[]>(() => {
+  const fromState = Array.isArray((state.value as any)?.recent_deliveries)
+    ? (state.value as any).recent_deliveries
+    : null
+  const fromModel = Array.isArray((currentGame.value as any)?.deliveries)
+    ? (currentGame.value as any).deliveries
+    : []
+  return (fromState ?? fromModel)
+})
+
+const totalLegalBallsDerived = computed(() =>
+  allDeliveries.value.filter(d => {
+    const ex = String(d.extra ?? d.extra_type ?? '')
+    return ex !== 'wd' && ex !== 'nb'
+  }).length
+)
+
+// Prefer server’s total if present; else fall back to derived legal balls; else model counters.
+const totalBalls = computed(() =>
+  Number((state.value as any)?.balls_bowled_total ??
+         totalLegalBallsDerived.value ??
+         ((Number(currentGame.value?.overs_completed ?? 0) * 6) +
+          Number(currentGame.value?.balls_this_over ?? 0)))
+)
+const oversText = computed(() => oversDisplayFromBalls(totalBalls.value))
+
+// Totals (prefer live state, then snapshot, then model)
+const runs = computed(() =>
+  Number(sAny.value?.total_runs ??
+        liveSnapshot.value?.total_runs ??
+        currentGame.value?.total_runs ?? 0)
+)
+const wkts = computed(() =>
+  Number(sAny.value?.total_wickets ??
+        liveSnapshot.value?.total_wickets ??
+        currentGame.value?.total_wickets ?? 0)
+)
 
 const scoreline = computed(() => `${runs.value}/${wkts.value}`)
-const oversText = computed(() => `${oversC.value}.${ballsO.value}`)
+
+// Rates now based on totalBalls
+const crr = computed(() =>
+  totalBalls.value ? (runs.value / (totalBalls.value / 6)).toFixed(2) : '—'
+)
+
+
+function parseOversNotation(s?: string | number | null) {
+  // Accept "13.3" or 13.3; clamp balls 0..5
+  if (s == null) return { oc: 0, ob: 0 }
+  const str = String(s)
+  const [o, b] = str.split('.')
+  const oc = Number(o) || 0
+  let ob = Number(b) || 0
+  if (ob < 0) ob = 0
+  if (ob > 5) ob = 5
+  return { oc, ob }
+}
+
+const overStr = computed(() =>
+  // Prefer canonical "overs" (e.g., "13.3"); fallback to completed+this_over
+  (currentGame.value as any)?.overs ??
+  `${(currentGame.value as any)?.overs_completed ?? 0}.${(currentGame.value as any)?.balls_this_over ?? 0}`
+)
+
+const ocob = computed(() => parseOversNotation(overStr.value))
+const oversC = computed(() => ocob.value.oc)
+const ballsO = computed(() => ocob.value.ob)
+const ballsBowled = computed(() => totalBalls.value)
+
+
+const legalBallsThisOver = computed(() => {
+  const del: any[] = Array.isArray((currentGame.value as any)?.deliveries) ? (currentGame.value as any).deliveries : []
+  const oc = oversC.value
+  const isLegal = (d:any) => {
+    const ex = String(d.extra ?? d.extra_type ?? '')
+    return ex !== 'wd' && ex !== 'nb'
+  }
+  const parse = (d:any) => {
+    const o = d.over_number ?? d.over
+    return typeof o === 'number' ? o : Number(String(o).split('.')[0] || 0)
+  }
+  return del.filter(d => parse(d) === oc && isLegal(d)).length % 6
+})
+
+// If the server ever omits "overs", uncomment the next line to force fallback:
+// const ballsO = computed(() => overStr.value ? ocob.value.ob : legalBallsThisOver.value)
+
+
+
 
 const target = computed<number | null>(() => (currentGame.value?.target ?? null) as number | null)
 const isSecondInnings = computed(() => Number(currentGame.value?.current_inning ?? 1) === 2)
 const oversLimit = computed(() => Number((currentGame.value as any)?.overs_limit ?? 0))
 
-const crr = computed(() => ballsBowled.value ? (runs.value / (ballsBowled.value / 6)).toFixed(2) : '—')
+
 const rrr = computed(() => {
   if (!isSecondInnings.value || target.value == null) return null
   const need = Math.max(0, target.value - runs.value)
@@ -400,19 +484,125 @@ onUnmounted(() => { resetHighlights() })
 /* ----------------------------- */
 /* Striker / Non-striker / Bowler */
 /* ----------------------------- */
+type BatRow = {
+  id: string; name: string; runs: number; balls: number; fours: number; sixes: number;
+  sr: number | string; isOut: boolean; howOut?: string
+}
+const battingRows = computed<BatRow[]>(() =>
+  (battingRowsXI.value || []).map((r: any) => ({
+    id: String(r.id),
+    name: String(r.name),
+    runs: Number(r.runs ?? 0),
+    balls: Number(r.balls ?? r.balls_faced ?? 0),
+    fours: Number(r.fours ?? 0),
+    sixes: Number(r.sixes ?? 0),
+    sr: typeof r.sr === 'number' ? r.sr : Number(r.sr ?? 0),
+    isOut: Boolean(r.isOut ?? r.is_out),
+    howOut: r.howOut ?? r.how_out ?? undefined,
+  }))
+)
+
+type BowlRow = {
+  id: string; name: string; overs: string; maidens: number; runs: number; wkts: number; econ: number | string
+}
+const bowlingRows = computed<BowlRow[]>(() =>
+  (bowlingRowsXI.value || []).map((r: any) => ({
+    id: String(r.id),
+    name: String(r.name),
+    overs: String(r.overs ?? r.overs_bowled ?? '0.0'),
+    maidens: Number(r.maidens ?? 0),
+    runs: Number(r.runs ?? r.runs_conceded ?? 0),
+    wkts: Number(r.wkts ?? r.wickets_taken ?? 0),
+    econ: typeof r.econ === 'number' ? r.econ : Number(r.econ ?? 0),
+  }))
+)
+
+// --- Decide strike swap from the last delivery (handles wd/nb running correctly)
+function shouldSwapStrikeFromLast(ld: any): boolean {
+  if (!ld) return false
+  const x = String(ld.extra_type ?? ld.extra ?? '')
+  if (!x || x === 'b' || x === 'lb') {
+    const offBat = Number(ld.runs_off_bat ?? ld.runs_scored ?? ld.runs ?? 0)
+    return (offBat % 2) === 1
+  }
+  if (x === 'wd') {
+    // wides: only *run(s) actually run* flip strike
+    const total = Math.max(1, Number(ld.runs_scored ?? ld.extra_runs ?? 1))
+    const runsRun = total - 1
+    return (runsRun % 2) === 1
+  }
+  if (x === 'nb') {
+    // no-ball: penalty 1 + off-bat (and any extra beyond penalty)
+    const offBat = Number(ld.runs_off_bat ?? 0)
+    const extraBeyondPenalty = Math.max(0, Number(ld.extra_runs ?? 1) - 1)
+    return ((offBat + extraBeyondPenalty) % 2) === 1
+  }
+  return false
+}
+
+const safeStrikerId = computed<string | null>(() => {
+  const g:any = currentGame.value || {}
+  const st = String(
+    (state.value as any)?.current_striker_id ??
+    liveSnapshot.value?.current_striker_id ??
+    g.current_striker_id ?? ''
+  ) || null
+  const nst = String(
+    (state.value as any)?.current_non_striker_id ??
+    liveSnapshot.value?.current_non_striker_id ??
+    g.current_non_striker_id ?? ''
+  ) || null
+
+  if (st && nst && st === nst) {
+    const ld = (state.value as any)?.last_delivery ?? g.last_delivery
+    return shouldSwapStrikeFromLast(ld) ? nst : st
+  }
+  return st
+})
+
+const safeNonStrikerId = computed<string | null>(() => {
+  const g:any = currentGame.value || {}
+  const st  = String(
+    (state.value as any)?.current_striker_id ??
+    liveSnapshot.value?.current_striker_id ??
+    g.current_striker_id ?? ''
+  ) || null
+  const nst = String(
+    (state.value as any)?.current_non_striker_id ??
+    liveSnapshot.value?.current_non_striker_id ??
+    g.current_non_striker_id ?? ''
+  ) || null
+
+  if (st && nst && st === nst) {
+    const ld = (state.value as any)?.last_delivery ?? g.last_delivery
+    return shouldSwapStrikeFromLast(ld) ? st : nst
+  }
+  return nst
+})
+
+
 // striker/non-striker lookups
-const strikerRow = computed(() => {
-  const id = String(currentGame.value?.current_striker_id ?? '')
-  return id ? battingRowsXI.value.find(r => r.id === id) || null : null
-})
-const nonStrikerRow = computed(() => {
-  const id = String(currentGame.value?.current_non_striker_id ?? '')
-  return id ? battingRowsXI.value.find(r => r.id === id) || null : null
-})
+const strikerRow = computed(() =>
+  safeStrikerId.value
+    ? battingRows.value.find(r => String(r.id) === safeStrikerId.value) || null
+    : null
+)
+
+const nonStrikerRow = computed(() =>
+  safeNonStrikerId.value
+    ? battingRows.value.find(r => String(r.id) === safeNonStrikerId.value) || null
+    : null
+)
+
+
+
 const bowlerRow = computed(() => {
-  const id = String((state.value as any)?.current_bowler_id ?? (currentGame.value as any)?.current_bowler_id ?? '')
-  return id ? bowlingRowsXI.value.find(r => r.id === id) || null : null
+  const id = String(sAny.value?.current_bowler_id ??
+                    (currentGame.value as any)?.current_bowler_id ?? '')
+  return id ? bowlingRowsXI.value.find(r => String(r.id) === id) || null : null
 })
+
+
 
 
 /* --------------------- */
@@ -445,9 +635,16 @@ function ballLabel(d: Delivery): string {
   return parts.join(' ')
 }
 const recentDeliveries = computed<Delivery[]>(() => {
-  const del: any[] = Array.isArray((currentGame.value as any)?.deliveries) ? (currentGame.value as any).deliveries : []
-  return del.slice(-10)
+  const fromState = Array.isArray((sAny.value as any)?.recent_deliveries)
+    ? (sAny.value as any).recent_deliveries
+    : null
+  const fromModel = Array.isArray((currentGame.value as any)?.deliveries)
+    ? (currentGame.value as any).deliveries
+    : []
+  return (fromState ?? fromModel).slice(-10)
 })
+
+
 
 /* ------------------- */
 /* Interruption control */
@@ -610,7 +807,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
                 <tr><th>Player</th><th class="num">R</th><th class="num">B</th><th class="num">4s</th><th class="num">6s</th><th class="num">SR</th><th>Status</th></tr>
               </thead>
               <tbody>
-                <tr v-for="b in battingRowsXI" :key="b.id">
+                <tr v-for="b in battingRows" :key="b.id">
                   <td class="name">{{ b.name }}</td>
                   <td class="num">{{ b.runs }}</td>
                   <td class="num">{{ b.balls }}</td>
@@ -630,7 +827,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
                 <tr><th>Bowler</th><th class="num">O</th><th class="num">M</th><th class="num">R</th><th class="num">W</th><th class="num">Econ</th></tr>
               </thead>
               <tbody>
-                <tr v-for="bw in bowlingRowsXI" :key="bw.id">
+                <tr v-for="bw in bowlingRows" :key="bw.id">
                   <td class="name">{{ bw.name }}</td>
                   <td class="num">{{ bw.overs }}</td>
                   <td class="num">{{ bw.maidens }}</td>
