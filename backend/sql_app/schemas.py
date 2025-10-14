@@ -5,6 +5,7 @@ from pydantic import field_validator, model_validator
 from pydantic.config import ConfigDict
 from typing import Any, List, Dict, Literal, Optional, Sequence, Mapping, Union, TypeAlias, cast
 from enum import Enum
+from datetime import datetime
 
 TeamItem: TypeAlias = Union[str, UUID, Mapping[str, object]]
 ExtraCode = Literal['wd', 'nb', 'b', 'lb']
@@ -114,6 +115,13 @@ class GameContributorRole(str, Enum):
     commentary = "commentary"
     analytics = "analytics"
 
+class MatchStatus(str, Enum):
+    SCHEDULED     = "SCHEDULED"
+    IN_PROGRESS   = "IN_PROGRESS"
+    INNINGS_BREAK = "INNINGS_BREAK"
+    COMPLETED     = "COMPLETED"
+    ABANDONED     = "ABANDONED"
+
 class GameContributorIn(BaseModel):
     user_id: str = Field(..., description="Auth/user id (string for MVP)")
     role: GameContributorRole
@@ -123,6 +131,10 @@ class GameContributor(GameContributorIn):
     id: int
     game_id: str
 
+class MatchType(str, Enum):
+    limited = "limited"
+    multi_day = "multi_day"
+    custom = "custom"
 # ===================================================================
 # API Input
 # ===================================================================
@@ -135,7 +147,7 @@ class GameCreate(BaseModel):
 
 
     # Flexible match config
-    match_type: Literal["limited", "multi_day", "custom"] = "limited"
+    match_type: MatchType
     overs_limit: Optional[int] = Field(None, ge=1, le=120)
     days_limit: Optional[int] = Field(None, ge=1, le=7)
     overs_per_day: Optional[int] = Field(None, ge=1, le=120)
@@ -155,13 +167,13 @@ class InterruptionEnd(BaseModel):
     overs_reduced_to: Optional[int] = Field(default=None, ge=1, le=50)
 
 class ScoreDelivery(BaseModel):
-    striker_id: str
-    non_striker_id: str
-    bowler_id: str
+    striker_id: Optional[str] = None
+    non_striker_id: Optional[str] = None
+    bowler_id: Optional[str] = None   # let server keep current bowler mid-over
     bowler_name: Optional[str] = None
     # Inputs (mutually exclusive by mode)
-    runs_scored: Optional[int] = Field(None, ge=0, le=6)  # used for legal balls or wd/b/lb
-    runs_off_bat: Optional[int] = Field(None, ge=0, le=6) # required for nb
+    runs_scored: Optional[int] = Field(None, ge=0, le=6)
+    runs_off_bat: Optional[int] = Field(None, ge=0, le=6)
     extra: Optional[ExtraCode] = None
 
     is_wicket: bool = False
@@ -180,7 +192,6 @@ class ScoreDelivery(BaseModel):
         if self.extra == "nb":
             if self.runs_off_bat is None:
                 raise ValueError("runs_off_bat is required when extra == 'nb'")
-            # ignore runs_scored for nb; we derive it
             self.runs_scored = None
         elif self.extra in ("wd", "b", "lb"):
             if self.runs_scored is None:
@@ -205,9 +216,29 @@ class TeamRoleUpdate(BaseModel):
     captain_id: Optional[str] = None
     wicket_keeper_id: Optional[str] = None
 
+
+
 # ===================================================================
 # API Output (ORM mode)
 # ===================================================================
+class MatchMethod(str, Enum):
+    by_runs = "by runs"
+    by_wickets = "by wickets"
+    tie = "tie"
+    no_result = "no result"
+
+class MatchResult(BaseModel):
+    """
+    Structured result so frontend can show a winner banner and avoid guessing.
+    Keep result_text for human-readable display.
+    """
+    winner_team_id: Optional[str] = None
+    winner_team_name: Optional[str] = None
+    method: Optional[MatchMethod] = None
+
+    margin: Optional[int] = None
+    result_text: Optional[str] = None
+    completed_at: Optional[datetime] = None
 
 class Game(BaseModel):
     game_id: str = Field(default=..., alias='id')
@@ -217,7 +248,7 @@ class Game(BaseModel):
     team_b: Team
 
     # --- Match setup fields ---
-    match_type: str
+    match_type: MatchType
     overs_limit: Optional[int]
     days_limit: Optional[int]
     dls_enabled: bool
@@ -229,7 +260,7 @@ class Game(BaseModel):
     bowling_team_name: str
 
     # --- State ---
-    status: str
+    status: MatchStatus
     current_inning: int
     total_runs: int
     total_wickets: int
@@ -239,9 +270,13 @@ class Game(BaseModel):
     current_non_striker_id: Optional[str] = None
     first_inning_summary: Optional[Dict[str, Any]] = None
     target: Optional[int] = None
-    result: Optional[str] = None
 
-    # --- Team roles (NEW, simple and explicit) ---
+    # --- Result / completion (NEW / updated) ---
+    result: Optional[MatchResult] = None
+    is_game_over: bool = False
+    completed_at: Optional[datetime] = None
+
+    # --- Team roles ---
     team_a_captain_id: Optional[str] = None
     team_a_keeper_id: Optional[str] = None
     team_b_captain_id: Optional[str] = None
@@ -252,6 +287,105 @@ class Game(BaseModel):
     batting_scorecard: Dict[str, BattingScorecardEntry]
     bowling_scorecard: Dict[str, BowlingScorecardEntry]
 
-    class Config:
-        orm_mode = True
-        allow_population_by_field_name = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True
+    )
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _normalize_status(cls, v: Any) -> MatchStatus:
+        """
+        Accept backend statuses (enum or str), map to API enum.
+        Backend emits: not_started, started, in_progress, innings_break, live, completed, abandoned
+        API serves:    SCHEDULED, IN_PROGRESS, INNINGS_BREAK, COMPLETED, ABANDONED
+        """
+        # unwrap SA/Python Enum
+        if isinstance(v, Enum):
+            v = v.value
+
+        s = str(v).strip().lower()
+
+        mapping: dict[str, MatchStatus] = {
+            "not_started":   MatchStatus.SCHEDULED,
+            "scheduled":     MatchStatus.SCHEDULED,
+            "started":       MatchStatus.IN_PROGRESS,
+            "live":          MatchStatus.IN_PROGRESS,
+            "in_progress":   MatchStatus.IN_PROGRESS,
+            "innings_break": MatchStatus.INNINGS_BREAK,
+            "completed":     MatchStatus.COMPLETED,
+            "abandoned":     MatchStatus.ABANDONED,
+        }
+
+        # Already one of the API enum strings?
+        for m in MatchStatus:
+            if s == m.value.lower():
+                return m
+
+        # Map internal → API
+        if s in mapping:
+            return mapping[s]
+
+        # Fallback (keeps the response valid)
+        return MatchStatus.IN_PROGRESS
+    
+    @field_validator("result", mode="before")
+    @classmethod
+    def _coerce_result(
+        cls, 
+        v: object
+    ) -> Optional[Union[MatchResult, Dict[str, Any]]]:
+        """
+        Accepts:
+        - None
+        - MatchResult instance
+        - Mapping[str, Any] (dict-like)
+        - Legacy string -> coerced to {'result_text': ...}
+        Returns:
+        MatchResult | Dict[str, Any] | None
+        """
+        if v is None:
+            return None
+
+        if isinstance(v, MatchResult):
+            return v
+
+        # Handle dict-like inputs with known key/value types
+        if isinstance(v, Mapping):
+            return dict(cast(Mapping[str, Any], v))
+
+        # Legacy plain string from older routes/DB snapshots
+        if isinstance(v, str):
+            return {"result_text": v}
+
+        # Fallback: stringify to keep type known and avoid "Unknown"
+        return {"result_text": str(v)}
+    
+# NEW: A concise snapshot schema for UI consumption
+class Snapshot(BaseModel):
+    """
+    Minimal, stable shape the frontend consumes.
+    Return this from scoring/ledger endpoints to keep payloads light.
+    """
+    id: str = Field(..., alias="game_id")
+
+    status: MatchStatus
+    current_inning: int
+
+    batting_team_name: str
+    bowling_team_name: str
+
+    total_runs: int
+    total_wickets: int
+    overs_completed: int
+    balls_this_over: int
+
+    target: Optional[int] = None
+    overs_limit: Optional[int] = None
+
+    # completion/result signals
+    is_game_over: bool = False
+    result: Optional[MatchResult] = None
+    completed_at: Optional[datetime] = None
+
+    model_config = ConfigDict(populate_by_name=True)

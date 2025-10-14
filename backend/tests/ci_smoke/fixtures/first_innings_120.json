@@ -1,0 +1,25 @@
+{
+  "meta": {"innings": 1, "overs": 20, "legal_balls": 120},
+  "deliveries": [
+    {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 4}, {"runs": 0}, {"runs": 1},
+    {"runs": 2}, {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 1},
+    {"runs": 0}, {"runs": 0}, {"runs": 1}, {"runs": 6}, {"runs": 0}, {"runs": 1},
+    {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0},
+    {"runs": 1}, {"runs": 0}, {"runs": 2}, {"runs": 0}, {"runs": 4}, {"runs": 1},
+    {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 1}, {"runs": 0},
+    {"runs": 2}, {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 1},
+    {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 4}, {"runs": 1},
+    {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 1}, {"runs": 0},
+    {"runs": 2}, {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 1},
+    {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 6}, {"runs": 1},
+    {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 1}, {"runs": 0},
+    {"runs": 2}, {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 1},
+    {"runs": 0}, {"runs": 4}, {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 1},
+    {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 1}, {"runs": 0},
+    {"runs": 2}, {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 1},
+    {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 4}, {"runs": 1},
+    {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 6}, {"runs": 1},
+    {"runs": 0}, {"runs": 1}, {"runs": 0}, {"runs": 0}, {"runs": 1}, {"runs": 0},
+    {"runs": 2}, {"runs": 0}, {"runs": 1}, {"runs": 0}
+  ]
+}

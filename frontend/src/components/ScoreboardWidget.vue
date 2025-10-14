@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { fmtSR, fmtEconomy, oversDisplayFromBalls } from '@/utils/cricket'
+import { fmtSR, fmtEconomy, oversDisplayFromBalls, oversDisplayFromAny, deriveBowlerFigures } from '@/utils/cricket'
 import { useGameStore } from '@/stores/gameStore'
 import { storeToRefs } from 'pinia'
 import { useHighlights, type Snapshot as HL } from '@/composables/useHighlights'
@@ -37,10 +37,15 @@ const {
   interruptions,
   currentInterruption,
   state,
-  battingRowsXI,   // <— use these
+  battingRowsXI,
   bowlingRowsXI,
   liveSnapshot,
+  currentBowlerFigures: bowlerRow,
+  isGameOver,
+  resultText,
 } = storeToRefs(gameStore)
+
+const { targetSafe, requiredRunRate, runsRequired, ballsBowledTotal } = storeToRefs(gameStore)
 
 /* ---------------------- */
 /* Bootstrapping (NEW)    */
@@ -267,6 +272,50 @@ async function loadSponsors() {
     sponsorsLoading.value = false
   }
 }
+const teamA = computed<any>(() => (currentGame.value as any)?.team_a || {})
+const teamB = computed<any>(() => (currentGame.value as any)?.team_b || {})
+
+function bestTeamNameShape(t: any): string {
+  return String(
+    t?.name ?? t?.team_name ?? t?.short_name ?? t?.abbr ?? ''
+  )
+}
+
+const teamAName = computed(() => bestTeamNameShape(teamA.value))
+const teamBName = computed(() => bestTeamNameShape(teamB.value))
+const teamAId   = computed(() => String(teamA.value?.id ?? ''))
+const teamBId   = computed(() => String(teamB.value?.id ?? ''))
+
+const currentInningNo = computed(() =>
+  Number((currentGame.value as any)?.current_inning ?? 1)
+)
+
+const battingTeamId = computed(() =>
+  String((currentGame.value as any)?.batting_team_id ?? '')
+)
+
+const battingTeamName = computed(() =>
+  (currentGame.value as any)?.batting_team_name
+  ?? (battingTeamId.value === teamAId.value ? teamAName.value
+     : battingTeamId.value === teamBId.value ? teamBName.value
+     : '')
+)
+
+// ✅ Deterministic: who played the FIRST innings?
+const innings1TeamName = computed(() => {
+  if (currentInningNo.value === 1) {
+    // first innings still in progress
+    return battingTeamName.value || teamAName.value || teamBName.value || ''
+  }
+  // second innings -> the other side batted first
+  if (battingTeamId.value && teamAId.value && teamBId.value) {
+    return battingTeamId.value === teamAId.value ? teamBName.value : teamAName.value
+  }
+  const bt = String((currentGame.value as any)?.batting_team_name || '')
+  if (bt && bt === teamAName.value) return teamBName.value
+  if (bt && bt === teamBName.value) return teamAName.value
+  return ''
+})
 
 
 
@@ -303,28 +352,20 @@ const allDeliveries = computed<any[]>(() => {
   return (fromState ?? fromModel)
 })
 
-const totalLegalBallsDerived = computed(() =>
-  allDeliveries.value.filter(d => {
-    const ex = String(d.extra ?? d.extra_type ?? '')
-    return ex !== 'wd' && ex !== 'nb'
-  }).length
-)
 
 // Prefer server’s total if present; else fall back to derived legal balls; else model counters.
-const totalBalls = computed(() =>
-  Number((state.value as any)?.balls_bowled_total ??
-         totalLegalBallsDerived.value ??
-         ((Number(currentGame.value?.overs_completed ?? 0) * 6) +
-          Number(currentGame.value?.balls_this_over ?? 0)))
+const totalBallsThisInnings = computed(() =>
+  deliveriesThisInnings.value.filter(isLegal).length
 )
-const oversText = computed(() => oversDisplayFromBalls(totalBalls.value))
+
+
+const oversText = computed(() => oversDisplayFromBalls(totalBallsThisInnings.value))
 
 // Totals (prefer live state, then snapshot, then model)
 const runs = computed(() =>
-  Number(sAny.value?.total_runs ??
-        liveSnapshot.value?.total_runs ??
-        currentGame.value?.total_runs ?? 0)
+  Number(sAny.value?.total_runs ?? liveSnapshot.value?.total_runs ?? currentGame.value?.total_runs ?? 0)
 )
+
 const wkts = computed(() =>
   Number(sAny.value?.total_wickets ??
         liveSnapshot.value?.total_wickets ??
@@ -335,9 +376,70 @@ const scoreline = computed(() => `${runs.value}/${wkts.value}`)
 
 // Rates now based on totalBalls
 const crr = computed(() =>
-  totalBalls.value ? (runs.value / (totalBalls.value / 6)).toFixed(2) : '—'
+  totalBallsThisInnings.value ? (runs.value / (totalBallsThisInnings.value / 6)).toFixed(2) : '—'
 )
 
+const parTxt = computed(() => {
+  const p = dlsPanel.value as any
+  return typeof p?.par === 'number' ? String(p.par) : null
+})
+
+const targetDisplay = computed<number | null>(() => {
+  const t = targetSafe?.value
+  if (t == null || Number.isNaN(Number(t))) return null
+  return Number(t)
+})
+
+
+
+
+
+function makeKey(d: any): string {
+  // innings number (support multiple possible field names)
+  const inn = Number(
+    d.innings ?? d.inning ?? d.inning_no ?? d.innings_no ?? d.inning_number ?? 0
+  )
+
+  // normalize over & ball into integers: over=0.., ball=0..5
+  const { over, ball } = parseOverBall(d)
+
+  // include distinguishing payload so wides/no-balls don’t collapse into the legal ball
+  const ex = String(d.extra ?? d.extra_type ?? '')                 // '', 'wd', 'nb', 'b', 'lb', ...
+  const rb = Number(d.runs_off_bat ?? d.runs ?? 0)                 // off-bat runs (for nbs)
+  const rs = Number(d.runs_scored ?? d.extra_runs ?? 0)            // total/extra runs
+  const w  = d.is_wicket ? 1 : 0                                   // wicket flag
+
+  // Only identical re-sends will produce the same key
+  return `${inn}:${over}:${ball}:${ex}:${rb}:${rs}:${w}`
+}
+
+
+// ADD this helper right after makeKey
+function dedupeByKey(arr: any[]) {
+  const byKey = new Map<string, any>()
+  for (const d of arr) byKey.set(makeKey(d), d)  // last write wins
+  return Array.from(byKey.values())
+}
+
+
+const allDeliveriesRaw = computed<any[]>(() => {
+  const fromState = Array.isArray((state.value as any)?.recent_deliveries)
+    ? (state.value as any).recent_deliveries
+    : null
+  const fromModel = Array.isArray((currentGame.value as any)?.deliveries)
+    ? (currentGame.value as any).deliveries
+    : []
+  return (fromState ?? fromModel)
+})
+
+// only this innings; if there are no innings markers at all, fall back to everything for innings 1, else empty
+
+
+// helper: is the ball legal (consumes ball)
+const isLegal = (d:any) => {
+  const x = String(d.extra ?? d.extra_type ?? '')
+  return x !== 'wd' && x !== 'nb'
+}
 
 function parseOversNotation(s?: string | number | null) {
   // Accept "13.3" or 13.3; clamp balls 0..5
@@ -360,21 +462,21 @@ const overStr = computed(() =>
 const ocob = computed(() => parseOversNotation(overStr.value))
 const oversC = computed(() => ocob.value.oc)
 const ballsO = computed(() => ocob.value.ob)
-const ballsBowled = computed(() => totalBalls.value)
+const ballsBowled = computed(() => totalBallsThisInnings.value)
+
 
 
 const legalBallsThisOver = computed(() => {
-  const del: any[] = Array.isArray((currentGame.value as any)?.deliveries) ? (currentGame.value as any).deliveries : []
-  const oc = oversC.value
-  const isLegal = (d:any) => {
-    const ex = String(d.extra ?? d.extra_type ?? '')
-    return ex !== 'wd' && ex !== 'nb'
-  }
-  const parse = (d:any) => {
+  if (!deliveriesThisInnings.value.length) return 0
+  const lastOver = Math.max(...deliveriesThisInnings.value.map(d => {
     const o = d.over_number ?? d.over
-    return typeof o === 'number' ? o : Number(String(o).split('.')[0] || 0)
-  }
-  return del.filter(d => parse(d) === oc && isLegal(d)).length % 6
+    return typeof o === 'number' ? Math.floor(o) : Number(String(o).split('.')[0] || 0)
+  }))
+  return deliveriesThisInnings.value.filter(d => {
+    const o = d.over_number ?? d.over
+    const over = typeof o === 'number' ? Math.floor(o) : Number(String(o).split('.')[0] || 0)
+    return over === lastOver && isLegal(d)
+  }).length % 6
 })
 
 // If the server ever omits "overs", uncomment the next line to force fallback:
@@ -383,28 +485,107 @@ const legalBallsThisOver = computed(() => {
 
 
 
+
+
+const oversLimit = computed(() => Number((currentGame.value as any)?.overs_limit ?? 0))
 const target = computed<number | null>(() => (currentGame.value?.target ?? null) as number | null)
 const isSecondInnings = computed(() => Number(currentGame.value?.current_inning ?? 1) === 2)
-const oversLimit = computed(() => Number((currentGame.value as any)?.overs_limit ?? 0))
-
 
 const rrr = computed(() => {
   if (!isSecondInnings.value || target.value == null) return null
   const need = Math.max(0, target.value - runs.value)
   if (!oversLimit.value) return null
-  const remBalls = Math.max(0, oversLimit.value * 6 - ballsBowled.value)
+  const remBalls = Math.max(0, oversLimit.value * 6 - totalBallsThisInnings.value)
   if (remBalls <= 0) return null
   return (need / (remBalls / 6)).toFixed(2)
 })
+
 const oversLeft = computed(() => {
   if (!oversLimit.value) return '—'
-  const rem = Math.max(0, oversLimit.value * 6 - ballsBowled.value)
+  const rem = Math.max(0, oversLimit.value * 6 - totalBallsThisInnings.value)
   return oversDisplayFromBalls(rem)
 })
-const parTxt = computed(() => {
-  const p = dlsPanel.value as any
-  return typeof p?.par === 'number' ? String(p.par) : null
+
+// --- First-innings summary (derive from deliveries if innings markers exist)
+function inningsOf(d: any): number | null {
+  const v = Number(
+    d.innings ?? d.inning ?? d.inning_no ?? d.innings_no ?? d.inning_number
+  )
+  return Number.isFinite(v) ? v : null
+}
+
+
+const currentInningsNo = computed(() => Number(currentGame.value?.current_inning ?? 1))
+const deliveriesThisInnings = computed(() =>
+  hasInningsMarkers.value
+    ? allDeliveries.value.filter(d => Number(inningsOf(d)) === currentInningsNo.value)
+    : allDeliveries.value // old data with no innings markers
+)
+
+// Derived, per-bowler figures (runs/balls/maidens/overs/econ) for *this innings*
+const figuresByBowler = computed<Record<string, ReturnType<typeof deriveBowlerFigures>>>(() => {
+  const map: Record<string, ReturnType<typeof deriveBowlerFigures>> = {}
+  // collect unique bowler ids seen in this innings
+  const ids = Array.from(
+    new Set(
+      deliveriesThisInnings.value
+        .map(d => String(d.bowler_id ?? ''))
+        .filter(Boolean)
+    )
+  )
+  for (const id of ids) {
+    map[id] = deriveBowlerFigures(deliveriesThisInnings.value as any, id)
+  }
+  return map
 })
+
+const legalBallsThisInningsDerived = computed(() =>
+  deliveriesThisInnings.value.filter(d => {
+    const ex = String(d.extra ?? d.extra_type ?? '')
+    return ex !== 'wd' && ex !== 'nb'
+  }).length
+)
+
+const hasInningsMarkers = computed(() =>
+  allDeliveriesRaw.value.some(d => inningsOf(d) != null)
+)
+
+// De-dupe first-innings feed so the last ball isn't double-counted
+const innings1Deliveries = computed(() =>
+  hasInningsMarkers.value
+    ? dedupeByKey(allDeliveriesRaw.value.filter(d => inningsOf(d) === 1))
+    : []
+)
+
+
+
+// Total runs for one delivery (robust across legal+extras)
+function totalRunsOf(d: any): number {
+  const ex = String(d.extra ?? d.extra_type ?? '')
+  const rb = Number(d.runs_off_bat ?? d.runs ?? 0)     // off the bat
+  const rs = Number(d.runs_scored ?? d.extra_runs ?? 0) // backend "total" if present
+  if (ex === 'wd') return rs || Math.max(1, Number(d.extra_runs ?? 1))
+  if (ex === 'nb') return (rs || 0) || (1 + rb)        // prefer rs if provided
+  if (ex === 'b' || ex === 'lb') return rs || Number(d.extra_runs ?? 0)
+  return rs || rb                                      // legal: off bat (or total)
+}
+
+// Balls = legal only (wides/no-balls don't consume a ball)
+const innings1 = computed<null | { runs: number; wkts: number; balls: number }>(() => {
+  if (!innings1Deliveries.value.length) return null
+  const legal = (d: any) => {
+    const ex = String(d.extra ?? d.extra_type ?? '')
+    return ex !== 'wd' && ex !== 'nb'
+  }
+  const balls = innings1Deliveries.value.filter(legal).length
+  const runs  = innings1Deliveries.value.reduce((s, d) => s + totalRunsOf(d), 0)
+  const wkts  = innings1Deliveries.value.filter(d => Boolean(d.is_wicket)).length
+  return { runs, wkts, balls }
+})
+
+const innings1Line = computed<string | null>(() =>
+  innings1.value ? `${innings1.value.runs}/${innings1.value.wkts} (${oversDisplayFromBalls(innings1.value.balls)} ov)` : null
+)
 
 // === Highlights (FOUR/SIX/WICKET/DUCK/50/100) =========================
 const enableHighlights = ref(true)   // make a prop later if you want
@@ -503,19 +684,31 @@ const battingRows = computed<BatRow[]>(() =>
 )
 
 type BowlRow = {
-  id: string; name: string; overs: string; maidens: number; runs: number; wkts: number; econ: number | string
+  id: string
+  name: string
+  overs: string
+  maidens: number
+  runs: number
+  wkts: number
+  econ: number | string
 }
+
 const bowlingRows = computed<BowlRow[]>(() =>
-  (bowlingRowsXI.value || []).map((r: any) => ({
-    id: String(r.id),
-    name: String(r.name),
-    overs: String(r.overs ?? r.overs_bowled ?? '0.0'),
-    maidens: Number(r.maidens ?? 0),
-    runs: Number(r.runs ?? r.runs_conceded ?? 0),
-    wkts: Number(r.wkts ?? r.wickets_taken ?? 0),
-    econ: typeof r.econ === 'number' ? r.econ : Number(r.econ ?? 0),
-  }))
-)
+   (bowlingRowsXI.value || []).map((r: any) => {
+     const id = String(r.id)
+     const fig = figuresByBowler.value[id]
+     return {
+       id,
+       name: String(r.name),
+       overs: fig?.oversText ?? oversDisplayFromAny(r),
+       maidens: fig?.maidens ?? Number(r.maidens ?? 0),
+       runs: fig?.runs ?? Number(r.runs ?? r.runs_conceded ?? 0),
+       wkts: Number(r.wkts ?? r.wickets_taken ?? 0), // keep server wickets
+       econ: fig?.econText ?? (typeof r.econ === 'number' ? r.econ : Number(r.econ ?? 0)),
+     }
+   })
+ )
+
 
 // --- Decide strike swap from the last delivery (handles wd/nb running correctly)
 function shouldSwapStrikeFromLast(ld: any): boolean {
@@ -595,16 +788,6 @@ const nonStrikerRow = computed(() =>
 )
 
 
-
-const bowlerRow = computed(() => {
-  const id = String(sAny.value?.current_bowler_id ??
-                    (currentGame.value as any)?.current_bowler_id ?? '')
-  return id ? bowlingRowsXI.value.find(r => String(r.id) === id) || null : null
-})
-
-
-
-
 /* --------------------- */
 /* Last 10 balls         */
 /* --------------------- */
@@ -634,16 +817,35 @@ function ballLabel(d: Delivery): string {
   if (d.commentary) parts.push(`— ${d.commentary}`)
   return parts.join(' ')
 }
-const recentDeliveries = computed<Delivery[]>(() => {
-  const fromState = Array.isArray((sAny.value as any)?.recent_deliveries)
-    ? (sAny.value as any).recent_deliveries
-    : null
-  const fromModel = Array.isArray((currentGame.value as any)?.deliveries)
-    ? (currentGame.value as any).deliveries
-    : []
-  return (fromState ?? fromModel).slice(-10)
-})
+const recentDeliveries = computed(() =>
+  deliveriesThisInnings.value.slice(-10)   // (de-dup already applied above)
+)
 
+ // Current bowler (safe id + name + derived figures)
+ const safeCurrentBowlerId = computed<string | null>(() => {
+   const s: any = state.value || {}
+   const id = s.current_bowler_id ?? s.last_ball_bowler_id ?? (currentGame.value as any)?.current_bowler_id
+   return id != null ? String(id) : null
+ })
+
+ const safeCurrentBowlerName = computed<string>(() => {
+   const id = safeCurrentBowlerId.value
+   if (!id) return ''
+   const row = (bowlingRowsXI.value || []).find((p: any) => String(p.id) === id)
+   return row?.name ? String(row.name) : ''
+ })
+
+ const currentBowlerDerived = computed(() => {
+   const id = safeCurrentBowlerId.value
+   return id ? figuresByBowler.value[id] : undefined
+ })
+
+  const currentBowlerWkts = computed<number>(() => {
+   const id = safeCurrentBowlerId.value
+   if (!id) return 0
+   const r = (bowlingRowsXI.value as any[]).find((p: any) => String(p.id) === id) as any
+   return Number((r?.wkts ?? r?.wickets_taken ?? 0) as number)
+ })
 
 
 /* ------------------- */
@@ -678,6 +880,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
       <span v-else-if="highlight==='HUNDRED'">HUNDRED!</span>
     </div>
 
+    <!-- Left sponsor rail -->
     <aside v-if="leftSponsor" class="sponsor-rail rail-left rail-large">
       <component
         :is="sponsorHref(leftSponsor) ? 'a' : 'div'"
@@ -690,42 +893,46 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
       </component>
     </aside>
 
-    
-
-   <header class="hdr">
-    <!-- brand/logo in header -->
-    <img
-      v-if="logoUrl && logoOk"
-      class="brand"
-      :src="logoUrl"
-      alt="Logo"
-      @error="onLogoErr"
-      :key="logoUrl"
-    />
-
-    <h3>{{ title || 'Live Scoreboard' }}</h3>
-    <span class="pill live">● LIVE</span>
-
-    <!-- Presented by badge -->
-    <a v-if="badgeSponsor"
-      class="badge-sponsor"
-      :href="sponsorHref(badgeSponsor)"
-      target="_blank" rel="noopener"
-      :aria-label="`Presented by ${sponsorAlt(badgeSponsor)}`">
-      <span class="badge-label">Presented by</span>
-      <img :src="sponsorImg(badgeSponsor)" :alt="sponsorAlt(badgeSponsor)" />
-    </a>
-  </header>
+    <!-- Header -->
+    <header class="hdr">
+      <img
+        v-if="logoUrl && logoOk"
+        class="brand"
+        :src="logoUrl"
+        alt="Logo"
+        @error="onLogoErr"
+        :key="logoUrl"
+      />
+      <h3>{{ title || 'Live Scoreboard' }}</h3>
+      <span v-if="!isGameOver" class="pill live">● LIVE</span>
+      <span v-else class="pill final">FINAL</span>
 
 
+      <!-- Presented by badge -->
+      <a
+        v-if="badgeSponsor"
+        class="badge-sponsor"
+        :href="sponsorHref(badgeSponsor)"
+        target="_blank"
+        rel="noopener"
+        :aria-label="`Presented by ${sponsorAlt(badgeSponsor)}`"
+      >
+        <span class="badge-label">Presented by</span>
+        <img :src="sponsorImg(badgeSponsor)" :alt="sponsorAlt(badgeSponsor)" />
+      </a>
+    </header>
+
+    <!-- Controls -->
     <div v-if="props.canControl && !showInterruptionBanner" class="ctrl-row" style="margin:8px 0;">
       <button class="btn" :disabled="interBusy" @click="startDelay('weather')">
         {{ interBusy ? 'Starting…' : 'Start delay' }}
       </button>
     </div>
 
+    <!-- Main card -->
     <div v-if="storeError" class="error">{{ storeError }}</div>
     <div v-else class="card">
+      <!-- Interruption banner -->
       <div v-if="showInterruptionBanner" class="interrupt-banner" role="status" aria-live="polite">
         <span class="icon">⛈</span>
         <strong class="kind">
@@ -745,8 +952,13 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
           {{ interBusy ? 'Resuming…' : 'Resume play' }}
         </button>
       </div>
-      
 
+      <!-- Result banner (only when match is completed) -->
+      <div v-if="isGameOver" class="result-banner" role="status" aria-live="polite">
+        <strong>{{ resultText || 'Match completed' }}</strong>
+      </div>
+
+      <!-- Topline -->
       <div class="topline">
         <div class="teams">
           <strong>{{ currentGame?.batting_team_name || '' }}</strong>
@@ -754,11 +966,20 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
           <strong>{{ currentGame?.bowling_team_name || '' }}</strong>
         </div>
         <div class="score">
+          <span v-if="currentInningNo === 2" class="bt">{{ battingTeamName }}</span>
           <span class="big">{{ scoreline }}</span>
           <span class="ov">({{ oversText }} ov)</span>
         </div>
       </div>
 
+      <!-- First-innings summary -->
+      <div class="first-inn" v-if="innings1Line">
+        <span class="lbl">First Innings — {{ innings1TeamName || '—' }}</span>
+        <strong>{{ innings1Line }}</strong>
+      </div>
+
+
+      <!-- Three-pane row + tables -->
       <div class="grid grid-3">
         <!-- Striker -->
         <div class="pane">
@@ -776,24 +997,29 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
           <div class="row"><div class="label">Strike Rate</div><div class="val">{{ fmtSR(nonStrikerRow?.runs ?? 0, nonStrikerRow?.balls ?? 0) }}</div></div>
         </div>
 
-        <!-- Bowler -->
+        <!-- Current bowler -->
         <div class="pane">
           <div class="pane-title">Bowler</div>
-          <div class="row"><div class="label">Name</div><div class="val">{{ bowlerRow?.name || '—' }}</div></div>
+          <div class="row"><div class="label">Name</div><div class="val">{{ safeCurrentBowlerName || '—' }}</div></div>
           <div class="row">
             <div class="label">Figures</div>
             <div class="val">
-              {{ (bowlerRow?.wkts ?? 0) }}-{{ (bowlerRow?.runs ?? 0) }} ({{ bowlerRow?.overs ?? '0.0' }})
+              {{ currentBowlerWkts }}-{{ currentBowlerDerived?.runs ?? 0 }} ({{ currentBowlerDerived?.oversText ?? '0.0' }})
             </div>
           </div>
-          <div class="row"><div class="label">Economy</div><div class="val">{{ typeof bowlerRow?.econ === 'number' ? bowlerRow?.econ.toFixed(2) : (bowlerRow?.econ ?? '—') }}</div></div>
+          <div class="row">
+            <div class="label">Economy</div>
+            <div class="val">{{ currentBowlerDerived?.econText ?? '—' }}</div>
+          </div>
         </div>
 
         <!-- Info strip -->
         <div class="info-strip">
           <div class="cell"><span class="lbl">CRR</span><strong>{{ crr }}</strong></div>
           <div v-if="rrr" class="cell"><span class="lbl">RRR</span><strong>{{ rrr }}</strong></div>
-          <div v-if="target != null" class="cell"><span class="lbl">Target</span><strong>{{ target }}</strong></div>
+          <div v-if="targetDisplay != null" class="cell">
+            <span class="lbl">Target</span><strong>{{ targetDisplay }}</strong>
+          </div>
           <div v-if="parTxt" class="cell"><span class="lbl">Par</span><strong>{{ parTxt }}</strong></div>
           <div class="cell"><span class="lbl">Overs left</span><strong>{{ oversLeft }}</strong></div>
         </div>
@@ -804,7 +1030,15 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
             <div class="pane-title">Batting</div>
             <table class="mini batting-table">
               <thead>
-                <tr><th>Player</th><th class="num">R</th><th class="num">B</th><th class="num">4s</th><th class="num">6s</th><th class="num">SR</th><th>Status</th></tr>
+                <tr>
+                  <th class="name">Player</th>
+                  <th class="num">R</th>
+                  <th class="num">B</th>
+                  <th class="num">4s</th>
+                  <th class="num">6s</th>
+                  <th class="num">SR</th>
+                  <th>Status</th>
+                </tr>
               </thead>
               <tbody>
                 <tr v-for="b in battingRows" :key="b.id">
@@ -813,7 +1047,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
                   <td class="num">{{ b.balls }}</td>
                   <td class="num">{{ b.fours }}</td>
                   <td class="num">{{ b.sixes }}</td>
-                  <td class="num">{{ b.sr }}</td>
+                  <td class="num">{{ fmtSR(b.runs, b.balls) }}</td>
                   <td class="status">{{ b.isOut ? (b.howOut ? `Out (${b.howOut})` : 'Out') : 'Not out' }}</td>
                 </tr>
               </tbody>
@@ -824,7 +1058,14 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
             <div class="pane-title">Bowling</div>
             <table class="mini bowling-table">
               <thead>
-                <tr><th>Bowler</th><th class="num">O</th><th class="num">M</th><th class="num">R</th><th class="num">W</th><th class="num">Econ</th></tr>
+                <tr>
+                  <th class="name">Bowler</th>
+                  <th class="num">O</th>
+                  <th class="num">M</th>
+                  <th class="num">R</th>
+                  <th class="num">W</th>
+                  <th class="num">Econ</th>
+                </tr>
               </thead>
               <tbody>
                 <tr v-for="bw in bowlingRows" :key="bw.id">
@@ -849,8 +1090,8 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </div> <!-- /.grid -->
+    </div>   <!-- /.card -->
   </section>
 </template>
 
@@ -893,6 +1134,32 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
   filter: drop-shadow(0 2px 6px rgba(0,0,0,.25));
 }
 .rail-link { text-decoration: none; }
+
+/* Completed match banner */
+.result-banner {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.6);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0 12px;
+  text-align: center;
+  font-weight: 800;
+}
+:where([data-theme="light"]) .result-banner {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+/* FINAL pill */
+.pill.final {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ef444422;  /* red-ish */
+  color: #ef4444;
+  border: 1px solid #ef444455;
+  font-weight: 800;
+}
 
 /* Light theme variants */
 :where([data-theme="light"]) .sponsor-rail { background: #f9fafb; border-color: #e5e7eb; }
@@ -945,17 +1212,47 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
   background:#ecfdf5; border-color:#a7f3d0; color:#047857;
 }
 
-.info-strip{
-  display:grid; grid-template-columns: repeat(5, minmax(0,1fr));
-  gap:8px; margin:8px 0 12px;
+.first-inn {
+  margin: 6px 0 0;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: #9ca3af;
 }
+.first-inn .lbl { font-size: 12px; }
+:where([data-theme="light"]) .first-inn { color: #6b7280; }
+
+.info-strip{
+  display: grid;
+  /* wrap nicely: each cell is at least 160px, expands up to 1fr */
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;                /* was 8px */
+  margin: 12px 0 16px;      /* a little more vertical space */
+}
+
 .info-strip .cell{
   background: rgba(0,0,0,.14);
-  border:1px solid rgba(255,255,255,.06);
-  border-radius:10px; padding:8px 10px; display:flex; justify-content:space-between; align-items:center;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 10px;
+  padding: 10px 14px;       /* was 8px 10px */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
-.info-strip .lbl{ font-size:12px; color:#9ca3af; }
-:where([data-theme="light"]) .info-strip .cell{ background:#f9fafb; border-color:#e5e7eb; }
+
+.info-strip .lbl{ font-size: 12px; color: #9ca3af; }
+
+:where([data-theme="light"]) .info-strip .cell{
+  background:#f9fafb; border-color:#e5e7eb;
+}
+
+/* (optional) give even more room on big screens */
+@media (min-width: 1200px){
+  .info-strip{
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+  }
+}
 
 .hdr { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
 .pill.live { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #10b98122; color: #10b981; border: 1px solid #10b98155; }
@@ -974,6 +1271,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
 .row:first-of-type { border-top: 0; }
 .label { color:#9ca3af; font-size: 13px; }
 .val { font-weight: 700; }
+.bt { font-weight: 800; margin-right: 6px; opacity: .9; }
 
 :where([data-theme="light"]) .card { background:#fff; border-color:#e5e7eb; }
 :where([data-theme="light"]) .pane { background:#f9fafb; border-color:#e5e7eb; }

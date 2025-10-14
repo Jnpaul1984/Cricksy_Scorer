@@ -80,7 +80,7 @@ const { canScore, liveSnapshot } = storeToRefs(gameStore)
 const { needsNewBatter, needsNewOver } = storeToRefs(gameStore)
 const { extrasBreakdown } = storeToRefs(gameStore)
 const { dlsKind } = storeToRefs(gameStore)
-
+const { runsRequired, targetSafe, requiredRunRate, ballsBowledTotal } = storeToRefs(gameStore)
 // Allow a manual start even if the server gate didn't flip yet
 const canForceStartInnings = computed(() =>
   Boolean(gameId.value) &&
@@ -108,10 +108,13 @@ function forceStartInnings(): void {
 const gameId = computed<string>(() => (route.params.gameId as string) || (route.query.id as string) || '')
 
 const canSubmitSimple = computed(() => {
-  if (!gameId.value || needsNewOverLive.value || needsNewBatterLive.value) return false
+  const firstBall = Number(currentOverBalls.value || 0) === 0
+  if (!gameId.value || needsNewBatterLive.value) return false
+  // Allow submit if it's the first ball and a bowler is chosen
+  if (needsNewOverLive.value && !(firstBall && !!selectedBowler.value)) return false
   if (!selectedStriker.value || !selectedNonStriker.value || !selectedBowler.value) return false
   if (needsNewInningsLive.value) return false
-
+  if (isStartingInnings.value) return false
   // If it's a wicket that needs a fielder, require one
   if (isWicket.value && needsFielder.value && !selectedFielderId.value) return false
 
@@ -123,7 +126,10 @@ const canSubmitSimple = computed(() => {
 
 
 async function submitSimple() {
-  if (needsNewOverLive.value)  { openStartOver();   onError('Start the next over first'); return }
+  const firstBall = Number(currentOverBalls.value || 0) === 0
+  if (needsNewOverLive.value && !(firstBall && !!selectedBowler.value)) {
+    openStartOver(); onError('Start the next over first'); return
+  }
   if (needsNewBatterLive.value){ openSelectBatter(); onError('Select the next batter first'); return }
 
   try {
@@ -230,8 +236,12 @@ const lastDelivery = computed<any | null>(() =>
 
 // Block when: there is no ball yet, an innings gate is up, or you still have queued actions
 const canDeleteLast = computed<boolean>(() =>
-  Boolean(lastDelivery.value) && !needsNewInningsLive.value && pendingCount.value === 0
+  Boolean(lastDelivery.value) &&
+  !needsNewInningsLive.value &&
+  !isStartingInnings.value &&        // ← add this guard
+  pendingCount.value === 0
 )
+
 
 async function deleteLastDelivery(): Promise<void> {
   const id = gameId.value
@@ -292,6 +302,17 @@ async function applyDls() {
 // --- Reduce Overs & Live Par ---
 const oversLimit = computed<number>(() => Number((gameStore.currentGame as any)?.overs_limit ?? 0))
 const currentInnings = computed<1 | 2>(() => Number((gameStore.currentGame as any)?.current_inning ?? 1) as 1 | 2)
+// Balls & overs remaining in the chase (defensive if not a chase or no limit)
+const ballsRemaining = computed<number>(() => {
+  const limit = oversLimit.value ? Number(oversLimit.value) * 6 : 0
+  return Math.max(0, limit - Number(ballsBowledTotal.value || 0))
+})
+const oversRemainingDisplay = computed<string>(() => {
+  const balls = ballsRemaining.value
+  const ov = Math.floor(balls / 6)
+  const rem = balls % 6
+  return `${ov}.${rem}`
+})
 
 const reduceScope = ref<'match' | 'innings'>('match')
 const reduceInnings = ref<1 | 2>(currentInnings.value)
@@ -471,12 +492,12 @@ const storeBattingOrderIds = computed<string[] | null>(() => {
   return Array.isArray(ids) ? ids.map(normId) : null
 })
 
-// Fallback: infer order from first appearance in deliveries
+// Fallback: infer order from first appearance **in this innings** only
 const battingAppearanceOrder = computed<string[]>(() => {
   if (storeBattingOrderIds.value && storeBattingOrderIds.value.length) return storeBattingOrderIds.value
   const seen = new Set<string>()
   const order: string[] = []
-  for (const d of dedupedDeliveries.value) {
+  for (const d of deliveriesThisInnings.value) {
     for (const id of [d.striker_id, d.non_striker_id]) {
       const nid = normId(id)
       if (nid && !seen.has(nid)) { seen.add(nid); order.push(nid) }
@@ -517,27 +538,54 @@ const battingEntries = computed(() => {
 
 
 const bowlingEntries = computed(() =>
-  (bowlingRowsXI.value || []).map((r: any) => ({
-    player_id: r.id,
-    player_name: String(r.name),
-    overs_bowled: r.overs, // keep "3.2" string if your card expects notation
-    maidens: Number(r.maidens),
-    runs_conceded: Number(r.runs),
-    wickets_taken: Number(r.wkts),
-    economy: typeof r.econ === 'number' ? r.econ : Number(r.econ || 0),
-  }))
+  (bowlingRowsXI.value || []).map((r: any) => {
+    const pid = String(r.id)
+    const derived = bowlingDerivedByPlayer.value[pid]
+    const balls = derived ? derived.balls : 0
+    const runsToBowler = derived ? derived.runs : Number(r.runs ?? r.runs_conceded ?? 0)
+    const maidens = derived ? derived.maidens : Number(r.maidens ?? 0)
+    const oversTxt = balls ? oversDisplayFromBalls(balls) : String(r.overs ?? r.overs_bowled ?? '0.0')
+    const econTxt = balls ? econ(runsToBowler, balls) : (typeof r.econ === 'number' ? r.econ.toFixed(2) : (Number(r.econ || 0)).toFixed(2))
+
+    return {
+      player_id: pid,
+      player_name: String(r.name),
+      overs_bowled: oversTxt,
+      maidens,
+      runs_conceded: runsToBowler,
+      wickets_taken: Number(r.wkts ?? r.wickets_taken ?? 0),
+      economy: Number(econTxt),
+    }
+  })
 )
 
 
+
 // ================== Deliveries (DEDUPE) ==================
-function makeKey(d: any): string {
-  const o  = Number(d.over_number ?? d.over ?? 0)
-  const b  = Number(d.ball_number ?? d.ball ?? 0)
-  const s  = normId(d.striker_id)
-  const bw = normId(d.bowler_id)
-  const rs = Number(d.runs_scored ?? d.runs ?? 0)
-  const ex = String(d.extra ?? d.extra_type ?? '')
-  return `${o}:${b}:${s}:${bw}:${rs}:${ex}`
+// normalize over/ball before keying
+function obOf(d:any){
+  const overLike = d.over_number ?? d.over
+  const ballLike = d.ball_number ?? d.ball
+  if (typeof ballLike === 'number' && typeof overLike === 'number') {
+    return { over: Math.max(0, Math.floor(overLike)), ball: Math.max(0, ballLike) }
+  }
+  if (typeof overLike === 'string') {
+    const [o,b] = overLike.split('.')
+    return { over: Number(o)||0, ball: Number(b)||0 }
+  }
+  if (typeof overLike === 'number') {
+    const whole = Math.floor(overLike)
+    const tenth = Math.round((overLike - whole) * 10)
+    return { over: whole, ball: Math.max(0, Math.min(5, tenth)) }
+  }
+  return { over: 0, ball: 0 }
+}
+
+// ✅ stable identity: innings + over + ball only
+function makeKey(d:any): string {
+  const inn = Number(d.innings ?? d.inning ?? d.inning_no ?? d.innings_no ?? d.inning_number ?? 0)
+  const { over, ball } = obOf(d)
+  return `${inn}:${over}:${ball}`
 }
 
 
@@ -586,9 +634,17 @@ const deliveriesThisInningsRaw = computed<any[]>(() => {
   const arr = rawDeliveries.value
   const hasInnings = arr.some(d => inningsOf(d) != null)
   if (hasInnings) return arr.filter(d => inningsOf(d) === cur)
-  if (inningsStartIso.value) return arr.filter(d => String(d.at_utc || '') >= inningsStartIso.value!)
-  return cur === 1 ? arr : []
+
+  // Fallback only if absolutely no innings markers exist (old data)
+  if (cur === 1) return arr
+  if (inningsStartIso.value) {
+    // strict: only include items with a timestamp after start
+    return arr.filter(d => d.at_utc && String(d.at_utc) >= inningsStartIso.value!)
+  }
+  return [] // no markers, no timestamps — don’t risk mixing innings
 })
+
+
 
 function dedupeByKey(arr:any[]) {
   const byKey = new Map<string, any>()
@@ -623,6 +679,86 @@ const deliveriesThisInnings = computed<DeliveryRowForTable[]>(() => {
   }).sort((a, b) => (a.over_number - b.over_number) || (a.ball_number - b.ball_number))
 })
 
+// == Derived bowling figures from deliveries in *this innings* ==
+const bowlingDerivedByPlayer = computed<Record<string, { balls: number; runs: number; maidens: number }>>(() => {
+  const out: Record<string, { balls: number; runs: number; maidens: number }> = {}
+  // group per over for maiden detection
+  const overRuns: Record<string, number> = {}
+
+  const add = (pid: string) => (out[pid] ||= { balls: 0, runs: 0, maidens: 0 })
+
+  for (const d of deliveriesThisInnings.value) {
+    const pid = String(d.bowler_id || '')
+    if (!pid) continue
+    const rec = add(pid)
+
+    // Runs conceded to bowler
+    if (d.extra === 'wd') {
+      rec.runs += Number(d.extra_runs || 0)               // wides: all wides to bowler
+    } else if (d.extra === 'nb') {
+      rec.runs += 1 + Number(d.runs_off_bat || 0)         // no-ball: 1 penalty + off-bat
+      // ball does NOT count
+    } else if (d.extra === 'b' || d.extra === 'lb') {
+      // byes/leg-byes: NO runs to bowler, but DO consume a ball
+      rec.balls += 1
+    } else {
+      // legal: off-bat runs to bowler, consumes a ball
+      rec.runs += Number(d.runs_off_bat ?? d.runs_scored ?? 0)
+      rec.balls += 1
+    }
+
+    // Track runs in the *over* to compute maidens later (legal extras still count to over total)
+    const overKey = `${d.bowler_id}:${d.over_number}`
+    let totalThisBall = 0
+    if (d.extra === 'wd') totalThisBall = Number(d.extra_runs || 0)
+    else if (d.extra === 'nb') totalThisBall = 1 + Number(d.runs_off_bat || 0)
+    else if (d.extra === 'b' || d.extra === 'lb') totalThisBall = Number(d.runs_scored || d.extra_runs || 0)
+    else totalThisBall = Number(d.runs_off_bat ?? d.runs_scored ?? 0)
+    overRuns[overKey] = (overRuns[overKey] || 0) + totalThisBall
+  }
+
+  // Maidens: any completed over with 0 runs
+  for (const key of Object.keys(overRuns)) {
+    const [pid, overStr] = key.split(':')
+    const over = Number(overStr)
+    // count legal balls in that over
+    const legalBallsInOver = deliveriesThisInnings.value.filter(d =>
+      String(d.bowler_id) === pid &&
+      d.over_number === over &&
+      (d.extra !== 'wd' && d.extra !== 'nb')
+    ).length
+    if (legalBallsInOver === 6 && overRuns[key] === 0) {
+      add(pid).maidens += 1
+    }
+  }
+
+  return out
+})
+
+// === Current bowler figures (match the scorecard’s logic) ====================
+const currentBowlerDerived = computed(() => {
+  const id = currentBowlerId.value
+  if (!id) return null
+
+  // Derived balls/runs/maidens for this innings
+  const base = bowlingDerivedByPlayer.value[id]
+
+  // Get wickets from the live XI rows (authoritative wicket tally)
+  const r = (bowlingRowsXI.value || []).find((p: any) => String(p.id) === String(id)) as any
+  const wkts = Number(r?.wkts ?? r?.wickets_taken ?? 0)
+
+  const balls = Number(base?.balls || 0)
+  const runs  = Number(base?.runs  || 0)
+
+  return {
+    wkts,
+    runs,
+    balls,
+    oversText: oversDisplayFromBalls(balls),
+    econText: econ(runs, balls),
+  }
+})
+
 // Name lookup for DeliveryTable
 function playerNameById(id?: UUID | null): string {
   const nid = normId(id)
@@ -651,6 +787,7 @@ function econ(runsConceded: number, ballsBowled: number): string {
 
 const cantScoreReasons = computed(() => {
   const rs:string[] = []
+  const firstBall = Number(currentOverBalls.value || 0) === 0
   if (!gameStore.currentGame) rs.push('No game loaded')
   else if (!['in_progress','live','started'].includes(String((gameStore.currentGame as any).status || '')))
     rs.push(`Game is ${(gameStore.currentGame as any).status}`)
@@ -660,9 +797,11 @@ const cantScoreReasons = computed(() => {
   if (selectedStriker.value && selectedStriker.value === selectedNonStriker.value)
     rs.push('Striker and non-striker cannot be the same')
 
-  if (!currentBowlerId.value) rs.push('Start next over / choose bowler')
+  if (!currentBowlerId.value && !(needsNewOverLive.value && firstBall && !!selectedBowler.value)) {
+    rs.push('Start next over / choose bowler')
+  }
   if (!selectedBowler.value) rs.push('Choose bowler')
-  if (needsNewOver.value) rs.push('Start next over')
+  if (needsNewOver.value && !(firstBall && !!selectedBowler.value)) rs.push('Start next over')
   if (needsNewBatter.value) rs.push('Select next batter')
   if (needsNewInningsLive.value) rs.push('Start next innings')
 
@@ -680,6 +819,9 @@ function clearQueuedDeliveriesForThisGame(): void {
 // ================== Live strip data (current bowler / over) ==================
 const stateAny = computed(() => gameStore.state as any)
 const isStartingInnings = ref(false)
+// First-innings summary captured locally when we flip to innings 2
+const firstInnings = ref<{ runs: number; wickets: number; overs: string } | null>(null)
+
 // 🔧 NEW: if backend publishes an innings start, adopt it
 watch(() => (stateAny.value?.innings_start_at as string | undefined), (t) => {
   if (t) inningsStartIso.value = String(t)
@@ -721,13 +863,34 @@ const oversExhausted = computed(() =>
   legalBallsBowled.value >= ballsPerInningsLimit.value && ballsThisOver.value === 0
 )
 
-// FINAL signal
+// Track last time the innings number changed
+const inningsFlipAt = ref<number>(0)
+watch(() => (gameStore.currentGame as any)?.current_inning, () => {
+  inningsFlipAt.value = Date.now()
+})
+
+// Small suppression window after flip (ms)
+const SUPPRESS_DERIVED_MS = 10000
+
 const needsNewInningsLive = computed<boolean>(() => {
+  const status = String((gameStore.currentGame as any)?.status || '')
   const serverGate =
     Boolean(stateAny.value?.needs_new_innings) ||
-    String((gameStore.currentGame as any)?.status || '') === 'innings_break'
-  return !isStartingInnings.value && (serverGate || allOut.value || oversExhausted.value)
+    status === 'innings_break'
+
+  // If server says the gate is up, respect it.
+  if (serverGate) return true
+
+  // While server says we're in progress, don't re-raise the gate locally.
+  if (status === 'in_progress') return false
+
+  // Right after an innings flip, ignore local "allOut/oversExhausted" noise.
+  if (Date.now() - inningsFlipAt.value < SUPPRESS_DERIVED_MS) return false
+
+  // Otherwise, the local fallbacks can raise the gate.
+  return allOut.value || oversExhausted.value
 })
+
 
 
 
@@ -804,6 +967,12 @@ const inningsScore = computed<{ runs: number; wickets: number }>(() => ({
   wickets: Number((gameStore as any).score?.wickets ?? 0),
 }))
 
+// Target shown during the chase (if server provided)
+const target = computed<number | null>(() => {
+  const t = (gameStore.currentGame as any)?.target
+  return typeof t === 'number' ? t : null
+})
+
 // Legal balls in the *current* (latest) over
 const legalBallsThisOver = computed(() => {
   const arr = deliveriesThisInnings.value
@@ -837,43 +1006,63 @@ function openStartInnings(): void {
 function closeStartInnings(): void { startInningsDlg.value?.close() }
 
 async function confirmStartInnings(): Promise<void> {
+  console.log('[confirmStartInnings] clicked');
   const id = gameId.value
   if (!id) return
   try {
     inningsStartIso.value = new Date().toISOString()
     isStartingInnings.value = true
 
+    // Cache the first-innings summary locally (runs/wkts/overs) before we flip
+    try {
+      firstInnings.value = {
+        runs: inningsScore.value.runs,
+        wickets: inningsScore.value.wickets,
+        overs: oversDisplay.value,
+      }
+    } catch { /* noop */ }
+
     const payload = {
-      striker_id:   normId(nextStrikerId.value)     || null,
-      non_striker_id: normId(nextNonStrikerId.value) || null,
-      opening_bowler_id: normId(openingBowlerId.value) || null,
+      striker_id:        normId(nextStrikerId.value)     || null,
+      non_striker_id:    normId(nextNonStrikerId.value)  || null,
+      opening_bowler_id: normId(openingBowlerId.value)   || null,
     }
 
     const anyStore: any = gameStore as any
     if (typeof anyStore.startNextInnings === 'function') {
-      // ✅ Use store action if your Pinia store implements it
       await anyStore.startNextInnings(id, payload)
     } else {
-      // ✅ Fallback to REST route your backend already supports
       const res = await fetch(`${apiBase}/games/${encodeURIComponent(id)}/innings/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error(await res.text())
-      // make sure local state refreshes
       await gameStore.loadGame(id)
     }
 
-    // Optimistic UI
+    // 🔧 Optimistic local clear so the dialog actually goes away now
+    // (server snapshot will arrive and confirm shortly)
+    gameStore.mergeGamePatch({ status: 'in_progress' } as any)
+    inningsFlipAt.value = Date.now()
+    if (liveSnapshot.value) {
+      liveSnapshot.value = { ...liveSnapshot.value, needs_new_innings: false } as any
+    }
+
+    // Optimistic selections
     selectedStriker.value = normId(nextStrikerId.value) as string
     selectedNonStriker.value = normId(nextNonStrikerId.value) as string
     if (openingBowlerId.value) selectedBowler.value = normId(openingBowlerId.value) as string
 
+
+    isStartingInnings.value = false
     showToast('Next innings started', 'success')
     closeStartInnings()
   } catch (e:any) {
+    isStartingInnings.value = false
     onError(e?.message || 'Failed to start next innings')
+    // (Optional) console for quick visibility:
+    console.error('startNextInnings error:', e)
   }
 }
 
@@ -1028,30 +1217,54 @@ watch([bowlingPlayers, xiLoaded, currentBowlerId], () => {
   const id = selectedBowler.value
   if (id && !bowlingPlayers.value.some(p => p.id === id) && id !== currentBowlerId.value) selectedBowler.value = '' as unknown as UUID
 })
-// Prefer the innings gate over everything else
 watch(needsNewInningsLive, (v) => {
+  if (!v) return
+  if (isStartingInnings.value) return               // don’t pop while we’re starting
+  if (startInningsDlg.value?.open) return           // already open
   if (v) {
-    try { startOverDlg.value?.close() } catch {}
-    try { selectBatterDlg.value?.close() } catch {}
-    // Let defaults (nextBattingXI/nextBowlingXI) settle for a tick, then open
-    nextTick().then(() => openStartInnings())
+    selectedBowler.value = '' as any   // force explicit choice for the new innings
   }
-}, { immediate: true })
+  try { startOverDlg.value?.close() } catch {}
+  try { selectBatterDlg.value?.close() } catch {}
+  nextTick().then(() => openStartInnings())
+})
+
+
+
 watch(() => stateAny.value?.needs_new_innings, (v) => {
   if (!v) isStartingInnings.value = false
 })
-setTimeout(() => { isStartingInnings.value = false }, 4000)
+
 
 // Only open these gates if an innings is NOT required
 watch(needsNewBatterLive, (v) => { if (v && !needsNewInningsLive.value) openSelectBatter() })
 watch([needsNewOverLive, needsNewOverDerived], ([serverGate, localGate]) => {
   if ((serverGate || localGate) && !needsNewInningsLive.value) {
-    selectedBowler.value = '' as unknown as UUID
-    selectedNextOverBowlerId.value = '' as unknown as UUID
-    openStartOver()
+    // Keep any user-chosen next bowler; just nudge the dialog if you want.
+    if (!selectedBowler.value) {
+      selectedBowler.value = (eligibleNextOverBowlers.value[0]?.id || '') as UUID
+      }
+      selectedNextOverBowlerId.value = selectedBowler.value as UUID
+      openStartOver()
+    }
+})
+
+watch([battingPlayers, needsNewInningsLive], ([list]) => {
+  const ids = new Set(list.map(p => p.id))
+  if (selectedStriker.value && !ids.has(selectedStriker.value)) {
+    selectedStriker.value = '' as any
+  }
+  if (selectedNonStriker.value && !ids.has(selectedNonStriker.value)) {
+    selectedNonStriker.value = '' as any
   }
 })
 
+watch([bowlingPlayers, needsNewInningsLive], ([list]) => {
+  const ids = new Set(list.map(p => p.id))
+  if (selectedBowler.value && !ids.has(selectedBowler.value)) {
+    selectedBowler.value = '' as any
+  }
+})
 
 
 // Reconnect + flush controls
@@ -1088,6 +1301,8 @@ const candidateBatters = computed<Player[]>(() => {
   const outSet = new Set(battingEntries.value.filter(b => b.is_out).map(b => b.player_id))
   return battingPlayers.value.filter(p => !outSet.has(p.id))
 })
+
+
 
 function openSelectBatter(): void { selectedNextBatterId.value = '' as UUID; selectBatterDlg.value?.showModal() }
 function closeSelectBatter(): void { selectBatterDlg.value?.close() }
@@ -1208,6 +1423,30 @@ async function confirmChangeBowler(): Promise<void> {
 
       <PresenceBar class="mb-3" :game-id="gameId" :status="gameStore.connectionStatus" :pending="pendingCount" />
 
+      <section
+        class="selectors card alt small-metrics"
+        v-if="Number((gameStore.currentGame as any)?.current_inning) === 2 && (firstInnings || targetSafe != null)"
+      >
+        <div class="row compact">
+          <div class="col" v-if="firstInnings">
+            <strong>Innings 1:</strong>
+            {{ firstInnings.runs }}/{{ firstInnings.wickets }} ({{ firstInnings.overs }})
+          </div>
+
+          <div class="col" v-if="targetSafe != null">
+            <strong>Target:</strong> {{ targetSafe }}
+          </div>
+
+          <div class="col" v-if="requiredRunRate != null">
+            <strong>Req RPO:</strong> {{ requiredRunRate.toFixed(2) }}
+            <small class="hint" v-if="runsRequired != null && ballsRemaining >= 0">
+              · Need {{ runsRequired }} off {{ ballsRemaining }} balls ({{ oversRemainingDisplay }} overs)
+            </small>
+          </div>
+        </div>
+      </section>
+
+
       <!-- Player selectors -->
       <section class="selectors card" style="border:1px solid rgba(0,0,0,.08); border-radius:12px; padding:12px; margin-bottom:12px;">
         <h3 style="margin:0 0 8px; font-size:14px;">Players</h3>
@@ -1244,7 +1483,7 @@ async function confirmChangeBowler(): Promise<void> {
 
           <div class="col">
             <label class="lbl">Bowler</label>
-            <select v-model="selectedBowler" class="sel" aria-label="Select bowler" :disabled="needsNewOverLive">
+            <select v-model="selectedBowler" class="sel" aria-label="Select bowler">
               <option disabled value="">Choose bowler…</option>
               <option v-for="p in bowlingPlayers" :key="p.id" :value="p.id">
                 {{ p.name }}
@@ -1275,8 +1514,10 @@ async function confirmChangeBowler(): Promise<void> {
           </div>
           <div class="col bowler-now" v-if="currentBowler">
             <strong>Current:</strong> {{ currentBowler.name }} ·
-            <span>{{ oversDisplayFromBalls(currentBowlerStats.balls) }}-{{ currentBowlerStats.runs }}</span>
-            <span> · Econ {{ econ(currentBowlerStats.runs, currentBowlerStats.balls) }}</span>
+            <span>{{ currentBowlerDerived?.wkts ?? 0 }}-{{ currentBowlerDerived?.runs ?? 0 }}
+              ({{ currentBowlerDerived?.oversText ?? '0.0' }})
+            </span>
+            <span> · Econ {{ currentBowlerDerived?.econText ?? '—' }}</span>
           </div>
         </div>
       </section>
@@ -1435,7 +1676,7 @@ async function confirmChangeBowler(): Promise<void> {
       <section class="mt-3 layout-2col">
         <div class="left">
           <DeliveryTable
-            :deliveries="dedupedDeliveries"
+            :deliveries="deliveriesThisInnings"
             :player-name-by-id="playerNameById"
             class="mt-3"
           />
@@ -1852,6 +2093,13 @@ async function confirmChangeBowler(): Promise<void> {
   grid-template-columns: 1fr auto;
   gap: 6px;
 }
+
+/* Compact metrics row */
+.small-metrics .row.compact {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.small-metrics .col { align-items: center; grid-auto-flow: column; grid-auto-columns: max-content; gap: 8px; }
 
 /* Responsive */
 @media (max-width: 1200px) {

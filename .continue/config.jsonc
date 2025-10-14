@@ -1,0 +1,10 @@
+{
+  "models": [
+    { "title": "OAI-4.1-mini", "provider": "openai", "model": "gpt-4.1-mini" },
+    { "title": "OAI-4.1", "provider": "openai", "model": "gpt-4.1" }
+  ],
+  "embeddings": { "provider": "openai", "model": "text-embedding-3-large" },
+  "allowAnonymousTelemetry": false,
+  "repoMap": { "maxFiles": 5000, "ignore": ["node_modules/**", "dist/**", ".venv/**"] },
+  "systemMessage": "You are a senior engineer for a cricket scoring app. Make small, safe diffs. Propose tests."
+}

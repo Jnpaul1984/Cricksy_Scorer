@@ -4,9 +4,22 @@
 export type ID = string;
 
 export type MatchType = 'limited' | 'multi_day' | 'custom';
-export type MatchStatus = 'not_started' | 'in_progress' | 'innings_break' | 'completed';
+
+export type MatchStatus =
+  | 'not_started' | 'in_progress' | 'innings_break' | 'completed'      // legacy lowercase
+  | 'SCHEDULED'   | 'IN_PROGRESS'  | 'COMPLETED'     | 'ABANDONED';     // backend uppercase
+
 
 export type ExtraCode = 'wd' | 'nb' | 'b' | 'lb';
+
+export interface MatchResult {
+  winner_team_id?: string | null;
+  winner_team_name?: string | null;
+  method?: 'by runs' | 'by wickets' | 'tie' | 'no result' | null;
+  margin?: number | null;
+  result_text?: string | null;
+  completed_at?: string | null; // ISO
+}
 
 /** Player & Team */
 export interface Player {
@@ -92,7 +105,9 @@ export interface GameState {
   current_striker_id: string | null
   current_non_striker_id: string | null
   target: number | null
-  result: string | null
+  result: MatchResult | string | null;
+  is_game_over?: boolean;         // set by backend when match completed
+  completed_at?: string | null; 
 
   // roles
   team_a_captain_id: string | null
@@ -128,7 +143,13 @@ export interface Snapshot {
   // NEW gate flags
   needs_new_batter?: boolean
   needs_new_over?: boolean
+  // completion/result
+  is_game_over?: boolean;
+  result?: MatchResult | null;
 
+  // sometimes backend returns status as 'status' or 'match_status'
+  match_status?: MatchStatus;
+  
   // allow extra keys without breaking the UI
   [k: string]: any
 }

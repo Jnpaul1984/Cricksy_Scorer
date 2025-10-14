@@ -104,6 +104,7 @@ interface Delivery {
   commentary?: string | null
   fielder_id?: string | null
   at_utc?: string | null
+  innings_no?: number
 }
 
 // Legacy/loose names we sometimes see on the wire
@@ -179,15 +180,23 @@ function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
     batting_scorecard: (s?.batting_scorecard !== undefined ? s.batting_scorecard : undefined) as any,
     bowling_scorecard: (s?.bowling_scorecard !== undefined ? s.bowling_scorecard : undefined) as any,
 
-    current_striker_id: s?.current_striker_id ?? null,
-    current_non_striker_id: s?.current_non_striker_id ?? null,
+    current_striker_id:
+      s?.current_striker_id ??
+      s?.batsmen?.striker?.id ??
+      null,
+
+    current_non_striker_id:
+      s?.current_non_striker_id ??
+      s?.batsmen?.non_striker?.id ??
+      null,
+
     target: s?.target ?? null,
     status: s?.status ?? undefined,
 
     // ✅ top-level “gate” flags
     needs_new_batter: Boolean(s?.needs_new_batter ?? false),
     needs_new_over: Boolean(s?.needs_new_over ?? false),
-
+    needs_new_innings: Boolean(s?.needs_new_innings ?? false),
     // runtime bowling context
     current_bowler_id: s?.current_bowler_id ?? s?.currentBowlerId ?? s?.current_bowler?.id ?? null,
     last_ball_bowler_id: s?.last_ball_bowler_id ?? s?.lastBallBowlerId ?? s?.last_ball_bowler?.id ?? null,
@@ -249,8 +258,16 @@ function normalizeServerSnapshot(s: any): UiSnapshot {
     bowling_team_name: s?.bowling_team_name ?? s?.teams?.bowling?.name ?? '',
     batting_scorecard: (s?.batting_scorecard ?? {}) as Record<string, BattingScorecardEntry>,
     bowling_scorecard: (s?.bowling_scorecard ?? {}) as Record<string, BowlingScorecardEntry>,
-    current_striker_id: s?.current_striker_id ?? null,
-    current_non_striker_id: s?.current_non_striker_id ?? null,
+    current_striker_id:
+      s?.current_striker_id ??
+      s?.batsmen?.striker?.id ??
+      null,
+
+    current_non_striker_id:
+      s?.current_non_striker_id ??
+      s?.batsmen?.non_striker?.id ??
+      null,
+
 
     // runtime bowling fields
     current_bowler_id: s?.current_bowler_id ?? s?.currentBowlerId ?? s?.current_bowler?.id ?? null,
@@ -260,6 +277,7 @@ function normalizeServerSnapshot(s: any): UiSnapshot {
     balls_bowled_total: Number(s?.balls_bowled_total ?? s?.ballsBowledTotal ?? 0),
     needs_new_batter: Boolean(s?.needs_new_batter ?? false),
     needs_new_over: Boolean(s?.needs_new_over ?? false),
+    needs_new_innings: Boolean(s?.needs_new_innings ?? false),
     target: s?.target ?? null,
     status: s?.status ?? undefined,
   }
@@ -335,6 +353,7 @@ function coerceGameFromApi(raw: any): GameState {
         commentary: (d.commentary ?? null) as string | null,
         fielder_id: (d.fielder_id ?? null) as string | null,
         at_utc: (d.at_utc ?? null) as string | null,
+        innings_no: Number((d as any).innings_no ?? (d as any).innings ?? 1),
       }))
     : [],
 
@@ -447,6 +466,29 @@ export const useGameStore = defineStore('game', () => {
   const isFirstInnings = computed<boolean>(() => (currentGame.value?.current_inning ?? 1) === 1)
   const isSecondInnings = computed<boolean>(() => (currentGame.value?.current_inning ?? 1) === 2)
 
+  // --- NEW: handle uppercase and is_game_over from backend ---
+  const isGameOver = computed<boolean>(() => {
+    const g = currentGame.value
+    const snap = liveSnapshot.value
+    const s = String(g?.status ?? snap?.status ?? '').toUpperCase()
+    return (
+      s === 'COMPLETED' ||
+      s === 'ABANDONED' ||
+      Boolean((g as any)?.is_game_over || (snap as any)?.is_game_over)
+    )
+  })
+
+  const resultText = computed<string>(() => {
+    const g = currentGame.value as any
+    const snap = liveSnapshot.value as any
+    return (
+      g?.result?.result_text ||
+      snap?.result?.result_text ||
+      g?.result ||
+      ''
+    )
+  })
+
   // ========================================================================
   // Teams & Players
   // ========================================================================
@@ -485,13 +527,17 @@ export const useGameStore = defineStore('game', () => {
       const ex = asExtra(d.extra_type)
       let extrasConceded = 0
       if (ex === 'wd') {
+        // wides: full amount (1 penalty + any runs run) go to the bowler
         const totalWides = Number(d.extra_runs ?? 0)
         extrasConceded += totalWides > 0 ? totalWides : (Number(d.runs_scored ?? 0) + 1)
       } else if (ex === 'nb') {
+        // no-ball: 1 penalty goes to the bowler; off-the-bat runs are counted via offBatRuns(d) below
         extrasConceded += 1
       } else if (ex === 'b' || ex === 'lb') {
-        extrasConceded += Number(d.extra_runs ?? d.runs_scored ?? 0)
+        // byes/leg-byes: NOT charged to the bowler
+        // extrasConceded += 0
       }
+
 
       map[id].runsConceded += offBatRuns(d) + extrasConceded
       if (isLegalBall(d)) map[id].balls += 1
@@ -509,7 +555,63 @@ export const useGameStore = defineStore('game', () => {
 
   const availableBowlers = computed<Player[]>(() => bowlingTeam.value ? bowlingTeam.value.players : [])
 
-  
+  // Pulls last N deliveries from the server and merges only the CURRENT innings
+async function backfillRecentDeliveries(limit = 60): Promise<void> {
+  const gameId = liveGameId.value ?? currentGame.value?.id
+  if (!gameId || !currentGame.value) return
+
+  try {
+    const res = await apiService.deliveries(gameId, { limit })
+    const items = Array.isArray(res?.deliveries) ? res.deliveries : []
+
+    const curInnings = currentGame.value.current_inning ?? 1
+    const toGameShape = (d: any) => ({
+      over_number: Number(d.over_number ?? d.over ?? 0),
+      ball_number: Number(d.ball_number ?? d.ball ?? 0),
+      striker_id: String(d.striker_id ?? ''),
+      non_striker_id: String(d.non_striker_id ?? ''),
+      bowler_id: String(d.bowler_id ?? ''),
+      runs_scored: Number(d.runs_scored ?? d.runs ?? 0),
+      runs_off_bat: Number(d.runs_off_bat ?? 0),
+      extra_runs: Number(d.extra_runs ?? 0),
+      is_wicket: Boolean(d.is_wicket),
+      is_extra: Boolean(d.is_extra ?? (d.extra_type != null || d.extra != null)),
+      extra_type: asExtra(d.extra_type ?? d.extra ?? null),
+      dismissal_type: d.dismissal_type ?? null,
+      dismissed_player_id: d.dismissed_player_id ?? null,
+      commentary: d.commentary ?? null,
+      fielder_id: d.fielder_id ?? null,
+      at_utc: d.at_utc ?? null,
+      inning_no: Number(d.inning_no ?? d.innings ?? d.inning ?? curInnings),
+    })
+
+    const merged = items
+      .map(toGameShape)
+      .filter(d => Number(d.inning_no) === curInnings)
+
+    // merge, dedup using your deliveryKey (which we already updated to include innings)
+    const g = currentGame.value
+    if (!Array.isArray(g.deliveries)) g.deliveries = []
+    for (const d of merged) {
+      const k = deliveryKey(d as any)
+      const exists = g.deliveries.some(x => deliveryKey(x as any) === k)
+      if (!exists) g.deliveries.push(d as any)
+    }
+    console.log('deliveries total', g.deliveries.length)
+    console.log('current inning', g.current_inning)
+    console.log(
+      'by inning',
+      g.deliveries.reduce((m: Record<number, number>, d: any) => {
+        const inn = d.inning_no || 0
+        m[inn] = (m[inn] || 0) + 1
+        return m
+      }, {})
+    )
+  } catch {
+    /* non-fatal – just skip */
+  }
+}
+
   // ========================================================================
   // Score helpers
   // ========================================================================
@@ -557,6 +659,51 @@ const dlsAheadBy = computed<number | null>(() => {
   const runsNow = liveSnapshot.value?.total_runs ?? currentGame.value?.total_runs ?? 0
   return runsNow - par // + ahead, - behind, 0 level
 })
+
+function stabilizeBattersFromLastDelivery(prevGame: GameState, snap: UiSnapshot) {
+  const last: any = (snap as any).last_delivery || (currentGame.value as any)?.last_delivery
+  if (!last) return
+
+  // If snapshot already has distinct batters, trust it and sync UI.
+  const sId = snap.current_striker_id ?? null
+  const nsId = snap.current_non_striker_id ?? null
+  if (sId && nsId && sId !== nsId) {
+    uiState.value.selectedStrikerId = String(sId)
+    uiState.value.selectedNonStrikerId = String(nsId)
+    return
+  }
+
+  // Derive swap from delivery semantics
+  const x = (last.extra_type ?? last.extra ?? null) as 'wd'|'nb'|'b'|'lb'|null
+  const legal = !x || x === 'b' || x === 'lb'
+  let swap = false
+
+  if (legal) {
+    const offBat = Number(last.runs_off_bat ?? last.runs_scored ?? 0)
+    swap = (offBat % 2) === 1
+  } else if (x === 'wd') {
+    const totalWides = Math.max(1, Number(last.extra_runs ?? 1))
+    const ran = totalWides - 1
+    swap = (ran % 2) === 1
+  } else if (x === 'nb') {
+    const offBat = Number(last.runs_off_bat ?? 0)
+    const extraBeyondPenalty = Math.max(0, Number(last.extra_runs ?? 1) - 1)
+    swap = ((offBat + extraBeyondPenalty) % 2) === 1
+  }
+
+  // Base ends: prefer current UI picks, fall back to previous game state
+  const prevS = uiState.value.selectedStrikerId ?? prevGame.current_striker_id ?? null
+  const prevNS = uiState.value.selectedNonStrikerId ?? prevGame.current_non_striker_id ?? null
+  if (!prevS || !prevNS || prevS === prevNS) return
+
+  if (swap) {
+    uiState.value.selectedStrikerId = prevNS
+    uiState.value.selectedNonStrikerId = prevS
+  } else {
+    uiState.value.selectedStrikerId = prevS
+    uiState.value.selectedNonStrikerId = prevNS
+  }
+}
 
   // ========================================================================
   // Scorecards (defensive shaping)
@@ -623,35 +770,36 @@ const dlsAheadBy = computed<number | null>(() => {
 
 
   const bowlingRows = computed(() => {
-    const g = currentGame.value
-    if (!g || !g.bowling_scorecard) {
-      return [] as Array<{ id: string; name: string; overs: string; maidens: number; runs: number; wkts: number; econ: number | string }>
-    }
+  const g = currentGame.value
+  if (!g || !g.bowling_scorecard) {
+    return [] as Array<{ id: string; name: string; overs: string; maidens: number; runs: number; wkts: number; econ: number | string }>
+  }
 
-    return Object.values(g.bowling_scorecard as Record<string, any>).map((row: any) => {
-      const id = String(row.player_id)
-      const name = String(row.player_name || '')
-      const maidens = Number(row.maidens ?? 0)
-      const wkts = Number(row.wickets ?? row.wickets_taken ?? 0)
+  // If we have any deliveries for this innings, always trust per-delivery stats
+  const haveAnyDeliveries = (currentInningsDeliveries.value?.length ?? 0) > 0
 
-      const stats = bowlingStatsByPlayer.value[id]
+  return Object.values(g.bowling_scorecard as Record<string, any>).map((row: any) => {
+    const id = String(row.player_id)
+    const name = String(row.player_name || '')
+    const maidens = Number(row.maidens ?? 0)
+    const wkts = Number(row.wickets ?? row.wickets_taken ?? 0)
 
-      // balls from deliveries if we have them; else from overs notation on the card
-      const balls = typeof stats?.balls === 'number'
-        ? stats.balls
-        : Math.round(oversNotationToFloat(row.overs ?? row.overs_bowled ?? 0) * 6)
+    const stats = bowlingStatsByPlayer.value[id]
 
-      // runs conceded from deliveries if we have them; else from the card
-      const runs = typeof stats?.runsConceded === 'number'
-        ? stats.runsConceded
-        : Number(row.runs_conceded ?? row.runs ?? 0)
+    const balls = haveAnyDeliveries
+      ? (typeof stats?.balls === 'number' ? stats.balls : 0)
+      : Math.round(oversNotationToFloat(row.overs ?? row.overs_bowled ?? 0) * 6)
 
-      const oversText = oversDisplayFromBalls(Math.max(0, balls | 0))
-      const econ = balls > 0 ? Number(fmtEconomy(runs, balls)) : (typeof row.economy === 'number' ? row.economy : '—')
+    const runs = haveAnyDeliveries
+      ? (typeof stats?.runsConceded === 'number' ? stats.runsConceded : 0)
+      : Number(row.runs_conceded ?? row.runs ?? 0)
 
-      return { id, name, overs: oversText, maidens, runs, wkts, econ }
-    })
+    const oversText = oversDisplayFromBalls(Math.max(0, balls | 0))
+    const econ = balls > 0 ? Number(fmtEconomy(runs, balls)) : (typeof row.economy === 'number' ? row.economy : '—')
+
+    return { id, name, overs: oversText, maidens, runs, wkts, econ }
   })
+})
 
 
   // Merge liveSnapshot + game for simple access in views
@@ -667,8 +815,100 @@ const dlsAheadBy = computed<number | null>(() => {
         balls_bowled_total: Number(s.balls_bowled_total ?? g.balls_bowled_total ?? 0),
         needs_new_batter: Boolean(s.needs_new_batter ?? false),
         needs_new_over: Boolean(s.needs_new_over ?? false),
+        needs_new_innings: Boolean((liveSnapshot.value as any)?.needs_new_innings ?? (currentGame.value as any)?.needs_new_innings ?? false),
       }
     })
+
+// === RRR & Target helpers ====================================================
+// Total runs for a single delivery based on extra type (defensive for mixed payloads)
+function totalRunsOfDelivery(d: any): number {
+  const ex = String(d?.extra_type ?? d?.extra ?? '')
+  const r  = Number(d?.runs_scored ?? d?.runs ?? 0)
+  const xr = Number(d?.extra_runs ?? 0)
+  const rob = Number(d?.runs_off_bat ?? 0)
+
+  if (ex === 'wd') {
+    // wides = automatic 1 + runs actually run (UI sends r = runs run, often 0)
+    return (xr > 0 ? xr : (r + 1))
+  }
+  if (ex === 'nb') {
+    // no-ball = automatic 1 + off-the-bat + any extra beyond penalty if present
+    return 1 + rob + Math.max(0, xr - 1)
+  }
+  if (ex === 'b' || ex === 'lb') {
+    // byes/leg-byes = extras count (prefer explicit extra_runs)
+    return xr > 0 ? xr : r
+  }
+  // legal ball (or unknown) — use runs_scored / runs
+  return r
+}
+
+// Sum runs for a given innings (1 or 2) from deliveries on the game model
+const runsForInnings = (inn: 1 | 2) => {
+  const g = currentGame.value as any
+  if (!g || !Array.isArray(g.deliveries)) return 0
+  return g.deliveries
+    .filter((d: any) => Number(d?.innings_no ?? d?.inning_no ?? d?.inning ?? 0) === inn)
+    .reduce((sum: number, d: any) => sum + totalRunsOfDelivery(d), 0)
+}
+
+// Prefer server/live balls_bowled_total; fallback to counting legal balls this innings
+const ballsBowledTotal = computed<number>(() => {
+  // live/merged state if present
+  const live = Number(state.value?.balls_bowled_total ?? 0)
+  if (live > 0) return live
+
+  // fallback: count legal balls in the CURRENT innings from deliveries
+  const g = currentGame.value as any
+  if (!g || !Array.isArray(g.deliveries)) return 0
+  const inn = Number(g.current_inning ?? 1)
+  const isLegal = (d: any) => {
+    const ex = String(d?.extra_type ?? d?.extra ?? '')
+    return ex !== 'wd' && ex !== 'nb'
+  }
+  return g.deliveries
+    .filter((d: any) => Number(d?.innings_no ?? d?.inning_no ?? d?.inning ?? 0) === inn)
+    .filter(isLegal).length
+})
+
+// Target with safe fallbacks: DLS target > backend target > derived (1st inns + 1)
+const targetSafe = computed<number | null>(() => {
+  // Prefer DLS panel if present
+  if (typeof dlsPanel.value?.target === 'number') return dlsPanel.value!.target!
+
+  // Then backend target on game/snapshot
+  const t = (currentGame.value as any)?.target
+  if (typeof t === 'number') return t
+
+  // If we are in a chase, derive: target = R1 + 1
+  const inn = Number((currentGame.value as any)?.current_inning ?? 1)
+  if (inn !== 2) return null
+  const r1 = runsForInnings(1)
+  return r1 > 0 ? (r1 + 1) : null
+})
+
+// Required Run Rate for 2nd innings; null otherwise
+const requiredRunRate = computed<number | null>(() => {
+  const g = currentGame.value as any
+  if (!g) return null
+  const inn = Number(g.current_inning ?? 1)
+  if (inn !== 2) return null
+
+  const limit = Number(g.overs_limit ?? 0)
+  if (!Number.isFinite(limit) || limit <= 0) return null
+
+  const tgt = targetSafe.value
+  if (tgt == null) return null
+
+  const runsNow = Number(liveSnapshot.value?.total_runs ?? g.total_runs ?? 0)
+  const need = Math.max(0, tgt - runsNow)
+  const bowled = ballsBowledTotal.value
+  const remBalls = Math.max(0, (limit * 6) - bowled)
+  if (remBalls <= 0) return null
+
+  const rrr = need / (remBalls / 6)
+  return Number(rrr.toFixed(2))
+})
 
     // --- XI helpers -------------------------------------------------------------
 function playingXI(team: Team | null): Player[] {
@@ -736,15 +976,21 @@ const bowlingRowsXI = computed(() => {
   const statsMap = bowlingStatsByPlayer.value
   const card = (g.bowling_scorecard ?? {}) as Record<string, any>
 
-  function ballsFrom(row:any, id:string) {
-    if (typeof statsMap[id]?.balls === 'number') return statsMap[id].balls
+  // If we have any deliveries in this innings, ALWAYS use per-delivery stats.
+  // (They count only legal balls via isLegalBall; wides/nb do not increment balls.)
+  const haveAnyDeliveries = (currentInningsDeliveries.value?.length ?? 0) > 0
+
+  function ballsFrom(row: any, id: string) {
+    if (haveAnyDeliveries) return Number(statsMap[id]?.balls ?? 0)
     const o = row?.overs ?? row?.overs_bowled ?? 0
     return Math.round(oversNotationToFloat(o) * 6)
   }
-  function runsFrom(row:any, id:string) {
-    if (typeof statsMap[id]?.runsConceded === 'number') return statsMap[id].runsConceded
+
+  function runsFrom(row: any, id: string) {
+    if (haveAnyDeliveries) return Number(statsMap[id]?.runsConceded ?? 0)
     return Number(row?.runs_conceded ?? row?.runs ?? 0)
   }
+
 
   
   // consider union of XI ids that appear in either card or stats
@@ -771,6 +1017,39 @@ const bowlingRowsXI = computed(() => {
   }
   return rows
 })
+
+// === Current bowler figures (for header widget) ============================
+const currentBowlerFigures = computed<{
+  id: string
+  name: string
+  overs: string
+  maidens: number
+  runs: number
+  wkts: number
+  econ: number | string
+} | null>(() => {
+  const curId  = String(state.value.current_bowler_id ?? '') || null
+  const lastId = String(state.value.last_ball_bowler_id ?? '') || null
+  const id = curId || lastId
+  if (!id) return null
+
+  // Prefer deliveries (legal balls only)
+  const stats = bowlingStatsByPlayer.value[id]
+  const balls = Number(stats?.balls ?? 0)
+  const runs  = Number(stats?.runsConceded ?? 0)
+
+  // Fallbacks we can still take from the XI row/card (maidens/wkts/name)
+  const xiRow = bowlingRowsXI.value.find(r => r.id === id) || null
+  const maidens = Number(xiRow?.maidens ?? 0)
+  const wkts    = Number(xiRow?.wkts ?? 0)
+  const name    = xiRow?.name || (bowlingTeam.value?.players.find(p => p.id === id)?.name ?? '')
+
+  const oversText = oversDisplayFromBalls(Math.max(0, balls))
+  const econ = balls > 0 ? Number(fmtEconomy(runs, balls)) : (typeof (xiRow?.econ) === 'number' ? xiRow!.econ : '—')
+
+  return { id, name, overs: oversText, maidens, runs, wkts, econ }
+})
+
 
 // Players on the current fielding team who are NOT in the XI
 const fieldingBench = computed<Player[]>(() => {
@@ -934,7 +1213,7 @@ function refreshInterruptions(opts: { force?: boolean } = {}) {
 function optimisticallyCloseCurrentInterruption() {
   const list = interruptions.value.slice()
   for (let i = list.length - 1; i >= 0; i--) {
-    if (isInterruptionOpen(list[i])) { list[i] = { ...list[i], ended_at: undefined }; break }
+    if (isInterruptionOpen(list[i])) { list[i] = { ...list[i], ended_at: new Date().toISOString() }; break }
   }
   interruptions.value = list
   if (currentGame.value && 'interruptions' in (currentGame.value as any)) {
@@ -990,13 +1269,12 @@ async function stopInterruptionAction(kind?: 'weather' | 'injury' | 'light' | 'o
 
     // Prefer a non-zero overs source
     const fromScore = splitOvers(slim.overs)
-    const fromRoot  = splitOvers((p as any)?.overs)   // e.g. "0.1" that your server sends at root
+    const fromRoot  = splitOvers((p as any)?.overs)
     let overs_completed = 0
     let balls_this_over = 0
 
-    // helper: true if either part is non-zero
     const has = (x: {overs_completed:number; balls_this_over:number}) =>
-      x.overs_completed > 0 || x.balls_this_over > 0
+      (x.overs_completed ?? 0) > 0 || (x.balls_this_over ?? 0) > 0
 
     if (has(fromRoot)) {
       overs_completed = fromRoot.overs_completed
@@ -1009,7 +1287,6 @@ async function stopInterruptionAction(kind?: 'weather' | 'injury' | 'light' | 'o
       overs_completed = Number(ld.over_number ?? ld.over ?? 0)
       balls_this_over = Number(ld.ball_number ?? ld.ball ?? 0)
     } else if (liveSnapshot.value != null) {
-      // Do not regress if the event is empty; coerce to numbers and keep previous if undefined
       overs_completed = Number(
         (liveSnapshot.value as Partial<UiSnapshot>).overs_completed ?? overs_completed
       )
@@ -1017,6 +1294,7 @@ async function stopInterruptionAction(kind?: 'weather' | 'injury' | 'light' | 'o
         (liveSnapshot.value as Partial<UiSnapshot>).balls_this_over ?? balls_this_over
       )
     }
+
 
 
     // Build cards (unchanged)
@@ -1066,20 +1344,54 @@ async function stopInterruptionAction(kind?: 'weather' | 'injury' | 'light' | 'o
   }
 
 
-  function deliveryKey(d: LooseDelivery): string {
-    const o = Number(d.over_number ?? (d as any).over ?? 0)
-    const b = Number(d.ball_number ?? (d as any).ball ?? 0)
-    const s = String(d.striker_id ?? '')
-    const bow = String(d.bowler_id ?? '')
-    const rs = Number(d.runs_scored ?? (d as any).runs ?? 0)
-    const ex = String(d.extra_type ?? (d as any).extra ?? '')
-    return `${o}|${b}|${s}|${bow}|${rs}|${ex}`
-  }
+
+
+// add this helper above deliveryKey
+function inningFrom(d: any): number {
+  const v =
+    Number(d?.inning_no ?? d?.innings_no ?? d?.inning_number ?? d?.inning ?? d?.innings)
+  return Number.isFinite(v) ? v : Number((currentGame.value as any)?.current_inning ?? 0)
+}
+
+// REPLACE your deliveryKey with this one
+function deliveryKey(d: LooseDelivery): string {
+  const inn = inningFrom(d)
+  const o   = Number(d.over_number ?? (d as any).over ?? 0)
+  const b   = Number(d.ball_number ?? (d as any).ball ?? 0)
+  const s   = String(d.striker_id ?? '')
+  const bow = String(d.bowler_id ?? '')
+  const rs  = Number(d.runs_scored ?? (d as any).runs ?? 0)
+  const ex  = String(d.extra_type ?? (d as any).extra ?? '')
+  return `${inn}|${o}|${b}|${s}|${bow}|${rs}|${ex}`
+}
+
+
 
 
   function applySnapshotToGame(s: UiSnapshot): void {
     const g = currentGame.value as GameState | null
     if (!g || !s) return
+
+    // ⬇️ ADD: clear previous-innings state when the inning number changes
+    const prevInning = g.current_inning
+    if (typeof s.current_inning === 'number' && s.current_inning !== prevInning) {
+      g.batting_scorecard = {}
+      g.bowling_scorecard = {}
+      g.deliveries = []
+
+      // wipe bowling runtime context
+      ;(currentGame.value as any).current_bowler_id = null
+      ;(currentGame.value as any).last_ball_bowler_id = null
+      ;(currentGame.value as any).current_over_balls = 0
+      ;(currentGame.value as any).mid_over_change_used = false
+      ;(currentGame.value as any).balls_bowled_total = 0
+    }
+
+
+    // Also reset UI selections so pickers show the correct (new) teams
+    uiState.value.selectedStrikerId = null
+    uiState.value.selectedNonStrikerId = null
+    uiState.value.selectedBowlerId = null
 
     if (s.total_runs != null) g.total_runs = s.total_runs
     if (s.total_wickets != null) g.total_wickets = s.total_wickets
@@ -1088,8 +1400,17 @@ async function stopInterruptionAction(kind?: 'weather' | 'injury' | 'light' | 'o
     if (s.current_inning != null) g.current_inning = s.current_inning
     if (s.status != null) g.status = s.status
     if (s.target != null) g.target = s.target
+    const prevBatName = g.batting_team_name
+    const prevBowlName = g.bowling_team_name
     if (s.batting_team_name != null) g.batting_team_name = s.batting_team_name
     if (s.bowling_team_name != null) g.bowling_team_name = s.bowling_team_name
+    // If the team names changed, nuke stale picks
+    if (g.batting_team_name !== prevBatName || g.bowling_team_name !== prevBowlName) {
+      uiState.value.selectedStrikerId = null
+      uiState.value.selectedNonStrikerId = null
+      uiState.value.selectedBowlerId = null
+    }
+
     if ((s as any).needs_new_batter != null) (currentGame.value as any).needs_new_batter = Boolean((s as any).needs_new_batter)
     if ((s as any).needs_new_over   != null) (currentGame.value as any).needs_new_over   = Boolean((s as any).needs_new_over)
 
@@ -1101,14 +1422,20 @@ async function stopInterruptionAction(kind?: 'weather' | 'injury' | 'light' | 'o
       g.bowling_scorecard = mergeScorecard(g.bowling_scorecard as any, s.bowling_scorecard as any) as any
     }
 
-    if (s.current_striker_id !== undefined && s.current_striker_id !== null) {
-      g.current_striker_id = s.current_striker_id
-      // reflect in UI selectors if they differ
-      uiState.value.selectedStrikerId = s.current_striker_id
-    }
-    if (s.current_non_striker_id !== undefined && s.current_non_striker_id !== null) {
-      g.current_non_striker_id = s.current_non_striker_id
-      uiState.value.selectedNonStrikerId = s.current_non_striker_id
+    const hasDistinct =
+      s.current_striker_id != null &&
+      s.current_non_striker_id != null &&
+      s.current_striker_id !== s.current_non_striker_id
+
+    if (hasDistinct) {
+      g.current_striker_id = s.current_striker_id!
+      g.current_non_striker_id = s.current_non_striker_id!
+      uiState.value.selectedStrikerId = s.current_striker_id!
+      uiState.value.selectedNonStrikerId = s.current_non_striker_id!
+    } else {
+      // still mirror onto game object if provided, but don’t clobber UI picks yet
+      if (s.current_striker_id != null) g.current_striker_id = s.current_striker_id
+      if (s.current_non_striker_id != null) g.current_non_striker_id = s.current_non_striker_id
     }
 
     // 🔧 bowler from snapshot should drive scoring gate
@@ -1133,12 +1460,23 @@ async function stopInterruptionAction(kind?: 'weather' | 'injury' | 'light' | 'o
     // Append last_delivery if new (stronger dedupe)
     const ld = (s as any).last_delivery as GameState['deliveries'][number] | null | undefined
     if (ld) {
+      ;(ld as any).inning_no = Number((s as any)?.current_inning ?? (currentGame.value as any)?.current_inning ?? 0)
       if (!Array.isArray(g.deliveries)) g.deliveries = []
-      const k = deliveryKey(ld)
-      const exists = g.deliveries.some(d => deliveryKey(d) === k)
-      if (!exists) g.deliveries.push(ld)
+      const inning_no = typeof s.current_inning === 'number'
+        ? s.current_inning
+        : (g.current_inning ?? 1)
+
+      const withInnings = { ...ld, inning_no } as any
+      const k = deliveryKey(withInnings)
+      const exists = g.deliveries.some(d => deliveryKey(d as any) === k)
+      if (!exists) g.deliveries.push(withInnings)
     }
+
+
+    
+    stabilizeBattersFromLastDelivery(g, s)
   }
+
 
   // -------------------------------------------------------------------------
   // Socket handlers
@@ -1146,6 +1484,12 @@ async function stopInterruptionAction(kind?: 'weather' | 'injury' | 'light' | 'o
   function handleStateUpdate(payload: { id: string; snapshot: any }): void {
     if (!liveGameId.value || payload.id !== liveGameId.value) return
     const snap = normalizeServerSnapshot(payload.snapshot)
+    console.debug('BAT IDs from snapshot',
+      snap.current_striker_id,
+      snap.current_non_striker_id,
+      payload?.snapshot?.batsmen?.striker?.id,
+      payload?.snapshot?.batsmen?.non_striker?.id
+    )
     liveSnapshot.value = snap
     lastLiveAt.value = Date.now()
     applySnapshotToGame(snap)
@@ -1187,7 +1531,12 @@ async function stopInterruptionAction(kind?: 'weather' | 'injury' | 'light' | 'o
     }
   }
 
-
+  console.log(
+    '[applySnapshotToGame] inning',
+    (currentGame.value as any)?.current_inning,
+    'deliveries:',
+    (currentGame.value as any)?.deliveries?.length
+  )
   const handleCommentary = (msg: { id: string; at: number; text: string; over?: string; author?: string; game_id: string }): void => {
     if (!liveGameId.value || msg.game_id !== liveGameId.value) return
     commentaryFeed.value.unshift({ id: msg.id, at: msg.at, over: msg.over, text: msg.text, author: msg.author })
@@ -1457,6 +1806,8 @@ async function postDeliveryAuthoritative(
             target: typeof (snap as any).dls.target === 'number' ? (snap as any).dls.target : undefined,
           }
         }
+
+        await backfillRecentDeliveries(60)
       }
       void refreshInterruptions()
     } catch { /* ignore */ }
@@ -1510,7 +1861,7 @@ function mapUnifiedUiToAuthoritativeOpts(input: any): {
     uiState.value.error = null
     try {
       uiState.value.loading = true
-
+  
       // If this looks like the UI "unified" shape, route via authoritative helper
       const looksLikeUiPayload =
         !('striker_id' in (delivery || {})) ||
@@ -1597,8 +1948,34 @@ async function changeBowlerMidOver(gameId: string, newBowlerId: string, reason: 
   ): Promise<UiSnapshot | undefined> {
     operationLoading.value.startInnings = true
     uiState.value.error = null
+
     try {
       uiState.value.loading = true
+      if (!gameId) throw new Error('Missing gameId')
+
+      // --- guards: block if match already completed or innings exhausted -----
+      const statusUpper = String(
+        currentGame.value?.status ?? liveSnapshot.value?.status ?? ''
+      ).toUpperCase()
+
+      const ended =
+        statusUpper === 'COMPLETED' ||
+        statusUpper === 'ABANDONED' ||
+        Boolean((currentGame.value as any)?.is_game_over || (liveSnapshot.value as any)?.is_game_over)
+
+      if (ended) {
+        // Soft-fail: nothing to do if game is over
+        return undefined
+      }
+
+      const inningsNow = Number(currentGame.value?.current_inning ?? liveSnapshot.value?.current_inning ?? 1)
+      const MAX_INNINGS = 2
+      if (inningsNow >= MAX_INNINGS) {
+        // No 3rd innings in MVP
+        return undefined
+      }
+
+      // --- call API -----------------------------------------------------------
       const svc: any = apiService as any
       if (typeof svc.startNextInnings !== 'function') {
         // thin fallback
@@ -1620,7 +1997,7 @@ async function changeBowlerMidOver(gameId: string, newBowlerId: string, reason: 
         })
       }
 
-      // Pull authoritative snapshot right away
+      // --- Pull authoritative snapshot right away ----------------------------
       const snap = await apiService.getSnapshot(gameId)
       const coerced = coerceSnapshot(snap || {})
       liveSnapshot.value = coerced
@@ -1628,19 +2005,41 @@ async function changeBowlerMidOver(gameId: string, newBowlerId: string, reason: 
       syncOversLimitFrom(snap)
       applyDlsPanelFrom(snap)
 
-      // Clear stale selections
-      uiState.value.selectedStrikerId = null
-      uiState.value.selectedNonStrikerId = null
-      uiState.value.selectedBowlerId = null
+      await backfillRecentDeliveries(60)
 
-      // If an opening bowler was chosen, immediately start the first over
-      if (opts?.opening_bowler_id) {
+      // Clear the "needs new innings" gates locally
+      ;(liveSnapshot.value as any).needs_new_innings = false
+      if (currentGame.value) {
+        (currentGame.value as any).needs_new_innings = false
+        // Only force status back to in_progress if the backend hasn't already completed it
+        const newStatus = String((currentGame.value as any).status || '').toUpperCase()
+        const newEnded =
+          newStatus === 'COMPLETED' ||
+          Boolean((currentGame.value as any).is_game_over)
+        if (!newEnded) {
+          ;(currentGame.value as any).status = 'in_progress'
+        }
+      }
+
+      // Ensure liveGameId exists so startNewOver can run
+      if (!liveGameId.value) liveGameId.value = gameId
+
+      // If an opening bowler was chosen and the match isn't over, immediately start the first over
+      const postStatusUpper = String(coerced?.status ?? '').toUpperCase()
+      const postEnded =
+        postStatusUpper === 'COMPLETED' || Boolean((coerced as any)?.is_game_over)
+      if (opts?.opening_bowler_id && liveGameId.value && !postEnded) {
         try {
           await startNewOver(opts.opening_bowler_id)
         } catch {
           // non-fatal; UI can still prompt to choose a bowler
         }
       }
+
+      // Keep UI selections in sync with provided openers
+      if (opts?.striker_id)        uiState.value.selectedStrikerId = opts.striker_id as string
+      if (opts?.non_striker_id)    uiState.value.selectedNonStrikerId = opts.non_striker_id as string
+      if (opts?.opening_bowler_id) uiState.value.selectedBowlerId    = opts.opening_bowler_id as string
 
       return coerced
     } catch (e) {
@@ -1683,31 +2082,41 @@ async function changeBowlerMidOver(gameId: string, newBowlerId: string, reason: 
     return id && team ? (team.players.find((p) => p.id === id) ?? null) : null
   })
 
-   const canScore = computed<boolean>(() => {
-    const g  = currentGame.value
-    const s  = state.value
-    const ui = uiState.value
+   // replace your canScore computed with this
+const canScore = computed<boolean>(() => {
+  const g  = currentGame.value
+  const s  = state.value
+  const ui = uiState.value
 
-    const statusOk =
-      !!g && ['in_progress', 'live', 'started'].includes(String(g.status || ''))
+  // stop everything if the match is done
+  if (isGameOver.value) return false
 
-    const haveBatters =
-      !!ui.selectedStrikerId &&
-      !!ui.selectedNonStrikerId &&
-      ui.selectedStrikerId !== ui.selectedNonStrikerId
+  const statusOk =
+    !!g && ['in_progress', 'live', 'started'].includes(String(g.status || ''))
 
-    const serverHasBowler = !!s.current_bowler_id
-    const bowlerMatches =
-      !ui.selectedBowlerId ? false : ui.selectedBowlerId === s.current_bowler_id
+  const haveBatters =
+    !!ui.selectedStrikerId &&
+    !!ui.selectedNonStrikerId &&
+    ui.selectedStrikerId !== ui.selectedNonStrikerId
 
-    const gatesClear =
-      !needsNewBatter.value &&
-      !needsNewOver.value &&
-      !ui.loading &&
-      !ui.scoringDisabled
+  const firstBallOfOver = Number(s.current_over_balls || 0) === 0
 
-    return Boolean(statusOk && haveBatters && serverHasBowler && bowlerMatches && gatesClear)
-  })
+  const serverHasBowler = !!s.current_bowler_id
+  const uiHasBowler = !!ui.selectedBowlerId
+
+  const bowlerOk =
+    (serverHasBowler && ui.selectedBowlerId === s.current_bowler_id) ||
+    (firstBallOfOver && uiHasBowler)
+
+  const gatesClear =
+    !ui.loading &&
+    !ui.scoringDisabled &&
+    !needsNewBatter.value &&
+    ( !needsNewOver.value || (firstBallOfOver && uiHasBowler) )
+
+  return Boolean(statusOk && haveBatters && bowlerOk && gatesClear)
+})
+
 
 
   
@@ -1988,6 +2397,8 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     isGameCompleted,
     isFirstInnings,
     isSecondInnings,
+    isGameOver,
+    resultText,
 
     // Teams/players
     battingTeam,
@@ -2004,6 +2415,11 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     targetDisplay,
     runsRequired,
 
+    // Chase helpers (NEW)
+    targetSafe,
+    ballsBowledTotal,
+    requiredRunRate,
+
     // Shaped scorecards
     battingRows,          // keep old for compatibility
     bowlingRows,          // keep old for compatibility
@@ -2017,7 +2433,8 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     fieldingSubs,
     fielderRosterAll,
     fieldingBench,
-
+    
+    currentBowlerFigures,
     // Live
     isLive,
     liveGameId,
