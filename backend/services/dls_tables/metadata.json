@@ -1,0 +1,25 @@
+{
+  "build_timestamp": "2025-08-20T21:46:19.674936+00:00",
+  "source_document": {
+    "doc_title": "DUCKWORTH-LEWIS METHODOLOGY FOR RE-CALCULATING THE TARGET SCORE IN AN INTERRUPTED MATCH",
+    "doc_effective_date": "2006-01-01",
+    "doc_url": "https://images.icc-cricket.com/image/upload/prd/orlbya4cqyhqaceje3b2.pdf",
+    "retrieved_at": "2025-08-20T21:46:18.832074+00:00"
+  },
+  "formats": {
+    "20": {
+      "filename": "icc_dls_international_20.json",
+      "size_bytes": 14821,
+      "balls_range": "0-120"
+    },
+    "50": {
+      "filename": "icc_dls_international_50.json",
+      "size_bytes": 36242,
+      "balls_range": "0-300"
+    }
+  },
+  "checksums": {
+    "icc_dls_international_20.json": "02ade33f33e3a4989aed27922ffedb21efb6dfd258733eb6145dd52e4caf6bab",
+    "icc_dls_international_50.json": "76089d1ff80e2f522638790e59e9c0ad7c36117a6b5d4131f1ae59e48a3ed616"
+  }
+}

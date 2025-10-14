@@ -2,8 +2,14 @@
 // Single, canonical API client aligned with FastAPI backend & the Pinia game store.
 
 export const API_BASE =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE) ||
-  (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '') ||
+  (typeof import.meta !== 'undefined' &&
+    // Prefer VITE_API_BASE (your env files now use this)
+    (import.meta.env?.VITE_API_BASE ||
+      // keep a loose fallback if someone still has the old key around
+      import.meta.env?.VITE_API_BASE_URL)) ||
+  (typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.host}`
+    : '') ||
   '';
 
 function url(path: string) {
@@ -22,46 +28,57 @@ export function getErrorMessage(err: unknown): string {
     if (anyErr?.detail) return String(anyErr.detail);
     if (anyErr?.message) return String(anyErr.message);
     if (anyErr?.response?.data?.detail) return String(anyErr.response.data.detail);
+    if (anyErr?.status && anyErr?.statusText) return `${anyErr.status} ${anyErr.statusText}`;
   } catch {}
   return 'Request failed';
 }
 
 export type TossDecision = 'bat' | 'bowl';
 
+/** Low-level fetch wrapper that preserves JSON errors from FastAPI. */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method || 'GET').toUpperCase()
+  const hasBody = init?.body !== undefined && init?.body !== null
+  const isForm = typeof FormData !== 'undefined' && init?.body instanceof FormData
+  const isUrlParams = typeof URLSearchParams !== 'undefined' && init?.body instanceof URLSearchParams
+  const isJSONish = hasBody && !isForm && !isUrlParams && typeof init?.body === 'string'
+
   const res = await fetch(url(path), {
+    // For GETs, make results uncacheable so live UI always sees fresh data.
+    cache: method === 'GET' ? 'no-store' : init?.cache,
+    // If you use cookie/session auth, uncomment the next line:
+    // credentials: 'include',
     headers: {
-      ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      ...(isJSONish ? { 'Content-Type': 'application/json' } : {}),
+      ...(method === 'GET' ? { 'Cache-Control': 'no-store' } : {}),
       ...(init?.headers || {}),
     },
     ...init,
-  });
+  })
 
   if (!res.ok) {
-    // Try to surface backend-provided detail (e.g., 409 gate messages)
-    let detail: any = undefined;
-    try {
-      detail = await res.json();
-    } catch {}
-    const msg = detail?.detail || `${res.status} ${res.statusText}`;
-    // Throw a rich Error message string; callers can parse or display directly
-    const err = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
-    // @ts-expect-error enrich error for callers that check .status / .detail
-    err.status = res.status;
+    let detail: any = undefined
+    try { detail = await res.json() } catch {}
+    const msg = detail?.detail || `${res.status} ${res.statusText}`
+    const err = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
     // @ts-expect-error
-    err.detail = detail?.detail ?? null;
-    throw err;
+    err.status = res.status
+    // @ts-expect-error
+    err.detail = detail?.detail ?? null
+    throw err
   }
 
-  if (res.status === 204) return undefined as unknown as T;
-  return (await res.json()) as T;
+  if (res.status === 204) return undefined as unknown as T
+  return (await res.json()) as T
 }
+
 
 /* ----------------------------- Types (client) ----------------------------- */
 
 // Create game — mirrors backend CreateGameRequest in main.py
 export type MatchType = 'limited' | 'multi_day' | 'custom';
 export type Decision = 'bat' | 'bowl';
+export type ExtraCode = 'nb' | 'wd' | 'b' | 'lb';
 
 export interface CreateGameRequest {
   team_a_name: string;
@@ -96,12 +113,17 @@ export interface ScoreDeliveryRequest {
   striker_id: string;
   non_striker_id: string;
   bowler_id: string;
-  runs_scored: number;
-  extra?: 'wd' | 'nb' | 'b' | 'lb'; // server accepts wire codes
-  is_wicket?: boolean;
+
+  // scoring
+  runs_off_bat?: number;    // use ONLY for no-balls (off-the-bat runs; server adds +1 penalty)
+  runs_scored?: number;     // legal balls (total off bat), or the EXTRA COUNT for wd/b/lb
+  extra?: 'wd' | 'nb' | 'b' | 'lb';
+
+  // wicket
+  is_wicket: boolean;
   dismissal_type?: string | null;
   dismissed_player_id?: string | null;
-  commentary?: string | null;
+  commentary?: string;
   fielder_id?: string | null;
 }
 
@@ -110,6 +132,12 @@ export interface Snapshot {
   id?: string;
   status?: string;
   score?: { runs: number; wickets: number; overs: number | string };
+  batsmen: {
+    striker: { id: string | null; name: string; runs: number; balls: number; is_out: boolean };
+    non_striker: { id: string | null; name: string; runs: number; balls: number; is_out: boolean };
+  };
+  current_bowler: { id: string | null; name: string | null };
+  overs: string;
   total_runs?: number;
   total_wickets?: number;
   overs_completed?: number;
@@ -119,7 +147,41 @@ export interface Snapshot {
   bowling_team_name?: string;
   batting_scorecard?: Record<string, any>;
   bowling_scorecard?: Record<string, any>;
-  last_delivery?: Record<string, any> | null;
+  last_delivery?: {
+    over_number: number;
+    ball_number: number;
+    bowler_id: string;
+    striker_id: string;
+    non_striker_id: string;
+    // NEW fields coming from backend snapshot
+    runs_off_bat?: number;
+    extra_type?: ExtraCode | null;
+    extra_runs?: number;
+    runs_scored?: number; // total for this ball
+  } | null;
+    // NEW from backend
+  dls?: { method: 'DLS'; par?: number; target?: number; ahead_by?: number };
+  extras_totals?: {
+    wides: number; no_balls: number; byes: number; leg_byes: number; penalty: number; total: number;
+  };
+  fall_of_wickets?: Array<{
+    score: number; wicket: number; batter_id: string; batter_name: string;
+    over: string; dismissal_type?: string | null;
+    bowler_id?: string | null; bowler_name?: string | null;
+    fielder_id?: string | null; fielder_name?: string | null;
+  }>;
+  last_ball_bowler_id?: string | null;
+  current_bowler_id?: string | null;
+  balls_bowled_total?: number;
+  needs_new_innings?: boolean;
+  teams?: { batting: { name: string }; bowling: { name: string } };
+  players?: {
+    batting: Array<{ id: string; name: string }>;
+    bowling: Array<{ id: string; name: string }>;
+  };
+  interruptions?: Interruption[];
+  mini_batting_card?: any[];
+  mini_bowling_card?: any[];
 
   // Gate flags (NEW)
   needs_new_batter?: boolean;
@@ -186,6 +248,176 @@ export interface StartOverBody {
 export interface ReplaceBatterBody {
   new_batter_id: string;
 }
+export interface MidOverChangeBody {
+  new_bowler_id: string;
+  reason?: 'injury' | 'other';
+}
+export interface OpenersBody {
+  striker_id: string;
+  non_striker_id: string;
+}
+export interface NextBatterBody {
+  batter_id: string;
+}
+
+// below other endpoint bodies
+export interface StartNextInningsBody {
+  striker_id?: string | null;
+  non_striker_id?: string | null;
+  opening_bowler_id?: string | null;
+}
+
+// --- interruptions (robust) ---
+
+export type Interruption = {
+  id: string
+  kind: 'weather' | 'injury' | 'light' | string
+  note?: string | null
+  started_at: string
+  ended_at?: string | null
+}
+
+async function getInterruptions(gameId: string): Promise<Interruption[]> {
+  const r = await request<any>(`/games/${encodeURIComponent(gameId)}/interruptions`)
+  return Array.isArray(r) ? r
+    : Array.isArray(r?.items) ? r.items
+    : Array.isArray(r?.interruptions) ? r.interruptions
+    : []
+}
+
+/** POST /interruptions/start with best-effort encoding */
+async function openInterruption(
+  gameId: string,
+  kind: 'weather' | 'injury' | 'light' | 'other' | string = 'weather',
+  note?: string
+): Promise<Interruption> {
+  const path = `/games/${encodeURIComponent(gameId)}/interruptions/start`
+
+  // try JSON {kind, note}
+  try {
+    const r = await request<any>(path, { method: 'POST', body: JSON.stringify({ kind, note }) })
+    return Array.isArray(r?.interruptions) ? r.interruptions.at(-1) : (r as Interruption)
+  } catch (e: any) {
+    // then form-encoded
+    if (e?.status === 400 || e?.status === 422) {
+      try {
+        const body = new URLSearchParams()
+        body.set('kind', kind)
+        if (note) body.set('note', note)
+        const res = await fetch(url(path), { method: 'POST', body }) // browser sets proper header
+        if (!res.ok) throw res
+        const j = await res.json()
+        return Array.isArray(j?.interruptions) ? j.interruptions.at(-1) : (j as Interruption)
+      } catch {}
+      // finally querystring (no body)
+      const qs = new URLSearchParams({ kind, ...(note ? { note } : {}) }).toString()
+      const res = await fetch(url(`${path}?${qs}`), { method: 'POST' })
+      if (!res.ok) {
+        let detail: any; try { detail = await res.json() } catch {}
+        const err = new Error(detail?.detail || `${res.status} ${res.statusText}`)
+        // @ts-expect-error
+        err.status = res.status
+        // @ts-expect-error
+        err.detail = detail?.detail ?? null
+        throw err
+      }
+      const j = await res.json()
+      return Array.isArray(j?.interruptions) ? j.interruptions.at(-1) : (j as Interruption)
+    }
+    throw e
+  }
+}
+
+/** POST /interruptions/stop — omit {"kind": null}. Accepts JSON, falls back to empty body. */
+async function stopInterruption(
+  gameId: string,
+  kind?: 'weather' | 'injury' | 'light' | 'other'
+): Promise<{ ok: true; interruptions: Interruption[] }> {
+  const path = `/games/${encodeURIComponent(gameId)}/interruptions/stop`
+  try {
+    if (kind) {
+      return await request(path, { method: 'POST', body: JSON.stringify({ kind }) }) as any
+    }
+    // empty body
+    return await request(path, { method: 'POST' }) as any
+  } catch (e: any) {
+    const msg = (e?.detail || e?.message || '').toString().toLowerCase()
+    // treat “no active interruption” as success
+    if (e?.status === 400 && (msg.includes('no active') || msg.includes('already stopped'))) {
+      return { ok: true, interruptions: [] }
+    }
+    // try one more time with no body
+    if (kind && (e?.status === 400 || e?.status === 422)) {
+      return await request(path, { method: 'POST' }) as any
+    }
+    throw e
+  }
+}
+
+export { getInterruptions, openInterruption, stopInterruption }
+
+
+/* ----------------------------- DLS helpers (optional routes enabled on server) ----------------------------- */
+
+export type DLSPreviewOut = {
+  team1_score: number;
+  team1_resources: number;
+  team2_resources: number;
+  target: number;
+  format_overs: 20 | 50;
+  G50: number;
+};
+
+// 1) Add these helper types near the other DLS bits (optional but tidy)
+export interface DlsRevisedTargetIn {
+  kind: 'odi' | 't20';
+  innings: 1 | 2;
+  max_overs?: number;
+}
+export interface DlsRevisedTargetOut {
+  R1_total: number;
+  R2_total: number;
+  S1: number;
+  target: number;
+}
+
+export interface DlsParNowIn {
+  kind: 'odi' | 't20';
+  innings: 1 | 2;
+  max_overs?: number;
+}
+export interface DlsParNowOut {
+  R1_total: number;
+  R2_used: number;
+  S1: number;
+  par: number;
+  ahead_by: number;
+}
+
+export async function getDlsPreview(gameId: string, G50 = 245): Promise<DLSPreviewOut> {
+  return request<DLSPreviewOut>(`/games/${encodeURIComponent(gameId)}/dls/preview?G50=${G50}`)
+}
+
+export async function postDlsApply(
+  gameId: string,
+  G50 = 245
+): Promise<DLSPreviewOut & { applied: boolean }> {
+  return request<DLSPreviewOut & { applied: boolean }>(
+    `/games/${encodeURIComponent(gameId)}/dls/apply?G50=${G50}`,
+    { method: 'POST' }
+  )
+}
+
+export async function patchReduceOvers(gameId: string, innings: 1 | 2, newOvers: number) {
+  return request<{ innings: number; new_overs: number; new_balls_limit: number }>(
+    `/games/${encodeURIComponent(gameId)}/overs/reduce`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ innings, new_overs: newOvers }),
+    }
+  )
+}
+
 
 /* ----------------------------- API surface ------------------------------- */
 
@@ -194,8 +426,7 @@ export const apiService = {
   createGame: (body: CreateGameRequest) =>
     request<GameMinimal>('/games', { method: 'POST', body: JSON.stringify(body) }),
 
-  getGame: (gameId: string) =>
-    request<GameMinimal>(`/games/${encodeURIComponent(gameId)}`),
+  getGame: (gameId: string) => request<GameMinimal>(`/games/${encodeURIComponent(gameId)}`),
 
   getSnapshot: (gameId: string) =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/snapshot`),
@@ -212,32 +443,94 @@ export const apiService = {
       method: 'POST',
     }),
 
-  setOversLimit: (gameId: string, body: OversLimitBody) =>
-    request<{ id: string; overs_limit: number }>(
-      `/games/${encodeURIComponent(gameId)}/overs-limit`,
-      { method: 'POST', body: JSON.stringify(body) },
-    ),
+  /* Match limits / rain */
+  setOversLimit: (gameId: string, body: OversLimitBody | number) => {
+  const payload = typeof body === 'number' ? { overs_limit: body } : body
+  return request<{ id: string; overs_limit: number }>(
+    `/games/${encodeURIComponent(gameId)}/overs-limit`,
+    { method: 'POST', body: JSON.stringify(payload) },
+  )
+},
 
+// 2) Add these two methods to the apiService object (near the other DLS/overs methods)
+dlsRevisedTarget: (gameId: string, body: DlsRevisedTargetIn) =>
+  request<DlsRevisedTargetOut>(
+    `/games/${encodeURIComponent(gameId)}/dls/revised-target`,
+    { method: 'POST', body: JSON.stringify(body) }
+  ),
+
+dlsParNow: (gameId: string, body: DlsParNowIn) =>
+  request<DlsParNowOut>(
+    `/games/${encodeURIComponent(gameId)}/dls/par`,
+    { method: 'POST', body: JSON.stringify(body) }
+  ),
+
+  /* Team roles */
   setTeamRoles: (gameId: string, body: TeamRoleUpdate) =>
     request<{ ok: true; team_roles: any }>(
       `/games/${encodeURIComponent(gameId)}/team-roles`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
 
-  // NEW: Start a new over (gate action)
+  /* 🔵 Over gates */
+  // Start a new over (select bowler) — matches POST /games/{id}/overs/start
   startOver: (gameId: string, bowler_id: string) =>
-    request<Snapshot>(`/games/${encodeURIComponent(gameId)}/overs/start`, {
+    request<{ ok: true; current_bowler_id: string }>(
+      `/games/${encodeURIComponent(gameId)}/overs/start`,
+      { method: 'POST', body: JSON.stringify({ bowler_id } as StartOverBody) },
+    ),
+
+  // Mid-over change (injury/other) — matches POST /games/{id}/overs/change_bowler
+  changeBowlerMidOver: (gameId: string, new_bowler_id: string, reason: 'injury' | 'other' = 'injury') =>
+    request<Snapshot>(`/games/${encodeURIComponent(gameId)}/overs/change_bowler`, {
       method: 'POST',
-      body: JSON.stringify({ bowler_id } as StartOverBody),
+      body: JSON.stringify({ new_bowler_id, reason } as MidOverChangeBody),
     }),
 
-  // NEW: Replace the next batter (gate action)
+  /* 🟢 Batter gates */
+  // Replace the out batter before next ball — POST /games/{id}/batters/replace
   replaceBatter: (gameId: string, new_batter_id: string) =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/batters/replace`, {
       method: 'POST',
       body: JSON.stringify({ new_batter_id } as ReplaceBatterBody),
     }),
 
+  // Explicitly set “next batter” (optional QoL) — POST /games/{id}/next-batter
+  setNextBatter: (gameId: string, batter_id: string) =>
+    request<{ ok: true; current_striker_id: string }>(
+      `/games/${encodeURIComponent(gameId)}/next-batter`,
+      { method: 'POST', body: JSON.stringify({ batter_id } as NextBatterBody) },
+    ),
+  
+  deliveries: (
+    gameId: string,
+    params?: { innings?: number; limit?: number; order?: 'asc' | 'desc' }
+  ) => {
+    const qp = new URLSearchParams()
+    if (params?.innings != null) qp.set('innings', String(params.innings))
+    if (params?.limit != null)   qp.set('limit',   String(params.limit))
+    if (params?.order)           qp.set('order',   params.order) // NEW
+    const qs = qp.toString()
+    const path = `/games/${encodeURIComponent(gameId)}/deliveries${qs ? `?${qs}` : ''}`
+    return request<{ game_id: string; count: number; deliveries: any[] }>(path)
+  },
+
+  recentDeliveries: (gameId: string, limit = 10) =>
+    request<{ game_id: string; count: number; deliveries: any[] }>(
+      `/games/${encodeURIComponent(gameId)}/recent_deliveries?limit=${encodeURIComponent(String(limit))}`
+    ),
+
+
+  // Set openers (optional QoL) — POST /games/{id}/openers
+  setOpeners: (gameId: string, body: OpenersBody) =>
+    request<Snapshot>(`/games/${encodeURIComponent(gameId)}/openers`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getInterruptions,
+  openInterruption,
+  stopInterruption,
   /* Contributors */
   addContributor: (gameId: string, body: ContributorIn) =>
     request<Contributor>(`/games/${encodeURIComponent(gameId)}/contributors`, {
@@ -280,9 +573,11 @@ export const apiService = {
 
   /* Optional placeholder (backend route not present yet) */
   // This will 404 until you add a backend route; the store calls it only if you wire a UI button.
-  startNextInnings: async (gameId: string) => {
-    throw new Error('startNextInnings endpoint not implemented on server');
-  },
+  startNextInnings: (gameId: string, body: StartNextInningsBody) =>
+  request<Snapshot>(`/games/${encodeURIComponent(gameId)}/innings/start`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }),
 };
 
 export default apiService;

@@ -1,0 +1,10 @@
+{
+  "items": [
+    { "logoUrl": "/static/sponsors/cricksy/Cricksy.png",                 "alt": "Cricksy" },
+    { "logoUrl": "/static/sponsors/cricksy/Cricksy_no_bg.png",           "alt": "Cricksy (no bg)" },
+    { "logoUrl": "/static/sponsors/cricksy/Cricksy_mono.png",            "alt": "Cricksy mono" },
+    { "logoUrl": "/static/sponsors/cricksy/Cricksy_outline.png",         "alt": "Cricksy outline" },
+    { "logoUrl": "/static/sponsors/cricksy/Cricksy_Black_&_white.png",   "alt": "Cricksy B/W" },
+    { "logoUrl": "/static/sponsors/cricksy/Cricksy_colored_circle.png",  "alt": "Cricksy circle" }
+  ]
+}

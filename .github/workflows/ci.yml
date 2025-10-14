@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      API_BASE: http://localhost:8000
+      LLM_PROVIDER: openai
+      LLM_MODEL: gpt-4o-mini
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt || true
+          pip install httpx pytest openai anthropic
+
+      - name: Start backend (docker compose)
+        run: |
+          docker compose up -d --wait || true
+          # If you don't use compose, start your API another way and keep API_BASE in sync.
+
+      - name: Run tests
+        id: pytest
+        continue-on-error: true
+        run: |
+          pytest -q --maxfail=1 --disable-warnings || echo "PYTEST_FAILED=1" >> $GITHUB_ENV
+
+      - name: Collect artifacts
+        run: |
+          python tools/collect_artifacts.py
+        if: always()
+
+      - name: LLM triage on failure
+        if: env.PYTEST_FAILED == '1'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python tools/llm_triage.py
+
+      - name: Create PR with patch (if any)
+        if: env.PYTEST_FAILED == '1'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "LLM triage: proposed fix"
+          title: "LLM triage: proposed fix"
+          body: |
+            Automated triage produced a patch. See artifacts/summary.md for rationale.
+          add-paths: |
+            backend/**
+            tools/**
+            artifacts/**
+          branch: llm/triage-fix

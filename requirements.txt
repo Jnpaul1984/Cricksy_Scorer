@@ -18,6 +18,8 @@ pydantic-settings==2.1.0
 python-multipart==0.0.6
 httpx==0.25.2
 
+psycopg[binary]>=3.1
+
 # CORS middleware (handled by FastAPI/Starlette)
 # No extra package needed
 

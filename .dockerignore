@@ -1,0 +1,12 @@
+
+!backend/tests/ci_smoke/fixtures/first_innings_120.json
+
+!backend/tests/ci_smoke/fixtures/second_innings_120.json
+
+!backend/
+
+!backend/tests/
+
+!backend/tests/ci_smoke/
+
+!backend/tests/ci_smoke/fixtures/
