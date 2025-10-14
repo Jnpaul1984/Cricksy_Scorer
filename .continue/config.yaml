@@ -1,0 +1,39 @@
+models:
+  - title: GPT-4o
+    provider: openai
+    model: gpt-4o
+    apiKey: ${OPENAI_API_KEY}
+
+defaultModel: GPT-4o
+
+allowFileEdits: true
+allowCommands: true
+
+codebase:
+  maxFiles: 500
+  ignoreGlobs:
+    - "**/node_modules/**"
+    - "**/.git/**"
+    - "**/.venv/**"
+    - "**/venv/**"
+    - "**/__pycache__/**"
+    - "**/.mypy_cache/**"
+    - "**/.pytest_cache/**"
+    - "**/dist/**"
+    - "**/.vite/**"
+    - "**/coverage/**"
+
+commands:
+  - name: "Backend tests"
+    shell: "cd backend && pytest -q --maxfail=1 --disable-warnings"
+  - name: "Backend type check"
+    shell: "cd backend && mypy --ignore-missing-imports ."
+  - name: "Backend lint"
+    shell: "cd backend && ruff check ."
+
+  - name: "Frontend unit tests"
+    shell: "cd frontend && npm run test:unit"
+  - name: "Frontend type check"
+    shell: "cd frontend && npm run typecheck"
+  - name: "Frontend lint"
+    shell: "cd frontend && npm run lint"
