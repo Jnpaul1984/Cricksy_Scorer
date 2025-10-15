@@ -224,8 +224,8 @@ class TeamRoleUpdate(BaseModel):
 class MatchMethod(str, Enum):
     by_runs = "by runs"
     by_wickets = "by wickets"
-    tie = "tie"
-    no_result = "no result"
+    tie = "tie"# ... existing code ...
+    no_result = 'no result'
 
 class MatchResult(BaseModel):
     """
@@ -240,6 +240,11 @@ class MatchResult(BaseModel):
     result_text: Optional[str] = None
     completed_at: Optional[datetime] = None
 
+class MatchResultRequest(BaseModel):
+    match_id: UUID# ... existing code ...
+    winner: Optional[str] = None  # ID of the winning team or None for a draw
+    team_a_score: int  # Total score of Team A
+    team_b_score: int  # Total score of Team B
 class Game(BaseModel):
     game_id: str = Field(default=..., alias='id')
 
@@ -272,10 +277,10 @@ class Game(BaseModel):
     target: Optional[int] = None
 
     # --- Result / completion (NEW / updated) ---
-    result: Optional[MatchResult] = None
+    result: Optional[Union[MatchResult, MatchResultRequest]] = None
     is_game_over: bool = False
     completed_at: Optional[datetime] = None
-
+    
     # --- Team roles ---
     team_a_captain_id: Optional[str] = None
     team_a_keeper_id: Optional[str] = None
@@ -389,3 +394,4 @@ class Snapshot(BaseModel):
     completed_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)
+
