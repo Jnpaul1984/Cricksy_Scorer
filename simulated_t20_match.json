@@ -1,0 +1,45 @@
+{
+  "matchType": "T20",
+  "teams": ["Team Alpha", "Team Beta"],
+  "venue": "Generic Cricket Ground",
+  "innings": [
+    {
+      "team": "Team Alpha",
+      "runs": 157,
+      "wickets": 6,
+      "balls": [
+        {"over": 1, "ball": 1, "bowler": "Bowler B1", "batsman": "Batsman A1", "runs": 0, "extras": 0, "wicket": false},
+        {"over": 1, "ball": 2, "bowler": "Bowler B1", "batsman": "Batsman A1", "runs": 4, "extras": 0, "wicket": false},
+        {"over": 1, "ball": 3, "bowler": "Bowler B1", "batsman": "Batsman A1", "runs": 1, "extras": 0, "wicket": false},
+        {"over": 1, "ball": 4, "bowler": "Bowler B1", "batsman": "Batsman A2", "runs": 6, "extras": 0, "wicket": false},
+        {"over": 1, "ball": 5, "bowler": "Bowler B1", "batsman": "Batsman A2", "runs": 0, "extras": 0, "wicket": false},
+        {"over": 1, "ball": 6, "bowler": "Bowler B1", "batsman": "Batsman A2", "runs": 2, "extras": 0, "wicket": false},
+        {"over": 2, "ball": 1, "bowler": "Bowler B2", "batsman": "Batsman A1", "runs": 0, "extras": 0, "wicket": true, "wicketType": "bowled", "fielder": ""},
+        {"over": 2, "ball": 2, "bowler": "Bowler B2", "batsman": "Batsman A3", "runs": 1, "extras": 0, "wicket": false},
+        {"over": 2, "ball": 3, "bowler": "Bowler B2", "batsman": "Batsman A2", "runs": 1, "extras": 0, "wicket": false},
+        {"over": 2, "ball": 4, "bowler": "Bowler B2", "batsman": "Batsman A3", "runs": 0, "extras": 1, "wicket": false, "extraType": "wide"},
+        {"over": 2, "ball": 5, "bowler": "Bowler B2", "batsman": "Batsman A3", "runs": 4, "extras": 0, "wicket": false},
+        {"over": 20, "ball": 6, "bowler": "Bowler B5", "batsman": "Batsman A7", "runs": 2, "extras": 0, "wicket": false}
+      ]
+    },
+    {
+      "team": "Team Beta",
+      "runs": 142,
+      "wickets": 8,
+      "balls": [
+        {"over": 1, "ball": 1, "bowler": "Bowler A1", "batsman": "Batsman B1", "runs": 1, "extras": 0, "wicket": false},
+        {"over": 1, "ball": 2, "bowler": "Bowler A1", "batsman": "Batsman B1", "runs": 0, "extras": 0, "wicket": false},
+        {"over": 1, "ball": 3, "bowler": "Bowler A1", "batsman": "Batsman B2", "runs": 4, "extras": 0, "wicket": false},
+        {"over": 1, "ball": 4, "bowler": "Bowler A1", "batsman": "Batsman B2", "runs": 2, "extras": 0, "wicket": false},
+        {"over": 1, "ball": 5, "bowler": "Bowler A1", "batsman": "Batsman B2", "runs": 1, "extras": 0, "wicket": false},
+        {"over": 1, "ball": 6, "bowler": "Bowler A1", "batsman": "Batsman B2", "runs": 6, "extras": 0, "wicket": false},
+        {"over": 20, "ball": 6, "bowler": "Bowler A5", "batsman": "Batsman B10", "runs": 0, "extras": 0, "wicket": true, "wicketType": "caught", "fielder": "Batsman A6"}
+      ]
+    }
+  ],
+  "result": {
+    "winner": "Team Alpha",
+    "summary": "Team Alpha won by 15 runs."
+  }
+}
+

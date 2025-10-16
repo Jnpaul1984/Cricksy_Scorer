@@ -33,6 +33,23 @@
     <!-- Vue mount point (leave empty; Vue will render the app) -->
     <div id="app"></div>
 
+    <!-- E2E test hook: define loadMatch early so Cypress can detect it -->
+    <script>
+      (function () {
+        if (typeof window.loadMatch !== 'function') {
+          window.__pendingMatch = null;
+          window.loadMatch = function (match) {
+            try {
+              window.__pendingMatch = match || null;
+              window.dispatchEvent(new CustomEvent('e2e:match'));
+            } catch (e) {
+              console.warn('loadMatch (early) failed:', e);
+            }
+          };
+        }
+      })();
+    </script>
+
     <!-- Vite entry -->
     <script type="module" src="/src/main.ts"></script>
     <script>

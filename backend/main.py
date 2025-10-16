@@ -238,6 +238,28 @@ class GameState(Protocol):
     # ✅ persistence
     async def save(self) -> None: ...
 
+class ConcreteGameState:
+    def __init__(self, id: str, team_a: TeamDict, team_b: TeamDict):
+        self.id = id
+        self.team_a = team_a
+        self.team_b = team_b
+        # Initialize other attributes with default values
+        self.match_type = "limited"
+        self.status = "SCHEDULED"
+        self.current_inning = 1
+        self.total_runs = 0
+        self.total_wickets = 0
+        self.overs_completed = 0
+        self.balls_this_over = 0
+        self.is_game_over = False
+        self.deliveries = []
+        self.batting_scorecard = {}
+        self.bowling_scorecard = {}
+        # Initialize other necessary attributes
+
+    async def save(self):
+        # Implement the logic to save the game state
+        pass
 class StartNextInningsBody(BaseModel):
     striker_id: Optional[str] = None
     non_striker_id: Optional[str] = None
@@ -314,7 +336,7 @@ _fastapi.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 _fastapi.include_router(games_router, prefix="/legacy")
 _fastapi.include_router(games_dls_router)
 _fastapi.include_router(interruptions_router)
-
+_fastapi.include_router(games_router)
 
 @_fastapi.get("/health", include_in_schema=False)
 def health() -> dict[str, str]:

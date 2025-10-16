@@ -1,0 +1,10 @@
+{
+  "matchType": "T20",
+  "teams": ["Team Alpha", "Team Beta"],
+  "venue": "Generic Cricket Ground",
+  "result": {
+    "winner": "Team Alpha",
+    "summary": "Team Alpha won by 15 runs."
+  }
+}
+

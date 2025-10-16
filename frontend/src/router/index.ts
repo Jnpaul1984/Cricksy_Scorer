@@ -17,6 +17,11 @@ const router = createRouter({
       component: () => import('@/views/MatchSetupView.vue'),
     },
     {
+      path: '/e2e',
+      name: 'e2e-view',
+      component: () => import('@/views/E2EView.vue'),
+    },
+    {
       path: '/game/:gameId/select-xi',
       name: 'team-select',
       component: () => import('@/views/TeamSelectionView.vue'),

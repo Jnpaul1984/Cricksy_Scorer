@@ -489,6 +489,33 @@ export const useGameStore = defineStore('game', () => {
     )
   })
 
+  // Convenience aliases expected by some components
+  const currentStriker = computed<Player | null>(() => {
+    const g = currentGame.value
+    const pid = g?.current_striker_id || uiState.value.selectedStrikerId
+    if (!g || !pid) return null
+    const all = [...(g.team_a?.players ?? []), ...(g.team_b?.players ?? [])]
+    return all.find(p => p.id === pid) || null
+  })
+
+  const currentNonStriker = computed<Player | null>(() => {
+    const g = currentGame.value
+    const pid = g?.current_non_striker_id || uiState.value.selectedNonStrikerId
+    if (!g || !pid) return null
+    const all = [...(g.team_a?.players ?? []), ...(g.team_b?.players ?? [])]
+    return all.find(p => p.id === pid) || null
+  })
+
+  const canScoreDelivery = computed<boolean>(() => {
+    return Boolean(
+      isGameActive.value &&
+      uiState.value.selectedStrikerId &&
+      uiState.value.selectedNonStrikerId &&
+      uiState.value.selectedBowlerId &&
+      uiState.value.selectedStrikerId !== uiState.value.selectedNonStrikerId
+    )
+  })
+
   // ========================================================================
   // Teams & Players
   // ========================================================================
@@ -2141,6 +2168,13 @@ const canScore = computed<boolean>(() => {
   function setActiveScorecardTab(tab: 'batting' | 'bowling'): void { uiState.value.activeScorecardTab = tab }
   function setScoringDisabled(disabled: boolean): void { uiState.value.scoringDisabled = disabled }
 
+  function swapBatsmen(): void {
+    const a = uiState.value.selectedStrikerId
+    const b = uiState.value.selectedNonStrikerId
+    uiState.value.selectedStrikerId = b
+    uiState.value.selectedNonStrikerId = a
+  }
+
   
   
 
@@ -2408,6 +2442,9 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     selectedStriker,
     selectedNonStriker,
     selectedBowler,
+    // Aliases for compatibility with components
+    currentStriker,
+    currentNonStriker,
 
     // Score helpers
     currentOver,
@@ -2448,6 +2485,7 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     canScore,
     needsNewBatter,
     needsNewOver,
+    canScoreDelivery,
     // Commentary
     commentaryFeed,
 
@@ -2516,6 +2554,7 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     setSelectedBowler,
     setActiveScorecardTab,
     setScoringDisabled,
+    swapBatsmen,
 
     // Utils
     scoreRuns,

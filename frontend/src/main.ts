@@ -49,6 +49,23 @@ if (!mountEl.__vue_app__) {
     console.log('Environment:', import.meta.env.MODE)
     console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000')
   }
+  if (import.meta.env.DEV) {
+    ;(window as any).loadMatch = (match: any) => {
+      import('@/stores/gameStore')
+        .then((mod) => {
+          const store = (mod as any).useGameStore()
+          store.currentGame = {
+            id: 'e2e',
+            team_a: { name: match?.teams?.[0] ?? 'Team A', players: [] },
+            team_b: { name: match?.teams?.[1] ?? 'Team B', players: [] },
+            status: 'completed',
+            current_inning: 2,
+            result: { result_text: match?.result?.summary ?? '' },
+          } as any
+        })
+        .catch((e) => console.warn('loadMatch failed:', e))
+    }
+  }
 } else {
   console.warn('App already mounted — skipping duplicate mount')
 }
