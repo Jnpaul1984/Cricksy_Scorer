@@ -160,6 +160,13 @@ async function continueToScoring() {
     // Save XI locally (your existing code)
     const xi = { team_a_xi: xiAList.value, team_b_xi: xiBList.value }
     localStorage.setItem(KEY(gameId.value), JSON.stringify(xi))
+    
+    // Persist lastGameId for resume functionality
+    try {
+      localStorage.setItem('lastGameId', gameId.value)
+    } catch (err) {
+      console.warn('Failed to save lastGameId:', err)
+    }
 
     // NEW: send XI + roles to backend
     await persistXIIfSupported()

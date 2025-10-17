@@ -126,7 +126,8 @@ export interface ScoreDeliveryRequest {
   // UX: optional name instead of ID; backend resolves
   dismissed_player_name?: string | null;
   commentary?: string;
-  fielder_id?: string | null;\n  shot_angle_deg?: number | null;
+  fielder_id?: string | null;
+  shot_angle_deg?: number | null;
 }
 
 // Snapshot â€” shape can vary; we keep it open but document common fields
@@ -170,7 +171,8 @@ export interface Snapshot {
     score: number; wicket: number; batter_id: string; batter_name: string;
     over: string; dismissal_type?: string | null;
     bowler_id?: string | null; bowler_name?: string | null;
-    fielder_id?: string | null;\n  shot_angle_deg?: number | null; fielder_name?: string | null;
+    fielder_id?: string | null;
+    shot_angle_deg?: number | null; fielder_name?: string | null;
   }>;
   last_ball_bowler_id?: string | null;
   current_bowler_id?: string | null;
