@@ -4,6 +4,7 @@ from typing import Any, Dict, Set, Optional, Sequence, TypedDict, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
@@ -179,7 +180,21 @@ async def post_game_results(
             "result_text": str(getattr(payload, "result_text", "")) if getattr(payload, "result_text", None) is not None else None,
             "completed_at": getattr(payload, "completed_at", None)
         }
+        # Persist result payload
         game.result = json.dumps(result_dict)
+        # Mark game as completed so frontends show the banner immediately
+        try:
+            game.status = models.GameStatus.completed  # type: ignore[assignment]
+        except Exception:
+            # Fallback as string if enum assignment differs
+            setattr(game, "status", getattr(models.GameStatus, "completed", "completed"))
+        setattr(game, "is_game_over", True)
+        try:
+            setattr(game, "completed_at", datetime.now(timezone.utc))
+        except Exception:
+            # If timezone not accepted, store naive UTC
+            setattr(game, "completed_at", datetime.utcnow())
+
         await db.commit()
         # Only pass fields that MatchResult expects, with correct types
         return schemas.MatchResult(

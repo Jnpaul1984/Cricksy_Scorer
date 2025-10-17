@@ -123,6 +123,8 @@ export interface ScoreDeliveryRequest {
   is_wicket: boolean;
   dismissal_type?: string | null;
   dismissed_player_id?: string | null;
+  // UX: optional name instead of ID; backend resolves
+  dismissed_player_name?: string | null;
   commentary?: string;
   fielder_id?: string | null;
 }

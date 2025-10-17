@@ -953,8 +953,8 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         </button>
       </div>
 
-      <!-- Result banner (only when match is completed) -->
-      <div v-if="isGameOver" class="result-banner" role="status" aria-live="polite">
+      <!-- Result banner: show if game is over OR any result text is present -->
+      <div v-if="isGameOver || resultText" class="result-banner" role="status" aria-live="polite">
         <strong>{{ resultText || 'Match completed' }}</strong>
       </div>
 

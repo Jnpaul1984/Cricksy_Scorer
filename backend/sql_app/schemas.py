@@ -171,6 +171,8 @@ class ScoreDelivery(BaseModel):
     non_striker_id: Optional[str] = None
     bowler_id: Optional[str] = None   # let server keep current bowler mid-over
     bowler_name: Optional[str] = None
+    # Allow UX to submit dismissed player by name to avoid exposing IDs in UI
+    dismissed_player_name: Optional[str] = None
     # Inputs (mutually exclusive by mode)
     runs_scored: Optional[int] = Field(None, ge=0, le=6)
     runs_off_bat: Optional[int] = Field(None, ge=0, le=6)

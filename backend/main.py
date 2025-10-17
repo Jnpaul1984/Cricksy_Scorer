@@ -2139,6 +2139,14 @@ async def add_delivery(
         if not resolved:
             raise HTTPException(status_code=404, detail="Unknown fielder name")
         delivery.fielder_id = resolved
+    # Allow UX to provide dismissed player by name instead of ID
+    if bool(delivery.is_wicket) and not getattr(delivery, "dismissed_player_id", None):
+        dpn = getattr(delivery, "dismissed_player_name", None)
+        if dpn:
+            resolved = _id_by_name(g.team_a, g.team_b, dpn)
+            if not resolved:
+                raise HTTPException(status_code=404, detail="Unknown dismissed player name")
+            delivery.dismissed_player_id = resolved
     # --- UI gating flags & guards ----------------------------------------------
     flags = _compute_snapshot_flags(g)
 
