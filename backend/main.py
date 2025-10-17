@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import uuid
@@ -214,7 +214,7 @@ class GameState(Protocol):
     pending_new_batter: bool
     pending_new_over: bool
 
-    # ✅ missing runtime fields
+    # âœ… missing runtime fields
     balls_bowled_total: int
     innings_history: List[Dict[str, Any]]
     needs_new_innings: bool
@@ -235,7 +235,7 @@ class GameState(Protocol):
     batting_scorecard: Dict[str, BattingEntryDict]
     bowling_scorecard: Dict[str, BowlingEntryDict]
 
-    # ✅ persistence
+    # âœ… persistence
     async def save(self) -> None: ...
 
 class ConcreteGameState:
@@ -505,7 +505,7 @@ def _maybe_finalize_match(g: GameState) -> None:
         if getattr(g, "first_inning_summary", None) is None:
             g.first_inning_summary = _first_innings_summary(g)
 
-        # normalize margins (avoid “0 wickets”)
+        # normalize margins (avoid â€œ0 wicketsâ€)
         margin_i = max(0, int(margin or 0))
         if method == schemas.MatchMethod.tie:
             result_text = "Match tied"
@@ -523,7 +523,7 @@ def _maybe_finalize_match(g: GameState) -> None:
 
         g.result = schemas.MatchResult(
             winner_team_name=winner_name,
-            method=method,                 # Optional[AllowedMethod] — exactly what the schema expects
+            method=method,                 # Optional[AllowedMethod] â€” exactly what the schema expects
             margin=margin_i,               # schema wants an int
             result_text=result_text,
             completed_at=datetime.now(timezone.utc),
@@ -660,7 +660,7 @@ def _complete_game_by_result(g: GameState) -> bool:
     balls_this_over: int = int(getattr(g, "balls_this_over", 0))
     overs_limit: int = int(getattr(g, "overs_limit", 0) or 0)
 
-    # 1) Chasing side has reached or surpassed the target → win by wickets
+    # 1) Chasing side has reached or surpassed the target â†’ win by wickets
     if current_runs >= target:
         margin = max(1, 10 - wkts)
         method_typed: Optional[schemas.MatchMethod] = cast(schemas.MatchMethod, "by wickets")
@@ -765,7 +765,7 @@ def is_legal_delivery(extra: Optional[str]) -> bool:
 def _rotate_strike_on_runs(runs: int) -> bool: # type: ignore
     return (runs % 2) == 1
 
-# --- Type narrowing for extras (fixes Pylance str|None → ExtraCode|None) ---
+# --- Type narrowing for extras (fixes Pylance str|None â†’ ExtraCode|None) ---
 ExtraCode = schemas.ExtraCode  # alias for readability
 
 _EXTRA_MAP: Mapping[str, ExtraCode] = {
@@ -822,7 +822,7 @@ def _deliveries_for_current_innings(g: GameState) -> List[Dict[str, Any]]:
 
     cur = int(getattr(g, "current_inning", 1) or 1)
     # IMPORTANT: only include deliveries that EXPLICITLY match the current innings.
-    # Treat missing 'inning' as legacy → inns 1, so they won't bleed into inns 2+.
+    # Treat missing 'inning' as legacy â†’ inns 1, so they won't bleed into inns 2+.
     return [d for d in rows if int(d.get("inning") or 1) == cur]
 
 
@@ -867,7 +867,7 @@ async def _maybe_close_innings(g: GameState) -> None:
             g.innings_history = []
 
 
-        # ✅ Only archive if not already archived
+        # âœ… Only archive if not already archived
         already_archived = any(
             inn.get("inning_no") == g.current_inning for inn in g.innings_history
         )
@@ -882,7 +882,7 @@ async def _maybe_close_innings(g: GameState) -> None:
                 "batting_scorecard": g.batting_scorecard,
                 "bowling_scorecard": g.bowling_scorecard,
                 "deliveries": g.deliveries,
-                "closed_at": datetime.now(timezone.utc).isoformat(),  # ✅ TZ-aware
+                "closed_at": datetime.now(timezone.utc).isoformat(),  # âœ… TZ-aware
             })
 
 
@@ -1394,7 +1394,7 @@ def _complete_over_runtime(g: GameState, bowler_id: Optional[str]) -> None:
     - Clears current_bowler_id to force selection for the next over
     - Resets per-over bookkeeping
     """
-    # last legal ball’s bowler is the over’s bowler
+    # last legal ballâ€™s bowler is the overâ€™s bowler
     if bowler_id:
         g.last_ball_bowler_id = bowler_id
 
@@ -1434,7 +1434,7 @@ def _score_one(
     bowler_id = g.current_bowler_id or bowler_id
     runs = int(runs_scored or 0)
 
-    # 👇 Normalize extra to canonical codes: None|'wd'|'nb'|'b'|'lb'
+    # ðŸ‘‡ Normalize extra to canonical codes: None|'wd'|'nb'|'b'|'lb'
     extra_norm = _norm_extra(extra)
     is_nb = (extra_norm == "nb")
     is_wd = (extra_norm == "wd")
@@ -1631,12 +1631,7 @@ def _snapshot_from_game(
     # Enrich last_delivery with totals
     if last_delivery_out is not None:
         ld: Mapping[str, Any] = cast(Mapping[str, Any], last_delivery_out)
-        last_delivery_out = {
-            **dict(ld),
-            "ball_total": int(ld.get("runs_scored") or 0),
-            "runs_off_bat": int(ld.get("runs_off_bat") or 0),
-            "extra_runs": int(ld.get("extra_runs") or 0),
-        }
+        
 
     # If there is an over in progress, current bowler ...
     cur_bowler_id: Optional[str] = getattr(g, "current_bowler_id", None)
@@ -1726,7 +1721,7 @@ def _snapshot_from_game(
 
 
 # ================================================================
-# Routes — Games
+# Routes â€” Games
 # ================================================================
 @_fastapi.options("/games")
 async def options_games() -> Dict[str, str]:
@@ -1765,7 +1760,7 @@ async def create_game(
         team_b_name=payload.team_b_name,
         players_a=payload.players_a,
         players_b=payload.players_b,
-        match_type=_coerce_match_type(payload.match_type),   # ← enum, not string
+        match_type=_coerce_match_type(payload.match_type),   # â† enum, not string
         overs_limit=payload.overs_limit,
         days_limit=payload.days_limit,
         overs_per_day=payload.overs_per_day,
@@ -1827,7 +1822,7 @@ async def start_next_innings(
     prev_batting_team = g.batting_team_name
     prev_bowling_team = g.bowling_team_name
 
-    # If the last innings wasn’t archived yet, archive it now
+    # If the last innings wasnâ€™t archived yet, archive it now
     last_archived_no = g.innings_history[-1]["inning_no"] if g.innings_history else None
     if last_archived_no != g.current_inning:
         g.innings_history.append({
@@ -1869,7 +1864,7 @@ async def start_next_innings(
         g.team_b if g.batting_team_name == g.team_a["name"] else g.team_a
     )
 
-    # Clear “gate” flags and mark match live
+    # Clear â€œgateâ€ flags and mark match live
     if not hasattr(g, "needs_new_over"):
         g.needs_new_over = False
     if not hasattr(g, "needs_new_batter"):
@@ -2007,7 +2002,7 @@ async def change_bowler_mid_over(
     if str(body.new_bowler_id) not in allowed:
         raise HTTPException(status_code=409, detail="Bowler is not in the bowling team")
 
-    # --- Apply change (do NOT touch last_ball_bowler_id; that’s an over-boundary concept)
+    # --- Apply change (do NOT touch last_ball_bowler_id; thatâ€™s an over-boundary concept)
     g.current_bowler_id = str(body.new_bowler_id)
     g.mid_over_change_used = True
 
@@ -2029,7 +2024,7 @@ async def change_bowler_mid_over(
     return snap  # return full snapshot, not just {"ok": true}
 
 # ================================================================
-# PR 1 — Record a delivery (with dismissal rules)
+# PR 1 â€” Record a delivery (with dismissal rules)
 # ================================================================
 @_fastapi.post("/games/{game_id}/deliveries")
 async def add_delivery(
@@ -2117,7 +2112,7 @@ async def add_delivery(
             g.mid_over_change_used = True
 
     # --- Start-of-over handling -------------------------------------------------
-    # If we’re at the very start of a fresh over (0 balls), keep any chosen bowler
+    # If weâ€™re at the very start of a fresh over (0 balls), keep any chosen bowler
     if active_bowler_id and int(getattr(g, "balls_this_over", 0)) == 0:
         g.current_bowler_id = active_bowler_id
         g.mid_over_change_used = mid_over_change_used
@@ -2255,6 +2250,11 @@ async def add_delivery(
     # --- Append to ledger once --------------------------------------------------
     del_dict: Dict[str, Any] = schemas.Delivery(**kwargs).model_dump()
     del_dict["inning"] = int(getattr(g, "current_inning", 1) or 1)
+    # Optional shot direction from client for wagon wheel analytics
+    try:
+        del_dict["shot_angle_deg"] = getattr(delivery, "shot_angle_deg", None)
+    except Exception:
+        del_dict["shot_angle_deg"] = None
     # Make sure deliveries is a real list[dict[str, Any]] for type checker
     if not isinstance(g.deliveries, list):
         g.deliveries = []  # type: ignore[assignment]
@@ -2282,7 +2282,7 @@ async def add_delivery(
     flag_modified(db_game, "batting_scorecard")
     flag_modified(db_game, "bowling_scorecard")
 
-    # 🏁 decide match result *before* persisting so it’s saved
+    # ðŸ decide match result *before* persisting so itâ€™s saved
     _ensure_target_if_chasing(g)
     _maybe_finalize_match(g)
 
@@ -2362,7 +2362,7 @@ async def get_deliveries(
     if innings is not None:
         rows = [d for d in rows if int(d.get("inning", 1)) == int(innings)]
 
-    # Natural insertion order is earliest→latest; enforce order + limit
+    # Natural insertion order is earliestâ†’latest; enforce order + limit
     if order == "desc":
         # newest-first
         rows = rows[-limit:][::-1]
@@ -2493,7 +2493,7 @@ async def set_next_batter(
 
 
 # ================================================================
-# PR 2 — Undo last ball (full state recompute from ledger)
+# PR 2 â€” Undo last ball (full state recompute from ledger)
 # ================================================================
 @_fastapi.post("/games/{game_id}/undo-last")
 async def undo_last_delivery(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
@@ -2547,7 +2547,7 @@ async def undo_last_delivery(game_id: str, db: AsyncSession = Depends(get_db)) -
 
 
 # ================================================================
-# PR 4 — Rain control: adjust overs limit mid-match
+# PR 4 â€” Rain control: adjust overs limit mid-match
 # ================================================================
 @_fastapi.post("/games/{game_id}/dls/revised-target", response_model=DLSRevisedOut)
 async def dls_revised_target(game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)):
@@ -2561,7 +2561,7 @@ async def dls_revised_target(game_id: str, body: DLSRequest, db: AsyncSession = 
     # Load env
     env = dlsmod.load_env(body.kind, str(BASE_DIR))
 
-    # Team 1 runs are just g.total_runs at end of inns 1; if called mid‑match, use snapshot
+    # Team 1 runs are just g.total_runs at end of inns 1; if called midâ€‘match, use snapshot
     # We infer from deliveries in innings 1:
     # total_resources_team1 expects List[Mapping[str, Any]] (list is invariant)
     deliveries_m: List[Mapping[str, Any]] = cast(
@@ -2614,7 +2614,7 @@ async def dls_par_now(game_id: str, body: DLSRequest, db: AsyncSession = Depends
     )
     S1 = _team1_runs(g)  # score to chase
 
-    # Team 2 “used so far” during chase
+    # Team 2 â€œused so farâ€ during chase
     # Use current (balls bowled, wickets) from runtime fields:
     balls_so_far = int(getattr(g, "overs_completed", 0)) * 6 + int(getattr(g, "balls_this_over", 0))
     wkts_so_far = int(getattr(g, "total_wickets", 0))  # second innings wickets at the moment
@@ -2707,7 +2707,7 @@ async def finalize_game(
     return snap
 
 # ================================================================
-# PR 5 — GET game snapshot (viewer bootstrap)
+# PR 5 â€” GET game snapshot (viewer bootstrap)
 # ================================================================
 @_fastapi.get("/games/{game_id}/snapshot")
 async def get_snapshot(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
@@ -2902,7 +2902,7 @@ async def get_recent_deliveries(
             # ensure the literal type matches the schema
             if "extra_type" in d_any:
                 d_any["extra_type"] = _as_extra_code(cast(Optional[str], d_any.get("extra_type")))
-            d_kw = cast(DeliveryKwargs, d_any)            # <-- silences “unknown argument type”
+            d_kw = cast(DeliveryKwargs, d_any)            # <-- silences â€œunknown argument typeâ€
             model = schemas.Delivery(**d_kw)
             out.append(model.model_dump())                # Pydantic v2
         except Exception:
@@ -2930,7 +2930,7 @@ async def get_recent_deliveries(
 
 
 # ================================================================
-# OPTIONAL — Explicitly set openers (quality-of-life)
+# OPTIONAL â€” Explicitly set openers (quality-of-life)
 # ================================================================
 @_fastapi.post("/games/{game_id}/openers")
 async def set_openers(
@@ -3006,7 +3006,7 @@ async def set_team_roles(
     }
 
 # ================================================================
-# PR 8 — Sponsor upload endpoint
+# PR 8 â€” Sponsor upload endpoint
 # ================================================================
 @_fastapi.post("/sponsors")
 async def create_sponsor(
@@ -3032,7 +3032,7 @@ async def create_sponsor(
     if ext is None:
         raise HTTPException(status_code=400, detail="Only SVG, PNG or WebP images are allowed")
 
-    # Surfaces parsing — ensure a list[str]
+    # Surfaces parsing â€” ensure a list[str]
     try:
         parsed_any: Any = json.loads(surfaces) if surfaces else ["all"]
     except Exception:
@@ -3092,7 +3092,7 @@ async def create_sponsor(
     }
 
 # ================================================================
-# PR 9 — Per-game sponsors lineup (time-gated, v1 global)
+# PR 9 â€” Per-game sponsors lineup (time-gated, v1 global)
 # ================================================================
 @_fastapi.get("/games/{game_id}/sponsors")
 async def get_game_sponsors(
@@ -3166,7 +3166,7 @@ def sponsors_manifest(brand: str) -> SponsorsManifest:
     ]
     return {"items": items}
 # ================================================================
-# PR 10 — Impression logging (proof-of-play)
+# PR 10 â€” Impression logging (proof-of-play)
 # ================================================================
 @_fastapi.post("/sponsor_impressions", response_model=SponsorImpressionsOut)
 async def log_sponsor_impressions(
@@ -3318,7 +3318,7 @@ async def remove_contributor(
     res = await db.execute(stmt)
     await db.commit()
 
-    # Some DB drivers don’t populate rowcount; handle defensively.
+    # Some DB drivers donâ€™t populate rowcount; handle defensively.
     if not getattr(res, "rowcount", 0):  # type: ignore[attr-defined]
         raise HTTPException(status_code=404, detail="Contributor not found")
 
@@ -3355,7 +3355,7 @@ async def join(sid: str, data: Optional[Dict[str, Any]]) -> None:
     _SID_ROOMS[sid].add(game_id)
     _ROOM_PRESENCE[game_id][sid] = {"sid": sid, "role": role, "name": name}
 
-    # Tell this client who’s here, then broadcast updated presence to the room
+    # Tell this client whoâ€™s here, then broadcast updated presence to the room
     await sio.emit("presence:init", {"game_id": game_id, "members": _room_snapshot(game_id)}, room=sid)
     await sio.emit("presence:update", {"game_id": game_id, "members": _room_snapshot(game_id)}, room=game_id)
     return None
@@ -3394,3 +3394,4 @@ async def healthz() -> Dict[str, str]:
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)  # pyright: ignore[reportUnknownMemberType]
+

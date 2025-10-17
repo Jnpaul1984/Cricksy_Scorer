@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from uuid import UUID
 from pydantic import BaseModel, Field
 from pydantic import field_validator, model_validator
@@ -167,6 +167,7 @@ class InterruptionEnd(BaseModel):
     overs_reduced_to: Optional[int] = Field(default=None, ge=1, le=50)
 
 class ScoreDelivery(BaseModel):
+    shot_angle_deg: Optional[float] = None  # optional shot direction for wagon wheel
     striker_id: Optional[str] = None
     non_striker_id: Optional[str] = None
     bowler_id: Optional[str] = None   # let server keep current bowler mid-over
@@ -329,7 +330,7 @@ class Game(BaseModel):
             if s == m.value.lower():
                 return m
 
-        # Map internal → API
+        # Map internal â†’ API
         if s in mapping:
             return mapping[s]
 
@@ -396,4 +397,5 @@ class Snapshot(BaseModel):
     completed_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)
+
 

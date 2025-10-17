@@ -39,12 +39,8 @@ type DeliveryRowForTable = {
 
 // ================== Single-panel state ==================
 type ExtraOpt = 'none' | 'nb' | 'wd' | 'b' | 'lb'
-const extra = ref<ExtraOpt>('none')
-const offBat = ref<number>(0)      // used for legal + nb
-const extraRuns = ref<number>(1)   // used for wd (â‰¥1) and b/lb (â‰¥0)
-const isWicket = ref(false)
-const dismissal = ref<string | null>(null)
-const dismissedName = ref<string | null>(null)
+
+const shotAngle = ref<number | null>(null)
 // --- Fielder (XI + subs) for wicket events ---
 const selectedFielderId = ref<UUID>('' as UUID)
 const inningsStartIso = ref<string | null>(null)
@@ -137,8 +133,8 @@ async function submitSimple() {
     const anyStore: any = gameStore as any
     const unifiedPossible = typeof anyStore.scoreDelivery === 'function'
 
-    if (unifiedPossible) {
-      const payload: any = {}
+      if (unifiedPossible) {
+        const payload: any = {}
 
       // ---- runs / extras (total per-ball semantics) ----
       if (extra.value === 'wd') {
@@ -146,12 +142,12 @@ async function submitSimple() {
         payload.extra_runs = extraRuns.value            // 1..5 (total wides)
       } else if (extra.value === 'nb') {
         payload.extra_type = 'nb'
-        payload.runs_off_bat = offBat.value             // 0..6 (off the bat)
+        \n        if (extra.value === 'nb' || extra.value === 'none') payload.shot_angle_deg = (shotAngle.value ?? null)6 (off the bat)
       } else if (extra.value === 'b' || extra.value === 'lb') {
         payload.extra_type = extra.value
         payload.extra_runs = extraRuns.value            // 0..4
       } else {
-        payload.runs_off_bat = offBat.value             // legal delivery
+        \n        if (extra.value === 'nb' || extra.value === 'none') payload.shot_angle_deg = (shotAngle.value ?? null)
       }
 
       // ---- wicket (optional) ----
@@ -164,8 +160,8 @@ async function submitSimple() {
       }
 
       await anyStore.scoreDelivery(gameId.value, payload)
-    } else {
-      // --- Fallback to your current API methods ---
+      } else {
+        // --- Fallback to your current API methods ---
       // (This preserves wides-as-total and keeps existing flows working.)
       if (isWicket.value && extra.value === 'none') {
         // wicket on a legal ball
@@ -202,6 +198,7 @@ async function submitSimple() {
             dismissal_type: (dismissal.value || 'bowled'),
             // Prefer name for safety/UX; backend resolves to ID
             dismissed_player_name: (dismissedName.value || null),
+            shot_angle_deg: (extra.value === 'none' || extra.value === 'nb') ? (shotAngle.value ?? null) : null,
             fielder_id: needsFielder.value ? (selectedFielderId.value || null) : null,
           }),
         })
@@ -1667,6 +1664,18 @@ async function confirmChangeBowler(): Promise<void> {
           </small>
           <!-- /NEW -->
 
+          <!-- Shot angle (optional, for legal ball or no-ball) -->
+          <input
+            v-if="extra==='none' || extra==='nb'"
+            type="number"
+            min="-180"
+            max="180"
+            step="5"
+            v-model.number="shotAngle"
+            placeholder="Shot angle (deg)"
+            class="inp"
+          />
+
           <select v-if="isWicket" v-model="dismissedName" class="sel" aria-label="Select dismissed batter">
             <option disabled value="">Select dismissed batter…</option>
             <option v-for="p in dismissedOptions" :key="p.id" :value="p.name">{{ p.name }}</option>
@@ -2167,3 +2176,5 @@ dialog::backdrop { background: rgba(0,0,0,0.2); }
 dialog .dlg { display: flex; flex-direction: column; gap: 10px; min-width: 320px; }
 dialog footer { display: flex; justify-content: flex-end; gap: 8px; }
 </style>
+
+
