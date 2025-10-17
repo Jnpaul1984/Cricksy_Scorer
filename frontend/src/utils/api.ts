@@ -433,6 +433,16 @@ export const apiService = {
   getSnapshot: (gameId: string) =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/snapshot`),
 
+  searchGames: (team_a?: string, team_b?: string) => {
+    const qp = new URLSearchParams()
+    if (team_a) qp.set('team_a', team_a)
+    if (team_b) qp.set('team_b', team_b)
+    const qs = qp.toString()
+    return request<Array<{ id: string; team_a_name: string; team_b_name: string; status?: string }>>(
+      `/games/search${qs ? `?${qs}` : ''}`
+    )
+  },
+
   /* Scoring */
   scoreDelivery: (gameId: string, body: ScoreDeliveryRequest) =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/deliveries`, {
