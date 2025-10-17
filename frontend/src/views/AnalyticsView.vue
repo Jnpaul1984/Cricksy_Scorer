@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import apiService from '@/utils/api'
+import SvgBarChart from '@/components/analytics/SvgBarChart.vue'
+import SvgLineChart from '@/components/analytics/SvgLineChart.vue'
+import PartnershipHeatmap from '@/components/analytics/PartnershipHeatmap.vue'
+import WagonWheel from '@/components/analytics/WagonWheel.vue'
+import PhaseSplits from '@/components/analytics/PhaseSplits.vue'
 
 type UUID = string
 type Delivery = {
@@ -168,6 +173,72 @@ const bowlingRows = computed(() => {
   })
 })
 
+// -------- Partnerships (simple aggregate by batter pair) --------
+type PairKey = string
+function pairKey(a?: string|null, b?: string|null): PairKey { const A=String(a||''); const B=String(b||''); return A < B ? `${A}|${B}` : `${B}|${A}` }
+const partnerships = computed(() => {
+  const map = new Map<PairKey, number>()
+  for (const d of deliveries.value) {
+    const s = String(d?.striker_id || '')
+    const n = String(d?.non_striker_id || '')
+    if (!s || !n || s === n) continue
+    const key = pairKey(s, n)
+    const add = Number((d as any)?.runs_scored ?? (d as any)?.runs ?? 0)
+    map.set(key, (map.get(key) || 0) + add)
+  }
+  // Build matrix-friendly arrays
+  const players: Array<{ id: string; name: string }> = []
+  const seen = new Set<string>()
+  const g: any = snapshot.value || {}
+  const tA = (g.team_a?.players || []) as Array<any>
+  const tB = (g.team_b?.players || []) as Array<any>
+  for (const p of [...tA, ...tB]) { if (!seen.has(String(p.id))) { seen.add(String(p.id)); players.push({ id: String(p.id), name: String(p.name||'') }) } }
+  const matrix: number[][] = players.map(()=> players.map(()=>0))
+  for (let i=0;i<players.length;i++){
+    for (let j=i+1;j<players.length;j++){
+      const val = map.get(pairKey(players[i].id, players[j].id)) || 0
+      matrix[i][j] = matrix[j][i] = val
+    }
+  }
+  return { players, matrix }
+})
+
+// -------- Phase splits (Powerplay/Middle/Death) --------
+function phaseBuckets(oversLimit: number): Array<{ name:string; start:number; end:number }>{
+  // Heuristics: T20 => PP 1-6, Death last 5; ODI => PP 1-10, Death last 10; else derive
+  if (oversLimit >= 45) return [ {name:'Powerplay', start:1, end:10}, {name:'Middle', start:11, end:oversLimit-10}, {name:'Death', start:oversLimit-9, end:oversLimit} ]
+  const death = Math.min(5, Math.floor(oversLimit/4))
+  const pp = Math.min(6, Math.max(1, Math.floor(oversLimit/3)))
+  const midEnd = Math.max(pp+1, oversLimit - death)
+  return [ {name:'Powerplay', start:1, end:pp}, {name:'Middle', start:pp+1, end:midEnd}, {name:'Death', start:midEnd+1, end:oversLimit} ]
+}
+const phaseSplits = computed(() => {
+  const ol = Number((snapshot.value?.overs_limit ?? 0) || 0)
+  if (!ol) return [] as any[]
+  const buckets = phaseBuckets(ol)
+  const acc: Record<string, { runs:number; balls:number; wkts:number }> = {}
+  for (const b of buckets) acc[b.name] = { runs:0, balls:0, wkts:0 }
+  for (const d of deliveries.value) {
+    const ov = Number(d?.over_number ?? 0) + 1
+    const b = buckets.find(x => ov >= x.start && ov <= x.end)
+    if (!b) continue
+    const key = b.name
+    const add = Number((d as any)?.runs_scored ?? (d as any)?.runs ?? 0)
+    acc[key].runs += add
+    // legal ball increments balls
+    if (legalBall(d)) acc[key].balls += 1
+    if (d.is_wicket) acc[key].wkts += 1
+  }
+  return buckets.map(b => ({ name: b.name, runs: acc[b.name].runs, overs: (acc[b.name].balls/6), wkts: acc[b.name].wkts }))
+})
+
+// -------- Wagon wheel (requires stroke angles – if not present, it will be empty) --------
+// Expect strokes like { angleDeg: number, runs: number }. Backend currently does not emit angles.
+const wagonStrokes = computed(() => {
+  // Placeholder: no angles available → empty array
+  return [] as Array<{ angleDeg:number; runs:number; kind?: '4'|'6'|'other' }>
+})
+
 </script>
 
 <template>
@@ -197,14 +268,12 @@ const bowlingRows = computed(() => {
 
       <div class="card">
         <h3>Manhattan (runs per over)</h3>
-        <div>Inns 1: {{ manhattan[1].join(', ') || '—' }}</div>
-        <div>Inns 2: {{ manhattan[2].join(', ') || '—' }}</div>
+        <SvgBarChart :series="[{ name: 'Inns 1', values: manhattan[1] }, { name: 'Inns 2', values: manhattan[2] }]" />
       </div>
 
       <div class="card">
         <h3>Worm (cumulative)</h3>
-        <div>Inns 1: {{ worm[1].join(', ') || '—' }}</div>
-        <div>Inns 2: {{ worm[2].join(', ') || '—' }}</div>
+        <SvgLineChart :series="[{ name: 'Inns 1', values: worm[1] }, { name: 'Inns 2', values: worm[2] }]" />
       </div>
 
       <div class="card">
@@ -270,3 +339,18 @@ const bowlingRows = computed(() => {
 .tbl { width:100%; border-collapse: collapse; }
 .tbl th, .tbl td { border-bottom:1px solid #eee; padding:6px 8px; text-align:left; }
 </style>
+      <div class="card wide">
+        <h3>Partnerships</h3>
+        <PartnershipHeatmap :players="partnerships.players" :matrix="partnerships.matrix" />
+      </div>
+
+      <div class="card">
+        <h3>Phase Splits</h3>
+        <PhaseSplits :splits="phaseSplits" />
+      </div>
+
+      <div class="card">
+        <h3>Wagon Wheel</h3>
+        <WagonWheel :strokes="wagonStrokes" />
+        <small v-if="wagonStrokes.length === 0" class="hint">No stroke angles available in data; wheel will render once angles are provided.</small>
+      </div>
