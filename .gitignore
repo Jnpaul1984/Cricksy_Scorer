@@ -12,6 +12,7 @@ ruff_cache/
 
 # --- Node/Vue ---
 node_modules/
+frontend/node_modules/
 dist/
 .vite/
 coverage/

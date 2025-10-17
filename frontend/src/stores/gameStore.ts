@@ -2178,25 +2178,34 @@ const canScore = computed<boolean>(() => {
   
   
 
-  async function scoreRuns(gameId: string, runs: number): Promise<any> {
-    // legal off-bat runs; server will rotate on odd runs
-    return postDeliveryAuthoritative(gameId, { extra: null, runs_scored: runs })
+  async function scoreRuns(gameId: string, runs: number, shotAngle?: number | null): Promise<any> {
+    return postDeliveryAuthoritative(gameId, {
+      extra: null,
+      runs_scored: runs,
+      shot_angle_deg: shotAngle ?? null,
+    })
   }
 
 
-  async function scoreExtra(gameId: string, code: 'wd' | 'nb' | 'b' | 'lb', runs = 1): Promise<any> {
-  if (code === 'nb') {
-    // off-bat runs on a no-ball
-    return postDeliveryAuthoritative(gameId, { extra: 'nb', runs_off_bat: runs })
+  async function scoreExtra(
+    gameId: string,
+    code: 'wd' | 'nb' | 'b' | 'lb',
+    runs = 1,
+    shotAngle?: number | null,
+  ): Promise<any> {
+    if (code === 'nb') {
+      return postDeliveryAuthoritative(gameId, {
+        extra: 'nb',
+        runs_off_bat: runs,
+        shot_angle_deg: shotAngle ?? null,
+      })
+    }
+    if (code === 'wd') {
+      const ran = Math.max(0, runs - 1)
+      return postDeliveryAuthoritative(gameId, { extra: 'wd', runs_scored: ran })
+    }
+    return postDeliveryAuthoritative(gameId, { extra: code, runs_scored: runs })
   }
-  if (code === 'wd') {
-    // UI passes total wides (incl. the automatic 1). Convert to "runs actually run".
-    const ran = Math.max(0, runs - 1)
-    return postDeliveryAuthoritative(gameId, { extra: 'wd', runs_scored: ran })
-  }
-  // byes / leg-byes: send extras count as-is
-  return postDeliveryAuthoritative(gameId, { extra: code, runs_scored: runs })
-}
 
 
 

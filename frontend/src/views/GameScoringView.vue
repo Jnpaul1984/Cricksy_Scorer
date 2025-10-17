@@ -63,7 +63,8 @@ watch(dismissal, (t) => {
 watch(extra, (t) => {
   if (t === 'wd') { extraRuns.value = 1; offBat.value = 0 }
   else if (t === 'b' || t === 'lb') { extraRuns.value = 0; offBat.value = 0 }
-  else if (t === 'none') { offBat.value = 0 }  // keep nbâ€™s offBat when staying on nb
+  else if (t === 'none') { offBat.value = 0 }
+  if (t !== 'none' && t !== 'nb') shotAngle.value = null
 })
 
 
@@ -126,77 +127,73 @@ async function submitSimple() {
   if (needsNewOverLive.value && !(firstBall && !!selectedBowler.value)) {
     openStartOver(); onError('Start the next over first'); return
   }
-  if (needsNewBatterLive.value){ openSelectBatter(); onError('Select the next batter first'); return }
+  if (needsNewBatterLive.value) { openSelectBatter(); onError('Select the next batter first'); return }
 
   try {
-    // Prefer a single "scoreDelivery" if your store provides it.
     const anyStore: any = gameStore as any
     const unifiedPossible = typeof anyStore.scoreDelivery === 'function'
 
-      if (unifiedPossible) {
-        const payload: any = {}
+    if (unifiedPossible) {
+      const payload: Record<string, unknown> = {}
 
-      // ---- runs / extras (total per-ball semantics) ----
       if (extra.value === 'wd') {
         payload.extra_type = 'wd'
-        payload.extra_runs = extraRuns.value            // 1..5 (total wides)
+        payload.extra_runs = extraRuns.value
       } else if (extra.value === 'nb') {
         payload.extra_type = 'nb'
-        \n        if (extra.value === 'nb' || extra.value === 'none') payload.shot_angle_deg = (shotAngle.value ?? null)6 (off the bat)
+        payload.runs_off_bat = offBat.value
+        payload.shot_angle_deg = shotAngle.value ?? null
       } else if (extra.value === 'b' || extra.value === 'lb') {
         payload.extra_type = extra.value
-        payload.extra_runs = extraRuns.value            // 0..4
+        payload.extra_runs = extraRuns.value
       } else {
-        \n        if (extra.value === 'nb' || extra.value === 'none') payload.shot_angle_deg = (shotAngle.value ?? null)
+        payload.runs_off_bat = offBat.value
+        payload.shot_angle_deg = shotAngle.value ?? null
       }
 
-      // ---- wicket (optional) ----
       if (isWicket.value) {
         payload.is_wicket = true
         payload.dismissal_type = (dismissal.value || 'bowled')
-        // Prefer name to avoid exposing internal IDs; backend resolves
         payload.dismissed_player_name = (dismissedName.value || null)
         payload.fielder_id = needsFielder.value ? (selectedFielderId.value || null) : null
       }
 
       await anyStore.scoreDelivery(gameId.value, payload)
-      } else {
-        // --- Fallback to your current API methods ---
-      // (This preserves wides-as-total and keeps existing flows working.)
+    } else {
       if (isWicket.value && extra.value === 'none') {
-        // wicket on a legal ball
         await gameStore.scoreWicket(
           gameId.value,
           (dismissal.value || 'bowled'),
-          undefined, // do not pass ID; UI uses name flow via generic path
+          undefined,
           undefined,
           (needsFielder.value ? (selectedFielderId.value || undefined) : undefined)
         )
       } else if (!isWicket.value && extra.value === 'nb') {
-        await gameStore.scoreExtra(gameId.value, 'nb', offBat.value)
+        await gameStore.scoreExtra(gameId.value, 'nb', offBat.value, shotAngle.value ?? null)
       } else if (!isWicket.value && extra.value === 'wd') {
-        await gameStore.scoreExtra(gameId.value, 'wd', extraRuns.value) // total wides (1..5)
+        await gameStore.scoreExtra(gameId.value, 'wd', extraRuns.value)
       } else if (!isWicket.value && (extra.value === 'b' || extra.value === 'lb')) {
         await gameStore.scoreExtra(gameId.value, extra.value, extraRuns.value)
       } else if (!isWicket.value && extra.value === 'none') {
-        await gameStore.scoreRuns(gameId.value, offBat.value)
+        await gameStore.scoreRuns(gameId.value, offBat.value, shotAngle.value ?? null)
       } else {
-        // If you ever need "extra + wicket" in fallback mode,
-        // post to a generic endpoint (matching your undo style).
         const res = await fetch(`${apiBase}/games/${encodeURIComponent(gameId.value)}/deliveries`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             extra_type: extra.value !== 'none' ? extra.value : null,
-            extra_runs: extra.value === 'wd' ? extraRuns.value
-                       : (extra.value === 'b' || extra.value === 'lb') ? extraRuns.value
-                       : undefined,
-            runs_off_bat: extra.value === 'nb' ? offBat.value
-                          : extra.value === 'none' ? offBat.value
-                          : undefined,
+            extra_runs: extra.value === 'wd'
+              ? extraRuns.value
+              : (extra.value === 'b' || extra.value === 'lb')
+                ? extraRuns.value
+                : undefined,
+            runs_off_bat: extra.value === 'nb'
+              ? offBat.value
+              : extra.value === 'none'
+                ? offBat.value
+                : undefined,
             is_wicket: true,
             dismissal_type: (dismissal.value || 'bowled'),
-            // Prefer name for safety/UX; backend resolves to ID
             dismissed_player_name: (dismissedName.value || null),
             shot_angle_deg: (extra.value === 'none' || extra.value === 'nb') ? (shotAngle.value ?? null) : null,
             fielder_id: needsFielder.value ? (selectedFielderId.value || null) : null,
@@ -206,7 +203,6 @@ async function submitSimple() {
       }
     }
 
-    // Reset panel
     extra.value = 'none'
     offBat.value = 0
     extraRuns.value = 1
@@ -214,11 +210,12 @@ async function submitSimple() {
     dismissal.value = null
     dismissedName.value = null
     selectedFielderId.value = '' as UUID
+    shotAngle.value = null
     onScored()
 
     await nextTick()
     maybeRotateFromLastDelivery()
-  } catch (e:any) {
+  } catch (e: any) {
     onError(e?.message || 'Scoring failed')
   }
 }
