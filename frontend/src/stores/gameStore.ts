@@ -1729,7 +1729,9 @@ async function postDeliveryAuthoritative(
     dismissal_type?: string,
     dismissed_player_id?: string | null,
     commentary?: string,
-    fielder_id?: string, 
+    fielder_id?: string,
+    shot_angle_deg?: number | null,
+    shot_map?: string | null,
   }
 ): Promise<any> {
   // Pull ids from server snapshot first; fall back to game / UI selectors only if needed
@@ -1759,6 +1761,12 @@ async function postDeliveryAuthoritative(
   } as ApiScoreDeliveryRequest
 
   if (opts.fielder_id) (payload as any).fielder_id = opts.fielder_id
+  if (opts.shot_angle_deg !== undefined) {
+    payload.shot_angle_deg = opts.shot_angle_deg ?? null
+  }
+  if (opts.shot_map !== undefined) {
+    payload.shot_map = opts.shot_map ?? null
+  }
   // Encoding rules:
   // - legal ball:      extra=null, runs_scored = off-bat runs
   // - no-ball:         extra='nb',  runs_off_bat = off-bat runs (server adds +1)
@@ -2184,11 +2192,17 @@ const canScore = computed<boolean>(() => {
   
   
 
-  async function scoreRuns(gameId: string, runs: number, shotAngle?: number | null): Promise<any> {
+  async function scoreRuns(
+    gameId: string,
+    runs: number,
+    shotAngle?: number | null,
+    shotMap?: string | null,
+  ): Promise<any> {
     return postDeliveryAuthoritative(gameId, {
       extra: null,
       runs_scored: runs,
       shot_angle_deg: shotAngle ?? null,
+      shot_map: shotMap ?? null,
     })
   }
 
@@ -2198,19 +2212,21 @@ const canScore = computed<boolean>(() => {
     code: 'wd' | 'nb' | 'b' | 'lb',
     runs = 1,
     shotAngle?: number | null,
+    shotMap?: string | null,
   ): Promise<any> {
     if (code === 'nb') {
       return postDeliveryAuthoritative(gameId, {
         extra: 'nb',
         runs_off_bat: runs,
         shot_angle_deg: shotAngle ?? null,
+        shot_map: shotMap ?? null,
       })
     }
     if (code === 'wd') {
       const ran = Math.max(0, runs - 1)
-      return postDeliveryAuthoritative(gameId, { extra: 'wd', runs_scored: ran })
+      return postDeliveryAuthoritative(gameId, { extra: 'wd', runs_scored: ran, shot_map: null })
     }
-    return postDeliveryAuthoritative(gameId, { extra: code, runs_scored: runs })
+    return postDeliveryAuthoritative(gameId, { extra: code, runs_scored: runs, shot_map: null })
   }
 
 

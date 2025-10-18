@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 /* eslint-disable */
 /* --- Vue & Router --- */
 
@@ -13,6 +13,7 @@ import BowlingCard from '@/components/BowlingCard.vue'
 import DeliveryTable from '@/components/DeliveryTable.vue'
 import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
+import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
 import { useGameStore } from '@/stores/gameStore'
 
 const isDev = import.meta.env.DEV
@@ -35,13 +36,15 @@ type DeliveryRowForTable = {
   extra?: 'wd' | 'nb' | 'b' | 'lb'; is_wicket?: boolean; commentary?: string;
   dismissed_player_id?: UUID | null; at_utc?: string
   extra_runs?: number
-  runs_off_bat?: number 
+  runs_off_bat?: number
+  shot_map?: string | null
 }
 
 // ================== Single-panel state ==================
 type ExtraOpt = 'none' | 'nb' | 'wd' | 'b' | 'lb'
 
 const shotAngle = ref<number | null>(null)
+const shotMap = ref<string | null>(null)
 // --- Fielder (XI + subs) for wicket events ---
 const selectedFielderId = ref<UUID>('' as UUID)
 const inningsStartIso = ref<string | null>(null)
@@ -65,7 +68,10 @@ watch(extra, (t) => {
   if (t === 'wd') { extraRuns.value = 1; offBat.value = 0 }
   else if (t === 'b' || t === 'lb') { extraRuns.value = 0; offBat.value = 0 }
   else if (t === 'none') { offBat.value = 0 }
-  if (t !== 'none' && t !== 'nb') shotAngle.value = null
+  if (t !== 'none' && t !== 'nb') {
+    shotAngle.value = null
+    shotMap.value = null
+  }
 })
 
 
@@ -151,6 +157,7 @@ async function submitSimple() {
         payload.runs_off_bat = offBat.value
         payload.shot_angle_deg = shotAngle.value ?? null
       }
+      payload.shot_map = (extra.value === 'none' || extra.value === 'nb') ? (shotMap.value ?? null) : null
 
       if (isWicket.value) {
         payload.is_wicket = true
@@ -170,13 +177,13 @@ async function submitSimple() {
           (needsFielder.value ? (selectedFielderId.value || undefined) : undefined)
         )
       } else if (!isWicket.value && extra.value === 'nb') {
-        await gameStore.scoreExtra(gameId.value, 'nb', offBat.value, shotAngle.value ?? null)
+        await gameStore.scoreExtra(gameId.value, 'nb', offBat.value, shotAngle.value ?? null, shotMap.value ?? null)
       } else if (!isWicket.value && extra.value === 'wd') {
         await gameStore.scoreExtra(gameId.value, 'wd', extraRuns.value)
       } else if (!isWicket.value && (extra.value === 'b' || extra.value === 'lb')) {
         await gameStore.scoreExtra(gameId.value, extra.value, extraRuns.value)
       } else if (!isWicket.value && extra.value === 'none') {
-        await gameStore.scoreRuns(gameId.value, offBat.value, shotAngle.value ?? null)
+        await gameStore.scoreRuns(gameId.value, offBat.value, shotAngle.value ?? null, shotMap.value ?? null)
       } else {
         const res = await fetch(`${apiBase}/games/${encodeURIComponent(gameId.value)}/deliveries`, {
           method: 'POST',
@@ -197,6 +204,7 @@ async function submitSimple() {
             dismissal_type: (dismissal.value || 'bowled'),
             dismissed_player_name: (dismissedName.value || null),
             shot_angle_deg: (extra.value === 'none' || extra.value === 'nb') ? (shotAngle.value ?? null) : null,
+            shot_map: (extra.value === 'none' || extra.value === 'nb') ? (shotMap.value ?? null) : null,
             fielder_id: needsFielder.value ? (selectedFielderId.value || null) : null,
           }),
         })
@@ -212,6 +220,7 @@ async function submitSimple() {
     dismissedName.value = null
     selectedFielderId.value = '' as UUID
     shotAngle.value = null
+    shotMap.value = null
     onScored()
 
     await nextTick()
@@ -634,6 +643,7 @@ const dedupedDeliveries = computed<DeliveryRowForTable[]>(() => {
       commentary: d.commentary as string | undefined,
       dismissed_player_id: (d.dismissed_player_id ? normId(d.dismissed_player_id) : null) as UUID | null,
       at_utc: d.at_utc as string | undefined,
+      shot_map: typeof d.shot_map === 'string' ? d.shot_map : null,
     }
   }).sort((a, b) => (a.over_number - b.over_number) || (a.ball_number - b.ball_number))
 })
@@ -690,6 +700,7 @@ const deliveriesThisInnings = computed<DeliveryRowForTable[]>(() => {
       commentary: d.commentary as string | undefined,
       dismissed_player_id: (d.dismissed_player_id ? normId(d.dismissed_player_id) : null) as UUID | null,
       at_utc: d.at_utc as string | undefined,
+      shot_map: typeof d.shot_map === 'string' ? d.shot_map : null,
     }
   }).sort((a, b) => (a.over_number - b.over_number) || (a.ball_number - b.ball_number))
 })
@@ -1662,22 +1673,26 @@ async function confirmChangeBowler(): Promise<void> {
           </small>
           <!-- /NEW -->
 
-          <!-- Shot angle (optional, for legal ball or no-ball) -->
+          <select v-if="isWicket" v-model="dismissedName" class="sel" aria-label="Select dismissed batter">
+            <option disabled value="">Select dismissed batter…</option>
+            <option v-for="p in dismissedOptions" :key="p.id" :value="p.name">{{ p.name }}</option>
+          </select>
+        </div>
+
+        <div v-if="extra==='none' || extra==='nb'" class="col shot-map-column">
+          <label class="shot-map-label" for="shot-angle-input">Shot angle (deg)</label>
           <input
-            v-if="extra==='none' || extra==='nb'"
+            id="shot-angle-input"
             v-model.number="shotAngle"
             type="number"
             min="-180"
             max="180"
             step="5"
-            placeholder="Shot angle (deg)"
-            class="inp"
+            placeholder="Enter angle"
+            class="inp shot-angle-input"
           />
-
-          <select v-if="isWicket" v-model="dismissedName" class="sel" aria-label="Select dismissed batter">
-            <option disabled value="">Select dismissed batter…</option>
-            <option v-for="p in dismissedOptions" :key="p.id" :value="p.name">{{ p.name }}</option>
-          </select>
+          <ShotMapCanvas v-model="shotMap" :width="240" :height="200" />
+          <small class="hint">Optional: sketch the shot path for analytics.</small>
         </div>
 
           <!-- Submit -->
@@ -1985,6 +2000,19 @@ class="btn btn-ghost"
 </template>
 
 <style scoped>
+.shot-map-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 260px;
+}
+.shot-map-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.shot-angle-input {
+  max-width: 140px;
+}
 /* Layout */
 .game-scoring { padding: 12px; display: grid; gap: 12px; }
 .toolbar { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.08); }

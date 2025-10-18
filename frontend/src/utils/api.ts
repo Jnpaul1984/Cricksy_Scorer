@@ -132,6 +132,7 @@ export interface ScoreDeliveryRequest {
   commentary?: string;
   fielder_id?: string | null;
   shot_angle_deg?: number | null;
+  shot_map?: string | null;
 }
 
 // Snapshot â€” shape can vary; we keep it open but document common fields
@@ -165,6 +166,7 @@ export interface Snapshot {
     extra_type?: ExtraCode | null;
     extra_runs?: number;
     runs_scored?: number; // total for this ball
+    shot_map?: string | null;
   } | null;
     // NEW from backend
   dls?: { method: 'DLS'; par?: number; target?: number; ahead_by?: number };

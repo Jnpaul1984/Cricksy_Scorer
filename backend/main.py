@@ -124,6 +124,7 @@ class DeliveryDict(TypedDict, total=False):
     dismissed_player_id: Optional[str]
     commentary: Optional[str]
     fielder_id: Optional[str]
+    shot_map: Optional[str]
 
 # Strongly-typed kwargs for constructing schemas.Delivery(**kwargs)
 class DeliveryKwargs(TypedDict):
@@ -142,6 +143,7 @@ class DeliveryKwargs(TypedDict):
     dismissed_player_id: Optional[str]
     commentary: Optional[str]
     fielder_id: Optional[str]
+    shot_map: NotRequired[Optional[str]]
 
 class InterruptionRec(TypedDict, total=False):
     id: str
@@ -2255,6 +2257,11 @@ async def add_delivery(
         del_dict["shot_angle_deg"] = getattr(delivery, "shot_angle_deg", None)
     except Exception:
         del_dict["shot_angle_deg"] = None
+    try:
+        shot_map_val = getattr(delivery, "shot_map", None)
+        del_dict["shot_map"] = str(shot_map_val) if shot_map_val is not None else None
+    except Exception:
+        del_dict["shot_map"] = None
     # Make sure deliveries is a real list[dict[str, Any]] for type checker
     if not isinstance(g.deliveries, list):
         g.deliveries = []  # type: ignore[assignment]

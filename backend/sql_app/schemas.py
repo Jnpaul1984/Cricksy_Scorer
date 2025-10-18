@@ -89,6 +89,7 @@ class Delivery(BaseModel):
     dismissed_player_id: Optional[str] = None
     commentary: Optional[str] = None
     fielder_id: Optional[str] = None
+    shot_map: Optional[str] = None
 
 class BattingScorecardEntry(BaseModel):
     """Represents a single player's batting stats for an innings."""
@@ -168,6 +169,7 @@ class InterruptionEnd(BaseModel):
 
 class ScoreDelivery(BaseModel):
     shot_angle_deg: Optional[float] = None  # optional shot direction for wagon wheel
+    shot_map: Optional[str] = None          # compact SVG or encoded sketch for analytics
     striker_id: Optional[str] = None
     non_striker_id: Optional[str] = None
     bowler_id: Optional[str] = None   # let server keep current bowler mid-over
