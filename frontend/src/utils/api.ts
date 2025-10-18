@@ -171,7 +171,8 @@ export interface Snapshot {
     score: number; wicket: number; batter_id: string; batter_name: string;
     over: string; dismissal_type?: string | null;
     bowler_id?: string | null; bowler_name?: string | null;
-    fielder_id?: string | null;\n  shot_angle_deg?: number | null; fielder_name?: string | null;
+    fielder_id?: string | null;
+    shot_angle_deg?: number | null; fielder_name?: string | null;
   }>;
   last_ball_bowler_id?: string | null;
   current_bowler_id?: string | null;

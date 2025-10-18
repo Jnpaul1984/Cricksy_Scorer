@@ -8,13 +8,18 @@ const history = ROUTER_MODE === 'hash'
   ? createWebHashHistory(import.meta.env.BASE_URL)
   : createWebHistory(import.meta.env.BASE_URL)
 
+// Check if public landing page is enabled
+const PUBLIC_LANDING = (import.meta as any).env?.VITE_PUBLIC_LANDING === 'true'
+
 const router = createRouter({
   history,
   routes: [
     {
       path: '/',
       name: 'setup',
-      component: () => import('@/views/MatchSetupView.vue'),
+      component: () => PUBLIC_LANDING
+        ? import('@/views/LandingView.vue')
+        : import('@/views/MatchSetupView.vue'),
     },
     {
       path: '/analytics',
@@ -91,5 +96,65 @@ if (ROUTER_MODE !== 'hash') {
     next()
   })
 }
+
+// ---------------------------------------------------------------------------
+// Route Guards: Resume last match, validate game existence
+// ---------------------------------------------------------------------------
+router.beforeEach(async (to, from, next) => {
+  // 1. Resume last match: redirect from "/" to last game if conditions are met
+  if (!PUBLIC_LANDING && (to.name === 'setup' || to.fullPath === '/')) {
+    const forceNew = to.query.new === '1'
+    
+    if (!forceNew && typeof window !== 'undefined') {
+      try {
+        const lastGameId = localStorage.getItem('lastGameId')
+        if (lastGameId && lastGameId.trim()) {
+          // Redirect to the scoring view for the last game
+          return next({ 
+            name: 'GameScoringView', 
+            params: { gameId: lastGameId.trim() } 
+          })
+        }
+      } catch (err) {
+        console.warn('Failed to read lastGameId from localStorage:', err)
+      }
+    }
+  }
+
+  // 2. Validate game existence for scoring and team-select routes
+  if (to.name === 'GameScoringView' || to.name === 'team-select') {
+    const gameId = to.params.gameId as string
+    
+    if (gameId && typeof window !== 'undefined') {
+      try {
+        // Check if game data exists using a simple localStorage convention
+        // The actual game state is managed by Pinia, but we can check for XI data
+        // as a proxy for game existence, or we could try to load it
+        const xiKey = `cricksy.xi.${gameId}`
+        const xiExists = localStorage.getItem(xiKey) !== null
+        
+        // Alternatively, we could check if the game can be loaded from the API
+        // For now, we'll allow navigation and let the view handle loading errors
+        // If you want stricter validation, you'd need to:
+        // 1. Import the game store
+        // 2. Try to load the game
+        // 3. Redirect on failure
+        
+        // For this implementation, we'll be lenient and let views handle it
+        // but clear lastGameId if it matches an invalid game
+        if (!xiExists) {
+          const lastGameId = localStorage.getItem('lastGameId')
+          if (lastGameId === gameId) {
+            localStorage.removeItem('lastGameId')
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to validate game existence:', err)
+      }
+    }
+  }
+
+  next()
+})
 
 export default router
