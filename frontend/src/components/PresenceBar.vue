@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount } from "vue";
+
 import { useRealtime } from "@/composables/useRealtime";
 
 // Allowed roles for nice typing

@@ -1,11 +1,12 @@
 ﻿<script setup lang="ts">
 import { ref, computed } from 'vue'
-import apiService from '@/utils/api'
+
 import ChartBar from '@/components/analytics/ChartBar.vue'
 import ChartLine from '@/components/analytics/ChartLine.vue'
 import PartnershipHeatmap from '@/components/analytics/PartnershipHeatmap.vue'
-import WagonWheel from '@/components/analytics/WagonWheel.vue'
 import PhaseSplits from '@/components/analytics/PhaseSplits.vue'
+import WagonWheel from '@/components/analytics/WagonWheel.vue'
+import { apiService } from '@/utils/api'
 
 type UUID = string
 
@@ -349,12 +350,12 @@ const wagonStrokes = computed(() => {
         </div>
       </div>
 
-      <div class="card" v-if="manhattanChart.labels.length">
+      <div v-if="manhattanChart.labels.length" class="card">
         <h3>Manhattan (runs per over)</h3>
         <ChartBar :labels="manhattanChart.labels" :series="manhattanChart.series" />
       </div>
 
-      <div class="card" v-if="wormChart.labels.length">
+      <div v-if="wormChart.labels.length" class="card">
         <h3>Worm (cumulative)</h3>
         <ChartLine :labels="wormChart.labels" :series="wormChart.series" />
       </div>

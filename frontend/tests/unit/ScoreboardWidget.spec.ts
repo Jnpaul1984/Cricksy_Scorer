@@ -1,9 +1,11 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
+
+import simulatedMatch from '../../../simulated_t20_match.json'
+
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import { useGameStore } from '@/stores/gameStore'
-import simulatedMatch from '../../../simulated_t20_match.json'
 
 describe('ScoreboardWidget', () => {
   it('displays the winner and match result', async () => {

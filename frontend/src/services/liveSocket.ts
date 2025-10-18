@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { io, Socket } from 'socket.io-client';
+
 import type { ScoreUpdatePayload } from './api';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:8000';

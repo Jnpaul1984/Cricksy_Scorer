@@ -53,12 +53,12 @@
     </div>
     
     <!-- Swap Batsmen Button -->
-    <div class="actions" v-if="canSwapBatsmen">
+    <div v-if="canSwapBatsmen" class="actions">
       <button 
-        @click="handleSwapBatsmen"
         class="swap-button"
         :disabled="loading"
         type="button"
+        @click="handleSwapBatsmen"
       >
         🔄 Swap Batsmen
       </button>
@@ -68,6 +68,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+
 import { useGameStore } from '@/stores/gameStore';
 import type { BattingScorecardEntry, BowlingScorecardEntry } from '@/types/api';
 

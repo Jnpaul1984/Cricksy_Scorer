@@ -2,7 +2,7 @@
   <div class="live-scoreboard">
     <div class="scoreboard-header">
       <h2 class="team-name">{{ battingTeamName }}</h2>
-      <div class="innings-indicator" v-if="currentInning > 1">
+      <div v-if="currentInning > 1" class="innings-indicator">
         2nd Innings
       </div>
     </div>
@@ -20,10 +20,10 @@
       </div>
     </div>
     
-    <div class="target-display" v-if="targetRuns">
+    <div v-if="targetRuns" class="target-display">
       <span class="target-label">Target:</span>
       <span class="target-value">{{ targetRuns }}</span>
-      <span class="required-info" v-if="runsRequired">
+      <span v-if="runsRequired" class="required-info">
         ({{ runsRequired }} runs needed)
       </span>
     </div>
@@ -36,6 +36,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+
 import { useGameStore } from '@/stores/gameStore';
 
 const gameStore = useGameStore();

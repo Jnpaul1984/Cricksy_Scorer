@@ -49,10 +49,10 @@ const nameOf = (id?: string | null) =>
           <td>{{ nameOf(d.striker_id) }}</td>
           <td>{{ nameOf(d.bowler_id) }}</td>
           <td class="num">{{ d.runs_scored }}</td>
-          <td class="tag" v-if="d.is_extra">
+          <td v-if="d.is_extra" class="tag">
             {{ (d.extra_type || '').toUpperCase() }}
           </td>
-          <td class="tag wicket" v-else-if="d.is_wicket">
+          <td v-else-if="d.is_wicket" class="tag wicket">
             {{ (d.dismissal_type || 'WICKET').toUpperCase() }}
           </td>
           <td v-else>—</td>

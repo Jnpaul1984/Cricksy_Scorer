@@ -8,11 +8,11 @@
     <select
       :id="selectId"
       :value="selectedPlayerId"
-      @change="handleSelectionChange"
       :disabled="disabled || loading"
       :class="selectorClass"
       class="player-select"
       :aria-describedby="errorId"
+      @change="handleSelectionChange"
     >
       <option value="">-- Select {{ label }} --</option>
       <option
@@ -40,6 +40,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+
 import type { Player } from '@/types/api';
 
 // Props

@@ -10,7 +10,7 @@
           </p>
           
           <!-- Game Creation Form -->
-          <div class="game-form" v-if="!gameStore.isLoading">
+          <div v-if="!gameStore.isLoading" class="game-form">
             <div class="form-row">
               <input 
                 v-model="gameForm.team_a_name" 
@@ -28,10 +28,10 @@
               <label class="toss-label">Toss Winner:</label>
               <select v-model="gameForm.toss_winner_team" class="toss-select">
                 <option value="">Select toss winner</option>
-                <option :value="gameForm.team_a_name" v-if="gameForm.team_a_name">
+                <option v-if="gameForm.team_a_name" :value="gameForm.team_a_name">
                   {{ gameForm.team_a_name }}
                 </option>
-                <option :value="gameForm.team_b_name" v-if="gameForm.team_b_name">
+                <option v-if="gameForm.team_b_name" :value="gameForm.team_b_name">
                   {{ gameForm.team_b_name }}
                 </option>
               </select>
@@ -44,10 +44,10 @@
             </div>
             
             <button 
-              @click="createNewGame" 
-              :disabled="!canCreateGame"
+              :disabled="!canCreateGame" 
               class="cta-button"
               :class="{ 'disabled': !canCreateGame }"
+              @click="createNewGame"
             >
               🏏 Create New Match
             </button>
@@ -62,7 +62,7 @@
           <!-- Error State -->
           <div v-if="gameStore.error" class="error-state">
             <p>❌ {{ gameStore.error }}</p>
-            <button @click="gameStore.clearError" class="retry-button">Try Again</button>
+            <button class="retry-button" @click="gameStore.clearError">Try Again</button>
           </div>
         </div>
       </section>
@@ -97,6 +97,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+
 import { useGameStore } from '@/stores/gameStore'
 
 const router = useRouter()

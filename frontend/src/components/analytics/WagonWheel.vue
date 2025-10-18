@@ -19,7 +19,8 @@ function polar(angleDeg: number, radius: number){
     </template>
     <!-- strokes -->
     <template v-for="(s,i) in strokes" :key="i">
-      <line :x1="size/2" :y1="size/2" :x2="polar(s.angleDeg, r).x" :y2="polar(s.angleDeg, r).y"
+      <line
+:x1="size/2" :y1="size/2" :x2="polar(s.angleDeg, r).x" :y2="polar(s.angleDeg, r).y"
             :stroke="s.kind==='6' ? '#22c55e' : (s.kind==='4' ? '#2563eb' : '#94a3b8')" stroke-width="2" />
     </template>
   </svg>

@@ -18,6 +18,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 
 const route = useRoute()

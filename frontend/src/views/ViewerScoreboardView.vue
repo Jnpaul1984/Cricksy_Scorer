@@ -31,6 +31,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 
 /**
@@ -76,10 +77,7 @@ const resolvedTheme = ref<ThemeOpt>(
  */
 onMounted(() => {
   if (resolvedTheme.value === 'auto' && typeof window !== 'undefined' && window.matchMedia) {
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    // we still pass "auto" to the widget, but you can change this to
-    // resolvedTheme.value = isDark ? 'dark' : 'light'
-    // if you want to force-resolve it here.
+    resolvedTheme.value = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   }
 })
 

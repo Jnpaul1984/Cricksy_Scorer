@@ -13,14 +13,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, toRefs, withDefaults } from 'vue';
+
 import type { Player } from '@/types';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   open: boolean;
   busy?: boolean;
   bowlers: Player[]; // supply from view/team state
-}>();
+}>(), {
+  busy: false,
+});
+
+const { open, busy, bowlers } = toRefs(props);
+
 const emit = defineEmits<{
   (e: 'close'): void;
   (e: 'confirm', id: string): void;

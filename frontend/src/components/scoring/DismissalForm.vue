@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+
 import { useGameStore } from '@/stores/gameStore'
 import type { ScoreDeliveryRequest, Player } from '@/types'
 
@@ -110,9 +111,9 @@ async function submit() {
         <label for="rad-striker">
           <input
             id="rad-striker"
+            v-model="dismissed"
             type="radio"
             value="striker"
-            v-model="dismissed"
             :disabled="!canScore"
           />
           Striker
@@ -121,9 +122,9 @@ async function submit() {
         <label for="rad-nonstriker">
           <input
             id="rad-nonstriker"
+            v-model="dismissed"
             type="radio"
             value="non_striker"
-            v-model="dismissed"
             :disabled="!canScore"
           />
           Non‑Striker
@@ -157,7 +158,7 @@ async function submit() {
       ></textarea>
     </div>
 
-    <button class="submit" @click="submit" :disabled="!canSubmit">Record Wicket</button>
+    <button class="submit" :disabled="!canSubmit" @click="submit">Record Wicket</button>
   </div>
 </template>
 

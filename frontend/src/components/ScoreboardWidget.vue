@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { fmtSR, fmtEconomy, oversDisplayFromBalls, oversDisplayFromAny, deriveBowlerFigures } from '@/utils/cricket'
-import { useGameStore } from '@/stores/gameStore'
+/* eslint-disable */
 import { storeToRefs } from 'pinia'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+
 import { useHighlights, type Snapshot as HL } from '@/composables/useHighlights'
+import { useGameStore } from '@/stores/gameStore'
+import { fmtSR, fmtEconomy, oversDisplayFromBalls, oversDisplayFromAny, deriveBowlerFigures } from '@/utils/cricket'
 /* ------------------------------------------------------------------ */
 /* Props                                                               */
 /* ------------------------------------------------------------------ */
@@ -897,11 +899,11 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
     <header class="hdr">
       <img
         v-if="logoUrl && logoOk"
+        :key="logoUrl"
         class="brand"
         :src="logoUrl"
         alt="Logo"
         @error="onLogoErr"
-        :key="logoUrl"
       />
       <h3>{{ title || 'Live Scoreboard' }}</h3>
       <span v-if="!isGameOver" class="pill live">● LIVE</span>
@@ -946,8 +948,8 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
           v-if="props.canControl"
           class="btn btn-ghost"
           :disabled="interBusy"
-          @click="resumePlay(currentInterruption?.kind as any)"
           style="margin-left:auto"
+          @click="resumePlay(currentInterruption?.kind as any)"
         >
           {{ interBusy ? 'Resuming…' : 'Resume play' }}
         </button>
@@ -973,7 +975,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
       </div>
 
       <!-- First-innings summary -->
-      <div class="first-inn" v-if="innings1Line">
+      <div v-if="innings1Line" class="first-inn">
         <span class="lbl">First Innings — {{ innings1TeamName || '—' }}</span>
         <strong>{{ innings1Line }}</strong>
       </div>
@@ -1085,7 +1087,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         <div class="pane">
           <div class="pane-title">Last 10 balls</div>
           <div class="balls">
-            <div class="ball" v-for="(d, i) in recentDeliveries" :key="i" :title="ballLabel(d)">
+            <div v-for="(d, i) in recentDeliveries" :key="i" class="ball" :title="ballLabel(d)">
               {{ outcomeTag(d) }}
             </div>
           </div>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
+
 import { useGameStore } from '@/stores/gameStore'
 
 type XI = {
@@ -84,7 +85,9 @@ function loadSavedXI() {
     if (obj.captain_b) captainB.value = obj.captain_b
     if (obj.keeper_b)  keeperB.value  = obj.keeper_b
 
-  } catch {}
+  } catch {
+    // ignore corrupted cached XI data
+  }
 }
 
 function prefillIfEmpty() {
@@ -116,33 +119,27 @@ function toggleB(id: string) {
 }
 
 async function persistXIIfSupported() {
-  try {
-    const base = (import.meta as any).env.VITE_API_BASE_URL?.replace(/\/+$/, '')
-    if (!base) return
+  const base = (import.meta as any).env.VITE_API_BASE_URL?.replace(/\/+$/, '')
+  if (!base) return
 
-    const payload = {
-      team_a: xiAList.value,
-      team_b: xiBList.value,
-      captain_a: captainA.value,
-      keeper_a:  keeperA.value,
-      captain_b: captainB.value,
-      keeper_b:  keeperB.value,
-    }
+  const payload = {
+    team_a: xiAList.value,
+    team_b: xiBList.value,
+    captain_a: captainA.value,
+    keeper_a:  keeperA.value,
+    captain_b: captainB.value,
+    keeper_b:  keeperB.value,
+  }
 
-    const res = await fetch(`${base}/games/${encodeURIComponent(gameId.value)}/playing-xi`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    // If server returns 400 with "Unknown players..." the UI XI contains an ID not in the squads
-    // Let the caller handle errors; no silent swallow here
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      throw new Error(`Failed to set XI: ${res.status} ${JSON.stringify(body)}`)
-    }
-  } catch (e) {
-    // Surface the error to the caller
-    throw e
+  const res = await fetch(`${base}/games/${encodeURIComponent(gameId.value)}/playing-xi`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(`Failed to set XI: ${res.status} ${JSON.stringify(body)}`)
   }
 }
 
@@ -278,7 +275,7 @@ onMounted(async () => {
 
     <div v-if="errorMsg" class="error">❌ {{ errorMsg }}</div>
 
-    <div class="actions" v-if="game.currentGame">
+    <div v-if="game.currentGame" class="actions">
       <button class="secondary" @click="$router.replace('/')">Cancel</button>
       <button class="primary" :disabled="!canContinue || saving" @click="continueToScoring">
         {{ saving ? 'Saving…' : 'Save & Continue' }}

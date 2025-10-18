@@ -69,8 +69,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useGameStore } from '@/stores/gameStore';
+
 import PlayerSelector from './PlayerSelector.vue';
+
+import { useGameStore } from '@/stores/gameStore';
 import type { Player } from '@/types/api';
 
 const gameStore = useGameStore();

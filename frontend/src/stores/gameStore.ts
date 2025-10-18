@@ -1,4 +1,5 @@
 // src/stores/gameStore.ts
+/* eslint-disable import/order */
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
@@ -17,14 +18,27 @@ import type {
 } from '@/types'
 
 // ---- API client & wire types
-import { apiService, getErrorMessage } from '@/utils/api'
-import type {
-  CreateGameRequest as ApiCreateGameRequest,
-  ScoreDeliveryRequest as ApiScoreDeliveryRequest,
-  Snapshot as ApiSnapshot,
+import {
+  apiService,
+  getErrorMessage,
+  getDlsPreview,
+  postDlsApply,
+  patchReduceOvers,
+  type DLSPreviewOut,
+  type CreateGameRequest as ApiCreateGameRequest,
+  type ScoreDeliveryRequest as ApiScoreDeliveryRequest,
+  type Snapshot as ApiSnapshot,
+  type Interruption as ApiInterruption,
 } from '@/utils/api'
 
+
 // ---- Socket helpers
+import {
+  isLegalBall,
+  fmtEconomy,
+  oversDisplayFromBalls,
+  oversNotationToFloat,
+} from '@/utils/cricket'
 import {
   on as onSocket,
   off as offSocket,
@@ -35,15 +49,8 @@ import {
 } from '@/utils/socket'
 
 // ---- Cricket math helpers
-import {
-  isLegalBall,
-  fmtEconomy,
-  oversDisplayFromBalls,
-  oversNotationToFloat,
-} from '@/utils/cricket'
 
-import { getDlsPreview, postDlsApply, patchReduceOvers, type DLSPreviewOut } from '@/utils/api'
-import type { Interruption as ApiInterruption } from '@/utils/api'
+
 // Loose wrappers so we can listen to custom events
 type ServerEvents = {
   'presence:init': { game_id: string; members: Array<{ sid: string; role: string; name: string }> }
@@ -51,7 +58,7 @@ type ServerEvents = {
   'score:update': ScoreUpdatePayloadSlim
   'commentary:new': { id?: string; at: string; text: string; game_id: string }
   'interruptions:update': { game_id?: string }
-  'interruption:ended': {}
+  'interruption:ended': undefined
 }
 
 const on = onSocket as unknown as <K extends keyof ServerEvents>(
@@ -771,7 +778,11 @@ function stabilizeBattersFromLastDelivery(prevGame: GameState, snap: UiSnapshot)
 
     const delivs = (currentInningsDeliveries.value ?? []) as D[]
 
-    let wides = 0, no_balls = 0, byes = 0, leg_byes = 0, penalty = 0
+    let wides = 0
+    let no_balls = 0
+    let byes = 0
+    let leg_byes = 0
+    const penalty = 0
 
     for (const d of delivs) {
       const ex = (d.extra_type ?? d.extra ?? null) as D['extra_type']
@@ -1564,11 +1575,6 @@ function deliveryKey(d: LooseDelivery): string {
     'deliveries:',
     (currentGame.value as any)?.deliveries?.length
   )
-  const handleCommentary = (msg: { id: string; at: number; text: string; over?: string; author?: string; game_id: string }): void => {
-    if (!liveGameId.value || msg.game_id !== liveGameId.value) return
-    commentaryFeed.value.unshift({ id: msg.id, at: msg.at, over: msg.over, text: msg.text, author: msg.author })
-    if (commentaryFeed.value.length > 200) commentaryFeed.value.pop()
-  }
 
   let presenceInitHandler: ((p: { game_id: string; members: Array<{ sid: string; role: string; name: string }> }) => void) | null = null
   let commentaryHandler: ((payload: { game_id: string; text: string; at: string }) => void) | null = null
