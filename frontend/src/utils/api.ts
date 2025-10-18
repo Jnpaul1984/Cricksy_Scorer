@@ -126,7 +126,8 @@ export interface ScoreDeliveryRequest {
   // UX: optional name instead of ID; backend resolves
   dismissed_player_name?: string | null;
   commentary?: string;
-  fielder_id?: string | null;\n  shot_angle_deg?: number | null;
+  fielder_id?: string | null;
+  shot_angle_deg?: number | null;
 }
 
 // Snapshot â€” shape can vary; we keep it open but document common fields
