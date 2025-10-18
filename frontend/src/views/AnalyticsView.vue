@@ -1,12 +1,12 @@
 ﻿<script setup lang="ts">
 import { ref, computed } from 'vue'
 
+import ShotMapPreview from '@/components/ShotMapPreview.vue'
 import ChartBar from '@/components/analytics/ChartBar.vue'
 import ChartLine from '@/components/analytics/ChartLine.vue'
 import PartnershipHeatmap from '@/components/analytics/PartnershipHeatmap.vue'
 import PhaseSplits from '@/components/analytics/PhaseSplits.vue'
 import WagonWheel from '@/components/analytics/WagonWheel.vue'
-import ShotMapPreview from '@/components/ShotMapPreview.vue'
 import { apiService } from '@/utils/api'
 
 type UUID = string
