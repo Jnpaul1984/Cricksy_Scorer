@@ -23,6 +23,12 @@ const errorMsg = ref<string | null>(null)
 
 const teamA = computed(() => game.currentGame?.team_a)
 const teamB = computed(() => game.currentGame?.team_b)
+const teamADisplayName = computed(() =>
+  teamA.value?.name && teamA.value.name.trim().length ? teamA.value.name : 'Team A'
+)
+const teamBDisplayName = computed(() =>
+  teamB.value?.name && teamB.value.name.trim().length ? teamB.value.name : 'Team B'
+)
 
 const selectedA = ref<Set<string>>(new Set())
 const selectedB = ref<Set<string>>(new Set())
@@ -45,16 +51,6 @@ const canContinue = computed(() =>
 const xiAList = computed(() => Array.from(selectedA.value))
 const xiBList = computed(() => Array.from(selectedB.value))
 
-const xi = {
-  team_a_xi: xiAList.value,
-  team_b_xi: xiBList.value,
-  captain_a: captainA.value,
-  keeper_a:  keeperA.value,
-  captain_b: captainB.value,
-  keeper_b:  keeperB.value,
-}
-localStorage.setItem(KEY(gameId.value), JSON.stringify(xi))
-
 // teamA/teamB already exist as computed(() => game.currentGame?.team_a / team_b)
 function nameFromId(id: string, team: any) {
   const arr = team?.players ?? []
@@ -62,13 +58,15 @@ function nameFromId(id: string, team: any) {
   return found?.name ?? id
 }
 
-// Basic in‑UI guard to keep roles within the XI
+// Basic in-UI guard to keep roles within the XI
 function validateRoles(): string | null {
   if (xiAList.value.length !== 11 || xiBList.value.length !== 11) return 'Each XI must be 11 players.'
-  if (captainA.value && !selectedA.value.has(captainA.value)) return 'Team A captain must be in Team A XI.'
-  if (keeperA.value  && !selectedA.value.has(keeperA.value))  return 'Team A wicket‑keeper must be in Team A XI.'
-  if (captainB.value && !selectedB.value.has(captainB.value)) return 'Team B captain must be in Team B XI.'
-  if (keeperB.value  && !selectedB.value.has(keeperB.value))  return 'Team B wicket‑keeper must be in Team B XI.'
+  const teamAName = teamADisplayName.value
+  const teamBName = teamBDisplayName.value
+  if (captainA.value && !selectedA.value.has(captainA.value)) return `${teamAName} captain must be in the XI.`
+  if (keeperA.value  && !selectedA.value.has(keeperA.value))  return `${teamAName} wicket-keeper must be in the XI.`
+  if (captainB.value && !selectedB.value.has(captainB.value)) return `${teamBName} captain must be in the XI.`
+  if (keeperB.value  && !selectedB.value.has(keeperB.value))  return `${teamBName} wicket-keeper must be in the XI.`
   return null
 }
 
@@ -155,7 +153,14 @@ async function continueToScoring() {
     if (v) throw new Error(v)
 
     // Save XI locally (your existing code)
-    const xi = { team_a_xi: xiAList.value, team_b_xi: xiBList.value }
+    const xi = {
+      team_a_xi: xiAList.value,
+      team_b_xi: xiBList.value,
+      captain_a: captainA.value,
+      keeper_a: keeperA.value,
+      captain_b: captainB.value,
+      keeper_b: keeperB.value,
+    }
     localStorage.setItem(KEY(gameId.value), JSON.stringify(xi))
 
     // NEW: send XI + roles to backend
@@ -200,7 +205,7 @@ onMounted(async () => {
     <div v-else-if="!game.currentGame" class="error">No match found.</div>
     <div v-else class="grid">
       <section class="team">
-        <h3>{{ teamA?.name || 'Team A' }}</h3>
+        <h3>{{ teamADisplayName }}</h3>
         <p class="hint">Pick 11 players ({{ selectedA.size }}/11)</p>
         <ul>
           <li
@@ -216,7 +221,7 @@ onMounted(async () => {
       </section>
     <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
       <div>
-        <label class="block text-sm font-medium mb-1">Team A Captain</label>
+        <label class="block text-sm font-medium mb-1">{{ teamADisplayName }} Captain</label>
         <select v-model="captainA" class="w-full border rounded p-2" :disabled="xiAList.length === 0">
           <option :value="null" disabled>Select captain</option>
           <option v-for="pid in xiAList" :key="pid" :value="pid">
@@ -225,9 +230,9 @@ onMounted(async () => {
         </select>
       </div>
       <div>
-        <label class="block text-sm font-medium mb-1">Team A Wicket‑keeper</label>
+        <label class="block text-sm font-medium mb-1">{{ teamADisplayName }} Wicket-keeper</label>
         <select v-model="keeperA" class="w-full border rounded p-2" :disabled="xiAList.length === 0">
-          <option :value="null" disabled>Select wicket‑keeper</option>
+          <option :value="null" disabled>Select wicket-keeper</option>
           <option v-for="pid in xiAList" :key="pid" :value="pid">
             {{ nameFromId(pid, teamA) }}
           </option>
@@ -236,7 +241,7 @@ onMounted(async () => {
     </div>
   
       <section class="team">
-        <h3>{{ teamB?.name || 'Team B' }}</h3>
+        <h3>{{ teamBDisplayName }}</h3>
         <p class="hint">Pick 11 players ({{ selectedB.size }}/11)</p>
         <ul>
           <li
@@ -252,7 +257,7 @@ onMounted(async () => {
       </section>
     <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
       <div>
-        <label class="block text-sm font-medium mb-1">Team B Captain</label>
+        <label class="block text-sm font-medium mb-1">{{ teamBDisplayName }} Captain</label>
         <select v-model="captainB" class="w-full border rounded p-2" :disabled="xiBList.length === 0">
           <option :value="null" disabled>Select captain</option>
           <option v-for="pid in xiBList" :key="pid" :value="pid">
@@ -261,9 +266,9 @@ onMounted(async () => {
         </select>
       </div>
       <div>
-        <label class="block text-sm font-medium mb-1">Team B Wicket‑keeper</label>
+        <label class="block text-sm font-medium mb-1">{{ teamBDisplayName }} Wicket-keeper</label>
         <select v-model="keeperB" class="w-full border rounded p-2" :disabled="xiBList.length === 0">
-          <option :value="null" disabled>Select wicket‑keeper</option>
+          <option :value="null" disabled>Select wicket-keeper</option>
           <option v-for="pid in xiBList" :key="pid" :value="pid">
             {{ nameFromId(pid, teamB) }}
           </option>

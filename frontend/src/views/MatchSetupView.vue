@@ -97,7 +97,7 @@ async function onSubmit() {
         <div class="row">
           <PlayersEditor
             v-model="playersA"
-            :label="'Players – Team A'"
+            :label="`Players - ${form.team_a_name || 'Team A'}`"
             :team-name="form.team_a_name"
             :max="16"
             :min="2"
@@ -107,7 +107,7 @@ async function onSubmit() {
         <div class="row">
           <PlayersEditor
             v-model="playersB"
-            :label="'Players – Team B'"
+            :label="`Players - ${form.team_b_name || 'Team B'}`"
             :team-name="form.team_b_name"
             :max="16"
             :min="2"

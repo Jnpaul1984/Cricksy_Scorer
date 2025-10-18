@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import defaultBackgroundImage from '@/assets/shot-map-field.png'
 
 type Point = { x: number; y: number }
 
@@ -7,6 +8,7 @@ const props = defineProps<{
   modelValue: string | null
   width?: number
   height?: number
+  backgroundImage?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +26,15 @@ const canvasHeight = computed(() => props.height ?? 220)
 
 const hasHistory = computed(() => strokes.value.length > 0)
 const hasActiveStroke = computed(() => hasHistory.value || currentStroke.value.length > 1)
+
+const surfaceStyle = computed(() => ({
+  width: `${canvasWidth.value}px`,
+  height: `${canvasHeight.value}px`,
+  backgroundImage: `url(${props.backgroundImage ?? defaultBackgroundImage})`,
+  backgroundSize: 'contain',
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'center',
+}))
 
 function setupCanvas(): void {
   const canvas = canvasRef.value
@@ -169,17 +180,19 @@ watch(
 
 <template>
   <div class="shot-map-canvas">
-    <canvas
-      ref="canvasRef"
-      class="shot-map-canvas__surface"
-      :width="canvasWidth"
-      :height="canvasHeight"
-      @pointerdown="onPointerDown"
-      @pointermove="onPointerMove"
-      @pointerup="finishStroke"
-      @pointerleave="finishStroke"
-      @pointercancel="finishStroke"
-    />
+    <div class="shot-map-canvas__surface-wrapper" :style="surfaceStyle">
+      <canvas
+        ref="canvasRef"
+        class="shot-map-canvas__surface"
+        :width="canvasWidth"
+        :height="canvasHeight"
+        @pointerdown="onPointerDown"
+        @pointermove="onPointerMove"
+        @pointerup="finishStroke"
+        @pointerleave="finishStroke"
+        @pointercancel="finishStroke"
+      />
+    </div>
     <div class="shot-map-canvas__actions">
       <button class="btn" type="button" :disabled="!hasHistory" @click="undo">Undo</button>
       <button class="btn" type="button" :disabled="!hasActiveStroke" @click="clearAll">Clear</button>
@@ -195,10 +208,19 @@ watch(
   align-items: flex-start;
 }
 
-.shot-map-canvas__surface {
+.shot-map-canvas__surface-wrapper {
+  position: relative;
   border: 1px solid rgba(148, 163, 184, 0.4);
   border-radius: 12px;
-  background: #f8fafc;
+  background-color: #f8fafc;
+  overflow: hidden;
+}
+
+.shot-map-canvas__surface {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   touch-action: none;
 }
 

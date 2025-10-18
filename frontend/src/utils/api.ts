@@ -1,16 +1,22 @@
 ﻿// src/utils/api.ts
 // Single, canonical API client aligned with FastAPI backend & the Pinia game store.
 
-export const API_BASE =
+const ENV_API_BASE =
   (typeof import.meta !== 'undefined' &&
     // Prefer VITE_API_BASE (your env files now use this)
     (import.meta.env?.VITE_API_BASE ||
       // keep a loose fallback if someone still has the old key around
       import.meta.env?.VITE_API_BASE_URL)) ||
-  (typeof window !== 'undefined'
-    ? `${window.location.protocol}//${window.location.host}`
-    : '') ||
   '';
+
+const DEV_FALLBACK =
+  typeof import.meta !== 'undefined' && import.meta.env?.DEV ? 'http://localhost:8000' : '';
+
+const RUNTIME_ORIGIN =
+  typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '';
+
+export const API_BASE = (ENV_API_BASE || DEV_FALLBACK || RUNTIME_ORIGIN || '').replace(/\/+$/, '');
+console.info('API_BASE', API_BASE);
 
 function url(path: string) {
   if (!API_BASE) return path;

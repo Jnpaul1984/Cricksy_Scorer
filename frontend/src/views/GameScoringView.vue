@@ -43,8 +43,17 @@ type DeliveryRowForTable = {
 // ================== Single-panel state ==================
 type ExtraOpt = 'none' | 'nb' | 'wd' | 'b' | 'lb'
 
+const extra = ref<ExtraOpt>('none')
+const offBat = ref<number>(0)
+const extraRuns = ref<number>(1)
+const isWicket = ref<boolean>(false)
+const dismissal = ref<string | null>(null)
+const dismissedName = ref<string | null>(null)
 const shotAngle = ref<number | null>(null)
 const shotMap = ref<string | null>(null)
+if (import.meta.env?.DEV) {
+  console.info('GameScoringView setup refs', { isWicket, extra })
+}
 // --- Fielder (XI + subs) for wicket events ---
 const selectedFielderId = ref<UUID>('' as UUID)
 const inningsStartIso = ref<string | null>(null)
