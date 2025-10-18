@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import defaultBackgroundImage from '@/assets/shot-map-field.png'
+
+import defaultBackgroundImage from '../../assets/shot-map-field.png'
 
 type Point = { x: number; y: number }
 
@@ -72,8 +73,6 @@ function render(): void {
   if (!ctx) return
 
   ctx.clearRect(0, 0, canvas.width, canvas.height)
-  ctx.fillStyle = '#f8fafc'
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
 
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'

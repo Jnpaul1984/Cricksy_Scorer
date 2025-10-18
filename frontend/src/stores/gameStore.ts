@@ -2195,13 +2195,11 @@ const canScore = computed<boolean>(() => {
   async function scoreRuns(
     gameId: string,
     runs: number,
-    shotAngle?: number | null,
     shotMap?: string | null,
   ): Promise<any> {
     return postDeliveryAuthoritative(gameId, {
       extra: null,
       runs_scored: runs,
-      shot_angle_deg: shotAngle ?? null,
       shot_map: shotMap ?? null,
     })
   }
@@ -2211,14 +2209,12 @@ const canScore = computed<boolean>(() => {
     gameId: string,
     code: 'wd' | 'nb' | 'b' | 'lb',
     runs = 1,
-    shotAngle?: number | null,
     shotMap?: string | null,
   ): Promise<any> {
     if (code === 'nb') {
       return postDeliveryAuthoritative(gameId, {
         extra: 'nb',
         runs_off_bat: runs,
-        shot_angle_deg: shotAngle ?? null,
         shot_map: shotMap ?? null,
       })
     }

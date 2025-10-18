@@ -49,7 +49,6 @@ const extraRuns = ref<number>(1)
 const isWicket = ref<boolean>(false)
 const dismissal = ref<string | null>(null)
 const dismissedName = ref<string | null>(null)
-const shotAngle = ref<number | null>(null)
 const shotMap = ref<string | null>(null)
 if (import.meta.env?.DEV) {
   console.info('GameScoringView setup refs', { isWicket, extra })
@@ -78,7 +77,6 @@ watch(extra, (t) => {
   else if (t === 'b' || t === 'lb') { extraRuns.value = 0; offBat.value = 0 }
   else if (t === 'none') { offBat.value = 0 }
   if (t !== 'none' && t !== 'nb') {
-    shotAngle.value = null
     shotMap.value = null
   }
 })
@@ -158,13 +156,11 @@ async function submitSimple() {
       } else if (extra.value === 'nb') {
         payload.extra_type = 'nb'
         payload.runs_off_bat = offBat.value
-        payload.shot_angle_deg = shotAngle.value ?? null
       } else if (extra.value === 'b' || extra.value === 'lb') {
         payload.extra_type = extra.value
         payload.extra_runs = extraRuns.value
       } else {
         payload.runs_off_bat = offBat.value
-        payload.shot_angle_deg = shotAngle.value ?? null
       }
       payload.shot_map = (extra.value === 'none' || extra.value === 'nb') ? (shotMap.value ?? null) : null
 
@@ -186,13 +182,13 @@ async function submitSimple() {
           (needsFielder.value ? (selectedFielderId.value || undefined) : undefined)
         )
       } else if (!isWicket.value && extra.value === 'nb') {
-        await gameStore.scoreExtra(gameId.value, 'nb', offBat.value, shotAngle.value ?? null, shotMap.value ?? null)
+        await gameStore.scoreExtra(gameId.value, 'nb', offBat.value, shotMap.value ?? null)
       } else if (!isWicket.value && extra.value === 'wd') {
         await gameStore.scoreExtra(gameId.value, 'wd', extraRuns.value)
       } else if (!isWicket.value && (extra.value === 'b' || extra.value === 'lb')) {
         await gameStore.scoreExtra(gameId.value, extra.value, extraRuns.value)
       } else if (!isWicket.value && extra.value === 'none') {
-        await gameStore.scoreRuns(gameId.value, offBat.value, shotAngle.value ?? null, shotMap.value ?? null)
+        await gameStore.scoreRuns(gameId.value, offBat.value, shotMap.value ?? null)
       } else {
         const res = await fetch(`${apiBase}/games/${encodeURIComponent(gameId.value)}/deliveries`, {
           method: 'POST',
@@ -212,7 +208,6 @@ async function submitSimple() {
             is_wicket: true,
             dismissal_type: (dismissal.value || 'bowled'),
             dismissed_player_name: (dismissedName.value || null),
-            shot_angle_deg: (extra.value === 'none' || extra.value === 'nb') ? (shotAngle.value ?? null) : null,
             shot_map: (extra.value === 'none' || extra.value === 'nb') ? (shotMap.value ?? null) : null,
             fielder_id: needsFielder.value ? (selectedFielderId.value || null) : null,
           }),
@@ -228,7 +223,6 @@ async function submitSimple() {
     dismissal.value = null
     dismissedName.value = null
     selectedFielderId.value = '' as UUID
-    shotAngle.value = null
     shotMap.value = null
     onScored()
 
@@ -1689,17 +1683,7 @@ async function confirmChangeBowler(): Promise<void> {
         </div>
 
         <div v-if="extra==='none' || extra==='nb'" class="col shot-map-column">
-          <label class="shot-map-label" for="shot-angle-input">Shot angle (deg)</label>
-          <input
-            id="shot-angle-input"
-            v-model.number="shotAngle"
-            type="number"
-            min="-180"
-            max="180"
-            step="5"
-            placeholder="Enter angle"
-            class="inp shot-angle-input"
-          />
+          <label class="shot-map-label">Shot map</label>
           <ShotMapCanvas v-model="shotMap" :width="240" :height="200" />
           <small class="hint">Optional: sketch the shot path for analytics.</small>
         </div>
@@ -2018,9 +2002,6 @@ class="btn btn-ghost"
 .shot-map-label {
   font-size: 0.85rem;
   font-weight: 600;
-}
-.shot-angle-input {
-  max-width: 140px;
 }
 /* Layout */
 .game-scoring { padding: 12px; display: grid; gap: 12px; }
