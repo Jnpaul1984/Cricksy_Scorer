@@ -28,14 +28,18 @@ const canvasHeight = computed(() => props.height ?? 220)
 const hasHistory = computed(() => strokes.value.length > 0)
 const hasActiveStroke = computed(() => hasHistory.value || currentStroke.value.length > 1)
 
-const surfaceStyle = computed(() => ({
-  width: `${canvasWidth.value}px`,
-  height: `${canvasHeight.value}px`,
-  backgroundImage: `url(${props.backgroundImage ?? defaultBackgroundImage})`,
-  backgroundSize: 'contain',
-  backgroundRepeat: 'no-repeat',
-  backgroundPosition: 'center',
-}))
+const surfaceStyle = computed(() => {
+  const image = props.backgroundImage ?? defaultBackgroundImage
+  return {
+    width: `${canvasWidth.value}px`,
+    height: `${canvasHeight.value}px`,
+    backgroundImage: image ? `url(${image})` : undefined,
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'center',
+    backgroundColor: image ? 'transparent' : '#f8fafc',
+  }
+})
 
 function setupCanvas(): void {
   const canvas = canvasRef.value
@@ -211,7 +215,6 @@ watch(
   position: relative;
   border: 1px solid rgba(148, 163, 184, 0.4);
   border-radius: 12px;
-  background-color: #f8fafc;
   overflow: hidden;
 }
 
