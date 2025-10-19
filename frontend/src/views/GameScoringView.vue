@@ -818,8 +818,12 @@ const cantScoreReasons = computed(() => {
   const rs:string[] = []
   const firstBall = Number(currentOverBalls.value || 0) === 0
   if (!gameStore.currentGame) rs.push('No game loaded')
-  else if (!['in_progress','live','started'].includes(String((gameStore.currentGame as any).status || '')))
-    rs.push(`Game is ${(gameStore.currentGame as any).status}`)
+  else {
+    const status = String((gameStore.currentGame as any).status || '').toLowerCase()
+    if (!['in_progress','live','started'].includes(status)) {
+      rs.push(`Game is ${(gameStore.currentGame as any).status}`)
+    }
+  }
 
   if (!selectedStriker.value) rs.push('Select striker')
   if (!selectedNonStriker.value) rs.push('Select non-striker')
@@ -902,7 +906,8 @@ watch(() => (gameStore.currentGame as any)?.current_inning, () => {
 const SUPPRESS_DERIVED_MS = 10000
 
 const needsNewInningsLive = computed<boolean>(() => {
-  const status = String((gameStore.currentGame as any)?.status || '')
+  const statusRaw = String((gameStore.currentGame as any)?.status || '')
+  const status = statusRaw.toLowerCase()
   const serverGate =
     Boolean(stateAny.value?.needs_new_innings) ||
     status === 'innings_break'

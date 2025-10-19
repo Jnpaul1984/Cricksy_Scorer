@@ -77,7 +77,7 @@ const runsRequired = computed(() => {
 });
 
 const gameStatusText = computed(() => {
-  const status = gameStore.currentGame?.status;
+  const status = String(gameStore.currentGame?.status || '').toLowerCase();
   switch (status) {
     case 'in_progress':
       return 'Live';
@@ -91,7 +91,7 @@ const gameStatusText = computed(() => {
 });
 
 const statusClass = computed(() => {
-  const status = gameStore.currentGame?.status;
+  const status = String(gameStore.currentGame?.status || '').toLowerCase();
   return {
     'status-live': status === 'in_progress',
     'status-break': status === 'innings_break',
@@ -245,4 +245,3 @@ const statusClass = computed(() => {
   }
 }
 </style>
-

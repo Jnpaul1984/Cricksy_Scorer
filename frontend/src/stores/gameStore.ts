@@ -467,9 +467,18 @@ export const useGameStore = defineStore('game', () => {
   const isLoading = computed<boolean>(() => uiState.value.loading)
   const error = computed<string | null>(() => uiState.value.error)
 
-  const isGameActive = computed<boolean>(() => currentGame.value?.status === 'in_progress')
-  const isInningsBreak = computed<boolean>(() => currentGame.value?.status === 'innings_break')
-  const isGameCompleted = computed<boolean>(() => currentGame.value?.status === 'completed')
+  const normalizeStatus = (status: unknown): string =>
+    String(status ?? '').toLowerCase()
+
+  const isGameActive = computed<boolean>(
+    () => normalizeStatus(currentGame.value?.status) === 'in_progress'
+  )
+  const isInningsBreak = computed<boolean>(
+    () => normalizeStatus(currentGame.value?.status) === 'innings_break'
+  )
+  const isGameCompleted = computed<boolean>(
+    () => normalizeStatus(currentGame.value?.status) === 'completed'
+  )
   const isFirstInnings = computed<boolean>(() => (currentGame.value?.current_inning ?? 1) === 1)
   const isSecondInnings = computed<boolean>(() => (currentGame.value?.current_inning ?? 1) === 2)
 
@@ -477,10 +486,10 @@ export const useGameStore = defineStore('game', () => {
   const isGameOver = computed<boolean>(() => {
     const g = currentGame.value
     const snap = liveSnapshot.value
-    const s = String(g?.status ?? snap?.status ?? '').toUpperCase()
+    const status = normalizeStatus(g?.status ?? snap?.status)
     return (
-      s === 'COMPLETED' ||
-      s === 'ABANDONED' ||
+      status === 'completed' ||
+      status === 'abandoned' ||
       Boolean((g as any)?.is_game_over || (snap as any)?.is_game_over)
     )
   })
@@ -2132,8 +2141,9 @@ const canScore = computed<boolean>(() => {
   // stop everything if the match is done
   if (isGameOver.value) return false
 
+  const status = normalizeStatus(g?.status)
   const statusOk =
-    !!g && ['in_progress', 'live', 'started'].includes(String(g.status || ''))
+    !!g && ['in_progress', 'live', 'started'].includes(status)
 
   const haveBatters =
     !!ui.selectedStrikerId &&
@@ -2163,7 +2173,7 @@ const canScore = computed<boolean>(() => {
   
     console.table({
       hasGame: !!currentGame.value,
-      inProgress: currentGame.value?.status === 'in_progress',
+      inProgress: normalizeStatus(currentGame.value?.status) === 'in_progress',
       strikerSet: !!uiState.value.selectedStrikerId,
       nonStrikerSet: !!uiState.value.selectedNonStrikerId,
       bowlerSet: !!uiState.value.selectedBowlerId,
