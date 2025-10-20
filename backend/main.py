@@ -559,6 +559,16 @@ def _player_name(team_a: TeamDict, team_b: TeamDict, pid: Optional[str]) -> Opti
                 return p["name"]
     return None
 
+
+def _player_team_name(team_a: TeamDict, team_b: TeamDict, pid: Optional[str]) -> Optional[str]:
+    if not pid:
+        return None
+    for team in (team_a, team_b):
+        for p in team["players"]:
+            if p["id"] == pid:
+                return team["name"]
+    return None
+
 def _id_by_name(team_a: TeamDict, team_b: TeamDict, name: Optional[str]) -> Optional[str]:
     if not name:
         return None
@@ -1214,41 +1224,97 @@ def _coerce_bowling_entry(  # pyright: ignore[reportUnusedFunction]
 # Rebuild scorecards FROM LEDGER (authoritative)
 # ================================================================
 def _rebuild_scorecards_from_deliveries(g: GameState) -> None:
+    deliveries = _dedup_deliveries(g)
+
+    inferred_team_name: Optional[str] = None
+    for d in deliveries:
+        for key in ("striker_id", "non_striker_id", "dismissed_player_id"):
+            team_name = _player_team_name(g.team_a, g.team_b, d.get(key))
+            if team_name:
+                inferred_team_name = team_name
+                break
+        if inferred_team_name:
+            break
+
+    if inferred_team_name and inferred_team_name != g.batting_team_name:
+        g.batting_team_name = inferred_team_name
+        if inferred_team_name == g.team_a["name"]:
+            g.bowling_team_name = g.team_b["name"]
+        elif inferred_team_name == g.team_b["name"]:
+            g.bowling_team_name = g.team_a["name"]
+
     batting_team = g.team_a if g.batting_team_name == g.team_a["name"] else g.team_b
     bowling_team = g.team_b if batting_team is g.team_a else g.team_a
 
     bat = _mk_batting_scorecard(batting_team)
     bowl = _mk_bowling_scorecard(bowling_team)
 
+    def ensure_batter(pid: Optional[str]) -> Optional[str]:
+        if not pid:
+            return None
+        pid_str = str(pid)
+        if not pid_str:
+            return None
+        if _player_team_name(g.team_a, g.team_b, pid_str) not in {None, g.batting_team_name}:
+            return None
+        if pid_str not in bat:
+            bat[pid_str] = {
+                "player_id": pid_str,
+                "player_name": _player_name(g.team_a, g.team_b, pid_str) or "",
+                "runs": 0,
+                "balls_faced": 0,
+                "is_out": False,
+                "fours": 0,
+                "sixes": 0,
+                "how_out": "",
+            }
+        return pid_str
+
+    def ensure_bowler(pid: Optional[str]) -> Optional[str]:
+        if not pid:
+            return None
+        pid_str = str(pid)
+        if not pid_str:
+            return None
+        if _player_team_name(g.team_a, g.team_b, pid_str) not in {None, g.bowling_team_name}:
+            return None
+        if pid_str not in bowl:
+            bowl[pid_str] = {
+                "player_id": pid_str,
+                "player_name": _player_name(g.team_a, g.team_b, pid_str) or "",
+                "overs_bowled": 0.0,
+                "runs_conceded": 0,
+                "wickets_taken": 0,
+            }
+        return pid_str
+
     balls_by_bowler: Dict[str, int] = defaultdict(int)
 
-    for d in _dedup_deliveries(g):
-        striker = d.get("striker_id")
-        bowler  = d.get("bowler_id")
-        x   = _norm_extra(d.get("extra_type"))
+    for d in deliveries:
+        striker = ensure_batter(d.get("striker_id"))
+        bowler = ensure_bowler(d.get("bowler_id"))
+        x = _norm_extra(d.get("extra_type"))
         off = int(d.get("runs_off_bat") or 0)
-        ex  = int(d.get("extra_runs") or 0)
-        wicket  = bool(d.get("is_wicket"))
+        ex = int(d.get("extra_runs") or 0)
+        wicket = bool(d.get("is_wicket"))
         dismissal_type = (d.get("dismissal_type") or "").strip().lower() or None
 
-        # --- Batter updates ---
-        if striker in bat:
+        if striker and striker in bat:
             if x not in ("wd", "nb"):
                 bat[striker]["balls_faced"] += 1
-            # credit only off-the-bat runs
             bat[striker]["runs"] += off
-            # boundaries on off-the-bat (incl. nb+4/6)
-            if off == 4: bat[striker]["fours"] = int(bat[striker].get("fours", 0)) + 1
-            if off == 6: bat[striker]["sixes"] = int(bat[striker].get("sixes", 0)) + 1
+            if off == 4:
+                bat[striker]["fours"] = int(bat[striker].get("fours", 0)) + 1
+            if off == 6:
+                bat[striker]["sixes"] = int(bat[striker].get("sixes", 0)) + 1
 
-        # Mark dismissed player out on scorecard & store how_out text
         if wicket and dismissal_type:
-            out_pid = str(d.get("dismissed_player_id") or striker or "")
-            if out_pid in bat:
+            dismissed_raw = d.get("dismissed_player_id") or striker
+            out_pid = ensure_batter(dismissed_raw)
+            if out_pid and out_pid in bat:
                 bat[out_pid]["is_out"] = True
                 fld = _player_name(g.team_a, g.team_b, d.get("fielder_id")) or ""
                 blr = _player_name(g.team_a, g.team_b, bowler) or ""
-                # simple, readable notation:
                 if dismissal_type == "caught":
                     bat[out_pid]["how_out"] = f"c {fld} b {blr}".strip()
                 elif dismissal_type == "lbw":
@@ -1262,9 +1328,8 @@ def _rebuild_scorecards_from_deliveries(g: GameState) -> None:
                 else:
                     bat[out_pid]["how_out"] = dismissal_type
 
-        # --- Bowler updates ---
-        if bowler in bowl:
-            if x not in ("wd","nb"):
+        if bowler and bowler in bowl:
+            if x not in ("wd", "nb"):
                 balls_by_bowler[bowler] += 1
             if x == "wd":
                 bowl[bowler]["runs_conceded"] += max(1, ex or 1)
@@ -1272,18 +1337,13 @@ def _rebuild_scorecards_from_deliveries(g: GameState) -> None:
                 bowl[bowler]["runs_conceded"] += 1 + off
             elif x is None:
                 bowl[bowler]["runs_conceded"] += off
-            # b/lb don't add to bowler runs
             if wicket and dismissal_type in _CREDIT_BOWLER:
                 bowl[bowler]["wickets_taken"] += 1
 
     for bid, balls in balls_by_bowler.items():
-        # authoritative integer count
         bowl[bid]["balls_bowled"] = int(balls)
-        # safe base-6 string for display (e.g., "3.4")
         bowl[bid]["overs_bowled_str"] = _overs_str_from_balls(int(balls))
-        # legacy float X.Y for any existing UI still reading overs_bowled
         bowl[bid]["overs_bowled"] = _bowling_balls_to_overs(int(balls))
-
 
     g.batting_scorecard = bat
     g.bowling_scorecard = bowl
