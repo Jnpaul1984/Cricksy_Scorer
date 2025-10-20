@@ -347,11 +347,12 @@ const sAny = computed(() => (state.value || {}) as any)
 const allDeliveries = computed<any[]>(() => {
   const fromState = Array.isArray((state.value as any)?.recent_deliveries)
     ? (state.value as any).recent_deliveries
-    : null
+    : []
   const fromModel = Array.isArray((currentGame.value as any)?.deliveries)
     ? (currentGame.value as any).deliveries
     : []
-  return (fromState ?? fromModel)
+  const combined = fromModel.length ? [...fromModel, ...fromState] : fromState
+  return combined.length ? dedupeByKey(combined) : []
 })
 
 
@@ -424,15 +425,7 @@ function dedupeByKey(arr: any[]) {
 }
 
 
-const allDeliveriesRaw = computed<any[]>(() => {
-  const fromState = Array.isArray((state.value as any)?.recent_deliveries)
-    ? (state.value as any).recent_deliveries
-    : null
-  const fromModel = Array.isArray((currentGame.value as any)?.deliveries)
-    ? (currentGame.value as any).deliveries
-    : []
-  return (fromState ?? fromModel)
-})
+const allDeliveriesRaw = computed<any[]>(() => allDeliveries.value)
 
 // only this innings; if there are no innings markers at all, fall back to everything for innings 1, else empty
 

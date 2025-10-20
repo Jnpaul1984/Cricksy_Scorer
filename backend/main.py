@@ -832,14 +832,29 @@ def _deliveries_for_current_innings(g: GameState) -> List[Dict[str, Any]]:
 
 def _sum_runs_for_innings(g: GameState, inning: int) -> int:
     total = 0
+    inning_no = int(inning)
     for d_any in getattr(g, "deliveries", []) or []:
         d = d_any.model_dump() if isinstance(d_any, BaseModel) else dict(d_any)
         try:
             inn = int(d.get("inning", 1))
         except Exception:
             inn = 1
-        if inn == int(inning):
-            total += int(d.get("runs_scored") or 0)
+        if inn != inning_no:
+            continue
+
+        extra = _norm_extra(d.get("extra_type") or d.get("extra"))
+        runs_scored = int(d.get("runs_scored") or 0)
+        off_bat = int(d.get("runs_off_bat") or d.get("runs") or 0)
+        extra_runs = int(d.get("extra_runs") or 0)
+
+        if extra == "wd":
+            total += runs_scored or max(1, extra_runs or 1)
+        elif extra == "nb":
+            total += runs_scored or (1 + off_bat)
+        elif extra in ("b", "lb"):
+            total += runs_scored or extra_runs
+        else:
+            total += runs_scored or off_bat
     return total
 
 def _team1_runs(g: GameState) -> int:

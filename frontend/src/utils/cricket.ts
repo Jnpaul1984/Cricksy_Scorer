@@ -162,10 +162,11 @@ export function deriveBowlerFigures(deliveries: Delivery[], bowlerId: string | n
     if (typeof o === 'string') return Number(o.split('.')[0] || 0) || 0
     return 0
   }
+  const extraCode = (d: Delivery): string => String(d.extra ?? (d as any)?.extra_type ?? '')
 
   for (const d of deliveries) {
     if (String(d.bowler_id || '') !== pid) continue
-    const x  = String(d.extra ?? '')
+    const x  = extraCode(d)
     const ob = Number(d.runs_off_bat ?? d.runs_scored ?? 0)
 
     if (x === 'wd') {
@@ -202,7 +203,7 @@ export function deriveBowlerFigures(deliveries: Delivery[], bowlerId: string | n
     const legalBallsInOver = deliveries.filter(d =>
       String(d.bowler_id || '') === pid &&
       overNum(d) === over &&
-      (d.extra !== 'wd' && d.extra !== 'nb')
+      (extraCode(d) !== 'wd' && extraCode(d) !== 'nb')
     ).length
     if (legalBallsInOver === 6 && overRuns[key] === 0) maidens += 1
   }
