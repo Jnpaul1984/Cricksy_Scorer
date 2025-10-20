@@ -355,6 +355,17 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:  # type: ignore[misc]
         yield session
 
+if os.getenv("CRICKSY_IN_MEMORY_DB") == "1":
+    from backend.testsupport.in_memory_crud import InMemoryCrudRepository, enable_in_memory_crud
+
+    _memory_repo = InMemoryCrudRepository()
+
+    async def _in_memory_get_db() -> AsyncGenerator[object, None]:
+        yield object()
+
+    _fastapi.dependency_overrides[get_db] = _in_memory_get_db  # type: ignore[assignment]
+    enable_in_memory_crud(_memory_repo)
+
 # ================================================================
 # Helpers: core utilities
 # ================================================================

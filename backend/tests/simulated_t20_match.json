@@ -1,6 +1,9 @@
 {
   "matchType": "T20",
-  "teams": ["Team Alpha", "Team Beta"],
+  "teams": [
+    "Team Alpha",
+    "Team Beta"
+  ],
   "venue": "Generic Cricket Ground",
   "innings": [
     {
@@ -8,18 +11,1121 @@
       "runs": 157,
       "wickets": 6,
       "balls": [
-        {"over": 1, "ball": 1, "bowler": "Bowler B1", "batsman": "Batsman A1", "runs": 0, "extras": 0, "wicket": false},
-        {"over": 1, "ball": 2, "bowler": "Bowler B1", "batsman": "Batsman A1", "runs": 4, "extras": 0, "wicket": false},
-        {"over": 1, "ball": 3, "bowler": "Bowler B1", "batsman": "Batsman A1", "runs": 1, "extras": 0, "wicket": false},
-        {"over": 1, "ball": 4, "bowler": "Bowler B1", "batsman": "Batsman A2", "runs": 6, "extras": 0, "wicket": false},
-        {"over": 1, "ball": 5, "bowler": "Bowler B1", "batsman": "Batsman A2", "runs": 0, "extras": 0, "wicket": false},
-        {"over": 1, "ball": 6, "bowler": "Bowler B1", "batsman": "Batsman A2", "runs": 2, "extras": 0, "wicket": false},
-        {"over": 2, "ball": 1, "bowler": "Bowler B2", "batsman": "Batsman A1", "runs": 0, "extras": 0, "wicket": true, "wicketType": "bowled", "fielder": ""},
-        {"over": 2, "ball": 2, "bowler": "Bowler B2", "batsman": "Batsman A3", "runs": 1, "extras": 0, "wicket": false},
-        {"over": 2, "ball": 3, "bowler": "Bowler B2", "batsman": "Batsman A2", "runs": 1, "extras": 0, "wicket": false},
-        {"over": 2, "ball": 4, "bowler": "Bowler B2", "batsman": "Batsman A3", "runs": 0, "extras": 1, "wicket": false, "extraType": "wide"},
-        {"over": 2, "ball": 5, "bowler": "Bowler B2", "batsman": "Batsman A3", "runs": 4, "extras": 0, "wicket": false},
-        {"over": 20, "ball": 6, "bowler": "Bowler B5", "batsman": "Batsman A7", "runs": 2, "extras": 0, "wicket": false}
+        {
+          "over": 1,
+          "ball": 1,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 1",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 1,
+          "ball": 2,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 2",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 1,
+          "ball": 3,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 2",
+          "runs": 4,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 1,
+          "ball": 4,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 2",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 1,
+          "ball": 5,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 1",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 1,
+          "ball": 6,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 2",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 2,
+          "ball": 1,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 2",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 2,
+          "ball": 2,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 2",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 2,
+          "ball": 3,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 2",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "caught",
+          "fielder": "Beta Player 3"
+        },
+        {
+          "over": 2,
+          "ball": 4,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 2,
+          "ball": 5,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 1",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 2,
+          "ball": 6,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 1",
+          "runs": 4,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 3,
+          "ball": 1,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 3,
+          "ball": 2,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 3,
+          "ball": 3,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 1",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 3,
+          "ball": 4,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 1",
+          "runs": 4,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 3,
+          "ball": 5,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 1",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 3,
+          "ball": 6,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 4,
+          "ball": 1,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 4,
+          "ball": 2,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 1",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 4,
+          "ball": 3,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 1",
+          "runs": 4,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 4,
+          "ball": 4,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 1",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 4,
+          "ball": 5,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 1",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 4,
+          "ball": 6,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 1",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "lbw"
+        },
+        {
+          "over": 5,
+          "ball": 1,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 5,
+          "ball": 2,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 4",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 5,
+          "ball": 3,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 5,
+          "ball": 4,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 3",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 5,
+          "ball": 5,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 5,
+          "ball": 6,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 6,
+          "ball": 1,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 4",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 6,
+          "ball": 2,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 4",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 6,
+          "ball": 3,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 3",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 6,
+          "ball": 4,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 6,
+          "ball": 5,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 6,
+          "ball": 6,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 7,
+          "ball": 1,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 4",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "bowled"
+        },
+        {
+          "over": 7,
+          "ball": 2,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 5",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 7,
+          "ball": 3,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 5",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 7,
+          "ball": 4,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 3",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 7,
+          "ball": 5,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 3",
+          "runs": 3,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 7,
+          "ball": 6,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 5",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 8,
+          "ball": 1,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 8,
+          "ball": 2,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 5",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 8,
+          "ball": 3,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 5",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 8,
+          "ball": 4,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 3",
+          "runs": 4,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 8,
+          "ball": 5,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 3",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 8,
+          "ball": 6,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 9,
+          "ball": 1,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 9,
+          "ball": 2,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 3",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 9,
+          "ball": 3,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 3",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 9,
+          "ball": 4,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 3",
+          "runs": 3,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 9,
+          "ball": 5,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 5",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 9,
+          "ball": 6,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 10,
+          "ball": 1,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 5",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 10,
+          "ball": 2,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 10,
+          "ball": 3,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 5",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 10,
+          "ball": 4,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 5",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 10,
+          "ball": 5,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 5",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "caught",
+          "fielder": "Beta Player 5"
+        },
+        {
+          "over": 10,
+          "ball": 6,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 6",
+          "runs": 3,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 11,
+          "ball": 1,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 6",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 11,
+          "ball": 2,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 11,
+          "ball": 3,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 11,
+          "ball": 4,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 11,
+          "ball": 5,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 11,
+          "ball": 6,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 12,
+          "ball": 1,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 12,
+          "ball": 2,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 12,
+          "ball": 3,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 6",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 12,
+          "ball": 4,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 12,
+          "ball": 5,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 12,
+          "ball": 6,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 13,
+          "ball": 1,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 3",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 13,
+          "ball": 2,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 13,
+          "ball": 3,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 13,
+          "ball": 4,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 13,
+          "ball": 5,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 13,
+          "ball": 6,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 14,
+          "ball": 1,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 14,
+          "ball": 2,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 14,
+          "ball": 3,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 3",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 14,
+          "ball": 4,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 14,
+          "ball": 5,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 14,
+          "ball": 6,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 15,
+          "ball": 1,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 15,
+          "ball": 2,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 3",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "caught",
+          "fielder": "Beta Player 6"
+        },
+        {
+          "over": 15,
+          "ball": 3,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 15,
+          "ball": 4,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 15,
+          "ball": 5,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 15,
+          "ball": 6,
+          "bowler": "Beta Player 3",
+          "batsman": "Alpha Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 16,
+          "ball": 1,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 16,
+          "ball": 2,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 7",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 16,
+          "ball": 3,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 16,
+          "ball": 4,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 16,
+          "ball": 5,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 16,
+          "ball": 6,
+          "bowler": "Beta Player 4",
+          "batsman": "Alpha Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 17,
+          "ball": 1,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 6",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 17,
+          "ball": 2,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 17,
+          "ball": 3,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 17,
+          "ball": 4,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 17,
+          "ball": 5,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 17,
+          "ball": 6,
+          "bowler": "Beta Player 5",
+          "batsman": "Alpha Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 18,
+          "ball": 1,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 18,
+          "ball": 2,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 18,
+          "ball": 3,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 18,
+          "ball": 4,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 6",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 18,
+          "ball": 5,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 6",
+          "runs": 4,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 18,
+          "ball": 6,
+          "bowler": "Beta Player 6",
+          "batsman": "Alpha Player 6",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "bowled"
+        },
+        {
+          "over": 19,
+          "ball": 1,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 19,
+          "ball": 2,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 19,
+          "ball": 3,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 8",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 19,
+          "ball": 4,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 8",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 19,
+          "ball": 5,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 19,
+          "ball": 6,
+          "bowler": "Beta Player 1",
+          "batsman": "Alpha Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 20,
+          "ball": 1,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 8",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 20,
+          "ball": 2,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 20,
+          "ball": 3,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 20,
+          "ball": 4,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 8",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 20,
+          "ball": 5,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 8",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 20,
+          "ball": 6,
+          "bowler": "Beta Player 2",
+          "batsman": "Alpha Player 8",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        }
+      ],
+      "opening_pair": {
+        "striker": "Alpha Player 1",
+        "non_striker": "Alpha Player 2"
+      },
+      "bowling_order": [
+        "Beta Player 1",
+        "Beta Player 2",
+        "Beta Player 3",
+        "Beta Player 4",
+        "Beta Player 5",
+        "Beta Player 6",
+        "Beta Player 1",
+        "Beta Player 2",
+        "Beta Player 3",
+        "Beta Player 4",
+        "Beta Player 5",
+        "Beta Player 6",
+        "Beta Player 1",
+        "Beta Player 2",
+        "Beta Player 3",
+        "Beta Player 4",
+        "Beta Player 5",
+        "Beta Player 6",
+        "Beta Player 1",
+        "Beta Player 2"
       ]
     },
     {
@@ -27,13 +1133,1125 @@
       "runs": 142,
       "wickets": 8,
       "balls": [
-        {"over": 1, "ball": 1, "bowler": "Bowler A1", "batsman": "Batsman B1", "runs": 1, "extras": 0, "wicket": false},
-        {"over": 1, "ball": 2, "bowler": "Bowler A1", "batsman": "Batsman B1", "runs": 0, "extras": 0, "wicket": false},
-        {"over": 1, "ball": 3, "bowler": "Bowler A1", "batsman": "Batsman B2", "runs": 4, "extras": 0, "wicket": false},
-        {"over": 1, "ball": 4, "bowler": "Bowler A1", "batsman": "Batsman B2", "runs": 2, "extras": 0, "wicket": false},
-        {"over": 1, "ball": 5, "bowler": "Bowler A1", "batsman": "Batsman B2", "runs": 1, "extras": 0, "wicket": false},
-        {"over": 1, "ball": 6, "bowler": "Bowler A1", "batsman": "Batsman B2", "runs": 6, "extras": 0, "wicket": false},
-        {"over": 20, "ball": 6, "bowler": "Bowler A5", "batsman": "Batsman B10", "runs": 0, "extras": 0, "wicket": true, "wicketType": "caught", "fielder": "Batsman A6"}
+        {
+          "over": 1,
+          "ball": 1,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 1",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 1,
+          "ball": 2,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 2",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 1,
+          "ball": 3,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 2",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 1,
+          "ball": 4,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 2",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 1,
+          "ball": 5,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 1",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 1,
+          "ball": 6,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 2",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 2,
+          "ball": 1,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 1",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 2,
+          "ball": 2,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 1",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 2,
+          "ball": 3,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 1",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 2,
+          "ball": 4,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 2",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 2,
+          "ball": 5,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 2",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 2,
+          "ball": 6,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 1",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 3,
+          "ball": 1,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 2",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 3,
+          "ball": 2,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 1",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "caught",
+          "fielder": "Alpha Player 3"
+        },
+        {
+          "over": 3,
+          "ball": 3,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 3",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 3,
+          "ball": 4,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 3,
+          "ball": 5,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 3,
+          "ball": 6,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 2",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 4,
+          "ball": 1,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 3",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 4,
+          "ball": 2,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 4,
+          "ball": 3,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 4,
+          "ball": 4,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 2",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 4,
+          "ball": 5,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 2",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 4,
+          "ball": 6,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 2",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 5,
+          "ball": 1,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 3",
+          "runs": 3,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 5,
+          "ball": 2,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 2",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 5,
+          "ball": 3,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 3",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 5,
+          "ball": 4,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 2",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 5,
+          "ball": 5,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 3",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 5,
+          "ball": 6,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 3",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "bowled"
+        },
+        {
+          "over": 6,
+          "ball": 1,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 2",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 6,
+          "ball": 2,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 4",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 6,
+          "ball": 3,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 4",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 6,
+          "ball": 4,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 4",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 6,
+          "ball": 5,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 4",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 6,
+          "ball": 6,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 2",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 7,
+          "ball": 1,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 4",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "lbw"
+        },
+        {
+          "over": 7,
+          "ball": 2,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 5",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 7,
+          "ball": 3,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 2",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 7,
+          "ball": 4,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 2",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 7,
+          "ball": 5,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 5",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 7,
+          "ball": 6,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 2",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 8,
+          "ball": 1,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 5",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 8,
+          "ball": 2,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 5",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 8,
+          "ball": 3,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 2",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 8,
+          "ball": 4,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 2",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 8,
+          "ball": 5,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 5",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 8,
+          "ball": 6,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 5",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 9,
+          "ball": 1,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 2",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 9,
+          "ball": 2,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 5",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 9,
+          "ball": 3,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 2",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 9,
+          "ball": 4,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 2",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "caught",
+          "fielder": "Alpha Player 5"
+        },
+        {
+          "over": 9,
+          "ball": 5,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 9,
+          "ball": 6,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 5",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 10,
+          "ball": 1,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 5",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 10,
+          "ball": 2,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 5",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 10,
+          "ball": 3,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 10,
+          "ball": 4,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 10,
+          "ball": 5,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 5",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 10,
+          "ball": 6,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 11,
+          "ball": 1,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 5",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 11,
+          "ball": 2,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 5",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 11,
+          "ball": 3,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 5",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 11,
+          "ball": 4,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 5",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 11,
+          "ball": 5,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 6",
+          "runs": 3,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 11,
+          "ball": 6,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 5",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "caught",
+          "fielder": "Alpha Player 6"
+        },
+        {
+          "over": 12,
+          "ball": 1,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 12,
+          "ball": 2,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 7",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 12,
+          "ball": 3,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 12,
+          "ball": 4,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 6",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 12,
+          "ball": 5,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 12,
+          "ball": 6,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 13,
+          "ball": 1,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 13,
+          "ball": 2,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 13,
+          "ball": 3,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 6",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 13,
+          "ball": 4,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 6",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 13,
+          "ball": 5,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 13,
+          "ball": 6,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 6",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 14,
+          "ball": 1,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 14,
+          "ball": 2,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 14,
+          "ball": 3,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 6",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "bowled"
+        },
+        {
+          "over": 14,
+          "ball": 4,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 8",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 14,
+          "ball": 5,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 8",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 14,
+          "ball": 6,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 15,
+          "ball": 1,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 8",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 15,
+          "ball": 2,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 8",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 15,
+          "ball": 3,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 8",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 15,
+          "ball": 4,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 15,
+          "ball": 5,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 8",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 15,
+          "ball": 6,
+          "bowler": "Alpha Player 3",
+          "batsman": "Beta Player 8",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 16,
+          "ball": 1,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 16,
+          "ball": 2,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 8",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 16,
+          "ball": 3,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 7",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 16,
+          "ball": 4,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 16,
+          "ball": 5,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 7",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 16,
+          "ball": 6,
+          "bowler": "Alpha Player 4",
+          "batsman": "Beta Player 8",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 17,
+          "ball": 1,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 17,
+          "ball": 2,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 7",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 17,
+          "ball": 3,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 17,
+          "ball": 4,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 7",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 17,
+          "ball": 5,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 7",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "caught",
+          "fielder": "Alpha Player 7"
+        },
+        {
+          "over": 17,
+          "ball": 6,
+          "bowler": "Alpha Player 5",
+          "batsman": "Beta Player 9",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 18,
+          "ball": 1,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 8",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 18,
+          "ball": 2,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 9",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 18,
+          "ball": 3,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 9",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 18,
+          "ball": 4,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 8",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 18,
+          "ball": 5,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 9",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 18,
+          "ball": 6,
+          "bowler": "Alpha Player 6",
+          "batsman": "Beta Player 8",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 19,
+          "ball": 1,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 9",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 19,
+          "ball": 2,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 9",
+          "runs": 0,
+          "extras": 0,
+          "wicket": true,
+          "wicketType": "caught",
+          "fielder": "Alpha Player 4"
+        },
+        {
+          "over": 19,
+          "ball": 3,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 10",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 19,
+          "ball": 4,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 8",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 19,
+          "ball": 5,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 8",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 19,
+          "ball": 6,
+          "bowler": "Alpha Player 1",
+          "batsman": "Beta Player 10",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 20,
+          "ball": 1,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 10",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 20,
+          "ball": 2,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 8",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 20,
+          "ball": 3,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 10",
+          "runs": 2,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 20,
+          "ball": 4,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 10",
+          "runs": 0,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 20,
+          "ball": 5,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 10",
+          "runs": 4,
+          "extras": 0,
+          "wicket": false
+        },
+        {
+          "over": 20,
+          "ball": 6,
+          "bowler": "Alpha Player 2",
+          "batsman": "Beta Player 10",
+          "runs": 1,
+          "extras": 0,
+          "wicket": false
+        }
+      ],
+      "opening_pair": {
+        "striker": "Beta Player 1",
+        "non_striker": "Beta Player 2"
+      },
+      "bowling_order": [
+        "Alpha Player 1",
+        "Alpha Player 2",
+        "Alpha Player 3",
+        "Alpha Player 4",
+        "Alpha Player 5",
+        "Alpha Player 6",
+        "Alpha Player 1",
+        "Alpha Player 2",
+        "Alpha Player 3",
+        "Alpha Player 4",
+        "Alpha Player 5",
+        "Alpha Player 6",
+        "Alpha Player 1",
+        "Alpha Player 2",
+        "Alpha Player 3",
+        "Alpha Player 4",
+        "Alpha Player 5",
+        "Alpha Player 6",
+        "Alpha Player 1",
+        "Alpha Player 2"
       ]
     }
   ],

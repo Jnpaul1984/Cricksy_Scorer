@@ -13,6 +13,17 @@ function Wait-ForUrl($url, $timeoutSec=30) {
   return $false
 }
 
+$apiBase = $Env:API_BASE
+if (-not $apiBase) {
+  $apiBase = 'http://localhost:8000'
+}
+$Env:API_BASE = $apiBase
+if (-not $Env:VITE_API_BASE) {
+  $Env:VITE_API_BASE = $apiBase
+}
+
+Write-Host "Using API base: $apiBase"
+
 Write-Host 'Building app...'
 cmd /c "npm run build" | Out-Host
 
@@ -32,4 +43,3 @@ try {
     Stop-Process -Id $preview.Id -Force -ErrorAction SilentlyContinue
   }
 }
-

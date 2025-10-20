@@ -119,6 +119,26 @@ npm run lint — ESLint
 
 npm run format — Prettier
 
+Full Simulation Test Run
+------------------------
+
+The repository includes an end-to-end simulation that replays the T20 fixture against the FastAPI API and the Cypress UI suite.
+
+```
+scripts/run-full-sim.sh
+```
+
+This helper runs `pytest` inside `backend/`, starts the API in an in-memory mode (no Postgres required), and executes `npm run test:e2e` from `frontend/`, which seeds the match and exercises the scoreboard, scoring console, and analytics pages.
+
+Run the sequence manually if you prefer:
+
+1. `export CRICKSY_IN_MEMORY_DB=1`
+2. `cd backend && pytest`
+3. `python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000`
+4. In another terminal: `cd frontend && API_BASE=http://localhost:8000 VITE_API_BASE=http://localhost:8000 npm run test:e2e`
+
+Remember to set `CRICKSY_IN_MEMORY_DB=1` any time you want the FastAPI app to use the in-memory store.
+
 API Integration
 Development: Proxied to FastAPI backend at <http://localhost:8000>
 
