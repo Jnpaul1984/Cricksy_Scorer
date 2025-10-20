@@ -14,7 +14,7 @@
     "dev": "vite --host",
     "test": "echo \"Use npm run test:unit for unit tests\" && exit 0",
     "test:unit": "vitest run",
-    "test:e2e": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\run-e2e.ps1",
+    "test:e2e": "node -e \"process.platform==='win32'?require('child_process').execSync('powershell -NoProfile -ExecutionPolicy Bypass -File .\\\\scripts\\\\run-e2e.ps1',{stdio:'inherit'}):require('child_process').execSync('bash scripts/run-e2e.sh',{stdio:'inherit'})\"",
     "test:e2e:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\run-e2e-dev.ps1"
   },
   "dependencies": {
