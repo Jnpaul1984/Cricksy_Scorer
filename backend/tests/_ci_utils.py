@@ -1,6 +1,14 @@
 # From the repo root (Cricksy_Scorer)
 
-import json, time, httpx, pathlib
+import json, time, os, pathlib, httpx
+from urllib.parse import urlsplit
+
+_USE_INPROC = os.getenv("CRICKSY_IN_MEMORY_DB") == "1"
+if _USE_INPROC:
+    from fastapi.testclient import TestClient
+    import backend.main as main
+
+    _local_client = TestClient(main.fastapi_app)
 
 # artifacts folder at repo root: Cricksy_Scorer/artifacts
 ARTI_DIR = pathlib.Path(__file__).resolve().parents[2] / "artifacts"
@@ -13,7 +21,15 @@ def traced_request(method: str, url: str, **kw) -> httpx.Response:
     """
     t0 = time.time()
     timeout = kw.pop("timeout", 15)
-    resp = httpx.request(method, url, timeout=timeout, **kw)
+
+    if _USE_INPROC:
+        parsed = urlsplit(url)
+        path = parsed.path or "/"
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
+        resp = _local_client.request(method, path, timeout=timeout, **kw)
+    else:
+        resp = httpx.request(method, url, timeout=timeout, **kw)
     t1 = time.time()
 
     try:

@@ -1,5 +1,5 @@
-import fs from 'node:fs'
-import path from 'node:path'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 
 type FixtureDelivery = {
   over: number
@@ -43,11 +43,14 @@ async function httpRequest<T>(
   options: { method?: string; body?: unknown } = {},
 ): Promise<T> {
   const url = `${base.replace(/\/+$/, '')}${path}`
-  const res = await fetch(url, {
-    method: options.method || 'GET',
-    headers: options.body ? API_HEADERS : {},
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  })
+  const init: RequestInit = {
+    method: options.method ?? 'GET',
+  }
+  if (options.body !== undefined) {
+    init.headers = API_HEADERS
+    init.body = JSON.stringify(options.body)
+  }
+  const res = await fetch(url, init)
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`${res.status} ${res.statusText}: ${text}`)
@@ -244,60 +247,65 @@ function mapPlayers(players: Array<{ id: string; name: string }>): IdMap {
 }
 
 export async function seedMatch(apiBase: string, frontendDir: string): Promise<{ gameId: string }> {
-  const fixture = loadFixture(frontendDir)
-  const [teamAName, teamBName] = fixture.teams
-  const playersA = Array.from({ length: 11 }, (_, i) => `Alpha Player ${i + 1}`)
-  const playersB = Array.from({ length: 11 }, (_, i) => `Beta Player ${i + 1}`)
+  try {
+    const fixture = loadFixture(frontendDir)
+    const [teamAName, teamBName] = fixture.teams
+    const playersA = Array.from({ length: 11 }, (_, i) => `Alpha Player ${i + 1}`)
+    const playersB = Array.from({ length: 11 }, (_, i) => `Beta Player ${i + 1}`)
 
-  const createPayload = {
-    team_a_name: teamAName,
-    team_b_name: teamBName,
-    players_a: playersA,
-    players_b: playersB,
-    match_type: 'limited',
-    overs_limit: 20,
-    dls_enabled: true,
-    toss_winner_team: teamAName,
-    decision: 'bat',
+    const createPayload = {
+      team_a_name: teamAName,
+      team_b_name: teamBName,
+      players_a: playersA,
+      players_b: playersB,
+      match_type: 'limited',
+      overs_limit: 20,
+      dls_enabled: true,
+      toss_winner_team: teamAName,
+      decision: 'bat',
+    }
+
+    interface GameCreationResponse {
+      id: string
+      team_a: { players: Array<{ id: string; name: string }> }
+      team_b: { players: Array<{ id: string; name: string }> }
+    }
+
+    const game = await httpRequest<GameCreationResponse>(apiBase, '/games', {
+      method: 'POST',
+      body: createPayload,
+    })
+    const gameId: string = game.id
+
+    const teamAIds = mapPlayers(game.team_a.players || [])
+    const teamBIds = mapPlayers(game.team_b.players || [])
+
+    const [innings1, innings2] = fixture.innings
+
+    await httpRequest(apiBase, `/games/${encodeURIComponent(gameId)}/openers`, {
+      method: 'POST',
+      body: {
+        striker_id: teamAIds.get(innings1.opening_pair.striker),
+        non_striker_id: teamAIds.get(innings1.opening_pair.non_striker),
+      },
+    })
+
+    await playInnings(apiBase, gameId, innings1, teamAIds, teamBIds)
+
+    await httpRequest(apiBase, `/games/${encodeURIComponent(gameId)}/innings/start`, {
+      method: 'POST',
+      body: {
+        striker_id: teamBIds.get(innings2.opening_pair.striker),
+        non_striker_id: teamBIds.get(innings2.opening_pair.non_striker),
+        opening_bowler_id: teamAIds.get((innings2.balls[0] || {}).bowler),
+      },
+    })
+
+    await playInnings(apiBase, gameId, innings2, teamBIds, teamAIds)
+
+    return { gameId }
+  } catch (err) {
+    console.error('[matchSimulator] seedMatch error', err)
+    throw err
   }
-
-  interface GameCreationResponse {
-    id: string
-    team_a: { players: Array<{ id: string; name: string }> }
-    team_b: { players: Array<{ id: string; name: string }> }
-  }
-
-  const game = await httpRequest<GameCreationResponse>(apiBase, '/games', {
-    method: 'POST',
-    body: createPayload,
-  })
-  const gameId: string = game.id
-
-  const teamAIds = mapPlayers(game.team_a.players || [])
-  const teamBIds = mapPlayers(game.team_b.players || [])
-
-  const [innings1, innings2] = fixture.innings
-
-  await httpRequest(apiBase, `/games/${encodeURIComponent(gameId)}/openers`, {
-    method: 'POST',
-    body: {
-      striker_id: teamAIds.get(innings1.opening_pair.striker),
-      non_striker_id: teamAIds.get(innings1.opening_pair.non_striker),
-    },
-  })
-
-  await playInnings(apiBase, gameId, innings1, teamAIds, teamBIds)
-
-  await httpRequest(apiBase, `/games/${encodeURIComponent(gameId)}/innings/start`, {
-    method: 'POST',
-    body: {
-      striker_id: teamBIds.get(innings2.opening_pair.striker),
-      non_striker_id: teamBIds.get(innings2.opening_pair.non_striker),
-      opening_bowler_id: teamAIds.get((innings2.balls[0] || {}).bowler),
-    },
-  })
-
-  await playInnings(apiBase, gameId, innings2, teamBIds, teamAIds)
-
-  return { gameId }
 }

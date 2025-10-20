@@ -4,6 +4,7 @@
     "vite.config.*",
     "vitest.config.*",
     "cypress.config.*",
+    "cypress/support/**/*.ts",
     "nightwatch.conf.*",
     "playwright.config.*"
   ],

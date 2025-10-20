@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from typing import Any, Dict
+from enum import Enum
+from importlib import import_module
+import sys
 
 from backend.sql_app import crud, models, schemas
 
@@ -83,6 +86,20 @@ class InMemoryCrudRepository:
 def enable_in_memory_crud(repository: InMemoryCrudRepository) -> None:
     """Patch the global CRUD module to use the supplied in-memory repository."""
 
-    crud.create_game = repository.create_game  # type: ignore[assignment]
-    crud.get_game = repository.get_game  # type: ignore[assignment]
-    crud.update_game = repository.update_game  # type: ignore[assignment]
+    targets = [crud]
+
+    # The backend imports CRUD via both ``sql_app`` and ``backend.sql_app``.
+    # Ensure we replace the functions on every loaded module alias.
+    module = sys.modules.get("sql_app.crud")
+    if module is None:
+        try:
+            module = import_module("sql_app.crud")
+        except ModuleNotFoundError:
+            module = None
+    if module is not None:
+        targets.append(module)
+
+    for target in targets:
+        target.create_game = repository.create_game  # type: ignore[assignment]
+        target.get_game = repository.get_game  # type: ignore[assignment]
+        target.update_game = repository.update_game  # type: ignore[assignment]

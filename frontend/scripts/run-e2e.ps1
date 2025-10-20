@@ -22,6 +22,11 @@ if (-not $Env:VITE_API_BASE) {
   $Env:VITE_API_BASE = $apiBase
 }
 
+# Cypress needs the Electron binary to run in browser mode.
+if ($Env:ELECTRON_RUN_AS_NODE) {
+  Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+}
+
 Write-Host "Using API base: $apiBase"
 
 Write-Host 'Building app...'
@@ -36,7 +41,7 @@ try {
   }
 
   Write-Host 'Running Cypress E2E tests...'
-  cmd /c "npx cypress run" | Out-Host
+  cmd /c "npx cypress run --config-file cypress.config.js" | Out-Host
 } finally {
   if ($preview -and -not $preview.HasExited) {
     Write-Host 'Stopping preview server...'

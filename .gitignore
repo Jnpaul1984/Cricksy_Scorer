@@ -18,3 +18,5 @@ dist/
 coverage/
 *.log
 *.tsbuildinfo
+frontend/.cypress-runtime/
+.tsc-tmp/

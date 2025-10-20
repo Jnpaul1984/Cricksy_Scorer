@@ -304,6 +304,8 @@ class SponsorsManifest(TypedDict):
 _sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")  # type: ignore[call-arg]
 sio: SocketIOServer = cast(SocketIOServer, _sio)
 _fastapi = FastAPI(title="Cricksy Scorer API")
+# Expose the FastAPI instance for tests and external tooling.
+fastapi_app = _fastapi
 _fastapi.state.sio = sio
 app = socketio.ASGIApp(sio, other_asgi_app=_fastapi)
 
