@@ -578,9 +578,27 @@ const innings1 = computed<null | { runs: number; wkts: number; balls: number }>(
   return { runs, wkts, balls }
 })
 
-const innings1Line = computed<string | null>(() =>
-  innings1.value ? `${innings1.value.runs}/${innings1.value.wkts} (${oversDisplayFromBalls(innings1.value.balls)} ov)` : null
-)
+const innings1Line = computed<string | null>(() => {
+  const snap = liveSnapshot.value
+  
+  // If we're in innings 2 or later, ALWAYS use the snapshot summary (most reliable)
+  if (currentInningsNo.value >= 2) {
+    const summary = snap?.first_inning_summary || (snap as any)?.first_innings_summary
+    if (summary) {
+      const runs = summary.runs ?? 0
+      const wickets = summary.wickets ?? 0
+      const overs = summary.overs ?? 0
+      return `${runs}/${wickets} (${overs} ov)`
+    }
+  }
+  
+  // For live innings 1, calculate from deliveries
+  if (innings1.value) {
+    return `${innings1.value.runs}/${innings1.value.wkts} (${oversDisplayFromBalls(innings1.value.balls)} ov)`
+  }
+  
+  return null
+})
 
 // === Highlights (FOUR/SIX/WICKET/DUCK/50/100) =========================
 const enableHighlights = ref(true)   // make a prop later if you want

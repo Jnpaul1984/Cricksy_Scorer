@@ -1,0 +1,94 @@
+# pytest.ini - Configuration for pytest test runner
+# Copy this to pytest.ini and customize as needed
+
+[pytest]
+# Test discovery patterns
+python_files = test_*.py *_test.py
+python_classes = Test*
+python_functions = test_*
+
+# Test markers for organizing tests
+markers =
+    unit: Unit tests - fast, isolated, no external dependencies
+    integration: Integration tests - require backend server running
+    e2e: End-to-end tests - require full system (backend + frontend)
+    slow: Slow-running tests (>5 seconds)
+    smoke: Smoke tests - basic functionality checks
+    contract: API contract tests
+    database: Tests that require database access
+    websocket: Tests that require WebSocket functionality
+    
+# Minimum Python version
+minversion = 7.0
+
+# Test output options
+addopts = 
+    -ra
+    --strict-markers
+    --strict-config
+    --showlocals
+    --tb=short
+
+# Coverage options (uncomment to enable)
+# addopts = 
+#     --cov=backend
+#     --cov-report=html
+#     --cov-report=term-missing
+#     --cov-fail-under=80
+
+# Test paths
+testpaths = tests
+
+# Ignore patterns
+norecursedirs = 
+    .git
+    .tox
+    dist
+    build
+    *.egg
+    __pycache__
+    node_modules
+    venv
+    .venv
+
+# Console output
+console_output_style = progress
+
+# Log settings
+log_cli = false
+log_cli_level = INFO
+log_cli_format = %(asctime)s [%(levelname)8s] %(message)s
+log_cli_date_format = %Y-%m-%d %H:%M:%S
+
+# Timeout for tests (requires pytest-timeout)
+# timeout = 300
+
+# Asyncio mode (for async tests)
+asyncio_mode = auto
+
+# Example usage:
+# 
+# Run only unit tests (fast):
+#   pytest -m unit
+#
+# Run integration tests:
+#   pytest -m integration
+#
+# Run everything except slow tests:
+#   pytest -m "not slow"
+#
+# Run unit and integration tests:
+#   pytest -m "unit or integration"
+#
+# Run with coverage:
+#   pytest --cov=backend --cov-report=html
+#
+# Run specific test file:
+#   pytest tests/test_health.py -v
+#
+# Run with verbose output:
+#   pytest -v
+#
+# Run and stop at first failure:
+#   pytest -x
+

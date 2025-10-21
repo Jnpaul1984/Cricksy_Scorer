@@ -21,7 +21,7 @@ def api_client(monkeypatch: pytest.MonkeyPatch) -> Iterable[TestClient]:
     async def fake_get_db() -> Iterable[object]:
         yield object()
 
-    fastapi_app = main.fastapi_app
+    fastapi_app = main._fastapi
     fastapi_app.dependency_overrides[get_db] = fake_get_db
     monkeypatch.setattr(crud, "create_game", repo.create_game)
     monkeypatch.setattr(crud, "get_game", repo.get_game)

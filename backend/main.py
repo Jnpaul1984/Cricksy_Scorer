@@ -12,7 +12,6 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
-    TypedDict,
     Callable,
     TypeVar,
     Union,
@@ -20,10 +19,10 @@ from typing import (
     Literal,
     Mapping,
     runtime_checkable,
-    NotRequired,
     Tuple,
     TypeAlias,
 )
+from typing_extensions import TypedDict, NotRequired
 from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,13 +35,13 @@ from sqlalchemy.orm.attributes import flag_modified
 from fastapi import UploadFile, File, Form
 from datetime import datetime, timezone
 import json
-import dls as dlsmod
-from routes.games_router import router as games_router
-from routes.games_dls import router as games_dls_router
-from routes.interruptions import router as interruptions_router
+from backend import dls as dlsmod
+from backend.routes.games_router import router as games_router
+from backend.routes.games_dls import router as games_dls_router
+from backend.routes.interruptions import router as interruptions_router
 # ---- App modules ----
-from sql_app import crud, schemas, models
-from sql_app.database import SessionLocal
+from backend.sql_app import crud, schemas, models
+from backend.sql_app.database import SessionLocal
 
 # Socket.IO (no first-party type stubs; we keep our own Protocol below)
 import socketio  # type: ignore[import-not-found]

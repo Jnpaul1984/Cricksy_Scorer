@@ -8,11 +8,21 @@ import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import { useGameStore } from '@/stores/gameStore'
 
 describe('ScoreboardWidget', () => {
+  let wrapper: any
+
+  afterEach(() => {
+    // Cleanup: unmount component to stop any timers
+    if (wrapper) {
+      wrapper.unmount()
+      wrapper = null
+    }
+  })
+
   it('displays the winner and match result', async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
 
-    const wrapper = mount(ScoreboardWidget, {
+    wrapper = mount(ScoreboardWidget, {
       global: { plugins: [pinia] },
       props: {
         gameId: 'test-game-id'

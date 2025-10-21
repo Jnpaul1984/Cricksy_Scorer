@@ -8,8 +8,8 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sql_app import models, schemas
-from sql_app.database import SessionLocal  # Async sessionmaker
+from backend.sql_app import models, schemas
+from backend.sql_app.database import SessionLocal  # Async sessionmaker
 
 router = APIRouter(prefix="/games", tags=["roles"])
 

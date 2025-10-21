@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
-from sql_app import models, schemas
-from sql_app.database import get_db  # async generator -> AsyncSession
+from backend.sql_app import models, schemas
+from backend.sql_app.database import get_db  # async generator -> AsyncSession
 import json
 
 # Ensure schemas.MatchResultRequest is imported and defined
