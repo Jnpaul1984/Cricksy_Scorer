@@ -38,42 +38,67 @@ jobs:
         run: |
           pytest -q tests/test_health.py tests/test_results_endpoint.py
 
-    backend-integration-tests:
-      name: Backend (integration tests)
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
+  backend-integration-tests:
+    name: Backend (integration tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-        - name: Set up Python
-          uses: actions/setup-python@v5
-          with:
-            python-version: '3.11'
-            cache: 'pip'
-            cache-dependency-path: backend/requirements.txt
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
 
-        - name: Install deps
-          working-directory: backend
-          run: |
-            python -m pip install --upgrade pip
-            pip install -r requirements.txt
-            pip install pytest-cov
+      - name: Install deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-cov
 
-        - name: Run integration tests
-          working-directory: backend
-          env:
-            CRICKSY_IN_MEMORY_DB: 1
-          run: |
-            pytest tests/integration/ -v --tb=short --cov=. --cov-report=xml --cov-report=term
+      - name: Run integration tests
+        working-directory: backend
+        env:
+          CRICKSY_IN_MEMORY_DB: 1
+        run: |
+          pytest tests/integration/ -v --tb=short --cov=. --cov-report=xml --cov-report=term
 
-        - name: Upload coverage to Codecov
-          uses: codecov/codecov-action@v4
-          with:
-            file: ./backend/coverage.xml
-            flags: integration
-            name: integration-tests
-            fail_ci_if_error: false
-          
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./backend/coverage.xml
+          flags: integration
+          name: integration-tests
+          fail_ci_if_error: false
+
+  backend-dls-tests:
+    name: Backend (DLS calculation tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run DLS calculation tests
+        working-directory: backend
+        run: |
+          pytest tests/test_dls_calculations.py -v --tb=short
+
   frontend-build:
     name: Frontend (build + type-check)
     runs-on: ubuntu-latest
@@ -102,4 +127,3 @@ jobs:
           # Safe default; app uses relative paths for most fetches in build
           VITE_API_BASE: http://localhost:8000
         run: npm run build-only
-
