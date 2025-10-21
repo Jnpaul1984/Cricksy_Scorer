@@ -423,11 +423,10 @@ def test_match_with_wickets_and_extras(game_helper, assert_helper):
     assert extras_count == 2
 
 
-@pytest.mark.xfail(reason="Further investigation needed for innings transition")
 def test_innings_transition(game_helper, assert_helper):
     """Test the transition between innings."""
-    # Create game
-    game_helper.create_game()
+    # Create game with 1 over per innings
+    game_helper.create_game(overs_limit=1)
     game_helper.set_openers(team="A")
     
     striker = game_helper.team_a_players[0]["id"]
