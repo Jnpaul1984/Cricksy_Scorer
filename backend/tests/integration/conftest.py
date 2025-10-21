@@ -112,7 +112,6 @@ class GameHelper:
         assert self.game_id, "Game must be created first"
         
         payload = {
-            "batsman_id": batsman_id,
             "bowler_id": bowler_id,
             "runs_scored": runs_scored
         }

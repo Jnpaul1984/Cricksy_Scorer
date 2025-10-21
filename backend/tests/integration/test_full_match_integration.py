@@ -14,7 +14,7 @@ Tests complete match scenarios from creation to finalization including:
 import pytest
 
 
-@pytest.mark.xfail(reason="400 error on delivery posting - payload format needs investigation")
+@pytest.mark.xfail(reason="Further investigation needed for multi-over match workflow")
 def test_complete_match_no_wickets(game_helper, assert_helper):
     """Test a complete match with no wickets."""
     # Create game
@@ -70,7 +70,7 @@ def test_complete_match_no_wickets(game_helper, assert_helper):
     assert_helper.assert_runs_scored(deliveries, 24)
 
 
-@pytest.mark.xfail(reason="400 error on delivery posting - payload format needs investigation")
+@pytest.mark.xfail(reason="Further investigation needed for wicket workflow")
 def test_complete_match_with_wickets(game_helper, assert_helper):
     """Test a complete match with wickets and batsman selection."""
     # Create game
@@ -247,7 +247,7 @@ def test_match_with_different_dismissal_types(game_helper, assert_helper):
             f"Dismissal type '{expected}' not found in recorded types"
 
 
-@pytest.mark.xfail(reason="400 error on delivery posting - payload format needs investigation")
+@pytest.mark.xfail(reason="Further investigation needed for extras workflow")
 def test_match_with_extras(game_helper, assert_helper):
     """Test a match with various extra types."""
     # Create game
@@ -290,7 +290,7 @@ def test_match_with_extras(game_helper, assert_helper):
     assert len(extras_deliveries) == 4
 
 
-@pytest.mark.xfail(reason="400 error on delivery posting - payload format needs investigation")
+@pytest.mark.xfail(reason="Further investigation needed for 20-over workflow")
 def test_complete_20_over_match(game_helper, assert_helper):
     """Test a complete 20-over match."""
     # Create game
@@ -354,7 +354,7 @@ def test_complete_20_over_match(game_helper, assert_helper):
     assert snapshot.get("result") is not None
 
 
-@pytest.mark.xfail(reason="400 error on delivery posting - payload format needs investigation")
+@pytest.mark.xfail(reason="Further investigation needed for complex workflow")
 def test_match_with_wickets_and_extras(game_helper, assert_helper):
     """Test a match combining wickets and extras."""
     # Create game
@@ -406,7 +406,7 @@ def test_match_with_wickets_and_extras(game_helper, assert_helper):
     assert extras_count == 2
 
 
-@pytest.mark.xfail(reason="Innings transition workflow differs from expected")
+@pytest.mark.xfail(reason="Further investigation needed for innings transition")
 def test_innings_transition(game_helper, assert_helper):
     """Test the transition between innings."""
     # Create game

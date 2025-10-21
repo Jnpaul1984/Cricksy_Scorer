@@ -164,7 +164,7 @@ def test_wicket_without_dismissal_type(game_helper):
         f"Expected 422, got {response.status_code}"
 
 
-@pytest.mark.xfail(reason="Innings transition workflow differs from expected")
+@pytest.mark.xfail(reason="Workflow behavior needs documentation")
 def test_start_innings_without_finishing_first(game_helper):
     """Test starting second innings before first is complete."""
     # Create game with 1 over limit
@@ -216,7 +216,7 @@ def test_finalize_incomplete_match(game_helper):
     assert response.status_code in [200, 409]
 
 
-@pytest.mark.xfail(reason="Finalize workflow differs from expected")
+@pytest.mark.xfail(reason="Finalize idempotency needs investigation")
 def test_double_finalize(game_helper):
     """Test finalizing a game twice."""
     # Create and complete a simple game
@@ -252,7 +252,7 @@ def test_double_finalize(game_helper):
     assert response2.status_code in [200, 409]
 
 
-@pytest.mark.xfail(reason="Finalize workflow differs from expected")
+@pytest.mark.xfail(reason="Post-finalize behavior needs investigation")
 def test_delivery_after_finalize(game_helper):
     """Test posting delivery after game is finalized."""
     # Create and finalize a simple game
