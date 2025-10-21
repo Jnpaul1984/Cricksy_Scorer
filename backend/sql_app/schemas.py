@@ -185,7 +185,7 @@ class ScoreDelivery(BaseModel):
     dismissal_type: Optional[Literal[
         "bowled", "caught", "lbw", "run_out", "stumped", "hit_wicket",
         "obstructing_the_field", "hit_ball_twice", "timed_out",
-        "retired_out", "handled_ball"
+        "retired_out", "retired_hurt", "handled_ball"
     ]] = None
     dismissed_player_id: Optional[str] = None
     fielder_id: Optional[str] = None

@@ -123,7 +123,7 @@ class GameHelper:
                 payload["fielder_id"] = fielder_id
         
         if extra_type:
-            payload["extra_type"] = extra_type
+            payload["extra"] = extra_type
         
         if runs_off_bat is not None:
             payload["runs_off_bat"] = runs_off_bat

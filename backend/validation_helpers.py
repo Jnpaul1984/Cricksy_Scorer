@@ -166,6 +166,8 @@ def validate_dismissal_type(is_wicket: bool, dismissal_type: Optional[str]) -> N
         "handled_the_ball",
         "timed_out",
         "hit_the_ball_twice",
+        "retired_hurt",
+        "retired_out",
     }
     
     if dismissal_type.lower() not in valid_dismissal_types:

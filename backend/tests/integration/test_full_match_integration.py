@@ -264,7 +264,6 @@ def test_match_with_different_dismissal_types(game_helper, assert_helper):
             f"Dismissal type '{expected}' not found in recorded types"
 
 
-@pytest.mark.xfail(reason="Further investigation needed for extras workflow")
 def test_match_with_extras(game_helper, assert_helper):
     """Test a match with various extra types."""
     # Create game
@@ -371,7 +370,6 @@ def test_complete_20_over_match(game_helper, assert_helper):
     assert snapshot.get("result") is not None
 
 
-@pytest.mark.xfail(reason="Further investigation needed for complex workflow")
 def test_match_with_wickets_and_extras(game_helper, assert_helper):
     """Test a match combining wickets and extras."""
     # Create game
