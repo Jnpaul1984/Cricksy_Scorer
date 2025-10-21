@@ -201,14 +201,11 @@ class TestDLSRealisticScenarios:
         assert result.target > 0, "Target should be positive"
         assert result.target < 160, "Target should be less than team 1 score due to reduced overs"
 
-    @pytest.mark.skip(reason="No 50-over DLS table available - only T20 (20-over) tables exist")
     def test_odi_scenario(self):
         """
         Test a 50-over ODI scenario:
         - Team 1 scores 280/7 in 50 overs
         - Rain reduces Team 2's innings to 40 overs
-        
-        Note: This test is skipped because the backend only has T20 DLS tables.
         """
         result = compute_dls_target(
             team1_score=280,

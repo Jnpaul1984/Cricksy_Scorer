@@ -48,15 +48,22 @@ class GameHelper:
         self,
         team_a_name: str = "Team Alpha",
         team_b_name: str = "Team Beta",
-        overs_limit: int = 20,
-        players_per_team: int = 11
-    ) -> Dict[str, Any]:
-        """Create a new game and store its data."""
+        overs_limit: Optional[int] = 20,
+        players_per_team: int = 11,
+        match_type: Optional[str] = None,
+        days_limit: Optional[int] = None,
+        overs_per_day: Optional[int] = None,
+    ) -> tuple[str, Dict[str, Any]]:
+        """Create a new game and store its data.
+        
+        Returns:
+            Tuple of (game_id, teams_dict) where teams_dict contains team_a and team_b player lists
+        """
         # Generate player names
         players_a = [f"Player A{i+1}" for i in range(players_per_team)]
         players_b = [f"Player B{i+1}" for i in range(players_per_team)]
         
-        response = self.client.post("/games", json={
+        payload = {
             "team_a_name": team_a_name,
             "team_b_name": team_b_name,
             "players_a": players_a,
@@ -64,7 +71,17 @@ class GameHelper:
             "overs_limit": overs_limit,
             "toss_winner_team": "A",
             "decision": "bat"
-        })
+        }
+        
+        # Add multi-day match parameters if provided
+        if match_type is not None:
+            payload["match_type"] = match_type
+        if days_limit is not None:
+            payload["days_limit"] = days_limit
+        if overs_per_day is not None:
+            payload["overs_per_day"] = overs_per_day
+        
+        response = self.client.post("/games", json=payload)
         assert response.status_code == 200, f"Failed to create game: {response.text}"
         
         self.game_data = response.json()
@@ -72,7 +89,12 @@ class GameHelper:
         self.team_a_players = self.game_data["team_a"]["players"]
         self.team_b_players = self.game_data["team_b"]["players"]
         
-        return self.game_data
+        # Return tuple of (game_id, teams_dict)
+        teams = {
+            "team_a": self.team_a_players,
+            "team_b": self.team_b_players
+        }
+        return self.game_id, teams
     
     def set_openers(
         self,
