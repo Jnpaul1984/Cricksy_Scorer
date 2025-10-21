@@ -271,7 +271,6 @@ class TestSnapshotPerformance:
 class TestFullMatchPerformance:
     """Performance tests for complete match scenarios."""
     
-    @pytest.mark.skip(reason="Second innings API needs investigation")
     def test_complete_match_performance(self, client):
         """
         Benchmark: Playing a complete 2-over match (24 deliveries).
@@ -313,11 +312,14 @@ class TestFullMatchPerformance:
             assert response.status_code == 200
         
         # Start second innings
-        client.post(f"/games/{game_id}/start-next-innings", json={
+        response = client.post(f"/games/{game_id}/innings/start", json={
             'striker_id': team_b_players[0]['id'],
             'non_striker_id': team_b_players[1]['id'],
             'opening_bowler_id': team_a_players[0]['id']
         })
+        if response.status_code != 200:
+            print(f"\nStart next innings failed: {response.status_code} - {response.json()}")
+        assert response.status_code == 200, f"Start next innings failed: {response.status_code} - {response.json()}"
         
         # Second innings: 2 overs (12 deliveries)
         for i in range(12):
@@ -326,6 +328,8 @@ class TestFullMatchPerformance:
                 'bowler_id': bowler,
                 'runs_scored': 3,
             })
+            if response.status_code != 200:
+                print(f"\nSecond innings delivery {i}: {response.status_code} - {response.json()}")
             assert response.status_code == 200
         
         end = time.time()
@@ -344,33 +348,29 @@ class TestFullMatchPerformance:
 class TestDLSPerformance:
     """Performance tests for DLS calculations."""
     
-    @pytest.mark.skip(reason="DLS tables are in JSON format, not CSV")
     def test_dls_calculation_performance(self):
         """
         Benchmark: DLS target calculation.
         Target: < 10ms per calculation.
         """
-        from dls import revised_target, load_env
-        
-        # Load DLS environment once
-        env = load_env("t20", "")
+        from dls import compute_dls_target
         
         iterations = 100
         times = []
         
         for i in range(iterations):
             start = time.time()
-            target = revised_target(
-                env=env,
-                s1=180,
-                w1=6,
-                o1=20,
-                o2=15,
-                w2=0
+            result = compute_dls_target(
+                team1_score=180,
+                team1_wickets_lost=6,
+                team1_overs_left_at_end=0,  # Team 1 completed 20 overs
+                format_overs=20,
+                team2_wkts_lost_now=0,
+                team2_overs_left_now=15  # Team 2 has 15 overs
             )
             end = time.time()
             
-            assert target is not None
+            assert result.target is not None
             times.append((end - start) * 1000)
         
         avg_time = sum(times) / len(times)
