@@ -42,6 +42,7 @@ from backend.routes.interruptions import router as interruptions_router
 # ---- App modules ----
 from backend.sql_app import crud, schemas, models
 from backend.sql_app.database import SessionLocal
+from backend import validation_helpers
 
 # Socket.IO (no first-party type stubs; we keep our own Protocol below)
 import socketio  # type: ignore[import-not-found]
@@ -2233,6 +2234,21 @@ async def add_delivery(
             if not resolved:
                 raise HTTPException(status_code=404, detail="Unknown dismissed player name")
             delivery.dismissed_player_id = resolved
+    
+    # --- Comprehensive player validation ---------------------------------------
+    # Validate all players involved in the delivery
+    validation_helpers.validate_delivery_players(
+        striker_id=delivery.striker_id,
+        non_striker_id=delivery.non_striker_id,
+        bowler_id=delivery.bowler_id or getattr(g, "current_bowler_id", None),
+        team_a=g.team_a,
+        team_b=g.team_b,
+        batting_team_name=g.batting_team_name,
+        bowling_team_name=g.bowling_team_name,
+        is_wicket=delivery.is_wicket or False,
+        dismissal_type=getattr(delivery, "dismissal_type", None)
+    )
+    
     # --- UI gating flags & guards ----------------------------------------------
     flags = _compute_snapshot_flags(g)
 

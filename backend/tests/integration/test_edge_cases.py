@@ -55,7 +55,6 @@ def test_invalid_player_id(game_helper):
         f"Expected 422 or 404, got {response.status_code}"
 
 
-@pytest.mark.xfail(reason="Backend doesn't enforce 409 for deliveries after wickets")
 def test_delivery_after_wicket_without_selection(game_helper, assert_helper):
     """Test that posting delivery after wicket without selecting batsman fails."""
     # Create game
@@ -139,7 +138,6 @@ def test_invalid_dismissal_type(game_helper):
         f"Expected 422, got {response.status_code}"
 
 
-@pytest.mark.xfail(reason="Backend doesn't require dismissal_type for wickets")
 def test_wicket_without_dismissal_type(game_helper):
     """Test posting wicket without specifying dismissal type."""
     # Create game
@@ -373,7 +371,6 @@ def test_excessive_runs(game_helper):
     assert response.status_code in [200, 422]
 
 
-@pytest.mark.xfail(reason="Backend doesn't prevent same player batting and bowling")
 def test_same_player_batting_and_bowling(game_helper):
     """Test if same player can bat and bowl (should fail)."""
     # Create game
@@ -394,7 +391,6 @@ def test_same_player_batting_and_bowling(game_helper):
         f"Expected 422 for same player batting and bowling, got {response.status_code}"
 
 
-@pytest.mark.xfail(reason="Backend doesn't validate bowler team")
 def test_bowler_from_batting_team(game_helper):
     """Test if bowler from batting team is rejected."""
     # Create game
