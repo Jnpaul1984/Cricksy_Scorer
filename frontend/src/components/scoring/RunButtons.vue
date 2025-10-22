@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+
 import { useGameStore } from '@/stores/gameStore'
 import type { ScoreDeliveryRequest } from '@/types'
 
@@ -75,11 +76,11 @@ async function score(runs: number) {
         v-for="runs in [0,1,2,3,4,5,6]"
         :key="runs"
         type="button"
-        @click="score(runs)"
         :disabled="isDisabled"
         :aria-disabled="isDisabled ? 'true' : 'false'"
         :title="isDisabled ? 'Select striker, non-striker (different) and bowler first' : `Record ${runs} run${runs===1?'':'s'}`"
         :class="['run-button', `runs-${runs}`]"
+        @click="score(runs)"
       >
         {{ runs }}
       </button>

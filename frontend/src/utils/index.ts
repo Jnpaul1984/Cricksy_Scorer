@@ -9,7 +9,7 @@ export const debounce = <T extends (...args: any[]) => any>(
   let timeoutId: ReturnType<typeof setTimeout>
   return (...args: Parameters<T>) => {
     clearTimeout(timeoutId)
-    timeoutId = setTimeout(() => func.apply(null, args), delay)
+    timeoutId = setTimeout(() => func(...args), delay)
   }
 }
 
@@ -17,10 +17,10 @@ export const throttle = <T extends (...args: any[]) => any>(
   func: T,
   limit: number
 ): ((...args: Parameters<T>) => void) => {
-  let inThrottle: boolean
+  let inThrottle = false
   return (...args: Parameters<T>) => {
     if (!inThrottle) {
-      func.apply(null, args)
+      func(...args)
       inThrottle = true
       setTimeout(() => (inThrottle = false), limit)
     }

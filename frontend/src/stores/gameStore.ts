@@ -1,4 +1,5 @@
 // src/stores/gameStore.ts
+/* eslint-disable import/order */
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
@@ -17,14 +18,27 @@ import type {
 } from '@/types'
 
 // ---- API client & wire types
-import { apiService, getErrorMessage } from '@/utils/api'
-import type {
-  CreateGameRequest as ApiCreateGameRequest,
-  ScoreDeliveryRequest as ApiScoreDeliveryRequest,
-  Snapshot as ApiSnapshot,
+import {
+  apiService,
+  getErrorMessage,
+  getDlsPreview,
+  postDlsApply,
+  patchReduceOvers,
+  type DLSPreviewOut,
+  type CreateGameRequest as ApiCreateGameRequest,
+  type ScoreDeliveryRequest as ApiScoreDeliveryRequest,
+  type Snapshot as ApiSnapshot,
+  type Interruption as ApiInterruption,
 } from '@/utils/api'
 
+
 // ---- Socket helpers
+import {
+  isLegalBall,
+  fmtEconomy,
+  oversDisplayFromBalls,
+  oversNotationToFloat,
+} from '@/utils/cricket'
 import {
   on as onSocket,
   off as offSocket,
@@ -35,15 +49,8 @@ import {
 } from '@/utils/socket'
 
 // ---- Cricket math helpers
-import {
-  isLegalBall,
-  fmtEconomy,
-  oversDisplayFromBalls,
-  oversNotationToFloat,
-} from '@/utils/cricket'
 
-import { getDlsPreview, postDlsApply, patchReduceOvers, type DLSPreviewOut } from '@/utils/api'
-import type { Interruption as ApiInterruption } from '@/utils/api'
+
 // Loose wrappers so we can listen to custom events
 type ServerEvents = {
   'presence:init': { game_id: string; members: Array<{ sid: string; role: string; name: string }> }
@@ -51,7 +58,7 @@ type ServerEvents = {
   'score:update': ScoreUpdatePayloadSlim
   'commentary:new': { id?: string; at: string; text: string; game_id: string }
   'interruptions:update': { game_id?: string }
-  'interruption:ended': {}
+  'interruption:ended': undefined
 }
 
 const on = onSocket as unknown as <K extends keyof ServerEvents>(
@@ -460,9 +467,18 @@ export const useGameStore = defineStore('game', () => {
   const isLoading = computed<boolean>(() => uiState.value.loading)
   const error = computed<string | null>(() => uiState.value.error)
 
-  const isGameActive = computed<boolean>(() => currentGame.value?.status === 'in_progress')
-  const isInningsBreak = computed<boolean>(() => currentGame.value?.status === 'innings_break')
-  const isGameCompleted = computed<boolean>(() => currentGame.value?.status === 'completed')
+  const normalizeStatus = (status: unknown): string =>
+    String(status ?? '').toLowerCase()
+
+  const isGameActive = computed<boolean>(
+    () => normalizeStatus(currentGame.value?.status) === 'in_progress'
+  )
+  const isInningsBreak = computed<boolean>(
+    () => normalizeStatus(currentGame.value?.status) === 'innings_break'
+  )
+  const isGameCompleted = computed<boolean>(
+    () => normalizeStatus(currentGame.value?.status) === 'completed'
+  )
   const isFirstInnings = computed<boolean>(() => (currentGame.value?.current_inning ?? 1) === 1)
   const isSecondInnings = computed<boolean>(() => (currentGame.value?.current_inning ?? 1) === 2)
 
@@ -470,10 +486,10 @@ export const useGameStore = defineStore('game', () => {
   const isGameOver = computed<boolean>(() => {
     const g = currentGame.value
     const snap = liveSnapshot.value
-    const s = String(g?.status ?? snap?.status ?? '').toUpperCase()
+    const status = normalizeStatus(g?.status ?? snap?.status)
     return (
-      s === 'COMPLETED' ||
-      s === 'ABANDONED' ||
+      status === 'completed' ||
+      status === 'abandoned' ||
       Boolean((g as any)?.is_game_over || (snap as any)?.is_game_over)
     )
   })
@@ -486,6 +502,33 @@ export const useGameStore = defineStore('game', () => {
       snap?.result?.result_text ||
       g?.result ||
       ''
+    )
+  })
+
+  // Convenience aliases expected by some components
+  const currentStriker = computed<Player | null>(() => {
+    const g = currentGame.value
+    const pid = g?.current_striker_id || uiState.value.selectedStrikerId
+    if (!g || !pid) return null
+    const all = [...(g.team_a?.players ?? []), ...(g.team_b?.players ?? [])]
+    return all.find(p => p.id === pid) || null
+  })
+
+  const currentNonStriker = computed<Player | null>(() => {
+    const g = currentGame.value
+    const pid = g?.current_non_striker_id || uiState.value.selectedNonStrikerId
+    if (!g || !pid) return null
+    const all = [...(g.team_a?.players ?? []), ...(g.team_b?.players ?? [])]
+    return all.find(p => p.id === pid) || null
+  })
+
+  const canScoreDelivery = computed<boolean>(() => {
+    return Boolean(
+      isGameActive.value &&
+      uiState.value.selectedStrikerId &&
+      uiState.value.selectedNonStrikerId &&
+      uiState.value.selectedBowlerId &&
+      uiState.value.selectedStrikerId !== uiState.value.selectedNonStrikerId
     )
   })
 
@@ -744,7 +787,11 @@ function stabilizeBattersFromLastDelivery(prevGame: GameState, snap: UiSnapshot)
 
     const delivs = (currentInningsDeliveries.value ?? []) as D[]
 
-    let wides = 0, no_balls = 0, byes = 0, leg_byes = 0, penalty = 0
+    let wides = 0
+    let no_balls = 0
+    let byes = 0
+    let leg_byes = 0
+    const penalty = 0
 
     for (const d of delivs) {
       const ex = (d.extra_type ?? d.extra ?? null) as D['extra_type']
@@ -1537,11 +1584,6 @@ function deliveryKey(d: LooseDelivery): string {
     'deliveries:',
     (currentGame.value as any)?.deliveries?.length
   )
-  const handleCommentary = (msg: { id: string; at: number; text: string; over?: string; author?: string; game_id: string }): void => {
-    if (!liveGameId.value || msg.game_id !== liveGameId.value) return
-    commentaryFeed.value.unshift({ id: msg.id, at: msg.at, over: msg.over, text: msg.text, author: msg.author })
-    if (commentaryFeed.value.length > 200) commentaryFeed.value.pop()
-  }
 
   let presenceInitHandler: ((p: { game_id: string; members: Array<{ sid: string; role: string; name: string }> }) => void) | null = null
   let commentaryHandler: ((payload: { game_id: string; text: string; at: string }) => void) | null = null
@@ -1696,7 +1738,9 @@ async function postDeliveryAuthoritative(
     dismissal_type?: string,
     dismissed_player_id?: string | null,
     commentary?: string,
-    fielder_id?: string, 
+    fielder_id?: string,
+    shot_angle_deg?: number | null,
+    shot_map?: string | null,
   }
 ): Promise<any> {
   // Pull ids from server snapshot first; fall back to game / UI selectors only if needed
@@ -1726,6 +1770,12 @@ async function postDeliveryAuthoritative(
   } as ApiScoreDeliveryRequest
 
   if (opts.fielder_id) (payload as any).fielder_id = opts.fielder_id
+  if (opts.shot_angle_deg !== undefined) {
+    payload.shot_angle_deg = opts.shot_angle_deg ?? null
+  }
+  if (opts.shot_map !== undefined) {
+    payload.shot_map = opts.shot_map ?? null
+  }
   // Encoding rules:
   // - legal ball:      extra=null, runs_scored = off-bat runs
   // - no-ball:         extra='nb',  runs_off_bat = off-bat runs (server adds +1)
@@ -2091,8 +2141,9 @@ const canScore = computed<boolean>(() => {
   // stop everything if the match is done
   if (isGameOver.value) return false
 
+  const status = normalizeStatus(g?.status)
   const statusOk =
-    !!g && ['in_progress', 'live', 'started'].includes(String(g.status || ''))
+    !!g && ['in_progress', 'live', 'started'].includes(status)
 
   const haveBatters =
     !!ui.selectedStrikerId &&
@@ -2122,7 +2173,7 @@ const canScore = computed<boolean>(() => {
   
     console.table({
       hasGame: !!currentGame.value,
-      inProgress: currentGame.value?.status === 'in_progress',
+      inProgress: normalizeStatus(currentGame.value?.status) === 'in_progress',
       strikerSet: !!uiState.value.selectedStrikerId,
       nonStrikerSet: !!uiState.value.selectedNonStrikerId,
       bowlerSet: !!uiState.value.selectedBowlerId,
@@ -2141,28 +2192,48 @@ const canScore = computed<boolean>(() => {
   function setActiveScorecardTab(tab: 'batting' | 'bowling'): void { uiState.value.activeScorecardTab = tab }
   function setScoringDisabled(disabled: boolean): void { uiState.value.scoringDisabled = disabled }
 
+  function swapBatsmen(): void {
+    const a = uiState.value.selectedStrikerId
+    const b = uiState.value.selectedNonStrikerId
+    uiState.value.selectedStrikerId = b
+    uiState.value.selectedNonStrikerId = a
+  }
+
   
   
 
-  async function scoreRuns(gameId: string, runs: number): Promise<any> {
-    // legal off-bat runs; server will rotate on odd runs
-    return postDeliveryAuthoritative(gameId, { extra: null, runs_scored: runs })
+  async function scoreRuns(
+    gameId: string,
+    runs: number,
+    shotMap?: string | null,
+  ): Promise<any> {
+    return postDeliveryAuthoritative(gameId, {
+      extra: null,
+      runs_scored: runs,
+      shot_map: shotMap ?? null,
+    })
   }
 
 
-  async function scoreExtra(gameId: string, code: 'wd' | 'nb' | 'b' | 'lb', runs = 1): Promise<any> {
-  if (code === 'nb') {
-    // off-bat runs on a no-ball
-    return postDeliveryAuthoritative(gameId, { extra: 'nb', runs_off_bat: runs })
+  async function scoreExtra(
+    gameId: string,
+    code: 'wd' | 'nb' | 'b' | 'lb',
+    runs = 1,
+    shotMap?: string | null,
+  ): Promise<any> {
+    if (code === 'nb') {
+      return postDeliveryAuthoritative(gameId, {
+        extra: 'nb',
+        runs_off_bat: runs,
+        shot_map: shotMap ?? null,
+      })
+    }
+    if (code === 'wd') {
+      const ran = Math.max(0, runs - 1)
+      return postDeliveryAuthoritative(gameId, { extra: 'wd', runs_scored: ran, shot_map: null })
+    }
+    return postDeliveryAuthoritative(gameId, { extra: code, runs_scored: runs, shot_map: null })
   }
-  if (code === 'wd') {
-    // UI passes total wides (incl. the automatic 1). Convert to "runs actually run".
-    const ran = Math.max(0, runs - 1)
-    return postDeliveryAuthoritative(gameId, { extra: 'wd', runs_scored: ran })
-  }
-  // byes / leg-byes: send extras count as-is
-  return postDeliveryAuthoritative(gameId, { extra: code, runs_scored: runs })
-}
 
 
 
@@ -2408,6 +2479,9 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     selectedStriker,
     selectedNonStriker,
     selectedBowler,
+    // Aliases for compatibility with components
+    currentStriker,
+    currentNonStriker,
 
     // Score helpers
     currentOver,
@@ -2448,6 +2522,7 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     canScore,
     needsNewBatter,
     needsNewOver,
+    canScoreDelivery,
     // Commentary
     commentaryFeed,
 
@@ -2516,6 +2591,7 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     setSelectedBowler,
     setActiveScorecardTab,
     setScoringDisabled,
+    swapBatsmen,
 
     // Utils
     scoreRuns,

@@ -82,10 +82,6 @@ function move(i: number, dir: -1 | 1) {
 }
 
 // adding
-function addOne(n: string) {
-  const merged = [...names.value, n]
-  commit(merged)
-}
 function addManyFromText(text: string) {
   const chunks = text.split(/[\n,;]+/g).map(s => s.trim()).filter(Boolean)
   const merged = [...names.value, ...chunks]
@@ -107,7 +103,6 @@ function onQuickPaste(e: ClipboardEvent) {
 
 const count = computed(() => names.value.length)
 const shortfall = computed(() => Math.max(0, props.min - count.value))
-const canAddMore = computed(() => count.value < props.max)
 </script>
 
 <template>
@@ -137,8 +132,8 @@ const canAddMore = computed(() => count.value < props.max)
           @input="updateAt(i, ($event.target as HTMLInputElement).value)"
         />
         <div class="actions">
-          <button type="button" title="Move up" @click="move(i, -1)" :disabled="i===0">↑</button>
-          <button type="button" title="Move down" @click="move(i, 1)" :disabled="i===names.length-1">↓</button>
+          <button type="button" title="Move up" :disabled="i===0" @click="move(i, -1)">↑</button>
+          <button type="button" title="Move down" :disabled="i===names.length-1" @click="move(i, 1)">↓</button>
           <button type="button" title="Remove" class="danger" @click="removeAt(i)">✕</button>
         </div>
       </div>
@@ -146,14 +141,14 @@ const canAddMore = computed(() => count.value < props.max)
 
     <div class="add">
       <input
+        v-model="quick"
         class="quick"
         :placeholder="placeholder"
-        v-model="quick"
         @keydown.enter.prevent="handleQuickEnter"
         @paste="onQuickPaste"
       />
-      <button type="button" class="add-btn" @click="handleQuickEnter" :disabled="!quick.trim()">Add</button>
-      <button type="button" class="clear-btn" @click="commit([])" :disabled="!names.length">Clear</button>
+      <button type="button" class="add-btn" :disabled="!quick.trim()" @click="handleQuickEnter">Add</button>
+      <button type="button" class="clear-btn" :disabled="!names.length" @click="commit([])">Clear</button>
     </div>
 
     <p v-if="warn" class="warn">⚠ {{ warn }}</p>

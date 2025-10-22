@@ -1,16 +1,22 @@
-// src/utils/api.ts
+﻿// src/utils/api.ts
 // Single, canonical API client aligned with FastAPI backend & the Pinia game store.
 
-export const API_BASE =
+const ENV_API_BASE =
   (typeof import.meta !== 'undefined' &&
     // Prefer VITE_API_BASE (your env files now use this)
     (import.meta.env?.VITE_API_BASE ||
       // keep a loose fallback if someone still has the old key around
       import.meta.env?.VITE_API_BASE_URL)) ||
-  (typeof window !== 'undefined'
-    ? `${window.location.protocol}//${window.location.host}`
-    : '') ||
   '';
+
+const DEV_FALLBACK =
+  typeof import.meta !== 'undefined' && import.meta.env?.DEV ? 'http://localhost:8000' : '';
+
+const RUNTIME_ORIGIN =
+  typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '';
+
+export const API_BASE = (ENV_API_BASE || DEV_FALLBACK || RUNTIME_ORIGIN || '').replace(/\/+$/, '');
+console.info('API_BASE', API_BASE);
 
 function url(path: string) {
   if (!API_BASE) return path;
@@ -29,7 +35,9 @@ export function getErrorMessage(err: unknown): string {
     if (anyErr?.message) return String(anyErr.message);
     if (anyErr?.response?.data?.detail) return String(anyErr.response.data.detail);
     if (anyErr?.status && anyErr?.statusText) return `${anyErr.status} ${anyErr.statusText}`;
-  } catch {}
+  } catch {
+    // ignore JSON parsing issues when mining error metadata
+  }
   return 'Request failed';
 }
 
@@ -58,12 +66,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     let detail: any = undefined
-    try { detail = await res.json() } catch {}
+    try { detail = await res.json() } catch {
+      // ignore body parsing errors when building error info
+    }
     const msg = detail?.detail || `${res.status} ${res.statusText}`
     const err = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
-    // @ts-expect-error
+    // @ts-expect-error – attach HTTP status for downstream handlers
     err.status = res.status
-    // @ts-expect-error
+    // @ts-expect-error – attach API error payload when available
     err.detail = detail?.detail ?? null
     throw err
   }
@@ -75,7 +85,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 /* ----------------------------- Types (client) ----------------------------- */
 
-// Create game — mirrors backend CreateGameRequest in main.py
+// Create game â€” mirrors backend CreateGameRequest in main.py
 export type MatchType = 'limited' | 'multi_day' | 'custom';
 export type Decision = 'bat' | 'bowl';
 export type ExtraCode = 'nb' | 'wd' | 'b' | 'lb';
@@ -108,7 +118,7 @@ export interface GameMinimal {
   [k: string]: any;
 }
 
-// Score a delivery — mirrors backend schemas.ScoreDelivery in main.py
+// Score a delivery â€” mirrors backend schemas.ScoreDelivery in main.py
 export interface ScoreDeliveryRequest {
   striker_id: string;
   non_striker_id: string;
@@ -123,11 +133,15 @@ export interface ScoreDeliveryRequest {
   is_wicket: boolean;
   dismissal_type?: string | null;
   dismissed_player_id?: string | null;
+  // UX: optional name instead of ID; backend resolves
+  dismissed_player_name?: string | null;
   commentary?: string;
   fielder_id?: string | null;
+  shot_angle_deg?: number | null;
+  shot_map?: string | null;
 }
 
-// Snapshot — shape can vary; we keep it open but document common fields
+// Snapshot â€” shape can vary; we keep it open but document common fields
 export interface Snapshot {
   id?: string;
   status?: string;
@@ -158,6 +172,7 @@ export interface Snapshot {
     extra_type?: ExtraCode | null;
     extra_runs?: number;
     runs_scored?: number; // total for this ball
+    shot_map?: string | null;
   } | null;
     // NEW from backend
   dls?: { method: 'DLS'; par?: number; target?: number; ahead_by?: number };
@@ -168,7 +183,9 @@ export interface Snapshot {
     score: number; wicket: number; batter_id: string; batter_name: string;
     over: string; dismissal_type?: string | null;
     bowler_id?: string | null; bowler_name?: string | null;
-    fielder_id?: string | null; fielder_name?: string | null;
+    fielder_id?: string | null;
+    shot_angle_deg?: number | null;
+    fielder_name?: string | null;
   }>;
   last_ball_bowler_id?: string | null;
   current_bowler_id?: string | null;
@@ -308,16 +325,20 @@ async function openInterruption(
         if (!res.ok) throw res
         const j = await res.json()
         return Array.isArray(j?.interruptions) ? j.interruptions.at(-1) : (j as Interruption)
-      } catch {}
+      } catch {
+        // ignoring fallback failure; we attempt querystring next
+      }
       // finally querystring (no body)
       const qs = new URLSearchParams({ kind, ...(note ? { note } : {}) }).toString()
       const res = await fetch(url(`${path}?${qs}`), { method: 'POST' })
       if (!res.ok) {
-        let detail: any; try { detail = await res.json() } catch {}
+        let detail: any; try { detail = await res.json() } catch {
+          // ignore parse failure for error handling
+        }
         const err = new Error(detail?.detail || `${res.status} ${res.statusText}`)
-        // @ts-expect-error
+        // @ts-expect-error – expose HTTP status for UI messaging
         err.status = res.status
-        // @ts-expect-error
+        // @ts-expect-error – attach API detail payload for callers
         err.detail = detail?.detail ?? null
         throw err
       }
@@ -328,7 +349,7 @@ async function openInterruption(
   }
 }
 
-/** POST /interruptions/stop — omit {"kind": null}. Accepts JSON, falls back to empty body. */
+/** POST /interruptions/stop â€” omit {"kind": null}. Accepts JSON, falls back to empty body. */
 async function stopInterruption(
   gameId: string,
   kind?: 'weather' | 'injury' | 'light' | 'other'
@@ -342,7 +363,7 @@ async function stopInterruption(
     return await request(path, { method: 'POST' }) as any
   } catch (e: any) {
     const msg = (e?.detail || e?.message || '').toString().toLowerCase()
-    // treat “no active interruption” as success
+    // treat â€œno active interruptionâ€ as success
     if (e?.status === 400 && (msg.includes('no active') || msg.includes('already stopped'))) {
       return { ok: true, interruptions: [] }
     }
@@ -431,6 +452,16 @@ export const apiService = {
   getSnapshot: (gameId: string) =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/snapshot`),
 
+  searchGames: (team_a?: string, team_b?: string) => {
+    const qp = new URLSearchParams()
+    if (team_a) qp.set('team_a', team_a)
+    if (team_b) qp.set('team_b', team_b)
+    const qs = qp.toString()
+    return request<Array<{ id: string; team_a_name: string; team_b_name: string; status?: string }>>(
+      `/games/search${qs ? `?${qs}` : ''}`
+    )
+  },
+
   /* Scoring */
   scoreDelivery: (gameId: string, body: ScoreDeliveryRequest) =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/deliveries`, {
@@ -472,30 +503,30 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
       { method: 'POST', body: JSON.stringify(body) },
     ),
 
-  /* 🔵 Over gates */
-  // Start a new over (select bowler) — matches POST /games/{id}/overs/start
+  /* ðŸ”µ Over gates */
+  // Start a new over (select bowler) â€” matches POST /games/{id}/overs/start
   startOver: (gameId: string, bowler_id: string) =>
     request<{ ok: true; current_bowler_id: string }>(
       `/games/${encodeURIComponent(gameId)}/overs/start`,
       { method: 'POST', body: JSON.stringify({ bowler_id } as StartOverBody) },
     ),
 
-  // Mid-over change (injury/other) — matches POST /games/{id}/overs/change_bowler
+  // Mid-over change (injury/other) â€” matches POST /games/{id}/overs/change_bowler
   changeBowlerMidOver: (gameId: string, new_bowler_id: string, reason: 'injury' | 'other' = 'injury') =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/overs/change_bowler`, {
       method: 'POST',
       body: JSON.stringify({ new_bowler_id, reason } as MidOverChangeBody),
     }),
 
-  /* 🟢 Batter gates */
-  // Replace the out batter before next ball — POST /games/{id}/batters/replace
+  /* ðŸŸ¢ Batter gates */
+  // Replace the out batter before next ball â€” POST /games/{id}/batters/replace
   replaceBatter: (gameId: string, new_batter_id: string) =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/batters/replace`, {
       method: 'POST',
       body: JSON.stringify({ new_batter_id } as ReplaceBatterBody),
     }),
 
-  // Explicitly set “next batter” (optional QoL) — POST /games/{id}/next-batter
+  // Explicitly set â€œnext batterâ€ (optional QoL) â€” POST /games/{id}/next-batter
   setNextBatter: (gameId: string, batter_id: string) =>
     request<{ ok: true; current_striker_id: string }>(
       `/games/${encodeURIComponent(gameId)}/next-batter`,
@@ -509,7 +540,7 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
     const qp = new URLSearchParams()
     if (params?.innings != null) qp.set('innings', String(params.innings))
     if (params?.limit != null)   qp.set('limit',   String(params.limit))
-    if (params?.order)           qp.set('order',   params.order) // NEW
+    if (params?.order)           qp.set('order',   params.order) // allow asc/desc order selection
     const qs = qp.toString()
     const path = `/games/${encodeURIComponent(gameId)}/deliveries${qs ? `?${qs}` : ''}`
     return request<{ game_id: string; count: number; deliveries: any[] }>(path)
@@ -521,7 +552,7 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
     ),
 
 
-  // Set openers (optional QoL) — POST /games/{id}/openers
+  // Set openers (optional QoL) â€” POST /games/{id}/openers
   setOpeners: (gameId: string, body: OpenersBody) =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/openers`, {
       method: 'POST',
@@ -581,3 +612,4 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
 };
 
 export default apiService;
+

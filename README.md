@@ -119,6 +119,48 @@ npm run lint — ESLint
 
 npm run format — Prettier
 
+Testing
+-------
+
+**📖 See [TESTING.md](TESTING.md) for comprehensive testing documentation.**
+
+The repository includes unit tests, integration tests, and end-to-end tests.
+
+### Quick Start
+
+**Backend Tests:**
+```bash
+cd backend
+export PYTHONPATH=/path/to/Cricksy_Scorer:$PYTHONPATH
+export CRICKSY_IN_MEMORY_DB=1
+pytest
+```
+
+**Frontend Tests:**
+```bash
+cd frontend
+npm run test:unit
+```
+
+**E2E Tests:**
+```bash
+# Automated script
+./scripts/run-full-sim.sh
+
+# Or manually:
+export CRICKSY_IN_MEMORY_DB=1
+export PYTHONPATH=/path/to/Cricksy_Scorer:$PYTHONPATH
+cd backend && pytest
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
+cd ../frontend
+export API_BASE=http://localhost:8000
+export VITE_API_BASE=http://localhost:8000
+npm run build && npm run preview -- --port 3000 &
+npx cypress run
+```
+
+**Important:** The `PYTHONPATH` environment variable must be set to the repository root for backend tests to work. See [TESTING.md](TESTING.md) for details.
+
 API Integration
 Development: Proxied to FastAPI backend at <http://localhost:8000>
 

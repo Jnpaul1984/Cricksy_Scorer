@@ -10,7 +10,7 @@
 
       <div class="viewport" @mouseenter="pause" @mouseleave="resume">
         <transition name="fade" mode="out-in">
-          <div class="slide" :key="activeKey">
+          <div :key="activeKey" class="slide">
             <a
               v-if="sponsorClickable && current?.clickUrl"
               class="logo-link"
@@ -36,7 +36,7 @@
       >›</button>
     </div>
 
-    <div class="dots" v-if="sponsors.length > 1">
+    <div v-if="sponsors.length > 1" class="dots">
       <button
         v-for="(sp, i) in sponsors"
         :key="sp.id ?? i"

@@ -3,7 +3,7 @@
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="share-title">
       <header class="hdr">
         <h3 id="share-title">Share & Monetize</h3>
-        <button class="x" @click="close" aria-label="Close">✕</button>
+        <button class="x" aria-label="Close" @click="close">✕</button>
       </header>
 
       <section class="body">
@@ -95,7 +95,9 @@ async function copy() {
     if (codeRef.value) {
       codeRef.value.focus()
       codeRef.value.select()
-      try { document.execCommand('copy') } catch {}
+      try { document.execCommand('copy') } catch {
+        // ignore legacy clipboard failures; fall through to label reset
+      }
       copied.value = true
     }
   }

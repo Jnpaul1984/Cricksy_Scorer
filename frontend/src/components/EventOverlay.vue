@@ -26,6 +26,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+
 import type { EventType } from "@/composables/useHighlights";
 
 const props = defineProps<{

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
+
 import logoUrl from '@/assets/logo.png' // make sure the file exists: src/assets/logo.png
 
 onMounted(() => {

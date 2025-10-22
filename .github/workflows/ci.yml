@@ -2,63 +2,128 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, agent/**, feature/** ]
   pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  backend-tests:
+    name: Backend (fast tests)
     runs-on: ubuntu-latest
-    env:
-      API_BASE: http://localhost:8000
-      LLM_PROVIDER: openai
-      LLM_MODEL: gpt-4o-mini
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install deps
+        working-directory: backend
         run: |
-          pip install -r requirements.txt || true
-          pip install httpx pytest openai anthropic
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Start backend (docker compose)
-        run: |
-          docker compose up -d --wait || true
-          # If you don't use compose, start your API another way and keep API_BASE in sync.
-
-      - name: Run tests
-        id: pytest
-        continue-on-error: true
-        run: |
-          pytest -q --maxfail=1 --disable-warnings || echo "PYTEST_FAILED=1" >> $GITHUB_ENV
-
-      - name: Collect artifacts
-        run: |
-          python tools/collect_artifacts.py
-        if: always()
-
-      - name: LLM triage on failure
-        if: env.PYTEST_FAILED == '1'
+      - name: Run fast unit tests (no DB required)
+        working-directory: backend
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # ensure tests that rely on overrides don't attempt network DB
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5555/none
         run: |
-          python tools/llm_triage.py
+          pytest -q tests/test_health.py tests/test_results_endpoint.py
 
-      - name: Create PR with patch (if any)
-        if: env.PYTEST_FAILED == '1'
-        uses: peter-evans/create-pull-request@v6
+  backend-integration-tests:
+    name: Backend (integration tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          commit-message: "LLM triage: proposed fix"
-          title: "LLM triage: proposed fix"
-          body: |
-            Automated triage produced a patch. See artifacts/summary.md for rationale.
-          add-paths: |
-            backend/**
-            tools/**
-            artifacts/**
-          branch: llm/triage-fix
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-cov
+
+      - name: Run integration tests
+        working-directory: backend
+        env:
+          CRICKSY_IN_MEMORY_DB: 1
+        run: |
+          pytest tests/integration/ -v --tb=short --cov=. --cov-report=xml --cov-report=term
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./backend/coverage.xml
+          flags: integration
+          name: integration-tests
+          fail_ci_if_error: false
+
+  backend-dls-tests:
+    name: Backend (DLS calculation tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run DLS calculation tests
+        working-directory: backend
+        run: |
+          pytest tests/test_dls_calculations.py -v --tb=short
+
+  frontend-build:
+    name: Frontend (build + type-check)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type check
+        working-directory: frontend
+        run: npm run type-check
+
+      - name: Build (production)
+        working-directory: frontend
+        env:
+          # Safe default; app uses relative paths for most fetches in build
+          VITE_API_BASE: http://localhost:8000
+        run: npm run build-only

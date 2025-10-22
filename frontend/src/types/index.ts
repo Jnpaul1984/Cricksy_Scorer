@@ -68,6 +68,8 @@ export interface Delivery {
   dismissed_player_id: string | null
   commentary: string | null
   fielder_id: string | null
+  shot_angle_deg?: number | null
+  shot_map?: string | null
   // NEW optional fields for live appending
   extra_type?: 'wd' | 'nb' | 'b' | 'lb' | null
   at_utc?: string | null
@@ -196,6 +198,8 @@ export interface ScoreDeliveryRequest {
   dismissal_type?: string;            // e.g., 'bowled', 'lbw', 'run_out'
   dismissed_player_id?: ID | null;
   commentary?: string;
+  shot_angle_deg?: number | null;
+  shot_map?: string | null;
 }
 
 /** UI state kept in the store (used by GameStore.ts) */

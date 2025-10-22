@@ -161,7 +161,31 @@ class Game(Base):
         back_populates="game", cascade="all, delete-orphan"
     )
 
+    
+    def get_winner(self):
+        """
+        Logic to determine the winner of the game.
+        This may involve comparing team scores, checking any decided rules or tie-breakers.
+        """
+        # Placeholder logic, replace with actual game win condition logic
+        if self.target is not None:
+            if self.total_runs > self.target:  # Simplified logic example
+                return self.batting_team_name
+            elif self.total_runs < self.target:
+                return self.bowling_team_name
+            else:
+                return "Draw"  # or other logic for tie condition
+        else:
+            return None  # or handle case where target is not set
 
+    def get_team_scores(self):
+        """
+        Logic to calculate team scores.
+        This will typically return scores for both teams in a tuple.
+        """
+        team_a_score = self.batting_scorecard.get("total", 0)
+        team_b_score = self.bowling_scorecard.get("total", 0)
+        return team_a_score, team_b_score
 # ---------- Pydantic payloads you already had ----------
 
 class PlayingXIRequest(BaseModel):
@@ -257,3 +281,4 @@ class SponsorImpression(Base):
         Index("ix_sponsor_impressions_sponsor_id", "sponsor_id"),
         Index("ix_sponsor_impressions_at", "at"),
     )
+

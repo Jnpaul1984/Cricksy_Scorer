@@ -1,0 +1,71 @@
+x-health: &health
+  interval: 5s
+  timeout: 5s
+  retries: 30
+
+services:
+  db:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: RubyAnita2018
+      POSTGRES_DB: cricksy_scorer
+    ports:
+      - "5555:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cricksy_scorer"]
+      <<: *health
+
+  cache:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      <<: *health
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:RubyAnita2018@db:5432/cricksy_scorer
+      REDIS_URL: redis://cache:6379/0
+      ENV: dev
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      <<: *health
+
+  web:
+    image: node:20
+    working_dir: /app
+    environment:
+      # Browser will call backend on host-mapped 8000
+      VITE_API_BASE: "http://localhost:8000"
+      NODE_ENV: development
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    command: ["sh", "-lc", "npm ci && npm run dev -- --host"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5173 || exit 1"]
+      <<: *health
+
+volumes:
+  postgres_data:

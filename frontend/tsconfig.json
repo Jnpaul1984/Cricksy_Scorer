@@ -13,6 +13,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
 
     /* ---- Aliases to unify types ---- */
     "baseUrl": ".",

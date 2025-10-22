@@ -6,7 +6,7 @@ import os
 # The database URL tells SQLAlchemy where our database is located.
 SQLALCHEMY_DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres:RubyAnita2018@db:5432/cricksy_scorer",
+    "postgresql+asyncpg://postgres:RubyAnita2018@localhost:5555/cricksy_scorer",
 )
 
 # The engine is the main entry point for SQLAlchemy to talk to the DB.
@@ -21,3 +21,4 @@ Base = declarative_base()
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
         yield session
+

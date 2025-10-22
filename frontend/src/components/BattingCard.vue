@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, withDefaults, defineProps } from 'vue'
+
 import { fmtSR } from '@/utils/cricket'
 
 type BatEntry = {
@@ -102,10 +103,11 @@ const rows = computed<Row[]>(() =>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="r in rows" :key="r.id"
+        <tr
+v-for="r in rows" :key="r.id"
             :class="[{ out: r.isOut, striker: r.isStriker, nonStriker: r.isNonStriker }]">
           <td class="name" :title="r.name">
-            <span class="dot" v-if="r.isStriker" aria-label="on strike" />
+            <span v-if="r.isStriker" class="dot" aria-label="on strike" />
             <span class="nameText">{{ r.name }}</span>
           </td>
           <td class="num">{{ r.runs }}</td>

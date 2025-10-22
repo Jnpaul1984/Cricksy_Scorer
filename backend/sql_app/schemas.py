@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from uuid import UUID
 from pydantic import BaseModel, Field
 from pydantic import field_validator, model_validator
@@ -89,6 +89,7 @@ class Delivery(BaseModel):
     dismissed_player_id: Optional[str] = None
     commentary: Optional[str] = None
     fielder_id: Optional[str] = None
+    shot_map: Optional[str] = None
 
 class BattingScorecardEntry(BaseModel):
     """Represents a single player's batting stats for an innings."""
@@ -167,10 +168,14 @@ class InterruptionEnd(BaseModel):
     overs_reduced_to: Optional[int] = Field(default=None, ge=1, le=50)
 
 class ScoreDelivery(BaseModel):
+    shot_angle_deg: Optional[float] = None  # optional shot direction for wagon wheel
+    shot_map: Optional[str] = None          # compact SVG or encoded sketch for analytics
     striker_id: Optional[str] = None
     non_striker_id: Optional[str] = None
     bowler_id: Optional[str] = None   # let server keep current bowler mid-over
     bowler_name: Optional[str] = None
+    # Allow UX to submit dismissed player by name to avoid exposing IDs in UI
+    dismissed_player_name: Optional[str] = None
     # Inputs (mutually exclusive by mode)
     runs_scored: Optional[int] = Field(None, ge=0, le=6)
     runs_off_bat: Optional[int] = Field(None, ge=0, le=6)
@@ -180,7 +185,7 @@ class ScoreDelivery(BaseModel):
     dismissal_type: Optional[Literal[
         "bowled", "caught", "lbw", "run_out", "stumped", "hit_wicket",
         "obstructing_the_field", "hit_ball_twice", "timed_out",
-        "retired_out", "handled_ball"
+        "retired_out", "retired_hurt", "handled_ball"
     ]] = None
     dismissed_player_id: Optional[str] = None
     fielder_id: Optional[str] = None
@@ -224,8 +229,8 @@ class TeamRoleUpdate(BaseModel):
 class MatchMethod(str, Enum):
     by_runs = "by runs"
     by_wickets = "by wickets"
-    tie = "tie"
-    no_result = "no result"
+    tie = "tie"# ... existing code ...
+    no_result = 'no result'
 
 class MatchResult(BaseModel):
     """
@@ -240,6 +245,11 @@ class MatchResult(BaseModel):
     result_text: Optional[str] = None
     completed_at: Optional[datetime] = None
 
+class MatchResultRequest(BaseModel):
+    match_id: UUID# ... existing code ...
+    winner: Optional[str] = None  # ID of the winning team or None for a draw
+    team_a_score: int  # Total score of Team A
+    team_b_score: int  # Total score of Team B
 class Game(BaseModel):
     game_id: str = Field(default=..., alias='id')
 
@@ -272,10 +282,10 @@ class Game(BaseModel):
     target: Optional[int] = None
 
     # --- Result / completion (NEW / updated) ---
-    result: Optional[MatchResult] = None
+    result: Optional[Union[MatchResult, MatchResultRequest]] = None
     is_game_over: bool = False
     completed_at: Optional[datetime] = None
-
+    
     # --- Team roles ---
     team_a_captain_id: Optional[str] = None
     team_a_keeper_id: Optional[str] = None
@@ -322,7 +332,7 @@ class Game(BaseModel):
             if s == m.value.lower():
                 return m
 
-        # Map internal → API
+        # Map internal â†’ API
         if s in mapping:
             return mapping[s]
 
@@ -389,3 +399,5 @@ class Snapshot(BaseModel):
     completed_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+

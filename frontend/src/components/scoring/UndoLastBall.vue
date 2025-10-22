@@ -7,12 +7,12 @@ const props = defineProps<{
 function undo() {
   // TODO: Implement when backend API exists
   // await apiService.undoLastDelivery(props.gameId)
-  alert('Undo last delivery is not available yet. Backend endpoint pending.')
+  alert(`Undo last delivery for game ${props.gameId} is not available yet. Backend endpoint pending.`)
 }
 </script>
 
 <template>
-  <button class="undo" :disabled="disabled" @click="undo" title="Backend endpoint pending">
+  <button class="undo" :disabled="disabled" title="Backend endpoint pending" @click="undo">
     ↩️ Undo Last Ball
   </button>
 </template>
