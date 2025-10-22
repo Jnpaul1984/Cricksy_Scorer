@@ -1889,7 +1889,7 @@ async def start_next_innings(
     u = cast(GameState, updated)
 
     # Snapshot + emit
-    snap = _snapshot_from_game(u, None)
+    snap = _snapshot_from_game(u, None, BASE_DIR)
     snap["needs_new_innings"] = False
     snap["needs_new_over"] = (g.current_bowler_id is None)
     snap["needs_new_batter"] = (g.current_striker_id is None or g.current_non_striker_id is None)
@@ -1941,7 +1941,7 @@ async def start_over(
 
     updated = await crud.update_game(db, game_model=db_game)
     u = cast(GameState, updated)
-    snap = _snapshot_from_game(u, None)
+    snap = _snapshot_from_game(u, None, BASE_DIR)
     await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
     return {"ok": True, "current_bowler_id": g.current_bowler_id}
 
@@ -2016,7 +2016,7 @@ async def change_bowler_mid_over(
     u = cast(GameState, updated)
 
     # Build/augment snapshot so UI has everything it needs immediately
-    snap = _snapshot_from_game(u, None)
+    snap = _snapshot_from_game(u, None, BASE_DIR)
     # Ensure runtime keys are present in snapshot payload:
     snap["current_bowler_id"] = g.current_bowler_id
     snap["last_ball_bowler_id"] = g.last_ball_bowler_id
@@ -2321,7 +2321,7 @@ async def add_delivery(
 
     # --- Build snapshot + final flags ------------------------------------------
     last = u.deliveries[-1] if u.deliveries else None
-    snap = _snapshot_from_game(u, last)
+    snap = _snapshot_from_game(u, last, BASE_DIR)
     is_break = str(getattr(u, "status", "")) == "innings_break" or bool(getattr(u, "needs_new_innings", False))
     if is_break:
         snap["needs_new_over"] = False
@@ -2468,7 +2468,7 @@ async def replace_batter(
     # Respond with fresh snapshot + flags
     dl = _dedup_deliveries(u)
     last = dl[-1] if dl else None
-    snap = _snapshot_from_game(u, last)
+    snap = _snapshot_from_game(u, last, BASE_DIR)
     flags = _compute_snapshot_flags(u)
     snap["needs_new_batter"] = flags["needs_new_batter"]
     snap["needs_new_over"] = flags["needs_new_over"]
@@ -2510,7 +2510,7 @@ async def set_next_batter(
 
     updated = await crud.update_game(db, game_model=db_game)
     u = cast(GameState, updated)
-    snap = _snapshot_from_game(u, None)
+    snap = _snapshot_from_game(u, None, BASE_DIR)
     await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
     return {"ok": True, "current_striker_id": g.current_striker_id}
 
@@ -2694,7 +2694,7 @@ async def set_overs_limit(
     u = cast(GameState, updated)
     dl = _dedup_deliveries(u)
     last = dl[-1] if dl else None
-    snap = _snapshot_from_game(u, last)
+    snap = _snapshot_from_game(u, last, BASE_DIR)
     _rebuild_scorecards_from_deliveries(u)
     _recompute_totals_and_runtime(u)
     _complete_game_by_result(u)
@@ -2726,7 +2726,7 @@ async def finalize_game(
 
     updated = await crud.update_game(db, game_model=db_game)
     u = cast(GameState, updated)
-    snap = _snapshot_from_game(u, None)
+    snap = _snapshot_from_game(u, None, BASE_DIR)
     await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
     return snap
 
@@ -2756,7 +2756,7 @@ async def get_snapshot(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict
 
     dl = _dedup_deliveries(g)
     last = dl[-1] if dl else None
-    snap = _snapshot_from_game(g, last)
+    snap = _snapshot_from_game(g, last, BASE_DIR)
 
     # UI gating flags
     flags = _compute_snapshot_flags(g)
@@ -2985,7 +2985,7 @@ async def set_openers(
     _rebuild_scorecards_from_deliveries(u)
     _recompute_totals_and_runtime(u)
     _complete_game_by_result(u)
-    snap = _snapshot_from_game(u, None)
+    snap = _snapshot_from_game(u, None, BASE_DIR)
     await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
     return snap
 
