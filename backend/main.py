@@ -1409,8 +1409,10 @@ def _iso_or_none(dt: Any) -> Optional[str]:
 class CreateGameRequest(BaseModel):
     team_a_name: str
     team_b_name: str
-    players_a: List[str] = Field(..., min_length=2)
-    players_b: List[str] = Field(..., min_length=2)
+    # Allow either explicit player lists OR a players_per_team count for tests/clients
+    players_a: Optional[List[str]] = Field(None, min_length=0)
+    players_b: Optional[List[str]] = Field(None, min_length=0)
+    players_per_team: Optional[int] = Field(None, ge=1)
 
     match_type: Literal["limited", "multi_day", "custom"] = "limited"
     overs_limit: Optional[int] = Field(None, ge=1, le=120)
@@ -1419,8 +1421,9 @@ class CreateGameRequest(BaseModel):
     dls_enabled: bool = False
     interruptions: List[Dict[str, Optional[str]]] = Field(default_factory=list)
 
-    toss_winner_team: str
-    decision: Literal["bat", "bowl"]
+    # Make toss / decision optional for simpler test payloads; default behavior is safe
+    toss_winner_team: Optional[str] = None
+    decision: Optional[Literal["bat", "bowl"]] = None
 
 class OversLimitBody(BaseModel):
     overs_limit: int
@@ -1808,6 +1811,13 @@ def _snapshot_from_game(
         snapshot["result"] = res_any  # already a dict or None
     snapshot["completed_at"] = getattr(g, "completed_at", None)
 
+     # Add pending_new_batter runtime flag to snapshot (tests expect this key)
+    snapshot["pending_new_batter"] = bool(getattr(g, "pending_new_batter", False))
+
+    # Expose explicit current striker/non-striker ids for API consumers/tests
+    snapshot["current_striker_id"] = getattr(g, "current_striker_id", None)
+    snapshot["current_non_striker_id"] = getattr(g, "current_non_striker_id", None)
+
     return snapshot
 
 
@@ -1828,17 +1838,33 @@ async def create_game(
     Create a new game with flexible format parameters and pre-seeded scorecards.
     Toss winner & decision determine the first batting side.
     """
-    team_a: TeamDict = {"name": payload.team_a_name, "players": _mk_players(payload.players_a)}
-    team_b: TeamDict = {"name": payload.team_b_name, "players": _mk_players(payload.players_b)}
+       
+        # --- Build players lists (prefer explicit lists, otherwise generate) ---
+    players_a_list = payload.players_a
+    players_b_list = payload.players_b
+    if not players_a_list or not players_b_list:
+        per_side = int(payload.players_per_team or 11)
+        players_a_list = players_a_list or [f"PlayerA{i}" for i in range(1, per_side + 1)]
+        players_b_list = players_b_list or [f"PlayerB{i}" for i in range(1, per_side + 1)]
 
-    # Determine initial batting side from toss
-    toss = payload.toss_winner_team.strip()
-    if toss == payload.team_a_name:
-        batting_team_name = payload.team_a_name if payload.decision == "bat" else payload.team_b_name
-    elif toss == payload.team_b_name:
-        batting_team_name = payload.team_b_name if payload.decision == "bat" else payload.team_a_name
+    team_a: TeamDict = {"name": payload.team_a_name, "players": _mk_players(players_a_list)}
+    team_b: TeamDict = {"name": payload.team_b_name, "players": _mk_players(players_b_list)}
+
+    # --- Determine initial batting side (toss/decision) with safe defaults ---
+    toss = (payload.toss_winner_team or "").strip()
+    decision = (payload.decision or "").strip().lower()
+    if toss:
+        # keep prior semantics when toss provided
+        if toss == payload.team_a_name:
+            batting_team_name = payload.team_a_name if decision == "bat" else payload.team_b_name
+        elif toss == payload.team_b_name:
+            batting_team_name = payload.team_b_name if decision == "bat" else payload.team_a_name
+        else:
+            # unknown toss value -> default to team_a
+            batting_team_name = payload.team_a_name
     else:
-        batting_team_name = payload.team_a_name  # safety fallback
+        # No toss provided — default to team_a batting first
+        batting_team_name = payload.team_a_name
 
     bowling_team_name = payload.team_b_name if batting_team_name == payload.team_a_name else payload.team_a_name
 
@@ -1849,16 +1875,17 @@ async def create_game(
     game_create = schemas.GameCreate(
         team_a_name=payload.team_a_name,
         team_b_name=payload.team_b_name,
-        players_a=payload.players_a,
-        players_b=payload.players_b,
-        match_type=_coerce_match_type(payload.match_type),   # â† enum, not string
+        players_a=players_a_list,
+        players_b=players_b_list,
+        match_type=_coerce_match_type(payload.match_type),
         overs_limit=payload.overs_limit,
         days_limit=payload.days_limit,
         overs_per_day=payload.overs_per_day,
         dls_enabled=payload.dls_enabled,
         interruptions=payload.interruptions,
-        toss_winner_team=payload.toss_winner_team,
-        decision=payload.decision,
+        # If caller didn't provide toss/decision, synthesize a safe default:
+        toss_winner_team=payload.toss_winner_team or batting_team_name,
+        decision=payload.decision or "bat",
     )
 
 
