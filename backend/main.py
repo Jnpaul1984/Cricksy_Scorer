@@ -2075,18 +2075,26 @@ async def add_delivery(
         del_dict["shot_map"] = None
     
     # Use the delivery service to append, flag and persist (service returns updated ORM row)
-    updated = await _apply_scoring_and_persist(
-        g,
-        compute_kwargs=False,          # we've already computed `del_dict` here
-        delivery_dict=del_dict,
-        db=db,
-    )
-    u = cast(GameState, updated)
+    # --- Use the delivery service to append, flag and persist (service returns updated ORM row) ---
+updated = await _apply_scoring_and_persist(
+    g,
+    compute_kwargs=False,          # we've already computed `del_dict` here
+    delivery_dict=del_dict,
+    db=db,
+)
+u = cast(GameState, updated)
 
-    # Recompute derived runtime (keep these call sites to keep behavior unchanged)
-    _rebuild_scorecards_from_deliveries(u)
-    _recompute_totals_and_runtime(u)
-    await _maybe_close_innings(u)
+# Recompute derived runtime (actions that read from the persisted row)
+_rebuild_scorecards_from_deliveries(u)
+_recompute_totals_and_runtime(u)
+await _maybe_close_innings(u)
+
+# Ensure target and decide match result (these were done before persisting in the original flow).
+# Run finalizers now and persist their effects so the ORM row has correct result/status.
+_ensure_target_if_chasing(u)
+_maybe_finalize_match(u)
+# Persist again if finalizers changed state/result
+await crud.update_game(db, game_model=cast(Any, u))
 
     # Ensure any scorecard fields were flagged by the service (service already flag_modified)
 
