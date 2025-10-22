@@ -404,6 +404,12 @@ try:
     _ensure_target_if_chasing = _gh._ensure_target_if_chasing
     _runs_wkts_balls_for_innings = _gh._runs_wkts_balls_for_innings
     _maybe_finalize_match = _gh._maybe_finalize_match
+
+    # Small normalization / conversion helpers also used across main.py
+    _norm_extra = _gh._norm_extra
+    _as_extra_code = getattr(_gh, "_as_extra_code", None)
+    _bowling_balls_to_overs = getattr(_gh, "_bowling_balls_to_overs", None)
+    _complete_over_runtime = getattr(_gh, "_complete_over_runtime", None)
 except Exception:
     # Keep local implementations if the extracted module isn't available yet.
     _gh = None
