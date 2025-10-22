@@ -1,12 +1,14 @@
 """
 Scoring service: encapsulates per-ball scoring logic.
 
-This file is an extraction of main._score_one and the small runtime helpers
-it needs so we can import score_one from main without creating circular imports.
-Keep this module standalone (no imports from backend.main).
+This module provides score_one(g, ...) which mutates the GameState-like object g
+and returns a dict suitable for schemas.Delivery. It is a direct extraction of
+the previous main._score_one implementation, with minimal helper helpers copied
+over so the module is self-contained and avoids circular imports.
 """
 from __future__ import annotations
-from typing import Any, Dict, Optional, Mapping, Tuple, List, Union, cast
+
+from typing import Any, Dict, Optional, cast
 from pydantic import BaseModel
 
 # --- Constants & rules copied from main.py ---
@@ -22,12 +24,8 @@ _CREDIT_TEAM = {
 _INVALID_ON_NO_BALL = {"bowled", "caught", "lbw", "stumped", "hit_wicket"}
 _INVALID_ON_WIDE = {"bowled", "lbw"}
 
-# Local types (minimal)
-DeliveryKwargs = dict  # runtime dict shape returned by score_one
 
-
-def _norm_extra(x: Any) -> Optional[str]:
-    """Normalize to: None | 'wd' | 'nb' | 'b' | 'lb'"""
+def _norm_extra(x: Optional[str] | Any) -> Optional[str]:
     if not x:
         return None
     s = (str(x) or "").strip().lower()
@@ -45,21 +43,21 @@ def _norm_extra(x: Any) -> Optional[str]:
 def _as_extra_code(x: Optional[str]) -> Optional[str]:
     if x is None:
         return None
-    # The app uses schemas.ExtraCode alias; here we keep a simple str mapping
     m = {"wd": "wd", "nb": "nb", "b": "b", "lb": "lb"}
     return m.get(x)
 
 
-def _bowling_balls_to_overs(balls: int) -> float:
-    overs = balls // 6
-    rem = balls % 6
-    return overs + rem / 10.0
+def _complete_over_runtime(g: Any, bowler_id: Optional[str]) -> None:
+    # minimal semantics copied from main._complete_over_runtime
+    if bowler_id:
+        g.last_ball_bowler_id = bowler_id
+    g.current_bowler_id = None
+    g.current_over_balls = 0
+    g.mid_over_change_used = False
 
 
-# Minimal ensure entry helpers (safe defaults, mutate provided scorecards)
 def _ensure_batting_entry(g: Any, batter_id: str) -> Dict[str, Any]:
-    bsc = getattr(g, "batting_scorecard", {}) or {}
-    e_any = bsc.get(batter_id)
+    e_any = (getattr(g, "batting_scorecard", {}) or {}).get(batter_id)
     if isinstance(e_any, BaseModel):
         try:
             e = cast(Dict[str, Any], e_any.model_dump())
@@ -81,8 +79,6 @@ def _ensure_batting_entry(g: Any, batter_id: str) -> Dict[str, Any]:
             "sixes": 0,
             "how_out": "",
         }
-
-    # ensure keys
     e.setdefault("player_id", batter_id)
     e.setdefault("player_name", None)
     e.setdefault("runs", 0)
@@ -91,14 +87,15 @@ def _ensure_batting_entry(g: Any, batter_id: str) -> Dict[str, Any]:
     e.setdefault("fours", 0)
     e.setdefault("sixes", 0)
     e.setdefault("how_out", "")
-
-    g.batting_scorecard[batter_id] = e
+    # Mutate the scorecard on the game object
+    batting = getattr(g, "batting_scorecard", {}) or {}
+    batting[batter_id] = e
+    g.batting_scorecard = batting
     return e
 
 
 def _ensure_bowling_entry(g: Any, bowler_id: str) -> Dict[str, Any]:
-    bsc = getattr(g, "bowling_scorecard", {}) or {}
-    e_any = bsc.get(bowler_id)
+    e_any = (getattr(g, "bowling_scorecard", {}) or {}).get(bowler_id)
     if isinstance(e_any, BaseModel):
         try:
             e = cast(Dict[str, Any], e_any.model_dump())
@@ -117,24 +114,15 @@ def _ensure_bowling_entry(g: Any, bowler_id: str) -> Dict[str, Any]:
             "runs_conceded": 0,
             "wickets_taken": 0,
         }
-
     e.setdefault("player_id", bowler_id)
     e.setdefault("player_name", None)
     e.setdefault("overs_bowled", 0.0)
     e.setdefault("runs_conceded", 0)
     e.setdefault("wickets_taken", 0)
-
-    g.bowling_scorecard[bowler_id] = e
+    bowling = getattr(g, "bowling_scorecard", {}) or {}
+    bowling[bowler_id] = e
+    g.bowling_scorecard = bowling
     return e
-
-
-def _complete_over_runtime(g: Any, bowler_id: Optional[str]) -> None:
-    """Same semantics as main._complete_over_runtime (minimal)"""
-    if bowler_id:
-        g.last_ball_bowler_id = bowler_id
-    g.current_bowler_id = None
-    g.current_over_balls = 0
-    g.mid_over_change_used = False
 
 
 def score_one(
@@ -148,10 +136,10 @@ def score_one(
     is_wicket: bool,
     dismissal_type: Optional[str],
     dismissed_player_id: Optional[str],
-) -> DeliveryKwargs:
+) -> Dict[str, Any]:
     """
-    Ported from main._score_one. Mutates the provided GameState-like object 'g'
-    and returns the delivery kwargs dict to be inserted into the ledger.
+    Mutates GameState-like object `g` and returns DeliveryKwargs dict.
+    Behaviour matches the original implementation in main._score_one.
     """
     # Ensure runtime fields exist
     if getattr(g, "current_striker_id", None) is None:
@@ -186,7 +174,7 @@ def score_one(
     elif extra_norm in ("wd", "b", "lb"):
         extra_runs = runs_scored
 
-    team_add = off_bat_runs + (1 if is_nb else 0) + (extra_runs if extra_norm in ("wd","b","lb") else 0)
+    team_add = off_bat_runs + (1 if is_nb else 0) + (extra_runs if extra_norm in ("wd", "b", "lb") else 0)
     g.total_runs = int(getattr(g, "total_runs", 0)) + team_add
 
     delivery_over_number = int(getattr(g, "overs_completed", 0))
@@ -222,7 +210,7 @@ def score_one(
             bw2 = _ensure_bowling_entry(g, bowler_id)
             bw2["wickets_taken"] = int(bw2.get("wickets_taken", 0) + 1)
 
-    # Strike rotation
+    # Strike rotation rules
     swap = False
     if extra_norm is None:
         swap = (off_bat_runs % 2) == 1
@@ -246,6 +234,7 @@ def score_one(
             g.balls_this_over = 0
             g.pending_new_over = True
             g.current_bowler_id = None
+            # swap ends on over completion
             g.current_striker_id, g.current_non_striker_id = (
                 g.current_non_striker_id,
                 g.current_striker_id,
