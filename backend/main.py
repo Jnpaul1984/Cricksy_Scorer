@@ -46,7 +46,7 @@ from backend.services.delivery_service import apply_scoring_and_persist as _appl
 from backend.sql_app import crud, schemas, models
 from backend.sql_app.database import SessionLocal
 from backend import validation_helpers
-
+from backend.routes import games as _games_impl
 # Socket.IO (no first-party type stubs; we keep our own Protocol below)
 import socketio  # type: ignore[import-not-found]
 import logging
@@ -969,8 +969,10 @@ async def create_game(
     payload: CreateGameRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    # Delegate orchestration to service to keep main.py small.
-    db_game = await _create_game_service(payload, db)
+    """
+    Delegate game creation to backend.routes.games.create_game_impl
+    """
+    db_game = await _games_impl.create_game_impl(payload, db)
     return db_game
 
 @_fastapi.get("/games/{game_id}", response_model=schemas.Game)  # type: ignore[name-defined]
@@ -1463,10 +1465,10 @@ async def add_delivery(
         del_dict["shot_map"] = None
     
     
-    # --- Use the delivery service to append, flag and persist (service returns updated ORM row) ---
-    updated = await _apply_scoring_and_persist(
-        g,
-        compute_kwargs=False,          # we've already computed `del_dict` here
+    # Delegate append/persist to the extracted route/service implementation.
+    # append_delivery_and_persist_impl returns the updated ORM Game row.
+    updated = await _games_impl.append_delivery_and_persist_impl(
+        db_game,
         delivery_dict=del_dict,
         db=db,
     )
