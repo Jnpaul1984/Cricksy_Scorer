@@ -39,6 +39,7 @@ from backend import dls as dlsmod
 from backend.routes.games_router import router as games_router
 from backend.routes.games_dls import router as games_dls_router
 from backend.routes.interruptions import router as interruptions_router
+from backend.services.game_service import create_game as _create_game_service
 # ---- App modules ----
 from backend.sql_app import crud, schemas, models
 from backend.sql_app.database import SessionLocal
@@ -1720,76 +1721,9 @@ async def create_game(
     payload: CreateGameRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Create a new game with flexible format parameters and pre-seeded scorecards.
-    Toss winner & decision determine the first batting side.
-    """
-       
-        # --- Build players lists (prefer explicit lists, otherwise generate) ---
-    players_a_list = payload.players_a
-    players_b_list = payload.players_b
-    if not players_a_list or not players_b_list:
-        per_side = int(payload.players_per_team or 11)
-        players_a_list = players_a_list or [f"PlayerA{i}" for i in range(1, per_side + 1)]
-        players_b_list = players_b_list or [f"PlayerB{i}" for i in range(1, per_side + 1)]
-
-    team_a: TeamDict = {"name": payload.team_a_name, "players": _mk_players(players_a_list)}
-    team_b: TeamDict = {"name": payload.team_b_name, "players": _mk_players(players_b_list)}
-
-    # --- Determine initial batting side (toss/decision) with safe defaults ---
-    toss = (payload.toss_winner_team or "").strip()
-    decision = (payload.decision or "").strip().lower()
-    if toss:
-        # keep prior semantics when toss provided
-        if toss == payload.team_a_name:
-            batting_team_name = payload.team_a_name if decision == "bat" else payload.team_b_name
-        elif toss == payload.team_b_name:
-            batting_team_name = payload.team_b_name if decision == "bat" else payload.team_a_name
-        else:
-            # unknown toss value -> default to team_a
-            batting_team_name = payload.team_a_name
-    else:
-        # No toss provided — default to team_a batting first
-        batting_team_name = payload.team_a_name
-
-    bowling_team_name = payload.team_b_name if batting_team_name == payload.team_a_name else payload.team_a_name
-
-    # Pre-seed scorecards
-    batting_scorecard = _mk_batting_scorecard(team_a if batting_team_name == payload.team_a_name else team_b)
-    bowling_scorecard = _mk_bowling_scorecard(team_b if batting_team_name == payload.team_a_name else team_a)
-
-    game_create = schemas.GameCreate(
-        team_a_name=payload.team_a_name,
-        team_b_name=payload.team_b_name,
-        players_a=players_a_list,
-        players_b=players_b_list,
-        match_type=_coerce_match_type(payload.match_type),
-        overs_limit=payload.overs_limit,
-        days_limit=payload.days_limit,
-        overs_per_day=payload.overs_per_day,
-        dls_enabled=payload.dls_enabled,
-        interruptions=payload.interruptions,
-        # If caller didn't provide toss/decision, synthesize a safe default:
-        toss_winner_team=payload.toss_winner_team or batting_team_name,
-        decision=payload.decision or "bat",
-    )
-
-
-    game_id = str(uuid.uuid4())
-
-    db_game = await crud.create_game(
-        db=db,
-        game=game_create,
-        game_id=game_id,
-        batting_team=batting_team_name,
-        bowling_team=bowling_team_name,
-        team_a=cast(Dict[str, Any], team_a),
-        team_b=cast(Dict[str, Any], team_b),
-        batting_scorecard=cast(Dict[str, Any], batting_scorecard),
-        bowling_scorecard=cast(Dict[str, Any], bowling_scorecard),
-    )
-
-    return db_game  # Pydantic orm_mode -> schemas.Game
+    # Delegate orchestration to service to keep main.py small.
+    db_game = await _create_game_service(payload, db)
+    return db_game
 
 @_fastapi.get("/games/{game_id}", response_model=schemas.Game)  # type: ignore[name-defined]
 async def get_game(game_id: str, db: AsyncSession = Depends(get_db)):
