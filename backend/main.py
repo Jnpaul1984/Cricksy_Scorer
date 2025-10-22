@@ -401,8 +401,7 @@ def _mk_bowling_scorecard(team: TeamDict) -> Dict[str, BowlingEntryDict]:
         }
         for p in team["players"]
     }
-def _overs_str_from_balls(balls: int) -> str:
-    return f"{balls // 6}.{balls % 6}"
+from .helpers import overs_str_from_balls as _overs_str_from_balls
 
 # --- API status mapping (internal -> wire enum) ---
 def _api_status(v: Any) -> str:
