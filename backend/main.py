@@ -40,6 +40,7 @@ from backend.routes.games_router import router as games_router
 from backend.routes.games_dls import router as games_dls_router
 from backend.routes.interruptions import router as interruptions_router
 from backend.services.game_service import create_game as _create_game_service
+from backend.services.scoring_service import score_one as _score_one
 # ---- App modules ----
 from backend.sql_app import crud, schemas, models
 from backend.sql_app.database import SessionLocal
@@ -1499,149 +1500,7 @@ def _complete_over_runtime(g: GameState, bowler_id: Optional[str]) -> None:
     g.mid_over_change_used = False
 
 
-def _score_one(
-    g: GameState,
-    *,
-    striker_id: str,
-    non_striker_id: str,
-    bowler_id: str,
-    runs_scored: int,
-    extra: Optional[schemas.ExtraCode],
-    is_wicket: bool,
-    dismissal_type: Optional[str],
-    dismissed_player_id: Optional[str],
-) -> DeliveryKwargs:
-    # Ensure runtime fields exist
-    if g.current_striker_id is None:
-        g.current_striker_id = striker_id
-    if g.current_non_striker_id is None:
-        g.current_non_striker_id = non_striker_id
-    pre_striker = g.current_striker_id
-    pre_non_striker = g.current_non_striker_id
 
-    if getattr(g, "current_bowler_id", None) is None:
-        g.current_bowler_id = bowler_id
-    if not hasattr(g, "pending_new_batter"):
-        g.pending_new_batter = False
-    if not hasattr(g, "pending_new_over"):
-        g.pending_new_over = False
-
-    bowler_id = g.current_bowler_id or bowler_id
-    runs = int(runs_scored or 0)
-
-    # ðŸ‘‡ Normalize extra to canonical codes: None|'wd'|'nb'|'b'|'lb'
-    extra_norm = _norm_extra(extra)
-    is_nb = (extra_norm == "nb")
-    is_wd = (extra_norm == "wd")
-    legal = not (is_nb or is_wd)
-
-    off_bat_runs = 0
-    extra_runs = 0
-
-    if extra_norm is None:                # legal ball
-        off_bat_runs = runs_scored
-    elif extra_norm == "nb":              # no-ball
-        off_bat_runs = runs_scored        # caller passed runs_off_bat -> we already mapped to runs_scored for this call
-    elif extra_norm in ("wd", "b", "lb"): # wides/byes/leg-byes
-        extra_runs = runs_scored
-
-    # team totals increment (runtime)
-    team_add = off_bat_runs + (1 if is_nb else 0) + (extra_runs if extra_norm in ("wd","b","lb") else 0)
-    g.total_runs += team_add
-    # capture the display over/ball *before* we mutate runtime
-    delivery_over_number = int(g.overs_completed)
-    delivery_ball_number = int(g.balls_this_over + 1)
-    # --- Batting runtime (only what scorecards need immediately) ---
-    bs = _ensure_batting_entry(g, striker_id)
-    if legal:
-        bs["balls_faced"] = int(bs.get("balls_faced", 0) + 1)
-    if extra_norm is None:
-        bs["runs"] = int(bs.get("runs", 0) + runs)
-    elif is_nb:
-        bs["runs"] = int(bs.get("runs", 0) + runs)
-
-
-    
-    # --- Bowling runtime (overs come from ledger rebuild; don't mutate here) ---
-    _ensure_bowling_entry(g, bowler_id)  # make sure bowler exists on the card
-    if legal:
-        g.current_over_balls = int(getattr(g, "current_over_balls", 0) + 1)
-        g.last_ball_bowler_id = bowler_id  # track who bowled the last legal ball
-
-    # --- Dismissal normalization ---
-    dismissal = (dismissal_type or "").strip().lower() or None
-    if dismissal:
-        if is_nb and dismissal in _INVALID_ON_NO_BALL:
-            dismissal = None
-        if is_wd and dismissal in _INVALID_ON_WIDE:
-            dismissal = None
-
-    out_happened = bool(is_wicket and dismissal)
-    out_player_id = dismissed_player_id or striker_id
-    if out_happened and out_player_id:
-        out_entry = _ensure_batting_entry(g, out_player_id)
-        out_entry["is_out"] = True
-        # Block next ball until a new batter is provided
-        g.pending_new_batter = True
-        if dismissal in _CREDIT_BOWLER:
-            bw2 = _ensure_bowling_entry(g, bowler_id)
-            bw2["wickets_taken"] = int(bw2.get("wickets_taken", 0) + 1)
-
-    # --- Strike rotation + over progression (runtime only) ---
-    swap = False
-    if extra_norm is None:
-        # legal ball: rotate on odd off-bat runs
-        swap = (off_bat_runs % 2) == 1
-    elif extra_norm == "nb":
-        # no-ball: rotate only on odd off-bat runs (the +1 penalty doesn't rotate)
-        swap = (off_bat_runs % 2) == 1
-    elif extra_norm in ("b", "lb"):
-        # byes/leg-byes: rotate on odd extras
-        swap = (extra_runs % 2) == 1
-    elif extra_norm == "wd":
-        # wides: rotate only if they RAN (i.e., extras > 1), and it's odd
-        swap = (extra_runs > 1) and (extra_runs % 2 == 1)
-
-    if swap:
-        g.current_striker_id, g.current_non_striker_id = (
-            g.current_non_striker_id,
-            g.current_striker_id,
-        )
-
-    if legal:
-        g.balls_this_over = int(g.balls_this_over + 1)
-        if g.balls_this_over >= 6:
-            g.overs_completed = int(g.overs_completed + 1)
-            g.balls_this_over = 0
-            g.pending_new_over = True
-            g.current_bowler_id = None
-            # swap ends at over end
-            g.current_striker_id, g.current_non_striker_id = (
-                g.current_non_striker_id,
-                g.current_striker_id,
-            )
-            _complete_over_runtime(g, bowler_id)
-
-    return {
-        "over_number": delivery_over_number,
-        "ball_number": delivery_ball_number,
-        "bowler_id": str(bowler_id),
-        # IMPORTANT: ledger records who actually faced this ball
-        "striker_id": str(pre_striker),
-        "non_striker_id": str(pre_non_striker),
-
-        "runs_off_bat": int(off_bat_runs),
-        "extra_type": _as_extra_code(extra_norm),
-        "extra_runs": int(extra_runs),
-        "runs_scored": int(team_add),
-
-        "is_extra": extra_norm is not None,
-        "is_wicket": out_happened,
-        "dismissal_type": dismissal,
-        "dismissed_player_id": out_player_id if out_happened else None,
-        "commentary": None,
-        "fielder_id": None,
-    }
 def _dls_panel_for(g: GameState) -> DlsPanel:
     """
     Best-effort DLS panel.
