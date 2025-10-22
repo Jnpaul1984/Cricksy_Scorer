@@ -41,6 +41,7 @@ from backend.routes.games_dls import router as games_dls_router
 from backend.routes.interruptions import router as interruptions_router
 from backend.services.game_service import create_game as _create_game_service
 from backend.services.scoring_service import score_one as _score_one
+from backend.services.delivery_service import apply_scoring_and_persist as _apply_scoring_and_persist
 # ---- App modules ----
 from backend.sql_app import crud, schemas, models
 from backend.sql_app.database import SessionLocal
@@ -2072,41 +2073,22 @@ async def add_delivery(
         del_dict["shot_map"] = str(shot_map_val) if shot_map_val is not None else None
     except Exception:
         del_dict["shot_map"] = None
-    # Make sure deliveries is a real list[dict[str, Any]] for type checker
-    if not isinstance(g.deliveries, list):
-        g.deliveries = []  # type: ignore[assignment]
-    g.deliveries = t.cast(List[Dict[str, Any]], g.deliveries)
-
-    g.deliveries.append(del_dict)
-
-
-    # Ensure runtime attrs always exist
-    if getattr(g, "current_over_balls", None) is None:
-        g.current_over_balls = 0
-    if getattr(g, "mid_over_change_used", None) is None:
-        g.mid_over_change_used = False
-    if not hasattr(g, "current_bowler_id"):
-        g.current_bowler_id = None
-    if not hasattr(g, "last_ball_bowler_id"):
-        g.last_ball_bowler_id = None
-
-    flag_modified(db_game, "deliveries")
-
-    # --- Rebuild scorecards from authoritative ledger --------------------------
-    _rebuild_scorecards_from_deliveries(g)
-    _recompute_totals_and_runtime(g)
-    await _maybe_close_innings(g)
-    flag_modified(db_game, "batting_scorecard")
-    flag_modified(db_game, "bowling_scorecard")
-
-    # ðŸ decide match result *before* persisting so itâ€™s saved
-    _ensure_target_if_chasing(g)
-    _maybe_finalize_match(g)
-
-    # --- Persist ----------------------------------------------------------------
-    updated = await crud.update_game(db, game_model=db_game)
-
+    
+    # Use the delivery service to append, flag and persist (service returns updated ORM row)
+    updated = await _apply_scoring_and_persist(
+        g,
+        compute_kwargs=False,          # we've already computed `del_dict` here
+        delivery_dict=del_dict,
+        db=db,
+    )
     u = cast(GameState, updated)
+
+    # Recompute derived runtime (keep these call sites to keep behavior unchanged)
+    _rebuild_scorecards_from_deliveries(u)
+    _recompute_totals_and_runtime(u)
+    await _maybe_close_innings(u)
+
+    # Ensure any scorecard fields were flagged by the service (service already flag_modified)
 
     
 
