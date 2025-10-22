@@ -1,4 +1,4 @@
-PYcat > backend/services/game_helpers.py <<'PY'
+from __future__ import annotations
 """
 Game helpers extracted from backend/main.py.
 
@@ -12,7 +12,7 @@ Note: This module intentionally operates on "GameState-like" objects (ORM rows
 or plain dict-like game state used by tests). It keeps the same semantics as
 the originals in main.py.
 """
-from __future__ import annotations
+
 
 from collections import defaultdict
 from datetime import datetime, timezone
