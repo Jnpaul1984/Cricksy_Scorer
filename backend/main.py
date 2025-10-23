@@ -41,6 +41,9 @@ from backend.routes.games_router import router as games_router
 from backend.routes.games_dls import router as games_dls_router
 from backend.routes.interruptions import router as interruptions_router
 from backend.routes.gameplay import router as gameplay_router
+from backend.routes.dls import router as dls_router
+from backend.routes.game_admin import router as game_admin_router
+from backend.routes.health import router as health_router
 from backend.services.game_service import create_game as _create_game_service
 from backend.services.scoring_service import score_one as _score_one
 from backend.services.delivery_service import apply_scoring_and_persist as _apply_scoring_and_persist
@@ -119,7 +122,6 @@ class BowlingEntryDict(TypedDict):
     overs_bowled_str: NotRequired[str]
     maidens: NotRequired[int]
     economy: NotRequired[float]
-
 
 class DeliveryDict(TypedDict, total=False):
     over_number: int
@@ -276,7 +278,6 @@ class ConcreteGameState:
         # Implement the logic to save the game state
         pass
 
-
 # If you're on Python < 3.11:
 # from typing_extensions import TypedDict, NotRequired
 # class SponsorItem(TypedDict, total=False):
@@ -297,8 +298,6 @@ class SponsorItem(TypedDict, total=False):
 
 class SponsorsManifest(TypedDict):
     items: List[SponsorItem]
-
-
 
 # ================================================================
 # FastAPI + Socket.IO wiring
@@ -339,7 +338,6 @@ _fastapi.add_middleware(
     allow_headers=["*"],
 )
 
-
 # ================================================================
 # DB dependency (async)
 # ================================================================
@@ -365,38 +363,20 @@ if settings.IN_MEMORY_DB:
     _fastapi.dependency_overrides[get_db] = _in_memory_get_db  # type: ignore[assignment]
     enable_in_memory_crud(_memory_repo)
 
-
 # Keep your separate games router mounted
 
-_fastapi.include_router(games_dls_router)
+_fastapi.include_router(games_dls_router)   # existing (can coexist; different endpoints)
 _fastapi.include_router(interruptions_router)
 _fastapi.include_router(games_router)
 _fastapi.include_router(gameplay_router)
-
-@_fastapi.get("/health", include_in_schema=False)
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+_fastapi.include_router(dls_router)         # new: revised-target / par
+_fastapi.include_router(game_admin_router)  # new: overs-limit / team-roles
+_fastapi.include_router(health_router)      # new: health endpoints
 
 
 
 # ================================================================
 # DB dependency (async)
-# ================================================================
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with SessionLocal() as session:  # type: ignore[misc]
-        yield session
-
-if os.getenv("CRICKSY_IN_MEMORY_DB") == "1":
-    from backend.testsupport.in_memory_crud import InMemoryCrudRepository, enable_in_memory_crud
-
-    _memory_repo = InMemoryCrudRepository()
-
-    async def _in_memory_get_db() -> AsyncGenerator[object, None]:
-        yield object()
-
-    _fastapi.dependency_overrides[get_db] = _in_memory_get_db  # type: ignore[assignment]
-    enable_in_memory_crud(_memory_repo)
-
 # ================================================================
 # Helpers: core utilities
 # ================================================================
@@ -466,24 +446,12 @@ def _api_status(v: Any) -> str:
     }
     return mapping.get(s, "IN_PROGRESS")
 
-
-
-
-
-
-
-
-
-
-
 # --- helpers ---------------------------------------------------------
 def _coerce_match_type(raw: str) -> schemas.MatchType:
     try:
         return schemas.MatchType(raw)  # exact enum match
     except Exception:
         return schemas.MatchType.limited  # safe default
-
-
 
 # ================================================================
 # Helpers: dismissal / extras rules
@@ -505,10 +473,6 @@ _CREDIT_TEAM = {
 _INVALID_ON_NO_BALL = {"bowled", "caught", "lbw", "stumped", "hit_wicket"}
 # On a WIDE, these are invalid (stumped *is allowed* on a wide):
 _INVALID_ON_WIDE = {"bowled", "lbw"}
-
-
-
-
 
 def _rotate_strike_on_runs(runs: int) -> bool: # type: ignore
     return (runs % 2) == 1
@@ -532,12 +496,8 @@ def _as_extra_code(x: Optional[str]) -> Optional[ExtraCode]:
 # NEW: normalization + dedupe + totals recompute
 # ================================================================
 
-
 def _is_blank(x: object) -> bool:
     return x is None or (isinstance(x, str) and x.strip() == "")
-
-
-
 
 def _sum_runs_for_innings(g: GameState, inning: int) -> int:
     total = 0
@@ -575,14 +535,12 @@ def _team1_runs(g: GameState) -> int:
             pass
     return _sum_runs_for_innings(g, 1)
 
-
 async def _maybe_close_innings(g: GameState) -> None:
     """Close the current innings if overs exhausted or all out."""
     balls_limit = (g.overs_limit or 0) * 6
     balls_bowled = int(getattr(g, "balls_bowled_total", None) or (
         int(getattr(g, "overs_completed", 0)) * 6 + int(getattr(g, "balls_this_over", 0))
     ))
-
 
     if g.status == models.GameStatus.innings_break:
         return
@@ -593,7 +551,6 @@ async def _maybe_close_innings(g: GameState) -> None:
     if all_out or overs_exhausted:
         if not hasattr(g, "innings_history"):
             g.innings_history = []
-
 
         # âœ… Only archive if not already archived
         already_archived = any(
@@ -613,7 +570,6 @@ async def _maybe_close_innings(g: GameState) -> None:
                 "closed_at": dt.datetime.now(UTC).isoformat(),  # âœ… TZ-aware
             })
 
-
         g.status = models.GameStatus.innings_break
         g.needs_new_innings = True
         g.needs_new_over = False
@@ -622,12 +578,10 @@ async def _maybe_close_innings(g: GameState) -> None:
         g.current_non_striker_id = None
         g.current_bowler_id = None
 
-
 # Key used in _dedup_deliveries: (over, ball, subindex) where subindex is int for illegal (wd/nb) or "L" for legal.
 BallKey: TypeAlias = Tuple[int, int, Union[int, Literal["L"]]]
 # Allowed match-result method values (use at module scope so Pylance is happy)
 AllowedMethod: TypeAlias = Literal["by runs", "by wickets", "tie", "no result"]
-
 
 def _coerce_batting_entry(  # pyright: ignore[reportUnusedFunction]
     x: Any, team_a: TeamDict, team_b: TeamDict
@@ -667,8 +621,6 @@ def _coerce_bowling_entry(  # pyright: ignore[reportUnusedFunction]
             wickets_taken=int(x_dict.get("wickets_taken", x_dict.get("wickets", 0))),
         )
     return schemas.BowlingScorecardEntry(player_id="", player_name="", overs_bowled=0.0, runs_conceded=0, wickets_taken=0)
-
-
 
 # ================================================================
 # Misc helpers
@@ -735,8 +687,6 @@ class CreateGameRequest(BaseModel):
 class OversLimitBody(BaseModel):
     overs_limit: int
 
-
-
 class StartInningsBody(BaseModel):
     striker_id: Optional[str] = None
     non_striker_id: Optional[str] = None
@@ -783,10 +733,6 @@ def _reset_runtime_and_scorecards(g: GameState) -> None:
 
     g.batting_scorecard = _mk_batting_scorecard(batting_team)
     g.bowling_scorecard = _mk_bowling_scorecard(bowling_team)
-
-
-
-
 
 def _dls_panel_for(g: GameState) -> DlsPanel:
     """
@@ -851,7 +797,6 @@ def _dls_panel_for(g: GameState) -> DlsPanel:
     except Exception:
         return {}
 
-
 from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
 
 # ================================================================
@@ -881,186 +826,6 @@ async def get_game(game_id: str, db: AsyncSession = Depends(get_db)):
     return db_game
 
 
-
-
-# ================================================================
-# PR 4 â€” Rain control: adjust overs limit mid-match
-# ================================================================
-@_fastapi.post("/games/{game_id}/dls/revised-target", response_model=DLSRevisedOut)
-async def dls_revised_target(game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)):
-    game = await crud.get_game(db, game_id=game_id)
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
-    
-    # allow attribute access without tripping strict type checkers
-    g = cast(Any, game)
-
-    # Load env
-    env = dlsmod.load_env(body.kind, str(BASE_DIR))
-
-    # Team 1 runs are just g.total_runs at end of inns 1; if called midâ€‘match, use snapshot
-    # We infer from deliveries in innings 1:
-    # total_resources_team1 expects List[Mapping[str, Any]] (list is invariant)
-    deliveries_m: List[Mapping[str, Any]] = cast(
-        List[Mapping[str, Any]],
-        list(getattr(g, "deliveries", []))
-    )
-    # In this simple model you keep a single combined ledger; if you split per-innings, adjust here.
-
-    # Team 1 resources
-    M1 = int(body.max_overs or (g.overs_limit or (50 if body.kind == "odi" else 20)))
-    interruptions = list(getattr(g, "interruptions", []))
-    R1_total = dlsmod.total_resources_team1(
-        env=env,
-        max_overs_initial=M1,
-        deliveries=deliveries_m,
-        interruptions=interruptions,
-    )
-
-    # Team 1 score (use persisted summary or compute from innings 1)
-    S1 = _team1_runs(g)
-
-    # Team 2 resources (available) = R(u,w) at start (w=0, u=M2)
-    M2 = int(body.max_overs or (g.overs_limit or (50 if body.kind == "odi" else 20)))
-    R2_total = env.table.R(M2, 0)
-
-    target = dlsmod.revised_target(S1=S1, R1_total=R1_total, R2_total=R2_total)
-    return DLSRevisedOut(R1_total=R1_total, R2_total=R2_total, S1=S1, target=target)
-
-@_fastapi.post("/games/{game_id}/dls/par", response_model=DLSParOut)
-async def dls_par_now(game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)):
-    game = await crud.get_game(db, game_id=game_id)
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
-    g = cast(Any, game)
-    env = dlsmod.load_env(body.kind, str(BASE_DIR))
-
-    # Inputs from state
-    deliveries_m: List[Mapping[str, Any]] = cast(
-        List[Mapping[str, Any]],
-        list(getattr(g, "deliveries", []))
-    )
-    M = int(body.max_overs or (g.overs_limit or (50 if body.kind == "odi" else 20)))
-
-    # Team 1 resources (as above)
-    R1_total = dlsmod.total_resources_team1(
-        env=env,
-        max_overs_initial=M,
-        deliveries=deliveries_m,
-        interruptions=list(getattr(g, "interruptions", [])),
-    )
-    S1 = _team1_runs(g)  # score to chase
-
-    # Team 2 â€œused so farâ€ during chase
-    # Use current (balls bowled, wickets) from runtime fields:
-    balls_so_far = int(getattr(g, "overs_completed", 0)) * 6 + int(getattr(g, "balls_this_over", 0))
-    wkts_so_far = int(getattr(g, "total_wickets", 0))  # second innings wickets at the moment
-
-    # Resources used = R(start) - R(remaining)
-    R_start = env.table.R(M, 0)
-    R_remaining = env.table.R(max(0.0, M - (balls_so_far / 6.0)), wkts_so_far)
-    R2_used = max(0.0, R_start - R_remaining)
-
-    par = dlsmod.par_score_now(S1=S1, R1_total=R1_total, R2_used_so_far=R2_used)
-    # Team 2 current runs live (from g.total_runs if you switch this route only during inns 2).
-    runs_now = int(getattr(g, "total_runs", 0))
-    return DLSParOut(R1_total=R1_total, R2_used=R2_used, S1=S1, par=par, ahead_by=runs_now - par)
-
-@_fastapi.post("/games/{game_id}/overs-limit")
-async def set_overs_limit(
-    game_id: str,
-    body: OversLimitBody,
-    db: AsyncSession = Depends(get_db),
-):
-    db_game = await crud.get_game(db, game_id=game_id)
-    if not db_game:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    g: GameState = t.cast(GameState, db_game)
-
-    bowled_balls = g.overs_completed * 6 + g.balls_this_over
-    new_limit_balls = int(body.overs_limit) * 6
-    if new_limit_balls < bowled_balls:
-        raise HTTPException(status_code=400, detail="New limit is less than overs already bowled")
-
-    # First, set the new limit (validated above), then (optionally) compute DLS off the NEW limit
-    g.overs_limit = int(body.overs_limit)
-    # DLS computation only when Team 1 completed or reduced between innings, and Team 2 innings in play
-    
-        
-    try:
-        interruptions = list(getattr(g, "interruptions", []))
-    except Exception:
-        interruptions = []
-    interruptions.append({
-        "type": "overs_reduction",
-        "at_delivery_index": len(getattr(g, "deliveries", []) or []),
-        "new_overs_limit": int(body.overs_limit),
-    })
-    g.interruptions = interruptions  # persist
-
-    g.overs_limit = int(body.overs_limit)
-    
-    updated = await crud.update_game(db, game_model=db_game)
-
-    # (Nice to have) emit a fresh snapshot so viewers update immediately
-    u = cast(GameState, updated)
-    dl = _dedup_deliveries(u)
-    last = dl[-1] if dl else None
-    snap = _snapshot_from_game(u, last, BASE_DIR)
-    _rebuild_scorecards_from_deliveries(u)
-    _recompute_totals_and_runtime(u)
-    _complete_game_by_result(u)
-    # persist if we changed status/result
-    await crud.update_game(db, game_model=cast(Any, u))
-    from backend.services.live_bus import emit_state_update
-    await emit_state_update(game_id, snap)
-
-    return {"id": game_id, "overs_limit": cast(GameState, updated).overs_limit}
-
-
-
-
-
-
-# ================================================================
-# Team Roles (captain / wicket-keeper)
-# ================================================================
-@_fastapi.post("/games/{game_id}/team-roles")
-async def set_team_roles(
-    game_id: str,
-    payload: schemas.TeamRoleUpdate,
-    db: AsyncSession = Depends(get_db),
-):
-    db_game = await crud.get_game(db, game_id=game_id)
-    if not db_game:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    g: GameState = t.cast(GameState, db_game)
-
-    players = (g.team_a.get("players", []) if payload.side == schemas.TeamSide.A else g.team_b.get("players", []))
-    player_ids = {p["id"] for p in players}
-
-    if payload.captain_id and payload.captain_id not in player_ids:
-        raise HTTPException(status_code=400, detail="captain_id not in team players")
-    if payload.wicket_keeper_id and payload.wicket_keeper_id not in player_ids:
-        raise HTTPException(status_code=400, detail="wicket_keeper_id not in team players")
-
-    if payload.side == schemas.TeamSide.A:
-        g.team_a_captain_id = payload.captain_id
-        g.team_a_keeper_id = payload.wicket_keeper_id
-    else:
-        g.team_b_captain_id = payload.captain_id
-        g.team_b_keeper_id = payload.wicket_keeper_id
-
-    await crud.update_game(db, game_model=db_game)  # <-- pass ORM row
-    return {
-        "ok": True,
-        "team_roles": {
-            "A": {"captain_id": g.team_a_captain_id, "wicket_keeper_id": g.team_a_keeper_id},
-            "B": {"captain_id": g.team_b_captain_id, "wicket_keeper_id": g.team_b_keeper_id},
-        },
-    }
 
 # ================================================================
 # PR 8 â€” Sponsor upload endpoint
@@ -1287,7 +1052,6 @@ async def log_sponsor_impressions(
         ids=[int(r.id) for r in rows],
     )
 
-
 # ================================================================
 # Game Contributors (scorer / commentary / analytics)
 # ================================================================
@@ -1339,7 +1103,6 @@ async def add_contributor(
         display_name=(str(rec.display_name) if rec.display_name is not None else None),
     )
 
-
 @_fastapi.get("/games/{game_id}/contributors", response_model=List[schemas.GameContributor])
 async def list_contributors(
     game_id: str,
@@ -1359,7 +1122,6 @@ async def list_contributors(
         )
         for r in rows
     ]
-
 
 @_fastapi.delete("/games/{game_id}/contributors/{contrib_id}")
 async def remove_contributor(
@@ -1383,19 +1145,9 @@ async def remove_contributor(
 
 
 # ================================================================
-# Health
-# ================================================================
-@_fastapi.get("/healthz")
-async def healthz() -> dict[str, str]:
-    return {"status": "ok"}
-
-# ================================================================
 # Local dev entrypoint (optional)
 # ================================================================
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)  # pyright: ignore[reportUnknownMemberType]
-
-
-
 
