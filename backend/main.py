@@ -1010,7 +1010,8 @@ async def set_overs_limit(
     _complete_game_by_result(u)
     # persist if we changed status/result
     await crud.update_game(db, game_model=cast(Any, u))
-    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
+    from backend.services.live_bus import emit_state_update
+    await emit_state_update(game_id, snap)
 
     return {"id": game_id, "overs_limit": cast(GameState, updated).overs_limit}
 
