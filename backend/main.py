@@ -315,8 +315,13 @@ _fastapi.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 fastapi_app = _fastapi
 _fastapi.state.sio = sio
 app = socketio.ASGIApp(sio, other_asgi_app=_fastapi)
-from backend.socket_handlers import register_sio  # new import
-register_sio(sio)  # attach the handlers to the AsyncServer
+
+from backend.socket_handlers import register_sio  # existing
+register_sio(sio)  # existing
+
+# ADD these two lines right after register_sio(sio):
+from backend.services.live_bus import set_socketio_server as _set_bus_sio
+_set_bus_sio(sio)
 
 _fastapi.add_middleware(
     CORSMiddleware,
