@@ -39,6 +39,7 @@ from backend import dls as dlsmod
 from backend.routes.games_router import router as games_router
 from backend.routes.games_dls import router as games_dls_router
 from backend.routes.interruptions import router as interruptions_router
+from backend.routes.gameplay import router as gameplay_router
 from backend.services.game_service import create_game as _create_game_service
 from backend.services.scoring_service import score_one as _score_one
 from backend.services.delivery_service import apply_scoring_and_persist as _apply_scoring_and_persist
@@ -347,7 +348,7 @@ _fastapi.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 _fastapi.include_router(games_dls_router)
 _fastapi.include_router(interruptions_router)
 _fastapi.include_router(games_router)
-
+_fastapi.include_router(gameplay_router)
 @_fastapi.get("/health", include_in_schema=False)
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -1771,101 +1772,7 @@ async def finalize_game(
     await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
     return snap
 
-# ================================================================
-# PR 5 â€” GET game snapshot (viewer bootstrap)
-# ================================================================
-@_fastapi.get("/games/{game_id}/snapshot")
-async def get_snapshot(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
-    game = await crud.get_game(db, game_id=game_id)
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
 
-    g = cast(GameState, game)
-    # Ensure runtime fields exist
-    if getattr(g, "current_over_balls", None) is None:
-        g.current_over_balls = 0
-    if getattr(g, "mid_over_change_used", None) is None:
-        g.mid_over_change_used = False
-    if not hasattr(g, "current_bowler_id"):
-        g.current_bowler_id = None
-    if not hasattr(g, "last_ball_bowler_id"):
-        g.last_ball_bowler_id = None
-
-    # Always rebuild from ledger BEFORE any derived panels (ensures fresh totals)
-    _rebuild_scorecards_from_deliveries(g)
-    _recompute_totals_and_runtime(g)
-
-    dl = _dedup_deliveries(g)
-    last = dl[-1] if dl else None
-    snap = _snapshot_from_game(g, last, BASE_DIR)
-
-    # UI gating flags
-    flags = _compute_snapshot_flags(g)
-    is_break = str(getattr(g, "status","")) == "innings_break" or bool(getattr(g, "needs_new_innings", False))
-    snap["needs_new_batter"] = flags["needs_new_batter"]
-    snap["needs_new_over"] = False if is_break else flags["needs_new_over"]
-    snap["needs_new_innings"] = is_break
-
-    # Interruption records + mini cards
-    snap["interruptions"] = cast(List[InterruptionRec], getattr(g, "interruptions", []) or [])
-    snap["mini_batting_card"] = _mini_batting_card(g)
-    snap["mini_bowling_card"] = _mini_bowling_card(g)
-
-    # DLS panel (best-effort; compute AFTER totals)
-    snap_dls: DlsPanel = {}
-    try:
-        overs_limit_opt = cast(Optional[int], getattr(g, "overs_limit", None))
-        current_innings = int(getattr(g, "current_inning", 1) or 1)
-        if isinstance(overs_limit_opt, int) and current_innings >= 2 and overs_limit_opt in (20, 50):
-            format_overs = int(overs_limit_opt)
-            kind = "odi" if format_overs >= 40 else "t20"
-            env = dlsmod.load_env(kind, str(BASE_DIR))
-
-            deliveries_m: List[Mapping[str, Any]] = cast(
-                List[Mapping[str, Any]],
-                list(getattr(g, "deliveries", []))
-            )
-            interruptions = list(getattr(g, "interruptions", []))
-
-            # Team 1 resources from ledger + interruptions
-            R1_total = dlsmod.total_resources_team1(
-                env=env,
-                max_overs_initial=format_overs,
-                deliveries=deliveries_m,
-                interruptions=interruptions,
-            )
-            # Team 1 score (best-effort; assumes S1 available as total_runs at innings break)
-            S1 = _team1_runs(g)
-
-            # Team 2 live usage for a quick par
-            overs_completed = float(getattr(g, "overs_completed", 0.0) or 0.0)
-            balls_this_over = float(getattr(g, "balls_this_over", 0.0) or 0.0)
-            team2_overs_left_now = max(0.0, float(format_overs) - (overs_completed + (balls_this_over / 6.0)))
-            team2_wkts_now = int(getattr(g, "total_wickets", 0)) if current_innings == 2 else 0
-
-            R_start = env.table.R(format_overs, 0)
-            R_remaining = env.table.R(team2_overs_left_now, team2_wkts_now)
-            R2_used = max(0.0, R_start - R_remaining)
-
-            par_now = int(dlsmod.par_score_now(S1=S1, R1_total=R1_total, R2_used_so_far=R2_used))
-            target_full = int(dlsmod.revised_target(S1=S1, R1_total=R1_total, R2_total=R_start))
-
-            snap_dls = {"method": "DLS", "par": par_now, "target": target_full}
-    except Exception:
-        snap_dls = {}
-
-    snap["dls"] = snap_dls
-
-    # Enrich for bootstrap (team names + player lists)
-    snap["teams"] = {
-        "batting": {"name": g.batting_team_name},
-        "bowling": {"name": g.bowling_team_name},
-    }
-    snap["players"] = {
-        "batting": [{"id": p["id"], "name": p["name"]} for p in (g.team_a if g.batting_team_name == g.team_a["name"] else g.team_b)["players"]],
-        "bowling": [{"id": p["id"], "name": p["name"]} for p in (g.team_b if g.batting_team_name == g.team_a["name"] else g.team_a)["players"]],
-    }
-    return snap
 
 @runtime_checkable
 class _SupportsModelDump(Protocol):
@@ -1933,63 +1840,6 @@ def _model_to_dict(x: Any) -> Optional[Dict[str, Any]]:
     
 
 
-@_fastapi.get("/games/{game_id}/recent_deliveries")
-async def get_recent_deliveries(
-    game_id: str,
-    limit: int = Query(10, ge=1, le=50, description="Max number of most recent deliveries"),
-    db: AsyncSession = Depends(get_db),
-) -> Dict[str, Any]:
-    """
-    Returns the most-recent `limit` deliveries for a game, newest-first.
-    Each delivery matches schemas.Delivery (wire-safe dict).
-    """
-    game = await crud.get_game(db, game_id=game_id)
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    g = cast(GameState, game)
-
-    # Slice last N from the authoritative ledger, newest-first
-    raw_seq: Sequence[Any] = getattr(g, "deliveries", []) or []
-    tail: List[Any] = list(raw_seq)[-limit:][::-1]
-
-    # Normalize each item to a dict
-    ledger: List[Dict[str, Any]] = []
-    for item in tail:
-        d = _model_to_dict(item)
-        if d is not None:
-            ledger.append(d)
-
-    # Validate/shape with Pydantic; help Pylance via a cast to DeliveryKwargs
-    out: List[Dict[str, Any]] = []
-    for d_any in ledger:
-        try:
-            # ensure the literal type matches the schema
-            if "extra_type" in d_any:
-                d_any["extra_type"] = _as_extra_code(cast(Optional[str], d_any.get("extra_type")))
-            d_kw = cast(DeliveryKwargs, d_any)            # <-- silences â€œunknown argument typeâ€
-            model = schemas.Delivery(**d_kw)
-            out.append(model.model_dump())                # Pydantic v2
-        except Exception:
-            # Optional Pydantic v1 fallback:
-            try:
-                model = schemas.Delivery(**d_any)         # type: ignore[call-arg]
-                out.append(model.dict())                  # type: ignore[attr-defined]
-            except Exception:
-                continue
-
-    # Enrich with names
-    for i, row in enumerate(out):
-        row["striker_name"] = _player_name(g.team_a, g.team_b, row.get("striker_id"))
-        row["non_striker_name"] = _player_name(g.team_a, g.team_b, row.get("non_striker_id"))
-        row["bowler_name"] = _player_name(g.team_a, g.team_b, row.get("bowler_id"))
-        row["inning"] = int(ledger[i].get("inning", 1) or 1)
-
-    return {
-        "game_id": game_id,
-        "count": len(out),
-        "deliveries": out,  # newest-first
-    }
 
 
 
