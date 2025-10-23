@@ -167,11 +167,7 @@ async def start_over(
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
     # Emit to room
-    try:
-        from backend.main import sio  # type: ignore
-        await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    except Exception:
-        pass
+    await emit_state_update(game_id, snap)
 
     return {"ok": True, "current_bowler_id": g.current_bowler_id}
 
