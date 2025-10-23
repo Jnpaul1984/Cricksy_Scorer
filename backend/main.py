@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import uuid
@@ -41,6 +41,9 @@ from backend.routes.games_router import router as games_router
 from backend.routes.games_dls import router as games_dls_router
 from backend.routes.interruptions import router as interruptions_router
 from backend.routes.gameplay import router as gameplay_router
+from backend.routes.dls import router as dls_router
+from backend.routes.game_admin import router as game_admin_router
+from backend.routes.health import router as health_router
 from backend.services.game_service import create_game as _create_game_service
 from backend.services.scoring_service import score_one as _score_one
 from backend.services.delivery_service import apply_scoring_and_persist as _apply_scoring_and_persist
@@ -362,14 +365,15 @@ if settings.IN_MEMORY_DB:
 
 # Keep your separate games router mounted
 
-_fastapi.include_router(games_dls_router)
+_fastapi.include_router(games_dls_router)   # existing (can coexist; different endpoints)
 _fastapi.include_router(interruptions_router)
 _fastapi.include_router(games_router)
 _fastapi.include_router(gameplay_router)
+_fastapi.include_router(dls_router)         # new: revised-target / par
+_fastapi.include_router(game_admin_router)  # new: overs-limit / team-roles
+_fastapi.include_router(health_router)      # new: health endpoints
 
-@_fastapi.get("/health", include_in_schema=False)
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+
 
 # ================================================================
 # DB dependency (async)
@@ -821,178 +825,7 @@ async def get_game(game_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Game not found")
     return db_game
 
-# ================================================================
-# PR 4 â€” Rain control: adjust overs limit mid-match
-# ================================================================
-@_fastapi.post("/games/{game_id}/dls/revised-target", response_model=DLSRevisedOut)
-async def dls_revised_target(game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)):
-    game = await crud.get_game(db, game_id=game_id)
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
-    
-    # allow attribute access without tripping strict type checkers
-    g = cast(Any, game)
 
-    # Load env
-    env = dlsmod.load_env(body.kind, str(BASE_DIR))
-
-    # Team 1 runs are just g.total_runs at end of inns 1; if called midâ€‘match, use snapshot
-    # We infer from deliveries in innings 1:
-    # total_resources_team1 expects List[Mapping[str, Any]] (list is invariant)
-    deliveries_m: List[Mapping[str, Any]] = cast(
-        List[Mapping[str, Any]],
-        list(getattr(g, "deliveries", []))
-    )
-    # In this simple model you keep a single combined ledger; if you split per-innings, adjust here.
-
-    # Team 1 resources
-    M1 = int(body.max_overs or (g.overs_limit or (50 if body.kind == "odi" else 20)))
-    interruptions = list(getattr(g, "interruptions", []))
-    R1_total = dlsmod.total_resources_team1(
-        env=env,
-        max_overs_initial=M1,
-        deliveries=deliveries_m,
-        interruptions=interruptions,
-    )
-
-    # Team 1 score (use persisted summary or compute from innings 1)
-    S1 = _team1_runs(g)
-
-    # Team 2 resources (available) = R(u,w) at start (w=0, u=M2)
-    M2 = int(body.max_overs or (g.overs_limit or (50 if body.kind == "odi" else 20)))
-    R2_total = env.table.R(M2, 0)
-
-    target = dlsmod.revised_target(S1=S1, R1_total=R1_total, R2_total=R2_total)
-    return DLSRevisedOut(R1_total=R1_total, R2_total=R2_total, S1=S1, target=target)
-
-@_fastapi.post("/games/{game_id}/dls/par", response_model=DLSParOut)
-async def dls_par_now(game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)):
-    game = await crud.get_game(db, game_id=game_id)
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
-    g = cast(Any, game)
-    env = dlsmod.load_env(body.kind, str(BASE_DIR))
-
-    # Inputs from state
-    deliveries_m: List[Mapping[str, Any]] = cast(
-        List[Mapping[str, Any]],
-        list(getattr(g, "deliveries", []))
-    )
-    M = int(body.max_overs or (g.overs_limit or (50 if body.kind == "odi" else 20)))
-
-    # Team 1 resources (as above)
-    R1_total = dlsmod.total_resources_team1(
-        env=env,
-        max_overs_initial=M,
-        deliveries=deliveries_m,
-        interruptions=list(getattr(g, "interruptions", [])),
-    )
-    S1 = _team1_runs(g)  # score to chase
-
-    # Team 2 â€œused so farâ€ during chase
-    # Use current (balls bowled, wickets) from runtime fields:
-    balls_so_far = int(getattr(g, "overs_completed", 0)) * 6 + int(getattr(g, "balls_this_over", 0))
-    wkts_so_far = int(getattr(g, "total_wickets", 0))  # second innings wickets at the moment
-
-    # Resources used = R(start) - R(remaining)
-    R_start = env.table.R(M, 0)
-    R_remaining = env.table.R(max(0.0, M - (balls_so_far / 6.0)), wkts_so_far)
-    R2_used = max(0.0, R_start - R_remaining)
-
-    par = dlsmod.par_score_now(S1=S1, R1_total=R1_total, R2_used_so_far=R2_used)
-    # Team 2 current runs live (from g.total_runs if you switch this route only during inns 2).
-    runs_now = int(getattr(g, "total_runs", 0))
-    return DLSParOut(R1_total=R1_total, R2_used=R2_used, S1=S1, par=par, ahead_by=runs_now - par)
-
-@_fastapi.post("/games/{game_id}/overs-limit")
-async def set_overs_limit(
-    game_id: str,
-    body: OversLimitBody,
-    db: AsyncSession = Depends(get_db),
-):
-    db_game = await crud.get_game(db, game_id=game_id)
-    if not db_game:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    g: GameState = t.cast(GameState, db_game)
-
-    bowled_balls = g.overs_completed * 6 + g.balls_this_over
-    new_limit_balls = int(body.overs_limit) * 6
-    if new_limit_balls < bowled_balls:
-        raise HTTPException(status_code=400, detail="New limit is less than overs already bowled")
-
-    # First, set the new limit (validated above), then (optionally) compute DLS off the NEW limit
-    g.overs_limit = int(body.overs_limit)
-    # DLS computation only when Team 1 completed or reduced between innings, and Team 2 innings in play
-    
-        
-    try:
-        interruptions = list(getattr(g, "interruptions", []))
-    except Exception:
-        interruptions = []
-    interruptions.append({
-        "type": "overs_reduction",
-        "at_delivery_index": len(getattr(g, "deliveries", []) or []),
-        "new_overs_limit": int(body.overs_limit),
-    })
-    g.interruptions = interruptions  # persist
-
-    g.overs_limit = int(body.overs_limit)
-    
-    updated = await crud.update_game(db, game_model=db_game)
-
-    # (Nice to have) emit a fresh snapshot so viewers update immediately
-    u = cast(GameState, updated)
-    dl = _dedup_deliveries(u)
-    last = dl[-1] if dl else None
-    snap = _snapshot_from_game(u, last, BASE_DIR)
-    _rebuild_scorecards_from_deliveries(u)
-    _recompute_totals_and_runtime(u)
-    _complete_game_by_result(u)
-    # persist if we changed status/result
-    await crud.update_game(db, game_model=cast(Any, u))
-    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-
-    return {"id": game_id, "overs_limit": cast(GameState, updated).overs_limit}
-
-# ================================================================
-# Team Roles (captain / wicket-keeper)
-# ================================================================
-@_fastapi.post("/games/{game_id}/team-roles")
-async def set_team_roles(
-    game_id: str,
-    payload: schemas.TeamRoleUpdate,
-    db: AsyncSession = Depends(get_db),
-):
-    db_game = await crud.get_game(db, game_id=game_id)
-    if not db_game:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    g: GameState = t.cast(GameState, db_game)
-
-    players = (g.team_a.get("players", []) if payload.side == schemas.TeamSide.A else g.team_b.get("players", []))
-    player_ids = {p["id"] for p in players}
-
-    if payload.captain_id and payload.captain_id not in player_ids:
-        raise HTTPException(status_code=400, detail="captain_id not in team players")
-    if payload.wicket_keeper_id and payload.wicket_keeper_id not in player_ids:
-        raise HTTPException(status_code=400, detail="wicket_keeper_id not in team players")
-
-    if payload.side == schemas.TeamSide.A:
-        g.team_a_captain_id = payload.captain_id
-        g.team_a_keeper_id = payload.wicket_keeper_id
-    else:
-        g.team_b_captain_id = payload.captain_id
-        g.team_b_keeper_id = payload.wicket_keeper_id
-
-    await crud.update_game(db, game_model=db_game)  # <-- pass ORM row
-    return {
-        "ok": True,
-        "team_roles": {
-            "A": {"captain_id": g.team_a_captain_id, "wicket_keeper_id": g.team_a_keeper_id},
-            "B": {"captain_id": g.team_b_captain_id, "wicket_keeper_id": g.team_b_keeper_id},
-        },
-    }
 
 # ================================================================
 # PR 8 â€” Sponsor upload endpoint
@@ -1310,12 +1143,6 @@ async def remove_contributor(
 
     return {"ok": True}
 
-# ================================================================
-# Health
-# ================================================================
-@_fastapi.get("/healthz")
-async def healthz() -> dict[str, str]:
-    return {"status": "ok"}
 
 # ================================================================
 # Local dev entrypoint (optional)
