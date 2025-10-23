@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import json
 from pathlib import Path
-from typing import Any, List, Optional, Dict, Mapping, Literal, Union, cast # type: ignore
+from typing import Any, List, Optional, Dict, Literal, Union, cast
 
 import datetime as dt
 UTC = getattr(dt, "UTC", dt.timezone.utc)
@@ -16,57 +16,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import settings
 from backend.sql_app import models, crud
 from backend.sql_app.database import get_db
+from backend.utils.common import (
+    MAX_UPLOAD_BYTES,
+    detect_image_ext as _detect_image_ext,
+    parse_iso_dt as _parse_iso_dt,
+    iso_or_none as _iso_or_none,
+)
 
 router = APIRouter(tags=["sponsors"])
 
-# -------------------------------------------------------------------
-# Local helpers (extracted from main.py)
-# -------------------------------------------------------------------
-MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5MB
+# Ensure static dir exists
 SPONSORS_DIR: Path = settings.SPONSORS_DIR
 SPONSORS_DIR.mkdir(parents=True, exist_ok=True)
 
-def _detect_image_ext(data: bytes, content_type: Optional[str], filename: Optional[str]) -> Optional[str]:
-    """Return 'svg' | 'png' | 'webp' if valid, else None."""
-    ct = (content_type or "").lower()
-    ext = (os.path.splitext(filename or "")[1].lower())
-    head = data[:256]
-
-    # SVG
-    if ct == "image/svg+xml" or ext == ".svg" or b"<svg" in head.lower():
-        return "svg"
-    # PNG
-    if ct == "image/png" or ext == ".png" or data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "png"
-    # WEBP
-    if ct == "image/webp" or ext == ".webp" or (data[:4] == b"RIFF" and data[8:12] == b"WEBP"):
-        return "webp"
-    return None
-
-def _parse_iso_dt(s: Optional[str]) -> Optional[dt.datetime]:
-    if not s:
-        return None
-    s = s.strip()
-    try:
-        if s.endswith("Z"):
-            return dt.datetime.fromisoformat(s[:-1]).replace(tzinfo=UTC)
-        dt_obj = dt.datetime.fromisoformat(s)
-        if dt_obj.tzinfo is None:
-            dt_obj = dt_obj.replace(tzinfo=UTC)
-        return dt_obj
-    except Exception:
-        return None
-
-def _iso_or_none(x: Any) -> Optional[str]:
-    return x.isoformat() if isinstance(x, dt.datetime) else None
-
-# -------------------------------------------------------------------
-# Schemas (extracted from main.py)
-# -------------------------------------------------------------------
 class SponsorImpressionIn(BaseModel):
     game_id: str
     sponsor_id: str
-    at: Optional[str] = None  # ISO-8601; defaults to now(UTC) when omitted
+    at: Optional[str] = None  # ISO-8601
 
 class SponsorImpressionsOut(BaseModel):
     inserted: int
@@ -88,26 +54,20 @@ class SponsorItem(BaseModel):
 class SponsorsManifest(BaseModel):
     items: List[SponsorItem]
 
-# -------------------------------------------------------------------
-# Routes (paths unchanged)
-# -------------------------------------------------------------------
-
 @router.post("/sponsors")
 async def create_sponsor(
     name: str = Form(...),
     logo: UploadFile = File(...),
     click_url: Optional[str] = Form(None),
     weight: int = Form(1),
-    surfaces: Optional[str] = Form(None),   # JSON array as string, e.g. '["all"]'
-    start_at: Optional[str] = Form(None),   # ISO-8601, e.g. '2025-08-11T14:00:00Z'
+    surfaces: Optional[str] = Form(None),   # JSON array as string
+    start_at: Optional[str] = Form(None),   # ISO-8601
     end_at: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
-    # Validate weight
     if weight < 1 or weight > 5:
         raise HTTPException(status_code=400, detail="weight must be between 1 and 5")
 
-    # Read file (limit 5MB)
     data = await logo.read()
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=400, detail="File exceeds 5MB limit")
@@ -116,7 +76,6 @@ async def create_sponsor(
     if ext is None:
         raise HTTPException(status_code=400, detail="Only SVG, PNG or WebP images are allowed")
 
-    # Surfaces parsing — ensure a list[str]
     try:
         parsed_any: Any = json.loads(surfaces) if surfaces else ["all"]
     except Exception as err:
@@ -131,18 +90,15 @@ async def create_sponsor(
             raise HTTPException(status_code=400, detail="surfaces must be a JSON array of strings")
     surfaces_list: List[str] = [str(itm) for itm in parsed_list] or ["all"]
 
-    # Date parsing
     start_dt = _parse_iso_dt(start_at)
     end_dt = _parse_iso_dt(end_at)
 
-    # Save to static/sponsors/<uuid>.<ext>
     SPONSORS_DIR.mkdir(parents=True, exist_ok=True)
     fid = os.urandom(8).hex()
     filename = f"{fid}.{ext}"
     fpath = SPONSORS_DIR / filename
     fpath.write_bytes(data)
 
-    # Persist DB row
     rec = models.Sponsor(
         name=name,
         logo_path=f"sponsors/{filename}",
@@ -176,7 +132,6 @@ async def get_game_sponsors(
     game_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> List[dict[str, Any]]:
-    # Ensure the game exists (keeps semantics per-game)
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -242,7 +197,6 @@ async def log_sponsor_impressions(
     body: Union[SponsorImpressionIn, List[SponsorImpressionIn]],
     db: AsyncSession = Depends(get_db),
 ):
-    # Normalize to list, enforce batch limit
     items: List[SponsorImpressionIn] = body if isinstance(body, list) else [body]
 
     if len(items) == 0:
@@ -250,25 +204,21 @@ async def log_sponsor_impressions(
     if len(items) > 20:
         raise HTTPException(status_code=400, detail="Batch too large; max 20")
 
-    # Optional referential checks (cheap existence validation)
     game_ids = {it.game_id for it in items}
     sponsor_ids = {it.sponsor_id for it in items}
 
-    # Validate games
     res_games = await db.execute(select(models.Game.id).where(models.Game.id.in_(list(game_ids))))
     found_games = {g for (g,) in res_games.all()}
     missing_games = [g for g in game_ids if g not in found_games]
     if missing_games:
         raise HTTPException(status_code=400, detail=f"Unknown game_id(s): {missing_games}")
 
-    # Validate sponsors
     res_sps = await db.execute(select(models.Sponsor.id).where(models.Sponsor.id.in_(list(sponsor_ids))))
     found_sps = {s for (s,) in res_sps.all()}
     missing_sps = [s for s in sponsor_ids if s not in found_sps]
     if missing_sps:
         raise HTTPException(status_code=400, detail=f"Unknown sponsor_id(s): {missing_sps}")
 
-    # Prepare rows
     rows: List[models.SponsorImpression] = []
     now = dt.datetime.now(UTC)
     for it in items:
@@ -281,11 +231,9 @@ async def log_sponsor_impressions(
             )
         )
 
-    # Bulk insert
     db.add_all(rows)
     await db.commit()
 
-    # Refresh to get PKs
     for r in rows:
         await db.refresh(r)
 
