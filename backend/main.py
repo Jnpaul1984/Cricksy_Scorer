@@ -317,6 +317,8 @@ _fastapi.state.sio = sio
 app = socketio.ASGIApp(sio, other_asgi_app=_fastapi)
 from backend.socket_handlers import register_sio  # new import
 register_sio(sio)  # attach the handlers to the AsyncServer
+from backend.services.live_bus import set_socketio_server
+set_socketio_server(sio)  # register with the live event bus
 
 _fastapi.add_middleware(
     CORSMiddleware,

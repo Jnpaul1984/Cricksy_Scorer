@@ -16,6 +16,7 @@ from backend.services.scoring_service import score_one as _score_one
 from backend.services import validation as validation_helpers
 from backend.routes import games as _games_impl
 from backend import dls as dlsmod
+from backend.services.live_bus import emit_state_update
 
 router = APIRouter(prefix="/games", tags=["gameplay"])
 
@@ -165,11 +166,7 @@ async def start_over(
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
     # Emit to room
-    try:
-        from backend.main import sio  # type: ignore
-        await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    except Exception:
-        pass
+    await emit_state_update(game_id, snap)
 
     return {"ok": True, "current_bowler_id": g.current_bowler_id}
 
@@ -318,11 +315,7 @@ async def change_bowler_mid_over(
     snap["mid_over_change_used"] = g.mid_over_change_used
     snap["needs_new_over"] = bool(getattr(g, "needs_new_over", False))
 
-    try:
-        from backend.main import sio  # type: ignore
-        await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    except Exception:
-        pass
+    await emit_state_update(game_id, snap)
 
     return snap
 
@@ -420,11 +413,7 @@ async def start_next_innings(
     snap["needs_new_over"] = (g.current_bowler_id is None)
     snap["needs_new_batter"] = (g.current_striker_id is None or g.current_non_striker_id is None)
 
-    try:
-        from backend.main import sio  # type: ignore
-        await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    except Exception:
-        pass
+    await emit_state_update(game_id, snap)
 
     return snap
 
@@ -455,11 +444,7 @@ async def set_openers(
     gh._complete_game_by_result(u)
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
-    try:
-        from backend.main import sio  # type: ignore
-        await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    except Exception:
-        pass
+    await emit_state_update(game_id, snap)
 
     return snap
 
@@ -512,11 +497,7 @@ async def replace_batter(
     snap["needs_new_batter"] = flags["needs_new_batter"]
     snap["needs_new_over"] = flags["needs_new_over"]
 
-    try:
-        from backend.main import sio  # type: ignore
-        await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    except Exception:
-        pass
+    await emit_state_update(game_id, snap)
 
     return snap
 
@@ -554,11 +535,7 @@ async def set_next_batter(
     u = cast(Any, updated)
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
-    try:
-        from backend.main import sio  # type: ignore
-        await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    except Exception:
-        pass
+    await emit_state_update(game_id, snap)
 
     return {"ok": True, "current_striker_id": g.current_striker_id}
 
@@ -586,11 +563,7 @@ async def finalize_game(
     u = cast(Any, updated)
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
-    try:
-        from backend.main import sio  # type: ignore
-        await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    except Exception:
-        pass
+    await emit_state_update(game_id, snap)
 
     return snap
 
@@ -987,12 +960,8 @@ async def add_delivery(
         snap.get("last_ball_bowler_id") or getattr(u, "last_ball_bowler_id", None),
     )
 
-    # Emit via global sio from backend.main (lazy import to avoid circulars)
-    try:
-        from backend.main import sio  # type: ignore
-        await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    except Exception:
-        pass
+    # Emit via live event bus
+    await emit_state_update(game_id, snap)
 
     return snap
 
@@ -1053,10 +1022,6 @@ async def undo_last_delivery(game_id: str, db: AsyncSession = Depends(get_db)) -
     last = u.deliveries[-1] if u.deliveries else None
     snapshot = _snapshot_from_game(u, last, BASE_DIR)
 
-    try:
-        from backend.main import sio  # type: ignore
-        await sio.emit("state:update", {"id": game_id, "snapshot": snapshot}, room=game_id)
-    except Exception:
-        pass
+    await emit_state_update(game_id, snapshot)
 
     return snapshot
