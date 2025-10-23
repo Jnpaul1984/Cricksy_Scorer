@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Mapping, List, Sequence, cast
+from typing import Any, Dict, Optional, Mapping, List, Sequence, cast, Literal
 from datetime import datetime, timezone
 from pathlib import Path
+from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,7 @@ async def get_db() -> Any:
         yield session
 
 BASE_DIR = Path(__file__).resolve().parent
+
 
 
 def _model_to_dict(x: Any) -> Optional[Dict[str, Any]]:
@@ -103,6 +105,145 @@ async def _maybe_close_innings(g: Any) -> None:
         g.current_non_striker_id = None
         g.current_bowler_id = None
 
+class StartOverBody(BaseModel):
+    bowler_id: str
+
+class MidOverChangeBody(BaseModel):
+    new_bowler_id: str
+    reason: Literal["injury", "other"] = "injury"
+
+
+@router.post("/{game_id}/overs/start")
+async def start_over(
+    game_id: str,
+    body: StartOverBody,
+    db: AsyncSession = Depends(get_db),
+):
+    db_game = await crud.get_game(db, game_id=game_id)
+    if not db_game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    g: Any = db_game
+
+    # Ensure runtime attrs exist (legacy rows)
+    if getattr(g, "current_over_balls", None) is None:
+        g.current_over_balls = 0
+    if getattr(g, "mid_over_change_used", None) is None:
+        g.mid_over_change_used = False
+    if not hasattr(g, "current_bowler_id"):
+        g.current_bowler_id = None
+    if not hasattr(g, "last_ball_bowler_id"):
+        g.last_ball_bowler_id = None
+    if getattr(g, "pending_new_over", None) is None:
+        g.pending_new_over = False
+
+    # Constraint: cannot start mid-over; cannot be same as last over's bowler
+    err = gh._can_start_over(g, body.bowler_id)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    g.current_bowler_id = body.bowler_id
+    g.current_over_balls = 0
+    g.mid_over_change_used = False
+    g.pending_new_over = False
+
+    gh._rebuild_scorecards_from_deliveries(g)
+    gh._recompute_totals_and_runtime(g)
+
+    updated = await crud.update_game(db, game_model=db_game)
+    u = cast(Any, updated)
+    snap = _snapshot_from_game(u, None, BASE_DIR)
+
+    # Emit to room
+    try:
+        from backend.main import sio  # type: ignore
+        await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
+    except Exception:
+        pass
+
+    return {"ok": True, "current_bowler_id": g.current_bowler_id}
+
+
+@router.post("/{game_id}/overs/change_bowler")
+async def change_bowler_mid_over(
+    game_id: str,
+    body: MidOverChangeBody,
+    db: AsyncSession = Depends(get_db),
+):
+    db_game = await crud.get_game(db, game_id=game_id)
+    if not db_game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    g: Any = db_game
+
+    # Ensure runtime attrs exist (legacy rows)
+    if getattr(g, "current_over_balls", None) is None:
+        g.current_over_balls = 0
+    if getattr(g, "mid_over_change_used", None) is None:
+        g.mid_over_change_used = False
+    if not hasattr(g, "current_bowler_id"):
+        g.current_bowler_id = None
+    if not hasattr(g, "last_ball_bowler_id"):
+        g.last_ball_bowler_id = None
+
+    # Rebuild runtime to set current_bowler_id/current_over_balls correctly
+    gh._rebuild_scorecards_from_deliveries(g)
+    gh._recompute_totals_and_runtime(g)
+
+    # Validate match state
+    status_ok = str(getattr(g, "status", "in_progress")).lower() in {"in_progress", "live", "started"}
+    if not status_ok:
+        raise HTTPException(status_code=409, detail=f"Game is {getattr(g, 'status', 'unknown')}")
+
+    balls_this_over = int(getattr(g, "current_over_balls", 0) or 0)
+    current = getattr(g, "current_bowler_id", None)
+
+    # Must be mid-over and have an active bowler
+    if not current or balls_this_over <= 0:
+        raise HTTPException(status_code=409, detail="Over not in progress; use /overs/start")
+
+    if getattr(g, "mid_over_change_used", False):
+        raise HTTPException(status_code=409, detail="Mid-over change already used this over")
+
+    if str(body.new_bowler_id) == str(current):
+        raise HTTPException(status_code=409, detail="New bowler is already the current bowler")
+
+    # New bowler must be in the bowling team
+    bowling_team_name = getattr(g, "bowling_team_name", None)
+    team_a = cast(Dict[str, Any], getattr(g, "team_a"))
+    team_b = cast(Dict[str, Any], getattr(g, "team_b"))
+    if not (bowling_team_name and team_a and team_b):
+        raise HTTPException(status_code=500, detail="Teams not initialized on game")
+
+    bowling_team: Dict[str, Any] = team_a if team_a["name"] == bowling_team_name else team_b
+    allowed = {str(p["id"]) for p in (bowling_team.get("players", []) or [])}
+    if str(body.new_bowler_id) not in allowed:
+        raise HTTPException(status_code=409, detail="Bowler is not in the bowling team")
+
+    # Apply change (do NOT touch last_ball_bowler_id; over-boundary concept)
+    g.current_bowler_id = str(body.new_bowler_id)
+    g.mid_over_change_used = True
+
+    gh._recompute_totals_and_runtime(g)
+    updated = await crud.update_game(db, game_model=db_game)
+    u = cast(Any, updated)
+
+    # Build/augment snapshot so UI has everything it needs immediately
+    snap = _snapshot_from_game(u, None, BASE_DIR)
+    # Ensure runtime keys are present in snapshot payload:
+    snap["current_bowler_id"] = g.current_bowler_id
+    snap["last_ball_bowler_id"] = g.last_ball_bowler_id
+    snap["current_over_balls"] = g.current_over_balls
+    snap["mid_over_change_used"] = g.mid_over_change_used
+    snap["needs_new_over"] = bool(getattr(g, "needs_new_over", False))
+
+    try:
+        from backend.main import sio  # type: ignore
+        await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
+    except Exception:
+        pass
+
+    return snap
 
 @router.get("/{game_id}/snapshot")
 async def get_snapshot(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
