@@ -266,17 +266,6 @@ class ConcreteGameState:
     async def save(self):
         # Implement the logic to save the game state
         pass
-class StartNextInningsBody(BaseModel):
-    striker_id: Optional[str] = None
-    non_striker_id: Optional[str] = None
-    opening_bowler_id: Optional[str] = None
-
-class StartOverBody(BaseModel):
-    bowler_id: str
-
-class MidOverChangeBody(BaseModel):
-    new_bowler_id: str
-    reason: Literal["injury", "other"] = "injury"
 
 
 # If you're on Python < 3.11:
@@ -713,8 +702,7 @@ class CreateGameRequest(BaseModel):
 class OversLimitBody(BaseModel):
     overs_limit: int
 
-class NextBatterBody(BaseModel):
-    batter_id: str
+
 
 class StartInningsBody(BaseModel):
     striker_id: Optional[str] = None
@@ -859,107 +847,6 @@ async def get_game(game_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Game not found")
     return db_game
 
-@_fastapi.post("/games/{game_id}/innings/start")
-async def start_next_innings(
-    game_id: str,
-    body: StartNextInningsBody,      # << accept JSON body
-    db: AsyncSession = Depends(get_db),
-) -> Dict[str, Any]:
-    db_game = await crud.get_game(db, game_id=game_id)
-    if not db_game:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    g: GameState = t.cast(GameState, db_game)
-
-
-    # Must be at innings break to start the next one
-    if g.status != models.GameStatus.innings_break:
-        raise HTTPException(status_code=400, detail="No new innings to start")
-
-    # Ensure these attrs exist on legacy rows
-    if not isinstance(getattr(g, "innings_history", None), list):
-        g.innings_history = []
-    if not hasattr(g, "needs_new_innings"):
-        g.needs_new_innings = True
-    if not hasattr(g, "current_inning") or not g.current_inning:
-        g.current_inning = 1
-
-    prev_batting_team = g.batting_team_name
-    prev_bowling_team = g.bowling_team_name
-
-    # If the last innings wasnâ€™t archived yet, archive it now
-    last_archived_no = g.innings_history[-1]["inning_no"] if g.innings_history else None
-    if last_archived_no != g.current_inning:
-        g.innings_history.append({
-            "inning_no": g.current_inning,
-            "batting_team": prev_batting_team,
-            "bowling_team": prev_bowling_team,
-            "runs": g.total_runs,
-            "wickets": g.total_wickets,
-            "overs": _overs_string_from_ledger(g),
-            "batting_scorecard": g.batting_scorecard,
-            "bowling_scorecard": g.bowling_scorecard,
-            # DO NOT destroy the ledger; it spans both innings
-            "closed_at": datetime.now(timezone.utc).isoformat(),
-        })
-
-
-    # Advance innings and flip teams
-    g.current_inning = int(g.current_inning) + 1
-    g.batting_team_name, g.bowling_team_name = prev_bowling_team, prev_batting_team
-
-    # Reset per-innings runtime counters (keep the combined deliveries ledger)
-    g.total_runs = 0
-    g.total_wickets = 0
-    g.overs_completed = 0
-    g.balls_this_over = 0
-
-    # Apply optional openers from body
-    g.current_striker_id = body.striker_id or None
-    g.current_non_striker_id = body.non_striker_id or None
-    if not hasattr(g, "current_bowler_id"):
-        g.current_bowler_id = None
-    g.current_bowler_id = body.opening_bowler_id or None
-
-    # (Re)build fresh scorecards for the new batting/bowling teams
-    g.batting_scorecard = _mk_batting_scorecard(
-        g.team_a if g.batting_team_name == g.team_a["name"] else g.team_b
-    )
-    g.bowling_scorecard = _mk_bowling_scorecard(
-        g.team_b if g.batting_team_name == g.team_a["name"] else g.team_a
-    )
-
-    # Clear â€œgateâ€ flags and mark match live
-    if not hasattr(g, "needs_new_over"):
-        g.needs_new_over = False
-    if not hasattr(g, "needs_new_batter"):
-        g.needs_new_batter = False
-    g.needs_new_innings = False
-    g.current_inning = 2
-    if g.first_inning_summary is None:
-        g.first_inning_summary = _first_innings_summary(g)
-    _ensure_target_if_chasing(g)
-    g.needs_new_over = (g.current_bowler_id is None)
-    g.needs_new_batter = (g.current_striker_id is None or g.current_non_striker_id is None)
-    g.status = models.GameStatus.in_progress
-
-    # Recompute derived/runtime and persist
-    _rebuild_scorecards_from_deliveries(g)
-    _recompute_totals_and_runtime(g)
-    updated = await crud.update_game(db, game_model=db_game)
-    u = cast(GameState, updated)
-
-    # Snapshot + emit
-    snap = _snapshot_from_game(u, None, BASE_DIR)
-    snap["needs_new_innings"] = False
-    snap["needs_new_over"] = (g.current_bowler_id is None)
-    snap["needs_new_batter"] = (g.current_striker_id is None or g.current_non_striker_id is None)
-
-    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    return snap
-
-
-
 
 @_fastapi.get("/games/{game_id}/deliveries")
 async def get_deliveries(
@@ -1035,102 +922,6 @@ async def get_deliveries(
         "count": len(out),
         "deliveries": out,   # ordered per `order` (desc by default)
     }
-
-class ReplaceBatterBody(BaseModel):
-    new_batter_id: str
-
-@_fastapi.post("/games/{game_id}/batters/replace")
-async def replace_batter(
-    game_id: str,
-    body: ReplaceBatterBody,
-    db: AsyncSession = Depends(get_db),
-) -> Dict[str, Any]:
-    db_game = await crud.get_game(db, game_id=game_id)
-    if not db_game:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    g: GameState = t.cast(GameState, db_game)
-
-
-    # Ensure latest state
-    _rebuild_scorecards_from_deliveries(g)
-    _recompute_totals_and_runtime(g)
-
-    # Determine which current batter is out
-    def _is_out(pid: Optional[str]) -> bool:
-        if not pid:
-            return False
-        e = g.batting_scorecard.get(pid) or {}
-        if isinstance(e, BaseModel):
-            e = e.model_dump()
-        return bool(e.get("is_out", False))
-
-    if _is_out(g.current_striker_id):
-        g.current_striker_id = body.new_batter_id
-    elif _is_out(g.current_non_striker_id):
-        g.current_non_striker_id = body.new_batter_id
-    else:
-        raise HTTPException(status_code=409, detail="No striker or non-striker requires replacement.")
-
-    # Ensure scorecard entry exists for the incoming batter
-    _ensure_batting_entry(g, body.new_batter_id)
-
-    flag_modified(db_game, "batting_scorecard")
-    updated = await crud.update_game(db, game_model=db_game)
-    u = cast(GameState, updated)
-
-    # Respond with fresh snapshot + flags
-    dl = _dedup_deliveries(u)
-    last = dl[-1] if dl else None
-    snap = _snapshot_from_game(u, last, BASE_DIR)
-    flags = _compute_snapshot_flags(u)
-    snap["needs_new_batter"] = flags["needs_new_batter"]
-    snap["needs_new_over"] = flags["needs_new_over"]
-
-    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    return snap
-
-
-@_fastapi.post("/games/{game_id}/next-batter")
-async def set_next_batter(
-    game_id: str,
-    body: NextBatterBody,
-    db: AsyncSession = Depends(get_db),
-):
-    db_game = await crud.get_game(db, game_id=game_id)
-    if not db_game:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    g: GameState = t.cast(GameState, db_game)
-
-    if getattr(g, "pending_new_batter", None) is None:
-        g.pending_new_batter = False
-
-    # If no replacement is required, no-op
-    if not g.pending_new_batter:
-        return {"ok": True, "message": "No replacement batter required"}
-
-    # Choose where to insert the new batter:
-    # Convention: new batter always becomes the striker after a wicket
-    g.current_striker_id = body.batter_id
-
-    # make sure entry exists
-    _ensure_batting_entry(g, body.batter_id)
-
-    g.pending_new_batter = False
-
-    _rebuild_scorecards_from_deliveries(g)
-    _recompute_totals_and_runtime(g)
-
-    updated = await crud.update_game(db, game_model=db_game)
-    u = cast(GameState, updated)
-    snap = _snapshot_from_game(u, None, BASE_DIR)
-    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    return {"ok": True, "current_striker_id": g.current_striker_id}
-
-
-
-
 
 
 # ================================================================
@@ -1267,31 +1058,6 @@ async def set_overs_limit(
 
     return {"id": game_id, "overs_limit": cast(GameState, updated).overs_limit}
 
-@_fastapi.post("/games/{game_id}/finalize")
-async def finalize_game(
-    game_id: str,
-    db: AsyncSession = Depends(get_db),
-) -> Dict[str, Any]:
-    db_game = await crud.get_game(db, game_id=game_id)
-    if not db_game:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    g: GameState = t.cast(GameState, db_game)
-
-    # Always rebuild current totals first
-    _rebuild_scorecards_from_deliveries(g)
-    _recompute_totals_and_runtime(g)
-    _ensure_target_if_chasing(g)
-
-    # Try both finalizers (one uses runtime, one re-reads ledger)
-    _complete_game_by_result(g)
-    _maybe_finalize_match(g)  # harmless if already completed
-
-    updated = await crud.update_game(db, game_model=db_game)
-    u = cast(GameState, updated)
-    snap = _snapshot_from_game(u, None, BASE_DIR)
-    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    return snap
 
 
 
@@ -1357,41 +1123,7 @@ def _model_to_dict(x: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-# ================================================================
-# OPTIONAL â€” Explicitly set openers (quality-of-life)
-# ================================================================
-@_fastapi.post("/games/{game_id}/openers")
-async def set_openers(
-    game_id: str,
-    body: Dict[str, str],
-    db: AsyncSession = Depends(get_db),
-):
-    # Fetch ORM row
-    db_game = await crud.get_game(db, game_id=game_id)
-    if not db_game:
-        raise HTTPException(status_code=404, detail="Game not found")
 
-    g: GameState = t.cast(GameState, db_game)
-
-
-    striker_id = str(body.get("striker_id") or "")
-    non_striker_id = str(body.get("non_striker_id") or "")
-
-    g.current_striker_id = striker_id
-    g.current_non_striker_id = non_striker_id
-
-    # IMPORTANT: pass the ORM object to CRUD, not the GameState-typed alias
-    updated = await crud.update_game(db, game_model=db_game)
-
-    # Cast the updated ORM row back to GameState for snapshotting
-    u = cast(GameState, updated)
-
-    _rebuild_scorecards_from_deliveries(u)
-    _recompute_totals_and_runtime(u)
-    _complete_game_by_result(u)
-    snap = _snapshot_from_game(u, None, BASE_DIR)
-    await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
-    return snap
 
 
 # ================================================================
