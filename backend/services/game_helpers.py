@@ -13,7 +13,6 @@ or plain dict-like game state used by tests). It keeps the same semantics as
 the originals in main.py.
 """
 
-
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union, cast
@@ -22,6 +21,13 @@ from pydantic import BaseModel
 
 from backend.sql_app import schemas, models
 from backend import helpers as _local_helpers  # contains overs_str_from_balls
+
+# NEW: central rules and normalization
+from backend.domain.constants import (
+    norm_extra as _norm_extra,          # keep public name the same
+    as_extra_code as _as_extra_code,    # expose for callers (main/get_recent_deliveries use)
+    CREDIT_BOWLER,
+)
 
 # Local type aliases
 PlayerDict = Dict[str, str]
@@ -34,23 +40,134 @@ BallKey = Tuple[int, int, Union[int, str]]
 # -------------------------
 # Normalization helpers
 # -------------------------
-def _norm_extra(x: Any) -> Optional[str]:
+# _norm_extra is delegated to backend.domain.constants via import above
+
+def is_legal_delivery(extra: Optional[str]) -> bool:
     """
-    Normalize to: None | 'wd' | 'nb' | 'b' | 'lb'
+    A delivery is legal if it's not a wide or no-ball.
+    Uses local _norm_extra normalization.
     """
-    if not x:
-        return None
-    s = (str(x) or "").strip().lower()
-    if s in {"wide", "wd"}:
-        return "wd"
-    if s in {"no_ball", "nb"}:
-        return "nb"
-    if s in {"b", "bye"}:
-        return "b"
-    if s in {"lb", "leg_bye", "leg-bye"}:
-        return "lb"
+    x = _norm_extra(extra)
+    return x not in {"wd", "nb"}
+
+def _can_start_over(g: Any, bowler_id: str) -> Optional[str]:
+    """
+    Validate whether a new over can start with the specified bowler.
+    - Must not be mid-over.
+    - New over bowler cannot be the same as the last over's last-ball bowler.
+    Returns error message string or None if OK.
+    """
+    if getattr(g, "current_over_balls", None) not in (0, None) or int(getattr(g, "balls_this_over", 0)) != 0:
+        return "Cannot start a new over while an over is in progress."
+    last_id = getattr(g, "last_ball_bowler_id", None)
+    if last_id and str(bowler_id) == str(last_id):
+        return "Selected bowler delivered the last ball of the previous over and cannot bowl consecutive overs."
     return None
 
+def _first_innings_summary(g: Any) -> Dict[str, Any]:
+    """
+    Compact summary for innings 1: runs, wickets, overs(float), balls.
+    """
+    r, w, b = _runs_wkts_balls_for_innings(g, 1)
+    return {
+        "runs": r,
+        "wickets": w,
+        "overs": float(f"{b//6}.{b%6}"),
+        "balls": b,
+    }
+
+def _complete_over_runtime(g: Any, bowler_id: Optional[str]) -> None:
+    """
+    Called exactly when an over finishes (after ball 6 of the over).
+    - Records who bowled the last legal ball of the finished over
+    - Clears current_bowler_id to force selection for the next over
+    - Resets per-over bookkeeping
+    """
+    if bowler_id:
+        g.last_ball_bowler_id = bowler_id
+    g.current_bowler_id = None
+    g.current_over_balls = 0
+    g.mid_over_change_used = False
+
+def _complete_game_by_result(g: Any) -> bool:
+    """
+    Mutates g to completed if a result is known. Returns True if status changed.
+    Applies to limited-overs with two innings.
+    """
+    # Already complete?
+    if str(getattr(g, "status", "")).lower() == "completed" or bool(getattr(g, "is_game_over", False)):
+        return False
+
+    # Only finalize once we're in the chase
+    current_inning = int(getattr(g, "current_inning", 1) or 1)
+    if current_inning < 2:
+        return False
+
+    # Ensure target is set (r1 + 1)
+    _ensure_target_if_chasing(g)
+    target: Optional[int] = cast(Optional[int], getattr(g, "target", None))
+    if target is None:
+        return False
+
+    # Live scoreboard
+    current_runs: int = int(getattr(g, "total_runs", 0))
+    wkts: int = int(getattr(g, "total_wickets", 0))
+    overs_done: int = int(getattr(g, "overs_completed", 0))
+    balls_this_over: int = int(getattr(g, "balls_this_over", 0))
+    overs_limit: int = int(getattr(g, "overs_limit", 0) or 0)
+
+    # 1) Chasing side has reached or surpassed the target → win by wickets
+    if current_runs >= target:
+        margin = max(1, 10 - wkts)
+        method_typed: Optional[schemas.MatchMethod] = cast(schemas.MatchMethod, "by wickets")
+        result_text = f"{getattr(g, 'batting_team_name', '')} won by {margin} wickets"
+        g.result = schemas.MatchResult(
+            winner_team_name=str(getattr(g, "batting_team_name", "")),
+            method=method_typed,
+            margin=margin,
+            result_text=result_text,
+            completed_at=datetime.now(timezone.utc),
+        )
+        g.status = models.GameStatus.completed
+        setattr(g, "is_game_over", True)
+        setattr(g, "completed_at", getattr(g.result, "completed_at"))
+        return True
+
+    # 2) If second-innings is over (all out or allocated overs exhausted), decide by runs or tie.
+    all_out = wkts >= 10
+    second_innings_balls_exhausted = bool(overs_limit and overs_done >= overs_limit and balls_this_over == 0)
+    if all_out or second_innings_balls_exhausted:
+        # target == r1 + 1, so tie when current_runs == target - 1
+        if current_runs == (target - 1):
+            method_typed = cast(schemas.MatchMethod, "tie")
+            g.result = schemas.MatchResult(
+                method=method_typed,
+                margin=0,
+                result_text="Match tied",
+                completed_at=datetime.now(timezone.utc),
+            )
+            g.status = models.GameStatus.completed
+            setattr(g, "is_game_over", True)
+            setattr(g, "completed_at", getattr(g.result, "completed_at"))
+            return True
+
+        # Otherwise the defending side wins by runs
+        margin = max(1, (target - 1) - current_runs)
+        method_typed = cast(schemas.MatchMethod, "by runs")
+        result_text = f"{getattr(g, 'bowling_team_name', '')} won by {margin} runs"
+        g.result = schemas.MatchResult(
+            winner_team_name=str(getattr(g, "bowling_team_name", "")),
+            method=method_typed,
+            margin=margin,
+            result_text=result_text,
+            completed_at=datetime.now(timezone.utc),
+        )
+        g.status = models.GameStatus.completed
+        setattr(g, "is_game_over", True)
+        setattr(g, "completed_at", getattr(g.result, "completed_at"))
+        return True
+
+    return False
 
 # -------------------------
 # Delivery ledger helpers
@@ -376,7 +493,7 @@ def _rebuild_scorecards_from_deliveries(g: Any) -> None:
                 bowl[bowler]["runs_conceded"] += 1 + off
             elif x is None:
                 bowl[bowler]["runs_conceded"] += off
-            if wicket and dismissal_type in {"bowled", "caught", "lbw", "stumped", "hit_wicket"}:
+            if wicket and dismissal_type in CREDIT_BOWLER:
                 bowl[bowler]["wickets_taken"] += 1
 
     for bid, balls in balls_by_bowler.items():
@@ -589,7 +706,7 @@ def _mini_bowling_card(g: Any) -> List[Dict[str, Any]]:
 
 def _ensure_target_if_chasing(g: Any) -> None:
     if int(getattr(g, "current_inning", 1)) >= 2 and getattr(g, "target", None) is None:
-        r1, *_ = _runs_wkts_balls_for_innings(g, 1)
+        r1, _w1, _b1 = _runs_wkts_balls_for_innings(g, 1)
         g.target = r1 + 1
 
 
