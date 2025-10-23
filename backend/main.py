@@ -346,7 +346,7 @@ _fastapi.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 _fastapi.include_router(games_router, prefix="/legacy")
 _fastapi.include_router(games_dls_router)
 _fastapi.include_router(interruptions_router)
-_fastapi.include_router(games_router)
+
 
 @_fastapi.get("/health", include_in_schema=False)
 def health() -> dict[str, str]:
