@@ -173,6 +173,77 @@ async def start_over(
 
     return {"ok": True, "current_bowler_id": g.current_bowler_id}
 
+@router.get("/{game_id}/deliveries")
+async def get_deliveries(
+    game_id: str,
+    innings: Optional[int] = Query(None, ge=1, le=4, description="Filter by innings number"),
+    limit: int = Query(120, ge=1, le=500, description="Max number of rows to return"),
+    order: Literal["desc", "asc"] = Query("desc", description="desc = newest-first"),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Returns deliveries for a game (optionally filtered by innings),
+    ordered newest-first by default.
+    Response shape matches the previous main.py implementation.
+    """
+    game = await crud.get_game(db, game_id=game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    g = cast(Any, game)
+
+    # Read the raw ledger (combined across innings)
+    raw_seq: Sequence[Any] = getattr(g, "deliveries", []) or []
+    rows: List[Dict[str, Any]] = []
+    for item in raw_seq:
+        d = _model_to_dict(item)
+        if d is not None:
+            # normalize extra_type to the canonical union expected by schemas.Delivery
+            if "extra_type" in d:
+                d["extra_type"] = gh._as_extra_code(cast(Optional[str], d.get("extra_type")))
+            # ensure there is an int innings tag; default legacy to 1
+            try:
+                d["inning"] = int(d.get("inning", 1) or 1)
+            except Exception:
+                d["inning"] = 1
+            rows.append(d)
+
+    # Optional innings filter
+    if innings is not None:
+        rows = [d for d in rows if int(d.get("inning", 1)) == int(innings)]
+
+    # Enforce order + limit
+    if order == "desc":
+        rows = rows[-limit:][::-1]  # newest-first
+    else:
+        rows = rows[:limit]         # earliest-first
+
+    # Validate/shape with Pydantic (keeps wire format consistent)
+    out: List[Dict[str, Any]] = []
+    for d_any in rows:
+        try:
+            model = schemas.Delivery(**cast(Dict[str, Any], d_any))
+            shaped = model.model_dump()
+        except Exception:
+            try:
+                model = schemas.Delivery(**d_any)          # type: ignore[call-arg]
+                shaped = model.dict()                      # type: ignore[attr-defined]
+            except Exception:
+                continue
+
+        # Enrich names for UI convenience
+        shaped["striker_name"] = gh._player_name(g.team_a, g.team_b, shaped.get("striker_id"))
+        shaped["non_striker_name"] = gh._player_name(g.team_a, g.team_b, shaped.get("non_striker_id"))
+        shaped["bowler_name"] = gh._player_name(g.team_a, g.team_b, shaped.get("bowler_id"))
+        # pass through innings tag
+        shaped["inning"] = d_any.get("inning", 1)
+        out.append(shaped)
+
+    return {
+        "game_id": game_id,
+        "count": len(out),
+        "deliveries": out,   # ordered per `order` (desc by default)
+    }
 
 @router.post("/{game_id}/overs/change_bowler")
 async def change_bowler_mid_over(
