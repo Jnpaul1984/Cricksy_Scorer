@@ -1,4 +1,4 @@
-"""team roles + game_contributors
+﻿"""team roles + game_contributors
 
 Revision ID: b3945b731a7a
 Revises: 598a9558c298
@@ -50,3 +50,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_game_contributors_game_id'), table_name='game_contributors')
     op.drop_table('game_contributors')
     # ### end Alembic commands ###
+
+
+

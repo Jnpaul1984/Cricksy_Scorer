@@ -1,4 +1,4 @@
-"""jsonb_and_required_run_rate
+﻿"""jsonb_and_required_run_rate
 
 Revision ID: a1f75f7dd6d4
 Revises: 2d0c3e4d3a75
@@ -80,3 +80,6 @@ def downgrade():
     # op.alter_column("games", "batting_scorecard", type_=psql.JSON(), postgresql_using="batting_scorecard::json")
     # op.alter_column("games", "bowling_scorecard", type_=psql.JSON(), postgresql_using="bowling_scorecard::json")
     # op.alter_column("games", "deliveries", type_=psql.JSON(), postgresql_using="deliveries::json")
+
+
+

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -66,7 +66,7 @@ class DLSTable:
         if wickets_lost not in self._resources:
             raise ValueError(f"No resource data for {wickets_lost} wickets lost")
 
-        # Avoid list.copy() “unknown” — return a fresh List[float]
+        # Avoid list.copy() â€œunknownâ€ â€” return a fresh List[float]
         return list(self._resources[wickets_lost])
 
     def overs_balls_to_balls_left(self, overs: int, balls: int) -> int:
@@ -109,3 +109,6 @@ def load_table_from_json(json_path: Union[str, Path]) -> DLSTable:
     resources: Mapping[Union[int, str], Sequence[float]] = data["resources"]
 
     return DLSTable(format_overs, resources)
+
+
+

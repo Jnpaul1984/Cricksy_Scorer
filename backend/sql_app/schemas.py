@@ -5,8 +5,8 @@ from pydantic import field_validator, model_validator
 from pydantic.config import ConfigDict
 from typing import Any, List, Dict, Literal, Optional, Sequence, Mapping, Union, TypeAlias, cast
 from enum import Enum
-from datetime import datetime
-
+import datetime as dt
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 TeamItem: TypeAlias = Union[str, UUID, Mapping[str, object]]
 ExtraCode = Literal['wd', 'nb', 'b', 'lb']
 # ===================================================================
@@ -243,7 +243,7 @@ class MatchResult(BaseModel):
 
     margin: Optional[int] = None
     result_text: Optional[str] = None
-    completed_at: Optional[datetime] = None
+    completed_at: Optional[dt.datetime] = None
 
 class MatchResultRequest(BaseModel):
     match_id: UUID# ... existing code ...
@@ -284,7 +284,7 @@ class Game(BaseModel):
     # --- Result / completion (NEW / updated) ---
     result: Optional[Union[MatchResult, MatchResultRequest]] = None
     is_game_over: bool = False
-    completed_at: Optional[datetime] = None
+    completed_at: Optional[dt.datetime] = None
     
     # --- Team roles ---
     team_a_captain_id: Optional[str] = None
@@ -396,8 +396,11 @@ class Snapshot(BaseModel):
     # completion/result signals
     is_game_over: bool = False
     result: Optional[MatchResult] = None
-    completed_at: Optional[datetime] = None
+    completed_at: Optional[dt.datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+
 
 

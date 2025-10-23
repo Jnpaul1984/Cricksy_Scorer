@@ -1,4 +1,4 @@
-"""add sponsor_impressions
+﻿"""add sponsor_impressions
 
 Revision ID: 4202ae331ef6
 Revises: 1b13e5e48c1e
@@ -44,3 +44,6 @@ def downgrade() -> None:
     op.drop_index('ix_sponsor_impressions_at', table_name='sponsor_impressions')
     op.drop_table('sponsor_impressions')
     # ### end Alembic commands ###
+
+
+

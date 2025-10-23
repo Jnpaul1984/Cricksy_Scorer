@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 """
 Game helpers extracted from backend/main.py.
 
@@ -14,7 +14,8 @@ the originals in main.py.
 """
 
 from collections import defaultdict
-from datetime import datetime
+import datetime as dt
+UTC = getattr(dt, "UTC", dt.UTC)
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union, cast
 
 from pydantic import BaseModel
@@ -116,7 +117,7 @@ def _complete_game_by_result(g: Any) -> bool:
     balls_this_over: int = int(getattr(g, "balls_this_over", 0))
     overs_limit: int = int(getattr(g, "overs_limit", 0) or 0)
 
-    # 1) Chasing side has reached or surpassed the target → win by wickets
+    # 1) Chasing side has reached or surpassed the target â†’ win by wickets
     if current_runs >= target:
         margin = max(1, 10 - wkts)
         method_typed: Optional[schemas.MatchMethod] = cast(schemas.MatchMethod, "by wickets")
@@ -126,7 +127,7 @@ def _complete_game_by_result(g: Any) -> bool:
             method=method_typed,
             margin=margin,
             result_text=result_text,
-            completed_at=datetime.now(datetime.UTC),
+            completed_at=dt.datetime.now(UTC),
         )
         g.status = models.GameStatus.completed
         g.is_game_over = True
@@ -144,7 +145,7 @@ def _complete_game_by_result(g: Any) -> bool:
                 method=method_typed,
                 margin=0,
                 result_text="Match tied",
-                completed_at=datetime.now(datetime.UTC),
+                completed_at=dt.datetime.now(UTC),
             )
             g.status = models.GameStatus.completed
             g.is_game_over = True
@@ -160,7 +161,7 @@ def _complete_game_by_result(g: Any) -> bool:
             method=method_typed,
             margin=margin,
             result_text=result_text,
-            completed_at=datetime.now(datetime.UTC),
+            completed_at=dt.datetime.now(UTC),
         )
         g.status = models.GameStatus.completed
         g.is_game_over = True
@@ -190,7 +191,7 @@ def _deliveries_for_current_innings(g: Any) -> List[DeliveryDict]:
 
     cur = int(getattr(g, "current_inning", 1) or 1)
     # IMPORTANT: only include deliveries that EXPLICITLY match the current innings.
-    # Treat missing 'inning' as legacy → inns 1, so they won't bleed into inns 2+.
+    # Treat missing 'inning' as legacy â†’ inns 1, so they won't bleed into inns 2+.
     return [d for d in rows if int(d.get("inning") or 1) == cur]
 
 
@@ -808,7 +809,7 @@ def _maybe_finalize_match(g: Any) -> None:
             method=method,
             margin=margin_i,
             result_text=result_text,
-            completed_at=datetime.now(datetime.UTC),
+            completed_at=dt.datetime.now(UTC),
         )
         g.status = models.GameStatus.completed
         g.is_game_over = True
@@ -818,3 +819,5 @@ def _maybe_finalize_match(g: Any) -> None:
         setattr(g, "completed_at", getattr(g.result, "completed_at"))
         g.is_game_over = True
         g.completed_at = getattr(g.result, "completed_at")
+
+

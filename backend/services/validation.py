@@ -1,4 +1,4 @@
-"""
+﻿"""
 Validation service facade.
 
 This module re-exports the existing validation helpers so the rest of the codebase
@@ -25,3 +25,5 @@ __all__ = [
     "validate_dismissal_type",
     "validate_delivery_players",
 ]
+
+

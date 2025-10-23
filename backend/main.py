@@ -33,7 +33,8 @@ from sqlalchemy import select, delete, update, or_, and_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.attributes import flag_modified
 from fastapi import UploadFile, File, Form
-from datetime import datetime
+import datetime as dt
+UTC = getattr(dt, "UTC", dt.UTC)
 import json
 from backend import dls as dlsmod
 from backend.routes.games_router import router as games_router
@@ -609,7 +610,7 @@ async def _maybe_close_innings(g: GameState) -> None:
                 "batting_scorecard": g.batting_scorecard,
                 "bowling_scorecard": g.bowling_scorecard,
                 "deliveries": g.deliveries,
-                "closed_at": datetime.now(datetime.UTC).isoformat(),  # âœ… TZ-aware
+                "closed_at": dt.datetime.now(UTC).isoformat(),  # âœ… TZ-aware
             })
 
 
@@ -691,18 +692,17 @@ def _detect_image_ext(data: bytes, content_type: Optional[str], filename: Option
         return "webp"
     return None
 
-def _parse_iso_dt(s: Optional[str]) -> Optional[datetime]:
-    """Parse ISO-8601; assume UTC if naive."""
+def _parse_iso_dt(s: Optional[str]) -> Optional[dt.datetime]:
     if not s:
         return None
     s = s.strip()
     try:
         if s.endswith("Z"):
-            return datetime.fromisoformat(s[:-1]).replace(tzinfo=timezone.utc)
-        dt = datetime.fromisoformat(s)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=datetime.UTC)
-        return dt
+            return dt.datetime.fromisoformat(s[:-1]).replace(tzinfo=UTC)
+        dt_obj = dt.datetime.fromisoformat(s)
+        if dt_obj.tzinfo is None:
+            dt_obj = dt_obj.replace(tzinfo=UTC)
+        return dt_obj
     except Exception:
         return None
 
@@ -1164,7 +1164,7 @@ async def get_game_sponsors(
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    now = datetime.now(datetime.UTC)
+    now = dt.datetime.now(datetime.UTC)
 
     Sponsor = models.Sponsor
     conditions = [
@@ -1262,7 +1262,7 @@ async def log_sponsor_impressions(
 
     # Prepare rows
     rows: List[models.SponsorImpression] = []
-    now = datetime.now(datetime.UTC)
+    now = dt.datetime.now(datetime.UTC)
     for it in items:
         at_dt = _parse_iso_dt(it.at) or now
         rows.append(
@@ -1394,4 +1394,7 @@ async def healthz() -> dict[str, str]:
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)  # pyright: ignore[reportUnknownMemberType]
+
+
+
 

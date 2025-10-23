@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any, Dict
 from enum import Enum
@@ -103,3 +103,6 @@ def enable_in_memory_crud(repository: InMemoryCrudRepository) -> None:
         target.create_game = repository.create_game  # type: ignore[assignment]
         target.get_game = repository.get_game  # type: ignore[assignment]
         target.update_game = repository.update_game  # type: ignore[assignment]
+
+
+

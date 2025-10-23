@@ -1,4 +1,4 @@
-"""add match setup fields
+﻿"""add match setup fields
 
 Revision ID: c7cb4087a1c1
 Revises: 3d32fa33fe5e
@@ -36,3 +36,6 @@ def downgrade() -> None:
     op.drop_column('games', 'days_limit')
     op.drop_column('games', 'match_type')
     # ### end Alembic commands ###
+
+
+

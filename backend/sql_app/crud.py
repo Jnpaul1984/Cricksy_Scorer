@@ -1,4 +1,4 @@
-# sql_app/crud.py
+﻿# sql_app/crud.py
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional, Dict, Any
@@ -35,7 +35,7 @@ def _coerce_result_to_text(value: Any) -> str | None:
         except Exception:
             pass
 
-    # Dict/list → JSON
+    # Dict/list â†’ JSON
     if isinstance(value, (dict, list)):
         try:
             return json.dumps(value, ensure_ascii=False)
@@ -120,3 +120,6 @@ async def update_game(db: AsyncSession, game_model: models.Game) -> models.Game:
     await db.commit()
     await db.refresh(game_model)
     return game_model
+
+
+

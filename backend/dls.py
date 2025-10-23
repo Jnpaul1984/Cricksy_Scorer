@@ -1,4 +1,4 @@
-# backend/dls.py
+﻿# backend/dls.py
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +11,7 @@ import math
 # ------------------------------
 # Resource tables (externalized)
 # ------------------------------
-# We load “resources remaining (%)” as a function of (overs_remaining, wickets_lost).
+# We load â€œresources remaining (%)â€ as a function of (overs_remaining, wickets_lost).
 # Files must be rectangular CSVs with header: overs_remaining, w0, w1, ..., w9
 # Example rows (overs_remaining descending to 0):
 # overs_remaining,w0,w1,w2,...,w9
@@ -49,7 +49,7 @@ class ResourceTable:
     def R(self, overs_remaining: float, wickets_lost: int) -> float:
         """
         Return resources remaining (%) for a given (overs_remaining, wickets_lost).
-        Linear‑interpolate on fractional overs; clamp wickets 0..9 and overs 0..max.
+        Linearâ€‘interpolate on fractional overs; clamp wickets 0..9 and overs 0..max.
         """
         w = max(0, min(9, wickets_lost))
         if overs_remaining <= 0:
@@ -68,7 +68,7 @@ class ResourceTable:
 @dataclass
 class DLSEnv:
     table: ResourceTable
-    # G is the “average 50-over score” constant used in DLS (ICC uses ~245 for ODI).
+    # G is the â€œaverage 50-over scoreâ€ constant used in DLS (ICC uses ~245 for ODI).
     # For T20, you may prefer ~150. We make it configurable but rarely needed except for special cases.
     G: float = 245.0
 
@@ -100,7 +100,7 @@ def wickets_from_ledger(deliveries: Iterable[Mapping[str, Any]]) -> int:
 
 
 def compute_state_from_ledger(deliveries: List[Mapping[str, Any]]) -> InningsState:
-    # Legal deliveries increment balls; wides/no‑balls do not (per your scoring rules)
+    # Legal deliveries increment balls; wides/noâ€‘balls do not (per your scoring rules)
     balls = 0
     wkts = 0
     for d in deliveries:
@@ -116,7 +116,7 @@ def compute_state_from_ledger(deliveries: List[Mapping[str, Any]]) -> InningsSta
 # ------------------------------
 # Interruptions model
 # ------------------------------
-# We’ll rely on a simple history of overs‑limit changes captured at the moment they were applied.
+# Weâ€™ll rely on a simple history of oversâ€‘limit changes captured at the moment they were applied.
 # Each record: { "at_delivery_index": int, "new_overs_limit": int }
 Interruption = Dict[str, Any]
 
@@ -129,9 +129,9 @@ def total_resources_team1(
     interruptions: List[Interruption],
 ) -> float:
     """
-    Compute Team 1 total resources (%) considering overs‑limit reductions at specific
+    Compute Team 1 total resources (%) considering oversâ€‘limit reductions at specific
     moments (with wickets at those moments).
-    Implements the “resources lost” sum: sum( R(u_before,w) - R(u_after,w) )
+    Implements the â€œresources lostâ€ sum: sum( R(u_before,w) - R(u_after,w) )
     """
     # Sort by when they occurred
     ints = sorted(
@@ -174,7 +174,7 @@ def total_resources_team2(
     delivered_balls_so_far: int,
     wickets_lost_so_far: int,
 ) -> float:
-    """Resources available to Team 2 from the start or “remaining right now” while chasing."""
+    """Resources available to Team 2 from the start or â€œremaining right nowâ€ while chasing."""
     overs_bowled_float = delivered_balls_so_far / 6.0
     u = max(0.0, max_overs_current - overs_bowled_float)
     return env.table.R(u, wickets_lost_so_far)
@@ -337,3 +337,6 @@ def compute_dls_target(
         R2_total=R2_total,
         R2_used=R2_used,
     )
+
+
+

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Scoring service: encapsulates per-ball scoring logic.
 
 This module provides score_one(g, ...) which mutates the GameState-like object g
@@ -232,3 +232,5 @@ def score_one(
         "commentary": None,
         "fielder_id": None,
     }
+
+

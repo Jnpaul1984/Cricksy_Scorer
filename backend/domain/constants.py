@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Final, Optional, Dict
 
@@ -59,3 +59,5 @@ def as_extra_code(x: Optional[str]) -> Optional[str]:
     if x is None:
         return None
     return _EXTRA_MAP.get(x)
+
+

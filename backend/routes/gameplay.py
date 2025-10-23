@@ -1,7 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any, Dict, Optional, Mapping, List, Sequence, cast, Literal
-from datetime import datetime, timezone
+import datetime as dt
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 from pathlib import Path
 from pydantic import BaseModel
 
@@ -95,7 +96,7 @@ async def _maybe_close_innings(g: Any) -> None:
                 "batting_scorecard": g.batting_scorecard,
                 "bowling_scorecard": g.bowling_scorecard,
                 "deliveries": g.deliveries,
-                "closed_at": datetime.now(timezone.utc).isoformat(),
+                "closed_at": dt.datetime.now(UTC).isoformat(),
             })
 
         g.status = models.GameStatus.innings_break
@@ -352,7 +353,7 @@ async def start_next_innings(
     prev_batting_team = g.batting_team_name
     prev_bowling_team = g.bowling_team_name
 
-    # If the last innings wasn’t archived yet, archive it now
+    # If the last innings wasnâ€™t archived yet, archive it now
     last_archived_no = g.innings_history[-1]["inning_no"] if g.innings_history else None
     if last_archived_no != g.current_inning:
         g.innings_history.append({
@@ -365,7 +366,7 @@ async def start_next_innings(
             "batting_scorecard": g.batting_scorecard,
             "bowling_scorecard": g.bowling_scorecard,
             # DO NOT destroy the ledger; it spans both innings
-            "closed_at": datetime.now(timezone.utc).isoformat(),
+            "closed_at": dt.datetime.now(UTC).isoformat(),
         })
 
     # Advance innings and flip teams
@@ -393,7 +394,7 @@ async def start_next_innings(
         g.team_b if g.batting_team_name == g.team_a["name"] else g.team_a
     )
 
-    # Clear “gate” flags and mark match live
+    # Clear â€œgateâ€ flags and mark match live
     if not hasattr(g, "needs_new_over"):
         g.needs_new_over = False
     if not hasattr(g, "needs_new_batter"):
@@ -1039,3 +1040,5 @@ async def undo_last_delivery(game_id: str, db: AsyncSession = Depends(get_db)) -
     await emit_state_update(game_id, snapshot)
 
     return snapshot
+
+

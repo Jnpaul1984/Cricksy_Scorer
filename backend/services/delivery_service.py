@@ -1,4 +1,4 @@
-"""
+﻿"""
 Delivery service: persist a scored delivery.
 
 This module provides a single, focused function:
@@ -96,3 +96,6 @@ async def apply_scoring_and_persist(
     # Persist via CRUD (pass the ORM row)
     updated = await crud.update_game(db=db, game_model=g)
     return updated
+
+
+

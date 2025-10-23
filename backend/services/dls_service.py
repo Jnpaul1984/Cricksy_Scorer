@@ -1,9 +1,9 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from functools import lru_cache
 from typing import Literal
 
-# ✅ Import from the correct package path
+# âœ… Import from the correct package path
 # If this file is at backend/services/dls_services.py and your DLS package is backend/services/dls/,
 # then the correct absolute import is:
 from backend.services.dls import load_international_table, calculate_dls_target
@@ -32,3 +32,6 @@ def calc_target(team1_score: int, team1_res: float, team2_res: float, G50: int =
     Standard Edition target calculation wrapper.
     """
     return int(calculate_dls_target(int(team1_score), float(team1_res), float(team2_res), int(G50)))
+
+
+
