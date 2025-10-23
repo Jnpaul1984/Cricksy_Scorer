@@ -51,6 +51,14 @@ from backend.routes import games as _games_impl
 # Socket.IO (no first-party type stubs; we keep our own Protocol below)
 import socketio  # type: ignore[import-not-found]
 import logging
+from backend.config import settings
+
+# initialize logging early (before creating loggers)
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+
 logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -294,9 +302,15 @@ class SponsorsManifest(TypedDict):
 # ================================================================
 # FastAPI + Socket.IO wiring
 # ================================================================
-_sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")  # type: ignore[call-arg]
+_sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS)  # type: ignore[call-arg]
 sio: SocketIOServer = cast(SocketIOServer, _sio)
 _fastapi = FastAPI(title="Cricksy Scorer API")
+
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_ROOT = settings.STATIC_ROOT
+SPONSORS_DIR = settings.SPONSORS_DIR
+SPONSORS_DIR.mkdir(parents=True, exist_ok=True)
+_fastapi.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 # Expose the FastAPI instance for tests and external tooling.
 fastapi_app = _fastapi
 _fastapi.state.sio = sio
@@ -320,16 +334,30 @@ _fastapi.add_middleware(
 )
 
 
-# --- PR 7: Static files for logos/sponsors ---
-# Resolve to backend/static
-BASE_DIR = Path(__file__).resolve().parent
+# ================================================================
+# DB dependency (async)
+# ================================================================
+from sqlalchemy.ext.asyncio import AsyncSession
+from backend.sql_app.database import SessionLocal
 
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with SessionLocal() as session:  # type: ignore[misc]
+        yield session
 
-# Create if missing (avoids RuntimeError)
-STATIC_ROOT = Path(__file__).parent / "static"
-SPONSORS_DIR = STATIC_ROOT / "sponsors"
-SPONSORS_DIR.mkdir(parents=True, exist_ok=True)
-_fastapi.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
+# In-memory mode for tests/dev (use centralized setting)
+from backend.config import settings
+
+if settings.IN_MEMORY_DB:
+    from backend.testsupport.in_memory_crud import InMemoryCrudRepository, enable_in_memory_crud
+
+    _memory_repo = InMemoryCrudRepository()
+
+    async def _in_memory_get_db() -> AsyncGenerator[object, None]:
+        yield object()
+
+    # Override FastAPI dependency to return a dummy object (CRUD uses in-memory repo)
+    _fastapi.dependency_overrides[get_db] = _in_memory_get_db  # type: ignore[assignment]
+    enable_in_memory_crud(_memory_repo)
 
 
 # Keep your separate games router mounted
