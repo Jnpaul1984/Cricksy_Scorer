@@ -406,6 +406,12 @@ try:
     _runs_wkts_balls_for_innings = _gh._runs_wkts_balls_for_innings
     _maybe_finalize_match = _gh._maybe_finalize_match
 
+    _can_start_over = _gh._can_start_over
+    _first_innings_summary = _gh._first_innings_summary
+    _complete_game_by_result = _gh._complete_game_by_result
+    is_legal_delivery = _gh.is_legal_delivery
+    _complete_over_runtime = getattr(_gh, "_complete_over_runtime", None)
+    
     # Small normalization / conversion helpers also used across main.py
     _norm_extra = _gh._norm_extra
     _as_extra_code = getattr(_gh, "_as_extra_code", None)
@@ -437,14 +443,6 @@ def _api_status(v: Any) -> str:
 
 
 
-def _first_innings_summary(g: GameState) -> Dict[str, Any]:
-    r, w, b = _runs_wkts_balls_for_innings(g, 1)
-    return {
-        "runs": r,
-        "wickets": w,
-        "overs": float(f"{b//6}.{b%6}"),
-        "balls": b,
-    }
 
 
 
@@ -459,98 +457,6 @@ def _coerce_match_type(raw: str) -> schemas.MatchType:
         return schemas.MatchType(raw)  # exact enum match
     except Exception:
         return schemas.MatchType.limited  # safe default
-
-# ================================================================
-# Helpers: bowling constraints
-# ================================================================
-def _can_start_over(g: GameState, bowler_id: str) -> Optional[str]:
-    if g.current_over_balls not in (0, None) or g.balls_this_over != 0:
-        return "Cannot start a new over while an over is in progress."
-    last_id = getattr(g, "last_ball_bowler_id", None)
-    if last_id and bowler_id == last_id:
-        return "Selected bowler delivered the last ball of the previous over and cannot bowl consecutive overs."
-    return None
-
-def _complete_game_by_result(g: GameState) -> bool:
-    """
-    Mutates g to completed if a result is known. Returns True if status changed.
-    Applies to limited-overs with two innings.
-    """
-    # Already complete?
-    if str(getattr(g, "status", "")).lower() == "completed" or bool(getattr(g, "is_game_over", False)):
-        return False
-
-    # Only finalize once we're in the chase
-    current_inning = int(getattr(g, "current_inning", 1) or 1)
-    if current_inning < 2:
-        return False
-
-    # Ensure target is set (r1 + 1)
-    _ensure_target_if_chasing(g)
-    target: Optional[int] = cast(Optional[int], getattr(g, "target", None))
-    if target is None:
-        return False  # nothing to decide yet
-
-    # Live scoreboard
-    current_runs: int = int(getattr(g, "total_runs", 0))
-    wkts: int = int(getattr(g, "total_wickets", 0))
-    overs_done: int = int(getattr(g, "overs_completed", 0))
-    balls_this_over: int = int(getattr(g, "balls_this_over", 0))
-    overs_limit: int = int(getattr(g, "overs_limit", 0) or 0)
-
-    # 1) Chasing side has reached or surpassed the target â†’ win by wickets
-    if current_runs >= target:
-        margin = max(1, 10 - wkts)
-        method_typed: Optional[schemas.MatchMethod] = cast(schemas.MatchMethod, "by wickets")
-        result_text = f"{getattr(g, 'batting_team_name', '')} won by {margin} wickets"
-        g.result = schemas.MatchResult(
-            winner_team_name=str(getattr(g, "batting_team_name", "")),
-            method=method_typed,
-            margin=margin,
-            result_text=result_text,
-            completed_at=datetime.now(timezone.utc),
-        )
-        g.status = models.GameStatus.completed
-        setattr(g, "is_game_over", True)
-        setattr(g, "completed_at", getattr(g.result, "completed_at"))
-        return True
-
-    # 2) If second-innings is over (all out or allocated overs exhausted),
-    #    decide by runs or tie.
-    all_out = wkts >= 10
-    second_innings_balls_exhausted = bool(overs_limit and overs_done >= overs_limit and balls_this_over == 0)
-    if all_out or second_innings_balls_exhausted:
-        # target == r1 + 1, so tie when current_runs == target - 1
-        if current_runs == (target - 1):
-            method_typed = cast(schemas.MatchMethod, "tie")
-            g.result = schemas.MatchResult(
-                method=method_typed,
-                margin=0,
-                result_text="Match tied",
-                completed_at=datetime.now(timezone.utc),
-            )
-            g.status = models.GameStatus.completed
-            setattr(g, "is_game_over", True)
-            setattr(g, "completed_at", getattr(g.result, "completed_at"))
-            return True
-
-        # Otherwise the defending side wins by runs
-        margin = max(1, (target - 1) - current_runs)
-        method_typed = cast(schemas.MatchMethod, "by runs")
-        result_text = f"{getattr(g, 'bowling_team_name', '')} won by {margin} runs"
-        g.result = schemas.MatchResult(
-            winner_team_name=str(getattr(g, "bowling_team_name", "")),
-            method=method_typed,
-            margin=margin,
-            result_text=result_text,
-            completed_at=datetime.now(timezone.utc),
-        )
-        g.status = models.GameStatus.completed
-        setattr(g, "is_game_over", True)
-        setattr(g, "completed_at", getattr(g.result, "completed_at"))
-        return True
-
-    return False
 
 
 
@@ -575,8 +481,7 @@ _INVALID_ON_NO_BALL = {"bowled", "caught", "lbw", "stumped", "hit_wicket"}
 # On a WIDE, these are invalid (stumped *is allowed* on a wide):
 _INVALID_ON_WIDE = {"bowled", "lbw"}
 
-def is_legal_delivery(extra: Optional[str]) -> bool:
-    return extra not in {"wd", "nb"}
+
 
 
 
@@ -856,24 +761,7 @@ def _reset_runtime_and_scorecards(g: GameState) -> None:
     g.batting_scorecard = _mk_batting_scorecard(batting_team)
     g.bowling_scorecard = _mk_bowling_scorecard(bowling_team)
 
-# ------------------------------------------------
-# Close an over: clear current bowler and mark last
-# ------------------------------------------------
-def _complete_over_runtime(g: GameState, bowler_id: Optional[str]) -> None:
-    """
-    Called exactly when an over finishes (after ball 6 of the over).
-    - Records who bowled the last legal ball of the finished over
-    - Clears current_bowler_id to force selection for the next over
-    - Resets per-over bookkeeping
-    """
-    # last legal ballâ€™s bowler is the overâ€™s bowler
-    if bowler_id:
-        g.last_ball_bowler_id = bowler_id
 
-    # over is finished -> next over requires explicit bowler
-    g.current_bowler_id = None
-    g.current_over_balls = 0
-    g.mid_over_change_used = False
 
 
 
