@@ -20,18 +20,17 @@ from typing import Any, Dict, List, Optional, Mapping, Sequence, Union, cast
 from pydantic import BaseModel
 from datetime import datetime, timezone
 import typing as t
-
+from pathlib import Path
+from typing import Union as _Union
 # Import schemas & DLS loader used by snapshot
 from backend.sql_app import schemas
 from backend import dls as dlsmod
 
 
-# Type alias for the GameState protocol defined in backend.main
-try:
-    # import the protocol for typing (non-circular at runtime because we only import types)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
     from backend.main import GameState  # type: ignore
-except Exception:
-    # Fallback: use a very permissive Any for environments where main cannot be imported
+else:
     GameState = Any  # type: ignore
 
 
@@ -242,7 +241,7 @@ def _fall_of_wickets(g: GameState) -> List[Dict[str, Any]]:
     return fow
 
 
-def _dls_panel_for(g: GameState) -> Dict[str, Any]:
+def _dls_panel_for(g: GameState, base_dir: Optional[_Union[str, Path]] = None) -> Dict[str, Any]:
     """Best-effort DLS panel. Returns {} when not applicable."""
     try:
         if not getattr(g, "dls_enabled", False):
@@ -251,12 +250,14 @@ def _dls_panel_for(g: GameState) -> Dict[str, Any]:
         if overs_limit_opt not in (20, 50):
             return {}
         kind = "odi" if overs_limit_opt == 50 else "t20"
-        env = dlsmod.load_env(kind, str())  # callers may adjust BASE_DIR; we pass empty string for now
+        # Use provided base_dir if present, otherwise fall back to current working dir string
+        base_dir_str = str(base_dir) if base_dir is not None else ""
+        env = dlsmod.load_env(kind, base_dir_str)
 
         deliveries_m: List[Mapping[str, Any]] = cast(List[Mapping[str, Any]], list(getattr(g, "deliveries", [])))
         interruptions = list(getattr(g, "interruptions", []))
         R1_total = dlsmod.total_resources_team1(env=env, max_overs_initial=int(overs_limit_opt), deliveries=deliveries_m, interruptions=interruptions)
-
+        
         S1 = 0
         # prefer a persisted first_inning_summary, otherwise compute from ledger (best-effort)
         fis_any = getattr(g, "first_inning_summary", None)
@@ -291,7 +292,11 @@ def _dls_panel_for(g: GameState) -> Dict[str, Any]:
 # -----------------------
 # Public API
 # -----------------------
-def build_snapshot(g: GameState, last_delivery: Optional[Union[schemas.Delivery, Dict[str, Any]]]) -> Dict[str, Any]:
+def build_snapshot(
+    g: GameState,
+    last_delivery: Optional[Union[schemas.Delivery, Dict[str, Any]]],
+    base_dir: Optional[_Union[str, Path]] = None,
+) -> Dict[str, Any]:
     """
     Build a snapshot dict suitable for the API from a GameState-like object g.
     This mirrors backend/main._snapshot_from_game but is implemented here so main.py
@@ -372,7 +377,7 @@ def build_snapshot(g: GameState, last_delivery: Optional[Union[schemas.Delivery,
         "needs_new_over": needs_new_over,
         "needs_new_batter": needs_new_batter,
         "needs_new_innings": needs_new_innings,
-        "dls": _dls_panel_for(g),
+        "dls": _dls_panel_for(g, base_dir),
     }
 
     # completion/result signals
