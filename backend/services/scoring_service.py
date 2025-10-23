@@ -11,40 +11,14 @@ from __future__ import annotations
 from typing import Any, Dict, Optional, cast
 from pydantic import BaseModel
 
-# --- Constants & rules copied from main.py ---
-_CREDIT_BOWLER = {"bowled", "caught", "lbw", "stumped", "hit_wicket"}
-_CREDIT_TEAM = {
-    "run_out",
-    "obstructing_the_field",
-    "hit_ball_twice",
-    "timed_out",
-    "retired_out",
-    "handled_ball",
-}
-_INVALID_ON_NO_BALL = {"bowled", "caught", "lbw", "stumped", "hit_wicket"}
-_INVALID_ON_WIDE = {"bowled", "lbw"}
-
-
-def _norm_extra(x: Optional[str] | Any) -> Optional[str]:
-    if not x:
-        return None
-    s = (str(x) or "").strip().lower()
-    if s in {"wide", "wd"}:
-        return "wd"
-    if s in {"no_ball", "nb"}:
-        return "nb"
-    if s in {"b", "bye"}:
-        return "b"
-    if s in {"lb", "leg_bye", "leg-bye"}:
-        return "lb"
-    return None
-
-
-def _as_extra_code(x: Optional[str]) -> Optional[str]:
-    if x is None:
-        return None
-    m = {"wd": "wd", "nb": "nb", "b": "b", "lb": "lb"}
-    return m.get(x)
+# Centralized constants/rules
+from backend.domain.constants import (
+    CREDIT_BOWLER as _CREDIT_BOWLER,
+    INVALID_ON_NO_BALL as _INVALID_ON_NO_BALL,
+    INVALID_ON_WIDE as _INVALID_ON_WIDE,
+    norm_extra as _norm_extra,
+    as_extra_code as _as_extra_code,
+)
 
 
 def _complete_over_runtime(g: Any, bowler_id: Optional[str]) -> None:
