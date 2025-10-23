@@ -1,4 +1,5 @@
 """Utility to regenerate the shared simulated T20 match fixture with full ball-by-ball data."""
+
 from __future__ import annotations
 
 import json
@@ -52,6 +53,7 @@ def _simulate_innings(
                 "ball": ball_number,
                 "bowler": bowler_name,
                 "batsman": striker_name,
+                "non_striker": non_striker_name,
                 "runs": runs,
                 "extras": 0,
                 "wicket": False,
@@ -64,7 +66,9 @@ def _simulate_innings(
                 if event.fielder:
                     # Ensure the fielder name exists in the fielding side roster
                     if event.fielder not in fielders:
-                        raise ValueError(f"Unknown fielder {event.fielder}. Valid fielders are: {fielders}")
+                        raise ValueError(
+                            f"Unknown fielder {event.fielder}. Valid fielders are: {fielders}"
+                        )
                     entry["fielder"] = event.fielder
                 total_wkts += 1
 
@@ -210,8 +214,11 @@ def main() -> None:
     )
 
     payload = json.dumps(fixture, indent=2)
-    print(f"Wrote fixture to {len(tuple(targets))} locations.")
+
+    wrote = 0
+    for path in targets:
         path.write_text(payload + "\n", encoding="utf-8")
+        wrote += 1
     print(f"Wrote fixture to {len(list(targets))} locations.")
 
 
