@@ -311,7 +311,8 @@ _fastapi = FastAPI(title="Cricksy Scorer API")
 fastapi_app = _fastapi
 _fastapi.state.sio = sio
 app = socketio.ASGIApp(sio, other_asgi_app=_fastapi)
-
+from backend.socket_handlers import register_sio  # new import
+register_sio(sio)  # attach the handlers to the AsyncServer
 
 _fastapi.add_middleware(
     CORSMiddleware,
@@ -692,24 +693,10 @@ async def _maybe_close_innings(g: GameState) -> None:
         g.current_bowler_id = None
 
 
-       
-
-
 # Key used in _dedup_deliveries: (over, ball, subindex) where subindex is int for illegal (wd/nb) or "L" for legal.
 BallKey: TypeAlias = Tuple[int, int, Union[int, Literal["L"]]]
 # Allowed match-result method values (use at module scope so Pylance is happy)
 AllowedMethod: TypeAlias = Literal["by runs", "by wickets", "tie", "no result"]
-
-
-
-
-
-
-
-
-
-
-
 
 
 def _coerce_batting_entry(  # pyright: ignore[reportUnusedFunction]
@@ -2514,62 +2501,6 @@ async def remove_contributor(
 
     return {"ok": True}
 
-# ================================================================
-# Presence store + join/leave handlers
-# ================================================================
-# game_id -> { sid -> {"sid": str, "role": str, "name": str} }
-_ROOM_PRESENCE: Dict[str, Dict[str, Dict[str, str]]] = defaultdict(dict)
-_SID_ROOMS: Dict[str, set[str]] = defaultdict(set)
-
-def _room_snapshot(game_id: str) -> List[Dict[str, str]]:
-    return list(_ROOM_PRESENCE.get(game_id, {}).values())
-
-@sio.event
-async def connect(sid: str, environ: Dict[str, Any], auth: Optional[Any]) -> None:
-    # Keep connection open; auth/JWT (if any) can be validated on 'join'
-    return None
-
-@sio.event
-async def join(sid: str, data: Optional[Dict[str, Any]]) -> None:
-    """
-    data: { game_id: str, role?: "SCORER"|"COMMENTATOR"|"ANALYST"|"VIEWER", name?: str }
-    """
-    payload = data or {}
-    game_id = cast(Optional[str], payload.get("game_id"))
-    if not game_id:
-        return None
-    role = str(payload.get("role") or "VIEWER")
-    name = str(payload.get("name") or role)
-
-    await sio.enter_room(sid, game_id)
-    _SID_ROOMS[sid].add(game_id)
-    _ROOM_PRESENCE[game_id][sid] = {"sid": sid, "role": role, "name": name}
-
-    # Tell this client whoâ€™s here, then broadcast updated presence to the room
-    await sio.emit("presence:init", {"game_id": game_id, "members": _room_snapshot(game_id)}, room=sid)
-    await sio.emit("presence:update", {"game_id": game_id, "members": _room_snapshot(game_id)}, room=game_id)
-    return None
-
-@sio.event
-async def leave(sid: str, data: Optional[Dict[str, Any]]) -> None:
-    payload = data or {}
-    game_id = cast(Optional[str], payload.get("game_id"))
-    if not game_id:
-        return None
-    await sio.leave_room(sid, game_id)
-    _SID_ROOMS[sid].discard(game_id)
-    _ROOM_PRESENCE.get(game_id, {}).pop(sid, None)
-    await sio.emit("presence:update", {"game_id": game_id, "members": _room_snapshot(game_id)}, room=game_id)
-    return None
-
-@sio.event
-async def disconnect(sid: str) -> None:
-    # Remove from all rooms we know about
-    for game_id in list(_SID_ROOMS.get(sid, set())):
-        _ROOM_PRESENCE.get(game_id, {}).pop(sid, None)
-        await sio.emit("presence:update", {"game_id": game_id, "members": _room_snapshot(game_id)}, room=game_id)
-    _SID_ROOMS.pop(sid, None)
-    return None
 
 # ================================================================
 # Health
