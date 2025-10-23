@@ -343,10 +343,10 @@ _fastapi.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 
 
 # Keep your separate games router mounted
-_fastapi.include_router(games_router, prefix="/legacy")
+
 _fastapi.include_router(games_dls_router)
 _fastapi.include_router(interruptions_router)
-
+_fastapi.include_router(games_router)
 
 @_fastapi.get("/health", include_in_schema=False)
 def health() -> dict[str, str]:
@@ -411,7 +411,7 @@ try:
     _complete_game_by_result = _gh._complete_game_by_result
     is_legal_delivery = _gh.is_legal_delivery
     _complete_over_runtime = getattr(_gh, "_complete_over_runtime", None)
-    
+
     # Small normalization / conversion helpers also used across main.py
     _norm_extra = _gh._norm_extra
     _as_extra_code = getattr(_gh, "_as_extra_code", None)
