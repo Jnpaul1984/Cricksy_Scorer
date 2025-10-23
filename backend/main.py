@@ -45,7 +45,7 @@ from backend.services.delivery_service import apply_scoring_and_persist as _appl
 # ---- App modules ----
 from backend.sql_app import crud, schemas, models
 from backend.sql_app.database import SessionLocal
-from backend import validation_helpers
+from backend.services import validation as validation_helpers
 from backend.routes import games as _games_impl
 # Socket.IO (no first-party type stubs; we keep our own Protocol below)
 import socketio  # type: ignore[import-not-found]
