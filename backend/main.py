@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import uuid
@@ -119,7 +119,6 @@ class BowlingEntryDict(TypedDict):
     overs_bowled_str: NotRequired[str]
     maidens: NotRequired[int]
     economy: NotRequired[float]
-
 
 class DeliveryDict(TypedDict, total=False):
     over_number: int
@@ -276,7 +275,6 @@ class ConcreteGameState:
         # Implement the logic to save the game state
         pass
 
-
 # If you're on Python < 3.11:
 # from typing_extensions import TypedDict, NotRequired
 # class SponsorItem(TypedDict, total=False):
@@ -297,8 +295,6 @@ class SponsorItem(TypedDict, total=False):
 
 class SponsorsManifest(TypedDict):
     items: List[SponsorItem]
-
-
 
 # ================================================================
 # FastAPI + Socket.IO wiring
@@ -339,7 +335,6 @@ _fastapi.add_middleware(
     allow_headers=["*"],
 )
 
-
 # ================================================================
 # DB dependency (async)
 # ================================================================
@@ -365,7 +360,6 @@ if settings.IN_MEMORY_DB:
     _fastapi.dependency_overrides[get_db] = _in_memory_get_db  # type: ignore[assignment]
     enable_in_memory_crud(_memory_repo)
 
-
 # Keep your separate games router mounted
 
 _fastapi.include_router(games_dls_router)
@@ -377,26 +371,8 @@ _fastapi.include_router(gameplay_router)
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
-
-
 # ================================================================
 # DB dependency (async)
-# ================================================================
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with SessionLocal() as session:  # type: ignore[misc]
-        yield session
-
-if os.getenv("CRICKSY_IN_MEMORY_DB") == "1":
-    from backend.testsupport.in_memory_crud import InMemoryCrudRepository, enable_in_memory_crud
-
-    _memory_repo = InMemoryCrudRepository()
-
-    async def _in_memory_get_db() -> AsyncGenerator[object, None]:
-        yield object()
-
-    _fastapi.dependency_overrides[get_db] = _in_memory_get_db  # type: ignore[assignment]
-    enable_in_memory_crud(_memory_repo)
-
 # ================================================================
 # Helpers: core utilities
 # ================================================================
@@ -466,24 +442,12 @@ def _api_status(v: Any) -> str:
     }
     return mapping.get(s, "IN_PROGRESS")
 
-
-
-
-
-
-
-
-
-
-
 # --- helpers ---------------------------------------------------------
 def _coerce_match_type(raw: str) -> schemas.MatchType:
     try:
         return schemas.MatchType(raw)  # exact enum match
     except Exception:
         return schemas.MatchType.limited  # safe default
-
-
 
 # ================================================================
 # Helpers: dismissal / extras rules
@@ -505,10 +469,6 @@ _CREDIT_TEAM = {
 _INVALID_ON_NO_BALL = {"bowled", "caught", "lbw", "stumped", "hit_wicket"}
 # On a WIDE, these are invalid (stumped *is allowed* on a wide):
 _INVALID_ON_WIDE = {"bowled", "lbw"}
-
-
-
-
 
 def _rotate_strike_on_runs(runs: int) -> bool: # type: ignore
     return (runs % 2) == 1
@@ -532,12 +492,8 @@ def _as_extra_code(x: Optional[str]) -> Optional[ExtraCode]:
 # NEW: normalization + dedupe + totals recompute
 # ================================================================
 
-
 def _is_blank(x: object) -> bool:
     return x is None or (isinstance(x, str) and x.strip() == "")
-
-
-
 
 def _sum_runs_for_innings(g: GameState, inning: int) -> int:
     total = 0
@@ -575,14 +531,12 @@ def _team1_runs(g: GameState) -> int:
             pass
     return _sum_runs_for_innings(g, 1)
 
-
 async def _maybe_close_innings(g: GameState) -> None:
     """Close the current innings if overs exhausted or all out."""
     balls_limit = (g.overs_limit or 0) * 6
     balls_bowled = int(getattr(g, "balls_bowled_total", None) or (
         int(getattr(g, "overs_completed", 0)) * 6 + int(getattr(g, "balls_this_over", 0))
     ))
-
 
     if g.status == models.GameStatus.innings_break:
         return
@@ -593,7 +547,6 @@ async def _maybe_close_innings(g: GameState) -> None:
     if all_out or overs_exhausted:
         if not hasattr(g, "innings_history"):
             g.innings_history = []
-
 
         # âœ… Only archive if not already archived
         already_archived = any(
@@ -613,7 +566,6 @@ async def _maybe_close_innings(g: GameState) -> None:
                 "closed_at": dt.datetime.now(UTC).isoformat(),  # âœ… TZ-aware
             })
 
-
         g.status = models.GameStatus.innings_break
         g.needs_new_innings = True
         g.needs_new_over = False
@@ -622,12 +574,10 @@ async def _maybe_close_innings(g: GameState) -> None:
         g.current_non_striker_id = None
         g.current_bowler_id = None
 
-
 # Key used in _dedup_deliveries: (over, ball, subindex) where subindex is int for illegal (wd/nb) or "L" for legal.
 BallKey: TypeAlias = Tuple[int, int, Union[int, Literal["L"]]]
 # Allowed match-result method values (use at module scope so Pylance is happy)
 AllowedMethod: TypeAlias = Literal["by runs", "by wickets", "tie", "no result"]
-
 
 def _coerce_batting_entry(  # pyright: ignore[reportUnusedFunction]
     x: Any, team_a: TeamDict, team_b: TeamDict
@@ -667,8 +617,6 @@ def _coerce_bowling_entry(  # pyright: ignore[reportUnusedFunction]
             wickets_taken=int(x_dict.get("wickets_taken", x_dict.get("wickets", 0))),
         )
     return schemas.BowlingScorecardEntry(player_id="", player_name="", overs_bowled=0.0, runs_conceded=0, wickets_taken=0)
-
-
 
 # ================================================================
 # Misc helpers
@@ -735,8 +683,6 @@ class CreateGameRequest(BaseModel):
 class OversLimitBody(BaseModel):
     overs_limit: int
 
-
-
 class StartInningsBody(BaseModel):
     striker_id: Optional[str] = None
     non_striker_id: Optional[str] = None
@@ -783,10 +729,6 @@ def _reset_runtime_and_scorecards(g: GameState) -> None:
 
     g.batting_scorecard = _mk_batting_scorecard(batting_team)
     g.bowling_scorecard = _mk_bowling_scorecard(bowling_team)
-
-
-
-
 
 def _dls_panel_for(g: GameState) -> DlsPanel:
     """
@@ -851,7 +793,6 @@ def _dls_panel_for(g: GameState) -> DlsPanel:
     except Exception:
         return {}
 
-
 from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
 
 # ================================================================
@@ -879,9 +820,6 @@ async def get_game(game_id: str, db: AsyncSession = Depends(get_db)):
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
     return db_game
-
-
-
 
 # ================================================================
 # PR 4 â€” Rain control: adjust overs limit mid-match
@@ -1016,11 +954,6 @@ async def set_overs_limit(
     await sio.emit("state:update", {"id": game_id, "snapshot": snap}, room=game_id)
 
     return {"id": game_id, "overs_limit": cast(GameState, updated).overs_limit}
-
-
-
-
-
 
 # ================================================================
 # Team Roles (captain / wicket-keeper)
@@ -1286,7 +1219,6 @@ async def log_sponsor_impressions(
         ids=[int(r.id) for r in rows],
     )
 
-
 # ================================================================
 # Game Contributors (scorer / commentary / analytics)
 # ================================================================
@@ -1338,7 +1270,6 @@ async def add_contributor(
         display_name=(str(rec.display_name) if rec.display_name is not None else None),
     )
 
-
 @_fastapi.get("/games/{game_id}/contributors", response_model=List[schemas.GameContributor])
 async def list_contributors(
     game_id: str,
@@ -1358,7 +1289,6 @@ async def list_contributors(
         )
         for r in rows
     ]
-
 
 @_fastapi.delete("/games/{game_id}/contributors/{contrib_id}")
 async def remove_contributor(
@@ -1380,7 +1310,6 @@ async def remove_contributor(
 
     return {"ok": True}
 
-
 # ================================================================
 # Health
 # ================================================================
@@ -1394,7 +1323,4 @@ async def healthz() -> dict[str, str]:
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)  # pyright: ignore[reportUnknownMemberType]
-
-
-
 
