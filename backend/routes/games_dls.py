@@ -9,13 +9,8 @@ from backend.sql_app import models
 from backend.sql_app.database import get_db
 from backend.services.dls_service import resource_remaining, calc_target
 
-# Optional live-bus broadcast (safe no-op if you don't have it yet)
-try:
-    from services.live_bus import publish_game_update  # type: ignore # your WS/SSE hub
-except Exception:  # pragma: no cover
-    def publish_game_update(game_id: str, payload: dict[str, Any]) -> None:
-        # No-op fallback: comment this out when you wire your bus.
-        return None
+# Live-bus broadcast for real-time updates
+from backend.services.live_bus import publish_game_update
 
 router = APIRouter(prefix="/games", tags=["games:dls"])
 
