@@ -46,8 +46,18 @@ async def seed_one_game() -> Dict[str, Any]:
         batting_team = team_a_name
         bowling_team = team_b_name
 
-        team_a = {"name": team_a_name, "players": [{"id": str(uuid.uuid4()), "name": n} for n in game_create.players_a]}
-        team_b = {"name": team_b_name, "players": [{"id": str(uuid.uuid4()), "name": n} for n in game_create.players_b]}
+        team_a = {
+            "name": team_a_name,
+            "players": [
+                {"id": str(uuid.uuid4()), "name": n} for n in game_create.players_a
+            ],
+        }
+        team_b = {
+            "name": team_b_name,
+            "players": [
+                {"id": str(uuid.uuid4()), "name": n} for n in game_create.players_b
+            ],
+        }
 
         # Minimal scorecards
         batting_scorecard: Dict[str, Any] = {}
@@ -95,4 +105,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

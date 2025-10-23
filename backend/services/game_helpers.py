@@ -14,7 +14,7 @@ the originals in main.py.
 """
 
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union, cast
 
 from pydantic import BaseModel
@@ -30,10 +30,10 @@ from backend.domain.constants import (
 )
 
 # Local type aliases
-PlayerDict = Dict[str, str]
-BattingEntryDict = Dict[str, Any]
-BowlingEntryDict = Dict[str, Any]
-DeliveryDict = Dict[str, Any]
+PlayerDict = dict[str, str]
+BattingEntryDict = dict[str, Any]
+BowlingEntryDict = dict[str, Any]
+DeliveryDict = dict[str, Any]
 BallKey = Tuple[int, int, Union[int, str]]
 
 
@@ -64,7 +64,7 @@ def _can_start_over(g: Any, bowler_id: str) -> Optional[str]:
         return "Selected bowler delivered the last ball of the previous over and cannot bowl consecutive overs."
     return None
 
-def _first_innings_summary(g: Any) -> Dict[str, Any]:
+def _first_innings_summary(g: Any) -> dict[str, Any]:
     """
     Compact summary for innings 1: runs, wickets, overs(float), balls.
     """
@@ -126,11 +126,11 @@ def _complete_game_by_result(g: Any) -> bool:
             method=method_typed,
             margin=margin,
             result_text=result_text,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(datetime.UTC),
         )
         g.status = models.GameStatus.completed
-        setattr(g, "is_game_over", True)
-        setattr(g, "completed_at", getattr(g.result, "completed_at"))
+        g.is_game_over = True
+        g.completed_at = getattr(g.result, "completed_at")
         return True
 
     # 2) If second-innings is over (all out or allocated overs exhausted), decide by runs or tie.
@@ -144,11 +144,11 @@ def _complete_game_by_result(g: Any) -> bool:
                 method=method_typed,
                 margin=0,
                 result_text="Match tied",
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(datetime.UTC),
             )
             g.status = models.GameStatus.completed
-            setattr(g, "is_game_over", True)
-            setattr(g, "completed_at", getattr(g.result, "completed_at"))
+            g.is_game_over = True
+            g.completed_at = getattr(g.result, "completed_at")
             return True
 
         # Otherwise the defending side wins by runs
@@ -160,11 +160,11 @@ def _complete_game_by_result(g: Any) -> bool:
             method=method_typed,
             margin=margin,
             result_text=result_text,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(datetime.UTC),
         )
         g.status = models.GameStatus.completed
-        setattr(g, "is_game_over", True)
-        setattr(g, "completed_at", getattr(g.result, "completed_at"))
+        g.is_game_over = True
+        g.completed_at = getattr(g.result, "completed_at")
         return True
 
     return False
@@ -204,9 +204,9 @@ def _dedup_deliveries(g: Any) -> List[DeliveryDict]:
     if not deliveries:
         return []
 
-    seen: Dict[BallKey, DeliveryDict] = {}
+    seen: dict[BallKey, DeliveryDict] = {}
     order: List[BallKey] = []
-    illegal_seq: Dict[Tuple[int, int], int] = defaultdict(int)
+    illegal_seq: dict[Tuple[int, int], int] = defaultdict(int)
 
     for d in deliveries:
         over_no = int(d.get("over_number") or 0)
@@ -279,7 +279,7 @@ def _id_by_name(team_a: Mapping[str, Any], team_b: Mapping[str, Any], name: Opti
 # -------------------------
 # Scorecard builders
 # -------------------------
-def _mk_batting_scorecard(team: Mapping[str, Any]) -> Dict[str, BattingEntryDict]:
+def _mk_batting_scorecard(team: Mapping[str, Any]) -> dict[str, BattingEntryDict]:
     return {
         p["id"]: {
             "player_id": p["id"],
@@ -295,7 +295,7 @@ def _mk_batting_scorecard(team: Mapping[str, Any]) -> Dict[str, BattingEntryDict
     }
 
 
-def _mk_bowling_scorecard(team: Mapping[str, Any]) -> Dict[str, BowlingEntryDict]:
+def _mk_bowling_scorecard(team: Mapping[str, Any]) -> dict[str, BowlingEntryDict]:
     return {
         p["id"]: {
             "player_id": p["id"],
@@ -444,7 +444,7 @@ def _rebuild_scorecards_from_deliveries(g: Any) -> None:
             }
         return pid_str
 
-    balls_by_bowler: Dict[str, int] = defaultdict(int)
+    balls_by_bowler: dict[str, int] = defaultdict(int)
 
     for d in deliveries:
         striker = ensure_batter(d.get("striker_id"))
@@ -583,7 +583,7 @@ def _recompute_totals_and_runtime(g: Any) -> None:
 # -------------------------
 # Analyst & UI helpers
 # -------------------------
-def _extras_breakdown(g: Any) -> Dict[str, int]:
+def _extras_breakdown(g: Any) -> dict[str, int]:
     wides = no_balls = byes = leg_byes = penalty = 0
 
     for d in _dedup_deliveries(g):
@@ -603,8 +603,8 @@ def _extras_breakdown(g: Any) -> Dict[str, int]:
     return {"wides": wides, "no_balls": no_balls, "byes": byes, "leg_byes": leg_byes, "penalty": penalty, "total": total}
 
 
-def _fall_of_wickets(g: Any) -> List[Dict[str, Any]]:
-    fow: List[Dict[str, Any]] = []
+def _fall_of_wickets(g: Any) -> List[dict[str, Any]]:
+    fow: List[dict[str, Any]] = []
     cum = 0
     for d in _dedup_deliveries(g):
         cum += int(d.get("runs_scored") or 0)
@@ -633,7 +633,7 @@ def _fall_of_wickets(g: Any) -> List[Dict[str, Any]]:
     return fow
 
 
-def _compute_snapshot_flags(g: Any) -> Dict[str, bool]:
+def _compute_snapshot_flags(g: Any) -> dict[str, bool]:
     """Return UI gating flags derived from current runtime state."""
     need_new_batter = False
     if getattr(g, "current_striker_id", None):
@@ -653,15 +653,15 @@ def _compute_snapshot_flags(g: Any) -> Dict[str, bool]:
     return {"needs_new_batter": need_new_batter, "needs_new_over": need_new_over}
 
 
-def _mini_batting_card(g: Any) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
+def _mini_batting_card(g: Any) -> List[dict[str, Any]]:
+    out: List[dict[str, Any]] = []
     bsc = getattr(g, "batting_scorecard", {}) or {}
     for _pid, e in bsc.items():
         balls = int(e.get("balls_faced", 0))
         was_out = bool(e.get("is_out", False))
         if balls == 0 and not was_out:
             continue
-        row: Dict[str, Any] = {
+        row: dict[str, Any] = {
             "name": e.get("player_name", ""),
             "runs": int(e.get("runs", 0)),
             "balls": balls,
@@ -669,7 +669,7 @@ def _mini_batting_card(g: Any) -> List[Dict[str, Any]]:
         }
         out.append(row)
 
-    last_dismiss_for: Dict[str, Dict[str, Optional[str]]] = {}
+    last_dismiss_for: dict[str, dict[str, Optional[str]]] = {}
     for d in _dedup_deliveries(g):
         if d.get("is_wicket") and d.get("dismissed_player_id"):
             last_dismiss_for[str(d["dismissed_player_id"])] = {
@@ -686,8 +686,8 @@ def _mini_batting_card(g: Any) -> List[Dict[str, Any]]:
     return out
 
 
-def _mini_bowling_card(g: Any) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
+def _mini_bowling_card(g: Any) -> List[dict[str, Any]]:
+    out: List[dict[str, Any]] = []
     bosc = getattr(g, "bowling_scorecard", {}) or {}
     for _pid, e in bosc.items():
         overs = float(e.get("overs_bowled", 0.0))
@@ -808,8 +808,13 @@ def _maybe_finalize_match(g: Any) -> None:
             method=method,
             margin=margin_i,
             result_text=result_text,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(datetime.UTC),
         )
+        g.status = models.GameStatus.completed
+        g.is_game_over = True
+        g.completed_at = getattr(g.result, "completed_at")
         g.status = models.GameStatus.completed
         setattr(g, "is_game_over", True)
         setattr(g, "completed_at", getattr(g.result, "completed_at"))
+        g.is_game_over = True
+        g.completed_at = getattr(g.result, "completed_at")

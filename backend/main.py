@@ -33,7 +33,7 @@ from sqlalchemy import select, delete, update, or_, and_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.attributes import flag_modified
 from fastapi import UploadFile, File, Form
-from datetime import datetime, timezone
+from datetime import datetime
 import json
 from backend import dls as dlsmod
 from backend.routes.games_router import router as games_router
@@ -219,7 +219,7 @@ class GameState(Protocol):
     current_striker_id: Optional[str]
     current_non_striker_id: Optional[str]
     target: Optional[int]
-    first_inning_summary: Optional[Dict[str, Any]]
+    first_inning_summary: Optional[dict[str, Any]]
     result: Optional[Union[str, schemas.MatchResult]]
     current_bowler_id: Optional[str]
     last_ball_bowler_id: Optional[str]
@@ -230,7 +230,7 @@ class GameState(Protocol):
 
     # âœ… missing runtime fields
     balls_bowled_total: int
-    innings_history: List[Dict[str, Any]]
+    innings_history: List[dict[str, Any]]
     needs_new_innings: bool
     needs_new_over: bool
     needs_new_batter: bool
@@ -246,8 +246,8 @@ class GameState(Protocol):
 
     # timelines & scorecards (JSON-safe)
     deliveries: Sequence[Any]
-    batting_scorecard: Dict[str, BattingEntryDict]
-    bowling_scorecard: Dict[str, BowlingEntryDict]
+    batting_scorecard: dict[str, BattingEntryDict]
+    bowling_scorecard: dict[str, BowlingEntryDict]
 
     # âœ… persistence
     async def save(self) -> None: ...
@@ -315,8 +315,13 @@ _fastapi.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 fastapi_app = _fastapi
 _fastapi.state.sio = sio
 app = socketio.ASGIApp(sio, other_asgi_app=_fastapi)
-from backend.socket_handlers import register_sio  # new import
-register_sio(sio)  # attach the handlers to the AsyncServer
+
+from backend.socket_handlers import register_sio  # existing
+register_sio(sio)  # existing
+
+# ADD these two lines right after register_sio(sio):
+from backend.services.live_bus import set_socketio_server as _set_bus_sio
+_set_bus_sio(sio)
 
 _fastapi.add_middleware(
     CORSMiddleware,
@@ -604,7 +609,7 @@ async def _maybe_close_innings(g: GameState) -> None:
                 "batting_scorecard": g.batting_scorecard,
                 "bowling_scorecard": g.bowling_scorecard,
                 "deliveries": g.deliveries,
-                "closed_at": datetime.now(timezone.utc).isoformat(),  # âœ… TZ-aware
+                "closed_at": datetime.now(datetime.UTC).isoformat(),  # âœ… TZ-aware
             })
 
 
@@ -629,7 +634,7 @@ def _coerce_batting_entry(  # pyright: ignore[reportUnusedFunction]
     if isinstance(x, schemas.BattingScorecardEntry):
         return x
     if isinstance(x, dict):
-        x_dict: Dict[str, Any] = cast(Dict[str, Any], x)
+        x_dict: dict[str, Any] = dict(x)
         pid = str(x_dict.get("player_id", ""))
         return schemas.BattingScorecardEntry(
             player_id=pid,
@@ -646,7 +651,7 @@ def _coerce_bowling_entry(  # pyright: ignore[reportUnusedFunction]
     if isinstance(x, schemas.BowlingScorecardEntry):
         return x
     if isinstance(x, dict):
-        x_dict: Dict[str, Any] = cast(Dict[str, Any], x)
+        x_dict: dict[str, Any] = dict(x)
         pid = str(x_dict.get("player_id", ""))
         overs_val: Any = x_dict.get("overs_bowled", x_dict.get("overs", 0.0))
         try:
@@ -696,7 +701,7 @@ def _parse_iso_dt(s: Optional[str]) -> Optional[datetime]:
             return datetime.fromisoformat(s[:-1]).replace(tzinfo=timezone.utc)
         dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=datetime.UTC)
         return dt
     except Exception:
         return None
@@ -853,8 +858,8 @@ from backend.services.snapshot_service import build_snapshot as _snapshot_from_g
 # Routes â€” Games
 # ================================================================
 @_fastapi.options("/games")
-async def options_games() -> Dict[str, str]:
-    payload: Dict[str, str] = {"message": "OK"}
+async def options_games() -> dict[str, str]:
+    payload: dict[str, str] = {"message": "OK"}
     return payload
 
 @_fastapi.post("/games", response_model=schemas.Game)  # type: ignore[name-defined]
@@ -1086,8 +1091,8 @@ async def create_sponsor(
     # Surfaces parsing â€” ensure a list[str]
     try:
         parsed_any: Any = json.loads(surfaces) if surfaces else ["all"]
-    except Exception:
-        raise HTTPException(status_code=400, detail="surfaces must be a JSON array of strings")
+    except Exception as err:
+        raise HTTPException(status_code=400, detail="surfaces must be a JSON array of strings") from err
 
     if not isinstance(parsed_any, list):
         raise HTTPException(status_code=400, detail="surfaces must be a JSON array of strings")
@@ -1149,7 +1154,7 @@ async def create_sponsor(
 async def get_game_sponsors(
     game_id: str,
     db: AsyncSession = Depends(get_db),
-) -> List[Dict[str, Any]]:
+) -> List[dict[str, Any]]:
     """
     Return all *active* sponsors at the current time window.
     v1: global pool (ignores league/season/game assignment).
@@ -1159,7 +1164,7 @@ async def get_game_sponsors(
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(datetime.UTC)
 
     Sponsor = models.Sponsor
     conditions = [
@@ -1178,7 +1183,7 @@ async def get_game_sponsors(
     # ...
     rows = res.scalars().all()
 
-    out: List[Dict[str, Any]] = []
+    out: List[dict[str, Any]] = []
     for r in rows:
         rid: int = int(r.id)
         name: str = str(r.name)
@@ -1257,7 +1262,7 @@ async def log_sponsor_impressions(
 
     # Prepare rows
     rows: List[models.SponsorImpression] = []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(datetime.UTC)
     for it in items:
         at_dt = _parse_iso_dt(it.at) or now
         rows.append(
@@ -1380,7 +1385,7 @@ async def remove_contributor(
 # Health
 # ================================================================
 @_fastapi.get("/healthz")
-async def healthz() -> Dict[str, str]:
+async def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 # ================================================================
