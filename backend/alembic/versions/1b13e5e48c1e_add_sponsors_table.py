@@ -1,4 +1,4 @@
-"""add sponsors table
+﻿"""add sponsors table
 
 Revision ID: 1b13e5e48c1e
 Revises: b3945b731a7a
@@ -46,3 +46,6 @@ def downgrade() -> None:
     op.drop_index('ix_sponsors_active_window', table_name='sponsors')
     op.drop_table('sponsors')
     # ### end Alembic commands ###
+
+
+

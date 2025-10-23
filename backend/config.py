@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -44,3 +44,5 @@ class Settings:
 
 
 settings = Settings()
+
+

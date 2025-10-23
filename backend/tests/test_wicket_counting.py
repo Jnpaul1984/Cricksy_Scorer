@@ -1,4 +1,4 @@
-"""
+﻿"""
 Test wicket counting functionality in the backend.
 
 This test validates that:
@@ -427,4 +427,7 @@ def test_dismissal_types_are_recorded(api_client):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+
 

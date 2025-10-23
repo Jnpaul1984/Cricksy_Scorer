@@ -1,4 +1,4 @@
-"""
+﻿"""
 Snapshot builder service for Cricksy Scorer.
 
 This module provides a single exported function:
@@ -18,7 +18,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Mapping, Sequence, Union, cast
 from pydantic import BaseModel
-from datetime import datetime, timezone
+import datetime as dt
+UTC = getattr(dt, 'UTC', dt.UTC)
 import typing as t
 from pathlib import Path
 from typing import Union as _Union
@@ -395,3 +396,5 @@ def build_snapshot(
     snapshot["current_non_striker_id"] = getattr(g, "current_non_striker_id", None)
 
     return snapshot
+
+

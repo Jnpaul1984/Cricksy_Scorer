@@ -1,4 +1,4 @@
-import os
+﻿import os
 from backend.tests._ci_utils import traced_request
 
 API = os.getenv("API_BASE", "http://localhost:8000").rstrip("/")
@@ -29,3 +29,6 @@ def test_create_legacy_schema_rejected_or_redirected():
     }
     r = _post(f"{API}/games", legacy)
     assert r.status_code in (200, 201, 400, 404, 405, 409, 422), r.text
+
+
+

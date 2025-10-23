@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 from fastapi.testclient import TestClient
 
@@ -19,3 +19,6 @@ def test_health():
         assert str(data["status"]).lower() in {"ok", "healthy", "up"}
     else:
         assert "ok" in resp.text.lower()
+
+
+

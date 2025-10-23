@@ -1,4 +1,4 @@
-"""Create initial game table
+﻿"""Create initial game table
 
 Revision ID: 3d32fa33fe5e
 Revises: 
@@ -56,3 +56,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_games_id'), table_name='games')
     op.drop_table('games')
     # ### end Alembic commands ###
+
+
+

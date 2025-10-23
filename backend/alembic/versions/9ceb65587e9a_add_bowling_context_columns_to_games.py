@@ -1,4 +1,4 @@
-"""add bowling context columns to games
+﻿"""add bowling context columns to games
 
 Revision ID: 9ceb65587e9a
 Revises: a1f75f7dd6d4
@@ -32,3 +32,6 @@ def downgrade() -> None:
     op.drop_column("games", "current_over_balls")
     op.drop_column("games", "last_ball_bowler_id")
     op.drop_column("games", "current_bowler_id")
+
+
+

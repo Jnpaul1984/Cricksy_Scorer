@@ -1,4 +1,4 @@
-"""
+﻿"""
 Full Match Integration Tests
 
 Tests complete match scenarios from creation to finalization including:
@@ -481,4 +481,7 @@ def test_innings_transition(game_helper, assert_helper):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+
 

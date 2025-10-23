@@ -1,11 +1,11 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, TypedDict
 
 import enum
 import uuid
-from datetime import datetime
-
+import datetime as dt
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 from pydantic import BaseModel
 from sqlalchemy import (
     JSON,
@@ -125,7 +125,7 @@ class Game(Base):
     team_b_keeper_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # --- Live context for Snapshot (NEW) ---
-    current_bowler_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)   # who’s bowling now (optional)
+    current_bowler_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)   # whoâ€™s bowling now (optional)
     last_ball_bowler_id: Mapped[Optional[str]] = mapped_column(String, nullable=True) # bowler of most recent ball
 
     # Extras totals for the *current innings* (fast access for snapshot/extras)
@@ -245,13 +245,13 @@ class Sponsor(Base):
     weight: Mapped[int] = mapped_column(Integer, nullable=False, default=1)      # 1..5
     surfaces: Mapped[List[str]] = mapped_column(JSON, default=lambda: ["all"], nullable=False)
 
-    start_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)  # UTC
-    end_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)    # UTC
+    start_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True), nullable=True)  # UTC
+    end_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True), nullable=True)    # UTC
 
-    created_at: Mapped[datetime] = mapped_column(
+    created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at: Mapped[datetime] = mapped_column(
+    updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
@@ -273,7 +273,7 @@ class SponsorImpression(Base):
     sponsor_id: Mapped[str] = mapped_column(
         String, ForeignKey("sponsors.id", ondelete="CASCADE"), nullable=False
     )
-    at: Mapped[datetime] = mapped_column(
+    at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
@@ -281,4 +281,7 @@ class SponsorImpression(Base):
         Index("ix_sponsor_impressions_sponsor_id", "sponsor_id"),
         Index("ix_sponsor_impressions_at", "at"),
     )
+
+
+
 

@@ -1,4 +1,4 @@
-from fastapi.testclient import TestClient
+﻿from fastapi.testclient import TestClient
 from typing import Any, Dict
 import uuid
 
@@ -133,3 +133,6 @@ def test_results_endpoint():
     assert isinstance(result["winner"], (str, type(None)))  # Winner can be None
     assert isinstance(result["team_a_score"], int)
     assert isinstance(result["team_b_score"], int)
+
+
+

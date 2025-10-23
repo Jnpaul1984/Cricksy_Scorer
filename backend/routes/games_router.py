@@ -1,10 +1,11 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any, Dict, Set, Optional, Sequence, TypedDict, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from datetime import datetime, timezone
+import datetime as dt
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
@@ -180,21 +181,16 @@ async def get_game_results(game_id: UUID, db: AsyncSession = Depends(get_db)) ->
 
     payload: dict[str, Any]
     raw = game.result
-    if isinstance(raw, str):
-        try:
-            payload = json.loads(raw)
-        except Exception:
-            payload = {}
-    elif isinstance(raw, dict):
-        payload = raw  # type: ignore[assignment]
-    else:
+    try:
+        payload = json.loads(raw)
+    except Exception:
         payload = {}
 
     return schemas.MatchResult(
         winner_team_id=str(payload.get("winner_team_id")) if payload.get("winner_team_id") is not None else None,
         winner_team_name=str(payload.get("winner_team_name")) if payload.get("winner_team_name") is not None else None,
         method=payload.get("method"),
-        margin=int(payload.get("margin")) if payload.get("margin") is not None else None,
+        margin=int(payload.get("margin")) if payload.get("margin", None) is not None else None,
         result_text=str(payload.get("result_text")) if payload.get("result_text") is not None else None,
         completed_at=payload.get("completed_at"),
     )
@@ -239,10 +235,10 @@ async def post_game_results(
             setattr(game, "status", getattr(models.GameStatus, "completed", "completed"))
         setattr(game, "is_game_over", True)
         try:
-            setattr(game, "completed_at", datetime.now(timezone.utc))
+            setattr(game, "completed_at", dt.datetime.now(UTC))
         except Exception:
             # If timezone not accepted, store naive UTC
-            setattr(game, "completed_at", datetime.utcnow())
+            setattr(game, "completed_at", dt.datetime.now(UTC))
 
         await db.commit()
         # Only pass fields that MatchResult expects, with correct types
@@ -304,4 +300,8 @@ async def list_game_results(db: AsyncSession = Depends(get_db)) -> Sequence[Dict
     return out
     
     
+
+
+
+
 

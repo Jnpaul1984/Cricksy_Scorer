@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections import defaultdict
 from typing import Any, Dict, Optional, List, Mapping, cast
@@ -67,3 +67,6 @@ def register_sio(sio: Any) -> None:
     sio.on("join")(_join)
     sio.on("leave")(_leave)
     sio.on("disconnect")(_disconnect)
+
+
+

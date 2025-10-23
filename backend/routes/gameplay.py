@@ -1,13 +1,15 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any, Dict, Optional, Mapping, List, Sequence, cast, Literal
-from datetime import datetime, timezone
+import datetime as dt
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 from pathlib import Path
 from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.services.live_bus import emit_state_update
 from backend.sql_app import crud, schemas, models
 from backend.sql_app.database import SessionLocal as _SessionLocal  # async SessionLocal for DI
 from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
@@ -17,7 +19,6 @@ from backend.services import validation as validation_helpers
 from backend.routes import games as _games_impl
 from backend import dls as dlsmod
 from backend.services.live_bus import emit_state_update
-
 router = APIRouter(prefix="/games", tags=["gameplay"])
 
 # Local DB dependency mirroring main.get_db
@@ -95,7 +96,7 @@ async def _maybe_close_innings(g: Any) -> None:
                 "batting_scorecard": g.batting_scorecard,
                 "bowling_scorecard": g.bowling_scorecard,
                 "deliveries": g.deliveries,
-                "closed_at": datetime.now(timezone.utc).isoformat(),
+                "closed_at": dt.datetime.now(UTC).isoformat(),
             })
 
         g.status = models.GameStatus.innings_break
@@ -315,6 +316,8 @@ async def change_bowler_mid_over(
     snap["mid_over_change_used"] = g.mid_over_change_used
     snap["needs_new_over"] = bool(getattr(g, "needs_new_over", False))
 
+    from backend.services.live_bus import emit_state_update
+    
     await emit_state_update(game_id, snap)
 
     return snap
@@ -346,7 +349,7 @@ async def start_next_innings(
     prev_batting_team = g.batting_team_name
     prev_bowling_team = g.bowling_team_name
 
-    # If the last innings wasn’t archived yet, archive it now
+    # If the last innings wasnâ€™t archived yet, archive it now
     last_archived_no = g.innings_history[-1]["inning_no"] if g.innings_history else None
     if last_archived_no != g.current_inning:
         g.innings_history.append({
@@ -359,7 +362,7 @@ async def start_next_innings(
             "batting_scorecard": g.batting_scorecard,
             "bowling_scorecard": g.bowling_scorecard,
             # DO NOT destroy the ledger; it spans both innings
-            "closed_at": datetime.now(timezone.utc).isoformat(),
+            "closed_at": dt.datetime.now(UTC).isoformat(),
         })
 
     # Advance innings and flip teams
@@ -387,7 +390,7 @@ async def start_next_innings(
         g.team_b if g.batting_team_name == g.team_a["name"] else g.team_a
     )
 
-    # Clear “gate” flags and mark match live
+    # Clear â€œgateâ€ flags and mark match live
     if not hasattr(g, "needs_new_over"):
         g.needs_new_over = False
     if not hasattr(g, "needs_new_batter"):
@@ -413,6 +416,8 @@ async def start_next_innings(
     snap["needs_new_over"] = (g.current_bowler_id is None)
     snap["needs_new_batter"] = (g.current_striker_id is None or g.current_non_striker_id is None)
 
+    from backend.services.live_bus import emit_state_update
+    
     await emit_state_update(game_id, snap)
 
     return snap
@@ -444,6 +449,7 @@ async def set_openers(
     gh._complete_game_by_result(u)
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
+    from backend.services.live_bus import emit_state_update
     await emit_state_update(game_id, snap)
 
     return snap
@@ -497,6 +503,7 @@ async def replace_batter(
     snap["needs_new_batter"] = flags["needs_new_batter"]
     snap["needs_new_over"] = flags["needs_new_over"]
 
+    from backend.services.live_bus import emit_state_update
     await emit_state_update(game_id, snap)
 
     return snap
@@ -535,6 +542,7 @@ async def set_next_batter(
     u = cast(Any, updated)
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
+    from backend.services.live_bus import emit_state_update
     await emit_state_update(game_id, snap)
 
     return {"ok": True, "current_striker_id": g.current_striker_id}
@@ -563,6 +571,7 @@ async def finalize_game(
     u = cast(Any, updated)
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
+    from backend.services.live_bus import emit_state_update
     await emit_state_update(game_id, snap)
 
     return snap
@@ -960,7 +969,8 @@ async def add_delivery(
         snap.get("last_ball_bowler_id") or getattr(u, "last_ball_bowler_id", None),
     )
 
-    # Emit via live event bus
+    # Emit via global sio from backend.main (lazy import to avoid circulars)
+    from backend.services.live_bus import emit_state_update
     await emit_state_update(game_id, snap)
 
     return snap
@@ -1022,6 +1032,9 @@ async def undo_last_delivery(game_id: str, db: AsyncSession = Depends(get_db)) -
     last = u.deliveries[-1] if u.deliveries else None
     snapshot = _snapshot_from_game(u, last, BASE_DIR)
 
+    from backend.services.live_bus import emit_state_update
     await emit_state_update(game_id, snapshot)
 
     return snapshot
+
+

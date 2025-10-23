@@ -1,4 +1,4 @@
-"""
+﻿"""
 Route handler implementations for /games endpoints.
 
 This module contains the extracted implementation logic for the main /games routes.
@@ -109,3 +109,6 @@ async def append_delivery_and_persist_impl(
             db=db,
         )
     return updated
+
+
+

@@ -1,4 +1,4 @@
-# backend/routes/roles.py
+﻿# backend/routes/roles.py
 from __future__ import annotations
 
 from typing import Any, AsyncGenerator, Dict, List, Optional, cast
@@ -14,7 +14,7 @@ from backend.sql_app.database import SessionLocal  # Async sessionmaker
 router = APIRouter(prefix="/games", tags=["roles"])
 
 # ----------------------------------------------------
-# DB dependency (async) — annotate as AsyncGenerator
+# DB dependency (async) â€” annotate as AsyncGenerator
 # ----------------------------------------------------
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:  # type: ignore[misc]
@@ -149,3 +149,6 @@ async def remove_contributor(game_id: str, contrib_id: int, db: AsyncSession = D
     if res.rowcount == 0:  # type: ignore[attr-defined]
         raise HTTPException(status_code=404, detail="Contributor not found")
     return {"ok": True}
+
+
+

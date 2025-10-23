@@ -1,4 +1,4 @@
-"""
+﻿"""
 Edge Case and Error Scenario Integration Tests
 
 Tests edge cases and error scenarios including:
@@ -489,4 +489,7 @@ def test_nonexistent_game_id(game_helper):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+
 

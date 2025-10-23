@@ -1,7 +1,7 @@
-# routes/interruptions.py
+﻿# routes/interruptions.py
 from __future__ import annotations
-
-from datetime import datetime, timezone
+import datetime as dt
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
@@ -10,10 +10,10 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# ⬇️ change these to match your project
+# â¬‡ï¸ change these to match your project
 from backend.sql_app.database import get_db
 from backend.sql_app.models import Game
-# ⬆️ change these to match your project
+# â¬†ï¸ change these to match your project
 
 router = APIRouter(prefix="/games", tags=["interruptions"])
 
@@ -23,13 +23,13 @@ Kind = Literal["weather", "light", "injury", "other"]
 class InterruptionStart(BaseModel):
     kind: Kind = "weather"
     note: Optional[str] = None
-    at_utc: Optional[datetime] = None
+    at_utc: Optional[dt.datetime] = None
 
 class InterruptionStop(BaseModel):
     kind: Optional[Kind] = None
-    at_utc: Optional[datetime] = None
+    at_utc: Optional[dt.datetime] = None
 
-# Compat “upsert” payload: POST /games/{id}/interruptions
+# Compat â€œupsertâ€ payload: POST /games/{id}/interruptions
 class InterruptionUpsert(BaseModel):
     # action/op/status or boolean flags, any of these work
     action: Optional[Literal["start", "stop", "begin", "end"]] = None
@@ -41,15 +41,15 @@ class InterruptionUpsert(BaseModel):
     kind: Optional[Kind] = "weather"
     type: Optional[Kind] = None  # tolerate { type: "weather" }
     note: Optional[str] = None
-    at_utc: Optional[datetime] = None
+    at_utc: Optional[dt.datetime] = None
 
 # ---------- Helpers ----------
-def _now_iso(dt: Optional[datetime]) -> str:
-    if dt is None:
-        dt = datetime.now(timezone.utc)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.isoformat()
+def _now_iso(value: Optional[dt.datetime]) -> str:
+    if value is None:
+        value = dt.datetime.now(UTC)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.isoformat()
 
 def _ensure_game(game: Optional[Game]) -> Game:
     if not game:
@@ -86,7 +86,7 @@ def _normalize_history(history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 # ---------- core ----------
 
-def _start_core(game: Game, kind: Kind, note: Optional[str], at_utc: Optional[datetime]) -> List[Dict[str, Any]]:
+def _start_core(game: Game, kind: Kind, note: Optional[str], at_utc: Optional[dt.datetime]) -> List[Dict[str, Any]]:
     history: List[Dict[str, Any]] = _normalize_history(list(game.interruptions or []))
     if _last_open_index(history, kind) is not None:
         raise HTTPException(400, f"{kind} interruption already active")
@@ -100,7 +100,7 @@ def _start_core(game: Game, kind: Kind, note: Optional[str], at_utc: Optional[da
     game.interruptions = history
     return history
 
-def _stop_core(game: Game, kind: Optional[Kind], at_utc: Optional[datetime]) -> List[Dict[str, Any]]:
+def _stop_core(game: Game, kind: Optional[Kind], at_utc: Optional[dt.datetime]) -> List[Dict[str, Any]]:
     history: List[Dict[str, Any]] = _normalize_history(list(game.interruptions or []))
     idx = _last_open_index(history, kind)
     if idx is None:
@@ -121,7 +121,7 @@ async def list_interruptions(game_id: str, db: AsyncSession = Depends(get_db)) -
 async def start_interruption(
     game_id: str,
     payload: InterruptionStart,
-    request: Request,                                 # ⬅️ add Request
+    request: Request,                                 # â¬…ï¸ add Request
     db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
@@ -129,7 +129,7 @@ async def start_interruption(
     await db.commit()
     await db.refresh(game)
 
-    # ⬇️ broadcast so widgets refresh immediately
+    # â¬‡ï¸ broadcast so widgets refresh immediately
     try:
         sio = request.app.state.sio
         await sio.emit("interruptions:update", {"game_id": game_id}, room=game_id)
@@ -143,7 +143,7 @@ async def start_interruption(
 async def stop_interruption(
     game_id: str,
     payload: InterruptionStop,
-    request: Request,                                 # ⬅️ add Request
+    request: Request,                                 # â¬…ï¸ add Request
     db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
@@ -151,7 +151,7 @@ async def stop_interruption(
     await db.commit()
     await db.refresh(game)
 
-    # ⬇️ broadcast so widgets refresh immediately
+    # â¬‡ï¸ broadcast so widgets refresh immediately
     try:
         sio = request.app.state.sio
         await sio.emit("interruptions:update", {"game_id": game_id}, room=game_id)
@@ -165,7 +165,7 @@ async def stop_interruption(
 async def upsert_interruption(
     game_id: str,
     payload: InterruptionUpsert,
-    request: Request,                                 # ⬅️ add Request
+    request: Request,                                 # â¬…ï¸ add Request
     db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
@@ -185,7 +185,7 @@ async def upsert_interruption(
     await db.commit()
     await db.refresh(game)
 
-    # ⬇️ broadcast so widgets refresh immediately
+    # â¬‡ï¸ broadcast so widgets refresh immediately
     try:
         sio = request.app.state.sio
         await sio.emit("interruptions:update", {"game_id": game_id}, room=game_id)
@@ -193,3 +193,5 @@ async def upsert_interruption(
         pass
 
     return {"ok": True, "interruptions": game.interruptions}
+
+
