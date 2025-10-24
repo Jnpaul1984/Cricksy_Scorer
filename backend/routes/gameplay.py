@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any, Dict, Optional, Mapping, List, Sequence, cast, Literal
 import datetime as dt

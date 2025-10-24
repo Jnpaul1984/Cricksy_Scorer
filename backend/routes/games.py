@@ -1,4 +1,4 @@
-﻿"""
+"""
 Route handler implementations for /games endpoints.
 
 This module contains the extracted implementation logic for the main /games routes.

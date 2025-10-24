@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 # App factory builds the ASGI and FastAPI apps (no side effects at import time)
 from backend.app import create_app

@@ -1,4 +1,4 @@
-﻿# routes/interruptions.py
+# routes/interruptions.py
 from __future__ import annotations
 import datetime as dt
 UTC = getattr(dt, "UTC", dt.timezone.utc)

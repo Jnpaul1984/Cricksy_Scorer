@@ -1,4 +1,4 @@
-﻿"""
+"""
 Snapshot builder service for Cricksy Scorer.
 
 This module provides a single exported function:

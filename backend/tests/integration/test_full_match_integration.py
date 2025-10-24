@@ -1,4 +1,4 @@
-﻿"""
+"""
 Full Match Integration Tests
 
 Tests complete match scenarios from creation to finalization including:

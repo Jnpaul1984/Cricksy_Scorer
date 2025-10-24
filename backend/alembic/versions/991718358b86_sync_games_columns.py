@@ -1,4 +1,4 @@
-﻿"""sync games columns
+"""sync games columns
 
 Revision ID: 991718358b86
 Revises: 1e46ec51bd33

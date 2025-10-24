@@ -1,4 +1,4 @@
-﻿# routers/games_dls.py
+# routers/games_dls.py
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -41,7 +41,7 @@ class ReduceOversOut(BaseModel):
 def _infer_format_overs(g: models.Game) -> Literal[20, 50]:
     """
     Decide whether the match uses 20 or 50 overs (standard DLS tables).
-    Priority: explicit innings limit â†’ match_overs â†’ default 50.
+    Priority: explicit innings limit â†' match_overs â†' default 50.
     """
     limit = getattr(g, "i1_overs_limit", None) or getattr(g, "match_overs", None) or 50
     return 20 if int(limit) <= 20 else 50  # type: ignore[return-value]

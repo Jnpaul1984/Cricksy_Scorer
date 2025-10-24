@@ -1,4 +1,4 @@
-﻿"""
+"""
 Test wicket counting functionality in the backend.
 
 This test validates that:

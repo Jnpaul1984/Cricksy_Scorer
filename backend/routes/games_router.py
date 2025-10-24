@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any, Dict, Set, Optional, Sequence, TypedDict, cast
 from uuid import UUID

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 from uuid import UUID
 from pydantic import BaseModel, Field
 from pydantic import field_validator, model_validator
@@ -332,7 +332,7 @@ class Game(BaseModel):
             if s == m.value.lower():
                 return m
 
-        # Map internal â†’ API
+        # Map internal â†' API
         if s in mapping:
             return mapping[s]
 

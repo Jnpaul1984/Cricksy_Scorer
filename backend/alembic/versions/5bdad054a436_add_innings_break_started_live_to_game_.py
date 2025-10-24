@@ -1,4 +1,4 @@
-﻿"""add innings_break/started/live to game_status
+"""add innings_break/started/live to game_status
 
 Revision ID: 5bdad054a436
 Revises: 991718358b86

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Performance benchmarks for Cricksy Scorer backend.
 
 These tests measure the performance of key operations to identify bottlenecks

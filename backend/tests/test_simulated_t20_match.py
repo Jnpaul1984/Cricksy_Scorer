@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 import pytest
 import backend.main as main  # Import the module to access private functions

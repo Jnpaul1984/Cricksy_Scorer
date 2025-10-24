@@ -1,4 +1,4 @@
-﻿"""add sponsors table
+"""add sponsors table
 
 Revision ID: 1b13e5e48c1e
 Revises: b3945b731a7a

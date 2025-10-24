@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any, Optional, Dict, List
 import asyncio
@@ -43,7 +43,7 @@ def publish_game_update(game_id: str, payload: Dict[str, Any]) -> None:
         if loop.is_running():
             loop.create_task(emit_game_update(game_id, payload))
     except Exception:
-        # No running loop (e.g., threadpool) â€” safe no-op
+        # No running loop (e.g., threadpool) â€" safe no-op
         pass
 
 

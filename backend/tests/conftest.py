@@ -1,4 +1,4 @@
-﻿# backend/tests/conftest.py
+# backend/tests/conftest.py
 import sys, pathlib
 
 # Repo root = two levels up from this file (Cricksy_Scorer/)

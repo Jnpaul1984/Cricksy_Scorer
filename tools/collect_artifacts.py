@@ -22,7 +22,7 @@ def copy_trace():
     if src.exists():
         # already in place (tests wrote here)
         return
-    # If tests didn’t write trace, create placeholder
+    # If tests didn't write trace, create placeholder
     src.write_text("", encoding="utf-8")
 
 
