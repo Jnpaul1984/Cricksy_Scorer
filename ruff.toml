@@ -1,0 +1,15 @@
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "B", "C4", "SIM", "RUF", "UP", "I"]
+ignore = ["UP038"]
+
+[lint.per-file-ignores]
+"backend/alembic/**/*.py" = ["E402"]
+"backend/routes/*.py" = ["B008"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
