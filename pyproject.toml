@@ -1,0 +1,46 @@
+[tool.ruff]
+line-length = 100
+# Target modern Python while remaining compatible with CI defaults
+# (GitHub Actions matrix below uses 3.12 & 3.13)
+target-version = "py312"
+include = [
+  "backend/**/*.py",
+  "scripts/**/*.py",
+]
+extend-exclude = [
+  "backend/tests/**",
+  "**/.venv/**",
+  "**/node_modules/**",
+]
+
+[tool.ruff.lint]
+# A curated, low-noise default rule set suitable for incremental adoption
+select = [
+  "E",   # pycodestyle
+  "F",   # pyflakes
+  "I",   # isort
+  "UP",  # pyupgrade
+  "B",   # flake8-bugbear
+  "C4",  # flake8-comprehensions
+  "SIM", # flake8-simplify
+  "PIE", # flake8-pie
+  "RUF", # Ruff-specific
+]
+# Keep long-line rule relaxed to avoid large diffs right now (revisit later)
+ignore = ["E501", "E203"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+# Keep mypy permissive initially; tighten incrementally later
+python_version = "3.12"
+warn_return_any = false
+warn_unused_configs = false
+ignore_missing_imports = true
+follow_imports = "skip"
+disallow_untyped_defs = false
+# Skip tests and common vendor dirs
+exclude = "backend/tests/|scripts/.*|node_modules/|.venv/"
