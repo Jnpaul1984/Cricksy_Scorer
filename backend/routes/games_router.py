@@ -257,11 +257,11 @@ async def post_game_results(
             result_text=result_dict["result_text"],
             completed_at=result_dict["completed_at"]
         )
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred updating the game results"
-        )
+        ) from e
 
 
 @router.get("/results")

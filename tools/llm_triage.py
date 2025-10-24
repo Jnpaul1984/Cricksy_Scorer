@@ -33,7 +33,8 @@ def prompt_message() -> str:
     }
 
     return f"""
-You are a senior backend+tests engineer. Diagnose failing tests for a cricket scoring API and propose a minimal patch.
+You are a senior backend+tests engineer. Diagnose failing tests for a cricket
+scoring API and propose a minimal patch.
 
 # API CONTRACT (must remain true)
 {contract}
@@ -47,8 +48,10 @@ You are a senior backend+tests engineer. Diagnose failing tests for a cricket sc
 
 # TASKS
 1) Identify the root cause (schema mismatch, innings state, finalize endpoint, etc.).
-2) Propose a minimal patch **as a unified diff** against the repository (modify tests or small backend handler if obvious).
-3) Keep the API contract intact. If you add a finalize endpoint route, document it in api_contract.md and update tests accordingly.
+2) Propose a minimal patch **as a unified diff** against the repository
+   (modify tests or small backend handler if obvious).
+3) Keep the API contract intact. If you add a finalize endpoint route,
+   document it in api_contract.md and update tests accordingly.
 4) Provide a short summary.md explaining the change and why it fixes the failure.
 
 Return strictly this JSON:

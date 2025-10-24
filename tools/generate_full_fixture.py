@@ -78,7 +78,8 @@ def _simulate_innings(
             if event:
                 if next_batter_idx >= len(batters):
                     raise RuntimeError(
-                        f"Ran out of batters while simulating wickets at over {over_number}, ball {ball_number}"
+                        f"Ran out of batters while simulating wickets at over "
+                        f"{over_number}, ball {ball_number}"
                     )
                 striker_idx = next_batter_idx
                 next_batter_idx += 1

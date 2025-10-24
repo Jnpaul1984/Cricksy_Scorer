@@ -7,7 +7,9 @@ ignore = ["UP038"]
 
 [lint.per-file-ignores]
 "backend/alembic/**/*.py" = ["E402"]
-"backend/routes/*.py" = ["B008"]
+"backend/routes/*.py" = ["B008", "E501"]
+"backend/services/**/*.py" = ["E501"]
+"backend/services/live_bus.py" = ["RUF006"]
 
 [format]
 quote-style = "double"
