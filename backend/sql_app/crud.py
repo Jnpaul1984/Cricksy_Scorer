@@ -1,8 +1,9 @@
-﻿# sql_app/crud.py
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import Optional, Dict, Any
+# sql_app/crud.py
 import json
+from typing import Any, Dict, Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import models, schemas
 
@@ -35,7 +36,7 @@ def _coerce_result_to_text(value: Any) -> str | None:
         except Exception:
             pass
 
-    # Dict/list â†’ JSON
+    # Dict/list â†' JSON
     if isinstance(value, (dict, list)):
         try:
             return json.dumps(value, ensure_ascii=False)
@@ -45,6 +46,7 @@ def _coerce_result_to_text(value: Any) -> str | None:
     # Enum? (e.g., value.value)
     try:
         import enum
+
         if isinstance(value, enum.Enum):
             return str(value.value)
     except Exception:
@@ -120,6 +122,3 @@ async def update_game(db: AsyncSession, game_model: models.Game) -> models.Game:
     await db.commit()
     await db.refresh(game_model)
     return game_model
-
-
-

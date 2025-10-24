@@ -1,4 +1,4 @@
-﻿"""
+"""
 Delivery service: persist a scored delivery.
 
 This module provides a single, focused function:
@@ -15,16 +15,17 @@ Responsibilities:
 - flag_modified on the ORM object fields and call crud.update_game to persist
 - return the updated ORM row (as GameState-like object)
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
+
 from pydantic import BaseModel
-
-from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
-from backend.sql_app import crud, schemas
 from backend.services.scoring_service import score_one as _score_one
+from backend.sql_app import crud, schemas
 
 
 async def apply_scoring_and_persist(
@@ -73,7 +74,9 @@ async def apply_scoring_and_persist(
         # trust that caller supplied a normalized delivery dict
         del_dict = dict(delivery_dict)
     else:
-        raise ValueError("Either delivery_dict must be provided or compute_kwargs=True with proper args")
+        raise ValueError(
+            "Either delivery_dict must be provided or compute_kwargs=True with proper args"
+        )
 
     # Ensure inning tag is present (best-effort)
     if "inning" not in del_dict:
@@ -96,6 +99,3 @@ async def apply_scoring_and_persist(
     # Persist via CRUD (pass the ORM row)
     updated = await crud.update_game(db=db, game_model=g)
     return updated
-
-
-

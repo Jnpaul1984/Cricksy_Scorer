@@ -1,4 +1,4 @@
-﻿"""
+"""
 Scoring service: encapsulates per-ball scoring logic.
 
 This module provides score_one(g, ...) which mutates the GameState-like object g
@@ -6,19 +6,19 @@ and returns a dict suitable for schemas.Delivery. It is a direct extraction of
 the previous main._score_one implementation, with minimal helper helpers copied
 over so the module is self-contained and avoids circular imports.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional, cast
+
 from pydantic import BaseModel
 
 # Centralized constants/rules
-from backend.domain.constants import (
-    CREDIT_BOWLER as _CREDIT_BOWLER,
-    INVALID_ON_NO_BALL as _INVALID_ON_NO_BALL,
-    INVALID_ON_WIDE as _INVALID_ON_WIDE,
-    norm_extra as _norm_extra,
-    as_extra_code as _as_extra_code,
-)
+from backend.domain.constants import CREDIT_BOWLER as _CREDIT_BOWLER
+from backend.domain.constants import INVALID_ON_NO_BALL as _INVALID_ON_NO_BALL
+from backend.domain.constants import INVALID_ON_WIDE as _INVALID_ON_WIDE
+from backend.domain.constants import as_extra_code as _as_extra_code
+from backend.domain.constants import norm_extra as _norm_extra
 
 
 def _complete_over_runtime(g: Any, bowler_id: Optional[str]) -> None:
@@ -134,8 +134,8 @@ def score_one(
     runs = int(runs_scored or 0)
 
     extra_norm = _norm_extra(extra)
-    is_nb = (extra_norm == "nb")
-    is_wd = (extra_norm == "wd")
+    is_nb = extra_norm == "nb"
+    is_wd = extra_norm == "wd"
     legal = not (is_nb or is_wd)
 
     off_bat_runs = 0
@@ -148,7 +148,11 @@ def score_one(
     elif extra_norm in ("wd", "b", "lb"):
         extra_runs = runs_scored
 
-    team_add = off_bat_runs + (1 if is_nb else 0) + (extra_runs if extra_norm in ("wd", "b", "lb") else 0)
+    team_add = (
+        off_bat_runs
+        + (1 if is_nb else 0)
+        + (extra_runs if extra_norm in ("wd", "b", "lb") else 0)
+    )
     g.total_runs = int(getattr(g, "total_runs", 0)) + team_add
 
     delivery_over_number = int(getattr(g, "overs_completed", 0))
@@ -232,5 +236,3 @@ def score_one(
         "commentary": None,
         "fielder_id": None,
     }
-
-

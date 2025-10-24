@@ -1,4 +1,4 @@
-﻿"""add match setup fields
+"""add match setup fields
 
 Revision ID: c7cb4087a1c1
 Revises: 3d32fa33fe5e

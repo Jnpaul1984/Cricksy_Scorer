@@ -1,4 +1,4 @@
-﻿from backend.helpers import overs_str_from_balls
+from backend.helpers import overs_str_from_balls
 
 
 def test_overs_str_from_balls_zero():

@@ -1,4 +1,4 @@
-﻿"""add FOW, phases, projections to games
+"""add FOW, phases, projections to games
 
 Revision ID: 1e46ec51bd33
 Revises: 8e842aa10dc3

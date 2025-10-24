@@ -1,4 +1,4 @@
-﻿"""add sponsor_impressions
+"""add sponsor_impressions
 
 Revision ID: 4202ae331ef6
 Revises: 1b13e5e48c1e

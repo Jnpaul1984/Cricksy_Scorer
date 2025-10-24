@@ -1,4 +1,4 @@
-﻿"""
+"""
 Edge Case and Error Scenario Integration Tests
 
 Tests edge cases and error scenarios including:

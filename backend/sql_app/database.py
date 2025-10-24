@@ -1,7 +1,9 @@
-﻿from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.orm import declarative_base
-from typing import AsyncGenerator
 import os
+from typing import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import (AsyncSession, async_sessionmaker,
+                                    create_async_engine)
+from sqlalchemy.orm import declarative_base
 
 # The database URL tells SQLAlchemy where our database is located.
 SQLALCHEMY_DATABASE_URL = os.getenv(
@@ -18,10 +20,7 @@ SessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=engine
 # This is a base class that our table models will inherit from.
 Base = declarative_base()
 
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
         yield session
-
-
-
-

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Integration tests for multi-day (Test) match functionality.
 
 These tests verify that the backend correctly handles:

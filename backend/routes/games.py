@@ -1,4 +1,4 @@
-﻿"""
+"""
 Route handler implementations for /games endpoints.
 
 This module contains the extracted implementation logic for the main /games routes.
@@ -6,15 +6,17 @@ It intentionally does NOT include FastAPI decorators so it can be imported by
 backend.main without creating circular imports. main.py will keep the route
 decorators and call these functions.
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Mapping, cast
+from typing import Annotated, Any, Dict, Mapping, Optional, cast
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.sql_app import crud, schemas
-from backend.services import game_service, delivery_service
-from backend.services import scoring_service
+from backend.services import delivery_service
 from backend.services import game_helpers as gh
+from backend.services import game_service, scoring_service
+from backend.sql_app import crud, schemas
 
 
 async def create_game_impl(payload: Any, db: AsyncSession) -> schemas.Game:
@@ -34,7 +36,9 @@ async def get_game_impl(game_id: str, db: AsyncSession) -> Optional[schemas.Game
     return await crud.get_game_by_id(db=db, game_id=game_id)
 
 
-async def build_snapshot_impl(db_game: Any, last_delivery: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+async def build_snapshot_impl(
+    db_game: Any, last_delivery: Optional[Mapping[str, Any]] = None
+) -> Dict[str, Any]:
     """
     Build the snapshot dict from the ORM game row using helpers.
     main.py previously used _snapshot_from_game; we replicate the semantics by
@@ -109,6 +113,3 @@ async def append_delivery_and_persist_impl(
             db=db,
         )
     return updated
-
-
-

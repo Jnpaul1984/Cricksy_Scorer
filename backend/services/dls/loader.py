@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -66,7 +66,7 @@ class DLSTable:
         if wickets_lost not in self._resources:
             raise ValueError(f"No resource data for {wickets_lost} wickets lost")
 
-        # Avoid list.copy() â€œunknownâ€ â€” return a fresh List[float]
+        # Avoid list.copy() â€œunknownâ€ â€" return a fresh List[float]
         return list(self._resources[wickets_lost])
 
     def overs_balls_to_balls_left(self, overs: int, balls: int) -> int:
@@ -96,7 +96,7 @@ def load_table_from_json(json_path: Union[str, Path]) -> DLSTable:
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in {json_path}: {e}")
+        raise ValueError(f"Invalid JSON in {json_path}: {e}") from e
 
     # Validate required fields
     for field in ("format_overs", "resources"):
