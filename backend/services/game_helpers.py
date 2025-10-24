@@ -16,23 +16,33 @@ the originals in main.py.
 
 import datetime as dt
 from collections import defaultdict
-from typing import (Any, Dict, Iterable, List, Mapping, MutableMapping,
-                    Optional, Sequence, Tuple, Union, cast)
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 from pydantic import BaseModel
 
 from backend import helpers as _local_helpers  # contains overs_str_from_balls
+from backend.domain.constants import CREDIT_BOWLER
+from backend.domain.constants import (
+    as_extra_code as _as_extra_code,  # expose for callers (main/get_recent_deliveries use)
+)
+from backend.domain.constants import norm_extra as _norm_extra  # keep public name the same
 from backend.sql_app import models, schemas
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
 # NEW: central rules and normalization
-from backend.domain.constants import CREDIT_BOWLER
-from backend.domain.constants import \
-    as_extra_code as \
-    _as_extra_code  # expose for callers (main/get_recent_deliveries use)
-from backend.domain.constants import \
-    norm_extra as _norm_extra  # keep public name the same
 
 # Local type aliases
 PlayerDict = dict[str, str]
@@ -134,9 +144,7 @@ def _complete_game_by_result(g: Any) -> bool:
     # 1) Chasing side has reached or surpassed the target â†' win by wickets
     if current_runs >= target:
         margin = max(1, 10 - wkts)
-        method_typed: Optional[schemas.MatchMethod] = cast(
-            schemas.MatchMethod, "by wickets"
-        )
+        method_typed: Optional[schemas.MatchMethod] = cast(schemas.MatchMethod, "by wickets")
         result_text = f"{getattr(g, 'batting_team_name', '')} won by {margin} wickets"
         g.result = schemas.MatchResult(
             winner_team_name=str(getattr(g, "batting_team_name", "")),
@@ -343,9 +351,7 @@ def _ensure_batting_entry(g: Any, batter_id: str) -> BattingEntryDict:
     else:
         e = {
             "player_id": batter_id,
-            "player_name": _player_name(
-                getattr(g, "team_a"), getattr(g, "team_b"), batter_id
-            )
+            "player_name": _player_name(getattr(g, "team_a"), getattr(g, "team_b"), batter_id)
             or "",
             "runs": 0,
             "balls_faced": 0,
@@ -384,9 +390,7 @@ def _ensure_bowling_entry(g: Any, bowler_id: str) -> BowlingEntryDict:
     else:
         e = {
             "player_id": bowler_id,
-            "player_name": _player_name(
-                getattr(g, "team_a"), getattr(g, "team_b"), bowler_id
-            )
+            "player_name": _player_name(getattr(g, "team_a"), getattr(g, "team_b"), bowler_id)
             or "",
             "overs_bowled": 0.0,
             "runs_conceded": 0,
@@ -423,9 +427,7 @@ def _rebuild_scorecards_from_deliveries(g: Any) -> None:
     inferred_team_name: Optional[str] = None
     for d in deliveries:
         for key in ("striker_id", "non_striker_id", "dismissed_player_id"):
-            team_name = _player_team_name(
-                getattr(g, "team_a"), getattr(g, "team_b"), d.get(key)
-            )
+            team_name = _player_team_name(getattr(g, "team_a"), getattr(g, "team_b"), d.get(key))
             if team_name:
                 inferred_team_name = team_name
                 break
@@ -451,16 +453,15 @@ def _rebuild_scorecards_from_deliveries(g: Any) -> None:
         pid_str = str(pid)
         if not pid_str:
             return None
-        if _player_team_name(
-            getattr(g, "team_a"), getattr(g, "team_b"), pid_str
-        ) not in {None, g.batting_team_name}:
+        if _player_team_name(getattr(g, "team_a"), getattr(g, "team_b"), pid_str) not in {
+            None,
+            g.batting_team_name,
+        }:
             return None
         if pid_str not in bat:
             bat[pid_str] = {
                 "player_id": pid_str,
-                "player_name": _player_name(
-                    getattr(g, "team_a"), getattr(g, "team_b"), pid_str
-                )
+                "player_name": _player_name(getattr(g, "team_a"), getattr(g, "team_b"), pid_str)
                 or "",
                 "runs": 0,
                 "balls_faced": 0,
@@ -477,16 +478,15 @@ def _rebuild_scorecards_from_deliveries(g: Any) -> None:
         pid_str = str(pid)
         if not pid_str:
             return None
-        if _player_team_name(
-            getattr(g, "team_a"), getattr(g, "team_b"), pid_str
-        ) not in {None, g.bowling_team_name}:
+        if _player_team_name(getattr(g, "team_a"), getattr(g, "team_b"), pid_str) not in {
+            None,
+            g.bowling_team_name,
+        }:
             return None
         if pid_str not in bowl:
             bowl[pid_str] = {
                 "player_id": pid_str,
-                "player_name": _player_name(
-                    getattr(g, "team_a"), getattr(g, "team_b"), pid_str
-                )
+                "player_name": _player_name(getattr(g, "team_a"), getattr(g, "team_b"), pid_str)
                 or "",
                 "overs_bowled": 0.0,
                 "runs_conceded": 0,
@@ -520,15 +520,10 @@ def _rebuild_scorecards_from_deliveries(g: Any) -> None:
             if out_pid and out_pid in bat:
                 bat[out_pid]["is_out"] = True
                 fld = (
-                    _player_name(
-                        getattr(g, "team_a"), getattr(g, "team_b"), d.get("fielder_id")
-                    )
+                    _player_name(getattr(g, "team_a"), getattr(g, "team_b"), d.get("fielder_id"))
                     or ""
                 )
-                blr = (
-                    _player_name(getattr(g, "team_a"), getattr(g, "team_b"), bowler)
-                    or ""
-                )
+                blr = _player_name(getattr(g, "team_a"), getattr(g, "team_b"), bowler) or ""
                 if dismissal_type == "caught":
                     bat[out_pid]["how_out"] = f"c {fld} b {blr}".strip()
                 elif dismissal_type == "lbw":
@@ -688,9 +683,7 @@ def _fall_of_wickets(g: Any) -> List[dict[str, Any]]:
                 "score": cum,
                 "wicket": len(fow) + 1,
                 "batter_id": out_pid,
-                "batter_name": _player_name(
-                    getattr(g, "team_a"), getattr(g, "team_b"), out_pid
-                )
+                "batter_name": _player_name(getattr(g, "team_a"), getattr(g, "team_b"), out_pid)
                 or "",
                 "over": f"{over_no}.{ball_no}",
                 "dismissal_type": dismissal,
@@ -799,9 +792,7 @@ def _runs_wkts_balls_for_innings(g: Any, inning: int) -> Tuple[int, int, int]:
     wkts: int = 0
     balls: int = 0
 
-    ledger: Sequence[Mapping[str, Any]] = cast(
-        Sequence[Mapping[str, Any]], (g.deliveries or [])
-    )
+    ledger: Sequence[Mapping[str, Any]] = cast(Sequence[Mapping[str, Any]], (g.deliveries or []))
 
     for d in ledger:
         if int(d.get("inning", 1) or 1) != int(inning):
@@ -846,9 +837,7 @@ def _maybe_finalize_match(g: Any) -> None:
             chasing_done = True
             method = schemas.MatchMethod.by_wickets
             margin = max(1, 10 - w2)
-            winner_name = getattr(
-                g, "batting_team_name", None
-            )  # batting in 2nd = chaser
+            winner_name = getattr(g, "batting_team_name", None)  # batting in 2nd = chaser
         else:
             balls_exhausted = balls_limit is not None and b2 >= balls_limit
             all_out = w2 >= 10
