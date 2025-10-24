@@ -1,4 +1,4 @@
-﻿"""add PlayerXIREQUEST and PlayerXIResponse fields
+"""add PlayerXIREQUEST and PlayerXIResponse fields
 
 Revision ID: 2d0c3e4d3a75
 Revises: 4202ae331ef6

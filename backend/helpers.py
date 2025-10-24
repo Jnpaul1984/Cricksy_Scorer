@@ -1,4 +1,4 @@
-﻿"""Backend helper utilities (small, well-tested helpers).
+"""Backend helper utilities (small, well-tested helpers).
 
 This module is a safe place for pure helpers extracted from backend/main.py.
 Start with overs_str_from_balls extracted from the original module.

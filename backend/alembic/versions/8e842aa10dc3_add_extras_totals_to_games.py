@@ -1,4 +1,4 @@
-﻿"""add extras_totals to games
+"""add extras_totals to games
 
 Revision ID: 8e842aa10dc3
 Revises: 9ceb65587e9a

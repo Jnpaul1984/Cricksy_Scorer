@@ -1,34 +1,35 @@
-﻿"""
+"""
 Snapshot builder service for Cricksy Scorer.
 
 This module provides a single exported function:
 
-    build_snapshot(g: GameState, last_delivery: Optional[Union[schemas.Delivery, Dict[str, Any]]]) -> Dict[str, Any]
+    build_snapshot(g: GameState, last_delivery: Optional[Union[schemas.Delivery,
+    Dict[str, Any]]]) -> Dict[str, Any]
 
-It re-implements the snapshot assembly logic currently in backend/main.py so it can be moved
-out of the giant main module. It intentionally only depends on the runtime game object (ORM
-row / GameState-like object) and a small set of helpers implemented here to avoid circular imports.
+It re-implements the snapshot assembly logic currently in backend/main.py so it
+can be moved out of the giant main module. It intentionally only depends on the
+runtime game object (ORM row / GameState-like object) and a small set of helpers
+implemented here to avoid circular imports.
 
 Notes:
-- This is an incremental refactor: many helpers are copied/adapted from backend/main.py to keep
-  the snapshot implementation self-contained. Later phases can deduplicate helpers into a
-  shared helpers/scoring module.
+- This is an incremental refactor: many helpers are copied/adapted from
+  backend/main.py to keep the snapshot implementation self-contained. Later
+  phases can deduplicate helpers into a shared helpers/scoring module.
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Mapping, Sequence, Union, cast
-from pydantic import BaseModel
 import datetime as dt
-UTC = getattr(dt, 'UTC', dt.UTC)
 import typing as t
 from pathlib import Path
-from typing import Union as _Union
-# Import schemas & DLS loader used by snapshot
-from backend.sql_app import schemas
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Sequence, Union, cast
+
+from pydantic import BaseModel
+
 from backend import dls as dlsmod
+from backend.sql_app import schemas
 
-
-from typing import TYPE_CHECKING
+UTC = getattr(dt, "UTC", dt.UTC)
 if TYPE_CHECKING:
     from backend.main import GameState  # type: ignore
 else:

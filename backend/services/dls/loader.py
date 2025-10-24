@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -9,7 +9,7 @@ class DLSTable:
     """
     DLS resource table for a specific cricket format.
     Provides access to DLS resource percentages for calculating revised targets
-    in interrupted cricket matches.
+    # Avoid list.copy() "unknown" -- return a fresh List[float]
     """
 
     def __init__(
@@ -96,7 +96,7 @@ def load_table_from_json(json_path: Union[str, Path]) -> DLSTable:
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in {json_path}: {e}")
+        raise ValueError(f"Invalid JSON in {json_path}: {e}") from e
 
     # Validate required fields
     for field in ("format_overs", "resources"):

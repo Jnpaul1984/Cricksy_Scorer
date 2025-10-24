@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any, Optional, Dict, List
 import asyncio
@@ -35,15 +35,16 @@ async def emit_game_update(game_id: str, payload: Dict[str, Any]) -> None:
 # Sync-friendly wrapper used by some sync routes (e.g., games_dls)
 def publish_game_update(game_id: str, payload: Dict[str, Any]) -> None:
     """
-    Fire-and-forget from sync contexts. If running in a worker thread without an event loop,
-    silently no-op (same behavior as previous 'try: import fail -> no-op' pattern).
+    Fire-and-forget from sync contexts. If running in a worker thread without an
+    event loop, silently no-op (same behavior as previous 'try: import fail ->
+    no-op' pattern).
     """
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            loop.create_task(emit_game_update(game_id, payload))
+            _task = loop.create_task(emit_game_update(game_id, payload))
     except Exception:
-        # No running loop (e.g., threadpool) â€” safe no-op
+        # No running loop (e.g., threadpool) -- safe no-op
         pass
 
 

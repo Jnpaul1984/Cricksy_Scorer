@@ -1,7 +1,7 @@
-﻿# routes/interruptions.py
+# routes/interruptions.py
 from __future__ import annotations
+
 import datetime as dt
-UTC = getattr(dt, "UTC", dt.timezone.utc)
 from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
@@ -10,10 +10,10 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# â¬‡ï¸ change these to match your project
 from backend.sql_app.database import get_db
 from backend.sql_app.models import Game
-# â¬†ï¸ change these to match your project
+
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 
 router = APIRouter(prefix="/games", tags=["interruptions"])
 
@@ -29,7 +29,7 @@ class InterruptionStop(BaseModel):
     kind: Optional[Kind] = None
     at_utc: Optional[dt.datetime] = None
 
-# Compat â€œupsertâ€ payload: POST /games/{id}/interruptions
+# Compat "upsert" payload: POST /games/{id}/interruptions
 class InterruptionUpsert(BaseModel):
     # action/op/status or boolean flags, any of these work
     action: Optional[Literal["start", "stop", "begin", "end"]] = None

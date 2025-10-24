@@ -1,18 +1,15 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+from typing import Any, Dict, List
 
 # App factory builds the ASGI and FastAPI apps (no side effects at import time)
 from backend.app import create_app
+from backend.sql_app import crud, models, schemas  # noqa: F401
+from backend.sql_app.database import get_db as get_db  # noqa: F401
 
 # Build the ASGI app and expose a FastAPI instance for tests
 app, _fastapi = create_app()
 fastapi_app = _fastapi  # compatibility for tests
-
-# Re-export DB dependency and ORM modules for compatibility
-from backend.sql_app.database import get_db as get_db  # noqa: F401
-from backend.sql_app import crud, schemas, models  # noqa: F401
-
-# Minimal stub matching previous tests' expectations
-from typing import Any, List, Dict
 
 class ConcreteGameState:
     def __init__(self, id: str, team_a: Dict[str, Any], team_b: Dict[str, Any]):

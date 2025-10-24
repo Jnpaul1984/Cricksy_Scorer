@@ -1,4 +1,4 @@
-﻿"""add bowling context columns to games
+"""add bowling context columns to games
 
 Revision ID: 9ceb65587e9a
 Revises: a1f75f7dd6d4

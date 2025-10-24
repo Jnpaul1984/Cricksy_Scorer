@@ -1,17 +1,19 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-from typing import Any, Dict, Set, Optional, Sequence, TypedDict, cast
+import datetime as dt
+import json
+from typing import Annotated, Any, Dict, Optional, Sequence, Set, TypedDict, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-import datetime as dt
-UTC = getattr(dt, "UTC", dt.timezone.utc)
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.sql_app import models, schemas
-from backend.sql_app.database import get_db  # async generator -> AsyncSession
-import json
+from backend.sql_app.database import get_db
+
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 
 # Ensure schemas.MatchResultRequest is imported and defined
 # If not, add the following to sql_app/schemas.py:
@@ -61,7 +63,7 @@ def _ids_from_team_json(team_json: Optional[Dict[str, Any]]) -> Set[str]:
 async def set_playing_xi(
     game_id: UUID,
     payload: schemas.PlayingXIRequest,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> schemas.PlayingXIResponse:
     # Fetch game (async)
     result = await db.execute(select(models.Game).where(models.Game.id == str(game_id)))
@@ -111,15 +113,15 @@ async def set_playing_xi(
 async def set_playing_xi_alias(
     game_id: UUID,
     payload: schemas.PlayingXIRequest,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> schemas.PlayingXIResponse:
     return await set_playing_xi(game_id, payload, db)
 
 @router.get("/search")
 async def search_games(
+    db: Annotated[AsyncSession, Depends(get_db)],
     team_a: Optional[str] = None,
     team_b: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
 ) -> Sequence[Dict[str, Any]]:
     """
     Minimal search by team names (case-insensitive contains) without requiring game IDs.
@@ -165,7 +167,7 @@ async def search_games(
     return out
 
 @router.get("/{game_id}/results", response_model=schemas.MatchResult)
-async def get_game_results(game_id: UUID, db: AsyncSession = Depends(get_db)) -> schemas.MatchResult:
+async def get_game_results(game_id: UUID, db: Annotated[AsyncSession, Depends(get_db)]) -> schemas.MatchResult:
     """Retrieve results for a specific game.
 
     Decodes the stored JSON and returns it mapped to schemas.MatchResult
@@ -200,7 +202,7 @@ async def get_game_results(game_id: UUID, db: AsyncSession = Depends(get_db)) ->
 async def post_game_results(
     game_id: UUID,
     payload: schemas.MatchResultRequest,
-    db: AsyncSession = Depends(get_db)
+    db: Annotated[AsyncSession, Depends(get_db)]
 ) -> schemas.MatchResult:
     """Creates or updates results for a specific game"""
     try:
@@ -253,15 +255,15 @@ async def post_game_results(
             result_text=result_dict["result_text"],
             completed_at=result_dict["completed_at"]
         )
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred updating the game results"
-        )
+        ) from e
 
 
 @router.get("/results")
-async def list_game_results(db: AsyncSession = Depends(get_db)) -> Sequence[Dict[str, Any]]:
+async def list_game_results(db: Annotated[AsyncSession, Depends(get_db)]) -> Sequence[Dict[str, Any]]:
     """Return all games that have a stored result as simple dicts."""
     res = await db.execute(select(models.Game).where(models.Game.result.isnot(None)))
     rows = res.scalars().all()

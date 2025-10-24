@@ -1,4 +1,4 @@
-﻿"""
+"""
 Validation service facade.
 
 This module re-exports the existing validation helpers so the rest of the codebase
