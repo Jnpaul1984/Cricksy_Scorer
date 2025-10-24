@@ -14,30 +14,36 @@ Notes:
   the snapshot implementation self-contained. Later phases can deduplicate helpers into a
   shared helpers/scoring module.
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Mapping, Sequence, Union, cast
-from pydantic import BaseModel
 import datetime as dt
-UTC = getattr(dt, 'UTC', dt.UTC)
 import typing as t
+from collections import defaultdict
 from pathlib import Path
-from typing import Union as _Union
-# Import schemas & DLS loader used by snapshot
-from backend.sql_app import schemas
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Mapping, Optional, Sequence, Union, cast
+
+from pydantic import BaseModel
+
 from backend import dls as dlsmod
+from backend.sql_app import schemas
 
+UTC = getattr(dt, "UTC", dt.UTC)
 
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from backend.main import GameState  # type: ignore
 else:
     GameState = Any  # type: ignore
 
+# Dedup key: (over, ball, subindex) where subindex is int for illegal (wd/nb) or "L" for legal.
+BallKey = t.Tuple[int, int, t.Union[int, t.Literal["L"]]]
+
 
 # -----------------------
 # Local helper functions
 # -----------------------
+
+
 def _to_dict(x: Any) -> Optional[Dict[str, Any]]:
     """Normalize a value that may be a dict or a Pydantic model to a plain dict[str,Any]."""
     if x is None:
@@ -107,12 +113,6 @@ def _deliveries_for_current_innings(g: GameState) -> List[Dict[str, Any]]:
 
     cur = int(getattr(g, "current_inning", 1) or 1)
     return [d for d in rows if int(d.get("inning", 1) or 1) == cur]
-
-
-# Dedup key: (over, ball, subindex) where subindex is int for illegal (wd/nb) or "L" for legal.
-from collections import defaultdict
-
-BallKey = t.Tuple[int, int, t.Union[int, t.Literal["L"]]]
 
 
 def _dedup_deliveries(g: GameState) -> List[Dict[str, Any]]:
