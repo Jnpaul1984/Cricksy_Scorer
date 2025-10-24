@@ -1,17 +1,19 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Set, Optional, Sequence, TypedDict, cast
+import datetime as dt
+import json
+from typing import Any, Dict, Optional, Sequence, Set, TypedDict, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-import datetime as dt
-UTC = getattr(dt, "UTC", dt.timezone.utc)
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.sql_app import models, schemas
 from backend.sql_app.database import get_db  # async generator -> AsyncSession
-import json
+
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 
 # Ensure schemas.MatchResultRequest is imported and defined
 # If not, add the following to sql_app/schemas.py:

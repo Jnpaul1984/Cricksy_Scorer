@@ -13,21 +13,34 @@ or plain dict-like game state used by tests). It keeps the same semantics as
 the originals in main.py.
 """
 
-from collections import defaultdict
 import datetime as dt
-UTC = getattr(dt, "UTC", dt.UTC)
-from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union, cast
+from collections import defaultdict
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 from pydantic import BaseModel
 
-from backend.sql_app import schemas, models
 from backend import helpers as _local_helpers  # contains overs_str_from_balls
+from backend.sql_app import models, schemas
+
+UTC = getattr(dt, "UTC", dt.UTC)
 
 # NEW: central rules and normalization
 from backend.domain.constants import (
-    norm_extra as _norm_extra,          # keep public name the same
-    as_extra_code as _as_extra_code,    # expose for callers (main/get_recent_deliveries use)
     CREDIT_BOWLER,
+    as_extra_code as _as_extra_code,  # expose for callers (main/get_recent_deliveries use)
+    norm_extra as _norm_extra,  # keep public name the same
 )
 
 # Local type aliases

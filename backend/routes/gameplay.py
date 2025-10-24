@@ -1,24 +1,24 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Mapping, List, Sequence, cast, Literal
 import datetime as dt
-UTC = getattr(dt, "UTC", dt.timezone.utc)
 from pathlib import Path
-from pydantic import BaseModel
+from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.services.live_bus import emit_state_update
-from backend.sql_app import crud, schemas, models
-from backend.sql_app.database import SessionLocal as _SessionLocal  # async SessionLocal for DI
-from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
-from backend.services import game_helpers as gh
-from backend.services.scoring_service import score_one as _score_one
-from backend.services import validation as validation_helpers
-from backend.routes import games as _games_impl
 from backend import dls as dlsmod
+from backend.routes import games as _games_impl
+from backend.services import game_helpers as gh
+from backend.services import validation as validation_helpers
 from backend.services.live_bus import emit_state_update
+from backend.services.scoring_service import score_one as _score_one
+from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
+from backend.sql_app import crud, models, schemas
+from backend.sql_app.database import SessionLocal as _SessionLocal  # async SessionLocal for DI
+
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 router = APIRouter(prefix="/games", tags=["gameplay"])
 
 # Local DB dependency mirroring main.get_db

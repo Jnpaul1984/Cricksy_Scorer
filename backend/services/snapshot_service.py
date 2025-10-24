@@ -16,16 +16,28 @@ Notes:
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Mapping, Sequence, Union, cast
-from pydantic import BaseModel
 import datetime as dt
-UTC = getattr(dt, 'UTC', dt.UTC)
 import typing as t
 from pathlib import Path
+from typing import (
+    Any,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Union,
+    cast,
+)
 from typing import Union as _Union
+
+from pydantic import BaseModel
+
 # Import schemas & DLS loader used by snapshot
-from backend.sql_app import schemas
 from backend import dls as dlsmod
+from backend.sql_app import schemas
+
+UTC = getattr(dt, "UTC", dt.UTC)
 
 
 from typing import TYPE_CHECKING

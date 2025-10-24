@@ -1,7 +1,6 @@
 # routes/interruptions.py
 from __future__ import annotations
 import datetime as dt
-UTC = getattr(dt, "UTC", dt.timezone.utc)
 from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
@@ -13,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # â¬‡ï¸ change these to match your project
 from backend.sql_app.database import get_db
 from backend.sql_app.models import Game
+
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 # â¬†ï¸ change these to match your project
 
 router = APIRouter(prefix="/games", tags=["interruptions"])
