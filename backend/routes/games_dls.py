@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from typing import Literal, Any
+from typing import Annotated, Literal, Any
 from sqlalchemy.orm import Session
 from backend.sql_app import models
 from backend.sql_app.database import get_db

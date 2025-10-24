@@ -1,7 +1,7 @@
 # routes/interruptions.py
 from __future__ import annotations
 import datetime as dt
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -113,7 +113,7 @@ def _stop_core(game: Game, kind: Optional[Kind], at_utc: Optional[dt.datetime]) 
 # ---------- GET route (normalize before returning) ----------
 
 @router.get("/{game_id}/interruptions")
-async def list_interruptions(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
+async def list_interruptions(game_id: str, db: Annotated[AsyncSession, Depends(get_db)]) -> Dict[str, Any]:
     game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
     game.interruptions = _normalize_history(list(game.interruptions or []))
     return {"ok": True, "interruptions": game.interruptions or []}
@@ -123,7 +123,7 @@ async def start_interruption(
     game_id: str,
     payload: InterruptionStart,
     request: Request,                                 # â¬…ï¸ add Request
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
     _start_core(game, payload.kind, payload.note, payload.at_utc)
@@ -145,7 +145,7 @@ async def stop_interruption(
     game_id: str,
     payload: InterruptionStop,
     request: Request,                                 # â¬…ï¸ add Request
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
     _stop_core(game, payload.kind, payload.at_utc)
@@ -167,7 +167,7 @@ async def upsert_interruption(
     game_id: str,
     payload: InterruptionUpsert,
     request: Request,                                 # â¬…ï¸ add Request
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
 

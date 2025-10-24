@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, cast
+from typing import Annotated, Any, Dict, List, Literal, Mapping, Optional, Sequence, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -129,7 +129,7 @@ class ReplaceBatterBody(BaseModel):
 async def start_over(
     game_id: str,
     body: StartOverBody,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
@@ -177,7 +177,7 @@ async def get_deliveries(
     innings: Optional[int] = Query(None, ge=1, le=4, description="Filter by innings number"),
     limit: int = Query(120, ge=1, le=500, description="Max number of rows to return"),
     order: Literal["desc", "asc"] = Query("desc", description="desc = newest-first"),
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     """
     Returns deliveries for a game (optionally filtered by innings),
@@ -247,7 +247,7 @@ async def get_deliveries(
 async def change_bowler_mid_over(
     game_id: str,
     body: MidOverChangeBody,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
@@ -326,7 +326,7 @@ async def change_bowler_mid_over(
 async def start_next_innings(
     game_id: str,
     body: StartNextInningsBody,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
@@ -427,7 +427,7 @@ async def start_next_innings(
 async def set_openers(
     game_id: str,
     body: Dict[str, str],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
@@ -459,7 +459,7 @@ async def set_openers(
 async def replace_batter(
     game_id: str,
     body: ReplaceBatterBody,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
@@ -513,7 +513,7 @@ async def replace_batter(
 async def set_next_batter(
     game_id: str,
     body: NextBatterBody,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
@@ -551,7 +551,7 @@ async def set_next_batter(
 @router.post("/{game_id}/finalize")
 async def finalize_game(
     game_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
@@ -577,7 +577,7 @@ async def finalize_game(
     return snap
 
 @router.get("/{game_id}/snapshot")
-async def get_snapshot(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
+async def get_snapshot(game_id: str, db: Annotated[AsyncSession, Depends(get_db)]) -> Dict[str, Any]:
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -696,7 +696,7 @@ async def get_snapshot(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict
 async def get_recent_deliveries(
     game_id: str,
     limit: int = Query(10, ge=1, le=50, description="Max number of most recent deliveries"),
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     """
     Returns the most-recent `limit` deliveries for a game, newest-first.
@@ -753,7 +753,7 @@ async def get_recent_deliveries(
 async def add_delivery(
     game_id: str,
     delivery: schemas.ScoreDelivery,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
@@ -977,7 +977,7 @@ async def add_delivery(
 
 
 @router.post("/{game_id}/undo-last")
-async def undo_last_delivery(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
+async def undo_last_delivery(game_id: str, db: Annotated[AsyncSession, Depends(get_db)]) -> Dict[str, Any]:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")

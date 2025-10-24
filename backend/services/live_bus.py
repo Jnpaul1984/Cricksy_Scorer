@@ -32,6 +32,10 @@ async def emit_game_update(game_id: str, payload: Dict[str, Any]) -> None:
     await emit("game:update", {"id": game_id, **payload}, room=game_id)
 
 
+# Keep references to tasks to avoid garbage collection warning (RUF006)
+_tasks: List[asyncio.Task[Any]] = []
+
+
 # Sync-friendly wrapper used by some sync routes (e.g., games_dls)
 def publish_game_update(game_id: str, payload: Dict[str, Any]) -> None:
     """
@@ -41,9 +45,12 @@ def publish_game_update(game_id: str, payload: Dict[str, Any]) -> None:
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            loop.create_task(emit_game_update(game_id, payload))
+            task = loop.create_task(emit_game_update(game_id, payload))
+            _tasks.append(task)
+            # Clean up completed tasks periodically
+            _tasks[:] = [t for t in _tasks if not t.done()]
     except Exception:
-        # No running loop (e.g., threadpool) â€" safe no-op
+        # No running loop (e.g., threadpool) - safe no-op
         pass
 
 

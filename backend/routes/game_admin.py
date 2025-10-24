@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, List, Mapping, Optional, cast
+from typing import Annotated, Any, List, Mapping, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -24,7 +24,7 @@ class OversLimitBody(BaseModel):
 async def set_overs_limit(
     game_id: str,
     body: OversLimitBody,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
@@ -68,7 +68,7 @@ async def set_overs_limit(
 async def set_team_roles(
     game_id: str,
     payload: schemas.TeamRoleUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:

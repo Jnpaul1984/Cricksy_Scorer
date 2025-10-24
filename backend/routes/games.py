@@ -8,7 +8,7 @@ decorators and call these functions.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Mapping, cast
+from typing import Annotated, Any, Dict, Optional, Mapping, cast
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.sql_app import crud, schemas
