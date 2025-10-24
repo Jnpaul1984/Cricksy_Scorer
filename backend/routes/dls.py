@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, List, Mapping, Optional, Literal, cast
+from typing import Annotated, Any, List, Mapping, Optional, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -50,7 +50,7 @@ def _team1_runs(g: Any) -> int:
     return total
 
 @router.post("/{game_id}/dls/revised-target", response_model=DLSRevisedOut)
-async def dls_revised_target(game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)):
+async def dls_revised_target(game_id: str, body: DLSRequest, db: Annotated[AsyncSession, Depends(get_db)]):
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -71,7 +71,7 @@ async def dls_revised_target(game_id: str, body: DLSRequest, db: AsyncSession = 
     return DLSRevisedOut(R1_total=R1_total, R2_total=R2_total, S1=S1, target=target)
 
 @router.post("/{game_id}/dls/par", response_model=DLSParOut)
-async def dls_par_now(game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)):
+async def dls_par_now(game_id: str, body: DLSRequest, db: Annotated[AsyncSession, Depends(get_db)]):
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")

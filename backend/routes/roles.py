@@ -1,7 +1,7 @@
 # backend/routes/roles.py
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator, Dict, List, Optional, cast
+from typing import Annotated, Any, AsyncGenerator, Dict, List, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select, update
@@ -40,7 +40,7 @@ def _ensure_player_on_team(player_id: Optional[str], team_players: List[Dict[str
 async def set_team_roles(
     game_id: str,
     payload: schemas.TeamRoleUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     res = await db.execute(select(models.Game).where(models.Game.id == game_id))
     game = res.scalar_one_or_none()
@@ -81,7 +81,7 @@ async def set_team_roles(
 async def add_contributor(
     game_id: str,
     body: schemas.GameContributorIn,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     # Ensure game exists
     res = await db.execute(select(models.Game).where(models.Game.id == game_id))
@@ -124,7 +124,7 @@ async def add_contributor(
     )
 
 @router.get("/{game_id}/contributors", response_model=List[schemas.GameContributor])
-async def list_contributors(game_id: str, db: AsyncSession = Depends(get_db)):
+async def list_contributors(game_id: str, db: Annotated[AsyncSession, Depends(get_db)]):
     res = await db.execute(select(models.GameContributor).where(models.GameContributor.game_id == game_id))
     rows = res.scalars().all()
     return [
@@ -139,7 +139,7 @@ async def list_contributors(game_id: str, db: AsyncSession = Depends(get_db)):
     ]
 
 @router.delete("/{game_id}/contributors/{contrib_id}")
-async def remove_contributor(game_id: str, contrib_id: int, db: AsyncSession = Depends(get_db)):
+async def remove_contributor(game_id: str, contrib_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
     stmt = delete(models.GameContributor).where(
         models.GameContributor.game_id == game_id,
         models.GameContributor.id == contrib_id,

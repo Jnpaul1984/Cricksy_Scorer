@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional, List, Dict, Literal, cast
+from typing import Annotated, Any, Optional, List, Dict, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -32,13 +32,13 @@ class CreateGameRequest(BaseModel):
     decision: Optional[Literal["bat", "bowl"]] = None
 
 @router.post("/games", response_model=schemas.Game)
-async def create_game(payload: CreateGameRequest, db: AsyncSession = Depends(get_db)) -> schemas.Game:
+async def create_game(payload: CreateGameRequest, db: Annotated[AsyncSession, Depends(get_db)]) -> schemas.Game:
     # Delegate to the existing implementation to avoid duplication
     db_game = await _games_impl.create_game_impl(payload, db)
     return cast(schemas.Game, db_game)
 
 @router.get("/games/{game_id}", response_model=schemas.Game)
-async def get_game(game_id: str, db: AsyncSession = Depends(get_db)) -> schemas.Game:
+async def get_game(game_id: str, db: Annotated[AsyncSession, Depends(get_db)]) -> schemas.Game:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")

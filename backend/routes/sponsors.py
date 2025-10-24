@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import json
 from pathlib import Path
-from typing import Any, List, Optional, Dict, Literal, Union, cast
+from typing import Annotated, Any, List, Optional, Dict, Literal, Union, cast
 
 import datetime as dt
 UTC = getattr(dt, "UTC", dt.timezone.utc)
@@ -63,7 +63,7 @@ async def create_sponsor(
     surfaces: Optional[str] = Form(None),   # JSON array as string
     start_at: Optional[str] = Form(None),   # ISO-8601
     end_at: Optional[str] = Form(None),
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     if weight < 1 or weight > 5:
         raise HTTPException(status_code=400, detail="weight must be between 1 and 5")
@@ -130,7 +130,7 @@ async def create_sponsor(
 @router.get("/games/{game_id}/sponsors")
 async def get_game_sponsors(
     game_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> List[dict[str, Any]]:
     game = await crud.get_game(db, game_id=game_id)
     if not game:
@@ -195,7 +195,7 @@ def sponsors_manifest(brand: str) -> SponsorsManifest:
 @router.post("/sponsor_impressions", response_model=SponsorImpressionsOut)
 async def log_sponsor_impressions(
     body: Union[SponsorImpressionIn, List[SponsorImpressionIn]],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     items: List[SponsorImpressionIn] = body if isinstance(body, list) else [body]
 
