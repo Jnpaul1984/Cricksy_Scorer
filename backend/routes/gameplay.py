@@ -179,10 +179,10 @@ async def start_over(
 @router.get("/{game_id}/deliveries")
 async def get_deliveries(
     game_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
     innings: Optional[int] = Query(None, ge=1, le=4, description="Filter by innings number"),
     limit: int = Query(120, ge=1, le=500, description="Max number of rows to return"),
     order: Literal["desc", "asc"] = Query("desc", description="desc = newest-first"),
-    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     """
     Returns deliveries for a game (optionally filtered by innings),
@@ -626,7 +626,7 @@ async def get_snapshot(game_id: str, db: Annotated[AsyncSession, Depends(get_db)
         current_innings = int(getattr(g, "current_inning", 1) or 1)
         if isinstance(overs_limit_opt, int) and current_innings >= 2 and overs_limit_opt in (20, 50):
             format_overs = int(overs_limit_opt)
-            kind = "odi" if format_overs >= 40 else "t20"
+            kind: Literal["odi", "t20"] = "odi" if format_overs >= 40 else "t20"
             env = dlsmod.load_env(kind, str(BASE_DIR))
 
             deliveries_m: List[Mapping[str, Any]] = cast(
@@ -700,8 +700,8 @@ async def get_snapshot(game_id: str, db: Annotated[AsyncSession, Depends(get_db)
 @router.get("/{game_id}/recent_deliveries")
 async def get_recent_deliveries(
     game_id: str,
-    limit: int = Query(10, ge=1, le=50, description="Max number of most recent deliveries"),
     db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = Query(10, ge=1, le=50, description="Max number of most recent deliveries"),
 ) -> Dict[str, Any]:
     """
     Returns the most-recent `limit` deliveries for a game, newest-first.

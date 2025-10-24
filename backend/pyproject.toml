@@ -37,4 +37,4 @@ warn_unused_configs = false
 ignore_missing_imports = true
 follow_imports = "skip"
 disallow_untyped_defs = false
-exclude = "tests/|scripts/.*|node_modules/|.venv/"
+exclude = "tests/|testsupport/|scripts/.*|node_modules/|.venv/"

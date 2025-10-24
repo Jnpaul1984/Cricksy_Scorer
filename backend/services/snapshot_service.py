@@ -129,11 +129,12 @@ def _dedup_deliveries(g: GameState) -> List[Dict[str, Any]]:
         ball_no = int(d.get("ball_number") or 0)
         x = _norm_extra(d.get("extra_type"))
 
+        k: BallKey
         if x in ("wd", "nb"):
             k = (over_no, ball_no, illegal_seq[(over_no, ball_no)])
             illegal_seq[(over_no, ball_no)] += 1
         else:
-            k = (over_no, ball_no, "L")  # type: ignore[arg-type]
+            k = (over_no, ball_no, "L")
 
         if k not in seen:
             order.append(k)
@@ -242,7 +243,7 @@ def _fall_of_wickets(g: GameState) -> List[Dict[str, Any]]:
     return fow
 
 
-def _dls_panel_for(g: GameState, base_dir: Optional[_Union[str, Path]] = None) -> Dict[str, Any]:
+def _dls_panel_for(g: GameState, base_dir: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
     """Best-effort DLS panel. Returns {} when not applicable."""
     try:
         if not getattr(g, "dls_enabled", False):
@@ -250,7 +251,7 @@ def _dls_panel_for(g: GameState, base_dir: Optional[_Union[str, Path]] = None) -
         overs_limit_opt = cast(Optional[int], getattr(g, "overs_limit", None))
         if overs_limit_opt not in (20, 50):
             return {}
-        kind = "odi" if overs_limit_opt == 50 else "t20"
+        kind: Literal["odi", "t20"] = "odi" if overs_limit_opt == 50 else "t20"
         # Use provided base_dir if present, otherwise fall back to current working dir string
         base_dir_str = str(base_dir) if base_dir is not None else ""
         env = dlsmod.load_env(kind, base_dir_str)
@@ -296,7 +297,7 @@ def _dls_panel_for(g: GameState, base_dir: Optional[_Union[str, Path]] = None) -
 def build_snapshot(
     g: GameState,
     last_delivery: Optional[Union[schemas.Delivery, Dict[str, Any]]],
-    base_dir: Optional[_Union[str, Path]] = None,
+    base_dir: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
     """
     Build a snapshot dict suitable for the API from a GameState-like object g.

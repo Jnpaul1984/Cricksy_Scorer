@@ -56,6 +56,7 @@ class SponsorsManifest(BaseModel):
 
 @router.post("/sponsors")
 async def create_sponsor(
+    db: Annotated[AsyncSession, Depends(get_db)],
     name: str = Form(...),
     logo: UploadFile = File(...),
     click_url: Optional[str] = Form(None),
@@ -63,7 +64,6 @@ async def create_sponsor(
     surfaces: Optional[str] = Form(None),   # JSON array as string
     start_at: Optional[str] = Form(None),   # ISO-8601
     end_at: Optional[str] = Form(None),
-    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     if weight < 1 or weight > 5:
         raise HTTPException(status_code=400, detail="weight must be between 1 and 5")

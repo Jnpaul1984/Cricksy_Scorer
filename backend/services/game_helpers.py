@@ -214,6 +214,7 @@ def _dedup_deliveries(g: Any) -> List[DeliveryDict]:
         ball_no = int(d.get("ball_number") or 0)
         x = _norm_extra(d.get("extra_type"))
 
+        k: BallKey
         if x in ("wd", "nb"):
             k = (over_no, ball_no, illegal_seq[(over_no, ball_no)])
             illegal_seq[(over_no, ball_no)] += 1

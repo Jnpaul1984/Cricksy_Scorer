@@ -194,7 +194,7 @@ async def get_game_results(
         winner_team_id=str(payload.get("winner_team_id")) if payload.get("winner_team_id") is not None else None,
         winner_team_name=str(payload.get("winner_team_name")) if payload.get("winner_team_name") is not None else None,
         method=payload.get("method"),
-        margin=int(payload.get("margin")) if payload.get("margin", None) is not None else None,
+        margin=int(payload.get("margin", 0)) if payload.get("margin", None) is not None else None,
         result_text=str(payload.get("result_text")) if payload.get("result_text") is not None else None,
         completed_at=payload.get("completed_at"),
     )

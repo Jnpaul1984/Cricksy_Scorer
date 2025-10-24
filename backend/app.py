@@ -34,8 +34,8 @@ from backend.services.live_bus import set_socketio_server as _set_bus_sio
 try:
     from backend.testsupport.in_memory_crud import InMemoryCrudRepository, enable_in_memory_crud  # type: ignore
 except Exception:
-    InMemoryCrudRepository = None  # type: ignore[assignment]
-    enable_in_memory_crud = None   # type: ignore[assignment]
+    InMemoryCrudRepository = None  # type: ignore[misc,assignment]
+    enable_in_memory_crud = None   # type: ignore[misc,assignment]
 
 
 def create_app(settings_override: Optional[Any] = None) -> Tuple[socketio.ASGIApp, FastAPI]:
@@ -96,7 +96,7 @@ def create_app(settings_override: Optional[Any] = None) -> Tuple[socketio.ASGIAp
             fastapi_app.dependency_overrides[gameplay_get_db] = _in_memory_get_db  # type: ignore[index]
         except Exception:
             pass
-        if enable_in_memory_crud and InMemoryCrudRepository:
+        if enable_in_memory_crud and InMemoryCrudRepository:  # type: ignore[truthy-function]
             _memory_repo = InMemoryCrudRepository()  # type: ignore[operator]
             enable_in_memory_crud(_memory_repo)      # type: ignore[call-arg]
 
