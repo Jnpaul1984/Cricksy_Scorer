@@ -1,6 +1,7 @@
-from fastapi.testclient import TestClient
-from typing import Any, Dict
 import uuid
+from typing import Any, Dict
+
+from fastapi.testclient import TestClient
 
 import backend.main as main
 from backend.main import app  # socketio.ASGIApp wrapping the FastAPI app
@@ -17,7 +18,9 @@ class _FakeGame:
 
 
 class _FakeResult:
-    def __init__(self, game: _FakeGame | None = None, games: list[_FakeGame] | None = None):
+    def __init__(
+        self, game: _FakeGame | None = None, games: list[_FakeGame] | None = None
+    ):
         self._game = game
         self._games = games or []
 
@@ -55,7 +58,10 @@ class _FakeSession:
             try:
                 for c in crit:
                     left = getattr(c, "left", None)
-                    if getattr(left, "key", None) == "id" or getattr(left, "name", None) == "id":
+                    if (
+                        getattr(left, "key", None) == "id"
+                        or getattr(left, "name", None) == "id"
+                    ):
                         by_id = True
                         break
             except Exception:
@@ -133,6 +139,3 @@ def test_results_endpoint():
     assert isinstance(result["winner"], (str, type(None)))  # Winner can be None
     assert isinstance(result["team_a_score"], int)
     assert isinstance(result["team_b_score"], int)
-
-
-

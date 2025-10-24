@@ -21,7 +21,18 @@ import datetime as dt
 import typing as t
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Mapping, Optional, Sequence, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Union,
+    cast,
+)
 
 from pydantic import BaseModel
 
@@ -52,7 +63,9 @@ def _to_dict(x: Any) -> Optional[Dict[str, Any]]:
         return {str(k): v for k, v in x.items()}
     if isinstance(x, BaseModel):
         try:
-            return {str(k): v for k, v in cast(Mapping[str, Any], x.model_dump()).items()}
+            return {
+                str(k): v for k, v in cast(Mapping[str, Any], x.model_dump()).items()
+            }
         except Exception:
             try:
                 md = x.dict()  # type: ignore[attr-defined]
@@ -143,12 +156,14 @@ def _dedup_deliveries(g: GameState) -> List[Dict[str, Any]]:
     return [seen[k] for k in order]
 
 
-def _player_name(team_a: Mapping[str, Any], team_b: Mapping[str, Any], pid: Optional[str]) -> Optional[str]:
+def _player_name(
+    team_a: Mapping[str, Any], team_b: Mapping[str, Any], pid: Optional[str]
+) -> Optional[str]:
     """Lookup player name by id across both teams."""
     if not pid:
         return None
     for team in (team_a, team_b):
-        for p in (team.get("players", []) or []):
+        for p in team.get("players", []) or []:
             try:
                 if p.get("id") == pid:
                     return p.get("name")
@@ -160,7 +175,13 @@ def _player_name(team_a: Mapping[str, Any], team_b: Mapping[str, Any], pid: Opti
 def _bat_entry(g: GameState, pid: Optional[str]) -> Dict[str, Any]:
     """Return batting entry dict for pid (works with BaseModel or dict stored on g.batting_scorecard)."""
     if not pid:
-        return {"player_id": "", "player_name": "", "runs": 0, "balls_faced": 0, "is_out": False}
+        return {
+            "player_id": "",
+            "player_name": "",
+            "runs": 0,
+            "balls_faced": 0,
+            "is_out": False,
+        }
     bsc = getattr(g, "batting_scorecard", {}) or {}
     e_any = bsc.get(pid)
     if isinstance(e_any, BaseModel):
@@ -174,27 +195,41 @@ def _bat_entry(g: GameState, pid: Optional[str]) -> Dict[str, Any]:
     if isinstance(e_any, dict):
         return cast(Dict[str, Any], e_any)
     # fallback
-    return {"player_id": pid, "player_name": _player_name(g.team_a, g.team_b, pid) or "", "runs": 0, "balls_faced": 0, "is_out": False}
+    return {
+        "player_id": pid,
+        "player_name": _player_name(g.team_a, g.team_b, pid) or "",
+        "runs": 0,
+        "balls_faced": 0,
+        "is_out": False,
+    }
 
 
 def _compute_snapshot_flags(g: GameState) -> Dict[str, bool]:
     """Return UI gating flags derived from current runtime state (needs_new_batter / needs_new_over)."""
     need_new_batter = False
     if getattr(g, "current_striker_id", None):
-        e = (getattr(g, "batting_scorecard", {}) or {}).get(getattr(g, "current_striker_id"))
+        e = (getattr(g, "batting_scorecard", {}) or {}).get(
+            getattr(g, "current_striker_id")
+        )
         if isinstance(e, BaseModel):
             e = e.model_dump()
         if isinstance(e, dict):
             need_new_batter = bool(e.get("is_out", False))
     if not need_new_batter and getattr(g, "current_non_striker_id", None):
-        e2 = (getattr(g, "batting_scorecard", {}) or {}).get(getattr(g, "current_non_striker_id"))
+        e2 = (getattr(g, "batting_scorecard", {}) or {}).get(
+            getattr(g, "current_non_striker_id")
+        )
         if isinstance(e2, BaseModel):
             e2 = e2.model_dump()
         if isinstance(e2, dict):
             need_new_batter = bool(e2.get("is_out", False))
 
-    have_any_balls = (len(_dedup_deliveries(g)) > 0)
-    need_new_over = bool(getattr(g, "balls_this_over", 0) == 0 and have_any_balls and not getattr(g, "current_bowler_id", None))
+    have_any_balls = len(_dedup_deliveries(g)) > 0
+    need_new_over = bool(
+        getattr(g, "balls_this_over", 0) == 0
+        and have_any_balls
+        and not getattr(g, "current_bowler_id", None)
+    )
 
     return {"needs_new_batter": need_new_batter, "needs_new_over": need_new_over}
 
@@ -213,7 +248,14 @@ def _extras_breakdown(g: GameState) -> Dict[str, int]:
         elif x == "lb":
             leg_byes += ex
     total = wides + no_balls + byes + leg_byes + penalty
-    return {"wides": wides, "no_balls": no_balls, "byes": byes, "leg_byes": leg_byes, "penalty": penalty, "total": total}
+    return {
+        "wides": wides,
+        "no_balls": no_balls,
+        "byes": byes,
+        "leg_byes": leg_byes,
+        "penalty": penalty,
+        "total": total,
+    }
 
 
 def _fall_of_wickets(g: GameState) -> List[Dict[str, Any]]:
@@ -228,22 +270,26 @@ def _fall_of_wickets(g: GameState) -> List[Dict[str, Any]]:
         over_no = int(d.get("over_number") or 0)
         ball_no = int(d.get("ball_number") or 0)
         out_pid = str(d.get("dismissed_player_id") or d.get("striker_id") or "")
-        fow.append({
-            "score": cum,
-            "wicket": len(fow) + 1,
-            "batter_id": out_pid,
-            "batter_name": _player_name(g.team_a, g.team_b, out_pid) or "",
-            "over": f"{over_no}.{ball_no}",
-            "dismissal_type": dismissal,
-            "bowler_id": d.get("bowler_id"),
-            "bowler_name": _player_name(g.team_a, g.team_b, d.get("bowler_id")),
-            "fielder_id": d.get("fielder_id"),
-            "fielder_name": _player_name(g.team_a, g.team_b, d.get("fielder_id")),
-        })
+        fow.append(
+            {
+                "score": cum,
+                "wicket": len(fow) + 1,
+                "batter_id": out_pid,
+                "batter_name": _player_name(g.team_a, g.team_b, out_pid) or "",
+                "over": f"{over_no}.{ball_no}",
+                "dismissal_type": dismissal,
+                "bowler_id": d.get("bowler_id"),
+                "bowler_name": _player_name(g.team_a, g.team_b, d.get("bowler_id")),
+                "fielder_id": d.get("fielder_id"),
+                "fielder_name": _player_name(g.team_a, g.team_b, d.get("fielder_id")),
+            }
+        )
     return fow
 
 
-def _dls_panel_for(g: GameState, base_dir: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
+def _dls_panel_for(
+    g: GameState, base_dir: Optional[Union[str, Path]] = None
+) -> Dict[str, Any]:
     """Best-effort DLS panel. Returns {} when not applicable."""
     try:
         if not getattr(g, "dls_enabled", False):
@@ -256,10 +302,17 @@ def _dls_panel_for(g: GameState, base_dir: Optional[Union[str, Path]] = None) ->
         base_dir_str = str(base_dir) if base_dir is not None else ""
         env = dlsmod.load_env(kind, base_dir_str)
 
-        deliveries_m: List[Mapping[str, Any]] = cast(List[Mapping[str, Any]], list(getattr(g, "deliveries", [])))
+        deliveries_m: List[Mapping[str, Any]] = cast(
+            List[Mapping[str, Any]], list(getattr(g, "deliveries", []))
+        )
         interruptions = list(getattr(g, "interruptions", []))
-        R1_total = dlsmod.total_resources_team1(env=env, max_overs_initial=int(overs_limit_opt), deliveries=deliveries_m, interruptions=interruptions)
-        
+        R1_total = dlsmod.total_resources_team1(
+            env=env,
+            max_overs_initial=int(overs_limit_opt),
+            deliveries=deliveries_m,
+            interruptions=interruptions,
+        )
+
         S1 = 0
         # prefer a persisted first_inning_summary, otherwise compute from ledger (best-effort)
         fis_any = getattr(g, "first_inning_summary", None)
@@ -270,18 +323,28 @@ def _dls_panel_for(g: GameState, base_dir: Optional[Union[str, Path]] = None) ->
                 S1 = 0
         else:
             # naive: sum deliveries in innings 1
-            S1 = sum(int(d.get("runs_scored") or 0) for d in list(getattr(g, "deliveries", []) or []) if int(d.get("inning", 1) or 1) == 1)
+            S1 = sum(
+                int(d.get("runs_scored") or 0)
+                for d in list(getattr(g, "deliveries", []) or [])
+                if int(d.get("inning", 1) or 1) == 1
+            )
 
         R_start = env.table.R(float(overs_limit_opt), 0)
         overs_completed = float(getattr(g, "overs_completed", 0) or 0)
         balls_this_over = float(getattr(g, "balls_this_over", 0) or 0)
         wkts_now = int(getattr(g, "total_wickets", 0) or 0)
-        team2_overs_left_now = max(0.0, float(overs_limit_opt) - (overs_completed + (balls_this_over / 6.0)))
+        team2_overs_left_now = max(
+            0.0, float(overs_limit_opt) - (overs_completed + (balls_this_over / 6.0))
+        )
         R_remaining = env.table.R(team2_overs_left_now, wkts_now)
         R2_used = max(0.0, R_start - R_remaining)
 
-        target_full = int(dlsmod.revised_target(S1=S1, R1_total=R1_total, R2_total=R_start))
-        par_now = int(dlsmod.par_score_now(S1=S1, R1_total=R1_total, R2_used_so_far=R2_used))
+        target_full = int(
+            dlsmod.revised_target(S1=S1, R1_total=R1_total, R2_total=R_start)
+        )
+        par_now = int(
+            dlsmod.par_score_now(S1=S1, R1_total=R1_total, R2_used_so_far=R2_used)
+        )
         panel: Dict[str, Any] = {"method": "DLS", "target": target_full, "par": par_now}
         if int(getattr(g, "current_inning", 1) or 1) >= 2:
             runs_now = int(getattr(g, "total_runs", 0))
@@ -343,26 +406,49 @@ def build_snapshot(
             "overs": int(getattr(g, "overs_completed", 0)),
         },
         "overs": f"{int(getattr(g, 'overs_completed', 0))}.{int(getattr(g, 'balls_this_over', 0))}",
-        "balls_bowled_total": int(getattr(g, "overs_completed", 0)) * 6 + int(getattr(g, "balls_this_over", 0)),
+        "balls_bowled_total": int(getattr(g, "overs_completed", 0)) * 6
+        + int(getattr(g, "balls_this_over", 0)),
         "batsmen": {
             "striker": {
                 "id": getattr(g, "current_striker_id", None),
-                "name": _player_name(getattr(g, "team_a", {}), getattr(g, "team_b", {}), getattr(g, "current_striker_id", None)),
-                "runs": _bat_entry(g, getattr(g, "current_striker_id", None)).get("runs", 0),
-                "balls": _bat_entry(g, getattr(g, "current_striker_id", None)).get("balls_faced", 0),
-                "is_out": _bat_entry(g, getattr(g, "current_striker_id", None)).get("is_out", False),
+                "name": _player_name(
+                    getattr(g, "team_a", {}),
+                    getattr(g, "team_b", {}),
+                    getattr(g, "current_striker_id", None),
+                ),
+                "runs": _bat_entry(g, getattr(g, "current_striker_id", None)).get(
+                    "runs", 0
+                ),
+                "balls": _bat_entry(g, getattr(g, "current_striker_id", None)).get(
+                    "balls_faced", 0
+                ),
+                "is_out": _bat_entry(g, getattr(g, "current_striker_id", None)).get(
+                    "is_out", False
+                ),
             },
             "non_striker": {
                 "id": getattr(g, "current_non_striker_id", None),
-                "name": _player_name(getattr(g, "team_a", {}), getattr(g, "team_b", {}), getattr(g, "current_non_striker_id", None)),
-                "runs": _bat_entry(g, getattr(g, "current_non_striker_id", None)).get("runs", 0),
-                "balls": _bat_entry(g, getattr(g, "current_non_striker_id", None)).get("balls_faced", 0),
-                "is_out": _bat_entry(g, getattr(g, "current_non_striker_id", None)).get("is_out", False),
+                "name": _player_name(
+                    getattr(g, "team_a", {}),
+                    getattr(g, "team_b", {}),
+                    getattr(g, "current_non_striker_id", None),
+                ),
+                "runs": _bat_entry(g, getattr(g, "current_non_striker_id", None)).get(
+                    "runs", 0
+                ),
+                "balls": _bat_entry(g, getattr(g, "current_non_striker_id", None)).get(
+                    "balls_faced", 0
+                ),
+                "is_out": _bat_entry(g, getattr(g, "current_non_striker_id", None)).get(
+                    "is_out", False
+                ),
             },
         },
         "current_bowler": {
             "id": cur_bowler_id,
-            "name": _player_name(getattr(g, "team_a", {}), getattr(g, "team_b", {}), cur_bowler_id),
+            "name": _player_name(
+                getattr(g, "team_a", {}), getattr(g, "team_b", {}), cur_bowler_id
+            ),
         },
         "extras_totals": extras_totals,
         "fall_of_wickets": fall_of_wickets,
@@ -397,5 +483,3 @@ def build_snapshot(
     snapshot["current_non_striker_id"] = getattr(g, "current_non_striker_id", None)
 
     return snapshot
-
-

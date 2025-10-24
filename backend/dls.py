@@ -1,12 +1,13 @@
 # backend/dls.py
 from __future__ import annotations
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, List, Tuple, Any, Iterable, Literal, Mapping, Optional
+
 import csv
-import os
 import json
 import math
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Literal, Mapping, Optional, Tuple
 
 # ------------------------------
 # Resource tables (externalized)
@@ -18,6 +19,7 @@ import math
 # 50,100.0,96.7,93.5,...,45.0
 # ...
 # 0,0,0,0,...,0
+
 
 @dataclass
 class ResourceTable:
@@ -43,8 +45,8 @@ class ResourceTable:
                     cols.append(float(rec.get(f"w{w}", 0.0)))
                 tmp[o] = cols
             # Normalize to contiguous 0..max_over
-            rows = [tmp.get(o, [0.0]*10) for o in range(max_over + 1)]
-        return cls(resources=rows, max_overs=len(rows)-1)
+            rows = [tmp.get(o, [0.0] * 10) for o in range(max_over + 1)]
+        return cls(resources=rows, max_overs=len(rows) - 1)
 
     def R(self, overs_remaining: float, wickets_lost: int) -> float:
         """
@@ -135,8 +137,12 @@ def total_resources_team1(
     """
     # Sort by when they occurred
     ints = sorted(
-        [i for i in interruptions if "at_delivery_index" in i and "new_overs_limit" in i],
-        key=lambda i: int(i["at_delivery_index"])
+        [
+            i
+            for i in interruptions
+            if "at_delivery_index" in i and "new_overs_limit" in i
+        ],
+        key=lambda i: int(i["at_delivery_index"]),
     )
 
     # Starting resources for Team 1: R(M, 0)
@@ -182,14 +188,15 @@ def total_resources_team2(
 
 def revised_target(
     *,
-    S1: int,              # Team 1 runs
-    R1_total: float,      # Team 1 total resources used (%)
-    R2_total: float,      # Team 2 total resources available (%)
+    S1: int,  # Team 1 runs
+    R1_total: float,  # Team 1 total resources used (%)
+    R2_total: float,  # Team 2 total resources available (%)
 ) -> int:
     # Standard DLS revised target: floor(S1 * (R2/R1)) + 1
     if R1_total <= 0.0:
         return S1 + 1  # safety; shouldn't happen
     import math
+
     return int(math.floor(S1 * (R2_total / R1_total)) + 1)
 
 
@@ -203,6 +210,7 @@ def par_score_now(
     if R1_total <= 0.0:
         return 0
     import math
+
     return int(math.floor(S1 * (R2_used_so_far / R1_total)) + 1)
 
 
@@ -314,7 +322,9 @@ def compute_dls_target(
     wickets1 = max(0, min(9, int(team1_wickets_lost)))
     wickets2 = max(0, min(9, int(team2_wkts_lost_now)))
 
-    overs_left_team1 = max(0.0, min(float(format_overs), float(team1_overs_left_at_end)))
+    overs_left_team1 = max(
+        0.0, min(float(format_overs), float(team1_overs_left_at_end))
+    )
     overs_left_team2 = max(0.0, min(float(format_overs), float(team2_overs_left_now)))
 
     R_start = env.table.R(format_overs, 0)
@@ -337,6 +347,3 @@ def compute_dls_target(
         R2_total=R2_total,
         R2_used=R2_used,
     )
-
-
-

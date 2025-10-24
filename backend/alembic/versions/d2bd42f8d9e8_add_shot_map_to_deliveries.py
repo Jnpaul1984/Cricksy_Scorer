@@ -4,11 +4,11 @@ Revision ID: d2bd42f8d9e8
 Revises: 5bdad054a436
 Create Date: 2025-10-18 12:00:00.000000
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa  # noqa: F401 (kept for Alembic convention)
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d2bd42f8d9e8"
@@ -46,6 +46,3 @@ def downgrade() -> None:
         ), '[]'::jsonb)
         """
     )
-
-
-

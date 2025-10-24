@@ -10,6 +10,8 @@ ignore = ["UP038"]
 "backend/routes/*.py" = ["B008", "E501"]
 "backend/services/**/*.py" = ["E501"]
 "backend/services/live_bus.py" = ["RUF006"]
+"scripts/**/*.py" = ["E501"]
+"tools/**/*.py" = ["SIM108", "SIM113"]
 
 [format]
 quote-style = "double"

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+import sys
 from enum import Enum
 from importlib import import_module
-import sys
+from typing import Any, Dict
 
 from backend.sql_app import crud, models, schemas
 
@@ -31,7 +31,11 @@ class InMemoryCrudRepository:
             id=game_id,
             team_a=team_a,
             team_b=team_b,
-            match_type=game.match_type.value if isinstance(game.match_type, Enum) else str(game.match_type),
+            match_type=(
+                game.match_type.value
+                if isinstance(game.match_type, Enum)
+                else str(game.match_type)
+            ),
             overs_limit=game.overs_limit,
             days_limit=game.days_limit,
             overs_per_day=game.overs_per_day,
@@ -66,7 +70,14 @@ class InMemoryCrudRepository:
         g.result = None
         g.is_game_over = False
         g.completed_at = None
-        g.extras_totals = {"wides": 0, "no_balls": 0, "byes": 0, "leg_byes": 0, "penalty": 0, "total": 0}
+        g.extras_totals = {
+            "wides": 0,
+            "no_balls": 0,
+            "byes": 0,
+            "leg_byes": 0,
+            "penalty": 0,
+            "total": 0,
+        }
         g.fall_of_wickets = []
         g.phases = {}
         g.projections = {}
@@ -103,6 +114,3 @@ def enable_in_memory_crud(repository: InMemoryCrudRepository) -> None:
         target.create_game = repository.create_game  # type: ignore[assignment]
         target.get_game = repository.get_game  # type: ignore[assignment]
         target.update_game = repository.update_game  # type: ignore[assignment]
-
-
-

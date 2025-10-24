@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List, Union, Mapping, Sequence
+from typing import Dict, List, Mapping, Sequence, Union
 
 
 class DLSTable:
@@ -109,6 +109,3 @@ def load_table_from_json(json_path: Union[str, Path]) -> DLSTable:
     resources: Mapping[Union[int, str], Sequence[float]] = data["resources"]
 
     return DLSTable(format_overs, resources)
-
-
-

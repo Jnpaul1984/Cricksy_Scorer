@@ -4,10 +4,11 @@ Revision ID: a1f75f7dd6d4
 Revises: 2d0c3e4d3a75
 Create Date: 2025-08-21 10:48:50.299658
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql as psql
 
 # revision identifiers, used by Alembic.
@@ -24,9 +25,7 @@ def _fill_null(table: str, column: str, json_literal: str) -> None:
     Works regardless of column's current type (json/text/jsonb).
     """
     op.execute(
-        sa.text(
-            f"UPDATE {table} SET {column} = {json_literal} WHERE {column} IS NULL"
-        )
+        sa.text(f"UPDATE {table} SET {column} = {json_literal} WHERE {column} IS NULL")
     )
 
 
@@ -63,7 +62,9 @@ def upgrade():
     insp = sa.inspect(bind)
     cols = {c["name"] for c in insp.get_columns("games")}
     if "required_run_rate" not in cols:
-        op.add_column("games", sa.Column("required_run_rate", sa.Float(), nullable=True))
+        op.add_column(
+            "games", sa.Column("required_run_rate", sa.Float(), nullable=True)
+        )
 
 
 def downgrade():
@@ -80,6 +81,3 @@ def downgrade():
     # op.alter_column("games", "batting_scorecard", type_=psql.JSON(), postgresql_using="batting_scorecard::json")
     # op.alter_column("games", "bowling_scorecard", type_=psql.JSON(), postgresql_using="bowling_scorecard::json")
     # op.alter_column("games", "deliveries", type_=psql.JSON(), postgresql_using="deliveries::json")
-
-
-

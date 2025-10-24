@@ -6,6 +6,7 @@ using the full API to create games, post deliveries, and retrieve DLS targets.
 """
 
 import pytest
+
 from .conftest import GameHelper
 
 
@@ -22,17 +23,17 @@ class TestDLSIntegrationT20:
             overs_limit=20,
             match_type="limited",
         )
-        
+
         team_a_players = teams["team_a"]
         team_b_players = teams["team_b"]
-        
+
         # Set openers for Team A
         game_helper.set_openers(team="A")
-        
+
         striker = team_a_players[0]["id"]
         bowler1 = team_b_players[0]["id"]
         bowler2 = team_b_players[1]["id"]
-        
+
         # Play 5 overs (30 balls) to verify the match works
         for i in range(30):
             bowler = bowler1 if (i // 6) % 2 == 0 else bowler2
@@ -42,7 +43,7 @@ class TestDLSIntegrationT20:
                 runs_scored=2,
             )
             assert response.status_code == 200
-        
+
         # Verify the match is progressing
         snapshot = game_helper.get_snapshot()
         assert snapshot["score"]["runs"] == 60
@@ -58,17 +59,17 @@ class TestDLSIntegrationT20:
             overs_limit=20,
             match_type="limited",
         )
-        
+
         team_a_players = teams["team_a"]
         team_b_players = teams["team_b"]
-        
+
         # Set openers for Team A
         game_helper.set_openers(team="A")
-        
+
         striker = team_a_players[0]["id"]
         bowler1 = team_b_players[0]["id"]
         bowler2 = team_b_players[1]["id"]
-        
+
         # Play 20 overs scoring exactly 100 runs
         for i in range(120):
             bowler = bowler1 if (i // 6) % 2 == 0 else bowler2
@@ -79,11 +80,11 @@ class TestDLSIntegrationT20:
                 runs_scored=runs,
             )
             assert response.status_code == 200
-        
+
         # Verify Team A's score
         snapshot = game_helper.get_snapshot()
         assert snapshot["score"]["runs"] == 100
-        
+
         # In a normal match, Team B's target would be 101
         # (This would be verified by starting Team B's innings and checking the target)
 
@@ -101,16 +102,16 @@ class TestDLSIntegrationODI:
             overs_limit=50,
             match_type="limited",
         )
-        
+
         team_a_players = teams["team_a"]
         team_b_players = teams["team_b"]
-        
+
         # Set openers for Team A
         game_helper.set_openers(team="A")
-        
+
         striker = team_a_players[0]["id"]
         bowler = team_b_players[0]["id"]
-        
+
         # Play a few overs to verify the match works
         bowler1 = team_b_players[0]["id"]
         bowler2 = team_b_players[1]["id"]
@@ -122,7 +123,7 @@ class TestDLSIntegrationODI:
                 runs_scored=1,
             )
             assert response.status_code == 200
-        
+
         # Verify the match is progressing
         snapshot = game_helper.get_snapshot()
         assert snapshot["score"]["runs"] == 30
@@ -141,16 +142,16 @@ class TestDLSIntegrationEdgeCases:
             overs_limit=1,
             match_type="limited",
         )
-        
+
         team_a_players = teams["team_a"]
         team_b_players = teams["team_b"]
-        
+
         # Set openers for Team A
         game_helper.set_openers(team="A")
-        
+
         striker = team_a_players[0]["id"]
         bowler = team_b_players[0]["id"]
-        
+
         # Play 1 over (6 balls)
         for i in range(6):
             response = game_helper.post_delivery(
@@ -159,7 +160,7 @@ class TestDLSIntegrationEdgeCases:
                 runs_scored=2,
             )
             assert response.status_code == 200
-        
+
         # Verify the match completed
         snapshot = game_helper.get_snapshot()
         assert snapshot["score"]["runs"] == 12
@@ -174,16 +175,16 @@ class TestDLSIntegrationEdgeCases:
             overs_limit=5,
             match_type="limited",
         )
-        
+
         team_a_players = teams["team_a"]
         team_b_players = teams["team_b"]
-        
+
         # Set openers for Team A
         game_helper.set_openers(team="A")
-        
+
         striker = team_a_players[0]["id"]
         bowler = team_b_players[0]["id"]
-        
+
         # Bowl a few normal deliveries
         for i in range(5):
             response = game_helper.post_delivery(
@@ -192,7 +193,7 @@ class TestDLSIntegrationEdgeCases:
                 runs_scored=1,
             )
             assert response.status_code == 200
-        
+
         # Take a wicket
         response = game_helper.post_delivery(
             batsman_id=striker,
@@ -202,7 +203,7 @@ class TestDLSIntegrationEdgeCases:
             dismissal_type="bowled",
         )
         assert response.status_code == 200
-        
+
         # Verify the wicket was recorded
         snapshot = game_helper.get_snapshot()
         assert snapshot["score"]["wickets"] == 1
@@ -211,7 +212,3 @@ class TestDLSIntegrationEdgeCases:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
-
-
-

@@ -12,15 +12,15 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import uuid
 import json
-from typing import Any, Dict
+import uuid
+from typing import Any
 
-from backend.sql_app import schemas, crud
+from backend.sql_app import crud, schemas
 from backend.sql_app.database import SessionLocal
 
 
-async def seed_one_game() -> Dict[str, Any]:
+async def seed_one_game() -> dict[str, Any]:
     async with SessionLocal() as session:
         team_a_name = "Dev Team A"
         team_b_name = "Dev Team B"
@@ -60,8 +60,8 @@ async def seed_one_game() -> Dict[str, Any]:
         }
 
         # Minimal scorecards
-        batting_scorecard: Dict[str, Any] = {}
-        bowling_scorecard: Dict[str, Any] = {}
+        batting_scorecard: dict[str, Any] = {}
+        bowling_scorecard: dict[str, Any] = {}
 
         db_game = await crud.create_game(
             db=session,

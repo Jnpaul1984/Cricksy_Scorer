@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Dict, Optional, List, Mapping, cast
+from typing import Any, Dict, List, Mapping, Optional, cast
 
 # Presence store: game_id -> { sid -> {"sid": str, "role": str, "name": str} }
 _ROOM_PRESENCE: Dict[str, Dict[str, Dict[str, str]]] = defaultdict(dict)
@@ -39,8 +39,16 @@ def register_sio(sio: Any) -> None:
         _ROOM_PRESENCE[game_id][sid] = {"sid": sid, "role": role, "name": name}
 
         # Tell this client who's here, then broadcast updated presence to the room
-        await sio.emit("presence:init", {"game_id": game_id, "members": _room_snapshot(game_id)}, room=sid)
-        await sio.emit("presence:update", {"game_id": game_id, "members": _room_snapshot(game_id)}, room=game_id)
+        await sio.emit(
+            "presence:init",
+            {"game_id": game_id, "members": _room_snapshot(game_id)},
+            room=sid,
+        )
+        await sio.emit(
+            "presence:update",
+            {"game_id": game_id, "members": _room_snapshot(game_id)},
+            room=game_id,
+        )
         return None
 
     async def _leave(sid: str, data: Optional[Dict[str, Any]]) -> None:
@@ -51,14 +59,22 @@ def register_sio(sio: Any) -> None:
         await sio.leave_room(sid, game_id)
         _SID_ROOMS[sid].discard(game_id)
         _ROOM_PRESENCE.get(game_id, {}).pop(sid, None)
-        await sio.emit("presence:update", {"game_id": game_id, "members": _room_snapshot(game_id)}, room=game_id)
+        await sio.emit(
+            "presence:update",
+            {"game_id": game_id, "members": _room_snapshot(game_id)},
+            room=game_id,
+        )
         return None
 
     async def _disconnect(sid: str) -> None:
         # Remove from all rooms we know about
         for game_id in list(_SID_ROOMS.get(sid, set())):
             _ROOM_PRESENCE.get(game_id, {}).pop(sid, None)
-            await sio.emit("presence:update", {"game_id": game_id, "members": _room_snapshot(game_id)}, room=game_id)
+            await sio.emit(
+                "presence:update",
+                {"game_id": game_id, "members": _room_snapshot(game_id)},
+                room=game_id,
+            )
         _SID_ROOMS.pop(sid, None)
         return None
 
@@ -67,6 +83,3 @@ def register_sio(sio: Any) -> None:
     sio.on("join")(_join)
     sio.on("leave")(_leave)
     sio.on("disconnect")(_disconnect)
-
-
-

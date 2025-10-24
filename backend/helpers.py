@@ -3,6 +3,7 @@
 This module is a safe place for pure helpers extracted from backend/main.py.
 Start with overs_str_from_balls extracted from the original module.
 """
+
 from __future__ import annotations
 
 from typing import Final
@@ -26,5 +27,3 @@ def overs_str_from_balls(balls: int) -> str:
     except Exception as exc:  # defensive
         raise TypeError("balls must be an integer-like value") from exc
     return f"{b // BALLS_PER_OVER}.{b % BALLS_PER_OVER}"
-
-

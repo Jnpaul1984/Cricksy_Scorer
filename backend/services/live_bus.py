@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Optional, Dict, List
 import asyncio
+from typing import Any, Dict, List, Optional
 
 _SIO: Optional[Any] = None
 
@@ -12,7 +12,13 @@ def set_socketio_server(sio: Any) -> None:
     _SIO = sio
 
 
-async def emit(event: str, data: Any, *, room: Optional[str] = None, namespace: Optional[str] = None) -> None:
+async def emit(
+    event: str,
+    data: Any,
+    *,
+    room: Optional[str] = None,
+    namespace: Optional[str] = None,
+) -> None:
     """Generic async emitter with best-effort error containment."""
     if _SIO is None:
         return
@@ -45,5 +51,3 @@ def publish_game_update(game_id: str, payload: Dict[str, Any]) -> None:
     except Exception:
         # No running loop (e.g., threadpool) â€” safe no-op
         pass
-
-

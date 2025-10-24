@@ -1,15 +1,18 @@
 # dls/__init__.py
 from __future__ import annotations
+
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 from .loader import DLSTable, load_table_from_json
 
 _SUPPORTED = {20: "icc_dls_international_20.json", 50: "icc_dls_international_50.json"}
 
+
 def get_supported_formats() -> List[int]:
     return sorted(_SUPPORTED.keys())
+
 
 def _default_tables_dir() -> Path:
     """
@@ -18,20 +21,25 @@ def _default_tables_dir() -> Path:
     2) ../dls_tables relative to this file
     """
     import os
+
     env = os.getenv("DLS_TABLES_DIR")
     if env:
         return Path(env).expanduser().resolve()
     # package layout: dls/__init__.py -> ../dls_tables/
     return Path(__file__).resolve().parent.parent.joinpath("dls_tables").resolve()
 
+
 def get_table_info(format_overs: int) -> Dict[str, Any]:
     """Return metadata without fully constructing DLSTable (cheap file read)."""
     if format_overs not in _SUPPORTED:
-        raise ValueError(f"Unsupported format: {format_overs}. Supported: {sorted(_SUPPORTED)}")
+        raise ValueError(
+            f"Unsupported format: {format_overs}. Supported: {sorted(_SUPPORTED)}"
+        )
     fpath = _default_tables_dir() / _SUPPORTED[format_overs]
     if not fpath.exists():
         raise FileNotFoundError(f"DLS table file not found: {fpath}")
     import json
+
     with open(fpath, "r", encoding="utf-8") as f:
         data = json.load(f)
     # keep only lightweight details
@@ -44,16 +52,21 @@ def get_table_info(format_overs: int) -> Dict[str, Any]:
         "path": str(fpath),
     }
 
+
 @lru_cache(maxsize=2)
 def load_international_table(format_overs: int) -> DLSTable:
     """Load and cache the ICC Standard Edition table for 20 or 50 overs."""
     if format_overs not in _SUPPORTED:
-        raise ValueError(f"Unsupported format: {format_overs}. Supported: {sorted(_SUPPORTED)}")
+        raise ValueError(
+            f"Unsupported format: {format_overs}. Supported: {sorted(_SUPPORTED)}"
+        )
     fpath = _default_tables_dir() / _SUPPORTED[format_overs]
     return load_table_from_json(fpath)
 
-def calculate_dls_target(team1_score: int, team1_resources: float,
-                         team2_resources: float, G50: int = 245) -> int:
+
+def calculate_dls_target(
+    team1_score: int, team1_resources: float, team2_resources: float, G50: int = 245
+) -> int:
     """
     Standard Edition target calculation:
     - fewer resources: floor(S1 * R2 / R1) + 1
@@ -68,6 +81,7 @@ def calculate_dls_target(team1_score: int, team1_resources: float,
     else:
         return team1_score + 1
 
+
 __all__ = [
     "DLSTable",
     "load_table_from_json",
@@ -76,6 +90,3 @@ __all__ = [
     "get_table_info",
     "calculate_dls_target",
 ]
-
-
-

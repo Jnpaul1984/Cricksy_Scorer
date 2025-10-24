@@ -1,21 +1,24 @@
 from __future__ import annotations
 
+import datetime as dt
 import os
 from typing import Any, Optional
 
-import datetime as dt
 UTC = getattr(dt, "UTC", dt.timezone.utc)
 
 # Limit for sponsor file uploads (5MB)
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5MB
 
-def detect_image_ext(data: bytes, content_type: Optional[str], filename: Optional[str]) -> Optional[str]:
+
+def detect_image_ext(
+    data: bytes, content_type: Optional[str], filename: Optional[str]
+) -> Optional[str]:
     """
     Return 'svg' | 'png' | 'webp' if valid, else None.
     Uses content-type, extension, and simple signature checks.
     """
     ct = (content_type or "").lower()
-    ext = (os.path.splitext(filename or "")[1].lower())
+    ext = os.path.splitext(filename or "")[1].lower()
     head = data[:256]
 
     # SVG
@@ -25,9 +28,14 @@ def detect_image_ext(data: bytes, content_type: Optional[str], filename: Optiona
     if ct == "image/png" or ext == ".png" or data.startswith(b"\x89PNG\r\n\x1a\n"):
         return "png"
     # WEBP
-    if ct == "image/webp" or ext == ".webp" or (data[:4] == b"RIFF" and data[8:12] == b"WEBP"):
+    if (
+        ct == "image/webp"
+        or ext == ".webp"
+        or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")
+    ):
         return "webp"
     return None
+
 
 def parse_iso_dt(s: Optional[str]) -> Optional[dt.datetime]:
     """
@@ -47,11 +55,13 @@ def parse_iso_dt(s: Optional[str]) -> Optional[dt.datetime]:
     except Exception:
         return None
 
+
 def iso_or_none(x: Any) -> Optional[str]:
     """
     Return isoformat string if x is a datetime, else None.
     """
     return x.isoformat() if isinstance(x, dt.datetime) else None
+
 
 __all__ = [
     "UTC",

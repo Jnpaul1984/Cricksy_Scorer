@@ -1,6 +1,8 @@
 # tests/test_dls.py
 import pytest
-from dls import compute_dls_target, DLSMissingTable
+
+from dls import DLSMissingTable, compute_dls_target
+
 
 def test_compute_works_with_placeholder(monkeypatch):
     # Point to the test fixture table
@@ -14,6 +16,3 @@ def test_compute_works_with_placeholder(monkeypatch):
         team2_overs_left_now=10.0,
     )
     assert res.target >= 1
-
-
-

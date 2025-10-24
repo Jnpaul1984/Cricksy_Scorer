@@ -1,11 +1,17 @@
 # From the repo root (Cricksy_Scorer)
 
-import json, time, os, pathlib, httpx
+import json
+import os
+import pathlib
+import time
 from urllib.parse import urlsplit
+
+import httpx
 
 _USE_INPROC = os.getenv("CRICKSY_IN_MEMORY_DB") == "1"
 if _USE_INPROC:
     from fastapi.testclient import TestClient
+
     import backend.main as main
 
     _local_client = TestClient(main.fastapi_app)
@@ -14,6 +20,7 @@ if _USE_INPROC:
 ARTI_DIR = pathlib.Path(__file__).resolve().parents[2] / "artifacts"
 ARTI_DIR.mkdir(parents=True, exist_ok=True)
 TRACE_FILE = ARTI_DIR / "http_trace.jsonl"
+
 
 def traced_request(method: str, url: str, **kw) -> httpx.Response:
     """
@@ -50,6 +57,3 @@ def traced_request(method: str, url: str, **kw) -> httpx.Response:
         pass
 
     return resp
-
-
-

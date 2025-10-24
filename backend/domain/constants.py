@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Final, Optional, Dict
+from typing import Dict, Final, Optional
 
 __all__ = [
     "CREDIT_BOWLER",
@@ -12,18 +12,24 @@ __all__ = [
 ]
 
 # Dismissal credit rules
-CREDIT_BOWLER: Final[frozenset[str]] = frozenset({"bowled", "caught", "lbw", "stumped", "hit_wicket"})
-CREDIT_TEAM: Final[frozenset[str]] = frozenset({
-    "run_out",
-    "obstructing_the_field",
-    "hit_ball_twice",
-    "timed_out",
-    "retired_out",
-    "handled_ball",
-})
+CREDIT_BOWLER: Final[frozenset[str]] = frozenset(
+    {"bowled", "caught", "lbw", "stumped", "hit_wicket"}
+)
+CREDIT_TEAM: Final[frozenset[str]] = frozenset(
+    {
+        "run_out",
+        "obstructing_the_field",
+        "hit_ball_twice",
+        "timed_out",
+        "retired_out",
+        "handled_ball",
+    }
+)
 
 # Invalid dismissals under specific extras
-INVALID_ON_NO_BALL: Final[frozenset[str]] = frozenset({"bowled", "caught", "lbw", "stumped", "hit_wicket"})
+INVALID_ON_NO_BALL: Final[frozenset[str]] = frozenset(
+    {"bowled", "caught", "lbw", "stumped", "hit_wicket"}
+)
 INVALID_ON_WIDE: Final[frozenset[str]] = frozenset({"bowled", "lbw"})
 
 # Canonical short codes for extras
@@ -33,6 +39,7 @@ _EXTRA_MAP: Dict[str, str] = {
     "b": "b",
     "lb": "lb",
 }
+
 
 def norm_extra(x: Optional[str] | object) -> Optional[str]:
     """
@@ -52,6 +59,7 @@ def norm_extra(x: Optional[str] | object) -> Optional[str]:
         return "lb"
     return None
 
+
 def as_extra_code(x: Optional[str]) -> Optional[str]:
     """
     Return the canonical short code for an extra, or None.
@@ -59,5 +67,3 @@ def as_extra_code(x: Optional[str]) -> Optional[str]:
     if x is None:
         return None
     return _EXTRA_MAP.get(x)
-
-
