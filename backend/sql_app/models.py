@@ -1,28 +1,29 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, TypedDict
-
+import datetime as dt
 import enum
 import uuid
-import datetime as dt
-UTC = getattr(dt, "UTC", dt.timezone.utc)
+from typing import Any, Dict, List, Optional, TypedDict
+
 from pydantic import BaseModel
 from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
+    Enum as SAEnum,
     Float,
     ForeignKey,
     Index,
     Integer,
     String,
     Text,
-    Enum as SAEnum,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
+
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 
 
 # -----------------------------

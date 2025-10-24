@@ -1,4 +1,4 @@
-﻿"""add overs_per_day setup fields
+"""add overs_per_day setup fields
 
 Revision ID: 598a9558c298
 Revises: c7cb4087a1c1

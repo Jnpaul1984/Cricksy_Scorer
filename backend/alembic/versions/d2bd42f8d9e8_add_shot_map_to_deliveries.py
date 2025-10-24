@@ -1,4 +1,4 @@
-﻿"""Add shot_map key to deliveries ledger entries.
+"""Add shot_map key to deliveries ledger entries.
 
 Revision ID: d2bd42f8d9e8
 Revises: 5bdad054a436

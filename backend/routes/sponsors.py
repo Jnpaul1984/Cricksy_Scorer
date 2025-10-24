@@ -1,27 +1,27 @@
 from __future__ import annotations
 
-import os
-import json
-from pathlib import Path
-from typing import Any, List, Optional, Dict, Literal, Union, cast
-
 import datetime as dt
-UTC = getattr(dt, "UTC", dt.timezone.utc)
+import json
+import os
+from pathlib import Path
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union, cast
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select, and_, or_
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
-from backend.sql_app import models, crud
+from backend.sql_app import crud, models
 from backend.sql_app.database import get_db
 from backend.utils.common import (
     MAX_UPLOAD_BYTES,
     detect_image_ext as _detect_image_ext,
-    parse_iso_dt as _parse_iso_dt,
     iso_or_none as _iso_or_none,
+    parse_iso_dt as _parse_iso_dt,
 )
+
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 
 router = APIRouter(tags=["sponsors"])
 
@@ -56,14 +56,14 @@ class SponsorsManifest(BaseModel):
 
 @router.post("/sponsors")
 async def create_sponsor(
-    name: str = Form(...),
-    logo: UploadFile = File(...),
-    click_url: Optional[str] = Form(None),
-    weight: int = Form(1),
-    surfaces: Optional[str] = Form(None),   # JSON array as string
-    start_at: Optional[str] = Form(None),   # ISO-8601
-    end_at: Optional[str] = Form(None),
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    name: Annotated[str, Form()],
+    logo: Annotated[UploadFile, File()],
+    click_url: Annotated[str | None, Form()] = None,
+    weight: Annotated[int, Form()] = 1,
+    surfaces: Annotated[str | None, Form()] = None,  # JSON array as string
+    start_at: Annotated[str | None, Form()] = None,  # ISO-8601
+    end_at: Annotated[str | None, Form()] = None,
 ) -> Dict[str, Any]:
     if weight < 1 or weight > 5:
         raise HTTPException(status_code=400, detail="weight must be between 1 and 5")

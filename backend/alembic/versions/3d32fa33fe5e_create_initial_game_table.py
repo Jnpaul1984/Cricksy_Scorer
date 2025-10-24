@@ -1,4 +1,4 @@
-﻿"""Create initial game table
+"""Create initial game table
 
 Revision ID: 3d32fa33fe5e
 Revises: 

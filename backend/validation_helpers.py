@@ -1,4 +1,4 @@
-﻿"""
+"""
 Validation helper functions for backend API endpoints.
 
 Provides comprehensive validation for:

@@ -10,7 +10,8 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: []
-        args: ["--config-file", "pyproject.toml", "backend"]
+        pass_filenames: false
+        args: ["--pretty", "--show-error-codes", "--install-types", "--non-interactive", "--ignore-missing-imports", "--explicit-package-bases", "backend"]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:

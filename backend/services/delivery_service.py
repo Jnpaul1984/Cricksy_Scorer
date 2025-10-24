@@ -1,4 +1,4 @@
-﻿"""
+"""
 Delivery service: persist a scored delivery.
 
 This module provides a single, focused function:

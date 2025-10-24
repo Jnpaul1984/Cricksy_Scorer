@@ -1,4 +1,4 @@
-﻿# backend/routes/roles.py
+# backend/routes/roles.py
 from __future__ import annotations
 
 from typing import Any, AsyncGenerator, Dict, List, Optional, cast
@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-
+ # DB dependency (async) -- annotate as AsyncGenerator
 from backend.sql_app import models, schemas
 from backend.sql_app.database import SessionLocal  # Async sessionmaker
 
