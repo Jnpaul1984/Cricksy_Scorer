@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import datetime as dt
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Literal, Mapping, Optional, Sequence, cast
+from typing import (Annotated, Any, Dict, List, Literal, Mapping, Optional,
+                    Sequence, cast)
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -14,26 +15,30 @@ from backend.services import game_helpers as gh
 from backend.services import validation as validation_helpers
 from backend.services.live_bus import emit_state_update
 from backend.services.scoring_service import score_one as _score_one
-from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
+from backend.services.snapshot_service import \
+    build_snapshot as _snapshot_from_game
 from backend.sql_app import crud, models, schemas
-from backend.sql_app.database import SessionLocal as _SessionLocal  # async SessionLocal for DI
+from backend.sql_app.database import \
+    SessionLocal as _SessionLocal  # async SessionLocal for DI
 
 UTC = getattr(dt, "UTC", dt.timezone.utc)
 router = APIRouter(prefix="/games", tags=["gameplay"])
+
 
 # Local DB dependency mirroring main.get_db
 async def get_db() -> Any:
     async with _SessionLocal() as session:  # type: ignore[misc]
         yield session
 
-BASE_DIR = Path(__file__).resolve().parent
 
+BASE_DIR = Path(__file__).resolve().parent
 
 
 def _model_to_dict(x: Any) -> Optional[Dict[str, Any]]:
     # Minimal copy of main._model_to_dict for this router
     try:
-        from pydantic import BaseModel  # local import to avoid circulars at import time
+        from pydantic import \
+            BaseModel  # local import to avoid circulars at import time
     except Exception:
         BaseModel = object  # type: ignore[assignment]
 
@@ -67,15 +72,19 @@ def _model_to_dict(x: Any) -> Optional[Dict[str, Any]]:
 # Local helper: close innings if all out or overs exhausted (ported from main.py)
 async def _maybe_close_innings(g: Any) -> None:
     balls_limit = (g.overs_limit or 0) * 6
-    balls_bowled = int(getattr(g, "balls_bowled_total", None) or (
-        int(getattr(g, "overs_completed", 0)) * 6 + int(getattr(g, "balls_this_over", 0))
-    ))
+    balls_bowled = int(
+        getattr(g, "balls_bowled_total", None)
+        or (
+            int(getattr(g, "overs_completed", 0)) * 6
+            + int(getattr(g, "balls_this_over", 0))
+        )
+    )
 
     if g.status == models.GameStatus.innings_break:
         return
 
-    all_out = (g.total_wickets >= 10)
-    overs_exhausted = (balls_limit > 0 and balls_bowled >= balls_limit)
+    all_out = g.total_wickets >= 10
+    overs_exhausted = balls_limit > 0 and balls_bowled >= balls_limit
 
     if all_out or overs_exhausted:
         if not hasattr(g, "innings_history"):
@@ -86,18 +95,20 @@ async def _maybe_close_innings(g: Any) -> None:
             inn.get("inning_no") == g.current_inning for inn in g.innings_history
         )
         if not already_archived:
-            g.innings_history.append({
-                "inning_no": g.current_inning or 1,
-                "batting_team": g.batting_team_name,
-                "bowling_team": g.bowling_team_name,
-                "runs": g.total_runs,
-                "wickets": g.total_wickets,
-                "overs": gh._overs_string_from_ledger(g),
-                "batting_scorecard": g.batting_scorecard,
-                "bowling_scorecard": g.bowling_scorecard,
-                "deliveries": g.deliveries,
-                "closed_at": dt.datetime.now(UTC).isoformat(),
-            })
+            g.innings_history.append(
+                {
+                    "inning_no": g.current_inning or 1,
+                    "batting_team": g.batting_team_name,
+                    "bowling_team": g.bowling_team_name,
+                    "runs": g.total_runs,
+                    "wickets": g.total_wickets,
+                    "overs": gh._overs_string_from_ledger(g),
+                    "batting_scorecard": g.batting_scorecard,
+                    "bowling_scorecard": g.bowling_scorecard,
+                    "deliveries": g.deliveries,
+                    "closed_at": dt.datetime.now(UTC).isoformat(),
+                }
+            )
 
         g.status = models.GameStatus.innings_break
         g.needs_new_innings = True
@@ -107,23 +118,29 @@ async def _maybe_close_innings(g: Any) -> None:
         g.current_non_striker_id = None
         g.current_bowler_id = None
 
+
 class StartOverBody(BaseModel):
     bowler_id: str
+
 
 class MidOverChangeBody(BaseModel):
     new_bowler_id: str
     reason: Literal["injury", "other"] = "injury"
+
 
 class StartNextInningsBody(BaseModel):
     striker_id: Optional[str] = None
     non_striker_id: Optional[str] = None
     opening_bowler_id: Optional[str] = None
 
+
 class NextBatterBody(BaseModel):
     batter_id: str
 
+
 class ReplaceBatterBody(BaseModel):
     new_batter_id: str
+
 
 @router.post("/{game_id}/overs/start")
 async def start_over(
@@ -171,13 +188,16 @@ async def start_over(
 
     return {"ok": True, "current_bowler_id": g.current_bowler_id}
 
+
 @router.get("/{game_id}/deliveries")
 async def get_deliveries(
     game_id: str,
-    innings: Optional[int] = Query(None, ge=1, le=4, description="Filter by innings number"),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    innings: Optional[int] = Query(
+        None, ge=1, le=4, description="Filter by innings number"
+    ),
     limit: int = Query(120, ge=1, le=500, description="Max number of rows to return"),
     order: Literal["desc", "asc"] = Query("desc", description="desc = newest-first"),
-    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Dict[str, Any]:
     """
     Returns deliveries for a game (optionally filtered by innings),
@@ -198,7 +218,9 @@ async def get_deliveries(
         if d is not None:
             # normalize extra_type to the canonical union expected by schemas.Delivery
             if "extra_type" in d:
-                d["extra_type"] = gh._as_extra_code(cast(Optional[str], d.get("extra_type")))
+                d["extra_type"] = gh._as_extra_code(
+                    cast(Optional[str], d.get("extra_type"))
+                )
             # ensure there is an int innings tag; default legacy to 1
             try:
                 d["inning"] = int(d.get("inning", 1) or 1)
@@ -214,7 +236,7 @@ async def get_deliveries(
     if order == "desc":
         rows = rows[-limit:][::-1]  # newest-first
     else:
-        rows = rows[:limit]         # earliest-first
+        rows = rows[:limit]  # earliest-first
 
     # Validate/shape with Pydantic (keeps wire format consistent)
     out: List[Dict[str, Any]] = []
@@ -224,15 +246,21 @@ async def get_deliveries(
             shaped = model.model_dump()
         except Exception:
             try:
-                model = schemas.Delivery(**d_any)          # type: ignore[call-arg]
-                shaped = model.dict()                      # type: ignore[attr-defined]
+                model = schemas.Delivery(**d_any)  # type: ignore[call-arg]
+                shaped = model.dict()  # type: ignore[attr-defined]
             except Exception:
                 continue
 
         # Enrich names for UI convenience
-        shaped["striker_name"] = gh._player_name(g.team_a, g.team_b, shaped.get("striker_id"))
-        shaped["non_striker_name"] = gh._player_name(g.team_a, g.team_b, shaped.get("non_striker_id"))
-        shaped["bowler_name"] = gh._player_name(g.team_a, g.team_b, shaped.get("bowler_id"))
+        shaped["striker_name"] = gh._player_name(
+            g.team_a, g.team_b, shaped.get("striker_id")
+        )
+        shaped["non_striker_name"] = gh._player_name(
+            g.team_a, g.team_b, shaped.get("non_striker_id")
+        )
+        shaped["bowler_name"] = gh._player_name(
+            g.team_a, g.team_b, shaped.get("bowler_id")
+        )
         # pass through innings tag
         shaped["inning"] = d_any.get("inning", 1)
         out.append(shaped)
@@ -240,8 +268,9 @@ async def get_deliveries(
     return {
         "game_id": game_id,
         "count": len(out),
-        "deliveries": out,   # ordered per `order` (desc by default)
+        "deliveries": out,  # ordered per `order` (desc by default)
     }
+
 
 @router.post("/{game_id}/overs/change_bowler")
 async def change_bowler_mid_over(
@@ -270,22 +299,34 @@ async def change_bowler_mid_over(
     gh._recompute_totals_and_runtime(g)
 
     # Validate match state
-    status_ok = str(getattr(g, "status", "in_progress")).lower() in {"in_progress", "live", "started"}
+    status_ok = str(getattr(g, "status", "in_progress")).lower() in {
+        "in_progress",
+        "live",
+        "started",
+    }
     if not status_ok:
-        raise HTTPException(status_code=409, detail=f"Game is {getattr(g, 'status', 'unknown')}")
+        raise HTTPException(
+            status_code=409, detail=f"Game is {getattr(g, 'status', 'unknown')}"
+        )
 
     balls_this_over = int(getattr(g, "current_over_balls", 0) or 0)
     current = getattr(g, "current_bowler_id", None)
 
     # Must be mid-over and have an active bowler
     if not current or balls_this_over <= 0:
-        raise HTTPException(status_code=409, detail="Over not in progress; use /overs/start")
+        raise HTTPException(
+            status_code=409, detail="Over not in progress; use /overs/start"
+        )
 
     if getattr(g, "mid_over_change_used", False):
-        raise HTTPException(status_code=409, detail="Mid-over change already used this over")
+        raise HTTPException(
+            status_code=409, detail="Mid-over change already used this over"
+        )
 
     if str(body.new_bowler_id) == str(current):
-        raise HTTPException(status_code=409, detail="New bowler is already the current bowler")
+        raise HTTPException(
+            status_code=409, detail="New bowler is already the current bowler"
+        )
 
     # New bowler must be in the bowling team
     bowling_team_name = getattr(g, "bowling_team_name", None)
@@ -294,7 +335,9 @@ async def change_bowler_mid_over(
     if not (bowling_team_name and team_a and team_b):
         raise HTTPException(status_code=500, detail="Teams not initialized on game")
 
-    bowling_team: Dict[str, Any] = team_a if team_a["name"] == bowling_team_name else team_b
+    bowling_team: Dict[str, Any] = (
+        team_a if team_a["name"] == bowling_team_name else team_b
+    )
     allowed = {str(p["id"]) for p in (bowling_team.get("players", []) or [])}
     if str(body.new_bowler_id) not in allowed:
         raise HTTPException(status_code=409, detail="Bowler is not in the bowling team")
@@ -317,10 +360,11 @@ async def change_bowler_mid_over(
     snap["needs_new_over"] = bool(getattr(g, "needs_new_over", False))
 
     from backend.services.live_bus import emit_state_update
-    
+
     await emit_state_update(game_id, snap)
 
     return snap
+
 
 @router.post("/{game_id}/innings/start")
 async def start_next_innings(
@@ -352,18 +396,20 @@ async def start_next_innings(
     # If the last innings wasnâ€™t archived yet, archive it now
     last_archived_no = g.innings_history[-1]["inning_no"] if g.innings_history else None
     if last_archived_no != g.current_inning:
-        g.innings_history.append({
-            "inning_no": g.current_inning,
-            "batting_team": prev_batting_team,
-            "bowling_team": prev_bowling_team,
-            "runs": g.total_runs,
-            "wickets": g.total_wickets,
-            "overs": gh._overs_string_from_ledger(g),
-            "batting_scorecard": g.batting_scorecard,
-            "bowling_scorecard": g.bowling_scorecard,
-            # DO NOT destroy the ledger; it spans both innings
-            "closed_at": dt.datetime.now(UTC).isoformat(),
-        })
+        g.innings_history.append(
+            {
+                "inning_no": g.current_inning,
+                "batting_team": prev_batting_team,
+                "bowling_team": prev_bowling_team,
+                "runs": g.total_runs,
+                "wickets": g.total_wickets,
+                "overs": gh._overs_string_from_ledger(g),
+                "batting_scorecard": g.batting_scorecard,
+                "bowling_scorecard": g.bowling_scorecard,
+                # DO NOT destroy the ledger; it spans both innings
+                "closed_at": dt.datetime.now(UTC).isoformat(),
+            }
+        )
 
     # Advance innings and flip teams
     g.current_inning = int(g.current_inning) + 1
@@ -400,8 +446,10 @@ async def start_next_innings(
     if g.first_inning_summary is None:
         g.first_inning_summary = gh._first_innings_summary(g)
     gh._ensure_target_if_chasing(g)
-    g.needs_new_over = (g.current_bowler_id is None)
-    g.needs_new_batter = (g.current_striker_id is None or g.current_non_striker_id is None)
+    g.needs_new_over = g.current_bowler_id is None
+    g.needs_new_batter = (
+        g.current_striker_id is None or g.current_non_striker_id is None
+    )
     g.status = models.GameStatus.in_progress
 
     # Recompute derived/runtime and persist
@@ -413,11 +461,13 @@ async def start_next_innings(
     # Snapshot + emit
     snap = _snapshot_from_game(u, None, BASE_DIR)
     snap["needs_new_innings"] = False
-    snap["needs_new_over"] = (g.current_bowler_id is None)
-    snap["needs_new_batter"] = (g.current_striker_id is None or g.current_non_striker_id is None)
+    snap["needs_new_over"] = g.current_bowler_id is None
+    snap["needs_new_batter"] = (
+        g.current_striker_id is None or g.current_non_striker_id is None
+    )
 
     from backend.services.live_bus import emit_state_update
-    
+
     await emit_state_update(game_id, snap)
 
     return snap
@@ -450,6 +500,7 @@ async def set_openers(
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
     from backend.services.live_bus import emit_state_update
+
     await emit_state_update(game_id, snap)
 
     return snap
@@ -485,13 +536,16 @@ async def replace_batter(
     elif _is_out(g.current_non_striker_id):
         g.current_non_striker_id = body.new_batter_id
     else:
-        raise HTTPException(status_code=409, detail="No striker or non-striker requires replacement.")
+        raise HTTPException(
+            status_code=409, detail="No striker or non-striker requires replacement."
+        )
 
     # Ensure scorecard entry exists for the incoming batter
     gh._ensure_batting_entry(g, body.new_batter_id)
 
     # Persist and snapshot
     from sqlalchemy.orm.attributes import flag_modified
+
     flag_modified(db_game, "batting_scorecard")
     updated = await crud.update_game(db, game_model=db_game)
     u = cast(Any, updated)
@@ -504,6 +558,7 @@ async def replace_batter(
     snap["needs_new_over"] = flags["needs_new_over"]
 
     from backend.services.live_bus import emit_state_update
+
     await emit_state_update(game_id, snap)
 
     return snap
@@ -543,6 +598,7 @@ async def set_next_batter(
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
     from backend.services.live_bus import emit_state_update
+
     await emit_state_update(game_id, snap)
 
     return {"ok": True, "current_striker_id": g.current_striker_id}
@@ -572,12 +628,16 @@ async def finalize_game(
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
     from backend.services.live_bus import emit_state_update
+
     await emit_state_update(game_id, snap)
 
     return snap
 
+
 @router.get("/{game_id}/snapshot")
-async def get_snapshot(game_id: str, db: Annotated[AsyncSession, Depends(get_db)]) -> Dict[str, Any]:
+async def get_snapshot(
+    game_id: str, db: Annotated[AsyncSession, Depends(get_db)]
+) -> Dict[str, Any]:
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -611,7 +671,9 @@ async def get_snapshot(game_id: str, db: Annotated[AsyncSession, Depends(get_db)
     snap["needs_new_innings"] = is_break
 
     # Interruption records + mini cards
-    snap["interruptions"] = cast(List[Dict[str, Any]], getattr(g, "interruptions", []) or [])
+    snap["interruptions"] = cast(
+        List[Dict[str, Any]], getattr(g, "interruptions", []) or []
+    )
     snap["mini_batting_card"] = gh._mini_batting_card(g)
     snap["mini_bowling_card"] = gh._mini_bowling_card(g)
 
@@ -619,7 +681,11 @@ async def get_snapshot(game_id: str, db: Annotated[AsyncSession, Depends(get_db)
     try:
         overs_limit_opt = cast(Optional[int], getattr(g, "overs_limit", None))
         current_innings = int(getattr(g, "current_inning", 1) or 1)
-        if isinstance(overs_limit_opt, int) and current_innings >= 2 and overs_limit_opt in (20, 50):
+        if (
+            isinstance(overs_limit_opt, int)
+            and current_innings >= 2
+            and overs_limit_opt in (20, 50)
+        ):
             format_overs = int(overs_limit_opt)
             kind = "odi" if format_overs >= 40 else "t20"
             env = dlsmod.load_env(kind, str(BASE_DIR))
@@ -654,7 +720,9 @@ async def get_snapshot(game_id: str, db: Annotated[AsyncSession, Depends(get_db)
             team2_overs_left_now = max(
                 0.0, float(format_overs) - (overs_completed + (balls_this_over / 6.0))
             )
-            team2_wkts_now = int(getattr(g, "total_wickets", 0)) if current_innings == 2 else 0
+            team2_wkts_now = (
+                int(getattr(g, "total_wickets", 0)) if current_innings == 2 else 0
+            )
 
             R_start = env.table.R(format_overs, 0)
             R_remaining = env.table.R(team2_overs_left_now, team2_wkts_now)
@@ -663,7 +731,9 @@ async def get_snapshot(game_id: str, db: Annotated[AsyncSession, Depends(get_db)
             par_now = int(
                 dlsmod.par_score_now(S1=S1, R1_total=R1_total, R2_used_so_far=R2_used)
             )
-            target_full = int(dlsmod.revised_target(S1=S1, R1_total=R1_total, R2_total=R_start))
+            target_full = int(
+                dlsmod.revised_target(S1=S1, R1_total=R1_total, R2_total=R_start)
+            )
 
             snap["dls"] = {"method": "DLS", "par": par_now, "target": target_full}
     except Exception:
@@ -695,8 +765,10 @@ async def get_snapshot(game_id: str, db: Annotated[AsyncSession, Depends(get_db)
 @router.get("/{game_id}/recent_deliveries")
 async def get_recent_deliveries(
     game_id: str,
-    limit: int = Query(10, ge=1, le=50, description="Max number of most recent deliveries"),
     db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = Query(
+        10, ge=1, le=50, description="Max number of most recent deliveries"
+    ),
 ) -> Dict[str, Any]:
     """
     Returns the most-recent `limit` deliveries for a game, newest-first.
@@ -738,7 +810,9 @@ async def get_recent_deliveries(
     # Enrich with names
     for i, row in enumerate(out):
         row["striker_name"] = gh._player_name(g.team_a, g.team_b, row.get("striker_id"))
-        row["non_striker_name"] = gh._player_name(g.team_a, g.team_b, row.get("non_striker_id"))
+        row["non_striker_name"] = gh._player_name(
+            g.team_a, g.team_b, row.get("non_striker_id")
+        )
         row["bowler_name"] = gh._player_name(g.team_a, g.team_b, row.get("bowler_id"))
         row["inning"] = int(ledger[i].get("inning", 1) or 1)
 
@@ -775,7 +849,9 @@ async def add_delivery(
         incoming = str(delivery.bowler_id)
         if cur and incoming and incoming != cur:
             if getattr(g, "mid_over_change_used", False):
-                raise HTTPException(status_code=409, detail="Mid-over change already used this over")
+                raise HTTPException(
+                    status_code=409, detail="Mid-over change already used this over"
+                )
 
             bowling_team_name = getattr(g, "bowling_team_name", None)
             team_a = cast(Dict[str, Any], getattr(g, "team_a"))
@@ -783,7 +859,9 @@ async def add_delivery(
             bowling_team = team_a if team_a["name"] == bowling_team_name else team_b
             allowed = {str(p["id"]) for p in (bowling_team.get("players", []) or [])}
             if incoming not in allowed:
-                raise HTTPException(status_code=409, detail="Bowler is not in the bowling team")
+                raise HTTPException(
+                    status_code=409, detail="Bowler is not in the bowling team"
+                )
 
             g.current_bowler_id = incoming
             g.mid_over_change_used = True
@@ -798,12 +876,18 @@ async def add_delivery(
             raise HTTPException(status_code=404, detail="Unknown bowler name")
         delivery.bowler_id = resolved
 
-    if int(getattr(g, "balls_this_over", 0)) == 0 and not getattr(g, "current_bowler_id", None):
+    if int(getattr(g, "balls_this_over", 0)) == 0 and not getattr(
+        g, "current_bowler_id", None
+    ):
         g.current_bowler_id = delivery.bowler_id
         g.mid_over_change_used = False
 
     # Fill fielder/dismissed by name if needed
-    needs_fielder = bool(delivery.is_wicket and str(getattr(delivery, "dismissal_type", "")).lower() in {"caught", "run_out", "stumped"})
+    needs_fielder = bool(
+        delivery.is_wicket
+        and str(getattr(delivery, "dismissal_type", "")).lower()
+        in {"caught", "run_out", "stumped"}
+    )
     if needs_fielder and not delivery.fielder_id and delivery.fielder_name:
         resolved = gh._id_by_name(g.team_a, g.team_b, delivery.fielder_name)
         if not resolved:
@@ -814,7 +898,9 @@ async def add_delivery(
         if dpn:
             resolved = gh._id_by_name(g.team_a, g.team_b, dpn)
             if not resolved:
-                raise HTTPException(status_code=404, detail="Unknown dismissed player name")
+                raise HTTPException(
+                    status_code=404, detail="Unknown dismissed player name"
+                )
             delivery.dismissed_player_id = resolved
 
     # Comprehensive validation
@@ -827,15 +913,20 @@ async def add_delivery(
         batting_team_name=g.batting_team_name,
         bowling_team_name=g.bowling_team_name,
         is_wicket=delivery.is_wicket or False,
-        dismissal_type=getattr(delivery, "dismissal_type", None)
+        dismissal_type=getattr(delivery, "dismissal_type", None),
     )
 
     # UI gating flags & guards
     flags = gh._compute_snapshot_flags(g)
-    if getattr(g, "current_bowler_id", None) and int(getattr(g, "balls_this_over", 0)) == 0:
+    if (
+        getattr(g, "current_bowler_id", None)
+        and int(getattr(g, "balls_this_over", 0)) == 0
+    ):
         flags["needs_new_over"] = False
     if flags.get("needs_new_batter"):
-        raise HTTPException(status_code=409, detail="Select a new batter before scoring the next ball.")
+        raise HTTPException(
+            status_code=409, detail="Select a new batter before scoring the next ball."
+        )
     if flags.get("needs_new_over"):
         msg = (
             f"Start a new over and select a bowler before scoring. "
@@ -847,7 +938,9 @@ async def add_delivery(
     last_id = getattr(g, "last_ball_bowler_id", None)
     eff_bowler = getattr(g, "current_bowler_id", None) or delivery.bowler_id
     if int(getattr(g, "balls_this_over", 0)) == 0 and last_id and eff_bowler == last_id:
-        raise HTTPException(status_code=400, detail="Bowler cannot bowl consecutive overs")
+        raise HTTPException(
+            status_code=400, detail="Bowler cannot bowl consecutive overs"
+        )
 
     # Normalize delivery + score one ball
     x = gh._norm_extra(delivery.extra)
@@ -857,22 +950,33 @@ async def add_delivery(
         if getattr(g, "current_striker_id", None):
             delivery.striker_id = g.current_striker_id  # type: ignore[assignment]
         else:
-            raise HTTPException(status_code=409, detail="Select openers before scoring the first ball.")
+            raise HTTPException(
+                status_code=409, detail="Select openers before scoring the first ball."
+            )
     if not getattr(delivery, "non_striker_id", None):
         if getattr(g, "current_non_striker_id", None):
             delivery.non_striker_id = g.current_non_striker_id  # type: ignore[assignment]
         else:
-            raise HTTPException(status_code=409, detail="Select openers before scoring the first ball.")
+            raise HTTPException(
+                status_code=409, detail="Select openers before scoring the first ball."
+            )
     if not delivery.striker_id:
-        raise HTTPException(status_code=409, detail="Select openers before scoring the first ball.")
+        raise HTTPException(
+            status_code=409, detail="Select openers before scoring the first ball."
+        )
     if not delivery.non_striker_id:
-        raise HTTPException(status_code=409, detail="Select openers before scoring the first ball.")
+        raise HTTPException(
+            status_code=409, detail="Select openers before scoring the first ball."
+        )
 
     effective_bowler_id: Optional[str] = (
         cast(Optional[str], getattr(g, "current_bowler_id", None)) or delivery.bowler_id
     )
     if not effective_bowler_id:
-        raise HTTPException(status_code=409, detail="Select a bowler before scoring the first ball of the over.")
+        raise HTTPException(
+            status_code=409,
+            detail="Select a bowler before scoring the first ball of the over.",
+        )
 
     striker_id_n: str = delivery.striker_id
     non_striker_id_n: str = delivery.non_striker_id
@@ -949,7 +1053,9 @@ async def add_delivery(
     # Build snapshot + final flags
     last = u.deliveries[-1] if u.deliveries else None
     snap = _snapshot_from_game(u, last, BASE_DIR)
-    is_break = str(getattr(u, "status", "")) == "innings_break" or bool(getattr(u, "needs_new_innings", False))
+    is_break = str(getattr(u, "status", "")) == "innings_break" or bool(
+        getattr(u, "needs_new_innings", False)
+    )
     if is_break:
         snap["needs_new_over"] = False
         snap["needs_new_innings"] = True
@@ -962,7 +1068,9 @@ async def add_delivery(
 
     snap["current_bowler_id"] = cast(
         Optional[str],
-        snap.get("current_bowler_id") or cur_bowler_from_obj or getattr(u, "current_bowler_id", None),
+        snap.get("current_bowler_id")
+        or cur_bowler_from_obj
+        or getattr(u, "current_bowler_id", None),
     )
     snap["last_ball_bowler_id"] = cast(
         Optional[str],
@@ -971,13 +1079,16 @@ async def add_delivery(
 
     # Emit via global sio from backend.main (lazy import to avoid circulars)
     from backend.services.live_bus import emit_state_update
+
     await emit_state_update(game_id, snap)
 
     return snap
 
 
 @router.post("/{game_id}/undo-last")
-async def undo_last_delivery(game_id: str, db: Annotated[AsyncSession, Depends(get_db)]) -> Dict[str, Any]:
+async def undo_last_delivery(
+    game_id: str, db: Annotated[AsyncSession, Depends(get_db)]
+) -> Dict[str, Any]:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -997,14 +1108,20 @@ async def undo_last_delivery(game_id: str, db: Annotated[AsyncSession, Depends(g
         game.balls_this_over = 0
         game.current_striker_id = None
         game.current_non_striker_id = None
-        batting_team = game.team_a if game.batting_team_name == game.team_a["name"] else game.team_b
+        batting_team = (
+            game.team_a
+            if game.batting_team_name == game.team_a["name"]
+            else game.team_b
+        )
         bowling_team = game.team_b if batting_team is game.team_a else game.team_a
         game.batting_scorecard = gh._mk_batting_scorecard(batting_team)
         game.bowling_scorecard = gh._mk_bowling_scorecard(bowling_team)
 
     _reset_runtime_and_scorecards(g)
 
-    deliveries_seq: Sequence[Mapping[str, Any]] = cast(Sequence[Mapping[str, Any]], g.deliveries)
+    deliveries_seq: Sequence[Mapping[str, Any]] = cast(
+        Sequence[Mapping[str, Any]], g.deliveries
+    )
     for d in deliveries_seq:
         x = gh._norm_extra(d.get("extra_type"))
         if x == "nb":
@@ -1033,8 +1150,7 @@ async def undo_last_delivery(game_id: str, db: Annotated[AsyncSession, Depends(g
     snapshot = _snapshot_from_game(u, last, BASE_DIR)
 
     from backend.services.live_bus import emit_state_update
+
     await emit_state_update(game_id, snapshot)
 
     return snapshot
-
-

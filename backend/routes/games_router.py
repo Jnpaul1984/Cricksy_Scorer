@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from typing import Annotated, Any, Dict, Optional, Sequence, Set, TypedDict, cast
+from typing import (Annotated, Any, Dict, Optional, Sequence, Set, TypedDict,
+                    cast)
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
