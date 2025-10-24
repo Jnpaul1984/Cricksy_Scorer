@@ -1,4 +1,4 @@
-﻿"""jsonb_and_required_run_rate
+"""jsonb_and_required_run_rate
 
 Revision ID: a1f75f7dd6d4
 Revises: 2d0c3e4d3a75

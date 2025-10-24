@@ -1,4 +1,4 @@
-﻿"""team roles + game_contributors
+"""team roles + game_contributors
 
 Revision ID: b3945b731a7a
 Revises: 598a9558c298

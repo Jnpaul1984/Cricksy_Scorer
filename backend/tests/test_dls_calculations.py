@@ -1,4 +1,4 @@
-﻿"""
+"""
 Comprehensive tests for DLS (Duckworth-Lewis-Stern) calculations.
 
 These tests verify the accuracy and correctness of DLS target calculations

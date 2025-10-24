@@ -1,4 +1,4 @@
-﻿# backend/routes/roles.py
+# backend/routes/roles.py
 from __future__ import annotations
 
 from typing import Any, AsyncGenerator, Dict, List, Optional, cast

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Example Test Organization
 ==========================
 

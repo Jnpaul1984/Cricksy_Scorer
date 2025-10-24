@@ -1,4 +1,4 @@
-﻿"""
+"""
 Integration tests for DLS (Duckworth-Lewis-Stern) calculations via API.
 
 These tests verify that DLS calculations work correctly in real match scenarios,

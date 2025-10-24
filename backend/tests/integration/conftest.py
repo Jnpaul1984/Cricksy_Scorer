@@ -1,4 +1,4 @@
-﻿"""
+"""
 Integration Test Framework for Cricksy Scorer
 
 Provides fixtures and utilities for integration testing including:

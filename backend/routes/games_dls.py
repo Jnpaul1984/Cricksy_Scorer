@@ -1,4 +1,4 @@
-﻿# routers/games_dls.py
+# routers/games_dls.py
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Depends

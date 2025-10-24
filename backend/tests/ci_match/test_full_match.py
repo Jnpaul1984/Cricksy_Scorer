@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 import os, time, json
 from typing import Dict, List, Optional
 from backend.tests._ci_utils import traced_request

@@ -121,4 +121,4 @@ if __name__ == "__main__":
         sys.exit(0)
     else:
         print("No patch applied (diff empty or failed).")
-        sys.exit(0)  # don’t fail the job; we still want logs & comments
+        sys.exit(0)  # don't fail the job; we still want logs & comments

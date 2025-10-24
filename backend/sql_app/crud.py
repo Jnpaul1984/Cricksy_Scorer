@@ -1,4 +1,4 @@
-﻿# sql_app/crud.py
+# sql_app/crud.py
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional, Dict, Any
