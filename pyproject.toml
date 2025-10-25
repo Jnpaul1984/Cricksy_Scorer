@@ -1,7 +1,6 @@
 [tool.ruff]
 line-length = 100
 # Target modern Python while remaining compatible with CI defaults
-# (GitHub Actions matrix below uses 3.12 & 3.13)
 target-version = "py312"
 include = [
   "backend/**/*.py",
@@ -25,9 +24,15 @@ select = [
   "SIM", # flake8-simplify
   "PIE", # flake8-pie
   "RUF", # Ruff-specific
+  "W",   # pycodestyle warnings
 ]
 # Keep long-line rule relaxed to avoid large diffs right now (revisit later)
-ignore = ["E501", "E203"]
+ignore = ["E501", "E203", "UP038"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/routes/*.py" = ["B008"]  # FastAPI Depends() in default args
+"backend/alembic/**/*.py" = ["E402"]  # Module level import not at top of file
+"backend/tests/**/*.py" = ["E501", "E701", "E702", "B007", "F841", "SIM108", "C401"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -38,9 +43,13 @@ line-ending = "lf"
 # Keep mypy permissive initially; tighten incrementally later
 python_version = "3.12"
 warn_return_any = false
-warn_unused_configs = false
+warn_unused_configs = true
 ignore_missing_imports = true
 follow_imports = "skip"
 disallow_untyped_defs = false
 # Skip tests and common vendor dirs
-exclude = "backend/tests/|scripts/.*|node_modules/|.venv/"
+exclude = "backend/tests/|backend/alembic/|scripts/.*|node_modules/|.venv/"
+
+[tool.bandit]
+exclude_dirs = ["backend/tests", "backend/alembic/versions", ".venv", "node_modules"]
+skips = []

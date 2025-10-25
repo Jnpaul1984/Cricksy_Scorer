@@ -1,7 +1,6 @@
 # backend/routes/roles.py
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
 from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,17 +9,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.sql_app import models, schemas
-from backend.sql_app.database import SessionLocal  # Async sessionmaker
+from backend.sql_app.database import get_db as default_get_db
 
 router = APIRouter(prefix="/games", tags=["roles"])
 
 
 # ----------------------------------------------------
-# DB dependency (async) â€” annotate as AsyncGenerator
+# DB dependency (async) - use the one from database.py
 # ----------------------------------------------------
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with SessionLocal() as session:  # type: ignore[misc]
-        yield session
+get_db = default_get_db
 
 
 # ----------------------------------------------------
