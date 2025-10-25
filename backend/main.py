@@ -6,6 +6,13 @@ from typing import Any
 from backend.app import create_app
 from backend.sql_app import crud, models, schemas  # noqa: F401
 from backend.sql_app.database import get_db as get_db
+import logging
+
+
+# Use absolute package imports so main.py works whether imported as backend.main or as a script
+from backend.logging_setup import configure_logging
+
+configure_logging(json=True, level=logging.INFO)
 
 # Build the ASGI app and expose a FastAPI instance for tests
 app, _fastapi = create_app()

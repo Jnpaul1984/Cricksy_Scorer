@@ -3,23 +3,24 @@ from __future__ import annotations
 from typing import Any
 import asyncio
 
-_SIO: Any | None = None
+# Match what tests reset and assert
+_sio_server: Any | None = None
 
 
 def set_socketio_server(sio: Any) -> None:
     """Register the Socket.IO server instance once during app startup."""
-    global _SIO
-    _SIO = sio
+    global _sio_server
+    _sio_server = sio
 
 
 async def emit(
     event: str, data: Any, *, room: str | None = None, namespace: str | None = None
 ) -> None:
     """Generic async emitter with best-effort error containment."""
-    if _SIO is None:
+    if _sio_server is None:
         return
     try:
-        await _SIO.emit(event, data, room=room, namespace=namespace)
+        await _sio_server.emit(event, data, room=room, namespace=namespace)
     except Exception:
         # Avoid breaking request handlers on emit failures
         return
@@ -31,7 +32,8 @@ async def emit_state_update(game_id: str, snapshot: dict[str, Any]) -> None:
 
 
 async def emit_game_update(game_id: str, payload: dict[str, Any]) -> None:
-    await emit("game:update", {"id": game_id, **payload}, room=game_id)
+    # Tests expect the raw payload (no id merged in)
+    await emit("game:update", payload, room=game_id)
 
 
 # Sync-friendly wrapper used by some sync routes (e.g., games_dls)
@@ -43,7 +45,7 @@ def publish_game_update(game_id: str, payload: dict[str, Any]) -> None:
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            _task = loop.create_task(emit_game_update(game_id, payload))  # noqa: RUF006
+            _ = loop.create_task(emit_game_update(game_id, payload))  # noqa: RUF006
     except Exception:
-        # No running loop (e.g., threadpool) â€” safe no-op
+        # No running loop (e.g., threadpool) — safe no-op
         pass

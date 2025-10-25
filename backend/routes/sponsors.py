@@ -64,11 +64,12 @@ async def create_sponsor(
     db: Annotated[AsyncSession, Depends(get_db)],
     name: Annotated[str, Form(...)],
     logo: Annotated[UploadFile, File(...)],
-    click_url: Annotated[str | None, Form(None)] = None,
-    weight: Annotated[int, Form(1)] = 1,
-    surfaces: Annotated[str | None, Form(None)] = None,  # JSON array as string
-    start_at: Annotated[str | None, Form(None)] = None,  # ISO-8601
-    end_at: Annotated[str | None, Form(None)] = None,
+    # Defaults must be on the parameter, not inside Form(...)
+    click_url: Annotated[str | None, Form()] = None,
+    weight: Annotated[int, Form()] = 1,
+    surfaces: Annotated[str | None, Form()] = None,  # JSON array as string
+    start_at: Annotated[str | None, Form()] = None,  # ISO-8601
+    end_at: Annotated[str | None, Form()] = None,
 ) -> dict[str, Any]:
     if weight < 1 or weight > 5:
         raise HTTPException(status_code=400, detail="weight must be between 1 and 5")

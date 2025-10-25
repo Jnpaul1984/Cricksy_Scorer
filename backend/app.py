@@ -4,6 +4,7 @@ from typing import Any, cast
 from collections.abc import AsyncGenerator
 from pathlib import Path
 import logging
+import os  # NEW
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,6 +47,44 @@ try:
 except Exception:
     InMemoryCrudRepository = None
     enable_in_memory_crud_fn = None
+
+
+# NEW: minimal no-op async session and result for in-memory mode safety
+class _FakeResult:
+    def scalars(self) -> _FakeResult:  # type: ignore[name-defined]
+        return self
+
+    def all(self) -> list[Any]:
+        return []
+
+    def first(self) -> Any | None:
+        return None
+
+    def scalar_one_or_none(self) -> Any | None:
+        return None
+
+
+class _FakeSession:
+    def add(self, obj: Any) -> None:
+        pass
+
+    def add_all(self, seq: list[Any]) -> None:
+        pass
+
+    async def commit(self) -> None:
+        pass
+
+    async def refresh(self, obj: Any) -> None:
+        pass
+
+    async def rollback(self) -> None:
+        pass
+
+    async def close(self) -> None:
+        pass
+
+    async def execute(self, *args: Any, **kwargs: Any) -> _FakeResult:
+        return _FakeResult()
 
 
 def create_app(settings_override: Any | None = None) -> tuple[socketio.ASGIApp, FastAPI]:
@@ -100,10 +139,16 @@ def create_app(settings_override: Any | None = None) -> tuple[socketio.ASGIApp, 
         async with SessionLocal() as session:  # type: ignore[misc]
             yield session
 
-    if bool(getattr(settings, "IN_MEMORY_DB", False)):
+    # NEW: Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
+    use_in_memory = bool(getattr(settings, "IN_MEMORY_DB", False)) or (
+        os.getenv("CRICKSY_IN_MEMORY_DB") == "1"
+    )
+
+    if use_in_memory:
 
         async def _in_memory_get_db() -> AsyncGenerator[object, None]:
-            yield object()
+            # Yield a minimal fake session to satisfy accidental DB calls
+            yield _FakeSession()
 
         fastapi_app.dependency_overrides[db_get_db] = _in_memory_get_db  # type: ignore[index]
         with suppress(Exception):

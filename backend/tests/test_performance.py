@@ -8,7 +8,7 @@ and ensure the application can handle realistic workloads.
 import time
 import pytest
 from fastapi.testclient import TestClient
-from main import _fastapi as app
+from backend.main import _fastapi as app
 
 
 @pytest.fixture
