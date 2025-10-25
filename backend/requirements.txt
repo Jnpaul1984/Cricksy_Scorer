@@ -31,7 +31,7 @@ passlib==1.7.4
 pathspec==0.12.1
 platformdirs==4.3.8
 pluggy==1.6.0
-pyasn1==0.6.1
+pyasn1
 pycodestyle==2.11.1
 pycparser==2.22
 pydantic==2.5.0
@@ -43,7 +43,7 @@ pytest-asyncio==0.21.1
 python-dateutil==2.8.2
 python-dotenv==1.0.0
 python-engineio==4.12.2
-python-jose==3.4.0
+python-jose==0.6.1
 python-multipart==0.0.18
 python-socketio==5.14.0
 PyYAML==6.0.2
