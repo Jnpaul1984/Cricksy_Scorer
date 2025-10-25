@@ -1,4 +1,4 @@
-﻿"""
+"""
 Delivery service: persist a scored delivery.
 
 This module provides a single, focused function:
@@ -15,10 +15,10 @@ Responsibilities:
 - flag_modified on the ORM object fields and call crud.update_game to persist
 - return the updated ORM row (as GameState-like object)
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-from pydantic import BaseModel
+from typing import Any
 
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,16 +32,16 @@ async def apply_scoring_and_persist(
     *,
     # Either pass the raw payload fields and let score_one compute kwargs:
     compute_kwargs: bool = True,
-    striker_id: Optional[str] = None,
-    non_striker_id: Optional[str] = None,
-    bowler_id: Optional[str] = None,
-    runs_scored: Optional[int] = 0,
-    extra: Optional[str] = None,
-    is_wicket: Optional[bool] = False,
-    dismissal_type: Optional[str] = None,
-    dismissed_player_id: Optional[str] = None,
+    striker_id: str | None = None,
+    non_striker_id: str | None = None,
+    bowler_id: str | None = None,
+    runs_scored: int | None = 0,
+    extra: str | None = None,
+    is_wicket: bool | None = False,
+    dismissal_type: str | None = None,
+    dismissed_player_id: str | None = None,
     # Or pass a fully-formed delivery_dict (result of schemas.Delivery) to append directly:
-    delivery_dict: Optional[Dict[str, Any]] = None,
+    delivery_dict: dict[str, Any] | None = None,
     db: AsyncSession = None,
 ) -> Any:
     """
@@ -73,7 +73,9 @@ async def apply_scoring_and_persist(
         # trust that caller supplied a normalized delivery dict
         del_dict = dict(delivery_dict)
     else:
-        raise ValueError("Either delivery_dict must be provided or compute_kwargs=True with proper args")
+        raise ValueError(
+            "Either delivery_dict must be provided or compute_kwargs=True with proper args"
+        )
 
     # Ensure inning tag is present (best-effort)
     if "inning" not in del_dict:
@@ -96,6 +98,3 @@ async def apply_scoring_and_persist(
     # Persist via CRUD (pass the ORM row)
     updated = await crud.update_game(db=db, game_model=g)
     return updated
-
-
-

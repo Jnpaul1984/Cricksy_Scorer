@@ -1,5 +1,5 @@
-﻿from fastapi.testclient import TestClient
-from typing import Any, Dict
+from fastapi.testclient import TestClient
+from typing import Any
 import uuid
 
 import backend.main as main
@@ -122,7 +122,7 @@ def test_results_endpoint():
     assert len(results) >= 1
 
     # Further assertions on at least one result
-    result: Dict[str, Any] = results[0]
+    result: dict[str, Any] = results[0]
     assert "match_id" in result
     assert "winner" in result
     assert "team_a_score" in result
@@ -133,6 +133,3 @@ def test_results_endpoint():
     assert isinstance(result["winner"], (str, type(None)))  # Winner can be None
     assert isinstance(result["team_a_score"], int)
     assert isinstance(result["team_b_score"], int)
-
-
-

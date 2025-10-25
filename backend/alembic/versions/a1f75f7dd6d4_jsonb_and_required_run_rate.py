@@ -1,10 +1,11 @@
-﻿"""jsonb_and_required_run_rate
+"""jsonb_and_required_run_rate
 
 Revision ID: a1f75f7dd6d4
 Revises: 2d0c3e4d3a75
 Create Date: 2025-08-21 10:48:50.299658
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 from alembic import op
 import sqlalchemy as sa
@@ -12,9 +13,9 @@ from sqlalchemy.dialects import postgresql as psql
 
 # revision identifiers, used by Alembic.
 revision: str = "a1f75f7dd6d4"
-down_revision: Union[str, Sequence[str], None] = "2d0c3e4d3a75"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "2d0c3e4d3a75"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def _fill_null(table: str, column: str, json_literal: str) -> None:
@@ -23,11 +24,7 @@ def _fill_null(table: str, column: str, json_literal: str) -> None:
     json_literal must be a valid JSON string like '{}' or '[]' (no casts here).
     Works regardless of column's current type (json/text/jsonb).
     """
-    op.execute(
-        sa.text(
-            f"UPDATE {table} SET {column} = {json_literal} WHERE {column} IS NULL"
-        )
-    )
+    op.execute(sa.text(f"UPDATE {table} SET {column} = {json_literal} WHERE {column} IS NULL"))
 
 
 def _to_jsonb(table: str, column: str) -> None:
@@ -80,6 +77,3 @@ def downgrade():
     # op.alter_column("games", "batting_scorecard", type_=psql.JSON(), postgresql_using="batting_scorecard::json")
     # op.alter_column("games", "bowling_scorecard", type_=psql.JSON(), postgresql_using="bowling_scorecard::json")
     # op.alter_column("games", "deliveries", type_=psql.JSON(), postgresql_using="deliveries::json")
-
-
-

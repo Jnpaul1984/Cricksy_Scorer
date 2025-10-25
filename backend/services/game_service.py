@@ -1,18 +1,20 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.sql_app import crud, schemas, models
+from backend.sql_app import crud, schemas
+
 
 # Local lightweight helpers (copied from main.py to avoid circular imports)
-def _mk_players(names: List[str]) -> List[Dict[str, str]]:
+def _mk_players(names: list[str]) -> list[dict[str, str]]:
     return [{"id": str(uuid.uuid4()), "name": n} for n in names]
 
-def _mk_batting_scorecard(team: Dict[str, Any]) -> Dict[str, Any]:
-    out: Dict[str, Any] = {}
+
+def _mk_batting_scorecard(team: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
     for p in team.get("players", []):
         out[p["id"]] = {
             "player_id": p["id"],
@@ -26,8 +28,9 @@ def _mk_batting_scorecard(team: Dict[str, Any]) -> Dict[str, Any]:
         }
     return out
 
-def _mk_bowling_scorecard(team: Dict[str, Any]) -> Dict[str, Any]:
-    out: Dict[str, Any] = {}
+
+def _mk_bowling_scorecard(team: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
     for p in team.get("players", []):
         out[p["id"]] = {
             "player_id": p["id"],
@@ -37,6 +40,7 @@ def _mk_bowling_scorecard(team: Dict[str, Any]) -> Dict[str, Any]:
             "wickets_taken": 0,
         }
     return out
+
 
 def _coerce_match_type(raw: str) -> schemas.MatchType:
     try:
@@ -61,8 +65,8 @@ async def create_game(
         players_a_list = players_a_list or [f"PlayerA{i}" for i in range(1, per_side + 1)]
         players_b_list = players_b_list or [f"PlayerB{i}" for i in range(1, per_side + 1)]
 
-    team_a: Dict[str, Any] = {"name": payload.team_a_name, "players": _mk_players(players_a_list)}
-    team_b: Dict[str, Any] = {"name": payload.team_b_name, "players": _mk_players(players_b_list)}
+    team_a: dict[str, Any] = {"name": payload.team_a_name, "players": _mk_players(players_a_list)}
+    team_b: dict[str, Any] = {"name": payload.team_b_name, "players": _mk_players(players_b_list)}
 
     # --- Determine initial batting side (toss/decision) with safe defaults ---
     toss = (payload.toss_winner_team or "").strip()
@@ -77,11 +81,17 @@ async def create_game(
     else:
         batting_team_name = payload.team_a_name
 
-    bowling_team_name = payload.team_b_name if batting_team_name == payload.team_a_name else payload.team_a_name
+    bowling_team_name = (
+        payload.team_b_name if batting_team_name == payload.team_a_name else payload.team_a_name
+    )
 
     # Pre-seed scorecards
-    batting_scorecard = _mk_batting_scorecard(team_a if batting_team_name == payload.team_a_name else team_b)
-    bowling_scorecard = _mk_bowling_scorecard(team_b if batting_team_name == payload.team_a_name else team_a)
+    batting_scorecard = _mk_batting_scorecard(
+        team_a if batting_team_name == payload.team_a_name else team_b
+    )
+    bowling_scorecard = _mk_bowling_scorecard(
+        team_b if batting_team_name == payload.team_a_name else team_a
+    )
 
     game_create = schemas.GameCreate(
         team_a_name=payload.team_a_name,
@@ -107,12 +117,10 @@ async def create_game(
         game_id=game_id,
         batting_team=batting_team_name,
         bowling_team=bowling_team_name,
-        team_a=cast(Dict[str, Any], team_a),
-        team_b=cast(Dict[str, Any], team_b),
-        batting_scorecard=cast(Dict[str, Any], batting_scorecard),
-        bowling_scorecard=cast(Dict[str, Any], bowling_scorecard),
+        team_a=cast(dict[str, Any], team_a),
+        team_b=cast(dict[str, Any], team_b),
+        batting_scorecard=cast(dict[str, Any], batting_scorecard),
+        bowling_scorecard=cast(dict[str, Any], bowling_scorecard),
     )
 
     return db_game
-
-

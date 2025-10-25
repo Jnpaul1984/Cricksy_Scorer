@@ -1,6 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-from typing import Any, Dict, cast
+from typing import Any, cast
 from enum import Enum
 from importlib import import_module
 import sys
@@ -12,7 +12,7 @@ class InMemoryCrudRepository:
     """Lightweight in-memory stand-in for SQLAlchemy CRUD used during CI."""
 
     def __init__(self) -> None:
-        self._games: Dict[str, models.Game] = {}
+        self._games: dict[str, models.Game] = {}
 
     async def create_game(
         self,
@@ -22,16 +22,18 @@ class InMemoryCrudRepository:
         game_id: str,
         batting_team: str,
         bowling_team: str,
-        team_a: Dict[str, Any],
-        team_b: Dict[str, Any],
-        batting_scorecard: Dict[str, Any],
-        bowling_scorecard: Dict[str, Any],
+        team_a: dict[str, Any],
+        team_b: dict[str, Any],
+        batting_scorecard: dict[str, Any],
+        bowling_scorecard: dict[str, Any],
     ) -> models.Game:
         g = models.Game(
             id=game_id,
             team_a=team_a,
             team_b=team_b,
-            match_type=game.match_type.value if isinstance(game.match_type, Enum) else str(game.match_type),
+            match_type=game.match_type.value
+            if isinstance(game.match_type, Enum)
+            else str(game.match_type),
             overs_limit=game.overs_limit,
             days_limit=game.days_limit,
             overs_per_day=game.overs_per_day,
@@ -66,7 +68,14 @@ class InMemoryCrudRepository:
         g.result = None
         g.is_game_over = False
         g.completed_at = None
-        g.extras_totals = {"wides": 0, "no_balls": 0, "byes": 0, "leg_byes": 0, "penalty": 0, "total": 0}
+        g.extras_totals = {
+            "wides": 0,
+            "no_balls": 0,
+            "byes": 0,
+            "leg_byes": 0,
+            "penalty": 0,
+            "total": 0,
+        }
         g.fall_of_wickets = []
         g.phases = {}
         g.projections = {}
@@ -101,9 +110,6 @@ def enable_in_memory_crud(repository: InMemoryCrudRepository) -> None:
 
     for target in targets:
         target_any = cast(Any, target)
-        setattr(target_any, "create_game", repository.create_game)
-        setattr(target_any, "get_game", repository.get_game)
-        setattr(target_any, "update_game", repository.update_game)
-
-
-
+        target_any.create_game = repository.create_game
+        target_any.get_game = repository.get_game
+        target_any.update_game = repository.update_game

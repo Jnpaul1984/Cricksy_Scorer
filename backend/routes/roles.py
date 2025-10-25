@@ -1,7 +1,8 @@
-﻿# backend/routes/roles.py
+# backend/routes/roles.py
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator, Dict, List, Optional, cast
+from typing import Any, cast
+from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select, update
@@ -13,6 +14,7 @@ from backend.sql_app.database import SessionLocal  # Async sessionmaker
 
 router = APIRouter(prefix="/games", tags=["roles"])
 
+
 # ----------------------------------------------------
 # DB dependency (async) â€” annotate as AsyncGenerator
 # ----------------------------------------------------
@@ -20,18 +22,21 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:  # type: ignore[misc]
         yield session
 
+
 # ----------------------------------------------------
 # Helpers
 # ----------------------------------------------------
-def _players_on_side(game: models.Game, side: schemas.TeamSide) -> List[Dict[str, Any]]:
+def _players_on_side(game: models.Game, side: schemas.TeamSide) -> list[dict[str, Any]]:
     team = game.team_a if side == schemas.TeamSide.A else game.team_b
     team = team or {}
-    return cast(List[Dict[str, Any]], team.get("players", []) or [])
+    return cast(list[dict[str, Any]], team.get("players", []) or [])
 
-def _ensure_player_on_team(player_id: Optional[str], team_players: List[Dict[str, Any]]) -> bool:
+
+def _ensure_player_on_team(player_id: str | None, team_players: list[dict[str, Any]]) -> bool:
     if not player_id:
         return True
     return any(p.get("id") == player_id for p in team_players)
+
 
 # ----------------------------------------------------
 # Team roles (captain / wicket-keeper)
@@ -40,7 +45,7 @@ def _ensure_player_on_team(player_id: Optional[str], team_players: List[Dict[str
 async def set_team_roles(
     game_id: str,
     payload: schemas.TeamRoleUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     res = await db.execute(select(models.Game).where(models.Game.id == game_id))
     game = res.scalar_one_or_none()
@@ -69,10 +74,17 @@ async def set_team_roles(
     return {
         "ok": True,
         "team_roles": {
-            "A": {"captain_id": cast(Optional[str], g.team_a_captain_id), "wicket_keeper_id": cast(Optional[str], g.team_a_keeper_id)},
-            "B": {"captain_id": cast(Optional[str], g.team_b_captain_id), "wicket_keeper_id": cast(Optional[str], g.team_b_keeper_id)},
+            "A": {
+                "captain_id": cast(str | None, g.team_a_captain_id),
+                "wicket_keeper_id": cast(str | None, g.team_a_keeper_id),
+            },
+            "B": {
+                "captain_id": cast(str | None, g.team_b_captain_id),
+                "wicket_keeper_id": cast(str | None, g.team_b_keeper_id),
+            },
         },
     }
+
 
 # ----------------------------------------------------
 # Game contributors (scorer / commentary / analytics)
@@ -81,7 +93,7 @@ async def set_team_roles(
 async def add_contributor(
     game_id: str,
     body: schemas.GameContributorIn,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     # Ensure game exists
     res = await db.execute(select(models.Game).where(models.Game.id == game_id))
@@ -119,27 +131,37 @@ async def add_contributor(
         id=cast(int, rec.id),
         game_id=cast(str, rec.game_id),
         user_id=cast(str, rec.user_id),
-        role=schemas.GameContributorRole(cast(str, rec.role.value if hasattr(rec.role, "value") else rec.role)),
-        display_name=cast(Optional[str], rec.display_name),
+        role=schemas.GameContributorRole(
+            cast(str, rec.role.value if hasattr(rec.role, "value") else rec.role)
+        ),
+        display_name=cast(str | None, rec.display_name),
     )
 
-@router.get("/{game_id}/contributors", response_model=List[schemas.GameContributor])
-async def list_contributors(game_id: str, db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(models.GameContributor).where(models.GameContributor.game_id == game_id))
+
+@router.get("/{game_id}/contributors", response_model=list[schemas.GameContributor])
+async def list_contributors(game_id: str, db: Annotated[AsyncSession, Depends(get_db)]):
+    res = await db.execute(
+        select(models.GameContributor).where(models.GameContributor.game_id == game_id)
+    )
     rows = res.scalars().all()
     return [
         schemas.GameContributor(
             id=cast(int, r.id),
             game_id=cast(str, r.game_id),
             user_id=cast(str, r.user_id),
-            role=schemas.GameContributorRole(cast(str, r.role.value if hasattr(r.role, "value") else r.role)),
-            display_name=cast(Optional[str], r.display_name),
+            role=schemas.GameContributorRole(
+                cast(str, r.role.value if hasattr(r.role, "value") else r.role)
+            ),
+            display_name=cast(str | None, r.display_name),
         )
         for r in rows
     ]
 
+
 @router.delete("/{game_id}/contributors/{contrib_id}")
-async def remove_contributor(game_id: str, contrib_id: int, db: AsyncSession = Depends(get_db)):
+async def remove_contributor(
+    game_id: str, contrib_id: int, db: Annotated[AsyncSession, Depends(get_db)]
+):
     stmt = delete(models.GameContributor).where(
         models.GameContributor.game_id == game_id,
         models.GameContributor.id == contrib_id,
@@ -149,6 +171,3 @@ async def remove_contributor(game_id: str, contrib_id: int, db: AsyncSession = D
     if res.rowcount == 0:  # type: ignore[attr-defined]
         raise HTTPException(status_code=404, detail="Contributor not found")
     return {"ok": True}
-
-
-

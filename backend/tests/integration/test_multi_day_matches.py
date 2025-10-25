@@ -1,4 +1,4 @@
-﻿"""
+"""
 Integration tests for multi-day (Test) match functionality.
 
 These tests verify that the backend correctly handles:
@@ -25,11 +25,11 @@ class TestMultiDayMatchCreation:
             overs_limit=None,  # Unlimited overs
             overs_per_day=90,
         )
-        
+
         # Get game object
         response = game_helper.client.get(f"/games/{game_id}")
         assert response.status_code == 200
-        
+
         game_data = response.json()
         assert game_data["match_type"] == "multi_day"
         assert game_data["days_limit"] == 5
@@ -47,10 +47,10 @@ class TestMultiDayMatchCreation:
             overs_limit=None,
             overs_per_day=80,
         )
-        
+
         response = game_helper.client.get(f"/games/{game_id}")
         assert response.status_code == 200
-        
+
         game_data = response.json()
         assert game_data["match_type"] == "multi_day"
         assert game_data["days_limit"] == 3
@@ -65,10 +65,10 @@ class TestMultiDayMatchCreation:
             overs_limit=None,
             overs_per_day=96,
         )
-        
+
         response = game_helper.client.get(f"/games/{game_id}")
         assert response.status_code == 200
-        
+
         game_data = response.json()
         assert game_data["match_type"] == "multi_day"
         assert game_data["days_limit"] == 4
@@ -86,17 +86,17 @@ class TestMultiDayMatchPlay:
             days_limit=5,
             overs_limit=None,
         )
-        
+
         team_a_players = teams["team_a"]
         team_b_players = teams["team_b"]
-        
+
         # Set openers
         game_helper.set_openers(team="A")
-        
+
         striker = team_a_players[0]["id"]
         bowler1 = team_b_players[0]["id"]
         bowler2 = team_b_players[1]["id"]
-        
+
         # Play 60 overs (360 balls) - more than a typical limited-overs match
         for i in range(360):
             bowler = bowler1 if (i // 6) % 2 == 0 else bowler2
@@ -107,14 +107,11 @@ class TestMultiDayMatchPlay:
                 runs_scored=runs,
             )
             assert response.status_code == 200
-        
+
         # Verify score
         snapshot = game_helper.get_snapshot()
         assert snapshot["score"]["runs"] == 420  # 300 + 120
         assert snapshot["score"]["overs"] == 60
-
-
-
 
 
 class TestMultiDayMatchState:
@@ -129,14 +126,14 @@ class TestMultiDayMatchState:
             days_limit=5,
             overs_limit=None,
         )
-        
+
         team_a_players = teams["team_a"]
         team_b_players = teams["team_b"]
-        
+
         game_helper.set_openers(team="A")
         striker = team_a_players[0]["id"]
         bowler = team_b_players[0]["id"]
-        
+
         # Play 1 over
         for i in range(6):
             response = game_helper.post_delivery(
@@ -145,11 +142,11 @@ class TestMultiDayMatchState:
                 runs_scored=1,
             )
             assert response.status_code == 200
-        
+
         # Check state after 1 over
         response = game_helper.client.get(f"/games/{game_id}")
         game_data = response.json()
-        
+
         assert game_data["total_runs"] == 6
         assert game_data["overs_completed"] == 1
         assert game_data["balls_this_over"] == 0
@@ -165,14 +162,14 @@ class TestMultiDayMatchState:
             days_limit=5,
             overs_limit=None,
         )
-        
+
         team_a_players = teams["team_a"]
         team_b_players = teams["team_b"]
-        
+
         game_helper.set_openers(team="A")
         striker = team_a_players[0]["id"]
         bowler = team_b_players[0]["id"]
-        
+
         # Play 3 deliveries
         for i in range(3):
             response = game_helper.post_delivery(
@@ -181,15 +178,15 @@ class TestMultiDayMatchState:
                 runs_scored=i,  # 0, 1, 2
             )
             assert response.status_code == 200
-        
+
         # Check deliveries list
         response = game_helper.client.get(f"/games/{game_id}")
         game_data = response.json()
-        
+
         assert "deliveries" in game_data
         deliveries = game_data["deliveries"]
         assert len(deliveries) == 3
-        
+
         # Verify delivery details
         assert deliveries[0]["runs_scored"] == 0
         assert deliveries[1]["runs_scored"] == 1
@@ -198,7 +195,3 @@ class TestMultiDayMatchState:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
-
-
-

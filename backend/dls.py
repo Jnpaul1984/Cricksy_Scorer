@@ -1,8 +1,9 @@
-﻿# backend/dls.py
+# backend/dls.py
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple, Any, Iterable, Literal, Mapping, Optional
+from typing import Any, Literal
+from collections.abc import Iterable, Mapping
 import csv
 import os
 import json
@@ -19,32 +20,33 @@ import math
 # ...
 # 0,0,0,0,...,0
 
+
 @dataclass
 class ResourceTable:
     # resources[overs_remaining][wickets_lost] -> percentage 0..100
-    resources: List[List[float]]  # index by overs_remaining (int), 0..M
+    resources: list[list[float]]  # index by overs_remaining (int), 0..M
     max_overs: int
 
     @classmethod
-    def from_csv(cls, path: str) -> "ResourceTable":
+    def from_csv(cls, path: str) -> ResourceTable:
         if not os.path.exists(path):
             raise FileNotFoundError(f"DLS resource CSV not found: {path}")
-        rows: List[List[float]] = []
-        with open(path, "r", newline="") as f:
+        rows: list[list[float]] = []
+        with open(path, newline="") as f:
             r = csv.DictReader(f)
             # Expect overs_remaining + w0..w9
-            tmp: Dict[int, List[float]] = {}
+            tmp: dict[int, list[float]] = {}
             max_over = 0
             for rec in r:
                 o = int(float(rec["overs_remaining"]))
                 max_over = max(max_over, o)
-                cols: List[float] = []
+                cols: list[float] = []
                 for w in range(10):
                     cols.append(float(rec.get(f"w{w}", 0.0)))
                 tmp[o] = cols
             # Normalize to contiguous 0..max_over
-            rows = [tmp.get(o, [0.0]*10) for o in range(max_over + 1)]
-        return cls(resources=rows, max_overs=len(rows)-1)
+            rows = [tmp.get(o, [0.0] * 10) for o in range(max_over + 1)]
+        return cls(resources=rows, max_overs=len(rows) - 1)
 
     def R(self, overs_remaining: float, wickets_lost: int) -> float:
         """
@@ -87,7 +89,7 @@ def balls_from_overs(overs: int, balls: int) -> int:
     return overs * 6 + balls
 
 
-def overs_balls_from_balls(total_balls: int) -> Tuple[int, int]:
+def overs_balls_from_balls(total_balls: int) -> tuple[int, int]:
     return divmod(max(0, total_balls), 6)
 
 
@@ -99,7 +101,7 @@ def wickets_from_ledger(deliveries: Iterable[Mapping[str, Any]]) -> int:
     return w
 
 
-def compute_state_from_ledger(deliveries: List[Mapping[str, Any]]) -> InningsState:
+def compute_state_from_ledger(deliveries: list[Mapping[str, Any]]) -> InningsState:
     # Legal deliveries increment balls; wides/noâ€‘balls do not (per your scoring rules)
     balls = 0
     wkts = 0
@@ -118,15 +120,15 @@ def compute_state_from_ledger(deliveries: List[Mapping[str, Any]]) -> InningsSta
 # ------------------------------
 # Weâ€™ll rely on a simple history of oversâ€‘limit changes captured at the moment they were applied.
 # Each record: { "at_delivery_index": int, "new_overs_limit": int }
-Interruption = Dict[str, Any]
+Interruption = dict[str, Any]
 
 
 def total_resources_team1(
     *,
     env: DLSEnv,
     max_overs_initial: int,
-    deliveries: List[Mapping[str, Any]],
-    interruptions: List[Interruption],
+    deliveries: list[Mapping[str, Any]],
+    interruptions: list[Interruption],
 ) -> float:
     """
     Compute Team 1 total resources (%) considering oversâ€‘limit reductions at specific
@@ -136,7 +138,7 @@ def total_resources_team1(
     # Sort by when they occurred
     ints = sorted(
         [i for i in interruptions if "at_delivery_index" in i and "new_overs_limit" in i],
-        key=lambda i: int(i["at_delivery_index"])
+        key=lambda i: int(i["at_delivery_index"]),
     )
 
     # Starting resources for Team 1: R(M, 0)
@@ -182,14 +184,15 @@ def total_resources_team2(
 
 def revised_target(
     *,
-    S1: int,              # Team 1 runs
-    R1_total: float,      # Team 1 total resources used (%)
-    R2_total: float,      # Team 2 total resources available (%)
+    S1: int,  # Team 1 runs
+    R1_total: float,  # Team 1 total resources used (%)
+    R2_total: float,  # Team 2 total resources available (%)
 ) -> int:
     # Standard DLS revised target: floor(S1 * (R2/R1)) + 1
     if R1_total <= 0.0:
         return S1 + 1  # safety; shouldn't happen
     import math
+
     return int(math.floor(S1 * (R2_total / R1_total)) + 1)
 
 
@@ -203,6 +206,7 @@ def par_score_now(
     if R1_total <= 0.0:
         return 0
     import math
+
     return int(math.floor(S1 * (R2_used_so_far / R1_total)) + 1)
 
 
@@ -236,14 +240,14 @@ def _load_json_table(path: Path, format_overs: int) -> ResourceTable:
     """Build a ResourceTable from a legacy JSON placeholder file."""
     payload = json.loads(path.read_text(encoding="utf-8"))
     max_wickets = 10  # DLS tables define wickets lost 0..9 (10th wicket ends innings)
-    resources: List[List[float]] = []
+    resources: list[list[float]] = []
 
     for overs_left in range(format_overs + 1):
         overs_bowled = float(format_overs - overs_left)
-        row: List[float] = []
+        row: list[float] = []
         for w in range(max_wickets):
             w_key = str(w)
-            series: Optional[Dict[str, Any]] = payload.get(w_key)
+            series: dict[str, Any] | None = payload.get(w_key)
             if not series:
                 # Fallback to simple proportional model when data missing
                 remaining = max(0.0, (overs_left / max(1, format_overs)) * 100.0)
@@ -337,6 +341,3 @@ def compute_dls_target(
         R2_total=R2_total,
         R2_used=R2_used,
     )
-
-
-

@@ -1,9 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-from typing import Any, Optional, Dict, List
+from typing import Any
 import asyncio
 
-_SIO: Optional[Any] = None
+_SIO: Any | None = None
 
 
 def set_socketio_server(sio: Any) -> None:
@@ -12,7 +12,9 @@ def set_socketio_server(sio: Any) -> None:
     _SIO = sio
 
 
-async def emit(event: str, data: Any, *, room: Optional[str] = None, namespace: Optional[str] = None) -> None:
+async def emit(
+    event: str, data: Any, *, room: str | None = None, namespace: str | None = None
+) -> None:
     """Generic async emitter with best-effort error containment."""
     if _SIO is None:
         return
@@ -24,16 +26,16 @@ async def emit(event: str, data: Any, *, room: Optional[str] = None, namespace: 
 
 
 # Convenience emitters used by routes
-async def emit_state_update(game_id: str, snapshot: Dict[str, Any]) -> None:
+async def emit_state_update(game_id: str, snapshot: dict[str, Any]) -> None:
     await emit("state:update", {"id": game_id, "snapshot": snapshot}, room=game_id)
 
 
-async def emit_game_update(game_id: str, payload: Dict[str, Any]) -> None:
+async def emit_game_update(game_id: str, payload: dict[str, Any]) -> None:
     await emit("game:update", {"id": game_id, **payload}, room=game_id)
 
 
 # Sync-friendly wrapper used by some sync routes (e.g., games_dls)
-def publish_game_update(game_id: str, payload: Dict[str, Any]) -> None:
+def publish_game_update(game_id: str, payload: dict[str, Any]) -> None:
     """
     Fire-and-forget from sync contexts. If running in a worker thread without an event loop,
     silently no-op (same behavior as previous 'try: import fail -> no-op' pattern).
@@ -45,5 +47,3 @@ def publish_game_update(game_id: str, payload: Dict[str, Any]) -> None:
     except Exception:
         # No running loop (e.g., threadpool) â€” safe no-op
         pass
-
-

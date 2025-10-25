@@ -1,21 +1,21 @@
-﻿"""add innings_break/started/live to game_status
+"""add innings_break/started/live to game_status
 
 Revision ID: 5bdad054a436
 Revises: 991718358b86
 Create Date: 2025-09-17 09:46:37.930681
 
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 from alembic import op
 
 
-
 # revision identifiers, used by Alembic.
-revision: str = '5bdad054a436'
-down_revision: Union[str, Sequence[str], None] = '991718358b86'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "5bdad054a436"
+down_revision: str | Sequence[str] | None = "991718358b86"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade():
@@ -30,5 +30,3 @@ def downgrade():
     # If you must truly downgrade, you'd need to recreate the enum/type.
     # Leaving as a no-op is standard for enum extensions.
     pass
-
-

@@ -1,11 +1,18 @@
-﻿import json
+import json
 import os
-import pytest
 import backend.main as main  # Import the module to access private functions
 from backend.main import ConcreteGameState  # Assuming ConcreteGameState is defined in backend.main
 
 
-def _mk_delivery(over: int, ball: int, runs: int, extras: int = 0, extra_type: str | None = None, wicket: bool = False, inning: int = 1):
+def _mk_delivery(
+    over: int,
+    ball: int,
+    runs: int,
+    extras: int = 0,
+    extra_type: str | None = None,
+    wicket: bool = False,
+    inning: int = 1,
+):
     # Map simplified fields to the runtime schema expected by recompute logic
     d: dict[str, object] = {
         "over_number": over,
@@ -28,7 +35,7 @@ def _mk_delivery(over: int, ball: int, runs: int, extras: int = 0, extra_type: s
             et = "lb"
         d["extra_type"] = et
     # Compute runs_scored to satisfy _runs_wkts_balls_for_innings()
-    et_code = (d.get("extra_type") or None)
+    et_code = d.get("extra_type") or None
     if et_code == "wd":
         d["runs_scored"] = max(1, extras or 1)
     elif et_code == "nb":
@@ -46,11 +53,15 @@ def test_simulated_t20_match():
     with open(match_path) as f:
         match = json.load(f)
 
-    team_a_name = match['teams'][0]
-    team_b_name = match['teams'][1]
+    team_a_name = match["teams"][0]
+    team_b_name = match["teams"][1]
 
     # Use the concrete implementation
-    g = ConcreteGameState(id="some-id", team_a={"name": team_a_name, "players": []}, team_b={"name": team_b_name, "players": []})
+    g = ConcreteGameState(
+        id="some-id",
+        team_a={"name": team_a_name, "players": []},
+        team_b={"name": team_b_name, "players": []},
+    )
 
     # Construct minimal deliveries that produce the target totals and end the chase by balls exhausted
     # Inning 1 total: 157 (one legal ball carrying total for simplicity)
@@ -86,11 +97,10 @@ def test_simulated_t20_match():
     # Assert winner and result
     result = getattr(g, "result", None)
     assert result is not None, "No result found!"
-    assert result.winner_team_name == match["result"]["winner"], f"Expected winner {match['result']['winner']}, got {result.winner_team_name}"
+    assert result.winner_team_name == match["result"]["winner"], (
+        f"Expected winner {match['result']['winner']}, got {result.winner_team_name}"
+    )
     # Allow minor punctuation differences at the end
-    assert result.result_text.rstrip('.') == match["result"]["summary"].rstrip('.'), (
+    assert result.result_text.rstrip(".") == match["result"]["summary"].rstrip("."), (
         f"Expected summary {match['result']['summary']}, got {result.result_text}"
     )
-
-
-

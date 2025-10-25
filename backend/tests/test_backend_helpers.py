@@ -1,4 +1,4 @@
-﻿from backend.helpers import overs_str_from_balls
+from backend.helpers import overs_str_from_balls
 
 
 def test_overs_str_from_balls_zero():
@@ -16,5 +16,3 @@ def test_overs_str_from_balls_mixed():
 def test_overs_str_from_balls_coerce_int_like():
     # Accept int-like float but coerce to int
     assert overs_str_from_balls(int(7.0)) == "1.1"
-
-

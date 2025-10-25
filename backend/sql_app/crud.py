@@ -1,7 +1,7 @@
-﻿# sql_app/crud.py
+# sql_app/crud.py
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import Optional, Dict, Any
+from typing import Any
 import json
 
 from . import models, schemas
@@ -29,7 +29,7 @@ def _coerce_result_to_text(value: Any) -> str | None:
     # Plain dataclass / object with attribute
     if hasattr(value, "result_text"):
         try:
-            rt = getattr(value, "result_text")
+            rt = value.result_text
             if rt:
                 return str(rt)
         except Exception:
@@ -45,6 +45,7 @@ def _coerce_result_to_text(value: Any) -> str | None:
     # Enum? (e.g., value.value)
     try:
         import enum
+
         if isinstance(value, enum.Enum):
             return str(value.value)
     except Exception:
@@ -54,7 +55,7 @@ def _coerce_result_to_text(value: Any) -> str | None:
     return str(value)
 
 
-async def get_game(db: AsyncSession, game_id: str) -> Optional[models.Game]:
+async def get_game(db: AsyncSession, game_id: str) -> models.Game | None:
     """
     Read a single game from the database by its ID.
     """
@@ -68,10 +69,10 @@ async def create_game(
     game_id: str,
     batting_team: str,
     bowling_team: str,
-    team_a: Dict[str, Any],
-    team_b: Dict[str, Any],
-    batting_scorecard: Dict[str, Any],
-    bowling_scorecard: Dict[str, Any],
+    team_a: dict[str, Any],
+    team_b: dict[str, Any],
+    batting_scorecard: dict[str, Any],
+    bowling_scorecard: dict[str, Any],
 ) -> models.Game:
     """
     Insert a new game row. Status string remains 'in_progress' to match current code paths.
@@ -120,6 +121,3 @@ async def update_game(db: AsyncSession, game_model: models.Game) -> models.Game:
     await db.commit()
     await db.refresh(game_model)
     return game_model
-
-
-

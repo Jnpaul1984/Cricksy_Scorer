@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, List, Mapping, Optional, Literal, cast
+from typing import Any, Literal, cast
+from collections.abc import Mapping
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -15,10 +16,12 @@ router = APIRouter(prefix="/games", tags=["games:dls"])
 
 BASE_DIR = Path(__file__).resolve().parent
 
+
 class DLSRequest(BaseModel):
     kind: Literal["odi", "t20"] = "odi"
     innings: Literal[1, 2] = 2
-    max_overs: Optional[int] = None
+    max_overs: int | None = None
+
 
 class DLSRevisedOut(BaseModel):
     R1_total: float
@@ -26,12 +29,14 @@ class DLSRevisedOut(BaseModel):
     S1: int
     target: int
 
+
 class DLSParOut(BaseModel):
     R1_total: float
     R2_used: float
     S1: int
     par: int
     ahead_by: int
+
 
 def _team1_runs(g: Any) -> int:
     fis_any: Any = getattr(g, "first_inning_summary", None)
@@ -49,6 +54,7 @@ def _team1_runs(g: Any) -> int:
         total += int(d.get("runs_scored") or 0)
     return total
 
+
 @router.post("/{game_id}/dls/revised-target", response_model=DLSRevisedOut)
 async def dls_revised_target(game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)):
     game = await crud.get_game(db, game_id=game_id)
@@ -58,10 +64,14 @@ async def dls_revised_target(game_id: str, body: DLSRequest, db: AsyncSession = 
     g = cast(Any, game)
     env = dlsmod.load_env(body.kind, str(BASE_DIR))
 
-    deliveries_m: List[Mapping[str, Any]] = cast(List[Mapping[str, Any]], list(getattr(g, "deliveries", [])))
+    deliveries_m: list[Mapping[str, Any]] = cast(
+        list[Mapping[str, Any]], list(getattr(g, "deliveries", []))
+    )
     M1 = int(body.max_overs or (g.overs_limit or (50 if body.kind == "odi" else 20)))
     interruptions = list(getattr(g, "interruptions", []))
-    R1_total = dlsmod.total_resources_team1(env=env, max_overs_initial=M1, deliveries=deliveries_m, interruptions=interruptions)
+    R1_total = dlsmod.total_resources_team1(
+        env=env, max_overs_initial=M1, deliveries=deliveries_m, interruptions=interruptions
+    )
 
     S1 = _team1_runs(g)
     M2 = int(body.max_overs or (g.overs_limit or (50 if body.kind == "odi" else 20)))
@@ -69,6 +79,7 @@ async def dls_revised_target(game_id: str, body: DLSRequest, db: AsyncSession = 
 
     target = dlsmod.revised_target(S1=S1, R1_total=R1_total, R2_total=R2_total)
     return DLSRevisedOut(R1_total=R1_total, R2_total=R2_total, S1=S1, target=target)
+
 
 @router.post("/{game_id}/dls/par", response_model=DLSParOut)
 async def dls_par_now(game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)):
@@ -78,7 +89,9 @@ async def dls_par_now(game_id: str, body: DLSRequest, db: AsyncSession = Depends
     g = cast(Any, game)
     env = dlsmod.load_env(body.kind, str(BASE_DIR))
 
-    deliveries_m: List[Mapping[str, Any]] = cast(List[Mapping[str, Any]], list(getattr(g, "deliveries", [])))
+    deliveries_m: list[Mapping[str, Any]] = cast(
+        list[Mapping[str, Any]], list(getattr(g, "deliveries", []))
+    )
     M = int(body.max_overs or (g.overs_limit or (50 if body.kind == "odi" else 20)))
 
     R1_total = dlsmod.total_resources_team1(

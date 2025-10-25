@@ -1,8 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List, Union, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 
 class DLSTable:
@@ -15,7 +15,7 @@ class DLSTable:
     def __init__(
         self,
         format_overs: int,
-        resources: Mapping[Union[int, str], Sequence[float]],
+        resources: Mapping[int | str, Sequence[float]],
     ) -> None:
         """
         Args:
@@ -27,7 +27,7 @@ class DLSTable:
         self.max_balls = format_overs * 6
 
         # Explicitly type the storage so Pylance knows what's inside.
-        self._resources: Dict[int, List[float]] = {}
+        self._resources: dict[int, list[float]] = {}
 
         # Convert keys to int and values to List[float], with validation.
         for wickets_key, resource_seq in resources.items():
@@ -57,7 +57,7 @@ class DLSTable:
         # Now that _resources is Dict[int, List[float]], this is a float.
         return self._resources[wickets_lost][balls_left]
 
-    def get_all_resources(self, wickets_lost: int) -> List[float]:
+    def get_all_resources(self, wickets_lost: int) -> list[float]:
         """
         Get complete resource array for a given number of wickets lost.
         """
@@ -83,7 +83,7 @@ class DLSTable:
         return f"DLSTable(format_overs={self.format_overs}, max_balls={self.max_balls})"
 
 
-def load_table_from_json(json_path: Union[str, Path]) -> DLSTable:
+def load_table_from_json(json_path: str | Path) -> DLSTable:
     """
     Load DLS table from JSON file.
     """
@@ -93,7 +93,7 @@ def load_table_from_json(json_path: Union[str, Path]) -> DLSTable:
         raise FileNotFoundError(f"DLS table file not found: {json_path}")
 
     try:
-        with open(json_path, "r", encoding="utf-8") as f:
+        with open(json_path, encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON in {json_path}: {e}") from e
@@ -106,9 +106,6 @@ def load_table_from_json(json_path: Union[str, Path]) -> DLSTable:
     format_overs = int(data["format_overs"])
 
     # JSON gives us Dict[str, List[float]] (or similar). This matches the widened type.
-    resources: Mapping[Union[int, str], Sequence[float]] = data["resources"]
+    resources: Mapping[int | str, Sequence[float]] = data["resources"]
 
     return DLSTable(format_overs, resources)
-
-
-

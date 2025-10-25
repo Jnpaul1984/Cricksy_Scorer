@@ -1,4 +1,4 @@
-﻿"""
+"""
 Route handler implementations for /games endpoints.
 
 This module contains the extracted implementation logic for the main /games routes.
@@ -6,14 +6,15 @@ It intentionally does NOT include FastAPI decorators so it can be imported by
 backend.main without creating circular imports. main.py will keep the route
 decorators and call these functions.
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Mapping, cast
+from typing import Any
+from collections.abc import Mapping
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.sql_app import crud, schemas
 from backend.services import game_service, delivery_service
-from backend.services import scoring_service
 from backend.services import game_helpers as gh
 
 
@@ -26,7 +27,7 @@ async def create_game_impl(payload: Any, db: AsyncSession) -> schemas.Game:
     return db_game
 
 
-async def get_game_impl(game_id: str, db: AsyncSession) -> Optional[schemas.Game]:
+async def get_game_impl(game_id: str, db: AsyncSession) -> schemas.Game | None:
     """
     Return the Game ORM row (or None) for the given ID.
     main.py will convert/return the proper response model.
@@ -34,7 +35,9 @@ async def get_game_impl(game_id: str, db: AsyncSession) -> Optional[schemas.Game
     return await crud.get_game(db=db, game_id=game_id)
 
 
-async def build_snapshot_impl(db_game: Any, last_delivery: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+async def build_snapshot_impl(
+    db_game: Any, last_delivery: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
     """
     Build the snapshot dict from the ORM game row using helpers.
     main.py previously used _snapshot_from_game; we replicate the semantics by
@@ -46,7 +49,7 @@ async def build_snapshot_impl(db_game: Any, last_delivery: Optional[Mapping[str,
 
     # Snapshot builder in main.py references many fields; reuse main._snapshot_from_game if available.
     # To avoid importing main, build a minimal snapshot consistent with tests:
-    snap: Dict[str, Any] = {}
+    snap: dict[str, Any] = {}
     snap["id"] = getattr(db_game, "id", None)
     snap["team_a"] = getattr(db_game, "team_a", {})
     snap["team_b"] = getattr(db_game, "team_b", {})
@@ -70,16 +73,16 @@ async def build_snapshot_impl(db_game: Any, last_delivery: Optional[Mapping[str,
 async def append_delivery_and_persist_impl(
     db_game: Any,
     *,
-    delivery_dict: Optional[Dict[str, Any]] = None,
+    delivery_dict: dict[str, Any] | None = None,
     compute_kwargs: bool = False,
-    striker_id: Optional[str] = None,
-    non_striker_id: Optional[str] = None,
-    bowler_id: Optional[str] = None,
-    runs_scored: Optional[int] = 0,
-    extra: Optional[str] = None,
-    is_wicket: Optional[bool] = False,
-    dismissal_type: Optional[str] = None,
-    dismissed_player_id: Optional[str] = None,
+    striker_id: str | None = None,
+    non_striker_id: str | None = None,
+    bowler_id: str | None = None,
+    runs_scored: int | None = 0,
+    extra: str | None = None,
+    is_wicket: bool | None = False,
+    dismissal_type: str | None = None,
+    dismissed_player_id: str | None = None,
     db: AsyncSession,
 ) -> Any:
     """
@@ -109,6 +112,3 @@ async def append_delivery_and_persist_impl(
             db=db,
         )
     return updated
-
-
-

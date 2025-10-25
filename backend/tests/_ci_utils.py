@@ -1,6 +1,10 @@
-﻿# From the repo root (Cricksy_Scorer)
+# From the repo root (Cricksy_Scorer)
 
-import json, time, os, pathlib, httpx
+import json
+import time
+import os
+import pathlib
+import httpx
 from urllib.parse import urlsplit
 
 _USE_INPROC = os.getenv("CRICKSY_IN_MEMORY_DB") == "1"
@@ -14,6 +18,7 @@ if _USE_INPROC:
 ARTI_DIR = pathlib.Path(__file__).resolve().parents[2] / "artifacts"
 ARTI_DIR.mkdir(parents=True, exist_ok=True)
 TRACE_FILE = ARTI_DIR / "http_trace.jsonl"
+
 
 def traced_request(method: str, url: str, **kw) -> httpx.Response:
     """
@@ -33,7 +38,7 @@ def traced_request(method: str, url: str, **kw) -> httpx.Response:
     t1 = time.time()
 
     try:
-        body = kw.get("json", None)
+        body = kw.get("json")
         rec = {
             "ts": t0,
             "dur_ms": int((t1 - t0) * 1000),
@@ -50,6 +55,3 @@ def traced_request(method: str, url: str, **kw) -> httpx.Response:
         pass
 
     return resp
-
-
-

@@ -1,10 +1,11 @@
-﻿"""sync games columns
+"""sync games columns
 
 Revision ID: 991718358b86
 Revises: 1e46ec51bd33
 Create Date: 2025-08-21 18:27:58.283241
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 from alembic import op
 import sqlalchemy as sa
@@ -12,19 +13,24 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "991718358b86"
-down_revision: Union[str, Sequence[str], None] = "1e46ec51bd33"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "1e46ec51bd33"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 # Define the enum so we can create/drop explicitly.
 game_status = postgresql.ENUM(
-    "not_started", "in_progress", "completed", "abandoned",
+    "not_started",
+    "in_progress",
+    "completed",
+    "abandoned",
     name="game_status",
     create_type=False,  # we'll create it ourselves with checkfirst=True
 )
 
+
 def _has_column(insp: sa.Inspector, table: str, column: str) -> bool:
     return column in {c["name"] for c in insp.get_columns(table)}
+
 
 def upgrade() -> None:
     bind = op.get_bind()
@@ -36,12 +42,14 @@ def upgrade() -> None:
     # 2) Cast games.status -> game_status (robust USING with fallback)
     if _has_column(insp, "games", "status"):
         # Normalize any out-of-range or NULL values so the cast won't fail
-        op.execute(sa.text("""
+        op.execute(
+            sa.text("""
             UPDATE games
             SET status = 'not_started'
             WHERE status IS NULL
                OR status NOT IN ('not_started','in_progress','completed','abandoned')
-        """))
+        """)
+        )
 
         # Only alter type if it isn't already the enum
         current_type = bind.execute(
@@ -100,9 +108,13 @@ def upgrade() -> None:
 
     # 5) Sponsors.surfaces -> NOT NULL (if present)
     if _has_column(insp, "sponsors", "surfaces"):
-        op.alter_column("sponsors", "surfaces",
-                        existing_type=postgresql.JSON(astext_type=sa.Text()),
-                        nullable=False)
+        op.alter_column(
+            "sponsors",
+            "surfaces",
+            existing_type=postgresql.JSON(astext_type=sa.Text()),
+            nullable=False,
+        )
+
 
 def downgrade() -> None:
     bind = op.get_bind()
@@ -110,9 +122,12 @@ def downgrade() -> None:
 
     # Sponsors.surfaces back to nullable
     if _has_column(insp, "sponsors", "surfaces"):
-        op.alter_column("sponsors", "surfaces",
-                        existing_type=postgresql.JSON(astext_type=sa.Text()),
-                        nullable=True)
+        op.alter_column(
+            "sponsors",
+            "surfaces",
+            existing_type=postgresql.JSON(astext_type=sa.Text()),
+            nullable=True,
+        )
 
     # Recreate legacy columns (nullable)
     for legacy, coltype in (
@@ -142,12 +157,8 @@ def downgrade() -> None:
 
     # Cast status back to VARCHAR, then drop enum type
     if _has_column(insp, "games", "status"):
-        op.alter_column("games", "status",
-                        existing_type=game_status,
-                        type_=sa.VARCHAR(),
-                        nullable=True)
+        op.alter_column(
+            "games", "status", existing_type=game_status, type_=sa.VARCHAR(), nullable=True
+        )
 
     game_status.drop(bind, checkfirst=True)
-
-
-

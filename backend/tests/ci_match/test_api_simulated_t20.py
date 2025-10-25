@@ -1,9 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from collections import deque
 from pathlib import Path
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any
+from collections.abc import Iterable
 
 import pytest
 from fastapi.testclient import TestClient
@@ -38,16 +39,18 @@ def api_client(monkeypatch: pytest.MonkeyPatch) -> Iterable[TestClient]:
         client.close()
 
 
-def _load_fixture() -> Dict[str, Any]:
+def _load_fixture() -> dict[str, Any]:
     path = Path(__file__).resolve().parents[1] / "simulated_t20_match.json"
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _name_to_id(players: Iterable[Dict[str, Any]]) -> Dict[str, str]:
+def _name_to_id(players: Iterable[dict[str, Any]]) -> dict[str, str]:
     return {p["name"]: str(p["id"]) for p in players}
 
 
-def _post_json(client: TestClient, method: str, url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+def _post_json(
+    client: TestClient, method: str, url: str, payload: dict[str, Any]
+) -> dict[str, Any]:
     response = client.post(url, json=payload) if method == "POST" else client.put(url, json=payload)
     assert response.status_code < 400, response.text
     return response.json() if response.text else {}
@@ -56,9 +59,9 @@ def _post_json(client: TestClient, method: str, url: str, payload: Dict[str, Any
 def _play_innings(
     client: TestClient,
     game_id: str,
-    innings: Dict[str, Any],
-    batting_ids: Dict[str, str],
-    bowling_ids: Dict[str, str],
+    innings: dict[str, Any],
+    batting_ids: dict[str, str],
+    bowling_ids: dict[str, str],
 ) -> None:
     balls = sorted(innings["balls"], key=lambda b: (b["over"], b["ball"]))
 
@@ -92,7 +95,7 @@ def _play_innings(
         bat_runs = int(ball.get("runs", 0))
         extra_runs = int(ball.get("extras", 0) or 0)
         extra_type = (ball.get("extraType") or "").lower() or None
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "striker_id": batting_ids[striker],
             "non_striker_id": batting_ids[non_striker],
             "bowler_id": bowling_ids[bowler_name],
@@ -207,7 +210,9 @@ def test_simulated_match_via_api(api_client: TestClient) -> None:
 
     assert detail_data["is_game_over"] is True
     assert detail_data["result"]["winner_team_name"] == match["result"]["winner"]
-    assert detail_data["result"]["result_text"].rstrip(".") == match["result"]["summary"].rstrip(".")
+    assert detail_data["result"]["result_text"].rstrip(".") == match["result"]["summary"].rstrip(
+        "."
+    )
     assert detail_data["target"] == 158
 
     snapshot_resp = api_client.get(f"/games/{game_id}/snapshot")
@@ -219,6 +224,3 @@ def test_simulated_match_via_api(api_client: TestClient) -> None:
     assert snapshot["target"] == 158
     dls_panel = snapshot.get("dls")
     assert isinstance(dls_panel, dict)
-
-
-

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator, Optional, Tuple, cast
+from typing import Any, cast
+from collections.abc import AsyncGenerator
 from pathlib import Path
 import logging
 
@@ -38,6 +39,7 @@ try:
         InMemoryCrudRepository as _IMRepo,
         enable_in_memory_crud as _enable_fn,
     )
+
     InMemoryCrudRepository = _IMRepo
     enable_in_memory_crud_fn = _enable_fn
 except Exception:
@@ -45,7 +47,7 @@ except Exception:
     enable_in_memory_crud_fn = None
 
 
-def create_app(settings_override: Optional[Any] = None) -> Tuple[socketio.ASGIApp, FastAPI]:
+def create_app(settings_override: Any | None = None) -> tuple[socketio.ASGIApp, FastAPI]:
     settings = settings_override or default_settings
 
     logging.basicConfig(
@@ -53,7 +55,9 @@ def create_app(settings_override: Optional[Any] = None) -> Tuple[socketio.ASGIAp
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
 
-    _sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS)  # type: ignore[call-arg]
+    _sio = socketio.AsyncServer(
+        async_mode="asgi", cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS
+    )  # type: ignore[call-arg]
     sio = cast("socketio.AsyncServer", _sio)
     fastapi_app = FastAPI(title="Cricksy Scorer API")
     fastapi_app.state.sio = sio
@@ -96,8 +100,10 @@ def create_app(settings_override: Optional[Any] = None) -> Tuple[socketio.ASGIAp
             yield session
 
     if bool(getattr(settings, "IN_MEMORY_DB", False)):
+
         async def _in_memory_get_db() -> AsyncGenerator[object, None]:
             yield object()
+
         fastapi_app.dependency_overrides[db_get_db] = _in_memory_get_db  # type: ignore[index]
         try:
             fastapi_app.dependency_overrides[gameplay_get_db] = _in_memory_get_db  # type: ignore[index]

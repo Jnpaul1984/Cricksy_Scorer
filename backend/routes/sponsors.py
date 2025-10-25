@@ -4,7 +4,7 @@ import datetime as dt
 import json
 import os
 from pathlib import Path
-from typing import Annotated, Any, List, Optional, Dict, Literal, Union, cast
+from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
@@ -21,7 +21,7 @@ from backend.utils.common import (
     iso_or_none as _iso_or_none,
 )
 
-UTC = getattr(dt, "UTC", dt.timezone.utc)
+UTC = getattr(dt, "UTC", dt.UTC)
 
 router = APIRouter(tags=["sponsors"])
 
@@ -29,30 +29,35 @@ router = APIRouter(tags=["sponsors"])
 SPONSORS_DIR: Path = settings.SPONSORS_DIR
 SPONSORS_DIR.mkdir(parents=True, exist_ok=True)
 
+
 class SponsorImpressionIn(BaseModel):
     game_id: str
     sponsor_id: str
-    at: Optional[str] = None  # ISO-8601
+    at: str | None = None  # ISO-8601
+
 
 class SponsorImpressionsOut(BaseModel):
     inserted: int
-    ids: List[int]
+    ids: list[int]
+
 
 class SponsorItem(BaseModel):
-    name: Optional[str] = None
-    logoUrl: Optional[str] = None
-    clickUrl: Optional[str] = None
-    image_url: Optional[str] = None
-    img: Optional[str] = None
-    link_url: Optional[str] = None
-    url: Optional[str] = None
-    alt: Optional[str] = None
-    rail: Optional[Literal["left", "right", "badge"]] = None
-    maxPx: Optional[Union[int, str]] = None
-    size: Optional[Union[int, str]] = None
+    name: str | None = None
+    logoUrl: str | None = None
+    clickUrl: str | None = None
+    image_url: str | None = None
+    img: str | None = None
+    link_url: str | None = None
+    url: str | None = None
+    alt: str | None = None
+    rail: Literal["left", "right", "badge"] | None = None
+    maxPx: int | str | None = None
+    size: int | str | None = None
+
 
 class SponsorsManifest(BaseModel):
-    items: List[SponsorItem]
+    items: list[SponsorItem]
+
 
 @router.post("/sponsors")
 async def create_sponsor(
@@ -61,10 +66,10 @@ async def create_sponsor(
     logo: Annotated[UploadFile, File(...)],
     click_url: Annotated[str | None, Form(None)] = None,
     weight: Annotated[int, Form(1)] = 1,
-    surfaces: Annotated[str | None, Form(None)] = None,   # JSON array as string
-    start_at: Annotated[str | None, Form(None)] = None,   # ISO-8601
+    surfaces: Annotated[str | None, Form(None)] = None,  # JSON array as string
+    start_at: Annotated[str | None, Form(None)] = None,  # ISO-8601
     end_at: Annotated[str | None, Form(None)] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     if weight < 1 or weight > 5:
         raise HTTPException(status_code=400, detail="weight must be between 1 and 5")
 
@@ -79,16 +84,18 @@ async def create_sponsor(
     try:
         parsed_any: Any = json.loads(surfaces) if surfaces else ["all"]
     except Exception as err:
-        raise HTTPException(status_code=400, detail="surfaces must be a JSON array of strings") from err
+        raise HTTPException(
+            status_code=400, detail="surfaces must be a JSON array of strings"
+        ) from err
 
     if not isinstance(parsed_any, list):
         raise HTTPException(status_code=400, detail="surfaces must be a JSON array of strings")
 
-    parsed_list: List[Any] = cast(List[Any], parsed_any)
+    parsed_list: list[Any] = cast(list[Any], parsed_any)
     for itm in parsed_list:
         if not isinstance(itm, str):
             raise HTTPException(status_code=400, detail="surfaces must be a JSON array of strings")
-    surfaces_list: List[str] = [str(itm) for itm in parsed_list] or ["all"]
+    surfaces_list: list[str] = [str(itm) for itm in parsed_list] or ["all"]
 
     start_dt = _parse_iso_dt(start_at)
     end_dt = _parse_iso_dt(end_at)
@@ -127,11 +134,12 @@ async def create_sponsor(
         "updated_at": _iso_or_none(rec.updated_at),
     }
 
+
 @router.get("/games/{game_id}/sponsors")
 async def get_game_sponsors(
     game_id: str,
     db: AsyncSession = Depends(get_db),
-) -> List[dict[str, Any]]:
+) -> list[dict[str, Any]]:
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -144,7 +152,7 @@ async def get_game_sponsors(
         or_(Sponsor.end_at.is_(None), Sponsor.end_at >= now),
     ]
     if hasattr(Sponsor, "is_active"):
-        conditions.append(getattr(Sponsor, "is_active") == True)  # noqa: E712
+        conditions.append(Sponsor.is_active == True)  # noqa: E712
 
     stmt = (
         select(Sponsor)
@@ -154,17 +162,17 @@ async def get_game_sponsors(
     res = await db.execute(stmt)
     rows = res.scalars().all()
 
-    out: List[dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for r in rows:
         rid: int = int(r.id)
         name: str = str(r.name)
         logo_path: str = str(r.logo_path)
-        click_url: Optional[str] = str(r.click_url) if r.click_url is not None else None
+        click_url: str | None = str(r.click_url) if r.click_url is not None else None
         weight: int = int(r.weight)
 
         raw_surfaces_any: Any = getattr(r, "surfaces", None)
         if isinstance(raw_surfaces_any, (list, tuple)):
-            surfaces: List[str] = (r.surfaces or ["all"])
+            surfaces: list[str] = r.surfaces or ["all"]
         else:
             surfaces = ["all"]
 
@@ -180,24 +188,39 @@ async def get_game_sponsors(
         )
     return out
 
+
 @router.get("/static/sponsors/{brand}/manifest.json", response_model=SponsorsManifest)
 def sponsors_manifest(brand: str) -> SponsorsManifest:
-    items: List[SponsorItem] = [
-        SponsorItem(logoUrl=f"/static/sponsors/{brand}/Cricksy.png",       alt="Cricksy",         rail="left",  maxPx=120),
-        SponsorItem(logoUrl=f"/static/sponsors/{brand}/Cricksy_no_bg.png", alt="Cricksy (no bg)", rail="right", maxPx=140),
-        SponsorItem(logoUrl=f"/static/sponsors/{brand}/Cricksy_mono.png",  alt="Presented by Cricksy"),
-        SponsorItem(logoUrl="/static/sponsors/cricksy/Cricksy_outline.png",        alt="Cricksy outline"),
-        SponsorItem(logoUrl="/static/sponsors/cricksy/Cricksy_Black_&_white.png",  alt="Cricksy B/W"),
-        SponsorItem(logoUrl="/static/sponsors/cricksy/Cricksy_colored_circle.png", alt="Cricksy circle"),
+    items: list[SponsorItem] = [
+        SponsorItem(
+            logoUrl=f"/static/sponsors/{brand}/Cricksy.png", alt="Cricksy", rail="left", maxPx=120
+        ),
+        SponsorItem(
+            logoUrl=f"/static/sponsors/{brand}/Cricksy_no_bg.png",
+            alt="Cricksy (no bg)",
+            rail="right",
+            maxPx=140,
+        ),
+        SponsorItem(
+            logoUrl=f"/static/sponsors/{brand}/Cricksy_mono.png", alt="Presented by Cricksy"
+        ),
+        SponsorItem(logoUrl="/static/sponsors/cricksy/Cricksy_outline.png", alt="Cricksy outline"),
+        SponsorItem(
+            logoUrl="/static/sponsors/cricksy/Cricksy_Black_&_white.png", alt="Cricksy B/W"
+        ),
+        SponsorItem(
+            logoUrl="/static/sponsors/cricksy/Cricksy_colored_circle.png", alt="Cricksy circle"
+        ),
     ]
     return SponsorsManifest(items=items)
 
+
 @router.post("/sponsor_impressions", response_model=SponsorImpressionsOut)
 async def log_sponsor_impressions(
-    body: Union[SponsorImpressionIn, List[SponsorImpressionIn]],
+    body: SponsorImpressionIn | list[SponsorImpressionIn],
     db: AsyncSession = Depends(get_db),
 ):
-    items: List[SponsorImpressionIn] = body if isinstance(body, list) else [body]
+    items: list[SponsorImpressionIn] = body if isinstance(body, list) else [body]
 
     if len(items) == 0:
         raise HTTPException(status_code=400, detail="Empty payload")
@@ -213,13 +236,15 @@ async def log_sponsor_impressions(
     if missing_games:
         raise HTTPException(status_code=400, detail=f"Unknown game_id(s): {missing_games}")
 
-    res_sps = await db.execute(select(models.Sponsor.id).where(models.Sponsor.id.in_(list(sponsor_ids))))
+    res_sps = await db.execute(
+        select(models.Sponsor.id).where(models.Sponsor.id.in_(list(sponsor_ids)))
+    )
     found_sps = {s for (s,) in res_sps.all()}
     missing_sps = [s for s in sponsor_ids if s not in found_sps]
     if missing_sps:
         raise HTTPException(status_code=400, detail=f"Unknown sponsor_id(s): {missing_sps}")
 
-    rows: List[models.SponsorImpression] = []
+    rows: list[models.SponsorImpression] = []
     now = dt.datetime.now(UTC)
     for it in items:
         at_dt = _parse_iso_dt(it.at) or now

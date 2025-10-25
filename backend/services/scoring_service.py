@@ -1,4 +1,4 @@
-﻿"""
+"""
 Scoring service: encapsulates per-ball scoring logic.
 
 This module provides score_one(g, ...) which mutates the GameState-like object g
@@ -6,9 +6,10 @@ and returns a dict suitable for schemas.Delivery. It is a direct extraction of
 the previous main._score_one implementation, with minimal helper helpers copied
 over so the module is self-contained and avoids circular imports.
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, cast
+from typing import Any, cast
 from pydantic import BaseModel
 
 # Centralized constants/rules
@@ -21,7 +22,7 @@ from backend.domain.constants import (
 )
 
 
-def _complete_over_runtime(g: Any, bowler_id: Optional[str]) -> None:
+def _complete_over_runtime(g: Any, bowler_id: str | None) -> None:
     # minimal semantics copied from main._complete_over_runtime
     if bowler_id:
         g.last_ball_bowler_id = bowler_id
@@ -30,14 +31,14 @@ def _complete_over_runtime(g: Any, bowler_id: Optional[str]) -> None:
     g.mid_over_change_used = False
 
 
-def _ensure_batting_entry(g: Any, batter_id: str) -> Dict[str, Any]:
+def _ensure_batting_entry(g: Any, batter_id: str) -> dict[str, Any]:
     e_any = (getattr(g, "batting_scorecard", {}) or {}).get(batter_id)
     if isinstance(e_any, BaseModel):
         try:
-            e = cast(Dict[str, Any], e_any.model_dump())
+            e = cast(dict[str, Any], e_any.model_dump())
         except Exception:
             try:
-                e = cast(Dict[str, Any], e_any.dict())  # type: ignore[attr-defined]
+                e = cast(dict[str, Any], e_any.dict())  # type: ignore[attr-defined]
             except Exception:
                 e = {}
     elif isinstance(e_any, dict):
@@ -68,14 +69,14 @@ def _ensure_batting_entry(g: Any, batter_id: str) -> Dict[str, Any]:
     return e
 
 
-def _ensure_bowling_entry(g: Any, bowler_id: str) -> Dict[str, Any]:
+def _ensure_bowling_entry(g: Any, bowler_id: str) -> dict[str, Any]:
     e_any = (getattr(g, "bowling_scorecard", {}) or {}).get(bowler_id)
     if isinstance(e_any, BaseModel):
         try:
-            e = cast(Dict[str, Any], e_any.model_dump())
+            e = cast(dict[str, Any], e_any.model_dump())
         except Exception:
             try:
-                e = cast(Dict[str, Any], e_any.dict())  # type: ignore[attr-defined]
+                e = cast(dict[str, Any], e_any.dict())  # type: ignore[attr-defined]
             except Exception:
                 e = {}
     elif isinstance(e_any, dict):
@@ -106,11 +107,11 @@ def score_one(
     non_striker_id: str,
     bowler_id: str,
     runs_scored: int,
-    extra: Optional[str],
+    extra: str | None,
     is_wicket: bool,
-    dismissal_type: Optional[str],
-    dismissed_player_id: Optional[str],
-) -> Dict[str, Any]:
+    dismissal_type: str | None,
+    dismissed_player_id: str | None,
+) -> dict[str, Any]:
     """
     Mutates GameState-like object `g` and returns DeliveryKwargs dict.
     Behaviour matches the original implementation in main._score_one.
@@ -134,21 +135,21 @@ def score_one(
     runs = int(runs_scored or 0)
 
     extra_norm = _norm_extra(extra)
-    is_nb = (extra_norm == "nb")
-    is_wd = (extra_norm == "wd")
+    is_nb = extra_norm == "nb"
+    is_wd = extra_norm == "wd"
     legal = not (is_nb or is_wd)
 
     off_bat_runs = 0
     extra_runs = 0
 
-    if extra_norm is None:
-        off_bat_runs = runs_scored
-    elif extra_norm == "nb":
+    if extra_norm is None or extra_norm == "nb":
         off_bat_runs = runs_scored
     elif extra_norm in ("wd", "b", "lb"):
         extra_runs = runs_scored
 
-    team_add = off_bat_runs + (1 if is_nb else 0) + (extra_runs if extra_norm in ("wd", "b", "lb") else 0)
+    team_add = (
+        off_bat_runs + (1 if is_nb else 0) + (extra_runs if extra_norm in ("wd", "b", "lb") else 0)
+    )
     g.total_runs = int(getattr(g, "total_runs", 0)) + team_add
 
     delivery_over_number = int(getattr(g, "overs_completed", 0))
@@ -157,9 +158,7 @@ def score_one(
     bs = _ensure_batting_entry(g, striker_id)
     if legal:
         bs["balls_faced"] = int(bs.get("balls_faced", 0) + 1)
-    if extra_norm is None:
-        bs["runs"] = int(bs.get("runs", 0) + runs)
-    elif is_nb:
+    if extra_norm is None or is_nb:
         bs["runs"] = int(bs.get("runs", 0) + runs)
 
     _ensure_bowling_entry(g, bowler_id)
@@ -186,9 +185,7 @@ def score_one(
 
     # Strike rotation rules
     swap = False
-    if extra_norm is None:
-        swap = (off_bat_runs % 2) == 1
-    elif extra_norm == "nb":
+    if extra_norm is None or extra_norm == "nb":
         swap = (off_bat_runs % 2) == 1
     elif extra_norm in ("b", "lb"):
         swap = (extra_runs % 2) == 1
@@ -232,5 +229,3 @@ def score_one(
         "commentary": None,
         "fielder_id": None,
     }
-
-

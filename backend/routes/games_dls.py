@@ -1,9 +1,9 @@
-﻿# routers/games_dls.py
+# routers/games_dls.py
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from typing import Literal, Any
+from typing import Literal
 from sqlalchemy.orm import Session
 from backend.sql_app import models
 from backend.sql_app.database import get_db
@@ -16,6 +16,7 @@ router = APIRouter(prefix="/games", tags=["games:dls"])
 
 # ---------- I/O Schemas ----------
 
+
 class DLSPreviewOut(BaseModel):
     team1_score: int
     team1_resources: float
@@ -24,19 +25,24 @@ class DLSPreviewOut(BaseModel):
     format_overs: Literal[20, 50]
     G50: int
 
+
 class DLSApplyOut(DLSPreviewOut):
     applied: bool
+
 
 class ReduceOversIn(BaseModel):
     innings: Literal[1, 2] = 2
     new_overs: int = Field(gt=0, le=50)
+
 
 class ReduceOversOut(BaseModel):
     innings: int
     new_overs: int
     new_balls_limit: int
 
+
 # ---------- Helpers (adapt field names to your schema if different) ----------
+
 
 def _infer_format_overs(g: models.Game) -> Literal[20, 50]:
     """
@@ -45,6 +51,7 @@ def _infer_format_overs(g: models.Game) -> Literal[20, 50]:
     """
     limit = getattr(g, "i1_overs_limit", None) or getattr(g, "match_overs", None) or 50
     return 20 if int(limit) <= 20 else 50  # type: ignore[return-value]
+
 
 def _current_team2_state(g: models.Game) -> tuple[int, int]:
     """Return (balls_left, wickets_lost) for Team 2 right now."""
@@ -55,6 +62,7 @@ def _current_team2_state(g: models.Game) -> tuple[int, int]:
     wickets_lost = int(getattr(g, "i2_wickets", 0) or 0)
     return balls_left, wickets_lost
 
+
 def _team1_resources_completed(g: models.Game, fmt: Literal[20, 50]) -> float:
     """
     Standard Edition: usually 100 if Team 1 completed without interruptions.
@@ -63,13 +71,13 @@ def _team1_resources_completed(g: models.Game, fmt: Literal[20, 50]) -> float:
     stored = getattr(g, "i1_resources_used", None)
     return float(stored) if stored is not None else 100.0
 
+
 # ---------- Routes ----------
+
 
 @router.get("/{game_id}/dls/preview", response_model=DLSPreviewOut)
 def dls_preview(game_id: str, G50: int = 245, db: Session = Depends(get_db)) -> DLSPreviewOut:
-    g: models.Game | None = (
-        db.query(models.Game).filter(models.Game.id == game_id).first()
-    )
+    g: models.Game | None = db.query(models.Game).filter(models.Game.id == game_id).first()
     if not g:
         raise HTTPException(404, "Game not found")
     if not getattr(g, "innings1_completed", False):
@@ -92,14 +100,12 @@ def dls_preview(game_id: str, G50: int = 245, db: Session = Depends(get_db)) -> 
         G50=G50,
     )
 
+
 @router.post("/{game_id}/dls/apply", response_model=DLSApplyOut)
 def dls_apply(game_id: str, G50: int = 245, db: Session = Depends(get_db)) -> DLSApplyOut:
     # Lock row so two scorers can't apply at the same time
     g: models.Game | None = (
-        db.query(models.Game)
-        .filter(models.Game.id == game_id)
-        .with_for_update()
-        .first()
+        db.query(models.Game).filter(models.Game.id == game_id).with_for_update().first()
     )
     if not g:
         raise HTTPException(404, "Game not found")
@@ -115,11 +121,11 @@ def dls_apply(game_id: str, G50: int = 245, db: Session = Depends(get_db)) -> DL
     target = calc_target(team1_score, team1_res, team2_res, G50)
 
     # Persist to DB (adjust to your actual column names)
-    setattr(g, "dls_applied", True)
-    setattr(g, "dls_format", int(fmt))
-    setattr(g, "dls_g50", int(G50))
-    setattr(g, "target_revised", int(target))
-    setattr(g, "team2_resources", float(team2_res))
+    g.dls_applied = True
+    g.dls_format = int(fmt)
+    g.dls_g50 = int(G50)
+    g.target_revised = int(target)
+    g.team2_resources = float(team2_res)
 
     db.add(g)
     db.commit()
@@ -146,11 +152,12 @@ def dls_apply(game_id: str, G50: int = 245, db: Session = Depends(get_db)) -> DL
         applied=True,
     )
 
+
 @router.patch("/{game_id}/overs/reduce", response_model=ReduceOversOut)
-def reduce_overs(game_id: str, body: ReduceOversIn, db: Session = Depends(get_db)) -> ReduceOversOut:
-    g: models.Game | None = (
-        db.query(models.Game).filter(models.Game.id == game_id).first()
-    )
+def reduce_overs(
+    game_id: str, body: ReduceOversIn, db: Session = Depends(get_db)
+) -> ReduceOversOut:
+    g: models.Game | None = db.query(models.Game).filter(models.Game.id == game_id).first()
     if not g:
         raise HTTPException(404, "Game not found")
 
@@ -162,11 +169,11 @@ def reduce_overs(game_id: str, body: ReduceOversIn, db: Session = Depends(get_db
 
     balls_limit = int(body.new_overs) * 6
     if body.innings == 1:
-        setattr(g, "i1_overs_limit", int(body.new_overs))
-        setattr(g, "i1_balls_limit", balls_limit)
+        g.i1_overs_limit = int(body.new_overs)
+        g.i1_balls_limit = balls_limit
     else:
-        setattr(g, "i2_overs_limit", int(body.new_overs))
-        setattr(g, "i2_balls_limit", balls_limit)
+        g.i2_overs_limit = int(body.new_overs)
+        g.i2_balls_limit = balls_limit
 
     db.add(g)
     db.commit()
@@ -181,6 +188,3 @@ def reduce_overs(game_id: str, body: ReduceOversIn, db: Session = Depends(get_db
         new_overs=int(body.new_overs),
         new_balls_limit=int(balls_limit),
     )
-
-
-
