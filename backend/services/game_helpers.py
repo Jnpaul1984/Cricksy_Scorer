@@ -15,8 +15,10 @@ the originals in main.py.
 
 from collections import defaultdict
 import datetime as dt
+
+from typing import Any, Dict, Iterable, List, Literal, Mapping, MutableMapping, Optional, Sequence, Tuple, Union, cast
+
 UTC = getattr(dt, "UTC", dt.UTC)
-from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union, cast
 
 from pydantic import BaseModel
 
@@ -35,7 +37,7 @@ PlayerDict = dict[str, str]
 BattingEntryDict = dict[str, Any]
 BowlingEntryDict = dict[str, Any]
 DeliveryDict = dict[str, Any]
-BallKey = Tuple[int, int, Union[int, str]]
+BallKey = tuple[int, int, int | Literal["L"]]
 
 
 # -------------------------

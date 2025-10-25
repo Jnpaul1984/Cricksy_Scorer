@@ -31,7 +31,7 @@ async def get_game_impl(game_id: str, db: AsyncSession) -> Optional[schemas.Game
     Return the Game ORM row (or None) for the given ID.
     main.py will convert/return the proper response model.
     """
-    return await crud.get_game_by_id(db=db, game_id=game_id)
+    return await crud.get_game(db=db, game_id=game_id)
 
 
 async def build_snapshot_impl(db_game: Any, last_delivery: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:

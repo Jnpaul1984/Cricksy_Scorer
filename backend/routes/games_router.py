@@ -1,17 +1,19 @@
 ﻿from __future__ import annotations
 
+import datetime as dt
+import json
 from typing import Any, Dict, Set, Optional, Sequence, TypedDict, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-import datetime as dt
-UTC = getattr(dt, "UTC", dt.timezone.utc)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
+
 from backend.sql_app import models, schemas
 from backend.sql_app.database import get_db  # async generator -> AsyncSession
-import json
+
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 
 # Ensure schemas.MatchResultRequest is imported and defined
 # If not, add the following to sql_app/schemas.py:
@@ -186,11 +188,14 @@ async def get_game_results(game_id: UUID, db: AsyncSession = Depends(get_db)) ->
     except Exception:
         payload = {}
 
+    margin_raw = payload.get("margin")
+    margin = int(margin_raw) if margin_raw is not None else None
+    
     return schemas.MatchResult(
         winner_team_id=str(payload.get("winner_team_id")) if payload.get("winner_team_id") is not None else None,
         winner_team_name=str(payload.get("winner_team_name")) if payload.get("winner_team_name") is not None else None,
         method=payload.get("method"),
-        margin=int(payload.get("margin")) if payload.get("margin", None) is not None else None,
+        margin=margin,
         result_text=str(payload.get("result_text")) if payload.get("result_text") is not None else None,
         completed_at=payload.get("completed_at"),
     )

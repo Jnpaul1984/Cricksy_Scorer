@@ -1,0 +1,11 @@
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "B", "C4", "SIM", "RUF", "UP"]
+ignore = ["UP038"]
+
+[lint.per-file-ignores]
+"backend/routes/*.py" = ["B008"]
+"backend/alembic/**/*.py" = ["E402"]
+"backend/tests/**/*.py" = ["E501", "E701", "E702", "B007", "F841", "SIM108", "C401"]

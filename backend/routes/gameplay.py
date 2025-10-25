@@ -1,11 +1,10 @@
 ﻿from __future__ import annotations
 
-from typing import Any, Dict, Optional, Mapping, List, Sequence, cast, Literal
 import datetime as dt
-UTC = getattr(dt, "UTC", dt.timezone.utc)
 from pathlib import Path
-from pydantic import BaseModel
+from typing import Any, Dict, Optional, Mapping, List, Sequence, cast, Literal
 
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +17,9 @@ from backend.services.scoring_service import score_one as _score_one
 from backend.services import validation as validation_helpers
 from backend.routes import games as _games_impl
 from backend import dls as dlsmod
-from backend.services.live_bus import emit_state_update
+from backend.domain.constants import as_extra_code as norm_extra
+
+UTC = getattr(dt, "UTC", dt.timezone.utc)
 router = APIRouter(prefix="/games", tags=["gameplay"])
 
 # Local DB dependency mirroring main.get_db
@@ -198,7 +199,7 @@ async def get_deliveries(
         if d is not None:
             # normalize extra_type to the canonical union expected by schemas.Delivery
             if "extra_type" in d:
-                d["extra_type"] = gh._as_extra_code(cast(Optional[str], d.get("extra_type")))
+                d["extra_type"] = norm_extra(cast(Optional[str], d.get("extra_type")))
             # ensure there is an int innings tag; default legacy to 1
             try:
                 d["inning"] = int(d.get("inning", 1) or 1)
@@ -622,7 +623,8 @@ async def get_snapshot(game_id: str, db: AsyncSession = Depends(get_db)) -> Dict
         if isinstance(overs_limit_opt, int) and current_innings >= 2 and overs_limit_opt in (20, 50):
             format_overs = int(overs_limit_opt)
             kind = "odi" if format_overs >= 40 else "t20"
-            env = dlsmod.load_env(kind, str(BASE_DIR))
+            assert kind in ("odi", "t20")
+            env = dlsmod.load_env(cast(Literal["odi", "t20"], kind), str(BASE_DIR))
 
             deliveries_m: List[Mapping[str, Any]] = cast(
                 List[Mapping[str, Any]], list(getattr(g, "deliveries", []))

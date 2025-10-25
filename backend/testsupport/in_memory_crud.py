@@ -1,6 +1,6 @@
 ﻿from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, cast
 from enum import Enum
 from importlib import import_module
 import sys
@@ -100,9 +100,10 @@ def enable_in_memory_crud(repository: InMemoryCrudRepository) -> None:
         targets.append(module)
 
     for target in targets:
-        target.create_game = repository.create_game  # type: ignore[assignment]
-        target.get_game = repository.get_game  # type: ignore[assignment]
-        target.update_game = repository.update_game  # type: ignore[assignment]
+        target_any = cast(Any, target)
+        setattr(target_any, "create_game", repository.create_game)
+        setattr(target_any, "get_game", repository.get_game)
+        setattr(target_any, "update_game", repository.update_game)
 
 
 

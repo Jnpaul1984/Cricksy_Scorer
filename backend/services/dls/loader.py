@@ -96,7 +96,7 @@ def load_table_from_json(json_path: Union[str, Path]) -> DLSTable:
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in {json_path}: {e}")
+        raise ValueError(f"Invalid JSON in {json_path}: {e}") from e
 
     # Validate required fields
     for field in ("format_overs", "resources"):

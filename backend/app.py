@@ -31,11 +31,18 @@ from backend.socket_handlers import register_sio
 from backend.services.live_bus import set_socketio_server as _set_bus_sio
 
 # Optional in-memory CRUD support
+InMemoryCrudRepository: Any | None
+enable_in_memory_crud_fn: Any | None
 try:
-    from backend.testsupport.in_memory_crud import InMemoryCrudRepository, enable_in_memory_crud  # type: ignore
+    from backend.testsupport.in_memory_crud import (
+        InMemoryCrudRepository as _IMRepo,
+        enable_in_memory_crud as _enable_fn,
+    )
+    InMemoryCrudRepository = _IMRepo
+    enable_in_memory_crud_fn = _enable_fn
 except Exception:
-    InMemoryCrudRepository = None  # type: ignore[assignment]
-    enable_in_memory_crud = None   # type: ignore[assignment]
+    InMemoryCrudRepository = None
+    enable_in_memory_crud_fn = None
 
 
 def create_app(settings_override: Optional[Any] = None) -> Tuple[socketio.ASGIApp, FastAPI]:
@@ -96,9 +103,9 @@ def create_app(settings_override: Optional[Any] = None) -> Tuple[socketio.ASGIAp
             fastapi_app.dependency_overrides[gameplay_get_db] = _in_memory_get_db  # type: ignore[index]
         except Exception:
             pass
-        if enable_in_memory_crud and InMemoryCrudRepository:
+        if enable_in_memory_crud_fn is not None and InMemoryCrudRepository is not None:
             _memory_repo = InMemoryCrudRepository()  # type: ignore[operator]
-            enable_in_memory_crud(_memory_repo)      # type: ignore[call-arg]
+            enable_in_memory_crud_fn(_memory_repo)  # type: ignore[call-arg]
 
     asgi_app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
     return asgi_app, fastapi_app

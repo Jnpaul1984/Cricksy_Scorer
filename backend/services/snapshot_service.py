@@ -16,16 +16,18 @@ Notes:
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Mapping, Sequence, Union, cast
-from pydantic import BaseModel
 import datetime as dt
-UTC = getattr(dt, 'UTC', dt.UTC)
 import typing as t
 from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional, Mapping, Sequence, Union, cast
 from typing import Union as _Union
-# Import schemas & DLS loader used by snapshot
+
+from pydantic import BaseModel
+
 from backend.sql_app import schemas
 from backend import dls as dlsmod
+
+UTC = getattr(dt, 'UTC', dt.UTC)
 
 
 from typing import TYPE_CHECKING
@@ -251,9 +253,10 @@ def _dls_panel_for(g: GameState, base_dir: Optional[_Union[str, Path]] = None) -
         if overs_limit_opt not in (20, 50):
             return {}
         kind = "odi" if overs_limit_opt == 50 else "t20"
+        assert kind in ("odi", "t20")
         # Use provided base_dir if present, otherwise fall back to current working dir string
         base_dir_str = str(base_dir) if base_dir is not None else ""
-        env = dlsmod.load_env(kind, base_dir_str)
+        env = dlsmod.load_env(cast(Literal["odi", "t20"], kind), base_dir_str)
 
         deliveries_m: List[Mapping[str, Any]] = cast(List[Mapping[str, Any]], list(getattr(g, "deliveries", [])))
         interruptions = list(getattr(g, "interruptions", []))
