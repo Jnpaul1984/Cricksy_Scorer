@@ -10,6 +10,87 @@ permissions:
   contents: read
 
 jobs:
+  pre-commit:
+    name: Pre-commit (all files)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
+        with:
+          extra_args: --all-files
+
+  lint:
+    name: Lint (ruff + black --check + mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff==0.6.5 black==24.10.0 mypy==1.11.2
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Black (check)
+        run: black --check .
+
+      - name: mypy (strict-ish)
+        working-directory: backend
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          # If you have a mypy.ini/pyproject config, mypy will pick it up.
+          mypy .
+
+  security:
+    name: Security (bandit + pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit==2.7.3 bandit[toml]==1.7.9
+
+      - name: pip-audit (backend requirements)
+        working-directory: backend
+        run: |
+          pip-audit -r requirements.txt --progress-spinner off
+
+      - name: Bandit (backend code)
+        run: |
+          bandit -r backend -x backend/tests -q
+
   backend-tests:
     name: Backend (fast tests)
     runs-on: ubuntu-latest
@@ -17,7 +98,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -30,11 +111,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run fast unit tests (no DB required)
+      - name: Run fast unit tests (in-process, no DB)
         working-directory: backend
         env:
-          # ensure tests that rely on overrides don't attempt network DB
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5555/none
+          CRICKSY_IN_MEMORY_DB: 1
         run: |
           pytest -q tests/test_health.py tests/test_results_endpoint.py
 
@@ -45,10 +125,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: 'pip'
           cache-dependency-path: backend/requirements.txt
 
@@ -59,7 +139,7 @@ jobs:
           pip install -r requirements.txt
           pip install pytest-cov
 
-      - name: Run integration tests
+      - name: Run integration tests (in-process app)
         working-directory: backend
         env:
           CRICKSY_IN_MEMORY_DB: 1
@@ -81,10 +161,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: 'pip'
           cache-dependency-path: backend/requirements.txt
 
@@ -94,8 +174,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run DLS calculation tests
+      - name: Run DLS calculation tests (in-process app)
         working-directory: backend
+        env:
+          CRICKSY_IN_MEMORY_DB: 1
         run: |
           pytest tests/test_dls_calculations.py -v --tb=short
 
@@ -124,6 +206,5 @@ jobs:
       - name: Build (production)
         working-directory: frontend
         env:
-          # Safe default; app uses relative paths for most fetches in build
           VITE_API_BASE: http://localhost:8000
         run: npm run build-only

@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cricksy_db
+    environment:
+      POSTGRES_DB: cricksy_scorer
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: RubyAnita2018
+    ports:
+      - "5555:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cricksy_scorer -h 127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  backend:
+    image: python:3.12-slim
+    container_name: cricksy_backend
+    working_dir: /app
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # When running inside Compose, the DB host is the 'db' service.
+      DATABASE_URL: postgresql+asyncpg://postgres:RubyAnita2018@db:5432/cricksy_scorer
+      # Ensure we use the real DB when running via Compose
+      CRICKSY_IN_MEMORY_DB: "0"
+      # Optional: control log level
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Make Python output unbuffered for better logs
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+      # speed up repeated pip installs during dev
+      - pip-cache:/root/.cache/pip
+    command: >
+      bash -lc "
+      pip install --no-input --upgrade pip &&
+      pip install --no-input -r backend/requirements.txt &&
+      cd backend && alembic upgrade head && cd .. &&
+      uvicorn backend.main:app --host 0.0.0.0 --port 8000
+      "
+
+volumes:
+  pgdata:
+  pip-cache:

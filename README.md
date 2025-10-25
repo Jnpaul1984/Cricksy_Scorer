@@ -1,196 +1,66 @@
-🏏 Cricksy Scorer UI
-Cricksy Scorer is a professional cricket scoring frontend built with Vue.js 3 and TypeScript, designed for schools, clubs, and custom games. It provides real-time scoring, flexible match setups, and engaging viewer experiences, all optimized for tablets and mobile devices.
+<!-- Append or merge this section into your existing README.md -->
 
-Key Features (MVP – PR14)
-Scoring & Match Control
-Multi-Format Support
+## Backend: Run API + Postgres with Docker Compose
 
-Limited-overs & multi-day matches.
+A lightweight Compose setup is included so you can bring up both the database and the FastAPI app with one command.
 
-User-defined overs/days (no hardcoding of formats).
+### 0) Prepare environment
 
-Mid-match overs reduction for weather delays (Duckworth–Lewis support planned).
+Copy the example env and adjust as needed (this is used by local tooling and as defaults in Compose):
 
-Flexible Dismissals
-
-All cricket dismissal types supported (incl. rare ones like hit wicket, timed out, obstructing field).
-
-Mid-over bowler changes & “Retired Hurt” handling.
-
-Strike & Bowler Logic
-
-Automatic striker/non-striker rotation based on runs/extras.
-
-Mid-over bowler replacement without breaking stats.
-
-Offline-First Scoring
-Scores queue when offline and sync automatically on reconnection.
-
-“Pending” banner to alert scorers when disconnected.
-
-Role-Based Access
-Scorer — Full match control.
-
-Commentary — Live commentary feed without affecting scoring.
-
-Analytics — View live dot ball %, boundary counts, wickets.
-
-Viewer — Watch live score updates in <1s via WebSockets.
-
-UI Enhancements
-Sponsor Slots — Upload PNG/JPG, auto-resize with aspect ratio preservation, fallback placeholders if missing.
-
-Event Animations — Automatic banners for boundaries, wickets, and ducks.
-
-Undo Last Ball — Fully restores match state and strike.
-
-Player Role Badges — Captain and wicketkeeper shown in team lists.
-
-Mobile-Friendly Layout Toggle — Condensed view for tablet/phone scorers.
-
-Technology Stack
-Vue.js 3 (Composition API) + TypeScript
-
-Vite for fast development
-
-Vue Router for navigation
-
-Pinia for state management
-
-Pico CSS for lightweight styling
-
-Socket.IO Client for real-time updates
-
-ESLint & Prettier for code quality
-
-Project Structure
-csharp
-Copy
-Edit
-cricksy-scorer-ui/
-├── public/                 # Static assets
-├── src/
-│   ├── components/
-│   │   ├── common/         # Shared UI components
-│   │   ├── game/           # Game-specific UI
-│   │   └── scoring/        # Scoring panel & tools
-│   ├── views/              # Full-page views
-│   ├── stores/             # Pinia state stores
-│   ├── types/              # TypeScript type defs
-│   ├── utils/              # Utility functions
-│   ├── assets/             # CSS, images
-│   ├── router/             # Vue Router config
-│   ├── App.vue             # Root component
-│   └── main.ts             # Entry point
-├── package.json
-├── vite.config.ts
-└── tsconfig.json
-Development Setup
-Prerequisites
-
-Node.js 18+
-
-npm or yarn
-
-Backend API running on <http://localhost:8000>
-
-Installation
-
-bash
-Copy
-Edit
-git clone <repository-url>
-cd cricksy-scorer-ui
-npm install
-npm run dev
-Navigate to <http://localhost:3000>.
-
-Scripts
-
-npm run dev — Start dev server with HMR
-
-npm run build — Production build
-
-npm run preview — Preview production build locally
-
-npm run type-check — TypeScript checks
-
-npm run lint — ESLint
-
-npm run format — Prettier
-
-Testing
--------
-
-**📖 See [TESTING.md](TESTING.md) for comprehensive testing documentation.**
-
-The repository includes unit tests, integration tests, and end-to-end tests.
-
-### Quick Start
-
-**Backend Tests:**
 ```bash
-cd backend
-export PYTHONPATH=/path/to/Cricksy_Scorer:$PYTHONPATH
-export CRICKSY_IN_MEMORY_DB=1
-pytest
+cp .env.example .env
 ```
 
-**Frontend Tests:**
+Note:
+- When running inside Compose, the API uses `DATABASE_URL=postgresql+asyncpg://postgres:RubyAnita2018@db:5432/cricksy_scorer` (the `db` service hostname). Your local host `DATABASE_URL` (e.g., `localhost:5555`) is still useful for tools that connect from your host.
+
+### 1) Start both services
+
 ```bash
-cd frontend
-npm run test:unit
+docker compose up -d db backend
 ```
 
-**E2E Tests:**
-```bash
-# Automated script
-./scripts/run-full-sim.sh
+- `db` exposes Postgres on host port `5555`.
+- `backend` exposes the API at `http://localhost:8000`.
 
-# Or manually:
-export CRICKSY_IN_MEMORY_DB=1
-export PYTHONPATH=/path/to/Cricksy_Scorer:$PYTHONPATH
-cd backend && pytest
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
-cd ../frontend
-export API_BASE=http://localhost:8000
-export VITE_API_BASE=http://localhost:8000
-npm run build && npm run preview -- --port 3000 &
-npx cypress run
+The backend container will:
+- Install Python dependencies from `backend/requirements.txt`
+- Run Alembic migrations against the `db` service
+- Start Uvicorn with `backend.main:app`
+
+Logs:
+
+```bash
+docker compose logs -f backend
 ```
 
-**Important:** The `PYTHONPATH` environment variable must be set to the repository root for backend tests to work. See [TESTING.md](TESTING.md) for details.
+Stop:
 
-API Integration
-Development: Proxied to FastAPI backend at <http://localhost:8000>
+```bash
+docker compose down
+```
 
-API calls to /api/* handled via Vite proxy
+### 2) Verify
 
-Testing Readiness (Post-PR14)
-We have locked the codebase and prepared for structured MVP testing:
+- Health: http://localhost:8000/health
+- OpenAPI Docs: http://localhost:8000/docs
 
-Test Execution Sheet — All core features, role-based flows, and edge cases documented.
+### 3) Iteration workflow
 
-Bug Tracker — Severity/priority triage ready for investor demo stabilization.
+The backend service mounts your repo into the container (`./:/app`), so code edits on your host are reflected in the container immediately. Restart the backend service to pick up dependency changes:
 
-Demo Dataset — Pre-seeded matches, players, and sponsor logos for realistic presentation.
+```bash
+docker compose restart backend
+```
 
-Browser Support
-Chrome/Chromium 88+
+If you add new Python packages, update `backend/requirements.txt` and restart:
 
-Firefox 85+
+```bash
+docker compose restart backend
+```
 
-Safari 14+
+### Notes
 
-Edge 88+
-
-Next Steps After MVP
-Duckworth–Lewis calculation integration.
-
-Advanced analytics dashboards.
-
-Custom animations for special match moments.
-
-Dockerfile for containerized deployment.
-
-Built with ❤️ for cricket scorers, schools, and clubs.
+- For local testing without Postgres, set `CRICKSY_IN_MEMORY_DB=1` in your shell and run tests on your host. When using Compose, the file sets `CRICKSY_IN_MEMORY_DB=0` for the backend container so it uses the Postgres service.
+- If you later add a Dockerfile for a faster build (recommended), switch the `backend` service to `build:` instead of installing requirements on each start.

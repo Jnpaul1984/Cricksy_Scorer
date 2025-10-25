@@ -4,7 +4,7 @@ from typing import Any, cast
 from collections.abc import AsyncGenerator
 from pathlib import Path
 import logging
-import os  # NEW
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,6 +33,10 @@ from backend.sql_app.database import get_db as db_get_db, SessionLocal  # type: 
 from backend.socket_handlers import register_sio
 from backend.services.live_bus import set_socketio_server as _set_bus_sio
 
+# Observability and error handling (install on FastAPI app, not ASGI wrapper)
+from backend.middleware.observability import CorrelationIdMiddleware, AccessLogMiddleware  # NEW
+from backend.error_handlers import install_exception_handlers  # NEW
+
 # Optional in-memory CRUD support
 InMemoryCrudRepository: Any | None
 enable_in_memory_crud_fn: Any | None
@@ -49,9 +53,9 @@ except Exception:
     enable_in_memory_crud_fn = None
 
 
-# NEW: minimal no-op async session and result for in-memory mode safety
+# Minimal no-op async session & result for in-memory mode safety
 class _FakeResult:
-    def scalars(self) -> _FakeResult:  # type: ignore[name-defined]
+    def scalars(self) -> _FakeResult:
         return self
 
     def all(self) -> list[Any]:
@@ -102,6 +106,11 @@ def create_app(settings_override: Any | None = None) -> tuple[socketio.ASGIApp, 
     fastapi_app = FastAPI(title="Cricksy Scorer API")
     fastapi_app.state.sio = sio
 
+    # Install middlewares and exception handlers on FastAPI app (not ASGI wrapper)
+    fastapi_app.add_middleware(CorrelationIdMiddleware)  # ensures request_id for error payloads
+    fastapi_app.add_middleware(AccessLogMiddleware)
+    install_exception_handlers(fastapi_app)
+
     STATIC_ROOT: Path = settings.STATIC_ROOT
     fastapi_app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 
@@ -132,14 +141,14 @@ def create_app(settings_override: Any | None = None) -> tuple[socketio.ASGIApp, 
     fastapi_app.include_router(game_admin_router)
     fastapi_app.include_router(health_router)
     fastapi_app.include_router(sponsors_router)
-    fastapi_app.include_router(games_core_router)  # NEW: create/get game endpoints
+    fastapi_app.include_router(games_core_router)
 
-    # Standard DB dependency (available to endpoints defined here if needed)
+    # Standard DB dependency
     async def _get_db() -> AsyncGenerator[AsyncSession, None]:
         async with SessionLocal() as session:  # type: ignore[misc]
             yield session
 
-    # NEW: Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
+    # Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
     use_in_memory = bool(getattr(settings, "IN_MEMORY_DB", False)) or (
         os.getenv("CRICKSY_IN_MEMORY_DB") == "1"
     )
@@ -147,7 +156,6 @@ def create_app(settings_override: Any | None = None) -> tuple[socketio.ASGIApp, 
     if use_in_memory:
 
         async def _in_memory_get_db() -> AsyncGenerator[object, None]:
-            # Yield a minimal fake session to satisfy accidental DB calls
             yield _FakeSession()
 
         fastapi_app.dependency_overrides[db_get_db] = _in_memory_get_db  # type: ignore[index]
