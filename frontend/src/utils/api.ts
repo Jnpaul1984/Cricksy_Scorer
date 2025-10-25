@@ -532,7 +532,7 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
       `/games/${encodeURIComponent(gameId)}/next-batter`,
       { method: 'POST', body: JSON.stringify({ batter_id } as NextBatterBody) },
     ),
-  
+
   deliveries: (
     gameId: string,
     params?: { innings?: number; limit?: number; order?: 'asc' | 'desc' }
@@ -612,4 +612,3 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
 };
 
 export default apiService;
-

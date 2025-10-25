@@ -71,7 +71,8 @@ class ResourceTable:
 class DLSEnv:
     table: ResourceTable
     # G is the â€œaverage 50-over scoreâ€ constant used in DLS (ICC uses ~245 for ODI).
-    # For T20, you may prefer ~150. We make it configurable but rarely needed except for special cases.
+    # For T20, you may prefer ~150.
+    # We make it configurable but rarely needed except for special cases.
     G: float = 245.0
 
 
@@ -118,7 +119,8 @@ def compute_state_from_ledger(deliveries: list[Mapping[str, Any]]) -> InningsSta
 # ------------------------------
 # Interruptions model
 # ------------------------------
-# Weâ€™ll rely on a simple history of oversâ€`limit changes captured at the moment they were applied.
+# Weâ€™ll rely on a simple history of oversâ€`limit
+# Changes captured at the moment they were applied.
 # Each record: { "at_delivery_index": int, "new_overs_limit": int }
 Interruption = dict[str, Any]
 

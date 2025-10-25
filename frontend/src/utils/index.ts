@@ -73,7 +73,7 @@ export const storage = {
       return defaultValue
     }
   },
-  
+
   set: <T>(key: string, value: T): void => {
     try {
       localStorage.setItem(key, JSON.stringify(value))
@@ -81,7 +81,7 @@ export const storage = {
       console.warn('Failed to save to localStorage:', error)
     }
   },
-  
+
   remove: (key: string): void => {
     try {
       localStorage.removeItem(key)

@@ -224,10 +224,7 @@ async def get_deliveries(
         rows = [d for d in rows if int(d.get("inning", 1)) == int(innings)]
 
     # Enforce order + limit
-    if order == "desc":
-        rows = rows[-limit:][::-1]  # newest-first
-    else:
-        rows = rows[:limit]  # earliest-first
+    rows = rows[-limit:][::-1] if order == "desc" else rows[:limit]
 
     # Validate/shape with Pydantic (keeps wire format consistent)
     out: list[dict[str, Any]] = []
@@ -877,8 +874,10 @@ async def add_delivery(
         )
     if flags.get("needs_new_over"):
         msg = (
-            f"Start a new over and select a bowler before scoring. "
-            f"(debug bto={g.balls_this_over}, cbi={g.current_bowler_id}, lbi={getattr(g, 'last_ball_bowler_id', None)})"
+            "Start a new over and select a bowler before scoring. "
+            f"(debug bto={g.balls_this_over}, "
+            f"cbi={g.current_bowler_id}, "
+            f"lbi={getattr(g, 'last_ball_bowler_id', None)})"
         )
         raise HTTPException(status_code=409, detail=msg)
 

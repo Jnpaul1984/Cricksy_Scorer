@@ -67,7 +67,10 @@ def _can_start_over(g: Any, bowler_id: str) -> str | None:
         return "Cannot start a new over while an over is in progress."
     last_id = getattr(g, "last_ball_bowler_id", None)
     if last_id and str(bowler_id) == str(last_id):
-        return "Selected bowler delivered the last ball of the previous over and cannot bowl consecutive overs."
+        return (
+            "Selected bowler delivered the last ball of the previous over and "
+            "cannot bowl consecutive overs."
+        )
     return None
 
 
@@ -187,7 +190,10 @@ def _complete_game_by_result(g: Any) -> bool:
 # Delivery ledger helpers
 # -------------------------
 def _deliveries_for_current_innings(g: Any) -> list[DeliveryDict]:
-    """Return deliveries filtered to the current innings when 'inning' is present; otherwise return as-is."""
+    """
+    Return deliveries filtered to the current innings when 'inning' is present;
+    otherwise return as-is.
+    """
     raw = getattr(g, "deliveries", []) or []
     rows: list[DeliveryDict] = []
     has_innings_flag = False

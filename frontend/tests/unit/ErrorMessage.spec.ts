@@ -8,7 +8,7 @@ describe('ErrorMessage', () => {
     const wrapper = mount(ErrorMessage, {
       props: { message }
     })
-    
+
     expect(wrapper.exists()).toBe(true)
     expect(wrapper.text()).toContain(message)
   })
@@ -17,9 +17,8 @@ describe('ErrorMessage', () => {
     const wrapper = mount(ErrorMessage, {
       props: { message: '' }
     })
-    
+
     // Component might still exist but be hidden
     expect(wrapper.exists()).toBe(true)
   })
 })
-

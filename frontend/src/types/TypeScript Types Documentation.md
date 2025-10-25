@@ -98,10 +98,10 @@ interface ScorecardComponentProps extends ScorecardProps {
 }
 
 // Player selector
-const PlayerSelector: Component<PlayerSelectorProps> = ({ 
-  players, 
-  selectedPlayerId, 
-  onSelectionChange 
+const PlayerSelector: Component<PlayerSelectorProps> = ({
+  players,
+  selectedPlayerId,
+  onSelectionChange
 }) => {
   // Component implementation
 }
@@ -113,15 +113,15 @@ const PlayerSelector: Component<PlayerSelectorProps> = ({
 // Form validation
 const validateGameForm = (data: CreateGameFormData): ValidationResult => {
   const errors: Record<string, string[]> = {}
-  
+
   if (!data.team_a_name.trim()) {
     errors.team_a_name = ['Team A name is required']
   }
-  
+
   if (data.players_a.length < 4) {
     errors.players_a = ['Team A must have at least 4 players']
   }
-  
+
   return {
     isValid: Object.keys(errors).length === 0,
     errors
@@ -294,4 +294,3 @@ type GameEvent = `game_${string}_${GameStatus}`
 ```
 
 This type system provides complete type safety for the Cricksy Scorer application while maintaining flexibility for future enhancements.
-

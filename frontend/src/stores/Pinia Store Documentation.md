@@ -60,15 +60,15 @@ import { useGameStore } from '@/stores';
 export default {
   setup() {
     const gameStore = useGameStore();
-    
+
     // Access reactive state
     const { currentGame, isGameActive, scoreDisplay } = gameStore;
-    
+
     // Call actions
     const createGame = async (gameData) => {
       await gameStore.createNewGame(gameData);
     };
-    
+
     return {
       currentGame,
       isGameActive,
@@ -302,9 +302,9 @@ describe('Game Store', () => {
   it('should create a new game', async () => {
     const gameStore = useGameStore();
     const gameData = { /* test data */ };
-    
+
     await gameStore.createNewGame(gameData);
-    
+
     expect(gameStore.currentGame).toBeTruthy();
     expect(gameStore.isGameActive).toBe(true);
   });
@@ -353,4 +353,3 @@ console.log(gameStore.uiState);
 ```
 
 This store architecture provides a solid foundation for managing all cricket game state while maintaining excellent developer experience and type safety.
-

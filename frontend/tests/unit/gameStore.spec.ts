@@ -10,7 +10,7 @@ describe('gameStore', () => {
   describe('initialization', () => {
     it('initializes with default state', () => {
       const store = useGameStore()
-      
+
       expect(store.currentGame).toBeNull()
       expect(store.isLoading).toBe(false)
       expect(store.error).toBeNull()
@@ -70,7 +70,7 @@ describe('gameStore', () => {
   describe('score computed property', () => {
     it('returns default score when no game loaded', () => {
       const store = useGameStore()
-      
+
       const score = store.score
       expect(score.runs).toBe(0)
       expect(score.wickets).toBe(0)
@@ -128,4 +128,3 @@ describe('gameStore', () => {
     })
   })
 })
-

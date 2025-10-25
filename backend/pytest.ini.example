@@ -17,12 +17,12 @@ markers =
     contract: API contract tests
     database: Tests that require database access
     websocket: Tests that require WebSocket functionality
-    
+
 # Minimum Python version
 minversion = 7.0
 
 # Test output options
-addopts = 
+addopts =
     -ra
     --strict-markers
     --strict-config
@@ -30,7 +30,7 @@ addopts =
     --tb=short
 
 # Coverage options (uncomment to enable)
-# addopts = 
+# addopts =
 #     --cov=backend
 #     --cov-report=html
 #     --cov-report=term-missing
@@ -40,7 +40,7 @@ addopts =
 testpaths = tests
 
 # Ignore patterns
-norecursedirs = 
+norecursedirs =
     .git
     .tox
     dist
@@ -67,7 +67,7 @@ log_cli_date_format = %Y-%m-%d %H:%M:%S
 asyncio_mode = auto
 
 # Example usage:
-# 
+#
 # Run only unit tests (fast):
 #   pytest -m unit
 #
@@ -91,4 +91,3 @@ asyncio_mode = auto
 #
 # Run and stop at first failure:
 #   pytest -x
-

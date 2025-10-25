@@ -41,7 +41,7 @@ onBeforeUnmount(() => {
   <div style="padding: 1rem">
     <ScoreboardWidget :game-id="'e2e'" />
   </div>
-  
+
 </template>
 
 <style scoped>

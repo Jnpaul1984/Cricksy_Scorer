@@ -1,7 +1,7 @@
 <template>
   <div class="current-players">
     <h3 class="section-title">Current Players</h3>
-    
+
     <div class="players-grid">
       <!-- Striker -->
       <div class="player-card striker">
@@ -18,7 +18,7 @@
           </div>
         </div>
       </div>
-      
+
       <!-- Non-Striker -->
       <div class="player-card non-striker">
         <div class="player-role">
@@ -34,7 +34,7 @@
           </div>
         </div>
       </div>
-      
+
       <!-- Bowler -->
       <div class="player-card bowler">
         <div class="player-role">
@@ -51,10 +51,10 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Swap Batsmen Button -->
     <div v-if="canSwapBatsmen" class="actions">
-      <button 
+      <button
         class="swap-button"
         :disabled="loading"
         type="button"
@@ -75,15 +75,15 @@ import type { BattingScorecardEntry, BowlingScorecardEntry } from '@/types/api';
 const gameStore = useGameStore();
 
 // Computed properties
-const strikerName = computed(() => 
+const strikerName = computed(() =>
   gameStore.currentStriker?.name || null
 );
 
-const nonStrikerName = computed(() => 
+const nonStrikerName = computed(() =>
   gameStore.currentNonStriker?.name || null
 );
 
-const bowlerName = computed(() => 
+const bowlerName = computed(() =>
   gameStore.selectedBowler?.name || null
 );
 
@@ -102,11 +102,11 @@ const bowlerStats = computed((): BowlingScorecardEntry | null => {
   return gameStore.currentGame?.bowling_scorecard[gameStore.uiState.selectedBowlerId] || null;
 });
 
-const canSwapBatsmen = computed(() => 
+const canSwapBatsmen = computed(() =>
   strikerName.value && nonStrikerName.value && gameStore.isGameActive
 );
 
-const loading = computed(() => 
+const loading = computed(() =>
   gameStore.uiState.loading
 );
 
@@ -239,19 +239,18 @@ const handleSwapBatsmen = () => {
   .current-players {
     padding: 1rem;
   }
-  
+
   .players-grid {
     grid-template-columns: 1fr;
     gap: 0.75rem;
   }
-  
+
   .player-card {
     padding: 0.75rem;
   }
-  
+
   .section-title {
     font-size: 1.2rem;
   }
 }
 </style>
-

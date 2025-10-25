@@ -225,5 +225,3 @@ export default {
   accumulateBowling,     // now corrected
   deriveBowlerFigures,   // <-- new
 }
-
-

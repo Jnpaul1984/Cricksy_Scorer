@@ -47,7 +47,8 @@ async def build_snapshot_impl(
     gh._rebuild_scorecards_from_deliveries(db_game)
     gh._recompute_totals_and_runtime(db_game)
 
-    # Snapshot builder in main.py references many fields; reuse main._snapshot_from_game if available.
+    # Snapshot builder in main.py references many fields;
+    # Reuse main._snapshot_from_game if available.
     # To avoid importing main, build a minimal snapshot consistent with tests:
     snap: dict[str, Any] = {}
     snap["id"] = getattr(db_game, "id", None)

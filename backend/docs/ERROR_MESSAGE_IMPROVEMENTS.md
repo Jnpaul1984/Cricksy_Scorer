@@ -127,7 +127,7 @@ from typing import Dict, Any, List, Optional
 
 class DetailedHTTPException(HTTPException):
     """Enhanced HTTP exception with structured error details."""
-    
+
     def __init__(
         self,
         status_code: int,
@@ -141,16 +141,16 @@ class DetailedHTTPException(HTTPException):
             "error": error_code,
             "detail": detail
         }
-        
+
         if current_state:
             error_response["current_state"] = current_state
-        
+
         if required_action:
             error_response["required_action"] = required_action
-        
+
         if additional_info:
             error_response.update(additional_info)
-        
+
         super().__init__(status_code=status_code, detail=error_response)
 
 
@@ -161,10 +161,10 @@ async def post_delivery(...):
         # Get last dismissal info
         last_wicket = _get_last_wicket_delivery(g)
         dismissed_player = _get_player_by_id(g, last_wicket.get("dismissed_player_id"))
-        
+
         # Get available batsmen
         available = _get_available_batsmen(g)
-        
+
         raise DetailedHTTPException(
             status_code=409,
             error_code="batsman_selection_required",
@@ -291,13 +291,13 @@ def test_batsman_selection_error_format():
     """Test that batsman selection error has correct format."""
     # Setup: create game and post wicket
     ...
-    
+
     # Attempt to post next delivery without selecting batsman
     response = client.post(f"/games/{game_id}/deliveries", json={...})
-    
+
     assert response.status_code == 409
     error = response.json()
-    
+
     # Verify error structure
     assert "error" in error
     assert error["error"] == "batsman_selection_required"
@@ -305,11 +305,11 @@ def test_batsman_selection_error_format():
     assert "current_state" in error
     assert "required_action" in error
     assert "available_batsmen" in error
-    
+
     # Verify current state
     assert error["current_state"]["pending_new_batter"] is True
     assert "last_dismissal" in error["current_state"]
-    
+
     # Verify required action
     assert error["required_action"]["endpoint"] == f"/games/{game_id}/next-batter"
     assert error["required_action"]["method"] == "POST"
@@ -458,43 +458,43 @@ async function postDelivery(gameId: string, delivery: Delivery) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(delivery)
     })
-    
+
     if (!response.ok) {
       const error = await response.json()
-      
+
       // Handle specific error codes
       switch (error.error) {
         case 'batsman_selection_required':
           // Show batsman selection dialog
           const availableBatsmen = error.available_batsmen
           const selectedBatsman = await showBatsmanSelectionDialog(availableBatsmen)
-          
+
           // Call the suggested endpoint
           await fetch(error.required_action.endpoint, {
             method: error.required_action.method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ batter_id: selectedBatsman.id })
           })
-          
+
           // Retry original request
           return postDelivery(gameId, delivery)
-          
+
         case 'state_game_completed':
           showError('Game is already completed', error.current_state.result)
           break
-          
+
         case 'validation_invalid_player_id':
-          showError(`Invalid player: ${error.provided_value}`, 
+          showError(`Invalid player: ${error.provided_value}`,
                    `Valid players: ${error.valid_players.map(p => p.name).join(', ')}`)
           break
-          
+
         default:
           showError('An error occurred', error.detail)
       }
-      
+
       throw new Error(error.detail)
     }
-    
+
     return await response.json()
   } catch (err) {
     console.error('Failed to post delivery:', err)
@@ -536,7 +536,6 @@ error_rate{code="state_game_completed"} 0.02
 
 ---
 
-**Last Updated:** October 20, 2025  
-**Status:** Proposed  
+**Last Updated:** October 20, 2025
+**Status:** Proposed
 **Priority:** Medium
-

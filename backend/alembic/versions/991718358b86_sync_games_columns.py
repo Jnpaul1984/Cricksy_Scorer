@@ -82,13 +82,19 @@ def upgrade() -> None:
     if not _has_column(insp, "games", "par_score"):
         op.add_column("games", sa.Column("par_score", sa.Integer(), nullable=True))
 
-    J = lambda: postgresql.JSONB(astext_type=sa.Text())
+    def create_jsonb() -> postgresql.JSONB:
+        return postgresql.JSONB(astext_type=sa.Text())
 
     def _add_jsonb_notnull(table: str, col: str, default_literal: str):
         if not _has_column(insp, table, col):
             op.add_column(
                 table,
-                sa.Column(col, J(), nullable=False, server_default=sa.text(default_literal)),
+                sa.Column(
+                    col,
+                    create_jsonb(),
+                    nullable=False,
+                    server_default=sa.text(default_literal),
+                ),
             )
             # remove the default once existing rows are backfilled
             op.alter_column(table, col, server_default=None)

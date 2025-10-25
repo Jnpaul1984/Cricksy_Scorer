@@ -43,9 +43,11 @@ def test_invalid_player_id(game_helper):
     )
 
     # Should fail with 422 or 404, or succeed with 200 if backend doesn't validate
-    assert response.status_code in [200, 422, 404], (
-        f"Expected 200, 422 or 404, got {response.status_code}"
-    )
+    assert response.status_code in [
+        200,
+        422,
+        404,
+    ], f"Expected 200, 422 or 404, got {response.status_code}"
 
 
 def test_delivery_after_wicket_without_selection(game_helper, assert_helper):
@@ -258,9 +260,10 @@ def test_delivery_after_finalize(game_helper):
     response = game_helper.post_delivery(striker2, bowler2, runs_scored=1)
 
     # Should fail with 409 or 400
-    assert response.status_code in [400, 409], (
-        f"Expected 400 or 409 for delivery after finalize, got {response.status_code}"
-    )
+    assert response.status_code in [
+        400,
+        409,
+    ], f"Expected 400 or 409 for delivery after finalize, got {response.status_code}"
 
 
 def test_all_out_scenario(game_helper, assert_helper):
@@ -323,9 +326,9 @@ def test_negative_runs(game_helper):
     )
 
     # Should fail with 422
-    assert response.status_code == 422, (
-        f"Expected 422 for negative runs, got {response.status_code}"
-    )
+    assert (
+        response.status_code == 422
+    ), f"Expected 422 for negative runs, got {response.status_code}"
 
 
 def test_excessive_runs(game_helper):
@@ -361,9 +364,9 @@ def test_same_player_batting_and_bowling(game_helper):
     )
 
     # Should fail with 422
-    assert response.status_code == 422, (
-        f"Expected 422 for same player batting and bowling, got {response.status_code}"
-    )
+    assert (
+        response.status_code == 422
+    ), f"Expected 422 for same player batting and bowling, got {response.status_code}"
 
 
 def test_bowler_from_batting_team(game_helper):
@@ -381,9 +384,9 @@ def test_bowler_from_batting_team(game_helper):
     )
 
     # Should fail with 422
-    assert response.status_code == 422, (
-        f"Expected 422 for bowler from batting team, got {response.status_code}"
-    )
+    assert (
+        response.status_code == 422
+    ), f"Expected 422 for bowler from batting team, got {response.status_code}"
 
 
 def test_concurrent_wickets(game_helper, assert_helper):

@@ -8,22 +8,22 @@
           <p class="hero-subtitle">
             Professional cricket scoring for 25-over school matches
           </p>
-          
+
           <!-- Game Creation Form -->
           <div v-if="!gameStore.isLoading" class="game-form">
             <div class="form-row">
-              <input 
-                v-model="gameForm.team_a_name" 
+              <input
+                v-model="gameForm.team_a_name"
                 placeholder="Team A Name (e.g., Lions)"
                 class="team-input"
               />
-              <input 
-                v-model="gameForm.team_b_name" 
+              <input
+                v-model="gameForm.team_b_name"
                 placeholder="Team B Name (e.g., Tigers)"
                 class="team-input"
               />
             </div>
-            
+
             <div class="toss-section">
               <label class="toss-label">Toss Winner:</label>
               <select v-model="gameForm.toss_winner_team" class="toss-select">
@@ -35,16 +35,16 @@
                   {{ gameForm.team_b_name }}
                 </option>
               </select>
-              
+
               <select v-model="gameForm.decision" class="decision-select">
                 <option value="">Choose to...</option>
                 <option value="bat">Bat First</option>
                 <option value="bowl">Bowl First</option>
               </select>
             </div>
-            
-            <button 
-              :disabled="!canCreateGame" 
+
+            <button
+              :disabled="!canCreateGame"
               class="cta-button"
               :class="{ 'disabled': !canCreateGame }"
               @click="createNewGame"
@@ -52,13 +52,13 @@
               🏏 Create New Match
             </button>
           </div>
-          
+
           <!-- Loading State -->
           <div v-if="gameStore.isLoading" class="loading-state">
             <div class="spinner"></div>
             <p>Creating your cricket match...</p>
           </div>
-          
+
           <!-- Error State -->
           <div v-if="gameStore.error" class="error-state">
             <p>❌ {{ gameStore.error }}</p>
@@ -76,13 +76,13 @@
             <h3>Real-time Scoring</h3>
             <p>Score deliveries instantly with intuitive controls</p>
           </div>
-          
+
           <div class="feature-card">
             <div class="feature-icon">📊</div>
             <h3>Detailed Statistics</h3>
             <p>Complete batting and bowling scorecards</p>
           </div>
-          
+
           <div class="feature-card">
             <div class="feature-icon">🎯</div>
             <h3>School-Focused</h3>
@@ -136,7 +136,7 @@ const canCreateGame = computed(() => {
 // Create new game
 const createNewGame = async () => {
   if (!canCreateGame.value) return
-  
+
   try {
     const payload: CreateGameRequest = {
       ...gameForm.value,
@@ -144,9 +144,9 @@ const createNewGame = async () => {
     }
 
     console.log('Creating new game with data:', payload)
-    
+
     await gameStore.createNewGame(payload)
-    
+
     if (gameStore.currentGame) {
       console.log('✅ Game created successfully:', gameStore.currentGame.id)
       router.push(`/game/${gameStore.currentGame.id}`)
@@ -378,19 +378,19 @@ console.log('🏠 HomeView component loaded')
   .hero-title {
     font-size: 2rem;
   }
-  
+
   .hero-content {
     padding: 2rem 1rem;
   }
-  
+
   .form-row {
     flex-direction: column;
   }
-  
+
   .features-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .container {
     padding: 0 1rem;
   }

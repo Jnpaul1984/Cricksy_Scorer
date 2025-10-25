@@ -1,7 +1,7 @@
 <template>
   <div class="player-selection-panel">
     <h3 class="panel-title">Player Selection</h3>
-    
+
     <div class="selection-grid">
       <!-- Striker Selection -->
       <PlayerSelector
@@ -16,7 +16,7 @@
         @update:selected-player-id="gameStore.setSelectedStriker"
         @player-selected="handleStrikerSelected"
       />
-      
+
       <!-- Non-Striker Selection -->
       <PlayerSelector
         :players="availableBatsmen"
@@ -30,7 +30,7 @@
         @update:selected-player-id="gameStore.setSelectedNonStriker"
         @player-selected="handleNonStrikerSelected"
       />
-      
+
       <!-- Bowler Selection -->
       <PlayerSelector
         :players="availableBowlers"
@@ -44,7 +44,7 @@
         @player-selected="handleBowlerSelected"
       />
     </div>
-    
+
     <!-- Validation Messages -->
     <div v-if="validationErrors.length > 0" class="validation-errors">
       <h4 class="errors-title">Please fix the following:</h4>
@@ -54,7 +54,7 @@
         </li>
       </ul>
     </div>
-    
+
     <!-- Selection Status -->
     <div class="selection-status" :class="statusClass">
       <div class="status-icon">
@@ -78,33 +78,33 @@ import type { Player } from '@/types/api';
 const gameStore = useGameStore();
 
 // Computed properties
-const availableBatsmen = computed(() => 
+const availableBatsmen = computed(() =>
   gameStore.availableBatsmen || []
 );
 
-const availableBowlers = computed(() => 
+const availableBowlers = computed(() =>
   gameStore.availableBowlers || []
 );
 
 const validationErrors = computed(() => {
   const errors: string[] = [];
-  
+
   if (!gameStore.uiState.selectedStrikerId) {
     errors.push('Please select a striker');
   }
-  
+
   if (!gameStore.uiState.selectedNonStrikerId) {
     errors.push('Please select a non-striker');
   }
-  
+
   if (!gameStore.uiState.selectedBowlerId) {
     errors.push('Please select a bowler');
   }
-  
+
   if (gameStore.uiState.selectedStrikerId === gameStore.uiState.selectedNonStrikerId) {
     errors.push('Striker and non-striker cannot be the same player');
   }
-  
+
   return errors;
 });
 
@@ -124,15 +124,15 @@ const statusMessage = computed(() => {
   if (!gameStore.isGameActive) {
     return 'Game is not active';
   }
-  
+
   if (gameStore.canScoreDelivery) {
     return 'Ready to score deliveries';
   }
-  
+
   if (validationErrors.value.length > 0) {
     return `${validationErrors.value.length} selection${validationErrors.value.length > 1 ? 's' : ''} required`;
   }
-  
+
   return 'Complete player selection';
 });
 
@@ -240,20 +240,19 @@ const handleBowlerSelected = (player: Player | null) => {
   .player-selection-panel {
     padding: 1rem;
   }
-  
+
   .selection-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
-  
+
   .panel-title {
     font-size: 1.2rem;
   }
-  
+
   .selection-status {
     padding: 0.75rem;
     font-size: 0.9rem;
   }
 }
 </style>
-

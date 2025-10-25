@@ -1,7 +1,7 @@
 # Long-Term Testing Strategy for Cricksy Scorer
 
-**Author**: Manus AI  
-**Date**: October 21, 2025  
+**Author**: Manus AI
+**Date**: October 21, 2025
 **Project**: Cricksy Scorer Testing Infrastructure Overhaul
 
 ## 1. Test Coverage Expansion Plan
@@ -105,5 +105,3 @@
 
 1.  **Living Documentation**: Treat test documentation as a living document that is updated alongside the code.
 2.  **Automated Documentation**: Where possible, automate the generation of documentation from the code and tests themselves.
-
-

@@ -69,9 +69,9 @@ def test_wicket_delivery_is_recorded(api_client):
     snapshot = snapshot_response.json()
 
     # Verify pending_new_batter flag is set
-    assert snapshot.get("pending_new_batter") is True, (
-        "pending_new_batter should be True after a wicket"
-    )
+    assert (
+        snapshot.get("pending_new_batter") is True
+    ), "pending_new_batter should be True after a wicket"
 
 
 def test_wicket_count_in_deliveries(api_client):
@@ -205,14 +205,14 @@ def test_batsman_selection_required_after_wicket(api_client):
     )
 
     # Should get 409 Conflict
-    assert next_delivery_response.status_code == 409, (
-        f"Expected 409 Conflict, got {next_delivery_response.status_code}"
-    )
+    assert (
+        next_delivery_response.status_code == 409
+    ), f"Expected 409 Conflict, got {next_delivery_response.status_code}"
 
     error_detail = next_delivery_response.json().get("detail", "")
-    assert "new batter" in error_detail.lower(), (
-        f"Error message should mention new batter: {error_detail}"
-    )
+    assert (
+        "new batter" in error_detail.lower()
+    ), f"Error message should mention new batter: {error_detail}"
 
 
 def test_batsman_selection_clears_pending_flag(api_client):
@@ -269,14 +269,14 @@ def test_batsman_selection_clears_pending_flag(api_client):
 
     # Verify pending_new_batter is now False
     snapshot2 = api_client.get(f"/games/{game_id}/snapshot").json()
-    assert snapshot2.get("pending_new_batter") is False, (
-        "pending_new_batter should be False after selecting new batsman"
-    )
+    assert (
+        snapshot2.get("pending_new_batter") is False
+    ), "pending_new_batter should be False after selecting new batsman"
 
     # Verify new batsman is current striker
-    assert snapshot2.get("current_striker_id") == new_batsman_id, (
-        "New batsman should be current striker"
-    )
+    assert (
+        snapshot2.get("current_striker_id") == new_batsman_id
+    ), "New batsman should be current striker"
 
 
 def test_delivery_after_batsman_selection_succeeds(api_client):
@@ -334,9 +334,9 @@ def test_delivery_after_batsman_selection_succeeds(api_client):
         },
     )
 
-    assert next_delivery_response.status_code == 200, (
-        f"Delivery after batsman selection should succeed, got {next_delivery_response.status_code}"
-    )
+    assert (
+        next_delivery_response.status_code == 200
+    ), f"Delivery after batsman selection should succeed, got {next_delivery_response.status_code}"
 
 
 def test_multiple_wickets_in_sequence(api_client):
@@ -459,14 +459,14 @@ def test_dismissal_types_are_recorded(api_client):
     wicket_deliveries = [d for d in deliveries if d.get("is_wicket")]
     recorded_types = [d.get("dismissal_type") for d in wicket_deliveries]
 
-    assert len(wicket_deliveries) == len(dismissal_types), (
-        f"Expected {len(dismissal_types)} wickets, got {len(wicket_deliveries)}"
-    )
+    assert len(wicket_deliveries) == len(
+        dismissal_types
+    ), f"Expected {len(dismissal_types)} wickets, got {len(wicket_deliveries)}"
 
     for expected_type in dismissal_types:
-        assert expected_type in recorded_types, (
-            f"Dismissal type '{expected_type}' not found in recorded types"
-        )
+        assert (
+            expected_type in recorded_types
+        ), f"Dismissal type '{expected_type}' not found in recorded types"
 
 
 if __name__ == "__main__":

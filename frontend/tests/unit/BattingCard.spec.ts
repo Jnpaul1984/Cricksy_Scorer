@@ -29,7 +29,7 @@ describe('BattingCard.vue', () => {
     const wrapper = mount(BattingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     expect(wrapper.find('.card').exists()).toBe(true)
     expect(wrapper.find('h3').text()).toBe('Batting')
     expect(wrapper.find('table').exists()).toBe(true)
@@ -39,7 +39,7 @@ describe('BattingCard.vue', () => {
     const wrapper = mount(BattingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     const rows = wrapper.findAll('tbody tr')
     expect(rows.length).toBe(2)
   })
@@ -48,7 +48,7 @@ describe('BattingCard.vue', () => {
     const wrapper = mount(BattingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     const rows = wrapper.findAll('tbody tr')
     expect(rows[0].text()).toContain('John Doe')
     expect(rows[1].text()).toContain('Jane Smith')
@@ -58,7 +58,7 @@ describe('BattingCard.vue', () => {
     const wrapper = mount(BattingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     const rows = wrapper.findAll('tbody tr')
     expect(rows[0].text()).toContain('45') // runs
     expect(rows[0].text()).toContain('30') // balls
@@ -68,12 +68,12 @@ describe('BattingCard.vue', () => {
 
   it('highlights striker with dot indicator', () => {
     const wrapper = mount(BattingCard, {
-      props: { 
+      props: {
         entries: sampleEntries,
         strikerId: '1'
       }
     })
-    
+
     const strikerRow = wrapper.findAll('tbody tr')[0]
     expect(strikerRow.classes()).toContain('striker')
     expect(strikerRow.find('.dot').exists()).toBe(true)
@@ -81,12 +81,12 @@ describe('BattingCard.vue', () => {
 
   it('highlights non-striker', () => {
     const wrapper = mount(BattingCard, {
-      props: { 
+      props: {
         entries: sampleEntries,
         nonStrikerId: '2'
       }
     })
-    
+
     const nonStrikerRow = wrapper.findAll('tbody tr')[1]
     expect(nonStrikerRow.classes()).toContain('nonStriker')
   })
@@ -95,7 +95,7 @@ describe('BattingCard.vue', () => {
     const wrapper = mount(BattingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     const outRow = wrapper.findAll('tbody tr')[1]
     expect(outRow.classes()).toContain('out')
     expect(outRow.text()).toContain('Out (caught)')
@@ -105,7 +105,7 @@ describe('BattingCard.vue', () => {
     const wrapper = mount(BattingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     const activeRow = wrapper.findAll('tbody tr')[0]
     expect(activeRow.text()).toContain('Not out')
   })
@@ -114,7 +114,7 @@ describe('BattingCard.vue', () => {
     const wrapper = mount(BattingCard, {
       props: { entries: [] }
     })
-    
+
     expect(wrapper.find('table').exists()).toBe(false)
     expect(wrapper.find('.empty').exists()).toBe(true)
     expect(wrapper.find('.empty').text()).toBe('No batting entries yet.')
@@ -124,7 +124,7 @@ describe('BattingCard.vue', () => {
     const wrapper = mount(BattingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     const rows = wrapper.findAll('tbody tr')
     // John Doe: 45 runs from 30 balls = 150.0 SR
     expect(rows[0].text()).toContain('150.0')
@@ -140,14 +140,13 @@ describe('BattingCard.vue', () => {
       sixes: 0,
       is_out: false,
     }]
-    
+
     const wrapper = mount(BattingCard, {
       props: { entries }
     })
-    
+
     const row = wrapper.find('tbody tr')
     // Should show em dash '—' for zero balls (from fmtSR utility)
     expect(row.text()).toContain('—')
   })
 })
-

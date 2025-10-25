@@ -14,13 +14,13 @@ from __future__ import annotations
 import asyncio
 import uuid
 import json
-from typing import Any, Dict
+from typing import Any
 
 from backend.sql_app import schemas, crud
 from backend.sql_app.database import SessionLocal
 
 
-async def seed_one_game() -> Dict[str, Any]:
+async def seed_one_game() -> dict[str, Any]:
     async with SessionLocal() as session:
         team_a_name = "Dev Team A"
         team_b_name = "Dev Team B"
@@ -48,20 +48,16 @@ async def seed_one_game() -> Dict[str, Any]:
 
         team_a = {
             "name": team_a_name,
-            "players": [
-                {"id": str(uuid.uuid4()), "name": n} for n in game_create.players_a
-            ],
+            "players": [{"id": str(uuid.uuid4()), "name": n} for n in game_create.players_a],
         }
         team_b = {
             "name": team_b_name,
-            "players": [
-                {"id": str(uuid.uuid4()), "name": n} for n in game_create.players_b
-            ],
+            "players": [{"id": str(uuid.uuid4()), "name": n} for n in game_create.players_b],
         }
 
         # Minimal scorecards
-        batting_scorecard: Dict[str, Any] = {}
-        bowling_scorecard: Dict[str, Any] = {}
+        batting_scorecard: dict[str, Any] = {}
+        bowling_scorecard: dict[str, Any] = {}
 
         db_game = await crud.create_game(
             db=session,

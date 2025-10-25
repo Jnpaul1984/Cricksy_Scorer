@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 import socketio  # type: ignore[import-not-found]
 
 from backend.config import settings as default_settings
+from contextlib import suppress
 
 # Routers
 from backend.routes.games_router import router as games_router
@@ -105,10 +106,8 @@ def create_app(settings_override: Any | None = None) -> tuple[socketio.ASGIApp, 
             yield object()
 
         fastapi_app.dependency_overrides[db_get_db] = _in_memory_get_db  # type: ignore[index]
-        try:
+        with suppress(Exception):
             fastapi_app.dependency_overrides[gameplay_get_db] = _in_memory_get_db  # type: ignore[index]
-        except Exception:
-            pass
         if enable_in_memory_crud_fn is not None and InMemoryCrudRepository is not None:
             _memory_repo = InMemoryCrudRepository()  # type: ignore[operator]
             enable_in_memory_crud_fn(_memory_repo)  # type: ignore[call-arg]

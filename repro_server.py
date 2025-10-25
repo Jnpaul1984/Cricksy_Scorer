@@ -12,9 +12,7 @@ if backend_path not in sys.path:
 
 os.environ["CRICKSY_IN_MEMORY_DB"] = "1"
 
-config = uvicorn.Config(
-    "backend.main:app", host="127.0.0.1", port=8001, log_level="debug"
-)
+config = uvicorn.Config("backend.main:app", host="127.0.0.1", port=8001, log_level="debug")
 server = uvicorn.Server(config)
 
 thread = threading.Thread(target=server.run, daemon=True)

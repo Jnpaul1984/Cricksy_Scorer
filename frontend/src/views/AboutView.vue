@@ -20,31 +20,31 @@
             <h3>School-Focused</h3>
             <p>Designed specifically for 25-over school cricket matches with simplified scoring</p>
           </div>
-          
+
           <div class="feature-card">
             <div class="feature-icon">📊</div>
             <h3>Real-time Statistics</h3>
             <p>Live batting and bowling scorecards with detailed player statistics</p>
           </div>
-          
+
           <div class="feature-card">
             <div class="feature-icon">📱</div>
             <h3>Mobile Friendly</h3>
             <p>Responsive design works perfectly on tablets and phones for field scoring</p>
           </div>
-          
+
           <div class="feature-card">
             <div class="feature-icon">💾</div>
             <h3>Data Export</h3>
             <p>Export complete game data as JSON files for record keeping and analysis</p>
           </div>
-          
+
           <div class="feature-card">
             <div class="feature-icon">⚡</div>
             <h3>Fast & Reliable</h3>
             <p>Built with modern web technologies for speed and reliability</p>
           </div>
-          
+
           <div class="feature-card">
             <div class="feature-icon">🎯</div>
             <h3>Easy to Use</h3>
@@ -61,12 +61,12 @@
             <h3>Frontend</h3>
             <p>Vue.js 3 with TypeScript for a modern, type-safe user interface</p>
           </div>
-          
+
           <div class="tech-item">
             <h3>Backend</h3>
             <p>FastAPI with PostgreSQL for robust data storage and API performance</p>
           </div>
-          
+
           <div class="tech-item">
             <h3>Deployment</h3>
             <p>Cloud-ready architecture with Docker support for easy deployment</p>
@@ -255,16 +255,16 @@ import { RouterLink } from 'vue-router'
   .hero-title {
     font-size: 2rem;
   }
-  
+
   .hero-content,
   .contact-content {
     padding: 2rem;
   }
-  
+
   .features-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .container {
     padding: 0 1rem;
   }

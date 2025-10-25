@@ -240,9 +240,9 @@ def test_match_with_different_dismissal_types(game_helper, assert_helper):
     expected_types = [dt[0] for dt in dismissal_types]
 
     for expected in expected_types:
-        assert expected in recorded_types, (
-            f"Dismissal type '{expected}' not found in recorded types"
-        )
+        assert (
+            expected in recorded_types
+        ), f"Dismissal type '{expected}' not found in recorded types"
 
 
 def test_match_with_extras(game_helper, assert_helper):

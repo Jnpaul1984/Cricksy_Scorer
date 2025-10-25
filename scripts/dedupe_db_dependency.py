@@ -10,7 +10,8 @@ src = src.lstrip("\ufeff")
 # 1) Ensure there's only one async def get_db(...) definition
 matches = list(re.finditer(r"\basync\s+def\s+get_db\s*\(", src))
 if len(matches) >= 2:
-    # Remove everything from the second 'get_db' section header through the subsequent in-memory env block if present
+    # Remove everything from the second 'get_db' section header
+    # through the subsequent in-memory env block if present
     second_idx = matches[1].start()
     # Back up to the nearest section header (the long ===== line) before the second get_db
     header_start = src.rfind(
@@ -23,7 +24,8 @@ if len(matches) >= 2:
 
     # Find an env block that uses os.getenv("CRICKSY_IN_MEMORY_DB") after the second get_db
     env_idx = src.find('os.getenv("CRICKSY_IN_MEMORY_DB")', second_idx)
-    # Decide the cut end at the next major section header after either the env block or the second get_db
+    # Decide the cut end at the next major section header
+    # after either the env block or the second get_db
     seek_from = env_idx if env_idx != -1 else second_idx
     next_header = src.find(
         "# ===============================================================",

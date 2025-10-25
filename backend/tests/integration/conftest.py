@@ -269,9 +269,9 @@ class AssertionHelper:
 
         if wickets is not None:
             actual_wickets = summary.get("wickets")
-            assert actual_wickets == wickets, (
-                f"Expected {wickets} wickets in summary, got {actual_wickets}"
-            )
+            assert (
+                actual_wickets == wickets
+            ), f"Expected {wickets} wickets in summary, got {actual_wickets}"
 
         if overs is not None:
             actual_overs = summary.get("overs")
@@ -285,9 +285,9 @@ class AssertionHelper:
 
         if expected_winner:
             result_text = result.get("result_text", "")
-            assert expected_winner in result_text, (
-                f"Expected '{expected_winner}' in result, got: {result_text}"
-            )
+            assert (
+                expected_winner in result_text
+            ), f"Expected '{expected_winner}' in result, got: {result_text}"
 
 
 @pytest.fixture

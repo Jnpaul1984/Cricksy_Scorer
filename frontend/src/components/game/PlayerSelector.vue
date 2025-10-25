@@ -4,7 +4,7 @@
       {{ label }}
       <span v-if="required" class="required-indicator">*</span>
     </label>
-    
+
     <select
       :id="selectId"
       :value="selectedPlayerId"
@@ -27,11 +27,11 @@
         </span>
       </option>
     </select>
-    
+
     <div v-if="error" :id="errorId" class="error-message" role="alert">
       {{ error }}
     </div>
-    
+
     <div v-if="hint" class="hint-message">
       {{ hint }}
     </div>
@@ -74,15 +74,15 @@ interface Emits {
 const emit = defineEmits<Emits>();
 
 // Computed
-const selectId = computed(() => 
+const selectId = computed(() =>
   `player-select-${props.label.toLowerCase().replace(/\s+/g, '-')}`
 );
 
-const errorId = computed(() => 
+const errorId = computed(() =>
   `${selectId.value}-error`
 );
 
-const availablePlayers = computed(() => 
+const availablePlayers = computed(() =>
   props.players.filter(player => !props.excludePlayerIds.includes(player.id))
 );
 
@@ -96,10 +96,10 @@ const selectorClass = computed(() => ({
 const handleSelectionChange = (event: Event) => {
   const target = event.target as HTMLSelectElement;
   const playerId = target.value || null;
-  
+
   emit('update:selectedPlayerId', playerId);
-  
-  const selectedPlayer = playerId 
+
+  const selectedPlayer = playerId
     ? props.players.find(p => p.id === playerId) || null
     : null;
   emit('player-selected', selectedPlayer);
@@ -217,10 +217,9 @@ const getDisabledReason = (playerId: string): string => {
     padding: 1rem;
     font-size: 1.1rem;
   }
-  
+
   .selector-label {
     font-size: 1.1rem;
   }
 }
 </style>
-

@@ -97,10 +97,10 @@ def test_simulated_t20_match():
     # Assert winner and result
     result = getattr(g, "result", None)
     assert result is not None, "No result found!"
-    assert result.winner_team_name == match["result"]["winner"], (
-        f"Expected winner {match['result']['winner']}, got {result.winner_team_name}"
-    )
+    assert (
+        result.winner_team_name == match["result"]["winner"]
+    ), f"Expected winner {match['result']['winner']}, got {result.winner_team_name}"
     # Allow minor punctuation differences at the end
-    assert result.result_text.rstrip(".") == match["result"]["summary"].rstrip("."), (
-        f"Expected summary {match['result']['summary']}, got {result.result_text}"
-    )
+    assert result.result_text.rstrip(".") == match["result"]["summary"].rstrip(
+        "."
+    ), f"Expected summary {match['result']['summary']}, got {result.result_text}"

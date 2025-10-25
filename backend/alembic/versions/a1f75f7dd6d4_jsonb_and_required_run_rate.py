@@ -62,8 +62,6 @@ def upgrade():
     if "required_run_rate" not in cols:
         op.add_column("games", sa.Column("required_run_rate", sa.Float(), nullable=True))
 
-
-def downgrade():
     # Drop required_run_rate if present
     bind = op.get_bind()
     insp = sa.inspect(bind)
@@ -74,6 +72,12 @@ def downgrade():
     # Leaving JSONB types in place is safest. If you truly need to revert:
     # op.alter_column("games", "team_a", type_=psql.JSON(), postgresql_using="team_a::json")
     # op.alter_column("games", "team_b", type_=psql.JSON(), postgresql_using="team_b::json")
-    # op.alter_column("games", "batting_scorecard", type_=psql.JSON(), postgresql_using="batting_scorecard::json")
-    # op.alter_column("games", "bowling_scorecard", type_=psql.JSON(), postgresql_using="bowling_scorecard::json")
+    # op.alter_column(
+    #     "games", "batting_scorecard", type_=psql.JSON(),
+    #     postgresql_using="batting_scorecard::json"
+    # )
+    # op.alter_column(
+    #     "games", "bowling_scorecard", type_=psql.JSON(),
+    #     postgresql_using="bowling_scorecard::json"
+    # )
     # op.alter_column("games", "deliveries", type_=psql.JSON(), postgresql_using="deliveries::json")

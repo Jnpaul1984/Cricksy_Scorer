@@ -97,28 +97,28 @@ frontend-e2e-tests:
     - uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-    
+
     - name: Install backend dependencies
       run: cd backend && pip install -r requirements.txt
-    
+
     - name: Start backend server
       run: |
         cd backend
         CRICKSY_IN_MEMORY_DB=1 uvicorn main:_fastapi --host 0.0.0.0 --port 8000 &
         sleep 5
-    
+
     - name: Install frontend dependencies
       run: cd frontend && npm ci
-    
+
     - name: Build frontend
       run: cd frontend && npm run build
-    
+
     - name: Start frontend server
       run: |
         cd frontend
         npm run preview -- --port 3000 &
         sleep 5
-    
+
     - name: Run Cypress tests
       run: cd frontend && npx cypress run
 \`\`\`
@@ -165,4 +165,3 @@ frontend-e2e-tests:
 - Implement test data factories for easier test setup
 - Add performance testing with Cypress
 - Create reusable Cypress commands for common operations
-

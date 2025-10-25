@@ -580,7 +580,7 @@ const innings1 = computed<null | { runs: number; wkts: number; balls: number }>(
 
 const innings1Line = computed<string | null>(() => {
   const snap = liveSnapshot.value
-  
+
   // If we're in innings 2 or later, ALWAYS use the snapshot summary (most reliable)
   if (currentInningsNo.value >= 2) {
     const summary = snap?.first_inning_summary || (snap as any)?.first_innings_summary
@@ -591,12 +591,12 @@ const innings1Line = computed<string | null>(() => {
       return `${runs}/${wickets} (${overs} ov)`
     }
   }
-  
+
   // For live innings 1, calculate from deliveries
   if (innings1.value) {
     return `${innings1.value.runs}/${innings1.value.wkts} (${oversDisplayFromBalls(innings1.value.balls)} ov)`
   }
-  
+
   return null
 })
 

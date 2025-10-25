@@ -333,4 +333,4 @@ async def test_database_migration():
 @pytest.mark.xfail(reason="Known bug #123")
 def test_known_bug():
     """Test for a known bug that's being tracked"""
-    assert False  # This will be marked as expected failure
+    raise AssertionError("Known bug: expected failure (tracked)")

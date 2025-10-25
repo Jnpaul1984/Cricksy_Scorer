@@ -14,8 +14,8 @@
         {{ details }}
       </div>
     </div>
-    <button 
-      v-if="dismissible" 
+    <button
+      v-if="dismissible"
       class="dismiss-button"
       type="button"
       aria-label="Dismiss error"
@@ -178,18 +178,17 @@ const handleDismiss = () => {
     padding: 0.75rem;
     gap: 0.75rem;
   }
-  
+
   .error-icon {
     font-size: 1rem;
   }
-  
+
   .error-title {
     font-size: 0.9rem;
   }
-  
+
   .error-text {
     font-size: 0.85rem;
   }
 }
 </style>
-

@@ -176,16 +176,16 @@ POST /games/{game_id}/deliveries
 { "batsman_id": "player-1", "bowler_id": "bowler-1", "runs_scored": 1 }
 // ✅ 200 OK
 
-// Ball 3.2 - Normal delivery  
+// Ball 3.2 - Normal delivery
 POST /games/{game_id}/deliveries
 { "batsman_id": "player-2", "bowler_id": "bowler-1", "runs_scored": 0 }
 // ✅ 200 OK
 
 // Ball 3.3 - WICKET!
 POST /games/{game_id}/deliveries
-{ 
-  "batsman_id": "player-1", 
-  "bowler_id": "bowler-1", 
+{
+  "batsman_id": "player-1",
+  "bowler_id": "bowler-1",
   "runs_scored": 0,
   "is_wicket": true,
   "dismissal_type": "bowled"
@@ -376,7 +376,7 @@ for (const ball of innings.balls) {
     })
     previousBallWasWicket = false
   }
-  
+
   // Post the delivery
   await fetch(`/games/${gameId}/deliveries`, {
     method: 'POST',
@@ -388,7 +388,7 @@ for (const ball of innings.balls) {
       dismissal_type: ball.wicket ? ball.wicketType : undefined
     })
   })
-  
+
   // Mark if this was a wicket
   if (ball.wicket) {
     previousBallWasWicket = true
@@ -402,7 +402,7 @@ for (const ball of innings.balls) {
 // Listen for state updates via WebSocket
 socket.on('state:update', (data) => {
   const snapshot = data.snapshot
-  
+
   // Check if new batsman is required
   if (snapshot.pending_new_batter) {
     // Show batsman selection UI
@@ -417,7 +417,7 @@ async function selectNewBatsman(batterId: string) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ batter_id: batterId })
   })
-  
+
   if (response.ok) {
     // Continue scoring
     hideBatsmanSelectionDialog()
@@ -508,7 +508,6 @@ Make sure you're not posting the next delivery before `/next-batter` completes.
 
 ---
 
-**Last Updated:** October 20, 2025  
-**Version:** 1.0.0  
+**Last Updated:** October 20, 2025
+**Version:** 1.0.0
 **Maintainer:** Cricksy Scorer Development Team
-

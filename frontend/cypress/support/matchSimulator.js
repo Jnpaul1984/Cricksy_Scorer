@@ -137,19 +137,19 @@ export async function seedMatch(apiBase, frontendDir) {
     let previousBallWasWicket = false
     for (let i = 0; i < innings.balls.length; i++) {
       const ball = innings.balls[i]
-      
+
       // If previous ball was a wicket, select new batsman before this delivery
       if (previousBallWasWicket && nextBatsmanIndex < availableBatsmen.length) {
         const newBatsmanId = availableBatsmen[nextBatsmanIndex]
         nextBatsmanIndex++
-        
+
         await httpRequest(apiBase, `/games/${gameId}/next-batter`, {
           method: 'POST',
           body: {
             batter_id: newBatsmanId
           }
         })
-        
+
         currentBatsmenOnField.add(newBatsmanId)
         previousBallWasWicket = false
       }
@@ -197,14 +197,14 @@ export async function seedMatch(apiBase, frontendDir) {
       const nextNonStrikerId = playerIds.get(nextInnings.opening_pair.non_striker)
       // Get first bowler from previous innings (now bowling team)
       const nextBowlerId = playerIds.get(innings.balls[0].bowler)
-      
-      await httpRequest(apiBase, `/games/${gameId}/innings/start`, { 
+
+      await httpRequest(apiBase, `/games/${gameId}/innings/start`, {
         method: 'POST',
         body: {
           striker_id: nextStrikerId,
           non_striker_id: nextNonStrikerId,
           opening_bowler_id: nextBowlerId
-        } 
+        }
       })
     }
   }
@@ -214,4 +214,3 @@ export async function seedMatch(apiBase, frontendDir) {
 
   return { gameId, success: true }
 }
-

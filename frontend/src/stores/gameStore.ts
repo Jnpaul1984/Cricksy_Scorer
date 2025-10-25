@@ -378,7 +378,7 @@ export const useGameStore = defineStore('game', () => {
   // ========================================================================
   const currentGame = ref<LocalGameState | null>(null)
 
-  
+
   const dlsPanel = ref<{ method: 'DLS'; par?: number; target?: number } | null>(null)
 
   function applyDlsPanelFrom(raw: unknown) {
@@ -392,7 +392,7 @@ export const useGameStore = defineStore('game', () => {
   }
 }
 
-  
+
   const dlsPreview = ref<DLSPreviewOut | null>(null)
   const dlsApplied = ref(false)
   const dlsKind = computed<'odi' | 't20'>(() => {
@@ -774,7 +774,7 @@ function stabilizeBattersFromLastDelivery(prevGame: GameState, snap: UiSnapshot)
     })
   })
 
-  
+
   const extrasBreakdown = computed(() => {
     type D = {
       extra_type?: 'wd' | 'nb' | 'b' | 'lb' | null
@@ -1039,7 +1039,7 @@ const bowlingRowsXI = computed(() => {
   }
 
 
-  
+
   // consider union of XI ids that appear in either card or stats
   const ids = new Set<string>()
   Object.keys(card).forEach(id => { if (xiIds.has(id)) ids.add(id) })
@@ -1203,7 +1203,7 @@ function normalizeInterruption(it: any): Interruption {
   }
 }
 
-/** 
+/**
  * Dedupe + throttle network calls so socket bursts don’t spam the API.
  * - Reuses an in-flight request
  * - Returns cache when called again within INTER_MIN_MS
@@ -1310,7 +1310,7 @@ async function stopInterruptionAction(kind?: 'weather' | 'injury' | 'light' | 'o
 }
 
 
-  
+
   function mapScorePayloadToSnapshot(p: ScoreUpdatePayloadSlim): UiSnapshot {
     const slim = p?.score ?? { runs: 0, wickets: 0, overs: '0.0' }
 
@@ -1520,7 +1520,7 @@ function deliveryKey(d: LooseDelivery): string {
     }
 
 
-    
+
     stabilizeBattersFromLastDelivery(g, s)
   }
 
@@ -1649,7 +1649,7 @@ function deliveryKey(d: LooseDelivery): string {
 
     off('state:update', handleStateUpdate as any);
     off('score:update', handleScoreUpdate as any);
-    
+
 
     disconnectSocket();
     connectionStatus.value = 'disconnected';
@@ -1723,8 +1723,8 @@ function deliveryKey(d: LooseDelivery): string {
       isFlushing.value = false
     }
   }
-   
-     
+
+
 // ========================================================================
 // Central scoring helper (ALWAYS uses ids from the latest snapshot)
 // ========================================================================
@@ -1810,9 +1810,9 @@ async function postDeliveryAuthoritative(
       const snap = await apiService.getSnapshot(String((game as any).id ?? (game as any).game_id))
       if (snap) {
         applySnapshotToGame(coerceSnapshot(snap))
-        
+
         syncOversLimitFrom(snap)
-        
+
         if ((snap as any)?.dls?.method === 'DLS') {
           dlsPanel.value = {
             method: 'DLS',
@@ -1911,7 +1911,7 @@ function mapUnifiedUiToAuthoritativeOpts(input: any): {
     uiState.value.error = null
     try {
       uiState.value.loading = true
-  
+
       // If this looks like the UI "unified" shape, route via authoritative helper
       const looksLikeUiPayload =
         !('striker_id' in (delivery || {})) ||
@@ -2101,7 +2101,7 @@ async function changeBowlerMidOver(gameId: string, newBowlerId: string, reason: 
     }
   }
 
-  
+
 
 
   async function submitDelivery(gameId: string, payload: ApiScoreDeliveryRequest): Promise<any> {
@@ -2170,7 +2170,7 @@ const canScore = computed<boolean>(() => {
 
 
 
-  
+
     console.table({
       hasGame: !!currentGame.value,
       inProgress: normalizeStatus(currentGame.value?.status) === 'in_progress',
@@ -2199,8 +2199,8 @@ const canScore = computed<boolean>(() => {
     uiState.value.selectedNonStrikerId = a
   }
 
-  
-  
+
+
 
   async function scoreRuns(
     gameId: string,
@@ -2270,10 +2270,10 @@ const canScore = computed<boolean>(() => {
 
       // 2) immediately fetch a fresh snapshot (authoritative)
       const full = await apiService.getSnapshot(liveGameId.value);
-      
+
       if (full) applySnapshotToGame(coerceSnapshot(full));
       uiState.value.selectedBowlerId = bowlerId
-      
+
       applyDlsPanelFrom(full)
 
 
@@ -2500,14 +2500,14 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     battingRowsXI,        // NEW
     bowlingRowsXI,        // NEW
     battingXI,            // optional export if you want
-    bowlingXI, 
+    bowlingXI,
     extrasBreakdown,
     battingRosterXI,
     bowlingRosterXI,
     fieldingSubs,
     fielderRosterAll,
     fieldingBench,
-    
+
     currentBowlerFigures,
     // Live
     isLive,
@@ -2517,7 +2517,7 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     liveSnapshot,
     initLive,
     stopLive,
-    
+
     // Gate flags for UI
     canScore,
     needsNewBatter,

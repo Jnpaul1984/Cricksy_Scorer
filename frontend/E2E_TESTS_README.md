@@ -103,4 +103,3 @@ This test is a more lightweight E2E test that focuses on the rendering of a pre-
 ## Conclusion
 
 These E2E tests provide a safety net to ensure that the core functionality of the Cricksy Scorer application remains intact. The `ci_match_simulator` is particularly important as it covers a wide range of features and user interactions. It is recommended to run these tests as part of your regular development and CI/CD pipeline.
-

@@ -50,7 +50,9 @@ def _coerce_match_type(raw: str) -> schemas.MatchType:
 
 
 async def create_game(
-    payload: Any,  # payload is main.CreateGameRequest Pydantic model; keep loose typing to avoid circular typing import
+    # payload is main.CreateGameRequest Pydantic model; keep loose typing
+    # to avoid circular typing import
+    payload: Any,
     db: AsyncSession,
 ) -> schemas.Game:
     """

@@ -6,20 +6,20 @@
         2nd Innings
       </div>
     </div>
-    
+
     <div class="score-display">
       <div class="main-score">
         <span class="runs">{{ totalRuns }}</span>
         <span class="separator">/</span>
         <span class="wickets">{{ totalWickets }}</span>
       </div>
-      
+
       <div class="overs-display">
         <span class="overs-label">Overs:</span>
         <span class="overs-value">{{ oversDisplay }}</span>
       </div>
     </div>
-    
+
     <div v-if="targetRuns" class="target-display">
       <span class="target-label">Target:</span>
       <span class="target-value">{{ targetRuns }}</span>
@@ -27,7 +27,7 @@
         ({{ runsRequired }} runs needed)
       </span>
     </div>
-    
+
     <div class="game-status" :class="statusClass">
       {{ gameStatusText }}
     </div>
@@ -44,19 +44,19 @@ const gameStore = useGameStore();
 // Props (none needed - component reads from store)
 
 // Computed properties
-const battingTeamName = computed(() => 
+const battingTeamName = computed(() =>
   gameStore.currentGame?.batting_team_name || 'Team'
 );
 
-const totalRuns = computed(() => 
+const totalRuns = computed(() =>
   gameStore.currentGame?.total_runs || 0
 );
 
-const totalWickets = computed(() => 
+const totalWickets = computed(() =>
   gameStore.currentGame?.total_wickets || 0
 );
 
-const currentInning = computed(() => 
+const currentInning = computed(() =>
   gameStore.currentGame?.current_inning || 1
 );
 
@@ -66,7 +66,7 @@ const oversDisplay = computed(() => {
   return `${overs_completed}.${balls_this_over}`;
 });
 
-const targetRuns = computed(() => 
+const targetRuns = computed(() =>
   gameStore.currentGame?.target || null
 );
 
@@ -230,15 +230,15 @@ const statusClass = computed(() => {
   .live-scoreboard {
     padding: 1.5rem;
   }
-  
+
   .main-score {
     font-size: 3rem;
   }
-  
+
   .team-name {
     font-size: 1.4rem;
   }
-  
+
   .scoreboard-header {
     flex-direction: column;
     gap: 1rem;

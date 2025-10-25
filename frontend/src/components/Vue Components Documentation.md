@@ -30,10 +30,10 @@ A reusable loading spinner component with multiple size options and overlay supp
 
 **Usage:**
 ```vue
-<LoadingSpinner 
-  size="large" 
-  message="Loading game..." 
-  :overlay="true" 
+<LoadingSpinner
+  size="large"
+  message="Loading game..."
+  :overlay="true"
 />
 ```
 
@@ -273,7 +273,7 @@ describe('LiveScoreboard', () => {
         plugins: [createTestingPinia()]
       }
     });
-    
+
     expect(wrapper.find('.main-score').text()).toContain('0/0');
   });
 });
@@ -300,7 +300,7 @@ describe('PlayerSelectionPanel', () => {
         })]
       }
     });
-    
+
     // Test validation logic
     expect(wrapper.find('.validation-errors').exists()).toBe(true);
   });
@@ -313,7 +313,7 @@ describe('PlayerSelectionPanel', () => {
 Use computed properties for derived state to ensure efficient reactivity:
 
 ```typescript
-const scoreDisplay = computed(() => 
+const scoreDisplay = computed(() =>
   `${gameStore.currentGame?.total_runs || 0}/${gameStore.currentGame?.total_wickets || 0}`
 );
 ```
@@ -349,4 +349,3 @@ const debouncedHandler = debounce(handleInput, 300);
 5. **Advanced Validation** - More sophisticated form validation
 
 This component architecture provides a solid foundation for building a professional cricket scoring application with excellent user experience and maintainability.
-

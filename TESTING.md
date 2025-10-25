@@ -675,4 +675,3 @@ When adding new tests:
 **Cypress Version:** 13.17.0
 **Python Version:** 3.11+
 **Node Version:** 22.13.0
-

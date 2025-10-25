@@ -1,7 +1,7 @@
 # DLS (Duckworth-Lewis-Stern) Test Suite Documentation
 
-**Author**: Manus AI  
-**Date**: October 21, 2025  
+**Author**: Manus AI
+**Date**: October 21, 2025
 **Test File**: `tests/test_dls_calculations.py`
 
 ## Overview
@@ -199,4 +199,3 @@ Where:
 ## Conclusion
 
 The DLS test suite provides comprehensive coverage of the DLS calculation logic, ensuring that rain-affected matches are handled correctly according to the official DLS method. With 20 passing tests covering basic calculations, realistic scenarios, edge cases, and helper functions, the implementation is well-validated and ready for production use in T20 matches.
-

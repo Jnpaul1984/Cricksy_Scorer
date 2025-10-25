@@ -26,7 +26,7 @@ describe('BowlingCard.vue', () => {
     const wrapper = mount(BowlingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     expect(wrapper.find('.card').exists()).toBe(true)
     expect(wrapper.find('h3').text()).toBe('Bowling')
     expect(wrapper.find('table').exists()).toBe(true)
@@ -36,7 +36,7 @@ describe('BowlingCard.vue', () => {
     const wrapper = mount(BowlingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     const rows = wrapper.findAll('tbody tr')
     expect(rows.length).toBe(2)
   })
@@ -45,7 +45,7 @@ describe('BowlingCard.vue', () => {
     const wrapper = mount(BowlingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     const rows = wrapper.findAll('tbody tr')
     expect(rows[0].text()).toContain('Fast Bowler')
     expect(rows[1].text()).toContain('Spin Bowler')
@@ -55,7 +55,7 @@ describe('BowlingCard.vue', () => {
     const wrapper = mount(BowlingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     const rows = wrapper.findAll('tbody tr')
     expect(rows[0].text()).toContain('1')  // maidens
     expect(rows[0].text()).toContain('30') // runs
@@ -66,7 +66,7 @@ describe('BowlingCard.vue', () => {
     const wrapper = mount(BowlingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     const rows = wrapper.findAll('tbody tr')
     // 24 balls = 4.0 overs
     expect(rows[0].text()).toContain('4.0')
@@ -78,7 +78,7 @@ describe('BowlingCard.vue', () => {
     const wrapper = mount(BowlingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     const rows = wrapper.findAll('tbody tr')
     // Fast Bowler: 30 runs from 24 balls = 7.50 economy
     expect(rows[0].text()).toContain('7.50')
@@ -90,7 +90,7 @@ describe('BowlingCard.vue', () => {
     const wrapper = mount(BowlingCard, {
       props: { entries: [] }
     })
-    
+
     expect(wrapper.find('table').exists()).toBe(false)
     expect(wrapper.find('.empty').exists()).toBe(true)
     expect(wrapper.find('.empty').text()).toBe('No bowling entries yet.')
@@ -105,11 +105,11 @@ describe('BowlingCard.vue', () => {
       runs_conceded: 0,
       wickets_taken: 0,
     }]
-    
+
     const wrapper = mount(BowlingCard, {
       props: { entries }
     })
-    
+
     const row = wrapper.find('tbody tr')
     expect(row.text()).toContain('0.0') // overs
     expect(row.text()).toContain('0')   // maidens
@@ -121,7 +121,7 @@ describe('BowlingCard.vue', () => {
     const wrapper = mount(BowlingCard, {
       props: { entries: sampleEntries }
     })
-    
+
     const headers = wrapper.findAll('thead th')
     expect(headers[0].text()).toBe('Player')
     expect(headers[1].text()).toBe('O')
@@ -140,13 +140,12 @@ describe('BowlingCard.vue', () => {
       runs_conceded: 20,
       wickets_taken: 1,
     }]
-    
+
     const wrapper = mount(BowlingCard, {
       props: { entries }
     })
-    
+
     const row = wrapper.find('tbody tr')
     expect(row.text()).toContain('2.5')
   })
 })
-

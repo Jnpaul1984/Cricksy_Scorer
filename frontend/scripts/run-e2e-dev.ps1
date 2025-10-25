@@ -29,4 +29,3 @@ try {
     Stop-Process -Id $dev.Id -Force -ErrorAction SilentlyContinue
   }
 }
-

@@ -8,7 +8,7 @@ type XI = {
   keeper_b: string | null;
   captain_a: string | null;
   keeper_a: string | null;
-  captain_b: string | null; team_a_xi: string[]; team_b_xi: string[] 
+  captain_b: string | null; team_a_xi: string[]; team_b_xi: string[]
 }
 const KEY = (id: string) => `cricksy.xi.${id}`
 
@@ -239,7 +239,7 @@ onMounted(async () => {
         </select>
       </div>
     </div>
-  
+
       <section class="team">
         <h3>{{ teamBDisplayName }}</h3>
         <p class="hint">Pick 11 players ({{ selectedB.size }}/11)</p>

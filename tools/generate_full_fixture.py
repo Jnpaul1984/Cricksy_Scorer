@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from collections.abc import Iterable
 
 
 @dataclass(frozen=True)
@@ -19,9 +19,9 @@ def _simulate_innings(
     team_name: str,
     batting_prefix: str,
     bowling_prefix: str,
-    over_run_patterns: List[List[int]],
-    wicket_map: Dict[Tuple[int, int], WicketEvent],
-) -> Dict[str, object]:
+    over_run_patterns: list[list[int]],
+    wicket_map: dict[tuple[int, int], WicketEvent],
+) -> dict[str, object]:
     """Build innings data using deterministic run patterns and wicket events."""
     batters = [f"{batting_prefix} Player {i}" for i in range(1, 12)]
     bowlers = [f"{bowling_prefix} Player {i}" for i in range(1, 7)]
@@ -34,11 +34,11 @@ def _simulate_innings(
         "striker": batters[striker_idx],
         "non_striker": batters[non_striker_idx],
     }
-    bowling_order: List[str] = []
+    bowling_order: list[str] = []
 
     total_runs = 0
     total_wkts = 0
-    deliveries: List[Dict[str, object]] = []
+    deliveries: list[dict[str, object]] = []
 
     for over_number, pattern in enumerate(over_run_patterns, start=1):
         bowler_name = bowlers[(over_number - 1) % len(bowlers)]
@@ -48,7 +48,7 @@ def _simulate_innings(
             striker_name = batters[striker_idx]
             non_striker_name = batters[non_striker_idx]
 
-            entry: Dict[str, object] = {
+            entry: dict[str, object] = {
                 "over": over_number,
                 "ball": ball_number,
                 "bowler": bowler_name,
@@ -78,7 +78,8 @@ def _simulate_innings(
             if event:
                 if next_batter_idx >= len(batters):
                     raise RuntimeError(
-                        f"Ran out of batters while simulating wickets at over {over_number}, ball {ball_number}"
+                        f"Ran out of batters while simulating wickets at over {over_number}, "
+                        f"ball {ball_number}"
                     )
                 striker_idx = next_batter_idx
                 next_batter_idx += 1
@@ -99,8 +100,8 @@ def _simulate_innings(
     }
 
 
-def _build_fixture() -> Dict[str, object]:
-    innings_one_patterns: List[List[int]] = [
+def _build_fixture() -> dict[str, object]:
+    innings_one_patterns: list[list[int]] = [
         [1, 0, 4, 1, 1, 1],
         [0, 2, 0, 1, 0, 4],
         [2, 1, 0, 4, 1, 1],
@@ -132,7 +133,7 @@ def _build_fixture() -> Dict[str, object]:
         (18, 6): WicketEvent("bowled"),
     }
 
-    innings_two_patterns: List[List[int]] = [
+    innings_two_patterns: list[list[int]] = [
         [1, 0, 2, 1, 1, 2],
         [2, 0, 1, 2, 1, 2],
         [1, 0, 0, 2, 1, 2],
@@ -216,10 +217,10 @@ def main() -> None:
     payload = json.dumps(fixture, indent=2)
 
     wrote = 0
-    for path in targets:
+    for _wrote, path in enumerate(targets, start=1):
         path.write_text(payload + "\n", encoding="utf-8")
-        wrote += 1
-    print(f"Wrote fixture to {len(list(targets))} locations.")
+        wrote = _wrote
+    print(f"Wrote fixture to {wrote} locations.")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 /**
  * Application-Specific Type Definitions for Cricksy Scorer
- * 
+ *
  * These types are used throughout the Vue.js application for component props,
  * state management, routing, and UI interactions.
  */
@@ -48,22 +48,22 @@ export enum TossDecision {
 export interface UIState {
   /** Global loading state */
   loading: boolean;
-  
+
   /** Global error message (null if no error) */
   error: string | null;
-  
+
   /** Currently selected striker player ID */
   selectedStrikerId: string | null;
-  
+
   /** Currently selected non-striker player ID */
   selectedNonStrikerId: string | null;
-  
+
   /** Currently selected bowler player ID */
   selectedBowlerId: string | null;
-  
+
   /** Whether the scoring controls are disabled */
   scoringDisabled: boolean;
-  
+
   /** Current active tab in scorecard view */
   activeScorecardTab: 'batting' | 'bowling';
 }
@@ -130,22 +130,22 @@ export interface ScorecardProps {
 export interface PlayerSelectorProps {
   /** List of available players */
   players: Player[];
-  
+
   /** Currently selected player ID */
   selectedPlayerId: string | null;
-  
+
   /** Label for the selector */
   label: string;
-  
+
   /** Whether the selector is disabled */
   disabled?: boolean;
-  
+
   /** Whether selection is required */
   required?: boolean;
-  
+
   /** Player IDs to exclude from selection */
   excludePlayerIds?: string[];
-  
+
   /** Callback when selection changes */
   onSelectionChange: (playerId: string | null) => void;
 }
@@ -156,19 +156,19 @@ export interface PlayerSelectorProps {
 export interface ScoringButtonProps {
   /** The runs value for this button */
   runs: number;
-  
+
   /** Whether the button is disabled */
   disabled?: boolean;
-  
+
   /** Whether this is an extra (wide/no-ball) */
   isExtra?: boolean;
-  
+
   /** Extra type if applicable */
   extraType?: 'wd' | 'nb';
-  
+
   /** Whether this represents a wicket */
   isWicket?: boolean;
-  
+
   /** Click handler */
   onClick: () => void;
 }
@@ -179,13 +179,13 @@ export interface ScoringButtonProps {
 export interface GameActionProps {
   /** The action type */
   action: 'start_second_innings' | 'export_game' | 'new_game';
-  
+
   /** Whether the action is loading */
   loading?: boolean;
-  
+
   /** Whether the action is disabled */
   disabled?: boolean;
-  
+
   /** Click handler */
   onClick: () => void;
 }
@@ -368,4 +368,3 @@ export type DeepPartial<T> = {
  * Non-nullable utility type
  */
 export type NonNullable<T> = T extends null | undefined ? never : T;
-

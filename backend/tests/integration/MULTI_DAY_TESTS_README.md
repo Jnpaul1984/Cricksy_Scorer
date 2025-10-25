@@ -1,7 +1,7 @@
 # Multi-Day Match Tests README
 
-**Author**: Manus AI  
-**Date**: October 21, 2025  
+**Author**: Manus AI
+**Date**: October 21, 2025
 **Project**: Cricksy Scorer
 
 ## Overview
@@ -80,7 +80,6 @@ This test suite provides a solid foundation for validating multi-day match funct
 
 ---
 
-**Repository**: [Jnpaul1984/Cricksy_Scorer](https://github.com/Jnpaul1984/Cricksy_Scorer)  
-**Branch**: `agent/sandbox`  
+**Repository**: [Jnpaul1984/Cricksy_Scorer](https://github.com/Jnpaul1984/Cricksy_Scorer)
+**Branch**: `agent/sandbox`
 **Status**: ✅ Complete
-

@@ -640,7 +640,7 @@ const dedupedDeliveries = computed<DeliveryRowForTable[]>(() => {
       non_striker_id: normId(d.non_striker_id),
       bowler_id: normId(d.bowler_id),
       extra: (d.extra ?? d.extra_type ?? undefined) as DeliveryRowForTable['extra'] | undefined,
-      extra_runs: Number(d.extra_runs ?? 0), 
+      extra_runs: Number(d.extra_runs ?? 0),
       runs_off_bat: Number(d.runs_off_bat ?? d.runs ?? 0),
       is_wicket: Boolean(d.is_wicket),
       commentary: d.commentary as string | undefined,
@@ -1729,7 +1729,7 @@ class="btn btn-ghost"
         <div class="right">
           <div class="scorecards-grid">
             <BattingCard :entries="battingEntries" />
-            
+
             <BowlingCard :entries="bowlingEntries" />
 
             <!-- NEW: compact fielding subs card -->
@@ -2198,5 +2198,3 @@ dialog::backdrop { background: rgba(0,0,0,0.2); }
 dialog .dlg { display: flex; flex-direction: column; gap: 10px; min-width: 320px; }
 dialog footer { display: flex; justify-content: flex-end; gap: 8px; }
 </style>
-
-

@@ -5,7 +5,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 describe('LoadingSpinner', () => {
   it('renders loading spinner', () => {
     const wrapper = mount(LoadingSpinner)
-    
+
     expect(wrapper.exists()).toBe(true)
     expect(wrapper.find('.loading-spinner').exists()).toBe(true)
   })
@@ -15,8 +15,7 @@ describe('LoadingSpinner', () => {
     const wrapper = mount(LoadingSpinner, {
       props: { message }
     })
-    
+
     expect(wrapper.text()).toContain(message)
   })
 })
-

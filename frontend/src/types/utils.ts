@@ -1,6 +1,6 @@
 /**
  * Utility Type Definitions for Cricksy Scorer
- * 
+ *
  * These types provide helper interfaces for common patterns like API responses,
  * error handling, validation, and other utility functions throughout the application.
  */
@@ -15,16 +15,16 @@
 export interface ApiResponse<T> {
   /** The actual response data */
   data: T;
-  
+
   /** Whether the request was successful */
   success: boolean;
-  
+
   /** Optional message from the server */
   message?: string;
-  
+
   /** HTTP status code */
   status?: number;
-  
+
   /** Additional metadata */
   meta?: {
     timestamp: string;
@@ -39,19 +39,19 @@ export interface ApiResponse<T> {
 export interface ApiError {
   /** Human-readable error message */
   message: string;
-  
+
   /** HTTP status code */
   status: number;
-  
+
   /** Machine-readable error code */
   code?: string;
-  
+
   /** Additional error details */
   details?: Record<string, any>;
-  
+
   /** Field-specific validation errors */
   fieldErrors?: Record<string, string[]>;
-  
+
   /** Stack trace (development only) */
   stack?: string;
 }
@@ -62,28 +62,28 @@ export interface ApiError {
 export interface PaginatedResponse<T> {
   /** Array of items for current page */
   items: T[];
-  
+
   /** Total number of items across all pages */
   total: number;
-  
+
   /** Current page number (1-based) */
   page: number;
-  
+
   /** Number of items per page */
   perPage: number;
-  
+
   /** Total number of pages */
   totalPages: number;
-  
+
   /** Whether there is a next page */
   hasNext: boolean;
-  
+
   /** Whether there is a previous page */
   hasPrev: boolean;
-  
+
   /** URL for next page (if available) */
   nextUrl?: string;
-  
+
   /** URL for previous page (if available) */
   prevUrl?: string;
 }
@@ -98,13 +98,13 @@ export interface PaginatedResponse<T> {
 export interface ValidationResult {
   /** Whether the validation passed */
   isValid: boolean;
-  
+
   /** Array of error messages */
   errors: string[];
-  
+
   /** Field-specific errors */
   fieldErrors?: Record<string, string[]>;
-  
+
   /** Warnings (non-blocking issues) */
   warnings?: string[];
 }
@@ -115,13 +115,13 @@ export interface ValidationResult {
 export interface ValidationRule<T = any> {
   /** Rule name for identification */
   name: string;
-  
+
   /** Validation function */
   validate: (value: T) => boolean | string;
-  
+
   /** Error message if validation fails */
   message: string;
-  
+
   /** Whether this rule is required */
   required?: boolean;
 }
@@ -143,16 +143,16 @@ export type ValidationSchema<T> = {
 export interface AsyncState<T = any, E = ApiError> {
   /** Current loading state */
   loading: boolean;
-  
+
   /** The data (if successful) */
   data: T | null;
-  
+
   /** The error (if failed) */
   error: E | null;
-  
+
   /** Whether the operation has been attempted */
   initialized: boolean;
-  
+
   /** Timestamp of last update */
   lastUpdated: Date | null;
 }
@@ -163,16 +163,16 @@ export interface AsyncState<T = any, E = ApiError> {
 export interface AsyncOptions {
   /** Timeout in milliseconds */
   timeout?: number;
-  
+
   /** Number of retry attempts */
   retries?: number;
-  
+
   /** Delay between retries in milliseconds */
   retryDelay?: number;
-  
+
   /** Whether to show loading indicators */
   showLoading?: boolean;
-  
+
   /** Whether to show error notifications */
   showErrors?: boolean;
 }
@@ -187,16 +187,16 @@ export interface AsyncOptions {
 export interface CacheEntry<T> {
   /** The cached data */
   data: T;
-  
+
   /** When the data was cached */
   timestamp: Date;
-  
+
   /** When the data expires */
   expiresAt: Date;
-  
+
   /** Cache key */
   key: string;
-  
+
   /** Additional metadata */
   meta?: Record<string, any>;
 }
@@ -207,13 +207,13 @@ export interface CacheEntry<T> {
 export interface CacheOptions {
   /** Time to live in milliseconds */
   ttl: number;
-  
+
   /** Maximum number of entries */
   maxSize?: number;
-  
+
   /** Whether to use localStorage for persistence */
   persistent?: boolean;
-  
+
   /** Key prefix for storage */
   keyPrefix?: string;
 }
@@ -238,16 +238,16 @@ export type AsyncEventHandler<T = any> = (event: T) => Promise<void>;
 export interface EventSubscription {
   /** Unique subscription ID */
   id: string;
-  
+
   /** Event name */
   event: string;
-  
+
   /** Handler function */
   handler: EventHandler;
-  
+
   /** Whether the subscription is active */
   active: boolean;
-  
+
   /** Unsubscribe function */
   unsubscribe: () => void;
 }
@@ -262,16 +262,16 @@ export interface EventSubscription {
 export interface StorageAdapter {
   /** Get item from storage */
   getItem(key: string): string | null;
-  
+
   /** Set item in storage */
   setItem(key: string, value: string): void;
-  
+
   /** Remove item from storage */
   removeItem(key: string): void;
-  
+
   /** Clear all items */
   clear(): void;
-  
+
   /** Get all keys */
   keys(): string[];
 }
@@ -282,13 +282,13 @@ export interface StorageAdapter {
 export interface StorageValue<T> {
   /** The actual value */
   value: T;
-  
+
   /** When it was stored */
   timestamp: Date;
-  
+
   /** When it expires (optional) */
   expiresAt?: Date;
-  
+
   /** Version for migration purposes */
   version?: number;
 }
@@ -303,16 +303,16 @@ export interface StorageValue<T> {
 export interface NumberFormatOptions {
   /** Number of decimal places */
   decimals?: number;
-  
+
   /** Thousands separator */
   thousandsSeparator?: string;
-  
+
   /** Decimal separator */
   decimalSeparator?: string;
-  
+
   /** Currency symbol */
   currency?: string;
-  
+
   /** Whether to show plus sign for positive numbers */
   showPlus?: boolean;
 }
@@ -323,13 +323,13 @@ export interface NumberFormatOptions {
 export interface DateFormatOptions {
   /** Date format pattern */
   format?: string;
-  
+
   /** Locale for formatting */
   locale?: string;
-  
+
   /** Timezone */
   timezone?: string;
-  
+
   /** Whether to show relative time (e.g., "2 hours ago") */
   relative?: boolean;
 }
@@ -354,22 +354,22 @@ export enum LogLevel {
 export interface LogEntry {
   /** Log level */
   level: LogLevel;
-  
+
   /** Log message */
   message: string;
-  
+
   /** Timestamp */
   timestamp: Date;
-  
+
   /** Additional data */
   data?: any;
-  
+
   /** Source location */
   source?: string;
-  
+
   /** User ID (if available) */
   userId?: string;
-  
+
   /** Session ID */
   sessionId?: string;
 }
@@ -384,16 +384,16 @@ export interface LogEntry {
 export interface PerformanceMeasurement {
   /** Operation name */
   name: string;
-  
+
   /** Start time */
   startTime: number;
-  
+
   /** End time */
   endTime: number;
-  
+
   /** Duration in milliseconds */
   duration: number;
-  
+
   /** Additional metadata */
   meta?: Record<string, any>;
 }
@@ -404,13 +404,13 @@ export interface PerformanceMeasurement {
 export interface PerformanceOptions {
   /** Whether to enable monitoring */
   enabled: boolean;
-  
+
   /** Sample rate (0-1) */
   sampleRate?: number;
-  
+
   /** Maximum number of measurements to keep */
   maxMeasurements?: number;
-  
+
   /** Whether to log to console */
   logToConsole?: boolean;
 }
@@ -464,4 +464,3 @@ export type DeepReadonly<T> = {
 export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
 };
-

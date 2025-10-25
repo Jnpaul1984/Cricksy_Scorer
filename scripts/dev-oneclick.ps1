@@ -51,7 +51,7 @@ Write-Info "Creating sample game: $TeamA vs $TeamB ($Overs overs) …"
 $playersA = @(1..11 | ForEach-Object { "A$_" })
 $playersB = @(1..11 | ForEach-Object { "B$_" })
 
-$body = @{ 
+$body = @{
   team_a_name      = $TeamA
   team_b_name      = $TeamB
   players_a        = $playersA
@@ -82,4 +82,3 @@ Start-Process "http://localhost:5173/game/$gid/scoring"
 Start-Process "http://localhost:5173/view/$gid"
 
 Write-Ok "Opened scorer and viewer tabs. Happy scoring!"
-

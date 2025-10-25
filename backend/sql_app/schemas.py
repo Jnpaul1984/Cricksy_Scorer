@@ -3,13 +3,13 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 from pydantic import field_validator, model_validator
 from pydantic.config import ConfigDict
-from typing import Any, Literal, TypeAlias, cast
+from typing import Any, Literal, cast, TypeAlias
 from collections.abc import Sequence, Mapping
 from enum import Enum
 import datetime as dt
 
 UTC = getattr(dt, "UTC", dt.UTC)
-TeamItem: TypeAlias = str | UUID | Mapping[str, object]
+TeamItem: TypeAlias = str | UUID | Mapping[str, object]  # noqa: UP040
 ExtraCode = Literal["wd", "nb", "b", "lb"]
 # ===================================================================
 # Base & Re-usable Models

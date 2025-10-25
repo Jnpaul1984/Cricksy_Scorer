@@ -109,7 +109,7 @@ export interface GameState {
   target: number | null
   result: MatchResult | string | null;
   is_game_over?: boolean;         // set by backend when match completed
-  completed_at?: string | null; 
+  completed_at?: string | null;
 
   // roles
   team_a_captain_id: string | null
@@ -151,7 +151,7 @@ export interface Snapshot {
 
   // sometimes backend returns status as 'status' or 'match_status'
   match_status?: MatchStatus;
-  
+
   // allow extra keys without breaking the UI
   [k: string]: any
 }

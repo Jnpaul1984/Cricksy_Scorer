@@ -3,7 +3,10 @@ Snapshot builder service for Cricksy Scorer.
 
 This module provides a single exported function:
 
-    build_snapshot(g: GameState, last_delivery: Optional[Union[schemas.Delivery, Dict[str, Any]]]) -> Dict[str, Any]
+    build_snapshot(
+        g: GameState,
+        last_delivery: Optional[Union[schemas.Delivery, Dict[str, Any]]],
+    ) -> Dict[str, Any]
 
 It re-implements the snapshot assembly logic currently in backend/main.py so it can be moved
 out of the giant main module. It intentionally only depends on the runtime game object (ORM
@@ -90,7 +93,8 @@ def is_legal_delivery(extra: str | None) -> bool:
 
 def _deliveries_for_current_innings(g: GameState) -> list[dict[str, Any]]:
     """
-    Return deliveries filtered to the current innings when 'inning' is present; otherwise return as-is.
+    Return deliveries filtered to the current innings.
+    When 'inning' is present; otherwise return as-is.
     Mirrors the behaviour in backend/main._deliveries_for_current_innings.
     """
     raw = getattr(g, "deliveries", []) or []
@@ -162,7 +166,10 @@ def _player_name(
 
 
 def _bat_entry(g: GameState, pid: str | None) -> dict[str, Any]:
-    """Return batting entry dict for pid (works with BaseModel or dict stored on g.batting_scorecard)."""
+    """
+    Return batting entry dict for pid (works with BaseModel
+    or dict stored on g.batting_scorecard).
+    """
     if not pid:
         return {"player_id": "", "player_name": "", "runs": 0, "balls_faced": 0, "is_out": False}
     bsc = getattr(g, "batting_scorecard", {}) or {}
@@ -188,7 +195,10 @@ def _bat_entry(g: GameState, pid: str | None) -> dict[str, Any]:
 
 
 def _compute_snapshot_flags(g: GameState) -> dict[str, bool]:
-    """Return UI gating flags derived from current runtime state (needs_new_batter / needs_new_over)."""
+    """
+    Return UI gating flags derived from current runtime state
+    (needs_new_batter / needs_new_over).
+    """
     need_new_batter = False
     if getattr(g, "current_striker_id", None):
         e = (getattr(g, "batting_scorecard", {}) or {}).get(g.current_striker_id)

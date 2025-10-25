@@ -3,7 +3,11 @@ Delivery service: persist a scored delivery.
 
 This module provides a single, focused function:
 
-    async def apply_scoring_and_persist(g: GameState, delivery_dict: dict, db: AsyncSession) -> GameState
+    async def apply_scoring_and_persist(
+        g: GameState,
+        delivery_dict: dict,
+        db: AsyncSession,
+    ) -> GameState
 
 It expects the caller to:
 - have already rebuilt scorecards + recomputed totals (if needed)

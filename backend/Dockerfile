@@ -5,7 +5,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    ENV=ci                             
+    ENV=ci
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl build-essential && rm -rf /var/lib/apt/lists/*

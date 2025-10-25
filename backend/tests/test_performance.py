@@ -135,9 +135,9 @@ class TestDeliveryPerformance:
                 "opening_bowler_id": team_b_players[0]["id"],
             },
         )
-        assert response.status_code == 200, (
-            f"Set openers failed: {response.status_code} - {response.json()}"
-        )
+        assert (
+            response.status_code == 200
+        ), f"Set openers failed: {response.status_code} - {response.json()}"
 
         bowler1_id = team_b_players[0]["id"]
         bowler2_id = team_b_players[1]["id"]
@@ -205,9 +205,9 @@ class TestDeliveryPerformance:
                 "opening_bowler_id": team_b_players[0]["id"],
             },
         )
-        assert response.status_code == 200, (
-            f"Set openers failed: {response.status_code} - {response.json()}"
-        )
+        assert (
+            response.status_code == 200
+        ), f"Set openers failed: {response.status_code} - {response.json()}"
 
         bowler1_id = team_b_players[0]["id"]
         bowler2_id = team_b_players[1]["id"]
@@ -269,9 +269,9 @@ class TestSnapshotPerformance:
                 "opening_bowler_id": team_b_players[0]["id"],
             },
         )
-        assert response.status_code == 200, (
-            f"Set openers failed: {response.status_code} - {response.json()}"
-        )
+        assert (
+            response.status_code == 200
+        ), f"Set openers failed: {response.status_code} - {response.json()}"
 
         # Post some deliveries first to make the snapshot more realistic
         bowler1_id = team_b_players[0]["id"]
@@ -346,9 +346,9 @@ class TestFullMatchPerformance:
                 "opening_bowler_id": team_b_players[0]["id"],
             },
         )
-        assert response.status_code == 200, (
-            f"Set openers failed: {response.status_code} - {response.json()}"
-        )
+        assert (
+            response.status_code == 200
+        ), f"Set openers failed: {response.status_code} - {response.json()}"
 
         start = time.time()
 
@@ -375,9 +375,9 @@ class TestFullMatchPerformance:
         )
         if response.status_code != 200:
             print(f"\nStart next innings failed: {response.status_code} - {response.json()}")
-        assert response.status_code == 200, (
-            f"Start next innings failed: {response.status_code} - {response.json()}"
-        )
+        assert (
+            response.status_code == 200
+        ), f"Start next innings failed: {response.status_code} - {response.json()}"
 
         # Second innings: 2 overs (12 deliveries)
         for i in range(12):

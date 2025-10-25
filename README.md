@@ -194,4 +194,3 @@ Custom animations for special match moments.
 Dockerfile for containerized deployment.
 
 Built with ❤️ for cricket scorers, schools, and clubs.
-
