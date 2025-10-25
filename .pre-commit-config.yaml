@@ -3,11 +3,11 @@ repos:
     rev: v0.6.8
     hooks:
       - id: ruff
-        args: ["--config=ruff.toml", "--fix"]
+        args: ["--config=pyproject.toml", "--fix"]
       - id: ruff-format
-        args: ["--config=ruff.toml"]
+        args: ["--config=pyproject.toml"]
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.10.0
+    rev: v1.11.2
     hooks:
       - id: mypy
         pass_filenames: false
@@ -19,4 +19,5 @@ repos:
       - id: check-yaml
       - id: end-of-file-fixer
       - id: trailing-whitespace
+      - id: check-merge-conflict
       - id: detect-private-key
