@@ -97,7 +97,10 @@ class GameHelper:
         return self.game_id, teams
 
     def set_openers(
-        self, striker_id: str | None = None, non_striker_id: str | None = None, team: str = "A"
+        self,
+        striker_id: str | None = None,
+        non_striker_id: str | None = None,
+        team: str = "A",
     ) -> dict[str, Any]:
         """Set openers for a team."""
         assert self.game_id, "Game must be created first"
@@ -114,7 +117,11 @@ class GameHelper:
 
         response = self.client.post(
             f"/games/{self.game_id}/openers",
-            json={"striker_id": striker_id, "non_striker_id": non_striker_id, "team": team},
+            json={
+                "striker_id": striker_id,
+                "non_striker_id": non_striker_id,
+                "team": team,
+            },
         )
         assert response.status_code == 200, f"Failed to set openers: {response.text}"
         return response.json()

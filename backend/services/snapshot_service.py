@@ -171,7 +171,13 @@ def _bat_entry(g: GameState, pid: str | None) -> dict[str, Any]:
     or dict stored on g.batting_scorecard).
     """
     if not pid:
-        return {"player_id": "", "player_name": "", "runs": 0, "balls_faced": 0, "is_out": False}
+        return {
+            "player_id": "",
+            "player_name": "",
+            "runs": 0,
+            "balls_faced": 0,
+            "is_out": False,
+        }
     bsc = getattr(g, "batting_scorecard", {}) or {}
     e_any = bsc.get(pid)
     if isinstance(e_any, BaseModel):

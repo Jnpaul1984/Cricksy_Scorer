@@ -438,7 +438,10 @@ def _rebuild_scorecards_from_deliveries(g: Any) -> None:
         pid_str = str(pid)
         if not pid_str:
             return None
-        if _player_team_name(g.team_a, g.team_b, pid_str) not in {None, g.batting_team_name}:
+        if _player_team_name(g.team_a, g.team_b, pid_str) not in {
+            None,
+            g.batting_team_name,
+        }:
             return None
         if pid_str not in bat:
             bat[pid_str] = {
@@ -459,7 +462,10 @@ def _rebuild_scorecards_from_deliveries(g: Any) -> None:
         pid_str = str(pid)
         if not pid_str:
             return None
-        if _player_team_name(g.team_a, g.team_b, pid_str) not in {None, g.bowling_team_name}:
+        if _player_team_name(g.team_a, g.team_b, pid_str) not in {
+            None,
+            g.bowling_team_name,
+        }:
             return None
         if pid_str not in bowl:
             bowl[pid_str] = {

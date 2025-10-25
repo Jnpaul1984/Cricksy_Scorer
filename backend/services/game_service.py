@@ -67,8 +67,14 @@ async def create_game(
         players_a_list = players_a_list or [f"PlayerA{i}" for i in range(1, per_side + 1)]
         players_b_list = players_b_list or [f"PlayerB{i}" for i in range(1, per_side + 1)]
 
-    team_a: dict[str, Any] = {"name": payload.team_a_name, "players": _mk_players(players_a_list)}
-    team_b: dict[str, Any] = {"name": payload.team_b_name, "players": _mk_players(players_b_list)}
+    team_a: dict[str, Any] = {
+        "name": payload.team_a_name,
+        "players": _mk_players(players_a_list),
+    }
+    team_b: dict[str, Any] = {
+        "name": payload.team_b_name,
+        "players": _mk_players(players_b_list),
+    }
 
     # --- Determine initial batting side (toss/decision) with safe defaults ---
     toss = (payload.toss_winner_team or "").strip()

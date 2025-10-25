@@ -85,13 +85,15 @@ async def set_playing_xi(
     if not req_a.issubset(allowed_a):
         unknown = sorted(req_a - allowed_a)
         raise HTTPException(
-            status_code=400, detail={"error": "Unknown players in team A XI", "ids": unknown}
+            status_code=400,
+            detail={"error": "Unknown players in team A XI", "ids": unknown},
         )
 
     if not req_b.issubset(allowed_b):
         unknown = sorted(req_b - allowed_b)
         raise HTTPException(
-            status_code=400, detail={"error": "Unknown players in team B XI", "ids": unknown}
+            status_code=400,
+            detail={"error": "Unknown players in team B XI", "ids": unknown},
         )
 
     # Persist XI lists into JSON blobs
@@ -203,26 +205,34 @@ async def get_game_results(
     margin = int(margin_raw) if margin_raw is not None else None
 
     return schemas.MatchResult(
-        winner_team_id=str(payload.get("winner_team_id"))
-        if payload.get("winner_team_id") is not None
-        else None,
-        winner_team_name=str(payload.get("winner_team_name"))
-        if payload.get("winner_team_name") is not None
-        else None,
+        winner_team_id=(
+            str(payload.get("winner_team_id"))
+            if payload.get("winner_team_id") is not None
+            else None
+        ),
+        winner_team_name=(
+            str(payload.get("winner_team_name"))
+            if payload.get("winner_team_name") is not None
+            else None
+        ),
         method=payload.get("method"),
         margin=margin,
-        result_text=str(payload.get("result_text"))
-        if payload.get("result_text") is not None
-        else None,
+        result_text=(
+            str(payload.get("result_text")) if payload.get("result_text") is not None else None
+        ),
         completed_at=payload.get("completed_at"),
     )
 
 
 @router.post(
-    "/{game_id}/results", response_model=schemas.MatchResult, status_code=status.HTTP_201_CREATED
+    "/{game_id}/results",
+    response_model=schemas.MatchResult,
+    status_code=status.HTTP_201_CREATED,
 )
 async def post_game_results(
-    game_id: UUID, payload: schemas.MatchResultRequest, db: Annotated[AsyncSession, Depends(get_db)]
+    game_id: UUID,
+    payload: schemas.MatchResultRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> schemas.MatchResult:
     """Creates or updates results for a specific game"""
     try:
@@ -237,19 +247,27 @@ async def post_game_results(
             "winner": str(payload.winner) if payload.winner is not None else None,
             "team_a_score": int(payload.team_a_score),
             "team_b_score": payload.team_b_score,
-            "winner_team_id": str(getattr(payload, "winner_team_id", ""))
-            if getattr(payload, "winner_team_id", None) is not None
-            else None,
-            "winner_team_name": str(getattr(payload, "winner_team_name", ""))
-            if getattr(payload, "winner_team_name", None) is not None
-            else None,
+            "winner_team_id": (
+                str(getattr(payload, "winner_team_id", ""))
+                if getattr(payload, "winner_team_id", None) is not None
+                else None
+            ),
+            "winner_team_name": (
+                str(getattr(payload, "winner_team_name", ""))
+                if getattr(payload, "winner_team_name", None) is not None
+                else None
+            ),
             "method": getattr(payload, "method", None),
-            "margin": int(getattr(payload, "margin", 0))
-            if getattr(payload, "margin", None) is not None
-            else None,
-            "result_text": str(getattr(payload, "result_text", ""))
-            if getattr(payload, "result_text", None) is not None
-            else None,
+            "margin": (
+                int(getattr(payload, "margin", 0))
+                if getattr(payload, "margin", None) is not None
+                else None
+            ),
+            "result_text": (
+                str(getattr(payload, "result_text", ""))
+                if getattr(payload, "result_text", None) is not None
+                else None
+            ),
             "completed_at": getattr(payload, "completed_at", None),
         }
         # Persist result payload

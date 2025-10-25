@@ -26,7 +26,10 @@ def test_delivery_without_openers(game_helper):
     response = game_helper.post_delivery(batsman_id=striker, bowler_id=bowler, runs_scored=1)
 
     # Should fail with 409 or 422
-    assert response.status_code in [409, 422], f"Expected 409 or 422, got {response.status_code}"
+    assert response.status_code in [
+        409,
+        422,
+    ], f"Expected 409 or 422, got {response.status_code}"
 
 
 def test_invalid_player_id(game_helper):
@@ -62,7 +65,11 @@ def test_delivery_after_wicket_without_selection(game_helper, assert_helper):
 
     # Post a wicket
     response = game_helper.post_delivery(
-        batsman_id=striker, bowler_id=bowler, runs_scored=0, is_wicket=True, dismissal_type="bowled"
+        batsman_id=striker,
+        bowler_id=bowler,
+        runs_scored=0,
+        is_wicket=True,
+        dismissal_type="bowled",
     )
     assert response.status_code == 200
 
@@ -167,7 +174,11 @@ def test_start_innings_without_finishing_first(game_helper):
 
     response = game_helper.client.post(
         f"/games/{game_helper.game_id}/innings/start",
-        json={"striker_id": striker2, "non_striker_id": non_striker2, "opening_bowler_id": bowler2},
+        json={
+            "striker_id": striker2,
+            "non_striker_id": non_striker2,
+            "opening_bowler_id": bowler2,
+        },
     )
 
     # Should either succeed (if allowed) or fail with 400/409

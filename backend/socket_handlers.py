@@ -40,7 +40,9 @@ def register_sio(sio: Any) -> None:
 
         # Tell this client who's here, then broadcast updated presence to the room
         await sio.emit(
-            "presence:init", {"game_id": game_id, "members": _room_snapshot(game_id)}, room=sid
+            "presence:init",
+            {"game_id": game_id, "members": _room_snapshot(game_id)},
+            room=sid,
         )
         await sio.emit(
             "presence:update",

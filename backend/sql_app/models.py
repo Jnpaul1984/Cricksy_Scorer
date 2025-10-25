@@ -64,7 +64,14 @@ def _empty_list() -> list[Any]:
 
 def _empty_extras() -> dict[str, int]:
     # Matches Snapshot.extras shape
-    return {"wides": 0, "no_balls": 0, "byes": 0, "leg_byes": 0, "penalty": 0, "total": 0}
+    return {
+        "wides": 0,
+        "no_balls": 0,
+        "byes": 0,
+        "leg_byes": 0,
+        "penalty": 0,
+        "total": 0,
+    }
 
 
 # -----------------------------
@@ -118,7 +125,9 @@ class Game(Base):
 
     # Align with Snapshot.status
     status: Mapped[GameStatus] = mapped_column(
-        SAEnum(GameStatus, name="game_status"), default=GameStatus.not_started, nullable=False
+        SAEnum(GameStatus, name="game_status"),
+        default=GameStatus.not_started,
+        nullable=False,
     )
 
     # Running total for *current innings* (recomputed when innings changes)
@@ -292,7 +301,10 @@ class Sponsor(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[dt.datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     __table_args__ = (

@@ -28,7 +28,10 @@ def upgrade() -> None:
         sa.Column("game_id", sa.String(), nullable=False),
         sa.Column("sponsor_id", sa.String(), nullable=False),
         sa.Column(
-            "at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.ForeignKeyConstraint(["game_id"], ["games.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["sponsor_id"], ["sponsors.id"], ondelete="CASCADE"),
@@ -36,10 +39,16 @@ def upgrade() -> None:
     )
     op.create_index("ix_sponsor_impressions_at", "sponsor_impressions", ["at"], unique=False)
     op.create_index(
-        op.f("ix_sponsor_impressions_game_id"), "sponsor_impressions", ["game_id"], unique=False
+        op.f("ix_sponsor_impressions_game_id"),
+        "sponsor_impressions",
+        ["game_id"],
+        unique=False,
     )
     op.create_index(
-        "ix_sponsor_impressions_sponsor_id", "sponsor_impressions", ["sponsor_id"], unique=False
+        "ix_sponsor_impressions_sponsor_id",
+        "sponsor_impressions",
+        ["sponsor_id"],
+        unique=False,
     )
     # ### end Alembic commands ###
 

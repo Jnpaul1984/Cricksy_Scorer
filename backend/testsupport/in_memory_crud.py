@@ -31,9 +31,9 @@ class InMemoryCrudRepository:
             id=game_id,
             team_a=team_a,
             team_b=team_b,
-            match_type=game.match_type.value
-            if isinstance(game.match_type, Enum)
-            else str(game.match_type),
+            match_type=(
+                game.match_type.value if isinstance(game.match_type, Enum) else str(game.match_type)
+            ),
             overs_limit=game.overs_limit,
             days_limit=game.days_limit,
             overs_per_day=game.overs_per_day,

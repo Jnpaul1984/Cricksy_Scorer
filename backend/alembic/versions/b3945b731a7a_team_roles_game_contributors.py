@@ -37,7 +37,10 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        op.f("ix_game_contributors_game_id"), "game_contributors", ["game_id"], unique=False
+        op.f("ix_game_contributors_game_id"),
+        "game_contributors",
+        ["game_id"],
+        unique=False,
     )
     op.create_index(
         "ix_game_contributors_unique",

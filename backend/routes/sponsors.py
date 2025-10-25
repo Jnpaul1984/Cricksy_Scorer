@@ -194,7 +194,10 @@ async def get_game_sponsors(
 def sponsors_manifest(brand: str) -> SponsorsManifest:
     items: list[SponsorItem] = [
         SponsorItem(
-            logoUrl=f"/static/sponsors/{brand}/Cricksy.png", alt="Cricksy", rail="left", maxPx=120
+            logoUrl=f"/static/sponsors/{brand}/Cricksy.png",
+            alt="Cricksy",
+            rail="left",
+            maxPx=120,
         ),
         SponsorItem(
             logoUrl=f"/static/sponsors/{brand}/Cricksy_no_bg.png",
@@ -203,14 +206,20 @@ def sponsors_manifest(brand: str) -> SponsorsManifest:
             maxPx=140,
         ),
         SponsorItem(
-            logoUrl=f"/static/sponsors/{brand}/Cricksy_mono.png", alt="Presented by Cricksy"
-        ),
-        SponsorItem(logoUrl="/static/sponsors/cricksy/Cricksy_outline.png", alt="Cricksy outline"),
-        SponsorItem(
-            logoUrl="/static/sponsors/cricksy/Cricksy_Black_&_white.png", alt="Cricksy B/W"
+            logoUrl=f"/static/sponsors/{brand}/Cricksy_mono.png",
+            alt="Presented by Cricksy",
         ),
         SponsorItem(
-            logoUrl="/static/sponsors/cricksy/Cricksy_colored_circle.png", alt="Cricksy circle"
+            logoUrl="/static/sponsors/cricksy/Cricksy_outline.png",
+            alt="Cricksy outline",
+        ),
+        SponsorItem(
+            logoUrl="/static/sponsors/cricksy/Cricksy_Black_&_white.png",
+            alt="Cricksy B/W",
+        ),
+        SponsorItem(
+            logoUrl="/static/sponsors/cricksy/Cricksy_colored_circle.png",
+            alt="Cricksy circle",
         ),
     ]
     return SponsorsManifest(items=items)

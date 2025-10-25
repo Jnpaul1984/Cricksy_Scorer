@@ -70,7 +70,10 @@ async def dls_revised_target(game_id: str, body: DLSRequest, db: AsyncSession = 
     M1 = int(body.max_overs or (g.overs_limit or (50 if body.kind == "odi" else 20)))
     interruptions = list(getattr(g, "interruptions", []))
     R1_total = dlsmod.total_resources_team1(
-        env=env, max_overs_initial=M1, deliveries=deliveries_m, interruptions=interruptions
+        env=env,
+        max_overs_initial=M1,
+        deliveries=deliveries_m,
+        interruptions=interruptions,
     )
 
     S1 = _team1_runs(g)

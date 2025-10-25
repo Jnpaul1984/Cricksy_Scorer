@@ -43,23 +43,27 @@ def upgrade() -> None:
     if _has_column(insp, "games", "status"):
         # Normalize any out-of-range or NULL values so the cast won't fail
         op.execute(
-            sa.text("""
+            sa.text(
+                """
             UPDATE games
             SET status = 'not_started'
             WHERE status IS NULL
                OR status NOT IN ('not_started','in_progress','completed','abandoned')
-        """)
+        """
+            )
         )
 
         # Only alter type if it isn't already the enum
         current_type = bind.execute(
-            sa.text("""
+            sa.text(
+                """
                 SELECT t.typname
                 FROM pg_attribute a
                 JOIN pg_class c ON a.attrelid = c.oid
                 JOIN pg_type  t ON a.atttypid = t.oid
                 WHERE c.relname = 'games' AND a.attname = 'status'
-            """)
+            """
+            )
         ).scalar()
 
         if current_type != "game_status":
@@ -164,7 +168,11 @@ def downgrade() -> None:
     # Cast status back to VARCHAR, then drop enum type
     if _has_column(insp, "games", "status"):
         op.alter_column(
-            "games", "status", existing_type=game_status, type_=sa.VARCHAR(), nullable=True
+            "games",
+            "status",
+            existing_type=game_status,
+            type_=sa.VARCHAR(),
+            nullable=True,
         )
 
     game_status.drop(bind, checkfirst=True)

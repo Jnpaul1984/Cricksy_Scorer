@@ -34,7 +34,10 @@ from backend.socket_handlers import register_sio
 from backend.services.live_bus import set_socketio_server as _set_bus_sio
 
 # Observability and error handling (install on FastAPI app, not ASGI wrapper)
-from backend.middleware.observability import CorrelationIdMiddleware, AccessLogMiddleware  # NEW
+from backend.middleware.observability import (
+    CorrelationIdMiddleware,
+    AccessLogMiddleware,
+)  # NEW
 from backend.error_handlers import install_exception_handlers  # NEW
 
 # Optional in-memory CRUD support
@@ -91,7 +94,9 @@ class _FakeSession:
         return _FakeResult()
 
 
-def create_app(settings_override: Any | None = None) -> tuple[socketio.ASGIApp, FastAPI]:
+def create_app(
+    settings_override: Any | None = None,
+) -> tuple[socketio.ASGIApp, FastAPI]:
     settings = settings_override or default_settings
 
     logging.basicConfig(

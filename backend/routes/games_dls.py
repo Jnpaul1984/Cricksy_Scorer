@@ -180,7 +180,11 @@ def reduce_overs(
 
     publish_game_update(
         game_id,
-        {"type": "overs_reduced", "innings": int(body.innings), "new_balls_limit": balls_limit},
+        {
+            "type": "overs_reduced",
+            "innings": int(body.innings),
+            "new_balls_limit": balls_limit,
+        },
     )
 
     return ReduceOversOut(

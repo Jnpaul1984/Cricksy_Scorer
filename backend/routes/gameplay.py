@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.services.live_bus import emit_state_update
 from backend.sql_app import crud, schemas, models
-from backend.sql_app.database import SessionLocal as _SessionLocal  # async SessionLocal for DI
+from backend.sql_app.database import (
+    SessionLocal as _SessionLocal,
+)  # async SessionLocal for DI
 from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
 from backend.services import game_helpers as gh
 from backend.services.scoring_service import score_one as _score_one
@@ -915,7 +917,8 @@ async def add_delivery(
     )
     if not effective_bowler_id:
         raise HTTPException(
-            status_code=409, detail="Select a bowler before scoring the first ball of the over."
+            status_code=409,
+            detail="Select a bowler before scoring the first ball of the over.",
         )
 
     striker_id_n: str = delivery.striker_id

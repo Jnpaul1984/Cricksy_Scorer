@@ -120,7 +120,8 @@ def validate_no_same_player_batting_and_bowling(
 
     if str(bowler_id) in batsmen:
         raise HTTPException(
-            status_code=422, detail="Same player cannot be batting and bowling simultaneously"
+            status_code=422,
+            detail="Same player cannot be batting and bowling simultaneously",
         )
 
 

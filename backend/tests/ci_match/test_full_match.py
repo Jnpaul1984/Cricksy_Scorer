@@ -265,7 +265,12 @@ def try_start_second_innings(gid: str, batting_team: dict, bowling_team: dict):
         s = snapshot(gid)
         inning = s.get("current_inning") or s.get("inning") or 1
         status = s.get("status") or s.get("game_status")
-        if inning >= 2 and status in ("IN_PROGRESS", "SECOND_INNINGS", "INNINGS_2", "in_progress"):
+        if inning >= 2 and status in (
+            "IN_PROGRESS",
+            "SECOND_INNINGS",
+            "INNINGS_2",
+            "in_progress",
+        ):
             return
         time.sleep(0.1)
 
