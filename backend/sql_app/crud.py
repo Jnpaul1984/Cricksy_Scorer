@@ -35,7 +35,7 @@ def _coerce_result_to_text(value: Any) -> str | None:
         except Exception:
             pass
 
-    # Dict/list â†’ JSON
+    # Dict/list â†' JSON
     if isinstance(value, (dict, list)):
         try:
             return json.dumps(value, ensure_ascii=False)

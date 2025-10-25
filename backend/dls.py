@@ -51,7 +51,7 @@ class ResourceTable:
     def R(self, overs_remaining: float, wickets_lost: int) -> float:
         """
         Return resources remaining (%) for a given (overs_remaining, wickets_lost).
-        Linearâ€‘interpolate on fractional overs; clamp wickets 0..9 and overs 0..max.
+        Linearâ€`interpolate on fractional overs; clamp wickets 0..9 and overs 0..max.
         """
         w = max(0, min(9, wickets_lost))
         if overs_remaining <= 0:
@@ -102,7 +102,7 @@ def wickets_from_ledger(deliveries: Iterable[Mapping[str, Any]]) -> int:
 
 
 def compute_state_from_ledger(deliveries: list[Mapping[str, Any]]) -> InningsState:
-    # Legal deliveries increment balls; wides/noâ€‘balls do not (per your scoring rules)
+    # Legal deliveries increment balls; wides/noâ€`balls do not (per your scoring rules)
     balls = 0
     wkts = 0
     for d in deliveries:
@@ -118,7 +118,7 @@ def compute_state_from_ledger(deliveries: list[Mapping[str, Any]]) -> InningsSta
 # ------------------------------
 # Interruptions model
 # ------------------------------
-# Weâ€™ll rely on a simple history of oversâ€‘limit changes captured at the moment they were applied.
+# Weâ€™ll rely on a simple history of oversâ€`limit changes captured at the moment they were applied.
 # Each record: { "at_delivery_index": int, "new_overs_limit": int }
 Interruption = dict[str, Any]
 
@@ -131,7 +131,7 @@ def total_resources_team1(
     interruptions: list[Interruption],
 ) -> float:
     """
-    Compute Team 1 total resources (%) considering oversâ€‘limit reductions at specific
+    Compute Team 1 total resources (%) considering oversâ€`limit reductions at specific
     moments (with wickets at those moments).
     Implements the â€œresources lostâ€ sum: sum( R(u_before,w) - R(u_after,w) )
     """
@@ -258,8 +258,8 @@ def _load_json_table(path: Path, format_overs: int) -> ResourceTable:
             end_raw = float(series.get(str(format_overs), 0.0))
             denom = start_raw - end_raw if start_raw != end_raw else 1.0
 
-            ob_floor = int(math.floor(overs_bowled))
-            ob_ceil = int(math.ceil(overs_bowled))
+            ob_floor = math.floor(overs_bowled)
+            ob_ceil = math.ceil(overs_bowled)
             ob_floor = max(0, min(format_overs, ob_floor))
             ob_ceil = max(0, min(format_overs, ob_ceil))
 

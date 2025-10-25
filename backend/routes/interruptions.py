@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.sql_app.database import get_db
 from backend.sql_app.models import Game
 
-UTC = getattr(dt, "UTC", dt.timezone.utc)
+UTC = getattr(dt, "UTC", dt.UTC)
 
 router = APIRouter(prefix="/games", tags=["interruptions"])
 
@@ -142,7 +142,7 @@ async def list_interruptions(
 async def start_interruption(
     game_id: str,
     payload: InterruptionStart,
-    request: Request,  # â¬…ï¸ add Request
+    request: Request,  # â¬…ï, add Request
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
@@ -150,7 +150,7 @@ async def start_interruption(
     await db.commit()
     await db.refresh(game)
 
-    # â¬‡ï¸ broadcast so widgets refresh immediately
+    # â¬‡ï, broadcast so widgets refresh immediately
     try:
         sio = request.app.state.sio
         await sio.emit("interruptions:update", {"game_id": game_id}, room=game_id)
@@ -164,7 +164,7 @@ async def start_interruption(
 async def stop_interruption(
     game_id: str,
     payload: InterruptionStop,
-    request: Request,  # â¬…ï¸ add Request
+    request: Request,  # â¬…ï, add Request
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
@@ -172,7 +172,7 @@ async def stop_interruption(
     await db.commit()
     await db.refresh(game)
 
-    # â¬‡ï¸ broadcast so widgets refresh immediately
+    # â¬‡ï, broadcast so widgets refresh immediately
     try:
         sio = request.app.state.sio
         await sio.emit("interruptions:update", {"game_id": game_id}, room=game_id)
@@ -186,7 +186,7 @@ async def stop_interruption(
 async def upsert_interruption(
     game_id: str,
     payload: InterruptionUpsert,
-    request: Request,  # â¬…ï¸ add Request
+    request: Request,  # â¬…ï, add Request
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
@@ -210,7 +210,7 @@ async def upsert_interruption(
     await db.commit()
     await db.refresh(game)
 
-    # â¬‡ï¸ broadcast so widgets refresh immediately
+    # â¬‡ï, broadcast so widgets refresh immediately
     try:
         sio = request.app.state.sio
         await sio.emit("interruptions:update", {"game_id": game_id}, room=game_id)

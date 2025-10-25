@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from typing import Any, TypedDict, cast
 from collections.abc import Sequence
+from typing import Annotated, Any, TypedDict, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -280,11 +280,11 @@ async def post_game_results(
             result_text=result_dict["result_text"],
             completed_at=result_dict["completed_at"],
         )
-    except SQLAlchemyError:
+    except SQLAlchemyError as err:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred updating the game results",
-        )
+        ) from err
 
 
 @router.get("/results")

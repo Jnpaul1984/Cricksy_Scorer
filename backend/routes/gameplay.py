@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import datetime as dt
 from pathlib import Path
-from typing import Any, cast, Literal
 from collections.abc import Mapping, Sequence
+from typing import Annotated, Any, cast, Literal
 
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query

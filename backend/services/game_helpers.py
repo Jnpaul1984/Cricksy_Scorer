@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Game helpers extracted from backend/main.py.
 
@@ -13,6 +11,8 @@ Note: This module intentionally operates on "GameState-like" objects (ORM rows
 or plain dict-like game state used by tests). It keeps the same semantics as
 the originals in main.py.
 """
+
+from __future__ import annotations
 
 import datetime as dt
 from collections import defaultdict
@@ -127,7 +127,7 @@ def _complete_game_by_result(g: Any) -> bool:
     balls_this_over: int = int(getattr(g, "balls_this_over", 0))
     overs_limit: int = int(getattr(g, "overs_limit", 0) or 0)
 
-    # 1) Chasing side has reached or surpassed the target â†’ win by wickets
+    # 1) Chasing side has reached or surpassed the target â†' win by wickets
     if current_runs >= target:
         margin = max(1, 10 - wkts)
         method_typed: schemas.MatchMethod | None = cast(schemas.MatchMethod, "by wickets")
@@ -204,7 +204,7 @@ def _deliveries_for_current_innings(g: Any) -> list[DeliveryDict]:
 
     cur = int(getattr(g, "current_inning", 1) or 1)
     # IMPORTANT: only include deliveries that EXPLICITLY match the current innings.
-    # Treat missing 'inning' as legacy â†’ inns 1, so they won't bleed into inns 2+.
+    # Treat missing 'inning' as legacy â†' inns 1, so they won't bleed into inns 2+.
     return [d for d in rows if int(d.get("inning") or 1) == cur]
 
 

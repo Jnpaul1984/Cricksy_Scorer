@@ -1,8 +1,8 @@
 # backend/routes/roles.py
 from __future__ import annotations
 
-from typing import Any, cast
 from collections.abc import AsyncGenerator
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select, update

@@ -43,7 +43,7 @@ def publish_game_update(game_id: str, payload: dict[str, Any]) -> None:
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            _task = loop.create_task(emit_game_update(game_id, payload))
+            _task = loop.create_task(emit_game_update(game_id, payload))  # noqa: RUF006
     except Exception:
         # No running loop (e.g., threadpool) â€” safe no-op
         pass

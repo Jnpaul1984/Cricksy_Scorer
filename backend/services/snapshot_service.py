@@ -21,7 +21,7 @@ import datetime as dt
 import typing as t
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, Literal, cast, TYPE_CHECKING
 from collections.abc import Mapping
 
 from pydantic import BaseModel
@@ -31,8 +31,6 @@ from backend import dls as dlsmod
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from backend.main import GameState  # type: ignore

@@ -2,7 +2,7 @@
 from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any
 
 from .loader import DLSTable, load_table_from_json
 

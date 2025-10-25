@@ -369,7 +369,7 @@ class Game(BaseModel):
             if s == m.value.lower():
                 return m
 
-        # Map internal â†’ API
+        # Map internal â†' API
         if s in mapping:
             return mapping[s]
 
