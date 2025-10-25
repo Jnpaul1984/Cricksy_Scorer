@@ -1,12 +1,46 @@
+# VCS
+.git
+.gitignore
+.gitattributes
 
-!backend/tests/ci_smoke/fixtures/first_innings_120.json
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+.venv*/
+site/
 
-!backend/tests/ci_smoke/fixtures/second_innings_120.json
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
 
-!backend/
+# Editor/OS
+.DS_Store
+Thumbs.db
 
-!backend/tests/
+# Coverage / Artifacts / Reports
+.coverage
+coverage.xml
+htmlcov/
+artifacts/
+reports/
 
-!backend/tests/ci_smoke/
+# Misc
+.env
+.env.*
+*.log
 
-!backend/tests/ci_smoke/fixtures/
+# Tests (exclude from image)
+backend/tests/
+backend/tests/**
