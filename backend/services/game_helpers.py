@@ -227,11 +227,12 @@ def _dedup_deliveries(g: Any) -> list[DeliveryDict]:
         ball_no = int(d.get("ball_number") or 0)
         x = _norm_extra(d.get("extra_type"))
 
+        k: BallKey
         if x in ("wd", "nb"):
             k = (over_no, ball_no, illegal_seq[(over_no, ball_no)])
             illegal_seq[(over_no, ball_no)] += 1
         else:
-            k = (over_no, ball_no, "L")  # legal
+            k = (over_no, ball_no, cast(Literal["L"], "L"))  # legal
 
         if k not in seen:
             order.append(k)
