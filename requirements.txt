@@ -6,6 +6,7 @@ uvicorn[standard]==0.24.0
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
 asyncpg==0.29.0
+aiosqlite==0.20.0
 
 # Database migrations
 alembic==1.12.1
