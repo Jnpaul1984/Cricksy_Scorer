@@ -97,6 +97,11 @@ class _FakeSession:
     async def execute(self, *args: Any, **kwargs: Any) -> _FakeResult:
         return _FakeResult()
 
+    # ADD THIS: emulate AsyncSession.scalar(...) for in-memory mode
+    async def scalar(self, *args: Any, **kwargs: Any) -> Any | None:
+        # We don't have a real DB in in-memory mode; returning None lets routes 404 cleanly
+        return None
+
 
 def create_app(
     settings_override: Any | None = None,
