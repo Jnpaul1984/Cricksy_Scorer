@@ -6,7 +6,7 @@ from typing import Literal
 # âœ… Import from the correct package path
 # If this file is at backend/services/dls_services.py and your DLS package is backend/services/dls/,
 # then the correct absolute import is:
-from backend.services.dls import load_international_table, calculate_dls_target
+from backend.services.dls import calculate_dls_target, load_international_table
 
 # (If you ever move this into another package level,
 # a relative import would be: from .dls import ...)

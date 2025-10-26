@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.routes import games as _games_impl  # contains create_game_impl
 from backend.sql_app import crud, schemas
 from backend.sql_app.database import get_db
-from backend.routes import games as _games_impl  # contains create_game_impl
 
 router = APIRouter(tags=["games:core"])
 

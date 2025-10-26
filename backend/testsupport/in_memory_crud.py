@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, cast
+import sys
 from enum import Enum
 from importlib import import_module
-import sys
+from typing import Any, cast
 
 from backend.sql_app import crud, models, schemas
 

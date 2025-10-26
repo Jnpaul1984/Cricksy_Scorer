@@ -24,11 +24,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
-from backend.sql_app import crud, schemas
 from backend.services.scoring_service import score_one as _score_one
+from backend.sql_app import crud, schemas
 
 
 async def apply_scoring_and_persist(

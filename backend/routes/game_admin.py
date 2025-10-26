@@ -7,11 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.services import game_helpers as gh
+from backend.services.live_bus import emit_state_update
+from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
 from backend.sql_app import crud, schemas
 from backend.sql_app.database import get_db
-from backend.services import game_helpers as gh
-from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
-from backend.services.live_bus import emit_state_update
 
 router = APIRouter(prefix="/games", tags=["game-admin"])
 

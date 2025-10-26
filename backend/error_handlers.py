@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from starlette import status
 
-
 _log = structlog.get_logger("errors")
 
 

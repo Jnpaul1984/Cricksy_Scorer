@@ -1,44 +1,46 @@
 from __future__ import annotations
 
-from typing import Any, cast
-from collections.abc import AsyncGenerator
-from pathlib import Path
 import logging
 import os
+from collections.abc import AsyncGenerator
+from contextlib import suppress
+from pathlib import Path
+from typing import Any, cast
 
+import socketio  # type: ignore[import-not-found]
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import socketio  # type: ignore[import-not-found]
-
-from backend.config import settings as default_settings
-from contextlib import suppress
-
-# Routers
-from backend.routes.games_router import router as games_router
-from backend.routes.gameplay import router as gameplay_router, get_db as gameplay_get_db  # type: ignore[attr-defined]
-from backend.routes.games_dls import router as games_dls_router
-from backend.routes.dls import router as dls_router
-from backend.routes.game_admin import router as game_admin_router
-from backend.routes.interruptions import router as interruptions_router
-from backend.routes.health import router as health_router
-from backend.routes.sponsors import router as sponsors_router
-from backend.routes.games_core import router as games_core_router  # NEW
 
 # DB dependency and in-memory wiring
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.sql_app.database import get_db as db_get_db, SessionLocal  # type: ignore[unused-ignore]
 
-# Socket handlers and live bus
-from backend.socket_handlers import register_sio
-from backend.services.live_bus import set_socketio_server as _set_bus_sio
+from backend.config import settings as default_settings
+from backend.error_handlers import install_exception_handlers  # NEW
 
 # Observability and error handling (install on FastAPI app, not ASGI wrapper)
 from backend.middleware.observability import (
-    CorrelationIdMiddleware,
     AccessLogMiddleware,
+    CorrelationIdMiddleware,
 )  # NEW
-from backend.error_handlers import install_exception_handlers  # NEW
+from backend.routes.dls import router as dls_router
+from backend.routes.game_admin import router as game_admin_router
+from backend.routes.gameplay import get_db as gameplay_get_db
+from backend.routes.gameplay import router as gameplay_router  # type: ignore[attr-defined]
+from backend.routes.games_core import router as games_core_router  # NEW
+from backend.routes.games_dls import router as games_dls_router
+
+# Routers
+from backend.routes.games_router import router as games_router
+from backend.routes.health import router as health_router
+from backend.routes.interruptions import router as interruptions_router
+from backend.routes.sponsors import router as sponsors_router
+from backend.services.live_bus import set_socketio_server as _set_bus_sio
+
+# Socket handlers and live bus
+from backend.socket_handlers import register_sio
+from backend.sql_app.database import SessionLocal
+from backend.sql_app.database import get_db as db_get_db  # type: ignore[unused-ignore]
 
 # Optional in-memory CRUD support
 InMemoryCrudRepository: Any | None
@@ -46,6 +48,8 @@ enable_in_memory_crud_fn: Any | None
 try:
     from backend.testsupport.in_memory_crud import (
         InMemoryCrudRepository as _IMRepo,
+    )
+    from backend.testsupport.in_memory_crud import (
         enable_in_memory_crud as _enable_fn,
     )
 

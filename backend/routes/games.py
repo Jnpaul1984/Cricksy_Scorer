@@ -9,13 +9,14 @@ decorators and call these functions.
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.sql_app import crud, schemas
-from backend.services import game_service, delivery_service
+from backend.services import delivery_service, game_service
 from backend.services import game_helpers as gh
+from backend.sql_app import crud, schemas
 
 
 async def create_game_impl(payload: Any, db: AsyncSession) -> schemas.Game:

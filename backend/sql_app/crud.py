@@ -1,8 +1,9 @@
 # sql_app/crud.py
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import Any
 import json
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import models, schemas
 

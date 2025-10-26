@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal, cast
-from collections.abc import Mapping
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
