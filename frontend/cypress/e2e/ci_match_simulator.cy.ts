@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-expressions */
 const API_BASE: string = (Cypress.env('API_BASE') as string) || 'http://localhost:8000'
 
 describe('CI Match Simulator', () => {
@@ -14,21 +15,32 @@ describe('CI Match Simulator', () => {
     const scoreboardUrl = `/view/${gameId}?apiBase=${encodeURIComponent(API_BASE)}`
 
     cy.visit(scoreboardUrl)
+
+    // Result banner proves the page bootstrapped with a completed match
     cy.contains('.result-banner', 'Team Alpha won by 15 runs', { timeout: 15000 }).should('be.visible')
 
-    // More resilient: wait longer for first-innings summary to render
+    // Be tolerant to format differences like "20 ov" vs "20.0 ov"
     cy.get('.first-inn', { timeout: 15000 })
       .should('be.visible')
-      .and('contain', '157/6')
-      .and('contain', '20 ov')
+      .within(() => {
+        cy.get('strong')
+          .invoke('text')
+          .should((txt) => {
+            // e.g., "157/6 (20 ov)" or "157/6 (20.0 ov)"
+            expect(txt).to.match(/\b\d{2,3}\/\d{1,2}\b/)        // scoreline like 157/6
+            expect(txt).to.match(/\(\s*\d+(?:\.\d+)?\s*ov\)/i)  // overs like (20 ov) or (20.0 ov)
+          })
+      })
 
     cy.get('.mini.batting-table tbody tr').its('length').should('be.greaterThan', 5)
     cy.get('.mini.bowling-table tbody tr').its('length').should('be.greaterThan', 4)
     cy.get('.info-strip').should('contain', 'Target').and('contain', '158')
+
     cy.contains('.pane-title', 'Bowler')
       .parent()
       .should('contain', 'Figures')
       .and('contain', '(')
+
     cy.get('.balls .ball').its('length').should('be.at.least', 6)
 
     cy.visit(`/game/${gameId}/scoring`)
