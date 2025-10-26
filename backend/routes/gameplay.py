@@ -18,18 +18,10 @@ from backend.services.live_bus import emit_state_update
 from backend.services.scoring_service import score_one as _score_one
 from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
 from backend.sql_app import crud, models, schemas
-from backend.sql_app.database import (
-    SessionLocal as _SessionLocal,
-)  # async SessionLocal for DI
+from backend.sql_app.database import get_db
 
 UTC = getattr(dt, "UTC", dt.UTC)
 router = APIRouter(prefix="/games", tags=["gameplay"])
-
-
-# Local DB dependency mirroring main.get_db
-async def get_db() -> Any:
-    async with _SessionLocal() as session:  # type: ignore[misc]
-        yield session
 
 
 BASE_DIR = Path(__file__).resolve().parent
