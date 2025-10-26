@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 
 
 class DLSTable:

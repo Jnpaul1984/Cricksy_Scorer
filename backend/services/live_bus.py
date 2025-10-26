@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 import asyncio
+from typing import Any
 
 # Match what tests reset and assert
 _sio_server: Any | None = None

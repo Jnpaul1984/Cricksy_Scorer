@@ -10,15 +10,24 @@ over so the module is self-contained and avoids circular imports.
 from __future__ import annotations
 
 from typing import Any, cast
+
 from pydantic import BaseModel
 
 # Centralized constants/rules
 from backend.domain.constants import (
     CREDIT_BOWLER as _CREDIT_BOWLER,
+)
+from backend.domain.constants import (
     INVALID_ON_NO_BALL as _INVALID_ON_NO_BALL,
+)
+from backend.domain.constants import (
     INVALID_ON_WIDE as _INVALID_ON_WIDE,
-    norm_extra as _norm_extra,
+)
+from backend.domain.constants import (
     as_extra_code as _as_extra_code,
+)
+from backend.domain.constants import (
+    norm_extra as _norm_extra,
 )
 
 

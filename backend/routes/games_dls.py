@@ -1,16 +1,18 @@
 # routers/games_dls.py
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, Field
 from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from backend.sql_app import models
-from backend.sql_app.database import get_db
-from backend.services.dls_service import resource_remaining, calc_target
+
+from backend.services.dls_service import calc_target, resource_remaining
 
 # Live-bus broadcast for real-time updates
 from backend.services.live_bus import publish_game_update
+from backend.sql_app import models
+from backend.sql_app.database import get_db
 
 router = APIRouter(prefix="/games", tags=["games:dls"])
 

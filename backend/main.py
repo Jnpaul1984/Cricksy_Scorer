@@ -1,14 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 # App factory builds the ASGI and FastAPI apps (no side effects at import time)
 from backend.app import create_app
+from backend.logging_setup import configure_logging
 from backend.sql_app import crud, models, schemas  # noqa: F401
 from backend.sql_app.database import get_db as get_db
-import logging
-
-from backend.logging_setup import configure_logging
 
 configure_logging(json=True, level=logging.INFO)
 

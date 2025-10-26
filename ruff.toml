@@ -3,7 +3,7 @@ target-version = "py312"
 
 [lint]
 select = ["E", "F", "W", "B", "C4", "SIM", "RUF", "UP"]
-ignore = ["UP038"]
+ignore = ["UP038", "B008"]
 
 [lint.per-file-ignores]
 "backend/routes/*.py" = ["B008"]

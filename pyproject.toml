@@ -27,7 +27,8 @@ select = [
   "RUF", # Ruff-specific
 ]
 # Keep long-line rule relaxed to avoid large diffs right now (revisit later)
-ignore = ["E501", "E203"]
+# B008: Depends() in FastAPI function arguments is the standard pattern
+ignore = ["E501", "E203", "B008"]
 
 [tool.ruff.format]
 quote-style = "double"

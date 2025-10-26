@@ -8,10 +8,9 @@ Create Date: 2025-08-21 18:13:11.587394
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
-
 
 # revision identifiers, used by Alembic.
 revision: str = "8e842aa10dc3"

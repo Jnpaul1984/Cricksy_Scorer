@@ -12,11 +12,11 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import uuid
 import json
+import uuid
 from typing import Any
 
-from backend.sql_app import schemas, crud
+from backend.sql_app import crud, schemas
 from backend.sql_app.database import SessionLocal
 
 

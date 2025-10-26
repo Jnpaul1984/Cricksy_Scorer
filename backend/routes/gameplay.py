@@ -1,35 +1,27 @@
 from __future__ import annotations
 
 import datetime as dt
-from pathlib import Path
 from collections.abc import Mapping, Sequence
-from typing import Annotated, Any, cast, Literal
+from pathlib import Path
+from typing import Annotated, Any, Literal, cast
 
-from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.services.live_bus import emit_state_update
-from backend.sql_app import crud, schemas, models
-from backend.sql_app.database import (
-    SessionLocal as _SessionLocal,
-)  # async SessionLocal for DI
-from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
-from backend.services import game_helpers as gh
-from backend.services.scoring_service import score_one as _score_one
-from backend.services import validation as validation_helpers
-from backend.routes import games as _games_impl
 from backend import dls as dlsmod
 from backend.domain.constants import as_extra_code as norm_extra
+from backend.routes import games as _games_impl
+from backend.services import game_helpers as gh
+from backend.services import validation as validation_helpers
+from backend.services.live_bus import emit_state_update
+from backend.services.scoring_service import score_one as _score_one
+from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
+from backend.sql_app import crud, models, schemas
+from backend.sql_app.database import get_db
 
 UTC = getattr(dt, "UTC", dt.UTC)
 router = APIRouter(prefix="/games", tags=["gameplay"])
-
-
-# Local DB dependency mirroring main.get_db
-async def get_db() -> Any:
-    async with _SessionLocal() as session:  # type: ignore[misc]
-        yield session
 
 
 BASE_DIR = Path(__file__).resolve().parent

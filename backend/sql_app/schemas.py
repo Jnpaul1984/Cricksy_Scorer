@@ -1,12 +1,13 @@
 from __future__ import annotations
-from uuid import UUID
-from pydantic import BaseModel, Field
-from pydantic import field_validator, model_validator
-from pydantic.config import ConfigDict
-from typing import Any, Literal, cast, TypeAlias
-from collections.abc import Sequence, Mapping
-from enum import Enum
+
 import datetime as dt
+from collections.abc import Mapping, Sequence
+from enum import Enum
+from typing import Any, Literal, TypeAlias, cast
+from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic.config import ConfigDict
 
 UTC = getattr(dt, "UTC", dt.UTC)
 TeamItem: TypeAlias = str | UUID | Mapping[str, object]  # noqa: UP040
