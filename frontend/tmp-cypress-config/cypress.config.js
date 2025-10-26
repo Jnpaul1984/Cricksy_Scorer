@@ -1,7 +1,10 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const cypress_1 = require("cypress");
 const node_path_1 = require("node:path");
+
+const cypress_1 = require("cypress");
+
 // @ts-expect-error - runtime helper is generated JS without type declarations
 const matchSimulator_runtime_js_1 = require("./cypress/support/matchSimulator.runtime.js");
 exports.default = (0, cypress_1.defineConfig)({

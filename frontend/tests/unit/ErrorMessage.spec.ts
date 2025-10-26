@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, it, expect } from 'vitest'
+
 import ErrorMessage from '@/components/common/ErrorMessage.vue'
 
 describe('ErrorMessage', () => {
