@@ -4,7 +4,9 @@ import { seedMatch } from "./cypress/support/matchSimulator.runtime.js";
 
 export default defineConfig({
   e2e: {
-    // Add this to give async UI more time across the suite
+    // Helps with sticky/fixed headers and slow async renders
+    viewportWidth: 1600,
+    viewportHeight: 1200,
     defaultCommandTimeout: 15000,
 
     async setupNodeEvents(on, config) {

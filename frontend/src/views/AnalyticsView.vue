@@ -315,7 +315,7 @@ const wagonStrokes = computed(() => {
     if (angle == null || Number.isNaN(Number(angle))) continue
     const runs = Number(d.runs_scored ?? 0)
     const kind = runs === 6 ? '6' : runs === 4 ? '4' : 'other'
-    out.push({ angleDeg: Number(angle), runs, kind })
+  out.push({ angleDeg: Number(angle), runs, kind })
   }
   return out
 })
@@ -330,7 +330,8 @@ const shotMapDeliveries = computed(() => {
 </script>
 
 <template>
-  <main class="container">
+  <!-- add `analytics` class to scope the offset styles to this page -->
+  <main class="container analytics">
     <h1>Match Analytics</h1>
 
     <section class="card">
@@ -481,17 +482,36 @@ const shotMapDeliveries = computed(() => {
 </template>
 
 <style scoped>
+/* Height of your sticky header. Adjust if your header is taller/shorter. */
+:root {
+  --sticky-header-height: 96px;
+}
+
 .container {
   max-width: 1100px;
   margin: 24px auto;
   padding: 0 12px;
 }
+
+/* Apply top padding only on this view so content isn't hidden under the sticky header */
+.analytics {
+  padding-top: var(--sticky-header-height);
+}
+
+/* When scrolled to headings, place them below the sticky header */
+.analytics h1,
+.analytics h2,
+.analytics h3 {
+  scroll-margin-top: var(--sticky-header-height);
+}
+
 .row {
   display: flex;
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
-}.shot-map-list {
+}
+.shot-map-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 12px;
@@ -510,7 +530,6 @@ const shotMapDeliveries = computed(() => {
   color: #475569;
   text-align: center;
 }
-
 
 .card {
   border: 1px solid #e5e7eb;

@@ -11,7 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.sql_app import models, schemas
+# NOTE: add crud here so we can honor in-memory mode via dependency overrides
+from backend.sql_app import models, schemas, crud
 from backend.sql_app.database import get_db  # async generator -> AsyncSession
 
 UTC = getattr(dt, "UTC", dt.UTC)
@@ -181,23 +182,17 @@ async def search_games(
 async def get_game_results(
     game_id: UUID, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> schemas.MatchResult:
-    """Retrieve results for a specific game.
-
-    Decodes the stored JSON and returns it mapped to schemas.MatchResult
-    for a consistent response shape.
-    """
-    res = await db.execute(select(models.Game).where(models.Game.id == str(game_id)))
-    game = res.scalar_one_or_none()
-    if not game or not game.result:
+    """Retrieve results for a specific game (CRUD-backed for in-memory compatibility)."""
+    game = await crud.get_game(db, game_id=str(game_id))
+    if not game or not getattr(game, "result", None):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Results not found for the game",
         )
 
-    payload: dict[str, Any]
-    raw = game.result
+    raw = getattr(game, "result", None)
     try:
-        payload = json.loads(raw)
+        payload: dict[str, Any] = json.loads(raw) if isinstance(raw, str) else (raw or {})
     except Exception:
         payload = {}
 
@@ -234,19 +229,21 @@ async def post_game_results(
     payload: schemas.MatchResultRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> schemas.MatchResult:
-    """Creates or updates results for a specific game"""
+    """Create/update results for a specific game (CRUD-backed for in-memory compatibility)."""
     try:
-        result = await db.execute(select(models.Game).where(models.Game.id == str(game_id)))
-        game = result.scalar_one_or_none()
+        game = await crud.get_game(db, game_id=str(game_id))
         if not game:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
 
-        # Update the game's result
-        result_dict = {
+        result_dict: dict[str, Any] = {
             "match_id": str(payload.match_id),
             "winner": str(payload.winner) if payload.winner is not None else None,
             "team_a_score": int(payload.team_a_score),
-            "team_b_score": payload.team_b_score,
+            "team_b_score": (
+                int(payload.team_b_score)
+                if getattr(payload, "team_b_score", None) is not None
+                else None
+            ),
             "winner_team_id": (
                 str(getattr(payload, "winner_team_id", ""))
                 if getattr(payload, "winner_team_id", None) is not None
@@ -270,23 +267,21 @@ async def post_game_results(
             ),
             "completed_at": getattr(payload, "completed_at", None),
         }
-        # Persist result payload
+
+        # Persist via CRUD so this works with either real DB or in-memory repo
         game.result = json.dumps(result_dict)
-        # Mark game as completed so frontends show the banner immediately
         try:
             game.status = models.GameStatus.completed  # type: ignore[assignment]
         except Exception:
-            # Fallback as string if enum assignment differs
             game.status = getattr(models.GameStatus, "completed", "completed")
         game.is_game_over = True
         try:
             game.completed_at = dt.datetime.now(UTC)
         except Exception:
-            # If timezone not accepted, store naive UTC
             game.completed_at = dt.datetime.now(UTC)
 
-        await db.commit()
-        # Only pass fields that MatchResult expects, with correct types
+        await crud.update_game(db, game_model=game)
+
         return schemas.MatchResult(
             match_id=result_dict["match_id"],  # pyright: ignore[reportCallIssue]
             winner=result_dict["winner"],  # pyright: ignore[reportCallIssue]

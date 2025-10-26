@@ -43,29 +43,57 @@ function buildBattingOrder(innings) {
   return [innings.opening_pair.striker, innings.opening_pair.non_striker, ...remaining]
 }
 
+// Map fixture ball to extra code and runs for posting deliveries
 function normalizeExtra(ball) {
-  const extraType = ball.extraType ? ball.extraType.toLowerCase() : null
-  if (!extraType || ball.extras === 0) {
-    return { code: null, runsScored: ball.runs, runsOffBat: undefined }
+  const extraType = ball.extraType ? String(ball.extraType).toLowerCase() : null
+  if (!extraType || Number(ball.extras || 0) === 0) {
+    return { code: null, runsScored: Number(ball.runs || 0), runsOffBat: undefined }
   }
   switch (extraType) {
     case 'wd':
     case 'wide':
-      return { code: 'wd', runsScored: ball.extras || 1, runsOffBat: undefined }
+      return { code: 'wd', runsScored: Number(ball.extras || 1), runsOffBat: undefined }
     case 'nb':
     case 'no_ball':
     case 'no-ball':
-      return { code: 'nb', runsScored: 0, runsOffBat: ball.runs }
+      return { code: 'nb', runsScored: 0, runsOffBat: Number(ball.runs || 0) }
     case 'b':
     case 'bye':
-      return { code: 'b', runsScored: ball.extras, runsOffBat: undefined }
+      return { code: 'b', runsScored: Number(ball.extras || 0), runsOffBat: undefined }
     case 'lb':
     case 'leg_bye':
     case 'leg-bye':
-      return { code: 'lb', runsScored: ball.extras, runsOffBat: undefined }
+      return { code: 'lb', runsScored: Number(ball.extras || 0), runsOffBat: undefined }
     default:
-      return { code: null, runsScored: ball.runs + ball.extras, runsOffBat: undefined }
+      return { code: null, runsScored: Number((ball.runs || 0) + (ball.extras || 0)), runsOffBat: undefined }
   }
+}
+
+// Compute total runs for an innings using the same scoring semantics
+function inningsTotal(innings) {
+  let total = 0
+  for (const ball of innings.balls) {
+    const et = ball.extraType ? String(ball.extraType).toLowerCase() : null
+    if (!et || Number(ball.extras || 0) === 0) {
+      total += Number(ball.runs || 0)
+    } else if (et === 'wd' || et === 'wide') {
+      total += Number(ball.extras || 1)
+    } else if (et === 'nb' || et === 'no_ball' || et === 'no-ball') {
+      total += 1 + Number(ball.runs || 0)
+    } else if (et === 'b' || et === 'bye' || et === 'lb' || et === 'leg_bye' || et === 'leg-bye') {
+      total += Number(ball.extras || 0)
+    } else {
+      total += Number((ball.runs || 0) + (ball.extras || 0))
+    }
+  }
+  return total
+}
+
+// Best-effort margin extraction from a summary like "Team Alpha won by 15 runs"
+function extractMargin(summary) {
+  if (!summary) return null
+  const m = String(summary).match(/\bby\s+(\d+)\b/i)
+  return m ? Number(m[1]) : null
 }
 
 async function startOver(apiBase, gameId, bowlerId) {
@@ -168,7 +196,7 @@ async function playInnings(apiBase, gameId, innings, battingIds, bowlingIds) {
       await replaceBatter(apiBase, gameId, nextId)
       striker = nextBatter
     } else {
-      const runsForRotation = extraCode === 'nb' ? runsOffBat ?? 0 : runsScored
+      const runsForRotation = extraCode === 'nb' ? (runsOffBat ?? 0) : runsScored
       ;[striker, nonStriker] = rotateStrike(striker, nonStriker, runsForRotation, extraCode)
     }
 
@@ -236,6 +264,33 @@ export async function seedMatch(apiBase, frontendDir) {
     })
 
     await playInnings(apiBase, gameId, innings2, teamBIds, teamAIds)
+
+    // 1) Finalize to compute winner/target state; snapshot/UI need this
+    await httpRequest(apiBase, `/games/${encodeURIComponent(gameId)}/finalize`, {
+      method: 'POST',
+    })
+
+    // 2) Persist result explicitly so GET /games/{id}/results succeeds in any mode
+    const teamAScore = inningsTotal(innings1)
+    const teamBScore = inningsTotal(innings2)
+    const winnerName = String(fixture?.result?.winner || teamAName) // fallback
+    const resultText = String(fixture?.result?.summary || `${winnerName} won`)
+    const margin = extractMargin(fixture?.result?.summary || '')
+
+    await httpRequest(apiBase, `/games/${encodeURIComponent(gameId)}/results`, {
+      method: 'POST',
+      body: {
+        match_id: gameId,
+        winner: winnerName,                 // optional in schema; safe to include
+        team_a_score: teamAScore,           // required by MatchResultRequest
+        team_b_score: teamBScore,           // required by MatchResultRequest
+        winner_team_name: winnerName,       // helps consumers
+        method: 'normal',
+        margin,
+        result_text: resultText,
+        completed_at: null,
+      },
+    })
 
     return { gameId }
   } catch (err) {
