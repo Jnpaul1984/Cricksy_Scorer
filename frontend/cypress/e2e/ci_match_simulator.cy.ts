@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 const API_BASE: string =
   (Cypress.env('API_BASE') as string) || 'http://localhost:8000'
+const API_BASE_ROOT = API_BASE.replace(/\/+$/, '')
 
 describe('CI Match Simulator', () => {
   let gameId: string
@@ -61,11 +62,20 @@ describe('CI Match Simulator', () => {
       cy.contains('Bowling').should('exist')
     })
 
-    // Analytics — pass apiBase so search hits the backend
+    // Analytics -- pass apiBase so search hits the backend
+    cy.intercept('GET', `${API_BASE_ROOT}/games/search*`).as('searchGames')
     cy.visit(`/analytics?apiBase=${encodeURIComponent(API_BASE)}`)
     cy.get('input[placeholder="Team A name"]').clear().type('Team Alpha')
     cy.get('input[placeholder="Team B name"]').clear().type('Team Beta')
     cy.contains('button', 'Search').click()
+
+    cy.wait('@searchGames')
+      .its('response.body')
+      .then((body) => {
+        cy.log(`search body: ${JSON.stringify(body)}`)
+        expect(body, 'search results body').to.be.an('array').and.not.be.empty
+      })
+
     cy.contains('.result-list button', 'Team Alpha vs Team Beta', {
       timeout: 15000,
     }).click()

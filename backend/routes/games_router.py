@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Annotated, Any, TypedDict, cast
 from uuid import UUID
 
@@ -101,16 +101,44 @@ async def set_playing_xi_alias(
     return await set_playing_xi(game_id, payload, db)
 
 
+def _name(obj: Any, fallback: str = "") -> str:
+    """
+    Extract a team name from JSON columns that might be dicts, strings, or legacy values.
+    """
+    if obj is None:
+        return fallback
+
+    if isinstance(obj, str):
+        if not obj:
+            return fallback
+        try:
+            parsed = json.loads(obj)
+        except ValueError:
+            return obj
+        obj = parsed
+
+    if isinstance(obj, Mapping):
+        value = obj.get("name") or fallback
+        if value:
+            return str(value)
+
+    return fallback
+
+
 @router.get("/search")
 async def search_games(
     db: Annotated[AsyncSession, Depends(get_db)],
     team_a: str | None = None,
     team_b: str | None = None,
 ) -> Sequence[dict[str, Any]]:
-    res = await db.execute(select(models.Game))
-    rows = list(res.scalars().all())
+    try:
+        res = await db.execute(select(models.Game))
+        rows = list(res.scalars().all())
+    except Exception:
+        # In-memory mode or DB unavailable: return empty list
+        return []
 
-    def _name(x: dict[str, Any] | None) -> str:
+    def _name2(x: dict[str, Any] | None) -> str:
         try:
             return str((x or {}).get("name") or "")
         except Exception:
@@ -121,19 +149,15 @@ async def search_games(
 
     out: list[dict[str, Any]] = []
     for g in rows:
-        ta = _name(getattr(g, "team_a", {}))
-        tb = _name(getattr(g, "team_b", {}))
-        ta_l = ta.lower()
-        tb_l = tb.lower()
-
+        ta = _name2(getattr(g, "team_a", {}))
+        tb = _name2(getattr(g, "team_b", {}))
         ok = True
         if ta_f:
-            ok = ok and (ta_f in ta_l or ta_f in tb_l)
+            ok = ok and (ta_f in ta.lower() or ta_f in tb.lower())
         if tb_f:
-            ok = ok and (tb_f in ta_l or tb_f in tb_l)
+            ok = ok and (tb_f in ta.lower() or tb_f in tb.lower())
         if not ok:
             continue
-
         out.append(
             {
                 "id": getattr(g, "id", None),
@@ -145,7 +169,6 @@ async def search_games(
                 "total_wickets": getattr(g, "total_wickets", None),
             }
         )
-
     return out
 
 
@@ -177,7 +200,7 @@ async def get_game_results(
 
     return schemas.MatchResult(
         winner_team_id=str(winner_team_id) if winner_team_id is not None else None,
-        winner_team_name=str(winner_team_name) if winner_team_name is not None else None,
+        winner_team_name=(str(winner_team_name) if winner_team_name is not None else None),
         method=payload.get("method"),
         margin=margin,
         result_text=str(result_text) if result_text is not None else None,
@@ -199,13 +222,30 @@ async def post_game_results(
     Create/update results for a specific game (CRUD-backed).
     Computes a sensible result_text if not provided.
     """
-    try:
-        game = await crud.get_game(db, game_id=str(game_id))
-        if not game:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
+    game = await crud.get_game(db, game_id=str(game_id))
+    if not game:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game not found",
+        )
 
-        ta = int(payload.team_a_score)
-        tb = int(payload.team_b_score or 0)
+    try:
+        ta: int = int(payload.team_a_score)
+        tb_opt = payload.team_b_score
+        tb: int = int(tb_opt) if tb_opt is not None else 0
+        tb_missing = tb_opt is None
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid scores provided",
+        ) from None
+
+    try:
+        # Optional: persist scores if your model has these columns
+        if hasattr(game, "team_a_score"):
+            game.team_a_score = ta  # type: ignore[attr-defined]
+        if hasattr(game, "team_b_score"):
+            game.team_b_score = None if tb_missing else tb  # type: ignore[attr-defined]
 
         def _team_name(obj: Any, key_json: str, key_legacy: str) -> str:
             try:
@@ -234,7 +274,7 @@ async def post_game_results(
         margin = payload.margin
         result_text = payload.result_text
 
-        # If anything essential is missing, compute simple “by runs”/“tie”.
+        # If anything essential is missing, compute simple “by runs”/“tied”.
         if not method_val or margin is None or not result_text:
             if ta > tb:
                 margin = ta - tb
@@ -257,7 +297,7 @@ async def post_game_results(
             "match_id": str(payload.match_id),
             "winner": (payload.winner or winner_name or None),
             "team_a_score": ta,
-            "team_b_score": tb if payload.team_b_score is not None else None,
+            "team_b_score": (int(tb_opt) if tb_opt is not None else None),
             "winner_team_id": getattr(payload, "winner_team_id", None) or None,
             "winner_team_name": winner_name or None,
             "method": method_val,
