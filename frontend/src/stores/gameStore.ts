@@ -2,7 +2,7 @@
 /* eslint-disable import/order */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 // ---- UI domain types
 import type {
@@ -504,6 +504,34 @@ export const useGameStore = defineStore('game', () => {
       ''
     )
   })
+
+  async function ensureResultForCompletedGame(): Promise<void> {
+    const id = currentGame.value?.id
+    if (!id) return
+
+    const alreadyHasText = Boolean(String(resultText.value || '').trim())
+    const completed = isGameOver.value || normalizeStatus(currentGame.value?.status) === 'completed'
+    if (!completed || alreadyHasText) return
+
+    try {
+      const res = await apiService.getResults(id)
+      if (res && typeof res === 'object') {
+        ;(currentGame.value as any).result = res
+        ;(currentGame.value as any).is_game_over = true
+        if (!currentGame.value?.status) {
+          ;(currentGame.value as any).status = 'completed'
+        }
+      }
+    } catch {
+      /* noop – banner remains hidden unless snapshot later includes result */
+    }
+  }
+
+  watch(
+    [() => currentGame.value?.id, isGameOver, resultText],
+    () => { void ensureResultForCompletedGame() },
+    { flush: 'post' }
+  )
 
   // Convenience aliases expected by some components
   const currentStriker = computed<Player | null>(() => {

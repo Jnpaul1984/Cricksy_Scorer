@@ -1,5 +1,7 @@
-﻿// src/utils/api.ts
+﻿﻿// src/utils/api.ts
 // Single, canonical API client aligned with FastAPI backend & the Pinia game store.
+
+import type { MatchResult } from '@/types'  // ⬅️ ADDED
 
 const ENV_API_BASE =
   (typeof import.meta !== 'undefined' &&
@@ -85,7 +87,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 /* ----------------------------- Types (client) ----------------------------- */
 
-// Create game â€” mirrors backend CreateGameRequest in main.py
+// Create game — mirrors backend CreateGameRequest in main.py
 export type MatchType = 'limited' | 'multi_day' | 'custom';
 export type Decision = 'bat' | 'bowl';
 export type ExtraCode = 'nb' | 'wd' | 'b' | 'lb';
@@ -118,7 +120,7 @@ export interface GameMinimal {
   [k: string]: any;
 }
 
-// Score a delivery â€” mirrors backend schemas.ScoreDelivery in main.py
+// Score a delivery — mirrors backend schemas.ScoreDelivery in main.py
 export interface ScoreDeliveryRequest {
   striker_id: string;
   non_striker_id: string;
@@ -141,7 +143,7 @@ export interface ScoreDeliveryRequest {
   shot_map?: string | null;
 }
 
-// Snapshot â€” shape can vary; we keep it open but document common fields
+// Snapshot — shape can vary; we keep it open but document common fields
 export interface Snapshot {
   id?: string;
   status?: string;
@@ -349,7 +351,7 @@ async function openInterruption(
   }
 }
 
-/** POST /interruptions/stop â€” omit {"kind": null}. Accepts JSON, falls back to empty body. */
+/** POST /interruptions/stop — omit {"kind": null}. Accepts JSON, falls back to empty body. */
 async function stopInterruption(
   gameId: string,
   kind?: 'weather' | 'injury' | 'light' | 'other'
@@ -363,7 +365,7 @@ async function stopInterruption(
     return await request(path, { method: 'POST' }) as any
   } catch (e: any) {
     const msg = (e?.detail || e?.message || '').toString().toLowerCase()
-    // treat â€œno active interruptionâ€ as success
+    // treat “no active interruption” as success
     if (e?.status === 400 && (msg.includes('no active') || msg.includes('already stopped'))) {
       return { ok: true, interruptions: [] }
     }
@@ -452,6 +454,16 @@ export const apiService = {
   getSnapshot: (gameId: string) =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/snapshot`),
 
+  // ⬇️ ADDED: fetch persisted result for a completed game; returns null on 404
+  async getResults(gameId: string): Promise<MatchResult | null> {
+    try {
+      return await request<MatchResult>(`/games/${encodeURIComponent(gameId)}/results`)
+    } catch (e: any) {
+      if (e?.status === 404) return null
+      return null
+    }
+  },
+
   searchGames: (team_a?: string, team_b?: string) => {
     const qp = new URLSearchParams()
     if (team_a) qp.set('team_a', team_a)
@@ -503,30 +515,30 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
       { method: 'POST', body: JSON.stringify(body) },
     ),
 
-  /* ðŸ”µ Over gates */
-  // Start a new over (select bowler) â€” matches POST /games/{id}/overs/start
+  /* 🔧 Over gates */
+  // Start a new over (select bowler) — matches POST /games/{id}/overs/start
   startOver: (gameId: string, bowler_id: string) =>
     request<{ ok: true; current_bowler_id: string }>(
       `/games/${encodeURIComponent(gameId)}/overs/start`,
       { method: 'POST', body: JSON.stringify({ bowler_id } as StartOverBody) },
     ),
 
-  // Mid-over change (injury/other) â€” matches POST /games/{id}/overs/change_bowler
+  // Mid-over change (injury/other) — matches POST /games/{id}/overs/change_bowler
   changeBowlerMidOver: (gameId: string, new_bowler_id: string, reason: 'injury' | 'other' = 'injury') =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/overs/change_bowler`, {
       method: 'POST',
       body: JSON.stringify({ new_bowler_id, reason } as MidOverChangeBody),
     }),
 
-  /* ðŸŸ¢ Batter gates */
-  // Replace the out batter before next ball â€” POST /games/{id}/batters/replace
+  /* 🧢 Batter gates */
+  // Replace the out batter before next ball — POST /games/{id}/batters/replace
   replaceBatter: (gameId: string, new_batter_id: string) =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/batters/replace`, {
       method: 'POST',
       body: JSON.stringify({ new_batter_id } as ReplaceBatterBody),
     }),
 
-  // Explicitly set â€œnext batterâ€ (optional QoL) â€” POST /games/{id}/next-batter
+  // Explicitly set “next batter” (optional QoL) — POST /games/{id}/next-batter
   setNextBatter: (gameId: string, batter_id: string) =>
     request<{ ok: true; current_striker_id: string }>(
       `/games/${encodeURIComponent(gameId)}/next-batter`,
@@ -552,7 +564,7 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
     ),
 
 
-  // Set openers (optional QoL) â€” POST /games/{id}/openers
+  // Set openers (optional QoL) — POST /games/{id}/openers
   setOpeners: (gameId: string, body: OpenersBody) =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/openers`, {
       method: 'POST',
