@@ -281,12 +281,26 @@ class MatchResult(BaseModel):
     result_text: str | None = None
     completed_at: dt.datetime | None = None
 
+    # NEW: tolerate extra keys defensively
+    model_config = ConfigDict(extra="ignore")
+
 
 class MatchResultRequest(BaseModel):
     match_id: UUID  # ... existing code ...
-    winner: str | None = None  # ID of the winning team or None for a draw
+    winner: str | None = None  # ID or name of the winning team or None for tie/no result
     team_a_score: int  # Total score of Team A
-    team_b_score: int  # Total score of Team B
+    team_b_score: int | None = None  # Total score of Team B (nullable for incomplete)
+
+    # NEW optional fields accepted by POST /games/{id}/results
+    winner_team_id: str | None = None
+    winner_team_name: str | None = None
+    method: MatchMethod | str | None = None
+    margin: int | None = None
+    result_text: str | None = None
+    completed_at: dt.datetime | None = None
+
+    # Allow unknown extras without 422s
+    model_config = ConfigDict(extra="allow")
 
 
 class Game(BaseModel):
@@ -370,7 +384,7 @@ class Game(BaseModel):
             if s == m.value.lower():
                 return m
 
-        # Map internal â†' API
+        # Map internal → API
         if s in mapping:
             return mapping[s]
 

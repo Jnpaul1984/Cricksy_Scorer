@@ -17,14 +17,6 @@ from backend.sql_app.database import get_db  # async generator -> AsyncSession
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
-# Ensure schemas.MatchResultRequest is imported and defined
-# If not, add the following to sql_app/schemas.py:
-# class MatchResultRequest(BaseModel):
-#     match_id: UUID
-#     winner: str
-#     team_a_score: int
-#     team_b_score: int
-
 router = APIRouter(prefix="/games", tags=["games"])
 
 
@@ -40,19 +32,9 @@ class TeamJSON(TypedDict, total=False):
 
 
 def _ids_from_team_json(team_json: dict[str, Any] | None) -> set[str]:
-    """
-    Expected shape in DB JSON:
-      {
-        "name": "Team A",
-        "players": [{"id": "<uuid>", "name": "..."}, ...]
-      }
-    """
     if not team_json:
         return set()
-
-    # Keep this cast: it tells Pylance 'players' is a list of PlayerJSON
     players: Sequence[PlayerJSON] = cast(Sequence[PlayerJSON], team_json.get("players") or [])
-
     ids: set[str] = set()
     for p in players:
         pid = p.get("id")
@@ -67,13 +49,11 @@ async def set_playing_xi(
     payload: schemas.PlayingXIRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> schemas.PlayingXIResponse:
-    # Fetch game (async)
     result = await db.execute(select(models.Game).where(models.Game.id == str(game_id)))
     game = result.scalar_one_or_none()
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    # Typed JSON copies to keep Pylance happy
     team_a_json: dict[str, Any] = (game.team_a or {}).copy()
     team_b_json: dict[str, Any] = (game.team_b or {}).copy()
 
@@ -97,26 +77,21 @@ async def set_playing_xi(
             detail={"error": "Unknown players in team B XI", "ids": unknown},
         )
 
-    # Persist XI lists into JSON blobs
     team_a_json["playing_xi"] = list(req_a)
     team_b_json["playing_xi"] = list(req_b)
 
-    # Assign back to ORM instance
     game.team_a = team_a_json
     game.team_b = team_b_json
 
-    # Captain / Keeper columns (Text/nullable on your model)
     game.team_a_captain_id = str(payload.captain_a) if payload.captain_a else None
     game.team_a_keeper_id = str(payload.keeper_a) if payload.keeper_a else None
     game.team_b_captain_id = str(payload.captain_b) if payload.captain_b else None
     game.team_b_keeper_id = str(payload.keeper_b) if payload.keeper_b else None
 
     await db.commit()
-
     return schemas.PlayingXIResponse(ok=True, game_id=game_id)
 
 
-# Optional alias for underscore path
 @router.post("/{game_id}/playing_xi", response_model=schemas.PlayingXIResponse)
 async def set_playing_xi_alias(
     game_id: UUID,
@@ -132,10 +107,6 @@ async def search_games(
     team_a: str | None = None,
     team_b: str | None = None,
 ) -> Sequence[dict[str, Any]]:
-    """
-    Minimal search by team names (case-insensitive contains) without requiring game IDs.
-    Filters in Python for portability; optimize later with JSONB paths if needed.
-    """
     res = await db.execute(select(models.Game))
     rows = list(res.scalars().all())
 
@@ -180,9 +151,10 @@ async def search_games(
 
 @router.get("/{game_id}/results", response_model=schemas.MatchResult)
 async def get_game_results(
-    game_id: UUID, db: Annotated[AsyncSession, Depends(get_db)]
+    game_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> schemas.MatchResult:
-    """Retrieve results for a specific game (CRUD-backed for in-memory compatibility)."""
+    """Retrieve results for a specific game (CRUD-backed)."""
     game = await crud.get_game(db, game_id=str(game_id))
     if not game or not getattr(game, "result", None):
         raise HTTPException(
@@ -199,22 +171,16 @@ async def get_game_results(
     margin_raw = payload.get("margin")
     margin = int(margin_raw) if margin_raw is not None else None
 
+    winner_team_id = payload.get("winner_team_id")
+    winner_team_name = payload.get("winner_team_name")
+    result_text = payload.get("result_text")
+
     return schemas.MatchResult(
-        winner_team_id=(
-            str(payload.get("winner_team_id"))
-            if payload.get("winner_team_id") is not None
-            else None
-        ),
-        winner_team_name=(
-            str(payload.get("winner_team_name"))
-            if payload.get("winner_team_name") is not None
-            else None
-        ),
+        winner_team_id=str(winner_team_id) if winner_team_id is not None else None,
+        winner_team_name=str(winner_team_name) if winner_team_name is not None else None,
         method=payload.get("method"),
         margin=margin,
-        result_text=(
-            str(payload.get("result_text")) if payload.get("result_text") is not None else None
-        ),
+        result_text=str(result_text) if result_text is not None else None,
         completed_at=payload.get("completed_at"),
     )
 
@@ -229,47 +195,78 @@ async def post_game_results(
     payload: schemas.MatchResultRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> schemas.MatchResult:
-    """Create/update results for a specific game (CRUD-backed for in-memory compatibility)."""
+    """
+    Create/update results for a specific game (CRUD-backed).
+    Computes a sensible result_text if not provided.
+    """
     try:
         game = await crud.get_game(db, game_id=str(game_id))
         if not game:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
 
+        ta = int(payload.team_a_score)
+        tb = int(payload.team_b_score or 0)
+
+        def _team_name(obj: Any, key_json: str, key_legacy: str) -> str:
+            try:
+                v = (getattr(obj, key_json, {}) or {}).get("name") or getattr(obj, key_legacy, None)
+                return str(v or "")
+            except Exception:
+                return ""
+
+        team_a_name = _team_name(game, "team_a", "team_a_name") or "Team A"
+        team_b_name = _team_name(game, "team_b", "team_b_name") or "Team B"
+
+        # Winner name: prefer explicit winner_team_name, then 'winner' string.
+        winner_name: str = (payload.winner_team_name or payload.winner or "").strip()
+        if not winner_name:
+            winner_name = team_a_name if ta >= tb else team_b_name
+
+        # Derive method as Optional[str] first; ensure str before persisting.
+        method_val: str | None
+        if isinstance(payload.method, schemas.MatchMethod):
+            method_val = payload.method.value
+        elif payload.method is None:
+            method_val = None
+        else:
+            method_val = str(payload.method)
+
+        margin = payload.margin
+        result_text = payload.result_text
+
+        # If anything essential is missing, compute simple “by runs”/“tie”.
+        if not method_val or margin is None or not result_text:
+            if ta > tb:
+                margin = ta - tb
+                method_val = method_val or schemas.MatchMethod.by_runs.value
+                winner_name = winner_name or team_a_name
+                result_text = result_text or f"{winner_name} won by {margin} runs"
+            elif tb > ta:
+                margin = tb - ta
+                method_val = method_val or schemas.MatchMethod.by_runs.value
+                winner_name = winner_name or team_b_name
+                result_text = result_text or f"{winner_name} won by {margin} runs"
+            else:
+                method_val = schemas.MatchMethod.tie.value
+                margin = 0
+                winner_name = ""  # no winner label for a tie
+                result_text = result_text or "Match tied"
+
+        # At this point: method_val is str, result_text is str, margin is int.
         result_dict: dict[str, Any] = {
             "match_id": str(payload.match_id),
-            "winner": str(payload.winner) if payload.winner is not None else None,
-            "team_a_score": int(payload.team_a_score),
-            "team_b_score": (
-                int(payload.team_b_score)
-                if getattr(payload, "team_b_score", None) is not None
-                else None
-            ),
-            "winner_team_id": (
-                str(getattr(payload, "winner_team_id", ""))
-                if getattr(payload, "winner_team_id", None) is not None
-                else None
-            ),
-            "winner_team_name": (
-                str(getattr(payload, "winner_team_name", ""))
-                if getattr(payload, "winner_team_name", None) is not None
-                else None
-            ),
-            "method": getattr(payload, "method", None),
-            "margin": (
-                int(getattr(payload, "margin", 0))
-                if getattr(payload, "margin", None) is not None
-                else None
-            ),
-            "result_text": (
-                str(getattr(payload, "result_text", ""))
-                if getattr(payload, "result_text", None) is not None
-                else None
-            ),
+            "winner": (payload.winner or winner_name or None),
+            "team_a_score": ta,
+            "team_b_score": tb if payload.team_b_score is not None else None,
+            "winner_team_id": getattr(payload, "winner_team_id", None) or None,
+            "winner_team_name": winner_name or None,
+            "method": method_val,
+            "margin": int(margin) if margin is not None else None,
+            "result_text": result_text,
             "completed_at": getattr(payload, "completed_at", None),
         }
 
-        # Persist via CRUD so this works with either real DB or in-memory repo
-        game.result = json.dumps(result_dict)
+        game.result = json.dumps(result_dict, ensure_ascii=False)
         try:
             game.status = models.GameStatus.completed  # type: ignore[assignment]
         except Exception:
@@ -283,9 +280,6 @@ async def post_game_results(
         await crud.update_game(db, game_model=game)
 
         return schemas.MatchResult(
-            match_id=result_dict["match_id"],  # pyright: ignore[reportCallIssue]
-            winner=result_dict["winner"],  # pyright: ignore[reportCallIssue]
-            team_a_score=result_dict["team_a_score"],  # pyright: ignore[reportCallIssue]
             winner_team_id=result_dict["winner_team_id"],
             winner_team_name=result_dict["winner_team_name"],
             method=result_dict["method"],
@@ -320,14 +314,12 @@ async def list_game_results(
         except Exception:
             data = {}
 
-        # Ensure minimal keys exist for the caller expectations
         item: dict[str, Any] = {
             "match_id": str(data.get("match_id", g.id)),
             "winner": data.get("winner"),
             "team_a_score": int(data.get("team_a_score") or 0),
             "team_b_score": int(data.get("team_b_score") or 0),
         }
-        # Include any extra fields if present (non-breaking for clients)
         for k in (
             "winner_team_id",
             "winner_team_name",
@@ -338,7 +330,6 @@ async def list_game_results(
         ):
             if k in data:
                 item[k] = data[k]
-
         out.append(item)
 
     return out
