@@ -131,12 +131,52 @@ async def search_games(
     team_a: str | None = None,
     team_b: str | None = None,
 ) -> Sequence[dict[str, Any]]:
+    rows = None
+
+    # If we're running in the in-memory test mode, prefer the in-memory repo
+    # first so seeded matches are visible to search without touching the DB.
     try:
-        res = await db.execute(select(models.Game))
-        rows = await res.scalars().all()
+        import backend.app as backend_app
+
+        repo = getattr(backend_app, "_memory_repo", None)
+        if repo is not None:
+            try:
+                # prefer the helper that returns only games with a stored result
+                rows = await repo.list_games_with_result()
+            except Exception:
+                try:
+                    rows = list(repo._games.values())
+                except Exception:
+                    rows = None
     except Exception:
-        # In-memory mode or DB unavailable: return empty list
-        return []
+        rows = None
+
+    # If not using in-memory repo, fall back to DB query and then try in-memory
+    # if DB is unavailable or returns nothing.
+    if rows is None:
+        try:
+            res = await db.execute(select(models.Game))
+            rows = await res.scalars().all()
+        except Exception:
+            rows = None
+
+        if not rows:
+            try:
+                import backend.app as backend_app
+
+                repo = getattr(backend_app, "_memory_repo", None)
+                if repo is not None:
+                    try:
+                        rows = list(repo._games.values())
+                    except Exception:
+                        rows = None
+                    if not rows and hasattr(repo, "list_games_with_result"):
+                        try:
+                            rows = await repo.list_games_with_result()
+                        except Exception:
+                            rows = rows or []
+            except Exception:
+                rows = rows or []
 
     def _name2(x: dict[str, Any] | None) -> str:
         try:
@@ -146,6 +186,21 @@ async def search_games(
 
     ta_f = (team_a or "").strip().lower()
     tb_f = (team_b or "").strip().lower()
+
+    # Debug: indicate what rows we are about to iterate (helps diagnose in-memory vs DB)
+    try:
+        if rows is None:
+            print("DEBUG: search rows is None")
+        else:
+            try:
+                ln = len(rows) if hasattr(rows, "__len__") else "?"
+            except Exception:
+                ln = "?"
+            print("DEBUG: search rows type:", type(rows), "len:", ln)
+    except Exception:
+        pass
+    # Ensure rows is an iterable for the loop (avoid mypy union-attr error)
+    rows = rows or []
 
     out: list[dict[str, Any]] = []
     for g in rows:
@@ -372,6 +427,9 @@ async def list_game_results(
                 rows = await repo.list_games_with_result()
         except Exception:
             rows = rows or []
+
+    # Make sure rows is iterable for the loop (fix mypy union-attr error)
+    rows = rows or []
 
     out: list[dict[str, Any]] = []
     for g in rows:
