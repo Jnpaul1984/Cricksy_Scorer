@@ -10,40 +10,44 @@ from . import models, schemas
 
 def _coerce_result_to_text(value: Any) -> str | None:
     """
-    Your DB column 'games.result' is TEXT/VARCHAR. Ensure we always write a string.
-    Prefer a human-readable 'result_text' when present (e.g. 'Alpha won by 3 runs').
-    Otherwise stringify or JSON-dump as a last resort.
+    The games.result column is stored as TEXT. Preserve structured payloads whenever possible
+    so downstream consumers can deserialize them back into rich objects.
     """
     if value is None:
         return None
 
-    # Pydantic v2 model?
-    try:
-        if hasattr(value, "model_dump"):
+    if isinstance(value, str):
+        return value
+
+    # Pydantic models expose model_dump(); prefer full JSON for round-tripping.
+    if hasattr(value, "model_dump"):
+        try:
+            data = value.model_dump(mode="json")
+        except Exception:
             data = value.model_dump()
-            if isinstance(data, dict) and data.get("result_text"):
-                return str(data["result_text"])
-            return json.dumps(data, ensure_ascii=False)
+        return json.dumps(data, ensure_ascii=False, default=str)
+
+    # Dataclasses can be serialized via asdict
+    try:
+        from dataclasses import asdict, is_dataclass
+
+        if is_dataclass(value):
+            return json.dumps(asdict(value), ensure_ascii=False)
     except Exception:
         pass
 
-    # Plain dataclass / object with attribute
-    if hasattr(value, "result_text"):
+    if hasattr(value, "__dict__"):
         try:
-            rt = value.result_text
-            if rt:
-                return str(rt)
+            return json.dumps(vars(value), ensure_ascii=False, default=str)
         except Exception:
             pass
 
-    # Dict/list â†' JSON
-    if isinstance(value, (dict, list)):
+    if isinstance(value, (dict, list, tuple)):
         try:
-            return json.dumps(value, ensure_ascii=False)
+            return json.dumps(value, ensure_ascii=False, default=str)
         except Exception:
             pass
 
-    # Enum? (e.g., value.value)
     try:
         import enum
 
@@ -52,7 +56,6 @@ def _coerce_result_to_text(value: Any) -> str | None:
     except Exception:
         pass
 
-    # Fallback: plain string
     return str(value)
 
 

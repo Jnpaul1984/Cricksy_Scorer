@@ -21,6 +21,7 @@ Notes:
 from __future__ import annotations
 
 import datetime as dt
+import json
 import typing as t
 from collections import defaultdict
 from collections.abc import Mapping
@@ -457,6 +458,11 @@ def build_snapshot(
     res_any = getattr(g, "result", None)
     if isinstance(res_any, BaseModel):
         snapshot["result"] = res_any.model_dump()
+    elif isinstance(res_any, str):
+        try:
+            snapshot["result"] = json.loads(res_any)
+        except Exception:
+            snapshot["result"] = {"result_text": res_any}
     else:
         snapshot["result"] = res_any
     snapshot["completed_at"] = getattr(g, "completed_at", None)

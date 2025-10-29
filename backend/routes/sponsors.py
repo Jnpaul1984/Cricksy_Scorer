@@ -167,7 +167,7 @@ async def get_game_sponsors(
         .order_by(Sponsor.weight.desc(), Sponsor.created_at.desc())
     )
     res = await db.execute(stmt)
-    rows = res.scalars().all()
+    rows = await res.scalars().all()
 
     out: list[dict[str, Any]] = []
     for r in rows:
@@ -247,7 +247,7 @@ async def log_sponsor_impressions(
     sponsor_ids = {it.sponsor_id for it in items}
 
     res_games = await db.execute(select(models.Game.id).where(models.Game.id.in_(list(game_ids))))
-    found_games = {g for (g,) in res_games.all()}
+    found_games = {g for (g,) in await res_games.all()}
     missing_games = [g for g in game_ids if g not in found_games]
     if missing_games:
         raise HTTPException(status_code=400, detail=f"Unknown game_id(s): {missing_games}")
@@ -255,7 +255,7 @@ async def log_sponsor_impressions(
     res_sps = await db.execute(
         select(models.Sponsor.id).where(models.Sponsor.id.in_(list(sponsor_ids)))
     )
-    found_sps = {s for (s,) in res_sps.all()}
+    found_sps = {s for (s,) in await res_sps.all()}
     missing_sps = [s for s in sponsor_ids if s not in found_sps]
     if missing_sps:
         raise HTTPException(status_code=400, detail=f"Unknown sponsor_id(s): {missing_sps}")

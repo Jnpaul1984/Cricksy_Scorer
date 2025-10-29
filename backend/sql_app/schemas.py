@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from collections.abc import Mapping, Sequence
 from enum import Enum
 from typing import Any, Literal, TypeAlias, cast
@@ -415,6 +416,24 @@ class Game(BaseModel):
 
         # Legacy plain string from older routes/DB snapshots
         if isinstance(v, str):
+            text = v.strip()
+            if not text:
+                return {"result_text": v}
+            try:
+                parsed = json.loads(text)
+            except Exception:
+                return {"result_text": v}
+
+            if parsed is None:
+                return None
+
+            if isinstance(parsed, Mapping):
+                parsed_dict = dict(cast(Mapping[str, Any], parsed))
+                try:
+                    return MatchResult.model_validate(parsed_dict)
+                except Exception:
+                    return parsed_dict
+
             return {"result_text": v}
 
         # Fallback: stringify to keep type known and avoid "Unknown"

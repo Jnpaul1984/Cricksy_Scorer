@@ -134,7 +134,7 @@ async def list_contributors(game_id: str, db: Annotated[AsyncSession, Depends(ge
     res = await db.execute(
         select(models.GameContributor).where(models.GameContributor.game_id == game_id)
     )
-    rows = res.scalars().all()
+    rows = await res.scalars().all()
     return [
         schemas.GameContributor(
             id=cast(int, r.id),

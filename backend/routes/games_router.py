@@ -133,7 +133,7 @@ async def search_games(
 ) -> Sequence[dict[str, Any]]:
     try:
         res = await db.execute(select(models.Game))
-        rows = list(res.scalars().all())
+        rows = await res.scalars().all()
     except Exception:
         # In-memory mode or DB unavailable: return empty list
         return []
@@ -319,6 +319,21 @@ async def post_game_results(
 
         await crud.update_game(db, game_model=game)
 
+        # Debugging: report whether an in-memory repo exists and contains the game
+        try:
+            import backend.app as backend_app
+
+            repo = getattr(backend_app, "_memory_repo", None)
+            if repo is not None:
+                try:
+                    print("DEBUG: in-memory repo games keys:", list(repo._games.keys()))
+                except Exception:
+                    print("DEBUG: in-memory repo present but failed to inspect _games")
+            else:
+                print("DEBUG: no in-memory repo configured")
+        except Exception:
+            print("DEBUG: could not import backend.app for repo inspection")
+
         return schemas.MatchResult(
             winner_team_id=result_dict["winner_team_id"],
             winner_team_name=result_dict["winner_team_name"],
@@ -339,12 +354,29 @@ async def list_game_results(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Sequence[dict[str, Any]]:
     """Return all games that have a stored result as simple dicts."""
-    res = await db.execute(select(models.Game).where(models.Game.result.isnot(None)))
-    rows = res.scalars().all()
+    # Prefer DB-backed query when possible. If DB is unavailable or empty,
+    # fall back to in-memory CRUD repository when configured.
+    rows = None
+    try:
+        res = await db.execute(select(models.Game).where(models.Game.result.isnot(None)))
+        rows = await res.scalars().all()
+    except Exception:
+        rows = None
+
+    if not rows:
+        try:
+            import backend.app as backend_app
+
+            repo = getattr(backend_app, "_memory_repo", None)
+            if repo is not None:
+                rows = await repo.list_games_with_result()
+        except Exception:
+            rows = rows or []
 
     out: list[dict[str, Any]] = []
     for g in rows:
-        raw = g.result
+        # g may be a SQLAlchemy model instance or an in-memory model stub
+        raw = getattr(g, "result", None)
         if not raw:
             continue
         try:
@@ -355,7 +387,7 @@ async def list_game_results(
             data = {}
 
         item: dict[str, Any] = {
-            "match_id": str(data.get("match_id", g.id)),
+            "match_id": str(data.get("match_id", getattr(g, "id", None))),
             "winner": data.get("winner"),
             "team_a_score": int(data.get("team_a_score") or 0),
             "team_b_score": int(data.get("team_b_score") or 0),

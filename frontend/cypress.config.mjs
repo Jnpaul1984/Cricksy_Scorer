@@ -19,7 +19,7 @@ export default defineConfig({
           const apiBase =
             (typeof config.env.API_BASE === "string" ? config.env.API_BASE : undefined) ||
             process.env.API_BASE ||
-            "http://localhost:8000";
+            "http://127.0.0.1:8000";
           console.log("[cypress.config.mjs] seed:match cwd:", process.cwd(), "frontendDir:", frontendDir);
           try {
             return await seedMatch(apiBase, frontendDir);
@@ -39,7 +39,7 @@ export default defineConfig({
     video: false,
     screenshotOnRunFailure: false,
     env: {
-      API_BASE: process.env.API_BASE || "http://localhost:8000",
+      API_BASE: process.env.API_BASE || "http://127.0.0.1:8000",
     },
   },
 });

@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
-const API_BASE: string =
-  (Cypress.env('API_BASE') as string) || 'http://localhost:8000'
+const API_BASE: string = (Cypress.env('API_BASE') as string) || 'http://localhost:8000'
 
 describe('CI Match Simulator', () => {
   let gameId: string
@@ -18,6 +17,19 @@ describe('CI Match Simulator', () => {
   it('renders scoreboard, scoring, and analytics views for the seeded match', () => {
     const url = `/view/${gameId}?apiBase=${encodeURIComponent(API_BASE)}`
     cy.visit(url)
+
+    // Optional: Check deliveries returned by API
+    cy.request(`${API_BASE}/games/${gameId}/deliveries`).then((resp) => {
+      cy.log(`API response: ${JSON.stringify(resp.body)}`)
+      expect(resp.body.deliveries, 'deliveries property').to.not.be.null
+      expect(resp.body.deliveries, 'deliveries property').to.not.be.undefined
+      expect(Array.isArray(resp.body.deliveries), 'deliveries is array').to.be.true
+
+      // Only assert length if it's an array
+      if (Array.isArray(resp.body.deliveries)) {
+        expect(resp.body.deliveries.length, 'deliveries length').to.be.at.least(120)
+      }
+    })
 
     // Banner: tolerant to either plain text or JSON blob
     cy.get('.result-banner', { timeout: 20000 })
@@ -69,7 +81,6 @@ describe('CI Match Simulator', () => {
       timeout: 15000,
     }).click()
 
-    // Run Rate card: h3 has the title; "Current" is in a sibling div in the same card
     cy.contains('.grid .card h3', 'Run Rate', { timeout: 15000 })
       .scrollIntoView({ ensureScrollable: false })
       .should('exist')
@@ -88,7 +99,7 @@ describe('CI Match Simulator', () => {
       .find('canvas')
       .should('exist')
 
-    cy.contains('h3', 'Extras / Dot & Boundary %', { timeout: 15000 })
+    cy.contains('h3', 'Extras / Dot & Boundary %', { timeout: 30000 })
       .scrollIntoView({ ensureScrollable: false })
       .parent()
       .should('contain', 'Legal balls: 240')

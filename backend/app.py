@@ -43,8 +43,9 @@ from backend.sql_app.database import SessionLocal
 from backend.sql_app.database import get_db as db_get_db  # type: ignore[unused-ignore]
 
 # Optional in-memory CRUD support
-InMemoryCrudRepository: Any | None
-enable_in_memory_crud_fn: Any | None
+InMemoryCrudRepoClass: Any | None = None
+enable_in_memory_crud_fn: Any | None = None
+_memory_repo: Any | None = None
 try:
     from backend.testsupport.in_memory_crud import (
         InMemoryCrudRepository as _IMRepo,
@@ -53,10 +54,10 @@ try:
         enable_in_memory_crud as _enable_fn,
     )
 
-    InMemoryCrudRepository = _IMRepo
+    InMemoryCrudRepoClass = _IMRepo
     enable_in_memory_crud_fn = _enable_fn
 except Exception:
-    InMemoryCrudRepository = None
+    InMemoryCrudRepoClass = None
     enable_in_memory_crud_fn = None
 
 
@@ -65,7 +66,7 @@ class _FakeResult:
     def scalars(self) -> _FakeResult:
         return self
 
-    def all(self) -> list[Any]:
+    async def all(self) -> list[Any]:
         return []
 
     def first(self) -> Any | None:
@@ -73,6 +74,25 @@ class _FakeResult:
 
     def scalar_one_or_none(self) -> Any | None:
         return None
+
+
+class _MemoryExecResult(_FakeResult):
+    """Result wrapper used by the in-memory session to return async .all() values.
+
+    The wrapper implements async all() and keeps scalars() returning itself so
+    callers can do `await res.scalars().all()` or `await res.all()`.
+    """
+
+    def __init__(self, fetcher: Any):
+        # fetcher should be a callable that returns an awaitable returning a list
+        self._fetcher = fetcher
+
+    async def all(self) -> list[Any]:
+        try:
+            return await self._fetcher()
+        except TypeError:
+            # fetcher might be a sync callable returning a value
+            return self._fetcher()
 
 
 class _FakeSession:
@@ -95,6 +115,26 @@ class _FakeSession:
         pass
 
     async def execute(self, *args: Any, **kwargs: Any) -> _FakeResult:
+        # Patch: If the query is for games with results, return those from in-memory CRUD
+        # use the repo class configured at module import time (tests support)
+        repo_class = InMemoryCrudRepoClass
+        # Detect query for games with result
+        if args and hasattr(args[0], "whereclause") and "result" in str(args[0].whereclause):
+            repo = globals().get("_memory_repo")
+            if repo is None and repo_class is not None:
+                repo = repo_class()
+                globals()["_memory_repo"] = repo
+            if repo is not None:
+                # return an execution result whose .scalars().all() is awaitable
+                return _MemoryExecResult(lambda: repo.list_games_with_result())
+        if args and "from games" in str(args[0]).lower():
+            repo = globals().get("_memory_repo")
+            if repo is None and repo_class is not None:
+                repo = repo_class()
+                globals()["_memory_repo"] = repo
+            if repo is not None:
+                # return all stored games (sync list wrapped in async fetcher)
+                return _MemoryExecResult(lambda: list(repo._games.values()))
         return _FakeResult()
 
     # ADD THIS: emulate AsyncSession.scalar(...) for in-memory mode
@@ -175,8 +215,17 @@ def create_app(
         fastapi_app.dependency_overrides[db_get_db] = _in_memory_get_db  # type: ignore[index]
         with suppress(Exception):
             fastapi_app.dependency_overrides[gameplay_get_db] = _in_memory_get_db  # type: ignore[index]
-        if enable_in_memory_crud_fn is not None and InMemoryCrudRepository is not None:
-            _memory_repo = InMemoryCrudRepository()  # type: ignore[operator]
+        # Debugging: indicate in-memory wiring status
+        try:
+            print("DEBUG: create_app detected in-memory mode")
+            print("DEBUG: enable_in_memory_crud_fn is", bool(enable_in_memory_crud_fn))
+            print("DEBUG: InMemoryCrudRepoClass is", bool(InMemoryCrudRepoClass))
+        except Exception:
+            pass
+        if enable_in_memory_crud_fn is not None and InMemoryCrudRepoClass is not None:
+            global _memory_repo
+            if _memory_repo is None:
+                _memory_repo = InMemoryCrudRepoClass()  # type: ignore[operator]
             enable_in_memory_crud_fn(_memory_repo)  # type: ignore[call-arg]
 
     asgi_app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from enum import Enum
 from importlib import import_module
+from contextlib import suppress
 from typing import Any, cast
 
 from backend.sql_app import crud, models, schemas
@@ -13,6 +14,10 @@ class InMemoryCrudRepository:
 
     def __init__(self) -> None:
         self._games: dict[str, models.Game] = {}
+
+    async def list_games_with_result(self) -> list[models.Game]:
+        """Return all games that have a non-null result."""
+        return [g for g in self._games.values() if getattr(g, "result", None)]
 
     async def create_game(
         self,
@@ -88,6 +93,25 @@ class InMemoryCrudRepository:
         return self._games.get(game_id)
 
     async def update_game(self, db: object, game_model: models.Game) -> models.Game:
+        # Ensure result is always a string (JSON) for compatibility with endpoints
+        import json
+
+        result_value = getattr(game_model, "result", None)
+        if result_value is not None and not isinstance(result_value, str):
+            if hasattr(result_value, "model_dump"):
+                try:
+                    data = result_value.model_dump(mode="json")
+                except Exception:
+                    data = result_value.model_dump()
+                result_value = json.dumps(data, ensure_ascii=False, default=str)
+            elif isinstance(result_value, (dict, list, tuple)):
+                result_value = json.dumps(result_value, ensure_ascii=False, default=str)
+            else:
+                try:
+                    result_value = json.dumps(result_value, ensure_ascii=False, default=str)
+                except Exception:
+                    result_value = str(result_value)
+            game_model.result = result_value
         self._games[game_model.id] = game_model
         return game_model
 
@@ -110,6 +134,16 @@ def enable_in_memory_crud(repository: InMemoryCrudRepository) -> None:
 
     for target in targets:
         target_any = cast(Any, target)
+        try:
+            print(
+                "DEBUG: patching in-memory CRUD target",
+                getattr(target_any, "__name__", str(target_any)),
+            )
+        except Exception:
+            print("DEBUG: patching in-memory CRUD target (unknown) ->", target_any)
         target_any.create_game = repository.create_game
         target_any.get_game = repository.get_game
         target_any.update_game = repository.update_game
+        target_any.list_games_with_result = repository.list_games_with_result
+        with suppress(Exception):
+            print("DEBUG: patched target create_game ->", getattr(target_any, "create_game", None))

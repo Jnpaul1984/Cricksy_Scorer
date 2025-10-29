@@ -9,9 +9,6 @@ from pathlib import Path
 
 import uvicorn
 
-# Import backend module eagerly so we can confirm the in-memory patch is active.
-import backend.main as backend_main  # type: ignore
-
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = ROOT / "backend"
 
@@ -20,6 +17,9 @@ for path in (ROOT, BACKEND_DIR):
     path_str = str(path)
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
+
+import backend.main as backend_main  # type: ignore  # noqa: E402
+
 
 # Force the backend to run with the light-weight in-memory CRUD layer.
 os.environ.setdefault("CRICKSY_IN_MEMORY_DB", "1")

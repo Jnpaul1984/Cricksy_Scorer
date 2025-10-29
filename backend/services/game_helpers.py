@@ -798,6 +798,31 @@ def _maybe_finalize_match(g: Any) -> None:
     overs_limit = getattr(g, "overs_limit", None)
     balls_limit = overs_limit * 6 if overs_limit else None
 
+    def _team_name_from_json(team_obj: Any) -> str | None:
+        if isinstance(team_obj, Mapping):
+            name = team_obj.get("name")
+            if isinstance(name, str) and name:
+                return name
+        return None
+
+    team_a_name = _team_name_from_json(getattr(g, "team_a", {}))
+    team_b_name = _team_name_from_json(getattr(g, "team_b", {}))
+
+    batting_name = getattr(g, "batting_team_name", None)
+    if not batting_name:
+        batting_name = getattr(g, "batting_team_name", None)
+        if not batting_name:
+            batting_name = (
+                team_b_name if inning >= 2 and team_b_name else team_a_name or team_b_name
+            )
+
+    bowling_name = getattr(g, "bowling_team_name", None)
+    if not bowling_name:
+        if batting_name and team_a_name and team_b_name:
+            bowling_name = team_b_name if batting_name == team_a_name else team_a_name
+        else:
+            bowling_name = team_b_name or team_a_name
+
     chasing_done: bool = False
     method: schemas.MatchMethod | None = None
     margin: int | None = None
@@ -808,7 +833,7 @@ def _maybe_finalize_match(g: Any) -> None:
             chasing_done = True
             method = schemas.MatchMethod.by_wickets
             margin = max(1, 10 - w2)
-            winner_name = getattr(g, "batting_team_name", None)  # batting in 2nd = chaser
+            winner_name = batting_name  # batting in 2nd = chaser
         else:
             balls_exhausted = balls_limit is not None and b2 >= balls_limit
             all_out = w2 >= 10
@@ -817,7 +842,7 @@ def _maybe_finalize_match(g: Any) -> None:
                 if r1 > r2:
                     method = schemas.MatchMethod.by_runs
                     margin = r1 - r2
-                    winner_name = getattr(g, "bowling_team_name", None)
+                    winner_name = bowling_name
                 elif r1 == r2:
                     method = schemas.MatchMethod.tie
                     margin = 0
@@ -825,7 +850,7 @@ def _maybe_finalize_match(g: Any) -> None:
                 else:
                     method = schemas.MatchMethod.by_wickets
                     margin = max(1, 10 - w2)
-                    winner_name = getattr(g, "batting_team_name", None)
+                    winner_name = batting_name
 
     if chasing_done:
         if getattr(g, "first_inning_summary", None) is None:
@@ -837,6 +862,11 @@ def _maybe_finalize_match(g: Any) -> None:
             }
 
         margin_i = max(0, int(margin or 0))
+        if method == schemas.MatchMethod.by_wickets and not winner_name:
+            winner_name = batting_name or bowling_name
+        if method == schemas.MatchMethod.by_runs and not winner_name:
+            winner_name = bowling_name or batting_name
+
         if method == schemas.MatchMethod.tie:
             result_text = "Match tied"
         elif method == schemas.MatchMethod.by_wickets and winner_name:

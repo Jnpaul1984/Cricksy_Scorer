@@ -119,6 +119,15 @@ async def create_game(
 
     game_id = str(uuid.uuid4())
 
+    # Debug: report which create_game implementation we're about to call
+    try:
+        print(
+            "DEBUG: crud.create_game is",
+            getattr(crud.create_game, "__qualname__", repr(crud.create_game)),
+        )
+    except Exception:
+        print("DEBUG: crud.create_game repr:", repr(crud.create_game))
+
     db_game = await crud.create_game(
         db=db,
         game=game_create,
