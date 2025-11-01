@@ -218,11 +218,11 @@ async def get_leaderboard(
         query = query.order_by(desc(PlayerProfile.centuries))
     elif metric == "bowling_average":
         query = query.where(PlayerProfile.total_wickets > 0).order_by(
-            desc(PlayerProfile.total_runs_conceded / PlayerProfile.total_wickets)
+            PlayerProfile.total_runs_conceded / PlayerProfile.total_wickets
         )
     elif metric == "economy_rate":
         query = query.where(PlayerProfile.total_overs_bowled > 0).order_by(
-            desc(PlayerProfile.total_runs_conceded / PlayerProfile.total_overs_bowled)
+            PlayerProfile.total_runs_conceded / PlayerProfile.total_overs_bowled
         )
     elif metric == "total_wickets":
         query = query.order_by(desc(PlayerProfile.total_wickets))
