@@ -469,3 +469,108 @@ class Snapshot(BaseModel):
     completed_at: dt.datetime | None = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+# ===================================================================
+# Player Profile Schemas
+# ===================================================================
+
+
+class PlayerProfileBase(BaseModel):
+    """Base schema for player profile data."""
+
+    player_id: str
+    player_name: str
+
+
+class PlayerProfileStats(PlayerProfileBase):
+    """Schema for player statistics."""
+
+    # Batting stats
+    total_matches: int
+    total_innings_batted: int
+    total_runs_scored: int
+    total_balls_faced: int
+    total_fours: int
+    total_sixes: int
+    times_out: int
+    highest_score: int
+    centuries: int
+    half_centuries: int
+    batting_average: float
+    strike_rate: float
+
+    # Bowling stats
+    total_innings_bowled: int
+    total_overs_bowled: float
+    total_runs_conceded: int
+    total_wickets: int
+    best_bowling_figures: str | None
+    five_wicket_hauls: int
+    maidens: int
+    bowling_average: float
+    economy_rate: float
+
+    # Fielding stats
+    catches: int
+    stumpings: int
+    run_outs: int
+
+    # Timestamps
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerAchievementResponse(BaseModel):
+    """Schema for player achievement."""
+
+    id: int
+    player_id: str
+    game_id: str | None
+    achievement_type: str
+    title: str
+    description: str
+    badge_icon: str | None
+    earned_at: dt.datetime
+    metadata: dict[str, Any]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerProfileResponse(PlayerProfileStats):
+    """Schema for complete player profile including achievements."""
+
+    achievements: list[PlayerAchievementResponse] = Field(default_factory=list)
+
+
+class AwardAchievementRequest(BaseModel):
+    """Request schema for awarding an achievement to a player."""
+
+    achievement_type: str
+    title: str
+    description: str
+    badge_icon: str | None = None
+    game_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class LeaderboardEntry(BaseModel):
+    """Schema for a single leaderboard entry."""
+
+    rank: int
+    player_id: str
+    player_name: str
+    value: float | int
+    additional_stats: dict[str, Any] = Field(default_factory=dict)
+
+
+class LeaderboardResponse(BaseModel):
+    """Schema for leaderboard response."""
+
+    metric: str
+    entries: list[LeaderboardEntry]
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
