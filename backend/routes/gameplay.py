@@ -595,6 +595,14 @@ async def finalize_game(
 
     await emit_state_update(game_id, snap)
 
+    # Auto-generate highlights after match completion
+    try:
+        await gh._generate_highlights_on_completion(game_id, db)
+    except Exception as e:
+        # Log but don't fail if highlights generation fails
+        import logging
+        logging.warning(f"Failed to auto-generate highlights for game {game_id}: {e}")
+
     return snap
 
 
