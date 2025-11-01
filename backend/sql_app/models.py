@@ -50,6 +50,16 @@ class GameContributorRoleEnum(str, enum.Enum):
     analytics = "analytics"
 
 
+class HighlightEventType(str, enum.Enum):
+    boundary = "boundary"
+    six = "six"
+    wicket = "wicket"
+    milestone = "milestone"
+    partnership = "partnership"
+    hat_trick = "hat_trick"
+    maiden_over = "maiden_over"
+
+
 # -----------------------------
 # Helpers for safe JSON defaults
 # (avoid default={} or default=[])
@@ -335,4 +345,50 @@ class SponsorImpression(Base):
     __table_args__ = (
         Index("ix_sponsor_impressions_sponsor_id", "sponsor_id"),
         Index("ix_sponsor_impressions_at", "at"),
+    )
+
+
+# ===== Highlights =====
+
+
+class Highlight(Base):
+    __tablename__ = "highlights"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    game_id: Mapped[str] = mapped_column(
+        String, ForeignKey("games.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    event_type: Mapped[HighlightEventType] = mapped_column(
+        SAEnum(HighlightEventType, name="highlight_event_type"), nullable=False
+    )
+    
+    # Delivery information
+    over_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    ball_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    inning: Mapped[int] = mapped_column(Integer, nullable=False)
+    
+    # Event details
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    # Player information
+    player_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    player_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    
+    # Event metadata (renamed from 'metadata' which is reserved by SQLAlchemy)
+    event_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
+    
+    # Video generation
+    video_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    video_generated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
+    # Timestamps
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    
+    __table_args__ = (
+        Index("ix_highlights_game_id", "game_id"),
+        Index("ix_highlights_event_type", "event_type"),
+        Index("ix_highlights_created_at", "created_at"),
     )

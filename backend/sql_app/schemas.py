@@ -469,3 +469,60 @@ class Snapshot(BaseModel):
     completed_at: dt.datetime | None = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+# ===================================================================
+# Highlights Schemas
+# ===================================================================
+
+
+class HighlightEventType(str, Enum):
+    boundary = "boundary"
+    six = "six"
+    wicket = "wicket"
+    milestone = "milestone"
+    partnership = "partnership"
+    hat_trick = "hat_trick"
+    maiden_over = "maiden_over"
+
+
+class HighlightBase(BaseModel):
+    event_type: HighlightEventType
+    over_number: int
+    ball_number: int
+    inning: int
+    title: str
+    description: str | None = None
+    player_id: str | None = None
+    player_name: str | None = None
+    event_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class HighlightCreate(HighlightBase):
+    game_id: str
+
+
+class Highlight(HighlightBase):
+    id: str
+    game_id: str
+    video_url: str | None = None
+    video_generated: bool = False
+    created_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HighlightList(BaseModel):
+    highlights: list[Highlight]
+    total: int
+
+
+class HighlightShareRequest(BaseModel):
+    highlight_id: str
+    platform: str  # e.g., "twitter", "facebook", "instagram"
+
+
+class HighlightShareResponse(BaseModel):
+    success: bool
+    share_url: str | None = None
+    message: str
