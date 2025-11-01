@@ -6,11 +6,6 @@ Handles player statistics, achievements, and leaderboards.
 import datetime as dt
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import desc, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from backend.sql_app.database import get_db
 from backend.sql_app.models import AchievementType, PlayerAchievement, PlayerProfile
 from backend.sql_app.schemas import (
@@ -20,6 +15,10 @@ from backend.sql_app.schemas import (
     PlayerAchievementResponse,
     PlayerProfileResponse,
 )
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
@@ -142,8 +141,8 @@ async def award_achievement(
     # Validate achievement type
     try:
         achievement_type = AchievementType(payload.achievement_type)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid achievement type")
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail="Invalid achievement type") from err
 
     # Create new achievement
     new_achievement = PlayerAchievement(

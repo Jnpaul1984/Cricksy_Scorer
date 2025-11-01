@@ -387,7 +387,7 @@ class PlayerProfile(Base):
     )
 
     # Relationships
-    achievements: Mapped[list["PlayerAchievement"]] = relationship(
+    achievements: Mapped[list[PlayerAchievement]] = relationship(
         back_populates="player_profile", cascade="all, delete-orphan"
     )
 
