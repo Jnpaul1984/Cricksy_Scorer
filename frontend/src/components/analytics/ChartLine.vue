@@ -64,9 +64,9 @@ const options = {
         size: 13,
       },
       callbacks: {
-        label: function(context: any) {
+        label: function(context: { dataset: { label?: string }; parsed: { y: number | null } }) {
           const label = context.dataset.label || '';
-          const value = context.parsed.y;
+          const value = context.parsed.y ?? 0;
           return `${label}: ${value} runs`;
         }
       }

@@ -30,7 +30,12 @@ const runRateHistory = computed(() => {
     const data: Array<{ over: number; runRate: number }> = []
     const completedOvers = Math.floor(props.ballsBowled / 6)
     
+    if (completedOvers === 0) {
+      return data
+    }
+    
     // For each over, calculate cumulative run rate
+    // Run rate = total runs / total overs at that point
     for (let i = 1; i <= completedOvers; i++) {
       const runRate = (props.currentScore / i)
       data.push({ over: i, runRate })
@@ -106,9 +111,9 @@ const options = {
         size: 13,
       },
       callbacks: {
-        label: function(context: any) {
+        label: function(context: { dataset: { label?: string }; parsed: { y: number | null } }) {
           const label = context.dataset.label || '';
-          const value = context.parsed.y;
+          const value = context.parsed.y ?? 0;
           return `${label}: ${value.toFixed(2)} rpo`;
         }
       }
