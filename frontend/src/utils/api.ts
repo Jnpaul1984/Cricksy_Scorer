@@ -621,6 +621,94 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
     method: 'POST',
     body: JSON.stringify(body),
   }),
+
+  /* Tournament Management */
+  // Tournaments
+  createTournament: (body: {
+    name: string;
+    description?: string | null;
+    tournament_type?: string;
+    start_date?: string | null;
+    end_date?: string | null;
+  }) =>
+    request<any>('/tournaments/', { method: 'POST', body: JSON.stringify(body) }),
+
+  getTournaments: (skip = 0, limit = 100) =>
+    request<any[]>(`/tournaments/?skip=${skip}&limit=${limit}`),
+
+  getTournament: (tournamentId: string) =>
+    request<any>(`/tournaments/${encodeURIComponent(tournamentId)}`),
+
+  updateTournament: (tournamentId: string, body: {
+    name?: string;
+    description?: string | null;
+    tournament_type?: string;
+    start_date?: string | null;
+    end_date?: string | null;
+    status?: string;
+  }) =>
+    request<any>(`/tournaments/${encodeURIComponent(tournamentId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  deleteTournament: (tournamentId: string) =>
+    request<{ status: string }>(`/tournaments/${encodeURIComponent(tournamentId)}`, {
+      method: 'DELETE',
+    }),
+
+  // Teams
+  addTeamToTournament: (tournamentId: string, body: {
+    team_name: string;
+    team_data?: any;
+  }) =>
+    request<any>(`/tournaments/${encodeURIComponent(tournamentId)}/teams`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getTournamentTeams: (tournamentId: string) =>
+    request<any[]>(`/tournaments/${encodeURIComponent(tournamentId)}/teams`),
+
+  getPointsTable: (tournamentId: string) =>
+    request<any[]>(`/tournaments/${encodeURIComponent(tournamentId)}/points-table`),
+
+  // Fixtures
+  createFixture: (body: {
+    tournament_id: string;
+    match_number?: number | null;
+    team_a_name: string;
+    team_b_name: string;
+    venue?: string | null;
+    scheduled_date?: string | null;
+  }) =>
+    request<any>('/tournaments/fixtures', { method: 'POST', body: JSON.stringify(body) }),
+
+  getFixture: (fixtureId: string) =>
+    request<any>(`/tournaments/fixtures/${encodeURIComponent(fixtureId)}`),
+
+  getTournamentFixtures: (tournamentId: string) =>
+    request<any[]>(`/tournaments/${encodeURIComponent(tournamentId)}/fixtures`),
+
+  updateFixture: (fixtureId: string, body: {
+    match_number?: number | null;
+    team_a_name?: string;
+    team_b_name?: string;
+    venue?: string | null;
+    scheduled_date?: string | null;
+    status?: string;
+    result?: string | null;
+    game_id?: string | null;
+  }) =>
+    request<any>(`/tournaments/fixtures/${encodeURIComponent(fixtureId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  deleteFixture: (fixtureId: string) =>
+    request<{ status: string }>(`/tournaments/fixtures/${encodeURIComponent(fixtureId)}`, {
+      method: 'DELETE',
+    }),
 };
 
 export default apiService;
