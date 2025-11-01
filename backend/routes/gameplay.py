@@ -1013,9 +1013,30 @@ async def add_delivery(
     )
 
     # Emit via global sio from backend.main (lazy import to avoid circulars)
-    from backend.services.live_bus import emit_state_update
+    from backend.services.live_bus import emit_state_update, emit_prediction_update
+    from backend.services.prediction_service import get_win_probability
 
     await emit_state_update(game_id, snap)
+    
+    # Calculate and emit win probability prediction
+    try:
+        game_state_for_prediction = {
+            "current_inning": u.current_inning,
+            "total_runs": u.total_runs,
+            "total_wickets": u.total_wickets,
+            "overs_completed": u.overs_completed,
+            "balls_this_over": u.balls_this_over,
+            "overs_limit": u.overs_limit,
+            "target": u.target,
+            "match_type": u.match_type,
+        }
+        prediction = get_win_probability(game_state_for_prediction)
+        prediction["batting_team"] = u.batting_team_name
+        prediction["bowling_team"] = u.bowling_team_name
+        await emit_prediction_update(game_id, prediction)
+    except Exception:
+        # Don't break scoring if prediction fails
+        pass
 
     return snap
 
