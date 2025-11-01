@@ -33,13 +33,56 @@ const chartData = computed(() => ({
 const options = {
   responsive: true,
   maintainAspectRatio: false,
+  interaction: {
+    mode: 'index' as const,
+    intersect: false,
+  },
   plugins: {
-    legend: { position: 'bottom' as const },
-    tooltip: { mode: 'index' as const, intersect: false },
+    legend: { 
+      position: 'bottom' as const,
+      labels: {
+        padding: 12,
+        usePointStyle: true,
+      }
+    },
+    tooltip: { 
+      mode: 'index' as const, 
+      intersect: false,
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      padding: 12,
+      titleFont: {
+        size: 14,
+        weight: 'bold' as const,
+      },
+      bodyFont: {
+        size: 13,
+      },
+      callbacks: {
+        label: function(context: any) {
+          const label = context.dataset.label || '';
+          const value = context.parsed.y;
+          return `${label}: ${value} runs`;
+        }
+      }
+    },
   },
   scales: {
-    x: { stacked: false },
-    y: { beginAtZero: true },
+    x: { 
+      stacked: false,
+      grid: {
+        display: false,
+      }
+    },
+    y: { 
+      beginAtZero: true,
+      title: {
+        display: true,
+        text: 'Runs per Over',
+      },
+      ticks: {
+        precision: 0,
+      }
+    },
   },
 }
 </script>

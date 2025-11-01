@@ -7,6 +7,7 @@ import ChartLine from '@/components/analytics/ChartLine.vue'
 import PartnershipHeatmap from '@/components/analytics/PartnershipHeatmap.vue'
 import PhaseSplits from '@/components/analytics/PhaseSplits.vue'
 import WagonWheel from '@/components/analytics/WagonWheel.vue'
+import RunRateComparison from '@/components/analytics/RunRateComparison.vue'
 
 type UUID = string
 
@@ -428,13 +429,16 @@ const shotMapDeliveries = computed(() => {
     </section>
 
     <section v-if="selectedId && snapshot" class="grid">
-      <div class="card">
-        <h3>Run Rate</h3>
-        <div>Current: {{ crr.toFixed(2) }} rpo</div>
-        <div v-if="req.rrr != null">
-          Required: {{ (req.rrr as number).toFixed(2) }} rpo
-          ({{ req.remainingRuns }} runs in {{ req.remainingOvers?.toFixed(1) }} overs)
-        </div>
+      <div class="card wide">
+        <h3>Run Rate Comparison</h3>
+        <RunRateComparison
+          :current-run-rate="crr"
+          :required-run-rate="req.rrr"
+          :current-score="currRuns"
+          :balls-bowled="ballsBowled"
+          :overs-limit="Number(snapshot?.overs_limit ?? 0)"
+          :target-score="snapshot?.target ?? null"
+        />
       </div>
 
       <div v-if="manhattanChart.labels.length" class="card">
