@@ -1,13 +1,12 @@
 """Tournament management API endpoints"""
 from __future__ import annotations
 
-from typing import Any
-
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Annotated, Any
 
 from backend.sql_app import schemas, tournament_crud
 from backend.sql_app.database import get_db
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 
@@ -15,7 +14,7 @@ router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 @router.post("/", response_model=schemas.TournamentResponse, status_code=201)
 async def create_tournament(
     tournament: schemas.TournamentCreate,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Create a new tournament"""
     return await tournament_crud.create_tournament(db, tournament)
@@ -23,9 +22,9 @@ async def create_tournament(
 
 @router.get("/", response_model=list[schemas.TournamentResponse])
 async def list_tournaments(
+    db: Annotated[AsyncSession, Depends(get_db)],
     skip: int = 0,
     limit: int = 100,
-    db: AsyncSession = Depends(get_db),
 ) -> Any:
     """List all tournaments"""
     return await tournament_crud.get_tournaments(db, skip=skip, limit=limit)
@@ -34,7 +33,7 @@ async def list_tournaments(
 @router.get("/{tournament_id}", response_model=schemas.TournamentResponse)
 async def get_tournament(
     tournament_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Get a specific tournament"""
     tournament = await tournament_crud.get_tournament(db, tournament_id)
@@ -47,7 +46,7 @@ async def get_tournament(
 async def update_tournament(
     tournament_id: str,
     tournament_update: schemas.TournamentUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Update a tournament"""
     tournament = await tournament_crud.update_tournament(db, tournament_id, tournament_update)
@@ -59,7 +58,7 @@ async def update_tournament(
 @router.delete("/{tournament_id}")
 async def delete_tournament(
     tournament_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, str]:
     """Delete a tournament"""
     success = await tournament_crud.delete_tournament(db, tournament_id)
@@ -75,7 +74,7 @@ async def delete_tournament(
 async def add_team(
     tournament_id: str,
     team: schemas.TeamAdd,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Add a team to a tournament"""
     result = await tournament_crud.add_team_to_tournament(db, tournament_id, team)
@@ -87,7 +86,7 @@ async def add_team(
 @router.get("/{tournament_id}/teams", response_model=list[schemas.TournamentTeamResponse])
 async def get_teams(
     tournament_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Get all teams in a tournament"""
     return await tournament_crud.get_tournament_teams(db, tournament_id)
@@ -96,7 +95,7 @@ async def get_teams(
 @router.get("/{tournament_id}/points-table", response_model=list[schemas.PointsTableEntry])
 async def get_points_table(
     tournament_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Get the points table for a tournament"""
     return await tournament_crud.get_points_table(db, tournament_id)
@@ -108,7 +107,7 @@ async def get_points_table(
 @router.post("/fixtures", response_model=schemas.FixtureResponse, status_code=201)
 async def create_fixture(
     fixture: schemas.FixtureCreate,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Create a new fixture"""
     return await tournament_crud.create_fixture(db, fixture)
@@ -117,7 +116,7 @@ async def create_fixture(
 @router.get("/fixtures/{fixture_id}", response_model=schemas.FixtureResponse)
 async def get_fixture(
     fixture_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Get a specific fixture"""
     fixture = await tournament_crud.get_fixture(db, fixture_id)
@@ -129,7 +128,7 @@ async def get_fixture(
 @router.get("/{tournament_id}/fixtures", response_model=list[schemas.FixtureResponse])
 async def get_fixtures(
     tournament_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Get all fixtures for a tournament"""
     return await tournament_crud.get_tournament_fixtures(db, tournament_id)
@@ -139,7 +138,7 @@ async def get_fixtures(
 async def update_fixture(
     fixture_id: str,
     fixture_update: schemas.FixtureUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Update a fixture"""
     fixture = await tournament_crud.update_fixture(db, fixture_id, fixture_update)
@@ -151,7 +150,7 @@ async def update_fixture(
 @router.delete("/fixtures/{fixture_id}")
 async def delete_fixture(
     fixture_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, str]:
     """Delete a fixture"""
     success = await tournament_crud.delete_fixture(db, fixture_id)
