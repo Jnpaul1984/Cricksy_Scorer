@@ -188,6 +188,30 @@ class TestHighlightsService:
         assert milestone_highlights[0]["title"] == "50 runs!"
         assert milestone_highlights[0]["event_metadata"]["milestone"] == 50
 
+    def test_detect_highest_milestone(self):
+        """Test that only the highest milestone is detected (not all lower ones)."""
+        batting_scorecard = {
+            "player1": {
+                "runs": 105,
+                "player_name": "Century Maker",
+                "balls_faced": 80,
+            }
+        }
+        
+        highlights = HighlightsService.detect_highlights(
+            deliveries=[],
+            batting_scorecard=batting_scorecard,
+            bowling_scorecard={},
+            game_id="game1",
+            current_inning=1,
+        )
+        
+        milestone_highlights = [h for h in highlights if h["event_type"] == HighlightEventType.milestone]
+        # Should only detect 100, not 50
+        assert len(milestone_highlights) == 1
+        assert milestone_highlights[0]["title"] == "100 runs!"
+        assert milestone_highlights[0]["event_metadata"]["milestone"] == 100
+
     def test_detect_maiden_over(self):
         """Test detection of a maiden over (6 balls, no runs)."""
         deliveries = [

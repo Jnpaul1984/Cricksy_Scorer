@@ -9,12 +9,9 @@ This module provides functionality to:
 
 from __future__ import annotations
 
-import datetime as dt
 from typing import Any
 
 from backend.sql_app.models import HighlightEventType
-
-UTC = getattr(dt, "UTC", dt.UTC)
 
 
 class HighlightsService:
@@ -45,9 +42,6 @@ class HighlightsService:
 
         # Track state for detection
         consecutive_wickets: list[dict[str, Any]] = []
-        partnership_runs: dict[tuple[str, str], int] = {}
-        current_over_runs = 0
-        last_over_number = -1
 
         for delivery in deliveries:
             over_num = delivery.get("over_number", 0)
@@ -56,12 +50,6 @@ class HighlightsService:
             is_wicket = delivery.get("is_wicket", False)
             striker_id = delivery.get("striker_id")
             bowler_id = delivery.get("bowler_id")
-
-            # Track current over runs
-            if over_num != last_over_number:
-                current_over_runs = 0
-                last_over_number = over_num
-            current_over_runs += runs
 
             # Detect boundaries (4s)
             if runs == 4 and not delivery.get("is_extra", False):
@@ -125,9 +113,9 @@ class HighlightsService:
 
                 # Track consecutive wickets for hat-trick detection
                 consecutive_wickets.append(delivery)
-                if len(consecutive_wickets) >= 3:
-                    # Check if last 3 wickets are by same bowler
-                    recent_bowlers = [d.get("bowler_id") for d in consecutive_wickets[-3:]]
+                if len(consecutive_wickets) == 3:
+                    # Check if last 3 wickets are by same bowler (on consecutive deliveries)
+                    recent_bowlers = [d.get("bowler_id") for d in consecutive_wickets]
                     if len(set(recent_bowlers)) == 1:
                         highlights.append({
                             "game_id": game_id,
@@ -143,7 +131,10 @@ class HighlightsService:
                                 "bowler_id": bowler_id,
                             },
                         })
+                        # Clear to avoid detecting multiple hat-tricks for same sequence
+                        consecutive_wickets.clear()
             else:
+                # Reset consecutive wickets counter on non-wicket delivery
                 consecutive_wickets.clear()
 
         # Detect milestones from batting scorecard
@@ -154,8 +145,8 @@ class HighlightsService:
             runs = stats.get("runs", 0)
             player_name = stats.get("player_name", "Unknown")
 
-            # Detect 50, 100, 150, 200+ milestones
-            milestones = [50, 100, 150, 200]
+            # Detect 50, 100, 150, 200+ milestones (check from highest to lowest)
+            milestones = [200, 150, 100, 50]
             for milestone in milestones:
                 if runs >= milestone:
                     # Find the delivery where milestone was reached
