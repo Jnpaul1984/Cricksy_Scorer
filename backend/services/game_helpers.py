@@ -888,8 +888,25 @@ def _maybe_finalize_match(g: Any) -> None:
         g.status = models.GameStatus.completed
         g.is_game_over = True
         g.completed_at = g.result.completed_at
-        g.status = models.GameStatus.completed
-        g.is_game_over = True
-        g.completed_at = g.result.completed_at
-        g.is_game_over = True
-        g.completed_at = g.result.completed_at
+
+
+async def _generate_highlights_on_completion(game_id: str, db: Any) -> None:
+    """
+    Generate highlights after a match is completed.
+    
+    This function should be called after match completion to automatically
+    detect and save highlight moments from the match.
+    
+    Args:
+        game_id: The game identifier
+        db: Database session (AsyncSession)
+    """
+    try:
+        from backend.routes.highlights import generate_highlights
+        
+        # Call the highlights generation endpoint logic
+        await generate_highlights(game_id, db)
+    except Exception as e:
+        # Log error but don't fail the match completion
+        import logging
+        logging.error(f"Failed to generate highlights for game {game_id}: {e}")

@@ -33,6 +33,7 @@ from backend.routes.games_dls import router as games_dls_router
 # Routers
 from backend.routes.games_router import router as games_router
 from backend.routes.health import router as health_router
+from backend.routes.highlights import router as highlights_router
 from backend.routes.interruptions import router as interruptions_router
 from backend.routes.sponsors import router as sponsors_router
 from backend.services.live_bus import set_socketio_server as _set_bus_sio
@@ -196,6 +197,7 @@ def create_app(
     fastapi_app.include_router(health_router)
     fastapi_app.include_router(sponsors_router)
     fastapi_app.include_router(games_core_router)
+    fastapi_app.include_router(highlights_router)
 
     # Standard DB dependency
     async def _get_db() -> AsyncGenerator[AsyncSession, None]:
