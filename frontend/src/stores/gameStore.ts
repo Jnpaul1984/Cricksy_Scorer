@@ -441,6 +441,16 @@ export const useGameStore = defineStore('game', () => {
 
   const commentaryFeed = ref<CommentaryItem[]>([])
 
+  // Win probability prediction state
+  const currentPrediction = ref<{
+    batting_team_win_prob: number
+    bowling_team_win_prob: number
+    confidence: number
+    batting_team?: string
+    bowling_team?: string
+    factors?: Record<string, any>
+  } | null>(null)
+
   const offlineEnabled = ref(true)
   const offlineQueue = ref<PendingDelivery[]>([])
   const isFlushing = ref(false)
@@ -1648,12 +1658,30 @@ function deliveryKey(d: LooseDelivery): string {
       }
       interEndedHandler = () => optimisticallyCloseCurrentInterruption()
 
+      predictionHandler = (payload: {
+        game_id: string
+        prediction: {
+          batting_team_win_prob: number
+          bowling_team_win_prob: number
+          confidence: number
+          batting_team?: string
+          bowling_team?: string
+          factors?: Record<string, any>
+        }
+      }) => {
+        if (!liveGameId.value || payload.game_id !== liveGameId.value) return
+        if (payload.prediction) {
+          currentPrediction.value = payload.prediction
+        }
+      }
+
       on('presence:init', presenceInitHandler)
       on('state:update', handleStateUpdate as any)
       on('score:update', handleScoreUpdate as any)
       on('commentary:new', commentaryHandler)
       on('interruptions:update', interUpdateHandler)
       on('interruption:ended', interEndedHandler)
+      on('prediction:update', predictionHandler as any)
 
       void refreshInterruptions()
     } catch (e) {
@@ -1674,6 +1702,7 @@ function deliveryKey(d: LooseDelivery): string {
     }
     if (interUpdateHandler) { off('interruptions:update', interUpdateHandler); interUpdateHandler = null }
     if (interEndedHandler)  { off('interruption:ended',  interEndedHandler);  interEndedHandler  = null }
+    if (predictionHandler) { off('prediction:update', predictionHandler); predictionHandler = null }
 
     off('state:update', handleStateUpdate as any);
     off('score:update', handleScoreUpdate as any);
@@ -1686,6 +1715,7 @@ function deliveryKey(d: LooseDelivery): string {
   }
   let interUpdateHandler: ((p: { game_id?: string }) => void) | null = null
   let interEndedHandler: (() => void) | null = null
+  let predictionHandler: ((payload: { game_id: string; prediction: any }) => void) | null = null
 
 
 
@@ -2553,6 +2583,9 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     canScoreDelivery,
     // Commentary
     commentaryFeed,
+
+    // Prediction
+    currentPrediction,
 
     // Offline
     offlineEnabled,

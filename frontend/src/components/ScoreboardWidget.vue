@@ -6,6 +6,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useHighlights, type Snapshot as HL } from '@/composables/useHighlights'
 import { useGameStore } from '@/stores/gameStore'
 import { fmtSR, fmtEconomy, oversDisplayFromBalls, oversDisplayFromAny, deriveBowlerFigures } from '@/utils/cricket'
+import WinProbabilityWidget from '@/components/WinProbabilityWidget.vue'
 /* ------------------------------------------------------------------ */
 /* Props                                                               */
 /* ------------------------------------------------------------------ */
@@ -45,6 +46,7 @@ const {
   currentBowlerFigures: bowlerRow,
   isGameOver,
   resultText,
+  currentPrediction,
 } = storeToRefs(gameStore)
 
 const { targetSafe, requiredRunRate, runsRequired, ballsBowledTotal } = storeToRefs(gameStore)
@@ -1104,6 +1106,16 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
           </div>
         </div>
       </div> <!-- /.grid -->
+
+      <!-- Win Probability Prediction -->
+      <WinProbabilityWidget
+        :prediction="currentPrediction"
+        :batting-team="battingTeamName"
+        :bowling-team="bowlingTeamName"
+        :theme="props.theme"
+        :show-chart="true"
+        :compact="false"
+      />
     </div>   <!-- /.card -->
   </section>
 </template>

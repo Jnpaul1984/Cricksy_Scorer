@@ -36,6 +36,11 @@ async def emit_game_update(game_id: str, payload: dict[str, Any]) -> None:
     await emit("game:update", payload, room=game_id)
 
 
+async def emit_prediction_update(game_id: str, prediction: dict[str, Any]) -> None:
+    """Emit win probability prediction update to clients."""
+    await emit("prediction:update", {"game_id": game_id, "prediction": prediction}, room=game_id)
+
+
 # Sync-friendly wrapper used by some sync routes (e.g., games_dls)
 def publish_game_update(game_id: str, payload: dict[str, Any]) -> None:
     """
