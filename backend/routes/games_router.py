@@ -12,7 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # NOTE: add crud here so we can honor in-memory mode via dependency overrides
-from backend.sql_app import models, schemas, crud
+from backend.sql_app import crud, models, schemas
 from backend.sql_app.database import get_db  # async generator -> AsyncSession
 
 UTC = getattr(dt, "UTC", dt.UTC)
