@@ -1658,7 +1658,17 @@ function deliveryKey(d: LooseDelivery): string {
       }
       interEndedHandler = () => optimisticallyCloseCurrentInterruption()
 
-      predictionHandler = (payload) => {
+      predictionHandler = (payload: {
+        game_id: string
+        prediction: {
+          batting_team_win_prob: number
+          bowling_team_win_prob: number
+          confidence: number
+          batting_team?: string
+          bowling_team?: string
+          factors?: Record<string, any>
+        }
+      }) => {
         if (!liveGameId.value || payload.game_id !== liveGameId.value) return
         if (payload.prediction) {
           currentPrediction.value = payload.prediction

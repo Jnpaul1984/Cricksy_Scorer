@@ -32,7 +32,7 @@ describe('WinProbabilityWidget', () => {
     expect(wrapper.text()).toContain('Confidence: 75%')
   })
 
-  it('displays team names correctly', () => {
+  it('displays team names from prediction when available', () => {
     const wrapper = mount(WinProbabilityWidget, {
       props: {
         prediction: samplePrediction,
@@ -41,6 +41,7 @@ describe('WinProbabilityWidget', () => {
       },
     })
 
+    // Prediction team names take priority
     expect(wrapper.text()).toContain('Team A')
     expect(wrapper.text()).toContain('Team B')
   })

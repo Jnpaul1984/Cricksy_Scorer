@@ -1034,9 +1034,10 @@ async def add_delivery(
         prediction["batting_team"] = u.batting_team_name
         prediction["bowling_team"] = u.bowling_team_name
         await emit_prediction_update(game_id, prediction)
-    except Exception:
-        # Don't break scoring if prediction fails
-        pass
+    except Exception as e:
+        # Don't break scoring if prediction fails, but log for debugging
+        import logging
+        logging.warning(f"Prediction calculation failed for game {game_id}: {e}")
 
     return snap
 

@@ -123,7 +123,10 @@ class WinProbabilityPredictor:
         balls_remaining = total_balls_limit - total_balls
         
         # Wicket factor: reduce projected RR as wickets fall
-        wicket_factor = 1.0 - (total_wickets / 20.0)  # Gradually reduce
+        # Using 20.0 as denominator provides gradual reduction (each wicket reduces by 5%)
+        # rather than sharp drop if using 10.0 (each wicket reduces by 10%)
+        WICKET_FACTOR_DENOMINATOR = 20.0
+        wicket_factor = 1.0 - (total_wickets / WICKET_FACTOR_DENOMINATOR)
         
         # Project remaining runs
         projected_rr = current_rr * wicket_factor
