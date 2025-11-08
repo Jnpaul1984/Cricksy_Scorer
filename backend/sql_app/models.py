@@ -336,3 +336,114 @@ class SponsorImpression(Base):
         Index("ix_sponsor_impressions_sponsor_id", "sponsor_id"),
         Index("ix_sponsor_impressions_at", "at"),
     )
+
+
+# ===== Tournament Management =====
+
+
+class Tournament(Base):
+    __tablename__ = "tournaments"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tournament_type: Mapped[str] = mapped_column(
+        String, nullable=False, default="league"
+    )  # league, knockout, round-robin
+    start_date: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    end_date: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String, nullable=False, default="upcoming"
+    )  # upcoming, ongoing, completed
+    
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    teams: Mapped[list[TournamentTeam]] = relationship(
+        back_populates="tournament", cascade="all, delete-orphan"
+    )
+    fixtures: Mapped[list[Fixture]] = relationship(
+        back_populates="tournament", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (Index("ix_tournaments_status", "status"),)
+
+
+class TournamentTeam(Base):
+    __tablename__ = "tournament_teams"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tournament_id: Mapped[str] = mapped_column(
+        String, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    team_name: Mapped[str] = mapped_column(String, nullable=False)
+    team_data: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=_empty_dict, nullable=False
+    )  # Store team info like players
+    
+    # Points table data
+    matches_played: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    matches_won: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    matches_lost: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    matches_drawn: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    net_run_rate: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
+    # Relationships
+    tournament: Mapped[Tournament] = relationship(back_populates="teams")
+
+    __table_args__ = (
+        Index("ix_tournament_teams_tournament_id", "tournament_id"),
+        Index("ix_tournament_teams_points", "points"),
+    )
+
+
+class Fixture(Base):
+    __tablename__ = "fixtures"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    tournament_id: Mapped[str] = mapped_column(
+        String, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    match_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    team_a_name: Mapped[str] = mapped_column(String, nullable=False)
+    team_b_name: Mapped[str] = mapped_column(String, nullable=False)
+    venue: Mapped[str | None] = mapped_column(String, nullable=True)
+    scheduled_date: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Link to actual game if created
+    game_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("games.id", ondelete="SET NULL"), nullable=True
+    )
+    
+    status: Mapped[str] = mapped_column(
+        String, nullable=False, default="scheduled"
+    )  # scheduled, in_progress, completed, cancelled
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    tournament: Mapped[Tournament] = relationship(back_populates="fixtures")
+
+    __table_args__ = (
+        Index("ix_fixtures_tournament_id", "tournament_id"),
+        Index("ix_fixtures_status", "status"),
+        Index("ix_fixtures_scheduled_date", "scheduled_date"),
+    )

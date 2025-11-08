@@ -53,6 +53,18 @@ const router = createRouter({
       props: route => ({ gameId: String(route.params.gameId), ...route.query }),
     },
 
+    // --- Tournament routes ---
+    {
+      path: '/tournaments',
+      name: 'tournaments',
+      component: () => import('@/views/TournamentDashboardView.vue'),
+    },
+    {
+      path: '/tournaments/:tournamentId',
+      name: 'tournament-detail',
+      component: () => import('@/views/TournamentDetailView.vue'),
+    },
+
     // Catch-all → setup
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
