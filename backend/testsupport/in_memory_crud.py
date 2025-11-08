@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import sys
+from contextlib import suppress
 from enum import Enum
 from importlib import import_module
-from contextlib import suppress
 from typing import Any, cast
 
 from backend.sql_app import crud, models, schemas
