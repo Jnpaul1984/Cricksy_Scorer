@@ -1,5 +1,7 @@
 ﻿import path from "node:path";
+
 import { defineConfig } from "cypress";
+
 import { seedMatch } from "./cypress/support/matchSimulator.runtime.js";
 
 export default defineConfig({
