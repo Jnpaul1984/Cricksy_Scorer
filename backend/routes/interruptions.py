@@ -11,8 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # ⬇️ change these to match your project
-from sql_app.database import get_db
-from sql_app.models import Game
+from backend.sql_app.database import get_db
+from backend.sql_app.models import Game
 # ⬆️ change these to match your project
 
 router = APIRouter(prefix="/games", tags=["interruptions"])

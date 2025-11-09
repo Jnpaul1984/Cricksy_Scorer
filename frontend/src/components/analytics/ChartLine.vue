@@ -1,6 +1,4 @@
 ﻿<script setup lang="ts">
-import { computed } from 'vue'
-import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,6 +9,8 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js'
+import { computed } from 'vue'
+import { Line } from 'vue-chartjs'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
 

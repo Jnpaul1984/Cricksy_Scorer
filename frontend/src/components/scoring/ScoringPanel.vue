@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import RunButtons from './RunButtons.vue'
-import ExtrasPanel from './ExtrasPanel.vue'
-import DismissalForm from './DismissalForm.vue'
-import UndoLastBall from './UndoLastBall.vue'
+import { ref, toRefs } from 'vue'
+
 import CommentaryInput from './CommentaryInput.vue'
+import DismissalForm from './DismissalForm.vue'
+import ExtrasPanel from './ExtrasPanel.vue'
+import RunButtons from './RunButtons.vue'
+import UndoLastBall from './UndoLastBall.vue'
+
 import type { Player } from '@/types'
 
 const props = defineProps<{
@@ -15,6 +17,7 @@ const props = defineProps<{
   bowlerId: string
   battingPlayers: Player[]
 }>()
+const { gameId, canScore, strikerId, nonStrikerId, bowlerId, battingPlayers } = toRefs(props)
 
 const emit = defineEmits<{
   (e:'scored'): void

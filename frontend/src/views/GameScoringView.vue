@@ -1,18 +1,20 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+/* eslint-disable */
 /* --- Vue & Router --- */
+
+/* --- Stores --- */
+import { storeToRefs } from 'pinia'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-/* --- Stores --- */
-import { useGameStore } from '@/stores/gameStore'
-import { storeToRefs } from 'pinia'
-
 /* --- UI Components --- */
-import DeliveryTable from '@/components/DeliveryTable.vue'
 import BattingCard from '@/components/BattingCard.vue'
 import BowlingCard from '@/components/BowlingCard.vue'
+import DeliveryTable from '@/components/DeliveryTable.vue'
 import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
+import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
+import { useGameStore } from '@/stores/gameStore'
 
 const isDev = import.meta.env.DEV
 const normId = (v: unknown) => String(v ?? '').trim()
@@ -34,13 +36,23 @@ type DeliveryRowForTable = {
   extra?: 'wd' | 'nb' | 'b' | 'lb'; is_wicket?: boolean; commentary?: string;
   dismissed_player_id?: UUID | null; at_utc?: string
   extra_runs?: number
-  runs_off_bat?: number 
+  runs_off_bat?: number
+  shot_map?: string | null
 }
 
 // ================== Single-panel state ==================
 type ExtraOpt = 'none' | 'nb' | 'wd' | 'b' | 'lb'
 
-const shotAngle = ref<number | null>(null)
+const extra = ref<ExtraOpt>('none')
+const offBat = ref<number>(0)
+const extraRuns = ref<number>(1)
+const isWicket = ref<boolean>(false)
+const dismissal = ref<string | null>(null)
+const dismissedName = ref<string | null>(null)
+const shotMap = ref<string | null>(null)
+if (import.meta.env?.DEV) {
+  console.info('GameScoringView setup refs', { isWicket, extra })
+}
 // --- Fielder (XI + subs) for wicket events ---
 const selectedFielderId = ref<UUID>('' as UUID)
 const inningsStartIso = ref<string | null>(null)
@@ -64,7 +76,9 @@ watch(extra, (t) => {
   if (t === 'wd') { extraRuns.value = 1; offBat.value = 0 }
   else if (t === 'b' || t === 'lb') { extraRuns.value = 0; offBat.value = 0 }
   else if (t === 'none') { offBat.value = 0 }
-  if (t !== 'none' && t !== 'nb') shotAngle.value = null
+  if (t !== 'none' && t !== 'nb') {
+    shotMap.value = null
+  }
 })
 
 
@@ -142,14 +156,13 @@ async function submitSimple() {
       } else if (extra.value === 'nb') {
         payload.extra_type = 'nb'
         payload.runs_off_bat = offBat.value
-        payload.shot_angle_deg = shotAngle.value ?? null
       } else if (extra.value === 'b' || extra.value === 'lb') {
         payload.extra_type = extra.value
         payload.extra_runs = extraRuns.value
       } else {
         payload.runs_off_bat = offBat.value
-        payload.shot_angle_deg = shotAngle.value ?? null
       }
+      payload.shot_map = (extra.value === 'none' || extra.value === 'nb') ? (shotMap.value ?? null) : null
 
       if (isWicket.value) {
         payload.is_wicket = true
@@ -169,13 +182,13 @@ async function submitSimple() {
           (needsFielder.value ? (selectedFielderId.value || undefined) : undefined)
         )
       } else if (!isWicket.value && extra.value === 'nb') {
-        await gameStore.scoreExtra(gameId.value, 'nb', offBat.value, shotAngle.value ?? null)
+        await gameStore.scoreExtra(gameId.value, 'nb', offBat.value, shotMap.value ?? null)
       } else if (!isWicket.value && extra.value === 'wd') {
         await gameStore.scoreExtra(gameId.value, 'wd', extraRuns.value)
       } else if (!isWicket.value && (extra.value === 'b' || extra.value === 'lb')) {
         await gameStore.scoreExtra(gameId.value, extra.value, extraRuns.value)
       } else if (!isWicket.value && extra.value === 'none') {
-        await gameStore.scoreRuns(gameId.value, offBat.value, shotAngle.value ?? null)
+        await gameStore.scoreRuns(gameId.value, offBat.value, shotMap.value ?? null)
       } else {
         const res = await fetch(`${apiBase}/games/${encodeURIComponent(gameId.value)}/deliveries`, {
           method: 'POST',
@@ -195,7 +208,7 @@ async function submitSimple() {
             is_wicket: true,
             dismissal_type: (dismissal.value || 'bowled'),
             dismissed_player_name: (dismissedName.value || null),
-            shot_angle_deg: (extra.value === 'none' || extra.value === 'nb') ? (shotAngle.value ?? null) : null,
+            shot_map: (extra.value === 'none' || extra.value === 'nb') ? (shotMap.value ?? null) : null,
             fielder_id: needsFielder.value ? (selectedFielderId.value || null) : null,
           }),
         })
@@ -210,7 +223,7 @@ async function submitSimple() {
     dismissal.value = null
     dismissedName.value = null
     selectedFielderId.value = '' as UUID
-    shotAngle.value = null
+    shotMap.value = null
     onScored()
 
     await nextTick()
@@ -633,6 +646,7 @@ const dedupedDeliveries = computed<DeliveryRowForTable[]>(() => {
       commentary: d.commentary as string | undefined,
       dismissed_player_id: (d.dismissed_player_id ? normId(d.dismissed_player_id) : null) as UUID | null,
       at_utc: d.at_utc as string | undefined,
+      shot_map: typeof d.shot_map === 'string' ? d.shot_map : null,
     }
   }).sort((a, b) => (a.over_number - b.over_number) || (a.ball_number - b.ball_number))
 })
@@ -689,6 +703,7 @@ const deliveriesThisInnings = computed<DeliveryRowForTable[]>(() => {
       commentary: d.commentary as string | undefined,
       dismissed_player_id: (d.dismissed_player_id ? normId(d.dismissed_player_id) : null) as UUID | null,
       at_utc: d.at_utc as string | undefined,
+      shot_map: typeof d.shot_map === 'string' ? d.shot_map : null,
     }
   }).sort((a, b) => (a.over_number - b.over_number) || (a.ball_number - b.ball_number))
 })
@@ -803,8 +818,12 @@ const cantScoreReasons = computed(() => {
   const rs:string[] = []
   const firstBall = Number(currentOverBalls.value || 0) === 0
   if (!gameStore.currentGame) rs.push('No game loaded')
-  else if (!['in_progress','live','started'].includes(String((gameStore.currentGame as any).status || '')))
-    rs.push(`Game is ${(gameStore.currentGame as any).status}`)
+  else {
+    const status = String((gameStore.currentGame as any).status || '').toLowerCase()
+    if (!['in_progress','live','started'].includes(status)) {
+      rs.push(`Game is ${(gameStore.currentGame as any).status}`)
+    }
+  }
 
   if (!selectedStriker.value) rs.push('Select striker')
   if (!selectedNonStriker.value) rs.push('Select non-striker')
@@ -887,7 +906,8 @@ watch(() => (gameStore.currentGame as any)?.current_inning, () => {
 const SUPPRESS_DERIVED_MS = 10000
 
 const needsNewInningsLive = computed<boolean>(() => {
-  const status = String((gameStore.currentGame as any)?.status || '')
+  const statusRaw = String((gameStore.currentGame as any)?.status || '')
+  const status = statusRaw.toLowerCase()
   const serverGate =
     Boolean(stateAny.value?.needs_new_innings) ||
     status === 'innings_break'
@@ -1413,7 +1433,7 @@ async function confirmChangeBowler(): Promise<void> {
     <header class="toolbar">
       <div class="left">
         <h2 class="title">Scoring Console</h2>
-        <span class="meta" v-if="gameId">Game: {{ gameId }}</span>
+        <span v-if="gameId" class="meta">Game: {{ gameId }}</span>
       </div>
 
       <div class="right">
@@ -1445,22 +1465,22 @@ async function confirmChangeBowler(): Promise<void> {
       <PresenceBar class="mb-3" :game-id="gameId" :status="gameStore.connectionStatus" :pending="pendingCount" />
 
       <section
-        class="selectors card alt small-metrics"
         v-if="Number((gameStore.currentGame as any)?.current_inning) === 2 && (firstInnings || targetSafe != null)"
+        class="selectors card alt small-metrics"
       >
         <div class="row compact">
-          <div class="col" v-if="firstInnings">
+          <div v-if="firstInnings" class="col">
             <strong>Innings 1:</strong>
             {{ firstInnings.runs }}/{{ firstInnings.wickets }} ({{ firstInnings.overs }})
           </div>
 
-          <div class="col" v-if="targetSafe != null">
+          <div v-if="targetSafe != null" class="col">
             <strong>Target:</strong> {{ targetSafe }}
           </div>
 
-          <div class="col" v-if="requiredRunRate != null">
+          <div v-if="requiredRunRate != null" class="col">
             <strong>Req RPO:</strong> {{ requiredRunRate.toFixed(2) }}
-            <small class="hint" v-if="runsRequired != null && ballsRemaining >= 0">
+            <small v-if="runsRequired != null && ballsRemaining >= 0" class="hint">
               Â· Need {{ runsRequired }} off {{ ballsRemaining }} balls ({{ oversRemainingDisplay }} overs)
             </small>
           </div>
@@ -1513,7 +1533,7 @@ async function confirmChangeBowler(): Promise<void> {
           </div>
         </div>
 
-        <small class="hint" v-if="selectedStrikerName && selectedBowlerName">
+        <small v-if="selectedStrikerName && selectedBowlerName" class="hint">
           {{ selectedStrikerName }} facing {{ selectedBowlerName }}.
         </small>
       </section>
@@ -1533,7 +1553,7 @@ async function confirmChangeBowler(): Promise<void> {
             <button class="btn" :disabled="!canUseMidOverChange" @click="openChangeBowler">Mid-over Change</button>
             <small class="hint">Allowed once per over (injury).</small>
           </div>
-          <div class="col bowler-now" v-if="currentBowler">
+          <div v-if="currentBowler" class="col bowler-now">
             <strong>Current:</strong> {{ currentBowler.name }} Â·
             <span>{{ currentBowlerDerived?.wkts ?? 0 }}-{{ currentBowlerDerived?.runs ?? 0 }}
               ({{ currentBowlerDerived?.oversText ?? '0.0' }})
@@ -1563,7 +1583,7 @@ async function confirmChangeBowler(): Promise<void> {
           <!-- NEW: toggle for subs card -->
           <div class="col">
             <label class="lbl" style="display:flex; align-items:center; gap:6px;">
-              <input type="checkbox" v-model="showSubsCard" />
+              <input v-model="showSubsCard" type="checkbox" />
               Fielding subs card
             </label>
             <small class="hint">Lists eligible substitute fielders.</small>
@@ -1578,7 +1598,7 @@ async function confirmChangeBowler(): Promise<void> {
         <div v-else-if="needsNewBatterLive">New batter required. <button class="btn btn-ghost" @click="openSelectBatter">Select next batter</button></div>
         <div v-else-if="needsNewOverLive">New over required. <button class="btn btn-ghost" @click="openStartOver">Choose bowler</button></div>
       </div>
-      <small class="hint" v-if="(!canScore || !canSubmitSimple) && cantScoreReasons.length">
+      <small v-if="(!canScore || !canSubmitSimple) && cantScoreReasons.length" class="hint">
         {{ cantScoreReasons[0] }}
       </small>
 
@@ -1611,14 +1631,14 @@ async function confirmChangeBowler(): Promise<void> {
           </div>
 
           <!-- Amount selector -->
-          <div class="col" v-if="extra==='none' || extra==='nb'">
+          <div v-if="extra==='none' || extra==='nb'" class="col">
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <span>Off the bat:</span>
               <button v-for="r in [0,1,2,3,4,5,6]" :key="r" class="btn" :class="offBat===r && 'btn-primary'" @click="offBat=r">{{ r }}</button>
             </div>
           </div>
 
-          <div class="col" v-else>
+          <div v-else class="col">
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <span v-if="extra==='wd'">Total wides:</span>
               <span v-else>Extras:</span>
@@ -1638,7 +1658,7 @@ async function confirmChangeBowler(): Promise<void> {
 
           <!-- Optional wicket -->
           <div class="col" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <label><input type="checkbox" v-model="isWicket" /> Wicket</label>
+            <label><input v-model="isWicket" type="checkbox" /> Wicket</label>
             <select v-if="isWicket" v-model="dismissal" class="sel">
               <option disabled value="">Select dismissal</option>
               <option value="bowled">Bowled</option>
@@ -1668,22 +1688,16 @@ async function confirmChangeBowler(): Promise<void> {
           </small>
           <!-- /NEW -->
 
-          <!-- Shot angle (optional, for legal ball or no-ball) -->
-          <input
-            v-if="extra==='none' || extra==='nb'"
-            type="number"
-            min="-180"
-            max="180"
-            step="5"
-            v-model.number="shotAngle"
-            placeholder="Shot angle (deg)"
-            class="inp"
-          />
-
           <select v-if="isWicket" v-model="dismissedName" class="sel" aria-label="Select dismissed batter">
             <option disabled value="">Select dismissed batter…</option>
             <option v-for="p in dismissedOptions" :key="p.id" :value="p.name">{{ p.name }}</option>
           </select>
+        </div>
+
+        <div v-if="extra==='none' || extra==='nb'" class="col shot-map-column">
+          <label class="shot-map-label">Shot map</label>
+          <ShotMapCanvas v-model="shotMap" :width="240" :height="200" />
+          <small class="hint">Optional: sketch the shot path for analytics.</small>
         </div>
 
           <!-- Submit -->
@@ -1692,16 +1706,17 @@ async function confirmChangeBowler(): Promise<void> {
               Submit delivery
             </button>
 
-            <button class="btn btn-ghost"
+            <button
+class="btn btn-ghost"
                     :disabled="!canDeleteLast || deletingLast"
                     @click="deleteLastDelivery">
               {{ deletingLast ? 'Deletingâ€¦' : 'Delete last delivery' }}
             </button>
-            <small class="hint" v-if="pendingCount > 0">
+            <small v-if="pendingCount > 0" class="hint">
               Wait for queued actions to finish before deleting.
             </small>
 
-            <small class="hint" v-if="!canScore">
+            <small v-if="!canScore" class="hint">
               Select striker/non-striker/bowler and clear any â€œNew over / New batterâ€ prompts.
             </small>
           </div>
@@ -1728,10 +1743,10 @@ async function confirmChangeBowler(): Promise<void> {
             <div v-if="showSubsCard" class="card subs-card">
               <div class="subs-hdr">
                 <h4>Fielding subs</h4>
-                <span class="count" v-if="fieldingSubs?.length">{{ fieldingSubs.length }}</span>
+                <span v-if="fieldingSubs?.length" class="count">{{ fieldingSubs.length }}</span>
               </div>
 
-              <ul class="subs-list" v-if="fieldingSubs && fieldingSubs.length">
+              <ul v-if="fieldingSubs && fieldingSubs.length" class="subs-list">
                 <li v-for="p in fieldingSubs" :key="p.id" class="subs-row">
                   <span class="name">{{ p.name }}</span>
                   <span class="chip">SUB</span>
@@ -1763,9 +1778,9 @@ async function confirmChangeBowler(): Promise<void> {
                   <div class="row-inline">
                     <label class="lbl">G50</label>
                     <input
+                      v-model.number="G50"
                       class="inp"
                       type="number"
-                      v-model.number="G50"
                       min="150"
                       max="300"
                       step="1"
@@ -1792,9 +1807,9 @@ async function confirmChangeBowler(): Promise<void> {
                       {{ applyingDls ? 'Applyingâ€¦' : 'Apply DLS Target' }}
                     </button>
 
-                    <small class="hint" v-if="gameStore.dlsApplied">DLS target applied.</small>
+                    <small v-if="gameStore.dlsApplied" class="hint">DLS target applied.</small>
                   </template>
-                  <small class="hint" v-else>Preview to compute a DLS target based on current resources.</small>
+                  <small v-else class="hint">Preview to compute a DLS target based on current resources.</small>
                 </div>
               </div>
 
@@ -1804,8 +1819,8 @@ async function confirmChangeBowler(): Promise<void> {
                 <div class="dls-grid">
                   <div class="row-inline" style="flex-wrap:wrap;">
                     <label class="lbl">Scope</label>
-                    <label><input type="radio" value="match" v-model="reduceScope"> Match</label>
-                    <label><input type="radio" value="innings" v-model="reduceScope"> Specific innings</label>
+                    <label><input v-model="reduceScope" type="radio" value="match"> Match</label>
+                    <label><input v-model="reduceScope" type="radio" value="innings"> Specific innings</label>
 
                     <select v-if="reduceScope==='innings'" v-model.number="reduceInnings" class="sel">
                       <option :value="1">Innings 1</option>
@@ -1815,7 +1830,7 @@ async function confirmChangeBowler(): Promise<void> {
 
                   <div class="row-inline" style="flex-wrap:wrap;">
                     <label class="lbl">New limit</label>
-                    <input class="inp" type="number" v-model.number="oversNew" min="1" step="1" style="width:90px;">
+                    <input v-model.number="oversNew" class="inp" type="number" min="1" step="1" style="width:90px;">
                     <small class="hint">Current limit: {{ oversLimit || 'â€”' }} overs</small>
                   </div>
 
@@ -1832,10 +1847,10 @@ async function confirmChangeBowler(): Promise<void> {
                   <button class="btn" :disabled="computingPar" @click="updateParNow">
                     {{ computingPar ? 'Computingâ€¦' : 'Update Live Par' }}
                   </button>
-                  <small class="hint" v-if="(gameStore.dlsPanel as any)?.par != null">
+                  <small v-if="(gameStore.dlsPanel as any)?.par != null" class="hint">
                     Par: {{ (gameStore.dlsPanel as any).par }}
                   </small>
-                  <small class="hint" v-else>Par will appear here once computed.</small>
+                  <small v-else class="hint">Par will appear here once computed.</small>
                 </div>
               </div>
             </div>
@@ -1845,11 +1860,11 @@ async function confirmChangeBowler(): Promise<void> {
     </main>
 
     <!-- Share & Monetize Modal -->
-    <div v-if="shareOpen" class="backdrop" @click.self="closeShare" role="dialog" aria-modal="true" aria-labelledby="share-title">
+    <div v-if="shareOpen" class="backdrop" role="dialog" aria-modal="true" aria-labelledby="share-title" @click.self="closeShare">
       <div class="modal">
         <header class="modal-hdr">
           <h3 id="share-title">Share & Monetize</h3>
-          <button class="x" @click="closeShare" aria-label="Close modal">âœ•</button>
+          <button class="x" aria-label="Close modal" @click="closeShare">âœ•</button>
         </header>
 
         <section class="modal-body">
@@ -1960,7 +1975,7 @@ async function confirmChangeBowler(): Promise<void> {
       <form method="dialog" class="dlg">
         <h3>Weather interruption</h3>
         <p>Add an optional note (e.g., â€œRain, covers onâ€).</p>
-        <input class="inp" v-model="weatherNote" placeholder="Note (optional)" />
+        <input v-model="weatherNote" class="inp" placeholder="Note (optional)" />
         <footer>
           <button type="button" class="btn" @click="closeWeather">Close</button>
           <button type="button" class="btn" @click.prevent="resumeAfterWeather">Resume play</button>
@@ -1990,6 +2005,16 @@ async function confirmChangeBowler(): Promise<void> {
 </template>
 
 <style scoped>
+.shot-map-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 260px;
+}
+.shot-map-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
 /* Layout */
 .game-scoring { padding: 12px; display: grid; gap: 12px; }
 .toolbar { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.08); }

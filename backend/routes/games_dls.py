@@ -5,9 +5,9 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import Literal, Any
 from sqlalchemy.orm import Session
-from sql_app import models
-from sql_app.database import get_db
-from services.dls_service import resource_remaining, calc_target
+from backend.sql_app import models
+from backend.sql_app.database import get_db
+from backend.services.dls_service import resource_remaining, calc_target
 
 # Optional live-bus broadcast (safe no-op if you don't have it yet)
 try:

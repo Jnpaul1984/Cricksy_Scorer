@@ -1,16 +1,22 @@
 ﻿// src/utils/api.ts
 // Single, canonical API client aligned with FastAPI backend & the Pinia game store.
 
-export const API_BASE =
+const ENV_API_BASE =
   (typeof import.meta !== 'undefined' &&
     // Prefer VITE_API_BASE (your env files now use this)
     (import.meta.env?.VITE_API_BASE ||
       // keep a loose fallback if someone still has the old key around
       import.meta.env?.VITE_API_BASE_URL)) ||
-  (typeof window !== 'undefined'
-    ? `${window.location.protocol}//${window.location.host}`
-    : '') ||
   '';
+
+const DEV_FALLBACK =
+  typeof import.meta !== 'undefined' && import.meta.env?.DEV ? 'http://localhost:8000' : '';
+
+const RUNTIME_ORIGIN =
+  typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '';
+
+export const API_BASE = (ENV_API_BASE || DEV_FALLBACK || RUNTIME_ORIGIN || '').replace(/\/+$/, '');
+console.info('API_BASE', API_BASE);
 
 function url(path: string) {
   if (!API_BASE) return path;
@@ -29,7 +35,9 @@ export function getErrorMessage(err: unknown): string {
     if (anyErr?.message) return String(anyErr.message);
     if (anyErr?.response?.data?.detail) return String(anyErr.response.data.detail);
     if (anyErr?.status && anyErr?.statusText) return `${anyErr.status} ${anyErr.statusText}`;
-  } catch {}
+  } catch {
+    // ignore JSON parsing issues when mining error metadata
+  }
   return 'Request failed';
 }
 
@@ -58,12 +66,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     let detail: any = undefined
-    try { detail = await res.json() } catch {}
+    try { detail = await res.json() } catch {
+      // ignore body parsing errors when building error info
+    }
     const msg = detail?.detail || `${res.status} ${res.statusText}`
     const err = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
-    // @ts-expect-error
+    // @ts-expect-error – attach HTTP status for downstream handlers
     err.status = res.status
-    // @ts-expect-error
+    // @ts-expect-error – attach API error payload when available
     err.detail = detail?.detail ?? null
     throw err
   }
@@ -161,6 +171,7 @@ export interface Snapshot {
     extra_type?: ExtraCode | null;
     extra_runs?: number;
     runs_scored?: number; // total for this ball
+    shot_map?: string | null;
   } | null;
     // NEW from backend
   dls?: { method: 'DLS'; par?: number; target?: number; ahead_by?: number };
@@ -312,16 +323,20 @@ async function openInterruption(
         if (!res.ok) throw res
         const j = await res.json()
         return Array.isArray(j?.interruptions) ? j.interruptions.at(-1) : (j as Interruption)
-      } catch {}
+      } catch {
+        // ignoring fallback failure; we attempt querystring next
+      }
       // finally querystring (no body)
       const qs = new URLSearchParams({ kind, ...(note ? { note } : {}) }).toString()
       const res = await fetch(url(`${path}?${qs}`), { method: 'POST' })
       if (!res.ok) {
-        let detail: any; try { detail = await res.json() } catch {}
+        let detail: any; try { detail = await res.json() } catch {
+          // ignore parse failure for error handling
+        }
         const err = new Error(detail?.detail || `${res.status} ${res.statusText}`)
-        // @ts-expect-error
+        // @ts-expect-error – expose HTTP status for UI messaging
         err.status = res.status
-        // @ts-expect-error
+        // @ts-expect-error – attach API detail payload for callers
         err.detail = detail?.detail ?? null
         throw err
       }
@@ -523,7 +538,7 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
     const qp = new URLSearchParams()
     if (params?.innings != null) qp.set('innings', String(params.innings))
     if (params?.limit != null)   qp.set('limit',   String(params.limit))
-    if (params?.order)           qp.set('order',   params.order) // NEW
+    if (params?.order)           qp.set('order',   params.order) // allow asc/desc order selection
     const qs = qp.toString()
     const path = `/games/${encodeURIComponent(gameId)}/deliveries${qs ? `?${qs}` : ''}`
     return request<{ game_id: string; count: number; deliveries: any[] }>(path)

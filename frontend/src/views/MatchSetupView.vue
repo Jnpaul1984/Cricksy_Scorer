@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { reactive, computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useGameStore } from '@/stores/gameStore'
-import { getErrorMessage } from '@/utils/api'
-import type { GameState } from '@/types'
+
 import PlayersEditor from '@/components/PlayersEditor.vue'
+import { useGameStore } from '@/stores/gameStore'
+import type { GameState } from '@/types'
+import { getErrorMessage } from '@/utils/api'
 
 const router = useRouter()
 const game = useGameStore()
@@ -96,8 +97,8 @@ async function onSubmit() {
         <div class="row">
           <PlayersEditor
             v-model="playersA"
-            :label="'Players – Team A'"
-            :teamName="form.team_a_name"
+            :label="`Players - ${form.team_a_name || 'Team A'}`"
+            :team-name="form.team_a_name"
             :max="16"
             :min="2"
           />
@@ -106,8 +107,8 @@ async function onSubmit() {
         <div class="row">
           <PlayersEditor
             v-model="playersB"
-            :label="'Players – Team B'"
-            :teamName="form.team_b_name"
+            :label="`Players - ${form.team_b_name || 'Team B'}`"
+            :team-name="form.team_b_name"
             :max="16"
             :min="2"
           />
@@ -124,16 +125,16 @@ async function onSubmit() {
           </div>
           <div v-if="form.match_type === 'limited'">
             <label>Overs (per innings)</label>
-            <input type="number" min="1" max="120" v-model.number="form.overs_limit" />
+            <input v-model.number="form.overs_limit" type="number" min="1" max="120" />
           </div>
           <template v-else-if="form.match_type === 'multi_day'">
             <div>
               <label>Days</label>
-              <input type="number" min="1" max="7" v-model.number="form.days_limit" />
+              <input v-model.number="form.days_limit" type="number" min="1" max="7" />
             </div>
             <div>
               <label>Overs per Day</label>
-              <input type="number" min="1" max="120" v-model.number="form.overs_per_day" />
+              <input v-model.number="form.overs_per_day" type="number" min="1" max="120" />
             </div>
           </template>
         </div>
@@ -150,8 +151,8 @@ async function onSubmit() {
             <label>Toss Winner</label>
             <select v-model="form.toss_winner_team">
               <option value="">— select —</option>
-              <option :value="form.team_a_name" v-if="form.team_a_name">{{ form.team_a_name }}</option>
-              <option :value="form.team_b_name" v-if="form.team_b_name">{{ form.team_b_name }}</option>
+              <option v-if="form.team_a_name" :value="form.team_a_name">{{ form.team_a_name }}</option>
+              <option v-if="form.team_b_name" :value="form.team_b_name">{{ form.team_b_name }}</option>
             </select>
           </div>
         </div>
@@ -159,8 +160,8 @@ async function onSubmit() {
         <div class="row">
           <label>Decision</label>
           <div class="toggle">
-            <label><input type="radio" value="bat" v-model="form.decision" /> Bat</label>
-            <label><input type="radio" value="bowl" v-model="form.decision" /> Bowl</label>
+            <label><input v-model="form.decision" type="radio" value="bat" /> Bat</label>
+            <label><input v-model="form.decision" type="radio" value="bowl" /> Bowl</label>
           </div>
         </div>
 

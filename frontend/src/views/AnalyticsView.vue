@@ -1,11 +1,13 @@
 ﻿<script setup lang="ts">
 import { ref, computed } from 'vue'
-import apiService from '@/utils/api'
+
+import ShotMapPreview from '@/components/ShotMapPreview.vue'
 import ChartBar from '@/components/analytics/ChartBar.vue'
 import ChartLine from '@/components/analytics/ChartLine.vue'
 import PartnershipHeatmap from '@/components/analytics/PartnershipHeatmap.vue'
-import WagonWheel from '@/components/analytics/WagonWheel.vue'
 import PhaseSplits from '@/components/analytics/PhaseSplits.vue'
+import WagonWheel from '@/components/analytics/WagonWheel.vue'
+import { apiService } from '@/utils/api'
 
 type UUID = string
 
@@ -22,6 +24,7 @@ type Delivery = {
   striker_id?: string | null
   non_striker_id?: string | null
   shot_angle_deg?: number | null
+  shot_map?: string | null
 }
 
 const qTeamA = ref('')
@@ -316,6 +319,14 @@ const wagonStrokes = computed(() => {
   }
   return out
 })
+
+const shotMapDeliveries = computed(() => {
+  const withMap = deliveries.value.filter((d) => {
+    const value = (d as any)?.shot_map
+    return typeof value === 'string' && value.length > 0
+  })
+  return withMap.reverse()
+})
 </script>
 
 <template>
@@ -349,12 +360,12 @@ const wagonStrokes = computed(() => {
         </div>
       </div>
 
-      <div class="card" v-if="manhattanChart.labels.length">
+      <div v-if="manhattanChart.labels.length" class="card">
         <h3>Manhattan (runs per over)</h3>
         <ChartBar :labels="manhattanChart.labels" :series="manhattanChart.series" />
       </div>
 
-      <div class="card" v-if="wormChart.labels.length">
+      <div v-if="wormChart.labels.length" class="card">
         <h3>Worm (cumulative)</h3>
         <ChartLine :labels="wormChart.labels" :series="wormChart.series" />
       </div>
@@ -450,6 +461,21 @@ const wagonStrokes = computed(() => {
           Shot angles will appear here once captured during scoring.
         </small>
       </div>
+
+      <div v-if="shotMapDeliveries.length" class="card wide">
+        <h3>Shot Maps</h3>
+        <ul class="shot-map-list">
+          <li
+            v-for="d in shotMapDeliveries.slice(0, 12)"
+            :key="`${d.inning ?? 0}-${d.over_number ?? 0}-${d.ball_number ?? 0}`"
+          >
+            <div class="shot-map-meta">
+              Inn {{ d.inning ?? '?' }}, Over {{ (d.over_number ?? 0) + 1 }}.{{ d.ball_number ?? 0 }}
+            </div>
+            <ShotMapPreview :value="(d as any).shot_map" :size="88" />
+          </li>
+        </ul>
+      </div>
     </section>
   </main>
 </template>
@@ -465,7 +491,27 @@ const wagonStrokes = computed(() => {
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+}.shot-map-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
+.shot-map-list li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.shot-map-meta {
+  font-size: 0.8rem;
+  color: #475569;
+  text-align: center;
+}
+
+
 .card {
   border: 1px solid #e5e7eb;
   border-radius: 12px;

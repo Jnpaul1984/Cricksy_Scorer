@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ShotMapPreview from '@/components/ShotMapPreview.vue'
+
 type Delivery = {
   over_number: number
   ball_number: number
@@ -12,6 +14,7 @@ type Delivery = {
   dismissal_type?: string | null
   dismissed_player_id?: string | null
   commentary?: string | null
+  shot_map?: string | null
 }
 
 const props = defineProps<{
@@ -36,6 +39,7 @@ const nameOf = (id?: string | null) =>
           <th>Runs</th>
           <th>Extra</th>
           <th>Wicket</th>
+          <th>Shot</th>
           <th>Notes</th>
         </tr>
       </thead>
@@ -49,13 +53,17 @@ const nameOf = (id?: string | null) =>
           <td>{{ nameOf(d.striker_id) }}</td>
           <td>{{ nameOf(d.bowler_id) }}</td>
           <td class="num">{{ d.runs_scored }}</td>
-          <td class="tag" v-if="d.is_extra">
+          <td v-if="d.is_extra" class="tag">
             {{ (d.extra_type || '').toUpperCase() }}
           </td>
-          <td class="tag wicket" v-else-if="d.is_wicket">
+          <td v-else-if="d.is_wicket" class="tag wicket">
             {{ (d.dismissal_type || 'WICKET').toUpperCase() }}
           </td>
           <td v-else>—</td>
+          <td class="shot">
+            <ShotMapPreview v-if="d.shot_map" :value="d.shot_map" :size="54" />
+            <span v-else>—</span>
+          </td>
           <td class="notes">{{ d.commentary || '' }}</td>
         </tr>
       </tbody>
@@ -76,5 +84,7 @@ th{background:rgba(255,255,255,.08);text-align:left;font-weight:600}
 .tag{font-size:.85rem;font-weight:700;letter-spacing:.02em}
 .wicket{color:#ffb3b3}
 .notes{opacity:.9}
+.shot{min-width:64px;text-align:center}
+.shot span{opacity:.6}
 .empty{padding:1rem;color:#fff;opacity:.85}
 </style>

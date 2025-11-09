@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { onMounted, onBeforeUnmount } from 'vue'
+
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import { useGameStore } from '@/stores/gameStore'
-import { onMounted, onBeforeUnmount } from 'vue'
 
 // Provide a test-only hook on this route to inject a match fixture
 // into the Pinia store so the widget can render the result banner.
@@ -38,7 +39,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div style="padding: 1rem">
-    <ScoreboardWidget :gameId="'e2e'" />
+    <ScoreboardWidget :game-id="'e2e'" />
   </div>
   
 </template>

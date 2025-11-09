@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { fmtSR, fmtEconomy, oversDisplayFromBalls, oversDisplayFromAny, deriveBowlerFigures } from '@/utils/cricket'
-import { useGameStore } from '@/stores/gameStore'
+/* eslint-disable */
 import { storeToRefs } from 'pinia'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+
 import { useHighlights, type Snapshot as HL } from '@/composables/useHighlights'
+import { useGameStore } from '@/stores/gameStore'
+import { fmtSR, fmtEconomy, oversDisplayFromBalls, oversDisplayFromAny, deriveBowlerFigures } from '@/utils/cricket'
 /* ------------------------------------------------------------------ */
 /* Props                                                               */
 /* ------------------------------------------------------------------ */
@@ -345,11 +347,12 @@ const sAny = computed(() => (state.value || {}) as any)
 const allDeliveries = computed<any[]>(() => {
   const fromState = Array.isArray((state.value as any)?.recent_deliveries)
     ? (state.value as any).recent_deliveries
-    : null
+    : []
   const fromModel = Array.isArray((currentGame.value as any)?.deliveries)
     ? (currentGame.value as any).deliveries
     : []
-  return (fromState ?? fromModel)
+  const combined = fromModel.length ? [...fromModel, ...fromState] : fromState
+  return combined.length ? dedupeByKey(combined) : []
 })
 
 
@@ -422,15 +425,7 @@ function dedupeByKey(arr: any[]) {
 }
 
 
-const allDeliveriesRaw = computed<any[]>(() => {
-  const fromState = Array.isArray((state.value as any)?.recent_deliveries)
-    ? (state.value as any).recent_deliveries
-    : null
-  const fromModel = Array.isArray((currentGame.value as any)?.deliveries)
-    ? (currentGame.value as any).deliveries
-    : []
-  return (fromState ?? fromModel)
-})
+const allDeliveriesRaw = computed<any[]>(() => allDeliveries.value)
 
 // only this innings; if there are no innings markers at all, fall back to everything for innings 1, else empty
 
@@ -583,9 +578,27 @@ const innings1 = computed<null | { runs: number; wkts: number; balls: number }>(
   return { runs, wkts, balls }
 })
 
-const innings1Line = computed<string | null>(() =>
-  innings1.value ? `${innings1.value.runs}/${innings1.value.wkts} (${oversDisplayFromBalls(innings1.value.balls)} ov)` : null
-)
+const innings1Line = computed<string | null>(() => {
+  const snap = liveSnapshot.value
+  
+  // If we're in innings 2 or later, ALWAYS use the snapshot summary (most reliable)
+  if (currentInningsNo.value >= 2) {
+    const summary = snap?.first_inning_summary || (snap as any)?.first_innings_summary
+    if (summary) {
+      const runs = summary.runs ?? 0
+      const wickets = summary.wickets ?? 0
+      const overs = summary.overs ?? 0
+      return `${runs}/${wickets} (${overs} ov)`
+    }
+  }
+  
+  // For live innings 1, calculate from deliveries
+  if (innings1.value) {
+    return `${innings1.value.runs}/${innings1.value.wkts} (${oversDisplayFromBalls(innings1.value.balls)} ov)`
+  }
+  
+  return null
+})
 
 // === Highlights (FOUR/SIX/WICKET/DUCK/50/100) =========================
 const enableHighlights = ref(true)   // make a prop later if you want
@@ -897,11 +910,11 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
     <header class="hdr">
       <img
         v-if="logoUrl && logoOk"
+        :key="logoUrl"
         class="brand"
         :src="logoUrl"
         alt="Logo"
         @error="onLogoErr"
-        :key="logoUrl"
       />
       <h3>{{ title || 'Live Scoreboard' }}</h3>
       <span v-if="!isGameOver" class="pill live">● LIVE</span>
@@ -946,8 +959,8 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
           v-if="props.canControl"
           class="btn btn-ghost"
           :disabled="interBusy"
-          @click="resumePlay(currentInterruption?.kind as any)"
           style="margin-left:auto"
+          @click="resumePlay(currentInterruption?.kind as any)"
         >
           {{ interBusy ? 'Resuming…' : 'Resume play' }}
         </button>
@@ -973,7 +986,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
       </div>
 
       <!-- First-innings summary -->
-      <div class="first-inn" v-if="innings1Line">
+      <div v-if="innings1Line" class="first-inn">
         <span class="lbl">First Innings — {{ innings1TeamName || '—' }}</span>
         <strong>{{ innings1Line }}</strong>
       </div>
@@ -1085,7 +1098,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         <div class="pane">
           <div class="pane-title">Last 10 balls</div>
           <div class="balls">
-            <div class="ball" v-for="(d, i) in recentDeliveries" :key="i" :title="ballLabel(d)">
+            <div v-for="(d, i) in recentDeliveries" :key="i" class="ball" :title="ballLabel(d)">
               {{ outcomeTag(d) }}
             </div>
           </div>

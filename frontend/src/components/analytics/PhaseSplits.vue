@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const props = defineProps<{ splits: Array<{ name:string; runs:number; overs:number; wkts:number }> }>()
+const { splits } = defineProps<{ splits: Array<{ name:string; runs:number; overs:number; wkts:number }> }>()
 </script>
 
 <template>

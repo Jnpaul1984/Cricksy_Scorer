@@ -1,5 +1,10 @@
 <script setup lang="ts">
-const props = defineProps<{ modelValue: string; placeholder?: string }>()
+import { toRefs, withDefaults } from 'vue'
+
+const props = withDefaults(defineProps<{ modelValue: string; placeholder?: string }>(), {
+  placeholder: '',
+})
+const { modelValue, placeholder } = toRefs(props)
 const emit = defineEmits<{ (e:'update:modelValue', v: string): void }>()
 
 function onInput(e: Event) {

@@ -1,0 +1,44 @@
+1; import { defineConfig } from 'cypress'
+2; import { fileURLToPath } from 'node:url'
+3; import path from 'node:path'
+4; import { seedMatch } from './cypress/support/matchSimulator.runtime.js'
+5; 
+6; const __filename = fileURLToPath(import.meta.url)
+7; const __dirname = path.dirname(__filename)
+8; 
+9; export default defineConfig({
+10;   e2e: {
+11;     async setupNodeEvents(on, config) {
+12;       const projectRoot = __dirname
+13; 
+14;       on('task', {
+15;         'seed:match': async () => {
+16;           console.log('[cypress.config.js] seed:match handler invoked')
+17;           const apiBase =
+18;             (typeof config.env.API_BASE === 'string' ? config.env.API_BASE : undefined) ||
+19;             process.env.API_BASE ||
+20;             'http://localhost:8000'
+21;           const frontendDir = projectRoot
+22;           console.log('[cypress.config.js] seed:match cwd:', process.cwd(), 'frontendDir:', frontendDir)
+23;           try {
+24;             return await seedMatch(apiBase, frontendDir)
+25;           } catch (err) {
+26;             console.error('[matchSimulator] seedMatch error', err)
+27;             throw err
+28;           }
+29;         },
+30;       })
+31; 
+32;       return config
+33;     },
+34;     baseUrl: 'http://localhost:3000',
+35;     supportFile: false,
+36;     specPattern: 'cypress/e2e/**/*.cy.{js,ts,jsx,tsx}',
+37;     fixturesFolder: 'cypress/fixtures',
+38;     video: false,
+39;     screenshotOnRunFailure: false,
+40;     env: {
+41;       API_BASE: process.env.API_BASE || 'http://localhost:8000',
+42;     },
+43;   },
+44; })

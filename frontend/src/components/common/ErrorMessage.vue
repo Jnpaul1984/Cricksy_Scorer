@@ -4,7 +4,7 @@
       {{ errorIcon }}
     </div>
     <div class="error-content">
-      <div class="error-title" v-if="title">
+      <div v-if="title" class="error-title">
         {{ title }}
       </div>
       <div class="error-text">
@@ -16,10 +16,10 @@
     </div>
     <button 
       v-if="dismissible" 
-      @click="handleDismiss"
       class="dismiss-button"
       type="button"
       aria-label="Dismiss error"
+      @click="handleDismiss"
     >
       ✕
     </button>

@@ -1,16 +1,28 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
-import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
-import { useGameStore } from '@/stores/gameStore'
+
 import simulatedMatch from '../../../simulated_t20_match.json'
 
+import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
+import { useGameStore } from '@/stores/gameStore'
+
 describe('ScoreboardWidget', () => {
+  let wrapper: any
+
+  afterEach(() => {
+    // Cleanup: unmount component to stop any timers
+    if (wrapper) {
+      wrapper.unmount()
+      wrapper = null
+    }
+  })
+
   it('displays the winner and match result', async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
 
-    const wrapper = mount(ScoreboardWidget, {
+    wrapper = mount(ScoreboardWidget, {
       global: { plugins: [pinia] },
       props: {
         gameId: 'test-game-id'
