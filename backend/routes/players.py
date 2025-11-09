@@ -16,7 +16,7 @@ from backend.sql_app.schemas import (
     PlayerProfileResponse,
 )
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import desc, select
+from sqlalchemy import Float, cast, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -203,24 +203,31 @@ async def get_leaderboard(
 
     if metric == "batting_average":
         # Filter players with at least 1 innings and order by average
+        # Cast to Float to preserve decimal precision in sorting
         query = query.where(PlayerProfile.times_out > 0).order_by(
-            desc(PlayerProfile.total_runs_scored / PlayerProfile.times_out)
+            desc(cast(PlayerProfile.total_runs_scored, Float) / PlayerProfile.times_out)
         )
     elif metric == "strike_rate":
+        # Cast to Float to preserve decimal precision in sorting
         query = query.where(PlayerProfile.total_balls_faced > 0).order_by(
-            desc((PlayerProfile.total_runs_scored / PlayerProfile.total_balls_faced) * 100)
+            desc(
+                (cast(PlayerProfile.total_runs_scored, Float) / PlayerProfile.total_balls_faced)
+                * 100
+            )
         )
     elif metric == "total_runs":
         query = query.order_by(desc(PlayerProfile.total_runs_scored))
     elif metric == "centuries":
         query = query.order_by(desc(PlayerProfile.centuries))
     elif metric == "bowling_average":
+        # Cast to Float to preserve decimal precision in sorting
         query = query.where(PlayerProfile.total_wickets > 0).order_by(
-            PlayerProfile.total_runs_conceded / PlayerProfile.total_wickets
+            cast(PlayerProfile.total_runs_conceded, Float) / PlayerProfile.total_wickets
         )
     elif metric == "economy_rate":
+        # Cast to Float to preserve decimal precision in sorting
         query = query.where(PlayerProfile.total_overs_bowled > 0).order_by(
-            PlayerProfile.total_runs_conceded / PlayerProfile.total_overs_bowled
+            cast(PlayerProfile.total_runs_conceded, Float) / PlayerProfile.total_overs_bowled
         )
     elif metric == "total_wickets":
         query = query.order_by(desc(PlayerProfile.total_wickets))
