@@ -162,6 +162,13 @@ async function continueToScoring() {
       keeper_b: keeperB.value,
     }
     localStorage.setItem(KEY(gameId.value), JSON.stringify(xi))
+    
+    // Persist lastGameId for resume functionality
+    try {
+      localStorage.setItem('lastGameId', gameId.value)
+    } catch (err) {
+      console.warn('Failed to save lastGameId:', err)
+    }
 
     // NEW: send XI + roles to backend
     await persistXIIfSupported()

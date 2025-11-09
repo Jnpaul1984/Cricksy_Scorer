@@ -1168,6 +1168,13 @@ onMounted(async () => {
   const id = gameId.value
   if (!id) { void router.replace('/'); return }
 
+  // Persist lastGameId for resume functionality
+  try {
+    localStorage.setItem('lastGameId', id)
+  } catch (err) {
+    console.warn('Failed to save lastGameId:', err)
+  }
+
   try {
     await gameStore.loadGame(id)
     loadXIForGame(id)
