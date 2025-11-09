@@ -22,6 +22,17 @@ const router = createRouter({
       component: () => import('@/views/AnalyticsView.vue'),
     },
     {
+      path: '/players/:playerId/profile',
+      name: 'player-profile',
+      component: () => import('@/views/PlayerProfileView.vue'),
+      props: true,
+    },
+    {
+      path: '/leaderboard',
+      name: 'leaderboard',
+      component: () => import('@/views/LeaderboardView.vue'),
+    },
+    {
       path: '/e2e',
       name: 'e2e-view',
       component: () => import('@/views/E2EView.vue'),
@@ -51,6 +62,18 @@ const router = createRouter({
       component: () => import('@/views/EmbedScoreboardView.vue'),
       // pass query params (theme/title/logo...) through as props too
       props: route => ({ gameId: String(route.params.gameId), ...route.query }),
+    },
+
+    // --- Tournament routes ---
+    {
+      path: '/tournaments',
+      name: 'tournaments',
+      component: () => import('@/views/TournamentDashboardView.vue'),
+    },
+    {
+      path: '/tournaments/:tournamentId',
+      name: 'tournament-detail',
+      component: () => import('@/views/TournamentDetailView.vue'),
     },
 
     // Catch-all → setup

@@ -39,13 +39,57 @@ const chartData = computed(() => ({
 const options = {
   responsive: true,
   maintainAspectRatio: false,
+  interaction: {
+    mode: 'index' as const,
+    intersect: false,
+  },
   plugins: {
-    legend: { position: 'bottom' as const },
-    tooltip: { mode: 'index' as const, intersect: false },
+    legend: { 
+      position: 'bottom' as const,
+      labels: {
+        padding: 12,
+        usePointStyle: true,
+      }
+    },
+    tooltip: { 
+      mode: 'index' as const, 
+      intersect: false,
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      padding: 12,
+      titleFont: {
+        size: 14,
+        weight: 'bold' as const,
+      },
+      bodyFont: {
+        size: 13,
+      },
+      callbacks: {
+        label: function(context: { dataset: { label?: string }; parsed: { y: number | null } }) {
+          const label = context.dataset.label || '';
+          const value = context.parsed.y ?? 0;
+          return `${label}: ${value} runs`;
+        }
+      }
+    },
   },
   scales: {
-    x: { display: true },
-    y: { beginAtZero: true },
+    x: { 
+      display: true,
+      grid: {
+        display: true,
+        color: 'rgba(0, 0, 0, 0.05)',
+      }
+    },
+    y: { 
+      beginAtZero: true,
+      title: {
+        display: true,
+        text: 'Cumulative Runs',
+      },
+      ticks: {
+        precision: 0,
+      }
+    },
   },
 }
 </script>

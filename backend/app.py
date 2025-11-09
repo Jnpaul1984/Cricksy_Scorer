@@ -5,7 +5,8 @@ import os
 from collections.abc import AsyncGenerator
 from contextlib import suppress
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
+import asyncio
 
 import socketio  # type: ignore[import-not-found]
 from fastapi import FastAPI
@@ -13,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 # DB dependency and in-memory wiring
-from sqlalchemy.ext.asyncio import AsyncSession
+# sqlalchemy AsyncSession is provided by database.get_db dependency when needed
 
 from backend.config import settings as default_settings
 from backend.error_handlers import install_exception_handlers  # NEW
@@ -34,14 +35,18 @@ from backend.routes.games_dls import router as games_dls_router
 from backend.routes.games_router import router as games_router
 from backend.routes.health import router as health_router
 from backend.routes.interruptions import router as interruptions_router
+from backend.routes.players import router as players_router
 from backend.routes.prediction import router as prediction_router
 from backend.routes.sponsors import router as sponsors_router
+from backend.routes.tournaments import router as tournaments_router
 from backend.services.live_bus import set_socketio_server as _set_bus_sio
 
 # Socket handlers and live bus
 from backend.socket_handlers import register_sio
-from backend.sql_app.database import SessionLocal
+from backend.sql_app import database as db
 from backend.sql_app.database import get_db as db_get_db  # type: ignore[unused-ignore]
+
+__all__ = ["create_app"]
 
 # Optional in-memory CRUD support
 InMemoryCrudRepoClass: Any | None = None
@@ -67,7 +72,8 @@ class _FakeResult:
     def scalars(self) -> _FakeResult:
         return self
 
-    async def all(self) -> list[Any]:
+    def all(self) -> list[Any]:
+        # synchronous .all() to match SQLAlchemy's Result.scalars().all()
         return []
 
     def first(self) -> Any | None:
@@ -88,12 +94,81 @@ class _MemoryExecResult(_FakeResult):
         # fetcher should be a callable that returns an awaitable returning a list
         self._fetcher = fetcher
 
-    async def all(self) -> list[Any]:
-        try:
-            return await self._fetcher()
-        except TypeError:
-            # fetcher might be a sync callable returning a value
-            return self._fetcher()
+    def all(self) -> Any:
+        """Return an object that is both awaitable and iterable/list-like.
+
+        - Awaiting it runs the underlying async fetcher and returns the list.
+        - Iterating over it (or accessing like a list) will attempt to fetch the
+          data synchronously when possible; if the fetcher is async and the
+          event loop is running, iteration will fall back to an empty list to
+          avoid runtime errors.
+        """
+
+        fetcher = self._fetcher
+
+        class _MaybeAwaitableList:
+            def __init__(self, fetcher: Any):
+                self._fetcher = fetcher
+                self._value: list[Any] | None = None
+
+            def _ensure_sync(self) -> list[Any]:
+                if self._value is not None:
+                    return self._value
+                try:
+                    val = self._fetcher()
+                except TypeError:
+                    val = self._fetcher
+
+                if hasattr(val, "__await__"):
+                    # If the loop is not running we can run the coroutine.
+                    try:
+                        loop = asyncio.get_event_loop()
+                    except RuntimeError:
+                        loop = None
+
+                    if loop is None or not loop.is_running():
+                        # Safe to run synchronously
+                        try:
+                            self._value = asyncio.get_event_loop().run_until_complete(val)
+                        except Exception:
+                            self._value = []
+                    else:
+                        # We're inside an event loop; can't run coroutine synchronously
+                        self._value = []
+                else:
+                    self._value = val
+
+                return self._value if self._value is not None else []
+
+            # Make it awaitable
+            def __await__(self):
+                try:
+                    val = self._fetcher()
+                except TypeError:
+                    val = self._fetcher
+
+                if hasattr(val, "__await__"):
+                    return val.__await__()
+
+                async def _wrap():
+                    return val
+
+                return _wrap().__await__()
+
+            # list-like methods
+            def __iter__(self):
+                return iter(self._ensure_sync())
+
+            def __len__(self):
+                return len(self._ensure_sync())
+
+            def __getitem__(self, idx: int):
+                return self._ensure_sync()[idx]
+
+            def __repr__(self) -> str:  # pragma: no cover - convenience
+                return repr(self._ensure_sync())
+
+        return _MaybeAwaitableList(fetcher)
 
 
 class _FakeSession:
@@ -157,7 +232,7 @@ def create_app(
     _sio = socketio.AsyncServer(
         async_mode="asgi", cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS
     )  # type: ignore[call-arg]
-    sio = cast("socketio.AsyncServer", _sio)
+    sio = _sio
     fastapi_app = FastAPI(title="Cricksy Scorer API")
     fastapi_app.state.sio = sio
 
@@ -198,11 +273,26 @@ def create_app(
     fastapi_app.include_router(sponsors_router)
     fastapi_app.include_router(games_core_router)
     fastapi_app.include_router(prediction_router)
+    fastapi_app.include_router(players_router)
+    fastapi_app.include_router(tournaments_router)
 
-    # Standard DB dependency
-    async def _get_db() -> AsyncGenerator[AsyncSession, None]:
-        async with SessionLocal() as session:  # type: ignore[misc]
-            yield session
+    # Ensure the DB engine/sessionmaker are created at application startup so
+    # TestClient and other in-process runners create pools on the same event loop.
+    @fastapi_app.on_event("startup")  # type: ignore[reportDeprecated]
+    async def _init_db_event() -> None:  # type: ignore[reportUnusedFunction]
+        # Initialise engine/sessionmaker (sync function)
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            db.init_engine()
+
+    @fastapi_app.on_event("shutdown")  # type: ignore[reportDeprecated]
+    async def _shutdown_db_event() -> None:  # type: ignore[reportUnusedFunction]
+        # Best-effort engine disposal
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            await db.shutdown_engine()
 
     # Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
     use_in_memory = bool(getattr(settings, "IN_MEMORY_DB", False)) or (
@@ -211,7 +301,7 @@ def create_app(
 
     if use_in_memory:
 
-        async def _in_memory_get_db() -> AsyncGenerator[object, None]:
+        async def _in_memory_get_db() -> AsyncGenerator[_FakeSession, None]:
             yield _FakeSession()
 
         fastapi_app.dependency_overrides[db_get_db] = _in_memory_get_db  # type: ignore[index]

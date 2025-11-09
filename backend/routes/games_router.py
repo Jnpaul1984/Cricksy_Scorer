@@ -101,9 +101,15 @@ async def set_playing_xi_alias(
     return await set_playing_xi(game_id, payload, db)
 
 
+# NOTE: _name function retained for potential future use / testing / debugging
+# It's not currently called by active routes but may be needed for legacy compatibility
+__all__ = ["_name", "router", "search_games", "set_playing_xi", "set_playing_xi_alias"]
+
+
 def _name(obj: Any, fallback: str = "") -> str:
     """
     Extract a team name from JSON columns that might be dicts, strings, or legacy values.
+    (Retained for compatibility; not currently called by active routes.)
     """
     if obj is None:
         return fallback
@@ -118,9 +124,12 @@ def _name(obj: Any, fallback: str = "") -> str:
         obj = parsed
 
     if isinstance(obj, Mapping):
-        value = obj.get("name") or fallback
-        if value:
-            return str(value)
+        # Cast to concrete dict to avoid partially-unknown .get() overload warnings
+        m = cast(dict[str, Any], obj)
+        value_raw = m.get("name")
+        if isinstance(value_raw, str) and value_raw:
+            return value_raw
+        return fallback
 
     return fallback
 
@@ -156,7 +165,8 @@ async def search_games(
     if rows is None:
         try:
             res = await db.execute(select(models.Game))
-            rows = await res.scalars().all()
+            # scalars().all() is not awaitable; cast to concrete list for typing
+            rows = cast(list[models.Game], res.scalars().all())
         except Exception:
             rows = None
 
@@ -196,7 +206,8 @@ async def search_games(
                 ln = len(rows) if hasattr(rows, "__len__") else "?"
             except Exception:
                 ln = "?"
-            print("DEBUG: search rows type:", type(rows), "len:", ln)
+            # Suppress partially-unknown type warning for debug print
+            print("DEBUG: search rows type:", str(type(rows)), "len:", ln)  # type: ignore[arg-type]
     except Exception:
         pass
     # Ensure rows is an iterable for the loop (avoid mypy union-attr error)
@@ -356,16 +367,17 @@ async def post_game_results(
             "winner_team_id": getattr(payload, "winner_team_id", None) or None,
             "winner_team_name": winner_name or None,
             "method": method_val,
-            "margin": int(margin) if margin is not None else None,
+            "margin": margin,  # Already int at this point (assigned above)
             "result_text": result_text,
             "completed_at": getattr(payload, "completed_at", None),
         }
 
         game.result = json.dumps(result_dict, ensure_ascii=False)
         try:
-            game.status = models.GameStatus.completed  # type: ignore[assignment]
+            game.status = models.GameStatus.completed
         except Exception:
-            game.status = getattr(models.GameStatus, "completed", "completed")
+            # Fallback for older model versions
+            game.status = "completed"  # type: ignore[assignment]
         game.is_game_over = True
         try:
             game.completed_at = dt.datetime.now(UTC)
@@ -414,7 +426,8 @@ async def list_game_results(
     rows = None
     try:
         res = await db.execute(select(models.Game).where(models.Game.result.isnot(None)))
-        rows = await res.scalars().all()
+        # scalars().all() is not awaitable; cast to concrete list for typing
+        rows = cast(list[models.Game], res.scalars().all())
     except Exception:
         rows = None
 
@@ -438,14 +451,17 @@ async def list_game_results(
         if not raw:
             continue
         try:
-            data = (
-                json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
-            )
+            if isinstance(raw, str):
+                data = cast(dict[str, Any], json.loads(raw))
+            elif isinstance(raw, dict):
+                data = cast(dict[str, Any], raw)
+            else:
+                data = {}
         except Exception:
             data = {}
 
         item: dict[str, Any] = {
-            "match_id": str(data.get("match_id", getattr(g, "id", None))),
+            "match_id": str(data.get("match_id") or getattr(g, "id", None) or ""),
             "winner": data.get("winner"),
             "team_a_score": int(data.get("team_a_score") or 0),
             "team_b_score": int(data.get("team_b_score") or 0),
