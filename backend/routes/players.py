@@ -130,9 +130,7 @@ async def award_achievement(
     Award an achievement to a player.
     """
     # Verify player profile exists
-    result = await db.execute(
-        select(PlayerProfile).where(PlayerProfile.player_id == player_id)
-    )
+    result = await db.execute(select(PlayerProfile).where(PlayerProfile.player_id == player_id))
     profile = result.scalar_one_or_none()
 
     if not profile:
@@ -235,11 +233,11 @@ async def get_leaderboard(
     profiles = result.scalars().all()
 
     # Build leaderboard entries
-    entries = []
+    entries: list[LeaderboardEntry] = []
     for rank, profile in enumerate(profiles, start=1):
         if metric == "batting_average":
             value = profile.batting_average
-            additional_stats = {
+            additional_stats: dict[str, object] = {
                 "total_runs": profile.total_runs_scored,
                 "times_out": profile.times_out,
             }

@@ -472,105 +472,122 @@ class Snapshot(BaseModel):
 
 
 # ===================================================================
-# Player Profile Schemas
+# Tournament Management Schemas
 # ===================================================================
 
 
-class PlayerProfileBase(BaseModel):
-    """Base schema for player profile data."""
+class TournamentCreate(BaseModel):
+    """Schema for creating a tournament"""
 
-    player_id: str
-    player_name: str
+    name: str
+    description: str | None = None
+    tournament_type: str = "league"  # league, knockout, round-robin
+    start_date: dt.datetime | None = None
+    end_date: dt.datetime | None = None
 
 
-class PlayerProfileStats(PlayerProfileBase):
-    """Schema for player statistics."""
+class TournamentUpdate(BaseModel):
+    """Schema for updating a tournament"""
 
-    # Batting stats
-    total_matches: int
-    total_innings_batted: int
-    total_runs_scored: int
-    total_balls_faced: int
-    total_fours: int
-    total_sixes: int
-    times_out: int
-    highest_score: int
-    centuries: int
-    half_centuries: int
-    batting_average: float
-    strike_rate: float
+    name: str | None = None
+    description: str | None = None
+    tournament_type: str | None = None
+    start_date: dt.datetime | None = None
+    end_date: dt.datetime | None = None
+    status: str | None = None
 
-    # Bowling stats
-    total_innings_bowled: int
-    total_overs_bowled: float
-    total_runs_conceded: int
-    total_wickets: int
-    best_bowling_figures: str | None
-    five_wicket_hauls: int
-    maidens: int
-    bowling_average: float
-    economy_rate: float
 
-    # Fielding stats
-    catches: int
-    stumpings: int
-    run_outs: int
+class TournamentTeamResponse(BaseModel):
+    """Schema for tournament team response"""
 
-    # Timestamps
+    id: int
+    tournament_id: str
+    team_name: str
+    team_data: dict[str, Any]
+    matches_played: int
+    matches_won: int
+    matches_lost: int
+    matches_drawn: int
+    points: int
+    net_run_rate: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TournamentResponse(BaseModel):
+    """Schema for tournament response"""
+
+    id: str
+    name: str
+    description: str | None
+    tournament_type: str
+    start_date: dt.datetime | None
+    end_date: dt.datetime | None
+    status: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+    teams: list[TournamentTeamResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TeamAdd(BaseModel):
+    """Schema for adding a team to tournament"""
+
+    team_name: str
+    team_data: dict[str, Any] = Field(default_factory=dict)
+
+
+class FixtureCreate(BaseModel):
+    """Schema for creating a fixture"""
+
+    tournament_id: str
+    match_number: int | None = None
+    team_a_name: str
+    team_b_name: str
+    venue: str | None = None
+    scheduled_date: dt.datetime | None = None
+
+
+class FixtureUpdate(BaseModel):
+    """Schema for updating a fixture"""
+
+    match_number: int | None = None
+    team_a_name: str | None = None
+    team_b_name: str | None = None
+    venue: str | None = None
+    scheduled_date: dt.datetime | None = None
+    status: str | None = None
+    result: str | None = None
+    game_id: str | None = None
+
+
+class FixtureResponse(BaseModel):
+    """Schema for fixture response"""
+
+    id: str
+    tournament_id: str
+    match_number: int | None
+    team_a_name: str
+    team_b_name: str
+    venue: str | None
+    scheduled_date: dt.datetime | None
+    game_id: str | None
+    status: str
+    result: str | None
     created_at: dt.datetime
     updated_at: dt.datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class PlayerAchievementResponse(BaseModel):
-    """Schema for player achievement."""
+class PointsTableEntry(BaseModel):
+    """Schema for points table entry"""
 
-    id: int
-    player_id: str
-    game_id: str | None
-    achievement_type: str
-    title: str
-    description: str
-    badge_icon: str | None
-    earned_at: dt.datetime
-    metadata: dict[str, Any]
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class PlayerProfileResponse(PlayerProfileStats):
-    """Schema for complete player profile including achievements."""
-
-    achievements: list[PlayerAchievementResponse] = Field(default_factory=list)
-
-
-class AwardAchievementRequest(BaseModel):
-    """Request schema for awarding an achievement to a player."""
-
-    achievement_type: str
-    title: str
-    description: str
-    badge_icon: str | None = None
-    game_id: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class LeaderboardEntry(BaseModel):
-    """Schema for a single leaderboard entry."""
-
-    rank: int
-    player_id: str
-    player_name: str
-    value: float | int
-    additional_stats: dict[str, Any] = Field(default_factory=dict)
-
-
-class LeaderboardResponse(BaseModel):
-    """Schema for leaderboard response."""
-
-    metric: str
-    entries: list[LeaderboardEntry]
-    updated_at: dt.datetime
-
-    model_config = ConfigDict(from_attributes=True)
+    team_name: str
+    matches_played: int
+    matches_won: int
+    matches_lost: int
+    matches_drawn: int
+    points: int
+    net_run_rate: float

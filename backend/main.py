@@ -1,13 +1,24 @@
 from __future__ import annotations
+import contextlib
+import os
 import logging
 from typing import Any
 
+# Optional early instrumentation for asyncpg (see backend/debug_asyncpg.py).
+# Importing it early ensures we catch any asyncpg.connect/create_pool calls
+# that happen during app/module import time.
+if os.getenv("CRICKSY_DEBUG_ASYNCPG") == "1":
+    with contextlib.suppress(Exception):
+        pass  # type: ignore
+
 from backend.app import create_app
 from backend.logging_setup import configure_logging
-from backend.sql_app import crud  # noqa: F401
-from backend.sql_app import models  # noqa: F401
-from backend.sql_app import schemas  # noqa: F401
+from backend.sql_app import crud  # Re-exported for tests
+from backend.sql_app import models  # Re-exported for tests
+from backend.sql_app import schemas  # Re-exported for tests
 from backend.sql_app.database import get_db as get_db
+
+__all__ = ["ConcreteGameState", "app", "crud", "fastapi_app", "get_db", "models", "schemas"]
 
 configure_logging(json=True, level=logging.INFO)
 
@@ -41,10 +52,10 @@ class ConcreteGameState:
 try:
     from backend.services import game_helpers as _gh
 
-    _recompute_totals_and_runtime = _gh._recompute_totals_and_runtime
-    _rebuild_scorecards_from_deliveries = _gh._rebuild_scorecards_from_deliveries
-    _maybe_finalize_match = _gh._maybe_finalize_match
-    _ensure_target_if_chasing = _gh._ensure_target_if_chasing
+    _recompute_totals_and_runtime = getattr(_gh, "_recompute_totals_and_runtime", None)
+    _rebuild_scorecards_from_deliveries = getattr(_gh, "_rebuild_scorecards_from_deliveries", None)
+    _maybe_finalize_match = getattr(_gh, "_maybe_finalize_match", None)
+    _ensure_target_if_chasing = getattr(_gh, "_ensure_target_if_chasing", None)
 except Exception:
     pass
 

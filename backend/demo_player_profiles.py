@@ -2,20 +2,24 @@
 Demo script to create sample player profiles and test the player profile APIs.
 This demonstrates the player profiles feature.
 """
+
 import asyncio
+import contextlib
 import sys
-from datetime import datetime, timezone
+from datetime import UTC
 
 from sqlalchemy import select
 
-from backend.sql_app.database import SessionLocal
+from backend.sql_app import database as db
+from backend.sql_app.database import SessionLocal  # backward-compatible alias
 from backend.sql_app.models import AchievementType, PlayerAchievement, PlayerProfile
 
-UTC = timezone.utc
+utc = UTC
 
 
 async def create_sample_profiles():
     """Create sample player profiles for demonstration."""
+    assert SessionLocal is not None, "Database not initialized"
     async with SessionLocal() as db:
         print("Creating sample player profiles...")
 
@@ -138,6 +142,7 @@ async def create_sample_profiles():
 
 async def display_profiles():
     """Display all player profiles."""
+    assert SessionLocal is not None, "Database not initialized"
     async with SessionLocal() as db:
         print("\n" + "=" * 80)
         print("PLAYER PROFILES")
@@ -150,15 +155,35 @@ async def display_profiles():
             print(f"\n👤 {profile.player_name} (ID: {profile.player_id})")
             print("-" * 80)
             print(f"  📊 Matches: {profile.total_matches}")
-            print(f"  🏏 Batting: {profile.total_runs_scored} runs @ avg {profile.batting_average:.2f}, SR {profile.strike_rate:.2f}")
-            print(f"            Centuries: {profile.centuries}, 50s: {profile.half_centuries}, HS: {profile.highest_score}")
-            print(f"  ⚾ Bowling: {profile.total_wickets} wickets @ avg {profile.bowling_average:.2f}, Econ {profile.economy_rate:.2f}")
-            print(f"            Best: {profile.best_bowling_figures or 'N/A'}, 5W: {profile.five_wicket_hauls}")
-            print(f"  🧤 Fielding: {profile.catches} catches, {profile.stumpings} stumpings, {profile.run_outs} run-outs")
+            print(
+                "  🏏 Batting: "
+                + f"{profile.total_runs_scored} runs @ avg {profile.batting_average:.2f}, "
+                + f"SR {profile.strike_rate:.2f}"
+            )
+            print(
+                "            Centuries: "
+                + f"{profile.centuries}, 50s: {profile.half_centuries}, "
+                + f"HS: {profile.highest_score}"
+            )
+            print(
+                "  ⚾ Bowling: "
+                + f"{profile.total_wickets} wickets @ avg {profile.bowling_average:.2f}, "
+                + f"Econ {profile.economy_rate:.2f}"
+            )
+            print(
+                "            Best: "
+                + f"{profile.best_bowling_figures or 'N/A'}, 5W: {profile.five_wicket_hauls}"
+            )
+            print(
+                "  🧤 Fielding: "
+                + f"{profile.catches} catches, {profile.stumpings} stumpings, "
+                + f"{profile.run_outs} run-outs"
+            )
 
 
 async def display_leaderboards():
     """Display top 3 in various leaderboards."""
+    assert SessionLocal is not None, "Database not initialized"
     async with SessionLocal() as db:
         print("\n" + "=" * 80)
         print("LEADERBOARDS")
@@ -185,9 +210,7 @@ async def display_leaderboards():
         result = await db.execute(
             select(PlayerProfile)
             .where(PlayerProfile.times_out >= 10)
-            .order_by(
-                (PlayerProfile.total_runs_scored / PlayerProfile.times_out).desc()
-            )
+            .order_by((PlayerProfile.total_runs_scored / PlayerProfile.times_out).desc())
             .limit(3)
         )
         for rank, profile in enumerate(result.scalars().all(), 1):
@@ -196,6 +219,7 @@ async def display_leaderboards():
 
 async def display_achievements():
     """Display all achievements."""
+    assert SessionLocal is not None, "Database not initialized"
     async with SessionLocal() as db:
         print("\n" + "=" * 80)
         print("ACHIEVEMENTS")
@@ -218,6 +242,10 @@ async def main():
     print("\n" + "=" * 80)
     print("PLAYER PROFILES FEATURE DEMO")
     print("=" * 80)
+
+    # Ensure DB is initialised when running this script directly
+    with contextlib.suppress(Exception):
+        db.init_engine()
 
     # Create sample data
     await create_sample_profiles()

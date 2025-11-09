@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -26,7 +26,7 @@ class CreateGameRequest(BaseModel):
     days_limit: int | None = Field(None, ge=1, le=7)
     overs_per_day: int | None = Field(None, ge=1, le=120)
     dls_enabled: bool = False
-    interruptions: list[dict[str, str | None]] = Field(default_factory=list)
+    interruptions: list[dict[str, Any]] = []  # type: ignore[assignment]
 
     # Make toss / decision optional for simpler test payloads; default behavior is safe
     toss_winner_team: str | None = None
@@ -39,7 +39,7 @@ async def create_game(
 ) -> schemas.Game:
     # Delegate to the existing implementation to avoid duplication
     db_game = await _games_impl.create_game_impl(payload, db)
-    return cast(schemas.Game, db_game)
+    return db_game
 
 
 @router.get("/games/{game_id}", response_model=schemas.Game)

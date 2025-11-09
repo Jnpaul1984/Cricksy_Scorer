@@ -10,6 +10,8 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from starlette import status
 
+__all__ = ["install_exception_handlers"]
+
 _log = structlog.get_logger("errors")
 
 
@@ -41,7 +43,7 @@ def _json_error(
 
 def install_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
-    async def handle_request_validation_error(
+    async def handle_request_validation_error(  # type: ignore[reportUnusedFunction]
         request: Request, exc: RequestValidationError
     ) -> ORJSONResponse:
         # FastAPI validation (request body/query/path/etc.)
@@ -61,7 +63,7 @@ def install_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(ValidationError)
-    async def handle_pydantic_validation_error(
+    async def handle_pydantic_validation_error(  # type: ignore[reportUnusedFunction]
         request: Request, exc: ValidationError
     ) -> ORJSONResponse:
         # Pydantic model validation inside handlers/services
@@ -85,7 +87,7 @@ def install_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(IntegrityError)
-    async def handle_integrity_error(request: Request, exc: IntegrityError) -> ORJSONResponse:
+    async def handle_integrity_error(request: Request, exc: IntegrityError) -> ORJSONResponse:  # type: ignore[reportUnusedFunction]
         # Constraint violations, duplicates, FK errors, etc.
         # Keep response stable; log full exception for operators.
         _log.warning(
@@ -114,7 +116,7 @@ def install_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def handle_generic_error(request: Request, exc: Exception) -> ORJSONResponse:
+    async def handle_generic_error(request: Request, exc: Exception) -> ORJSONResponse:  # type: ignore[reportUnusedFunction]
         # Last-resort safety net
         _log.exception(
             "unhandled_exception",
