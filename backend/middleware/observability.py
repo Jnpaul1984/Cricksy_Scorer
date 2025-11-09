@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import time
 import uuid
+from typing import TYPE_CHECKING
 
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
+
+if TYPE_CHECKING:
+    from starlette.types import ASGIApp
 
 
 def _client_ip(request: Request) -> str | None:
@@ -27,7 +31,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     - Echoes X-Request-ID in the response headers.
     """
 
-    def __init__(self, app, header_name: str = "X-Request-ID") -> None:
+    def __init__(self, app: ASGIApp, header_name: str = "X-Request-ID") -> None:
         super().__init__(app)
         self.header_name = header_name
 
@@ -49,7 +53,7 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
     Emits a structured access log for every request/response.
     """
 
-    def __init__(self, app, logger_name: str = "access") -> None:
+    def __init__(self, app: ASGIApp, logger_name: str = "access") -> None:
         super().__init__(app)
         self._logger = structlog.get_logger(logger_name)
 

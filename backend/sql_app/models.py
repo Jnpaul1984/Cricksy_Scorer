@@ -338,6 +338,164 @@ class SponsorImpression(Base):
     )
 
 
+# ===== Player Profiles =====
+
+
+class PlayerProfile(Base):
+    """Stores comprehensive player statistics and profile information."""
+
+    __tablename__ = "player_profiles"
+
+    player_id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    player_name: Mapped[str] = mapped_column(String, nullable=False)
+
+    # Batting statistics
+    total_matches: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_innings_batted: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_runs_scored: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_balls_faced: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_fours: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_sixes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    times_out: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    highest_score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    centuries: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    half_centuries: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Bowling statistics
+    total_innings_bowled: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_overs_bowled: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    total_runs_conceded: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_wickets: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    best_bowling_figures: Mapped[str | None] = mapped_column(String, nullable=True)  # "5/23"
+    five_wicket_hauls: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    maidens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Fielding statistics
+    catches: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    stumpings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    run_outs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Timestamps
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    achievements: Mapped[list[PlayerAchievement]] = relationship(
+        back_populates="player_profile", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("ix_player_profiles_total_runs", "total_runs_scored"),
+        Index("ix_player_profiles_total_wickets", "total_wickets"),
+        Index("ix_player_profiles_batting_avg", "total_runs_scored", "times_out"),
+    )
+
+    @property
+    def batting_average(self) -> float:
+        """Calculate batting average: total runs / times out."""
+        return (
+            round(self.total_runs_scored / self.times_out, 2)
+            if self.times_out > 0
+            else float(self.total_runs_scored)
+        )
+
+    @property
+    def strike_rate(self) -> float:
+        """Calculate strike rate: (total runs / balls faced) * 100."""
+        return (
+            round((self.total_runs_scored / self.total_balls_faced) * 100, 2)
+            if self.total_balls_faced > 0
+            else 0.0
+        )
+
+    @property
+    def bowling_average(self) -> float:
+        """Calculate bowling average: runs conceded / wickets taken."""
+        return (
+            round(self.total_runs_conceded / self.total_wickets, 2)
+            if self.total_wickets > 0
+            else float(self.total_runs_conceded)
+        )
+
+    @property
+    def economy_rate(self) -> float:
+        """Calculate economy rate: runs conceded / overs bowled."""
+        return (
+            round(self.total_runs_conceded / self.total_overs_bowled, 2)
+            if self.total_overs_bowled > 0
+            else 0.0
+        )
+
+
+# ===== Player Achievements =====
+
+
+class AchievementType(str, enum.Enum):
+    """Types of achievements that can be awarded to players."""
+
+    century = "century"  # 100+ runs in an innings
+    half_century = "half_century"  # 50-99 runs in an innings
+    five_wickets = "five_wickets"  # 5+ wickets in an innings
+    best_scorer = "best_scorer"  # Best scorer of the match
+    best_bowler = "best_bowler"  # Best bowler of the match
+    hat_trick = "hat_trick"  # 3 wickets in consecutive balls
+    golden_duck = "golden_duck"  # Out on first ball
+    maiden_over = "maiden_over"  # Bowled a maiden over
+    six_sixes = "six_sixes"  # 6 sixes in an innings
+    perfect_catch = "perfect_catch"  # 3+ catches in a match
+
+
+class PlayerAchievement(Base):
+    """Stores individual achievements and badges earned by players."""
+
+    __tablename__ = "player_achievements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    game_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("games.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+
+    achievement_type: Mapped[AchievementType] = mapped_column(
+        SAEnum(AchievementType, name="achievement_type"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String, nullable=False)  # e.g., "Century Maker"
+    description: Mapped[str] = mapped_column(
+        Text, nullable=False
+    )  # e.g., "Scored 105 runs vs Team B"
+    badge_icon: Mapped[str | None] = mapped_column(String, nullable=True)  # emoji or icon class
+
+    earned_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Optional: achievement details (runs scored, wickets taken, etc.)
+    achievement_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=_empty_dict, nullable=False
+    )
+
+    # Relationships
+    player_profile: Mapped[PlayerProfile] = relationship(back_populates="achievements")
+
+    __table_args__ = (
+        Index("ix_player_achievements_player_id", "player_id"),
+        Index("ix_player_achievements_type", "achievement_type"),
+        Index("ix_player_achievements_earned_at", "earned_at"),
+    )
+
+
 # ===== Tournament Management =====
 
 
@@ -355,7 +513,7 @@ class Tournament(Base):
     status: Mapped[str] = mapped_column(
         String, nullable=False, default="upcoming"
     )  # upcoming, ongoing, completed
-    
+
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -388,7 +546,7 @@ class TournamentTeam(Base):
     team_data: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=_empty_dict, nullable=False
     )  # Store team info like players
-    
+
     # Points table data
     matches_played: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     matches_won: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -417,18 +575,20 @@ class Fixture(Base):
     team_a_name: Mapped[str] = mapped_column(String, nullable=False)
     team_b_name: Mapped[str] = mapped_column(String, nullable=False)
     venue: Mapped[str | None] = mapped_column(String, nullable=True)
-    scheduled_date: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    
+    scheduled_date: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Link to actual game if created
     game_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("games.id", ondelete="SET NULL"), nullable=True
     )
-    
+
     status: Mapped[str] = mapped_column(
         String, nullable=False, default="scheduled"
     )  # scheduled, in_progress, completed, cancelled
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
-    
+
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
