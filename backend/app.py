@@ -37,6 +37,7 @@ from backend.routes.health import router as health_router
 from backend.routes.interruptions import router as interruptions_router
 from backend.routes.players import router as players_router
 from backend.routes.sponsors import router as sponsors_router
+from backend.routes.tournaments import router as tournaments_router
 from backend.services.live_bus import set_socketio_server as _set_bus_sio
 
 # Socket handlers and live bus
@@ -271,6 +272,7 @@ def create_app(
     fastapi_app.include_router(sponsors_router)
     fastapi_app.include_router(games_core_router)
     fastapi_app.include_router(players_router)
+    fastapi_app.include_router(tournaments_router)
 
     # Ensure the DB engine/sessionmaker are created at application startup so
     # TestClient and other in-process runners create pools on the same event loop.
