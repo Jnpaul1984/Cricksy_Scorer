@@ -230,9 +230,28 @@ def create_app(
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
 
-    _sio = socketio.AsyncServer(
-        async_mode="asgi", cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS
-    )  # type: ignore[call-arg]
+    # Configure Socket.IO with optional Redis adapter for horizontal scaling
+    sio_kwargs: dict[str, Any] = {
+        "async_mode": "asgi",
+        "cors_allowed_origins": settings.SIO_CORS_ALLOWED_ORIGINS
+    }
+    
+    if settings.USE_REDIS_ADAPTER:
+        try:
+            # Import redis adapter
+            import socketio.asyncio_redis_manager as redis_mgr
+            
+            # Create Redis manager for pub/sub across multiple servers
+            redis_manager = redis_mgr.AsyncRedisManager(settings.SOCKET_REDIS_URL)
+            sio_kwargs["client_manager"] = redis_manager
+            
+            logging.info(f"Socket.IO configured with Redis adapter: {settings.SOCKET_REDIS_URL}")
+        except ImportError:
+            logging.warning("Redis adapter not available, falling back to in-memory mode")
+        except Exception as e:
+            logging.error(f"Failed to configure Redis adapter: {e}")
+    
+    _sio = socketio.AsyncServer(**sio_kwargs)  # type: ignore[call-arg]
     sio = _sio
     fastapi_app = FastAPI(title="Cricksy Scorer API")
     fastapi_app.state.sio = sio
