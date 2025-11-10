@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter
 
 router = APIRouter(tags=["health"])
@@ -16,7 +18,7 @@ def healthz() -> dict[str, str]:
 
 
 @router.get("/api/health/ws-metrics")
-def ws_metrics() -> dict[str, any]:
+def ws_metrics() -> dict[str, Any]:
     """
     Get WebSocket emission metrics for observability.
     
