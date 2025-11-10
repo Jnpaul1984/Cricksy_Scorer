@@ -14,6 +14,7 @@ def configure_logging(json: bool = True, level: int = logging.INFO) -> None:
     - Merges contextvars (e.g., request_id) into each log record.
     - Bridges stdlib loggers (uvicorn, sqlalchemy, etc.) to emit message-only, so
       structlog controls rendering.
+    - Adds WebSocket and upload pipeline instrumentation.
     """
     timestamper = structlog.processors.TimeStamper(fmt="iso", utc=True)
 
@@ -55,3 +56,9 @@ def configure_logging(json: bool = True, level: int = logging.INFO) -> None:
     # Suppress uvicorn's default access logs (we emit our own structured access logs).
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.engine.Engine").setLevel(logging.WARNING)
+
+    # Configure instrumentation loggers
+    logging.getLogger("backend.socket_handlers").setLevel(logging.INFO)
+    logging.getLogger("backend.services.live_bus").setLevel(logging.INFO)
+    logging.getLogger("backend.routes.uploads").setLevel(logging.INFO)
+    logging.getLogger("backend.worker.processor").setLevel(logging.INFO)
