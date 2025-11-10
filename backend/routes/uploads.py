@@ -89,9 +89,7 @@ def _check_feature_enabled() -> None:
         )
 
 
-async def _get_upload_or_404(
-    upload_id: uuid.UUID, db: AsyncSession
-) -> Upload:
+async def _get_upload_or_404(upload_id: uuid.UUID, db: AsyncSession) -> Upload:
     """Get upload by ID or raise 404."""
     result = await db.execute(select(Upload).where(Upload.id == upload_id))
     upload = result.scalar_one_or_none()

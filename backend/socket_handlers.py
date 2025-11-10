@@ -67,7 +67,7 @@ def emit_compact_delta(
         _METRICS["messages_sent"] += 1
 
         logger.debug(
-            f"Emitted delta event",
+            "Emitted delta event",
             extra={
                 "game_id": game_id,
                 "event_type": event_type,
@@ -117,7 +117,7 @@ def register_sio(sio: Any) -> None:
             _METRICS["joins"] += 1
 
             logger.info(
-                f"Client joined room",
+                "Client joined room",
                 extra={
                     "sid": sid,
                     "game_id": game_id,
@@ -161,7 +161,7 @@ def register_sio(sio: Any) -> None:
             _METRICS["leaves"] += 1
 
             logger.info(
-                f"Client left room",
+                "Client left room",
                 extra={
                     "sid": sid,
                     "game_id": game_id,
@@ -201,7 +201,7 @@ def register_sio(sio: Any) -> None:
             _SID_ROOMS.pop(sid, None)
 
             logger.info(
-                f"Client disconnected",
+                "Client disconnected",
                 extra={"sid": sid, "rooms_left": len(rooms)},
             )
 
@@ -218,4 +218,3 @@ def register_sio(sio: Any) -> None:
     sio.on("disconnect")(_disconnect)
 
     logger.info("Socket.IO handlers registered")
-

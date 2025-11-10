@@ -26,4 +26,3 @@ def ws_metrics() -> dict[str, any]:
     from backend.socket_handlers import get_metrics
 
     return get_metrics()
-

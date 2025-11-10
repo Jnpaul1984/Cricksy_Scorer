@@ -29,7 +29,9 @@ def configure_logging(json: bool = True, level: int = logging.INFO) -> None:
     ]
 
     renderer = (
-        structlog.processors.JSONRenderer() if json else structlog.dev.ConsoleRenderer(colors=True)
+        structlog.processors.JSONRenderer()
+        if json
+        else structlog.dev.ConsoleRenderer(colors=True)
     )
 
     structlog.configure(
@@ -153,4 +155,3 @@ class RequestInstrumentation:
             )
 
         structlog.contextvars.unbind_contextvars("operation", *self.context.keys())
-
