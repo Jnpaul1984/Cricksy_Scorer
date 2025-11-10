@@ -150,6 +150,11 @@ class WinProbabilityPredictor:
             progress = total_balls / total_balls_limit
             confidence = min(75.0, progress * 100.0)
 
+            logger.info(
+                f"ML score prediction: {match_format} format, "
+                f"projected={projected_score:.1f}, prob={batting_prob:.1f}%"
+            )
+
             return {
                 "batting_team_win_prob": round(batting_prob, 1),
                 "bowling_team_win_prob": round(bowling_prob, 1),
@@ -164,7 +169,10 @@ class WinProbabilityPredictor:
             }
 
         except Exception as e:
-            logger.warning(f"ML prediction failed, using rule-based: {e}")
+            logger.warning(
+                f"ML score prediction failed for {match_format} format, "
+                f"using rule-based fallback: {e}"
+            )
             # Fall through to rule-based prediction
 
         # Rule-based fallback (original implementation)
@@ -351,6 +359,12 @@ class WinProbabilityPredictor:
             required_rr = (runs_needed / balls_remaining) * 6 if balls_remaining > 0 else 99.99
             current_rr = (total_runs / total_balls) * 6 if total_balls > 0 else 0.0
 
+            logger.info(
+                f"ML win prediction: {match_format} format, "
+                f"prob={batting_prob_ml:.1f}%, RRR={required_rr:.2f}, "
+                f"runs_needed={runs_needed}, balls={balls_remaining}"
+            )
+
             return {
                 "batting_team_win_prob": round(batting_prob_ml, 1),
                 "bowling_team_win_prob": round(100.0 - batting_prob_ml, 1),
@@ -366,7 +380,10 @@ class WinProbabilityPredictor:
             }
 
         except Exception as e:
-            logger.warning(f"ML win prediction failed, using rule-based: {e}")
+            logger.warning(
+                f"ML win prediction failed for {match_format} format, "
+                f"using rule-based fallback: {e}"
+            )
             # Fall through to rule-based prediction
 
         # Rule-based fallback (original implementation)
