@@ -9,7 +9,7 @@ from typing import Any
 
 from backend.config import settings
 from backend.sql_app.database import get_db
-from backend.sql_app.models.upload import Upload
+from backend.sql_app.models import Upload
 from backend.utils.s3 import generate_presigned_upload_url
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field

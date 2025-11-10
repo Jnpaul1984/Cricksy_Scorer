@@ -44,7 +44,7 @@ def process_upload_task(self: Any, upload_id: str) -> dict[str, Any]:
 
     from backend.config import settings
     from backend.sql_app.database import get_database_url
-    from backend.sql_app.models.upload import Upload
+    from backend.sql_app.models import Upload
     from backend.utils.s3 import generate_presigned_download_url
 
     # Create synchronous database session for Celery worker
