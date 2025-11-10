@@ -607,3 +607,51 @@ class Fixture(Base):
         Index("ix_fixtures_status", "status"),
         Index("ix_fixtures_scheduled_date", "scheduled_date"),
     )
+
+
+# ===== Upload Model =====
+
+
+class UploadStatus(str, enum.Enum):
+    """Status of an uploaded file."""
+    pending = "pending"
+    processing = "processing"
+    ready = "ready"
+    failed = "failed"
+
+
+class Upload(Base):
+    """Model for uploaded photos/PDFs/videos for OCR parsing."""
+
+    __tablename__ = "uploads"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    uploader_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    game_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("games.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    filename: Mapped[str] = mapped_column(String, nullable=False)
+    file_type: Mapped[str] = mapped_column(String, nullable=False)  # e.g., 'image/png', 'application/pdf'
+    s3_key: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    status: Mapped[UploadStatus] = mapped_column(
+        SAEnum(UploadStatus, name="upload_status"), nullable=False, default=UploadStatus.pending
+    )
+    parsed_preview: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    upload_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
+
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index("ix_uploads_uploader_id", "uploader_id"),
+        Index("ix_uploads_game_id", "game_id"),
+        Index("ix_uploads_status", "status"),
+        Index("ix_uploads_created_at", "created_at"),
+    )

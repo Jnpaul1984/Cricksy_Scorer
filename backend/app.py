@@ -275,6 +275,11 @@ def create_app(
     fastapi_app.include_router(prediction_router)
     fastapi_app.include_router(players_router)
     fastapi_app.include_router(tournaments_router)
+    
+    # Include uploads router (feature-flagged)
+    if settings.ENABLE_UPLOADS:
+        from backend.routes.uploads import router as uploads_router
+        fastapi_app.include_router(uploads_router)
 
     # Ensure the DB engine/sessionmaker are created at application startup so
     # TestClient and other in-process runners create pools on the same event loop.
