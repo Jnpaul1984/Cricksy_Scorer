@@ -607,3 +607,57 @@ class Fixture(Base):
         Index("ix_fixtures_status", "status"),
         Index("ix_fixtures_scheduled_date", "scheduled_date"),
     )
+
+
+# -----------------------------
+# Upload model for scorecard files
+# -----------------------------
+
+
+class UploadStatus(str, enum.Enum):
+    """Status of an upload."""
+    pending = "pending"
+    processing = "processing"
+    ready = "ready"
+    failed = "failed"
+
+
+class Upload(Base):
+    """Upload model for scorecard images/PDFs."""
+    __tablename__ = "uploads"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    uploader_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    game_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("games.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+    filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    file_type: Mapped[str] = mapped_column(String(100), nullable=False)  # image/jpeg, application/pdf, etc.
+    s3_key: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True, index=True)
+    status: Mapped[UploadStatus] = mapped_column(
+        SAEnum(UploadStatus, native_enum=False, length=50),
+        nullable=False,
+        default=UploadStatus.pending,
+        index=True
+    )
+    parsed_preview: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # OCR results as deliveries preview
+    upload_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)  # Additional metadata (renamed from metadata to avoid SQLAlchemy conflict)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)  # Error details if failed
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"<Upload(id={self.id}, filename={self.filename}, status={self.status})>"
+
