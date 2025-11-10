@@ -5,6 +5,8 @@ asyncpg==0.29.0
 bcrypt==4.3.0
 bidict==0.23.1
 black==23.11.0
+boto3==1.28.85
+celery==5.3.4
 certifi==2025.7.14
 cffi==1.17.1
 click==8.2.1
@@ -29,6 +31,7 @@ orjson==3.9.10
 packaging==25.0
 passlib==1.7.4
 pathspec==0.12.1
+pillow==10.3.0
 platformdirs==4.3.8
 pluggy==1.6.0
 pyasn1==0.6.1
@@ -38,6 +41,7 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 pydantic_core==2.14.1
 pyflakes==3.1.0
+pytesseract==0.3.10
 pytest==7.4.3
 pytest-asyncio==0.21.1
 python-dateutil==2.8.2
@@ -47,6 +51,7 @@ python-jose[cryptography]==3.3.0
 python-multipart==0.0.18
 python-socketio==5.14.0
 PyYAML==6.0.2
+redis==5.0.1
 rsa==4.9.1
 simple-websocket==1.1.0
 six==1.17.0
