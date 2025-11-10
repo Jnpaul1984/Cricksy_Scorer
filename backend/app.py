@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from collections.abc import AsyncGenerator
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
-import asyncio
 
 import socketio  # type: ignore[import-not-found]
 from fastapi import FastAPI
@@ -15,7 +15,6 @@ from fastapi.staticfiles import StaticFiles
 
 # DB dependency and in-memory wiring
 # sqlalchemy AsyncSession is provided by database.get_db dependency when needed
-
 from backend.config import settings as default_settings
 from backend.error_handlers import install_exception_handlers  # NEW
 
@@ -230,9 +229,25 @@ def create_app(
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
 
-    _sio = socketio.AsyncServer(
-        async_mode="asgi", cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS
-    )  # type: ignore[call-arg]
+    # Configure Socket.IO with optional Redis adapter (Week 3)
+    if settings.USE_REDIS_ADAPTER:
+        try:
+            _sio = socketio.AsyncServer(
+                async_mode="asgi",
+                cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS,
+                client_manager=socketio.AsyncRedisManager(settings.REDIS_URL),
+            )  # type: ignore[call-arg]
+            logging.info(f"Socket.IO using Redis adapter at {settings.REDIS_URL}")
+        except Exception as e:
+            logging.warning(f"Failed to initialize Redis adapter: {e}")
+            _sio = socketio.AsyncServer(
+                async_mode="asgi", cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS
+            )  # type: ignore[call-arg]
+    else:
+        _sio = socketio.AsyncServer(
+            async_mode="asgi", cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS
+        )  # type: ignore[call-arg]
+
     sio = _sio
     fastapi_app = FastAPI(title="Cricksy Scorer API")
     fastapi_app.state.sio = sio

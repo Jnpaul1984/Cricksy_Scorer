@@ -55,3 +55,9 @@ def configure_logging(json: bool = True, level: int = logging.INFO) -> None:
     # Suppress uvicorn's default access logs (we emit our own structured access logs).
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.engine.Engine").setLevel(logging.WARNING)
+
+    # Week 3: Configure logging for upload/OCR/WebSocket components
+    logging.getLogger("backend.worker").setLevel(level)
+    logging.getLogger("backend.socket_handlers").setLevel(level)
+    logging.getLogger("backend.routes.uploads").setLevel(level)
+    logging.getLogger("backend.utils.s3").setLevel(level)
