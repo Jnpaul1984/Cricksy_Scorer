@@ -36,6 +36,7 @@ from backend.routes.games_router import router as games_router
 from backend.routes.health import router as health_router
 from backend.routes.interruptions import router as interruptions_router
 from backend.routes.players import router as players_router
+from backend.routes.prediction import router as prediction_router
 from backend.routes.sponsors import router as sponsors_router
 from backend.routes.tournaments import router as tournaments_router
 from backend.services.live_bus import set_socketio_server as _set_bus_sio
@@ -271,6 +272,7 @@ def create_app(
     fastapi_app.include_router(health_router)
     fastapi_app.include_router(sponsors_router)
     fastapi_app.include_router(games_core_router)
+    fastapi_app.include_router(prediction_router)
     fastapi_app.include_router(players_router)
     fastapi_app.include_router(tournaments_router)
 

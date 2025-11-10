@@ -1,0 +1,23 @@
+{
+  "model_type": "XGBClassifier",
+  "match_format": "t20",
+  "n_estimators": 800,
+  "features": [
+    "over_progress",
+    "balls_left",
+    "wickets_left",
+    "run_rate",
+    "run_rate_last_3",
+    "acceleration",
+    "dot_ratio_last_6",
+    "boundary_density_last_3",
+    "required_run_rate",
+    "runs_needed",
+    "wickets_per_over",
+    "runs_per_wicket"
+  ],
+  "training_samples": 127964,
+  "test_accuracy": 0.998062015503876,
+  "test_roc_auc": 0.9999828875720785,
+  "trained_date": "2025-11-09T19:17:22.491124"
+}

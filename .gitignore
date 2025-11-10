@@ -20,3 +20,7 @@ coverage/
 *.tsbuildinfo
 frontend/.cypress-runtime/
 .tsc-tmp/
+
+# --- Training data ---
+backend/snapshots/
+snapshots_archive_*.zip
