@@ -1,0 +1,13 @@
+# Ignore model files by default (can be overridden with git add -f)
+*.pkl
+*.joblib
+*.h5
+*.keras
+*.pt
+*.pth
+*.onnx
+
+# Keep metadata and documentation
+!metadata.json
+!README.md
+!.gitkeep
