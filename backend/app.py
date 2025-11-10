@@ -230,8 +230,29 @@ def create_app(
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
 
+    # Configure Socket.IO with optional Redis adapter
+    client_manager = None
+    if hasattr(settings, "REDIS_URL") and settings.REDIS_URL:
+        try:
+            # Try to use Redis adapter for multi-server Socket.IO
+            import redis
+            from socketio import AsyncRedisManager
+
+            redis_url = settings.REDIS_URL
+            logging.info(f"Configuring Socket.IO with Redis adapter: {redis_url}")
+            client_manager = AsyncRedisManager(redis_url)
+        except ImportError:
+            logging.warning(
+                "Redis adapter requested but dependencies not available. "
+                "Install with: pip install redis"
+            )
+        except Exception as e:
+            logging.warning(f"Failed to configure Redis adapter: {e}")
+
     _sio = socketio.AsyncServer(
-        async_mode="asgi", cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS
+        async_mode="asgi",
+        cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS,
+        client_manager=client_manager,  # NEW: Add Redis adapter if available
     )  # type: ignore[call-arg]
     sio = _sio
     fastapi_app = FastAPI(title="Cricksy Scorer API")

@@ -13,3 +13,17 @@ def health() -> dict[str, str]:
 @router.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/api/health/ws-metrics")
+def ws_metrics() -> dict[str, any]:
+    """
+    Get WebSocket/Socket.IO metrics.
+
+    Returns connection statistics, message counts, and error rates.
+    Useful for monitoring and alerting.
+    """
+    from backend.socket_handlers import get_metrics
+
+    return get_metrics()
+
