@@ -76,6 +76,19 @@ const router = createRouter({
       component: () => import('@/views/TournamentDetailView.vue'),
     },
 
+    // --- Upload routes ---
+    {
+      path: '/upload',
+      name: 'upload-scorecard',
+      component: () => import('@/components/UploadScorecard.vue'),
+    },
+    {
+      path: '/upload/:uploadId/review',
+      name: 'upload-review',
+      component: () => import('@/views/UploadReview.vue'),
+      props: true,
+    },
+
     // Catch-all → setup
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
