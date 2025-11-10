@@ -276,7 +276,7 @@ def create_app(
     fastapi_app.include_router(players_router)
     fastapi_app.include_router(tournaments_router)
 
-    # Ensure the DB engine/sessionmaker are created at application startup so
+    # In-process database startup/shutdown hooks.
     # TestClient and other in-process runners create pools on the same event loop.
     @fastapi_app.on_event("startup")  # type: ignore[reportDeprecated]
     async def _init_db_event() -> None:  # type: ignore[reportUnusedFunction]
@@ -284,7 +284,8 @@ def create_app(
         import contextlib
 
         with contextlib.suppress(Exception):
-            db.init_engine()
+            # Engine is already initialized in the database module
+            pass
 
     @fastapi_app.on_event("shutdown")  # type: ignore[reportDeprecated]
     async def _shutdown_db_event() -> None:  # type: ignore[reportUnusedFunction]
@@ -292,7 +293,8 @@ def create_app(
         import contextlib
 
         with contextlib.suppress(Exception):
-            await db.shutdown_engine()
+            # Dispose the engine if needed
+            await db.engine.dispose()
 
     # Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
     use_in_memory = bool(getattr(settings, "IN_MEMORY_DB", False)) or (

@@ -13,7 +13,7 @@ Strategy:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from .ml_features import build_score_predictor_features, build_win_predictor_features
 from .ml_model_service import get_ml_service
@@ -111,7 +111,7 @@ class WinProbabilityPredictor:
             }
 
         # Determine match format
-        match_format = "t20" if overs_limit <= 20 else "odi"
+        match_format: Literal["t20", "odi"] = "t20" if overs_limit <= 20 else "odi"
 
         # Try ML prediction first
         try:
@@ -324,7 +324,7 @@ class WinProbabilityPredictor:
             }
 
         # Determine match format
-        match_format = "t20" if overs_limit <= 20 else "odi"
+        match_format: Literal["t20", "odi"] = "t20" if overs_limit <= 20 else "odi"
 
         # Try ML win prediction first
         try:

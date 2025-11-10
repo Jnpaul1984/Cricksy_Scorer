@@ -51,8 +51,8 @@ def _model_to_dict(x: Any) -> dict[str, Any] | None:
         except Exception:
             try:
                 md = x.dict()  # type: ignore[attr-defined]
-                md2: dict[str, Any] = dict(md)
-                return {str(k): v for k, v in md2.items()}
+                md_dict: dict[str, Any] = dict(md)
+                return {str(k): v for k, v in md_dict.items()}
             except Exception:
                 return None
 
@@ -690,8 +690,7 @@ async def get_snapshot(
             and overs_limit_opt in (20, 50)
         ):
             format_overs = int(overs_limit_opt)
-            kind = "odi" if format_overs >= 40 else "t20"
-            assert kind in ("odi", "t20")
+            kind: Literal["odi", "t20"] = "odi" if format_overs >= 40 else "t20"
             env = dlsmod.load_env(kind, str(BASE_DIR))
 
             deliveries_m: list[Mapping[str, Any]] = list(getattr(g, "deliveries", []))

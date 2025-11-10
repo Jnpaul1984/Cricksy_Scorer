@@ -9,10 +9,22 @@ Handles loading and inference for ML models:
 
 import joblib
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Any, Protocol
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class MLModel(Protocol):
+    """Protocol for ML models with predict and predict_proba methods."""
+
+    def predict(self, X: Any) -> Any:
+        """Predict method for regression models."""
+        ...
+
+    def predict_proba(self, X: Any) -> Any:
+        """Predict probability method for classification models."""
+        ...
 
 
 class MLModelService:
@@ -20,14 +32,14 @@ class MLModelService:
 
     def __init__(self):
         """Initialize the ML model service."""
-        self._models = {}
+        self._models: dict[str, MLModel] = {}
         self._base_path = Path(__file__).parent.parent / "ml_models"
 
     def load_model(
         self,
         model_type: Literal["win_probability", "score_predictor"],
         match_format: Literal["t20", "odi"],
-    ) -> object | None:
+    ) -> MLModel | None:
         """
         Load a specific ML model.
 
