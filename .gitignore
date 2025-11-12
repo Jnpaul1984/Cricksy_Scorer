@@ -21,6 +21,15 @@ coverage/
 frontend/.cypress-runtime/
 .tsc-tmp/
 
+# --- Terraform ---
+.terraform/
+.terraform/*
+infra/terraform/.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+
 # --- Training data ---
 backend/snapshots/
 snapshots_archive_*.zip
