@@ -52,6 +52,18 @@ import {
 
 
 // Loose wrappers so we can listen to custom events
+type PredictionEventPayload = {
+  game_id: string
+  prediction: {
+    batting_team_win_prob: number
+    bowling_team_win_prob: number
+    confidence: number
+    batting_team?: string
+    bowling_team?: string
+    factors?: Record<string, any>
+  }
+}
+
 type ServerEvents = {
   'presence:init': { game_id: string; members: Array<{ sid: string; role: string; name: string }> }
   'state:update': { id: string; snapshot: ApiSnapshot | any }
@@ -59,6 +71,7 @@ type ServerEvents = {
   'commentary:new': { id?: string; at: string; text: string; game_id: string }
   'interruptions:update': { game_id?: string }
   'interruption:ended': undefined
+  'prediction:update': PredictionEventPayload
 }
 
 const on = onSocket as unknown as <K extends keyof ServerEvents>(
@@ -1658,17 +1671,7 @@ function deliveryKey(d: LooseDelivery): string {
       }
       interEndedHandler = () => optimisticallyCloseCurrentInterruption()
 
-      predictionHandler = (payload: {
-        game_id: string
-        prediction: {
-          batting_team_win_prob: number
-          bowling_team_win_prob: number
-          confidence: number
-          batting_team?: string
-          bowling_team?: string
-          factors?: Record<string, any>
-        }
-      }) => {
+      predictionHandler = (payload: PredictionEventPayload) => {
         if (!liveGameId.value || payload.game_id !== liveGameId.value) return
         if (payload.prediction) {
           currentPrediction.value = payload.prediction
@@ -1681,7 +1684,9 @@ function deliveryKey(d: LooseDelivery): string {
       on('commentary:new', commentaryHandler)
       on('interruptions:update', interUpdateHandler)
       on('interruption:ended', interEndedHandler)
-      on('prediction:update', predictionHandler as any)
+      if (predictionHandler) {
+        on('prediction:update', predictionHandler)
+      }
 
       void refreshInterruptions()
     } catch (e) {
@@ -1715,7 +1720,7 @@ function deliveryKey(d: LooseDelivery): string {
   }
   let interUpdateHandler: ((p: { game_id?: string }) => void) | null = null
   let interEndedHandler: (() => void) | null = null
-  let predictionHandler: ((payload: { game_id: string; prediction: any }) => void) | null = null
+  let predictionHandler: ((payload: PredictionEventPayload) => void) | null = null
 
 
 

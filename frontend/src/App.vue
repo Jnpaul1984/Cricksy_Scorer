@@ -2,20 +2,50 @@
 import { onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 
-import logoUrl from '@/assets/logo.png' // make sure the file exists: src/assets/logo.png
+import logoAvif480 from '@/assets/optimized/logo-w480.avif'
+import logoAvif768 from '@/assets/optimized/logo-w768.avif'
+import logoAvif1024 from '@/assets/optimized/logo-w1024.avif'
+import logoAvif1440 from '@/assets/optimized/logo-w1440.avif'
+import logoWebp480 from '@/assets/optimized/logo-w480.webp'
+import logoWebp768 from '@/assets/optimized/logo-w768.webp'
+import logoWebp1024 from '@/assets/optimized/logo-w1024.webp'
+import logoWebp1440 from '@/assets/optimized/logo-w1440.webp'
 
 onMounted(() => {
   // hide the tiny fallback text from index.html once Vue is mounted
   const el = document.getElementById('app')
   if (el) el.classList.add('loaded')
 })
+const logoSources = [
+  { width: 480, avif: logoAvif480, webp: logoWebp480 },
+  { width: 768, avif: logoAvif768, webp: logoWebp768 },
+  { width: 1024, avif: logoAvif1024, webp: logoWebp1024 },
+  { width: 1440, avif: logoAvif1440, webp: logoWebp1440 },
+] as const
+
+const logoAvifSrcset = logoSources.map((src) => `${src.avif} ${src.width}w`).join(', ')
+const logoWebpSrcset = logoSources.map((src) => `${src.webp} ${src.width}w`).join(', ')
+const logoFallbackSrc = logoSources.find((src) => src.width === 768)?.webp ?? logoSources[0].webp
+const logoSizes = '32px'
 </script>
 
 <template>
   <div class="app">
     <header class="app-header">
       <RouterLink to="/" class="brand">
-        <img :src="logoUrl" alt="Cricksy Mascot" />
+        <picture class="brand-logo">
+          <source :srcset="logoAvifSrcset" :sizes="logoSizes" type="image/avif" />
+          <source :srcset="logoWebpSrcset" :sizes="logoSizes" type="image/webp" />
+          <img
+            :src="logoFallbackSrc"
+            :sizes="logoSizes"
+            alt="Cricksy Mascot"
+            loading="eager"
+            decoding="async"
+            width="32"
+            height="32"
+          />
+        </picture>
         <span>Cricksy Scorer</span>
       </RouterLink>
 
@@ -62,9 +92,15 @@ onMounted(() => {
   font-weight: 700;
   letter-spacing: 0.2px;
 }
-.brand img {
+.brand-logo,
+.brand-logo img {
   width: 32px;
   height: 32px;
+  display: inline-flex;
+}
+.brand-logo img {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 .nav {

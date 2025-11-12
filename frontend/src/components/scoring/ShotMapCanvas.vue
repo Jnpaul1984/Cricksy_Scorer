@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
-import defaultBackgroundImage from '../../assets/shot-map-field.png'
+import shotMapAvif480 from '@/assets/optimized/shot-map-field-w480.avif'
+import shotMapAvif768 from '@/assets/optimized/shot-map-field-w768.avif'
+import shotMapAvif1024 from '@/assets/optimized/shot-map-field-w1024.avif'
+import shotMapAvif1440 from '@/assets/optimized/shot-map-field-w1440.avif'
+import shotMapWebp480 from '@/assets/optimized/shot-map-field-w480.webp'
+import shotMapWebp768 from '@/assets/optimized/shot-map-field-w768.webp'
+import shotMapWebp1024 from '@/assets/optimized/shot-map-field-w1024.webp'
+import shotMapWebp1440 from '@/assets/optimized/shot-map-field-w1440.webp'
 
 type Point = { x: number; y: number }
 
@@ -28,18 +35,26 @@ const canvasHeight = computed(() => props.height ?? 220)
 const hasHistory = computed(() => strokes.value.length > 0)
 const hasActiveStroke = computed(() => hasHistory.value || currentStroke.value.length > 1)
 
-const surfaceStyle = computed(() => {
-  const image = props.backgroundImage ?? defaultBackgroundImage
-  return {
-    width: `${canvasWidth.value}px`,
-    height: `${canvasHeight.value}px`,
-    backgroundImage: image ? `url(${image})` : undefined,
-    backgroundSize: 'cover',
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'center',
-    backgroundColor: image ? 'transparent' : '#f8fafc',
-  }
-})
+const surfaceStyle = computed(() => ({
+  width: `${canvasWidth.value}px`,
+  height: `${canvasHeight.value}px`,
+  backgroundColor: props.backgroundImage ? 'transparent' : '#f8fafc',
+}))
+
+const shotMapSources = [
+  { width: 480, avif: shotMapAvif480, webp: shotMapWebp480 },
+  { width: 768, avif: shotMapAvif768, webp: shotMapWebp768 },
+  { width: 1024, avif: shotMapAvif1024, webp: shotMapWebp1024 },
+  { width: 1440, avif: shotMapAvif1440, webp: shotMapWebp1440 },
+] as const
+
+const shotMapAvifSrcset = shotMapSources.map((src) => `${src.avif} ${src.width}w`).join(', ')
+const shotMapWebpSrcset = shotMapSources.map((src) => `${src.webp} ${src.width}w`).join(', ')
+const shotMapDefaultSrc =
+  shotMapSources.find((src) => src.width === 1024)?.webp ??
+  shotMapSources[shotMapSources.length - 1]?.webp ??
+  ''
+const shotMapSizes = computed(() => `${canvasWidth.value}px`)
 
 function setupCanvas(): void {
   const canvas = canvasRef.value
@@ -184,6 +199,29 @@ watch(
 <template>
   <div class="shot-map-canvas">
     <div class="shot-map-canvas__surface-wrapper" :style="surfaceStyle">
+      <div class="shot-map-canvas__background">
+        <template v-if="props.backgroundImage">
+          <img
+            class="shot-map-canvas__background-img"
+            :src="props.backgroundImage"
+            alt="Cricket field"
+            loading="lazy"
+            decoding="async"
+          />
+        </template>
+        <picture v-else class="shot-map-canvas__picture">
+          <source :srcset="shotMapAvifSrcset" :sizes="shotMapSizes" type="image/avif" />
+          <source :srcset="shotMapWebpSrcset" :sizes="shotMapSizes" type="image/webp" />
+          <img
+            class="shot-map-canvas__background-img"
+            :src="shotMapDefaultSrc"
+            :sizes="shotMapSizes"
+            alt="Cricket field"
+            loading="lazy"
+            decoding="async"
+          />
+        </picture>
+      </div>
       <canvas
         ref="canvasRef"
         class="shot-map-canvas__surface"
@@ -216,6 +254,25 @@ watch(
   border: 1px solid rgba(148, 163, 184, 0.4);
   border-radius: 12px;
   overflow: hidden;
+}
+
+.shot-map-canvas__background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.shot-map-canvas__picture {
+  display: contents;
+}
+
+.shot-map-canvas__background-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .shot-map-canvas__surface {

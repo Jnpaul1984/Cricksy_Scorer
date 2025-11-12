@@ -23,7 +23,7 @@ interface Props {
   prediction: WinProbability | null
   battingTeam?: string
   bowlingTeam?: string
-  theme?: 'dark' | 'light'
+  theme?: 'dark' | 'light' | 'auto'
   showChart?: boolean
   compact?: boolean
 }
@@ -66,6 +66,11 @@ const formattedBattingTeam = computed(() => {
 
 const formattedBowlingTeam = computed(() => {
   return props.prediction?.bowling_team || props.bowlingTeam || 'Bowling Team'
+})
+
+const resolvedTheme = computed<'dark' | 'light'>(() => {
+  if (props.theme === 'dark') return 'dark'
+  return 'light'
 })
 </script>
 
@@ -131,7 +136,7 @@ const formattedBowlingTeam = computed(() => {
           :current-prediction="prediction"
           :batting-team="formattedBattingTeam"
           :bowling-team="formattedBowlingTeam"
-          :theme="theme"
+          :theme="resolvedTheme"
         />
       </div>
     </div>

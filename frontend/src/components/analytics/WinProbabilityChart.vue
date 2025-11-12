@@ -58,7 +58,7 @@ watch(
         battingProb: newPred.batting_team_win_prob,
         bowlingProb: newPred.bowling_team_win_prob,
       })
-      
+
       // Keep only last 50 data points
       if (predictionHistory.value.length > 50) {
         predictionHistory.value.shift()
@@ -70,7 +70,7 @@ watch(
 
 const chartData = computed(() => {
   const labels = predictionHistory.value.map((p) => p.over)
-  
+
   return {
     labels,
     datasets: [
@@ -127,7 +127,12 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
       borderWidth: 1,
       callbacks: {
         label: function (context) {
-          return `${context.dataset.label}: ${context.parsed.y.toFixed(1)}%`
+          const yValue = context.parsed?.y
+          if (typeof yValue !== 'number') {
+            return context.dataset.label ?? ''
+          }
+          const label = context.dataset.label ?? 'Value'
+          return `${label}: ${yValue.toFixed(1)}%`
         },
       },
     },

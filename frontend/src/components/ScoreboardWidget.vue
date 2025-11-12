@@ -305,6 +305,12 @@ const battingTeamName = computed(() =>
      : '')
 )
 
+const bowlingTeamName = computed(() =>
+  (currentGame.value as any)?.bowlingTeamName
+  ?? (currentGame.value as any)?.bowling_team_name
+  ?? ''
+)
+
 // ✅ Deterministic: who played the FIRST innings?
 const innings1TeamName = computed(() => {
   if (currentInningNo.value === 1) {
