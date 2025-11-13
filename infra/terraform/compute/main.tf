@@ -153,7 +153,7 @@ resource "aws_ecs_task_definition" "backend" {
         logDriver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.api.name
-          awslogs-region        = data.aws_region.current.name
+          awslogs-region        = data.aws_region.current.id
           awslogs-stream-prefix = "backend"
         }
       }
@@ -177,4 +177,39 @@ resource "aws_ecs_task_definition" "backend" {
   ])
 
   tags = local.common_tags
+}
+
+resource "aws_ecs_service" "backend" {
+  name            = "cricksy-ai-backend-service"
+  cluster         = aws_ecs_cluster.this.id
+  task_definition = aws_ecs_task_definition.backend.arn
+  launch_type     = "FARGATE"
+  desired_count   = 1
+  propagate_tags  = "TASK_DEFINITION"
+
+  network_configuration {
+    subnets         = var.private_subnets
+    security_groups = [var.sg_app_id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.api.arn
+    container_name   = "backend"
+    container_port   = 8000
+  }
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  enable_execute_command = true
+  platform_version       = "1.4.0"
+
+  tags = local.common_tags
+
+  depends_on = [
+    aws_lb_listener.http
+  ]
 }

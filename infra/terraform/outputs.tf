@@ -53,3 +53,8 @@ output "db_identifier" {
 output "db_sg_id" {
   value = module.db.db_sg_id
 }
+
+output "github_deploy_role_arn" {
+  description = "IAM role ARN for GitHub Actions backend deploys"
+  value       = aws_iam_role.cricksy_ai_github_deploy.arn
+}
