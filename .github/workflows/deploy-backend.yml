@@ -25,7 +25,7 @@ jobs:
           --health-retries=5
     env:
       DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/cricksy
-
+      APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
