@@ -15,6 +15,7 @@ import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
 import { useGameStore } from '@/stores/gameStore'
+import { API_BASE } from '@/utils/api'
 
 const isDev = import.meta.env.DEV
 const normId = (v: unknown) => String(v ?? '').trim()
@@ -386,8 +387,7 @@ function openWeather() { weatherDlg.value?.showModal() }
 function closeWeather() { weatherDlg.value?.close() }
 
 const apiBase =
-  (import.meta as any).env?.VITE_API_BASE?.replace(/\/$/, '') ||
-  (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin).replace(/\/$/, '')
+  (API_BASE || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '')
 
 // Store is the single writer; no manual refresh calls here.
 async function startWeatherDelay() {

@@ -15,7 +15,7 @@ locals {
     "10.0.120.0/24"
   ]
   common_tags = {
-    project = "cricksy"
+    project = "cricksy-ai"
     env     = "prod"
     tier    = "network"
   }

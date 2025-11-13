@@ -33,6 +33,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
+import { API_BASE } from '@/utils/api'
 
 /**
  * Route & params
@@ -47,11 +48,9 @@ const gameId = computed(() => String(route.params.gameId || ''))
  */
 const q = route.query as Record<string, string | undefined>
 
-const envApi = (import.meta as any).env?.VITE_API_BASE as string | undefined
+const fallbackOrigin = typeof window !== 'undefined' ? window.location.origin : ''
 const apiBase = computed<string>(() =>
-  (q.apiBase as string) ||
-  envApi ||
-  (typeof window !== 'undefined' ? window.location.origin : '')
+  ((q.apiBase as string) || API_BASE || fallbackOrigin).replace(/\/$/, '')
 )
 
 const sponsorsUrl = computed<string>(() =>

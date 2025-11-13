@@ -20,6 +20,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
+import { API_BASE } from '@/utils/api'
 
 const route = useRoute()
 const gameId = computed(() => String(route.params.gameId))
@@ -35,8 +36,8 @@ const sponsorsUrl = (q.sponsorsUrl as string) || ''
 const sponsorRotateMs = Number(q.sponsorRotateMs ?? 8000)
 const sponsorClickable = String(q.sponsorClickable ?? 'false') === 'true'
 
-// allow override; default to local dev backend
-const apiBase = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:8000'
+const fallbackOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+const apiBase = ((q.apiBase as string) || API_BASE || fallbackOrigin).replace(/\/$/, '')
 </script>
 
 <style scoped>

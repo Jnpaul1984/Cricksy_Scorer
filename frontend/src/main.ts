@@ -49,7 +49,7 @@ if (!mountEl.__vue_app__) {
   if (import.meta.env.DEV) {
     console.log('🏏 Cricksy Scorer application initialized successfully')
     console.log('Environment:', import.meta.env.MODE)
-    console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000')
+    console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL ?? '(not set)')
   }
   if (import.meta.env.DEV) {
     ;(window as any).loadMatch = (match: any) => {

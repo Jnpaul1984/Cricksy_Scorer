@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 
 import { useGameStore } from '@/stores/gameStore'
+import { API_BASE } from '@/utils/api'
 
 type XI = {
   keeper_b: string | null;
@@ -117,7 +118,7 @@ function toggleB(id: string) {
 }
 
 async function persistXIIfSupported() {
-  const base = (import.meta as any).env.VITE_API_BASE_URL?.replace(/\/+$/, '')
+  const base = (API_BASE || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/+$/, '')
   if (!base) return
 
   const payload = {

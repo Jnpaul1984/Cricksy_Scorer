@@ -29,6 +29,8 @@ infra/terraform/.terraform/
 *.tfstate
 *.tfstate.*
 *.tfplan
+terraform.tfvars
+infra/terraform/terraform.tfvars
 
 # --- Training data ---
 backend/snapshots/

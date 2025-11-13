@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
-
-def _csv_list(env_val: str | None) -> list[str]:
-    return [s.strip() for s in (env_val or "").split(",") if s.strip()]
-
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Resolve relative to backend/ directory
 _ROOT = Path(__file__).resolve().parent
@@ -21,25 +18,66 @@ _DEFAULT_CORS = [
 ]
 
 
-class Settings:
-    # API
-    API_TITLE: str = os.getenv("CRICKSY_API_TITLE", "Cricksy Scorer API")
+class Settings(BaseSettings):
+    """Runtime configuration sourced from environment/Secrets Manager."""
 
-    # CORS
-    CORS_ORIGINS: list[str] = _csv_list(os.getenv("CRICKSY_CORS_ORIGINS")) or _DEFAULT_CORS
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # DB mode
-    IN_MEMORY_DB: bool = os.getenv("CRICKSY_IN_MEMORY_DB", "0") == "1"
+    API_TITLE: str = Field(default="Cricksy Scorer API", alias="CRICKSY_API_TITLE")
+    DATABASE_URL: str = Field(..., alias="DATABASE_URL")
+    APP_SECRET_KEY: str = Field(..., alias="APP_SECRET_KEY")
+    BACKEND_CORS_ORIGINS: str = Field(
+        default=",".join(_DEFAULT_CORS),
+        alias="BACKEND_CORS_ORIGINS",
+    )
+    IN_MEMORY_DB: bool = Field(default=False, alias="CRICKSY_IN_MEMORY_DB")
+    STATIC_ROOT: Path = Field(default=_ROOT / "static", alias="CRICKSY_STATIC_ROOT")
+    SPONSORS_DIR: Path = Field(default=_ROOT / "static" / "sponsors", alias="CRICKSY_SPONSORS_DIR")
+    SIO_CORS_ALLOWED_ORIGINS: str | list[str] = Field(
+        default="*",
+        alias="CRICKSY_SIO_CORS_ORIGINS",
+    )
+    LOG_LEVEL: str = Field(default="INFO", alias="CRICKSY_LOG_LEVEL")
 
-    # Static paths
-    STATIC_ROOT: Path = Path(os.getenv("CRICKSY_STATIC_ROOT") or (_ROOT / "static"))
-    SPONSORS_DIR: Path = Path(os.getenv("CRICKSY_SPONSORS_DIR") or (STATIC_ROOT / "sponsors"))
+    @field_validator("STATIC_ROOT", mode="before")
+    @classmethod
+    def _resolve_static_root(cls, value: Path | str | None) -> Path:
+        if isinstance(value, Path):
+            return value
+        if value is None:
+            return _ROOT / "static"
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return _ROOT / "static"
+            return Path(stripped)
+        return Path(value)
 
-    # Socket.IO
-    SIO_CORS_ALLOWED_ORIGINS: str | list[str] = os.getenv("CRICKSY_SIO_CORS_ORIGINS", "*")
+    @field_validator("SPONSORS_DIR", mode="before")
+    @classmethod
+    def _resolve_sponsors_dir(cls, value: Path | str | None) -> Path:
+        if isinstance(value, Path):
+            return value
+        if value is None:
+            return _ROOT / "static" / "sponsors"
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return _ROOT / "static" / "sponsors"
+            return Path(stripped)
+        return Path(value)
 
-    # Logging
-    LOG_LEVEL: str = os.getenv("CRICKSY_LOG_LEVEL", "INFO")
+    @property
+    def database_url(self) -> str:
+        return self.DATABASE_URL
+
+    @property
+    def app_secret_key(self) -> str:
+        return self.APP_SECRET_KEY
+
+    @property
+    def backend_cors_origins(self) -> str:
+        return self.BACKEND_CORS_ORIGINS
 
 
 settings = Settings()

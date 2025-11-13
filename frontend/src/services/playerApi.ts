@@ -7,9 +7,11 @@ import type {
   Leaderboard,
   LeaderboardMetric,
   AwardAchievementRequest,
-} from '@/types/player'
+} from "@/types/player"
+import { API_BASE } from "@/utils/api"
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const API_BASE_URL =
+  API_BASE || (typeof window !== "undefined" ? window.location.origin.replace(/\/+$/, "") : "")
 
 /**
  * Get player profile with statistics and achievements

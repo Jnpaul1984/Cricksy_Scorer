@@ -2,14 +2,18 @@
 // File: src/services/liveSocket.ts
 // Purpose: Socket.IO client wrapper. Joins game room and forwards events.
 // Install (if needed): npm i socket.io-client
-// Env: VITE_SOCKET_URL (e.g., http://localhost:8000)
+// Env: VITE_SOCKET_URL (e.g., https://api.example.com)
 // ============================================================================
 
-import { io, Socket } from 'socket.io-client';
+import { io, Socket } from "socket.io-client";
 
-import type { ScoreUpdatePayload } from './api';
+import type { ScoreUpdatePayload } from "./api";
+import { API_BASE } from "./api";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:8000';
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  API_BASE ||
+  (typeof window !== "undefined" ? window.location.origin : "");
 
 export type LiveEvents = {
   /** Emitted by server after a successful delivery POST and recompute */

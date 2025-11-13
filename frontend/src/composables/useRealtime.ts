@@ -1,9 +1,15 @@
 import { io, Socket } from "socket.io-client";
 import { ref, onUnmounted } from "vue";
 
-// Adjust to your backend URL/port
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
-const socket: Socket = io(API_URL, { transports: ["websocket"] });
+import { API_BASE } from "@/utils/api";
+
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  import.meta.env.VITE_API_URL ||
+  API_BASE ||
+  (typeof window !== "undefined" ? window.location.origin : "");
+
+const socket: Socket = io(SOCKET_URL, { transports: ["websocket"] });
 
 type Member = { sid: string; role: string; name: string };
 const membersByGame = new Map<string, Member[]>();

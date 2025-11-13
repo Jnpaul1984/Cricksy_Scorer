@@ -233,7 +233,7 @@ def create_app(
         async_mode="asgi", cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS
     )  # type: ignore[call-arg]
     sio = _sio
-    fastapi_app = FastAPI(title="Cricksy Scorer API")
+    fastapi_app = FastAPI(title=settings.API_TITLE)
     fastapi_app.state.sio = sio
 
     # Install middlewares and exception handlers on FastAPI app (not ASGI wrapper)
@@ -244,16 +244,21 @@ def create_app(
     STATIC_ROOT: Path = settings.STATIC_ROOT
     fastapi_app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 
-    fastapi_app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[
+    raw_cors_origins = str(getattr(settings, "BACKEND_CORS_ORIGINS", "")).strip()
+    cors_origins = [origin.strip() for origin in raw_cors_origins.split(",") if origin.strip()]
+    if not cors_origins:
+        cors_origins = [
             "http://localhost:3000",
             "http://127.0.0.1:3000",
             "http://localhost:5173",
             "http://127.0.0.1:5173",
             "http://localhost:4173",
             "http://127.0.0.1:4173",
-        ],
+        ]
+
+    fastapi_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
