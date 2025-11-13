@@ -6,8 +6,62 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy-backend:
+  test-backend-postgres:
+    name: Test Backend (Postgres)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: cricksy
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U test -d cricksy"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/cricksy
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install alembic pytest
+
+      - name: Run Alembic migrations
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          alembic upgrade head
+
+      - name: Run backend tests
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          pytest -v
+
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    needs: [test-backend-postgres]
     env:
       AWS_REGION: us-east-1
       ECR_REPOSITORY: cricksy-backend
@@ -15,46 +69,19 @@ jobs:
       ECS_SERVICE: cricksy-ai-backend-service
 
     steps:
-      # Checkout source
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Set up Python for backend tests
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: backend/requirements.txt
-
-      # Install backend dependencies and run tests
-      - name: Install backend dependencies
-        working-directory: backend
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-
-      - name: Run backend tests
-        working-directory: backend
-        env:
-          CRICKSY_IN_MEMORY_DB: "1"
-        run: |
-          pytest -v
-
-      # Configure AWS credentials using OIDC
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Login to Amazon ECR
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Build and tag Docker image
       - name: Build backend image
         working-directory: backend
         env:
@@ -63,7 +90,6 @@ jobs:
           docker build -f Dockerfile -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest .
           docker tag $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA}
 
-      # Push Docker images
       - name: Push backend image
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
@@ -71,7 +97,6 @@ jobs:
           docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
           docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA}
 
-      # Force ECS deployment and wait for stability
       - name: Force new ECS deployment
         run: |
           aws ecs update-service \
