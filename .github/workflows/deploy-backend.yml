@@ -55,6 +55,7 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
+          PYTHONPATH: ${{ github.workspace }}/backend
         run: |
           pytest -v
 
