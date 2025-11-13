@@ -59,6 +59,6 @@ variable "image_tag" {
 
 variable "backend_cors_origins" {
   type        = string
-  description = "Comma-separated origins allowed to call the backend"
+  description = "Comma-separated origins allowed to call the backend (e.g. \"https://YOUR_FIREBASE_SITE.web.app,https://api.cricksy-ai.com,http://localhost:5173\")"
   default     = "http://localhost:5173,https://app.cricksy-ai.com"
 }

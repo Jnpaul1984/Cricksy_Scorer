@@ -38,7 +38,7 @@ variable "environment" {
 }
 
 variable "backend_cors_origins" {
-  description = "Comma-separated list of allowed origins for the backend API"
+  description = "Comma-separated list of allowed origins for the backend API (e.g. \"https://YOUR_FIREBASE_SITE.web.app,https://api.cricksy-ai.com,http://localhost:5173\")"
   type        = string
   default     = "http://localhost:5173,https://app.cricksy-ai.com"
 }
