@@ -45,7 +45,9 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_sponsors_active_window", "sponsors", ["start_at", "end_at"], unique=False)
+    op.create_index(
+        "ix_sponsors_active_window", "sponsors", ["start_at", "end_at"], unique=False
+    )
     op.create_index("ix_sponsors_weight", "sponsors", ["weight"], unique=False)
     # ### end Alembic commands ###
 

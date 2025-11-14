@@ -23,25 +23,25 @@ async def get_game_win_probability(
 ) -> Dict[str, Any]:
     """
     Get current win probability for a game.
-    
+
     Returns real-time prediction based on current match state.
-    
+
     Args:
         game_id: UUID of the game
         db: Database session
-        
+
     Returns:
         Dictionary with win probabilities and factors
-        
+
     Raises:
         HTTPException: If game not found
     """
     # Fetch game from database
     game = await crud.get_game(db, game_id)
-    
+
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    
+
     # Build game state dictionary
     game_state = {
         "current_inning": game.current_inning,
@@ -53,13 +53,13 @@ async def get_game_win_probability(
         "target": game.target,
         "match_type": game.match_type,
     }
-    
+
     # Calculate prediction
     prediction = get_win_probability(game_state)
-    
+
     # Add team names to response
     prediction["batting_team"] = game.batting_team_name
     prediction["bowling_team"] = game.bowling_team_name
     prediction["game_id"] = game_id
-    
+
     return prediction

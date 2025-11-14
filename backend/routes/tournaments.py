@@ -49,7 +49,9 @@ async def update_tournament(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Update a tournament"""
-    tournament = await tournament_crud.update_tournament(db, tournament_id, tournament_update)
+    tournament = await tournament_crud.update_tournament(
+        db, tournament_id, tournament_update
+    )
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
     return tournament
@@ -70,7 +72,11 @@ async def delete_tournament(
 # Team management endpoints
 
 
-@router.post("/{tournament_id}/teams", response_model=schemas.TournamentTeamResponse, status_code=201)
+@router.post(
+    "/{tournament_id}/teams",
+    response_model=schemas.TournamentTeamResponse,
+    status_code=201,
+)
 async def add_team(
     tournament_id: str,
     team: schemas.TeamAdd,
@@ -83,7 +89,9 @@ async def add_team(
     return result
 
 
-@router.get("/{tournament_id}/teams", response_model=list[schemas.TournamentTeamResponse])
+@router.get(
+    "/{tournament_id}/teams", response_model=list[schemas.TournamentTeamResponse]
+)
 async def get_teams(
     tournament_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -92,7 +100,9 @@ async def get_teams(
     return await tournament_crud.get_tournament_teams(db, tournament_id)
 
 
-@router.get("/{tournament_id}/points-table", response_model=list[schemas.PointsTableEntry])
+@router.get(
+    "/{tournament_id}/points-table", response_model=list[schemas.PointsTableEntry]
+)
 async def get_points_table(
     tournament_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],

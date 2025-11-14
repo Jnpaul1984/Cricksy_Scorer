@@ -58,7 +58,14 @@ class TestMLIntegration:
         # Verify reasonable probability range
         assert 0 <= result["batting_team_win_prob"] <= 100
         assert 0 <= result["bowling_team_win_prob"] <= 100
-        assert abs(result["batting_team_win_prob"] + result["bowling_team_win_prob"] - 100.0) < 0.1
+        assert (
+            abs(
+                result["batting_team_win_prob"]
+                + result["bowling_team_win_prob"]
+                - 100.0
+            )
+            < 0.1
+        )
 
     def test_ml_second_innings_prediction(self):
         """Test that second innings uses ML win predictor."""

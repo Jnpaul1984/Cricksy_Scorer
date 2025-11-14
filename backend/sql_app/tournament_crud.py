@@ -25,7 +25,9 @@ async def create_tournament(
     return tournament
 
 
-async def get_tournament(db: AsyncSession, tournament_id: str) -> models.Tournament | None:
+async def get_tournament(
+    db: AsyncSession, tournament_id: str
+) -> models.Tournament | None:
     """Get a tournament by ID"""
     result = await db.execute(
         select(models.Tournament)
@@ -35,7 +37,9 @@ async def get_tournament(db: AsyncSession, tournament_id: str) -> models.Tournam
     return result.scalar_one_or_none()
 
 
-async def get_tournaments(db: AsyncSession, skip: int = 0, limit: int = 100) -> list[models.Tournament]:
+async def get_tournaments(
+    db: AsyncSession, skip: int = 0, limit: int = 100
+) -> list[models.Tournament]:
     """Get all tournaments"""
     result = await db.execute(
         select(models.Tournament)
@@ -104,7 +108,10 @@ async def get_tournament_teams(
     result = await db.execute(
         select(models.TournamentTeam)
         .where(models.TournamentTeam.tournament_id == tournament_id)
-        .order_by(models.TournamentTeam.points.desc(), models.TournamentTeam.net_run_rate.desc())
+        .order_by(
+            models.TournamentTeam.points.desc(),
+            models.TournamentTeam.net_run_rate.desc(),
+        )
     )
     return list(result.scalars().all())
 
@@ -123,8 +130,7 @@ async def update_team_stats(
 ) -> models.TournamentTeam | None:
     """Update team statistics after a match"""
     result = await db.execute(
-        select(models.TournamentTeam)
-        .where(
+        select(models.TournamentTeam).where(
             models.TournamentTeam.tournament_id == tournament_id,
             models.TournamentTeam.team_name == team_name,
         )

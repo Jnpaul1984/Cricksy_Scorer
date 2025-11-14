@@ -26,13 +26,12 @@ async def test_create_tournament(mock_session):
         description="A test tournament",
         tournament_type="league",
     )
-    
-    with patch.object(mock_session, "add") as mock_add, \
-         patch.object(mock_session, "commit") as mock_commit, \
-         patch.object(mock_session, "refresh") as mock_refresh:
-        
+
+    with patch.object(mock_session, "add") as mock_add, patch.object(
+        mock_session, "commit"
+    ) as mock_commit, patch.object(mock_session, "refresh") as mock_refresh:
         result = await tournament_crud.create_tournament(mock_session, tournament_data)
-        
+
         mock_add.assert_called_once()
         mock_commit.assert_called_once()
         mock_refresh.assert_called_once()
@@ -52,24 +51,24 @@ async def test_add_team_to_tournament(mock_session):
         created_at=dt.datetime.now(UTC),
         updated_at=dt.datetime.now(UTC),
     )
-    
+
     team_data = schemas.TeamAdd(
         team_name="Test Team",
         team_data={"players": [{"id": "1", "name": "Player 1"}]},
     )
-    
+
     # Mock the get_tournament call
     with patch.object(
         tournament_crud, "get_tournament", return_value=tournament
-    ) as mock_get, \
-         patch.object(mock_session, "add") as mock_add, \
-         patch.object(mock_session, "commit") as mock_commit, \
-         patch.object(mock_session, "refresh") as mock_refresh:
-        
+    ) as mock_get, patch.object(mock_session, "add") as mock_add, patch.object(
+        mock_session, "commit"
+    ) as mock_commit, patch.object(
+        mock_session, "refresh"
+    ) as mock_refresh:
         result = await tournament_crud.add_team_to_tournament(
             mock_session, "test-tournament-id", team_data
         )
-        
+
         mock_get.assert_called_once_with(mock_session, "test-tournament-id")
         mock_add.assert_called_once()
         mock_commit.assert_called_once()
@@ -93,15 +92,15 @@ async def test_update_team_stats_win(mock_session):
         points=0,
         net_run_rate=0.0,
     )
-    
+
     # Mock the select query
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = team
     mock_session.execute = AsyncMock(return_value=mock_result)
-    
-    with patch.object(mock_session, "commit") as mock_commit, \
-         patch.object(mock_session, "refresh") as mock_refresh:
-        
+
+    with patch.object(mock_session, "commit") as mock_commit, patch.object(
+        mock_session, "refresh"
+    ) as mock_refresh:
         result = await tournament_crud.update_team_stats(
             mock_session,
             "test-tournament-id",
@@ -112,7 +111,7 @@ async def test_update_team_stats_win(mock_session):
             overs_faced=20.0,
             overs_bowled=20.0,
         )
-        
+
         mock_commit.assert_called_once()
         mock_refresh.assert_called_once()
         assert result.matches_played == 1
@@ -132,13 +131,12 @@ async def test_create_fixture(mock_session):
         venue="Test Stadium",
         scheduled_date=dt.datetime.now(UTC),
     )
-    
-    with patch.object(mock_session, "add") as mock_add, \
-         patch.object(mock_session, "commit") as mock_commit, \
-         patch.object(mock_session, "refresh") as mock_refresh:
-        
+
+    with patch.object(mock_session, "add") as mock_add, patch.object(
+        mock_session, "commit"
+    ) as mock_commit, patch.object(mock_session, "refresh") as mock_refresh:
         result = await tournament_crud.create_fixture(mock_session, fixture_data)
-        
+
         mock_add.assert_called_once()
         mock_commit.assert_called_once()
         mock_refresh.assert_called_once()
@@ -176,15 +174,14 @@ async def test_get_points_table(mock_session):
             net_run_rate=0.5,
         ),
     ]
-    
+
     with patch.object(
         tournament_crud, "get_tournament_teams", return_value=teams
     ) as mock_get:
-        
         result = await tournament_crud.get_points_table(
             mock_session, "test-tournament-id"
         )
-        
+
         mock_get.assert_called_once_with(mock_session, "test-tournament-id")
         assert len(result) == 2
         assert result[0].team_name == "Team A"

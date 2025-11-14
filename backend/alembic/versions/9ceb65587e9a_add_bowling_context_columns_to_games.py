@@ -19,12 +19,18 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("games", sa.Column("current_bowler_id", sa.String(length=64), nullable=True))
-    op.add_column("games", sa.Column("last_ball_bowler_id", sa.String(length=64), nullable=True))
+    op.add_column(
+        "games", sa.Column("current_bowler_id", sa.String(length=64), nullable=True)
+    )
+    op.add_column(
+        "games", sa.Column("last_ball_bowler_id", sa.String(length=64), nullable=True)
+    )
     # If you also persist these (your code reads them from snapshot,
     #  but safe to add if you plan to store):
     op.add_column("games", sa.Column("current_over_balls", sa.Integer(), nullable=True))
-    op.add_column("games", sa.Column("mid_over_change_used", sa.Boolean(), nullable=True))
+    op.add_column(
+        "games", sa.Column("mid_over_change_used", sa.Boolean(), nullable=True)
+    )
     op.add_column("games", sa.Column("balls_bowled_total", sa.Integer(), nullable=True))
 
 
