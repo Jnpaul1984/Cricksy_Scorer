@@ -61,3 +61,5 @@ watchfiles==1.1.0
 websockets==15.0.1
 wsproto==1.2.0
 aiosqlite==0.20.0
+numpy>=1.26.0,<2
+numpy>=1.26.0,<2
