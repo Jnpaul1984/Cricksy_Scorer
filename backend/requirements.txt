@@ -27,7 +27,7 @@ MarkupSafe==3.0.2
 mccabe==0.7.0
 mypy_extensions==1.1.0
 numpy==2.1.2
-orjson==3.9.10
+orjson==3.9.15
 packaging==25.0
 pandas==2.2.3
 passlib==1.7.4
@@ -46,13 +46,13 @@ pytest-asyncio==0.21.1
 python-dateutil==2.8.2
 python-dotenv==1.0.0
 python-engineio==4.12.2
-python-jose[cryptography]==3.3.0
+python-jose[cryptography]==3.4.0
 python-multipart==0.0.18
 python-socketio==5.14.0
 PyYAML==6.0.2
 scikit-learn==1.5.2
 scipy==1.14.1
-requests==2.32.3
+requests==2.32.4
 rsa==4.9.1
 simple-websocket==1.1.0
 six==1.17.0
