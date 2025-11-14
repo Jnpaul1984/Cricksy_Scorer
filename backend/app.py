@@ -66,6 +66,23 @@ except Exception:
     InMemoryCrudRepoClass = None
     enable_in_memory_crud_fn = None
 
+InMemoryTournamentRepoClass: Any | None = None
+enable_in_memory_tournaments_fn: Any | None = None
+_tournament_repo: Any | None = None
+try:
+    from backend.testsupport.in_memory_tournaments import (
+        InMemoryTournamentRepository as _IMTournamentRepo,
+    )
+    from backend.testsupport.in_memory_tournaments import (
+        enable_in_memory_tournaments as _enable_tournaments_fn,
+    )
+
+    InMemoryTournamentRepoClass = _IMTournamentRepo
+    enable_in_memory_tournaments_fn = _enable_tournaments_fn
+except Exception:
+    InMemoryTournamentRepoClass = None
+    enable_in_memory_tournaments_fn = None
+
 
 # Minimal no-op async session & result for in-memory mode safety
 class _FakeResult:
@@ -326,6 +343,14 @@ def create_app(
             if _memory_repo is None:
                 _memory_repo = InMemoryCrudRepoClass()  # type: ignore[operator]
             enable_in_memory_crud_fn(_memory_repo)  # type: ignore[call-arg]
+        if enable_in_memory_tournaments_fn is not None and InMemoryTournamentRepoClass is not None:
+            global _tournament_repo
+            if _tournament_repo is None:
+                _tournament_repo = InMemoryTournamentRepoClass()  # type: ignore[operator]
+            enable_in_memory_tournaments_fn(_tournament_repo)  # type: ignore[call-arg]
+    else:
+        if enable_in_memory_tournaments_fn is not None:
+            enable_in_memory_tournaments_fn(None)  # Ensure ORM paths are active
 
     asgi_app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
     return asgi_app, fastapi_app

@@ -1,144 +1,151 @@
 """
 Model Re-export Utility
 =======================
-This script helps re-export models that have version compatibility issues.
+
+This script reloads serialized models with the currently installed
+versions of scikit-learn / XGBoost and re-saves them with joblib so they
+work with our production environment.
 
 Run this script on the machine where you originally trained the models,
-or provide the original training environment.
+or reproduce the original environment (matching library versions).
 
 Usage:
     python fix_models.py
 """
-import pickle
-import joblib
-from pathlib import Path
-import sys
 
-def fix_model(old_path: Path, new_path: Path, model_name: str):
+from __future__ import annotations
+
+import pickle
+from dataclasses import dataclass
+from pathlib import Path
+
+import joblib
+
+BANNER = "=" * 60
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    """Specification describing a model file that needs re-export."""
+
+    name: str
+    path: Path
+    temp_path: Path
+
+
+def fix_model(old_path: Path, new_path: Path, model_name: str) -> bool:
     """
     Attempt to load and re-save a model with current library versions.
-    
+
     Args:
-        old_path: Path to the problematic model
-        new_path: Path where to save the fixed model
-        model_name: Descriptive name for logging
+        old_path: Path to the problematic model.
+        new_path: Temporary output path for the re-saved model.
+        model_name: Descriptive name for logging.
     """
-    print(f"\n{'='*60}")
+
+    print(f"\n{BANNER}")
     print(f"Fixing: {model_name}")
-    print(f"{'='*60}")
-    
+    print(BANNER)
+
     if not old_path.exists():
-        print(f"❌ Model file not found: {old_path}")
-        return False
-    
-    try:
-        # Try loading with pickle first
-        print(f"📂 Loading model from: {old_path}")
-        with open(old_path, 'rb') as f:
-            model = pickle.load(f)
-        
-        print(f"✅ Model loaded successfully!")
-        print(f"   Type: {type(model).__name__}")
-        
-        # Check if it has the expected methods
-        if hasattr(model, 'predict'):
-            print(f"   ✓ Has predict method")
-        if hasattr(model, 'predict_proba'):
-            print(f"   ✓ Has predict_proba method")
-        
-        # Show features if available
-        if hasattr(model, 'feature_names_in_'):
-            print(f"   ✓ Features: {len(model.feature_names_in_)} features")
-        
-        # Re-save using joblib (recommended for sklearn/xgboost)
-        print(f"\n💾 Re-saving model to: {new_path}")
-        joblib.dump(model, new_path, compress=3)
-        
-        # Verify the new file
-        print(f"🔍 Verifying re-saved model...")
-        test_model = joblib.load(new_path)
-        print(f"✅ Verification successful!")
-        
-        # Backup the old file
-        backup_path = old_path.with_suffix('.pkl.backup')
-        old_path.rename(backup_path)
-        print(f"📦 Original backed up to: {backup_path.name}")
-        
-        # Move new file to original location
-        new_path.rename(old_path)
-        print(f"✅ Fixed model saved to: {old_path.name}")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        print(f"\n⚠️  This model needs to be re-exported from the original training environment.")
-        print(f"    If you have access to the training code, please:")
-        print(f"    1. Load the model in the original environment")
-        print(f"    2. Use joblib.dump(model, 'model_name.pkl', compress=3)")
-        print(f"    3. Replace the file in ml_models/")
+        print(f"[!] Model file not found: {old_path}")
         return False
 
-def main():
+    try:
+        print(f"[.] Loading model from: {old_path}")
+        with open(old_path, "rb") as fh:
+            model = pickle.load(fh)
+
+        print("[+] Model loaded successfully!")
+        print(f"    Type: {type(model).__name__}")
+
+        if hasattr(model, "predict"):
+            print("    - Has predict method")
+        if hasattr(model, "predict_proba"):
+            print("    - Has predict_proba method")
+        if hasattr(model, "feature_names_in_"):
+            num_features = len(model.feature_names_in_)  # type: ignore[attr-defined]
+            print(f"    - Features: {num_features} columns")
+
+        print(f"[.] Re-saving model to: {new_path}")
+        joblib.dump(model, new_path, compress=3)
+
+        print("[.] Verifying re-saved model...")
+        joblib.load(new_path)
+        print("[+] Verification successful!")
+
+        backup_path = old_path.with_suffix(".pkl.backup")
+        old_path.rename(backup_path)
+        print(f"[.] Original backed up to: {backup_path.name}")
+
+        new_path.rename(old_path)
+        print(f"[+] Fixed model saved to: {old_path.name}")
+        return True
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"[!] Error: {exc}")
+        print("\nManual re-export required:")
+        print("    1. Load the model in the original training environment.")
+        print("    2. Call joblib.dump(model, 'model_name.pkl', compress=3).")
+        print("    3. Replace the file in backend/ml_models/.")
+        return False
+
+
+def main() -> None:
     """Main function to fix problematic models."""
     base_path = Path(__file__).parent / "ml_models"
-    
-    print("="*60)
+
+    print(BANNER)
     print("MODEL FIX UTILITY")
-    print("="*60)
-    print(f"Current library versions:")
+    print(BANNER)
+    print("Current library versions:")
+
     try:
-        import sklearn
-        print(f"  scikit-learn: {sklearn.__version__}")
+        import sklearn  # local import to avoid hard dependency at module load
+
+        print(f"  scikit-learn: {sklearn.__version__}")  # type: ignore[attr-defined]
     except ImportError:
-        print(f"  scikit-learn: Not installed")
-    
+        print("  scikit-learn: Not installed")
+
     try:
-        import xgboost
-        print(f"  xgboost: {xgboost.__version__}")
+        import xgboost  # local import to avoid hard dependency at module load
+
+        print(f"  xgboost: {xgboost.__version__}")  # type: ignore[attr-defined]
     except ImportError:
-        print(f"  xgboost: Not installed")
-    
-    # Models to fix
-    models_to_fix = [
-        {
-            "name": "T20 Win Predictor",
-            "path": base_path / "win_probability" / "t20_win_predictor_v2.pkl",
-            "temp_path": base_path / "win_probability" / "t20_win_predictor_v2_fixed.pkl"
-        },
-        {
-            "name": "ODI Score Predictor",
-            "path": base_path / "score_predictor" / "odi_score_predictor_v2.pkl",
-            "temp_path": base_path / "score_predictor" / "odi_score_predictor_v2_fixed.pkl"
-        }
+        print("  xgboost: Not installed")
+
+    models_to_fix: list[ModelSpec] = [
+        ModelSpec(
+            name="T20 Win Predictor",
+            path=base_path / "win_probability" / "t20_win_predictor_v2.pkl",
+            temp_path=base_path / "win_probability" / "t20_win_predictor_v2_fixed.pkl",
+        ),
+        ModelSpec(
+            name="ODI Score Predictor",
+            path=base_path / "score_predictor" / "odi_score_predictor_v2.pkl",
+            temp_path=base_path / "score_predictor" / "odi_score_predictor_v2_fixed.pkl",
+        ),
     ]
-    
-    results = []
-    for model_info in models_to_fix:
-        success = fix_model(
-            model_info["path"],
-            model_info["temp_path"],
-            model_info["name"]
-        )
-        results.append((model_info["name"], success))
-    
-    # Summary
-    print(f"\n{'='*60}")
+
+    results: list[tuple[str, bool]] = []
+    for spec in models_to_fix:
+        success = fix_model(spec.path, spec.temp_path, spec.name)
+        results.append((spec.name, success))
+
+    print(f"\n{BANNER}")
     print("SUMMARY")
-    print(f"{'='*60}")
+    print(BANNER)
     for name, success in results:
-        status = "✅ FIXED" if success else "❌ NEEDS MANUAL FIX"
+        status = "[+] FIXED" if success else "[!] NEEDS MANUAL FIX"
         print(f"{status}: {name}")
-    
-    all_fixed = all(success for _, success in results)
-    if all_fixed:
-        print(f"\n🎉 All models fixed successfully!")
+
+    if all(success for _, success in results):
+        print("\nAll models fixed successfully!")
     else:
-        print(f"\n⚠️  Some models need manual re-export from training environment")
-        print(f"\nAlternative: If you can't access the training environment,")
-        print(f"consider retraining the models or using the working models only.")
-    
-    print(f"{'='*60}\n")
+        print("\nSome models need manual re-export from the training environment.")
+        print("If you cannot access that environment, consider retraining the models.")
+
+    print(f"{BANNER}\n")
+
 
 if __name__ == "__main__":
     main()

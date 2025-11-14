@@ -146,4 +146,7 @@ def enable_in_memory_crud(repository: InMemoryCrudRepository) -> None:
         target_any.update_game = repository.update_game
         target_any.list_games_with_result = repository.list_games_with_result
         with suppress(Exception):
-            print("DEBUG: patched target create_game ->", getattr(target_any, "create_game", None))
+            print(
+                "DEBUG: patched target create_game ->",
+                getattr(target_any, "create_game", None),
+            )

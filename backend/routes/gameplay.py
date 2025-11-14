@@ -260,10 +260,12 @@ async def get_deliveries(
 
         # Enrich names for UI convenience
         shaped["striker_name"] = cast(
-            str | None, _gh("_player_name", g.team_a, g.team_b, shaped.get("striker_id"))
+            str | None,
+            _gh("_player_name", g.team_a, g.team_b, shaped.get("striker_id")),
         )
         shaped["non_striker_name"] = cast(
-            str | None, _gh("_player_name", g.team_a, g.team_b, shaped.get("non_striker_id"))
+            str | None,
+            _gh("_player_name", g.team_a, g.team_b, shaped.get("non_striker_id")),
         )
         shaped["bowler_name"] = cast(
             str | None, _gh("_player_name", g.team_a, g.team_b, shaped.get("bowler_id"))
@@ -823,7 +825,8 @@ async def get_recent_deliveries(
             str | None, _gh("_player_name", g.team_a, g.team_b, row.get("striker_id"))
         )
         row["non_striker_name"] = cast(
-            str | None, _gh("_player_name", g.team_a, g.team_b, row.get("non_striker_id"))
+            str | None,
+            _gh("_player_name", g.team_a, g.team_b, row.get("non_striker_id")),
         )
         row["bowler_name"] = cast(
             str | None, _gh("_player_name", g.team_a, g.team_b, row.get("bowler_id"))

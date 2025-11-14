@@ -540,7 +540,10 @@ class TournamentTeam(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tournament_id: Mapped[str] = mapped_column(
-        String, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
+        String,
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     team_name: Mapped[str] = mapped_column(String, nullable=False)
     team_data: Mapped[dict[str, Any]] = mapped_column(
@@ -569,7 +572,10 @@ class Fixture(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     tournament_id: Mapped[str] = mapped_column(
-        String, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
+        String,
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     match_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     team_a_name: Mapped[str] = mapped_column(String, nullable=False)
