@@ -29,18 +29,18 @@ const runRateHistory = computed(() => {
     // Calculate run rate over the current innings
     const data: Array<{ over: number; runRate: number }> = []
     const completedOvers = Math.floor(props.ballsBowled / 6)
-    
+
     if (completedOvers === 0) {
       return data
     }
-    
+
     // For each over, calculate cumulative run rate
     // Run rate = total runs / total overs at that point
     for (let i = 1; i <= completedOvers; i++) {
       const runRate = (props.currentScore / i)
       data.push({ over: i, runRate })
     }
-    
+
     return data
   }
   return props.oversData
@@ -49,7 +49,7 @@ const runRateHistory = computed(() => {
 const chartData = computed(() => {
   const labels = runRateHistory.value.map(d => `Over ${d.over}`)
   const datasets = []
-  
+
   // Current run rate line
   datasets.push({
     label: 'Current Run Rate',
@@ -61,7 +61,7 @@ const chartData = computed(() => {
     pointHoverRadius: 5,
     fill: false,
   })
-  
+
   // Required run rate line (if chasing)
   if (props.requiredRunRate != null && props.requiredRunRate > 0) {
     const rrr = props.requiredRunRate
@@ -76,7 +76,7 @@ const chartData = computed(() => {
       fill: false,
     })
   }
-  
+
   return {
     labels,
     datasets,
@@ -91,15 +91,15 @@ const options = {
     intersect: false,
   },
   plugins: {
-    legend: { 
+    legend: {
       position: 'bottom' as const,
       labels: {
         padding: 12,
         usePointStyle: true,
       }
     },
-    tooltip: { 
-      mode: 'index' as const, 
+    tooltip: {
+      mode: 'index' as const,
       intersect: false,
       backgroundColor: 'rgba(0, 0, 0, 0.8)',
       padding: 12,
@@ -128,7 +128,7 @@ const options = {
     }
   },
   scales: {
-    x: { 
+    x: {
       display: true,
       grid: {
         display: true,
@@ -139,7 +139,7 @@ const options = {
         text: 'Overs',
       }
     },
-    y: { 
+    y: {
       beginAtZero: true,
       title: {
         display: true,
@@ -161,7 +161,7 @@ const options = {
     <div v-else class="empty-state">
       No run rate data available yet. Data will appear as overs are completed.
     </div>
-    
+
     <div class="stats-summary">
       <div class="stat-item">
         <span class="stat-label">Current Run Rate:</span>
@@ -173,8 +173,8 @@ const options = {
       </div>
       <div v-if="requiredRunRate != null && requiredRunRate > 0" class="stat-item">
         <span class="stat-label">Difference:</span>
-        <span 
-          class="stat-value" 
+        <span
+          class="stat-value"
           :class="currentRunRate >= requiredRunRate ? 'ahead' : 'behind'"
         >
           {{ Math.abs(currentRunRate - requiredRunRate).toFixed(2) }} rpo

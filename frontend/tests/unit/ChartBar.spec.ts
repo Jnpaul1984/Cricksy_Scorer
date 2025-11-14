@@ -111,9 +111,9 @@ describe('ChartBar.vue', () => {
     const manyOvers = {
       labels: Array.from({ length: 20 }, (_, i) => `Over ${i + 1}`),
       series: [
-        { 
-          label: 'Innings 1', 
-          data: Array.from({ length: 20 }, () => Math.floor(Math.random() * 20)) 
+        {
+          label: 'Innings 1',
+          data: Array.from({ length: 20 }, () => Math.floor(Math.random() * 20))
         }
       ]
     }

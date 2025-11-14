@@ -106,10 +106,10 @@ describe('WinProbabilityWidget', () => {
 
     const bars = wrapper.findAll('.bar')
     expect(bars.length).toBe(2)
-    
+
     // Check batting bar width
     expect(bars[0].attributes('style')).toContain('width: 65.5%')
-    
+
     // Check bowling bar width
     expect(bars[1].attributes('style')).toContain('width: 34.5%')
   })
