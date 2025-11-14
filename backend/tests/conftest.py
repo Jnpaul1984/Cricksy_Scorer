@@ -1,6 +1,6 @@
 # backend/tests/conftest.py
-import sys
 import pathlib
+import sys
 
 # Repo root = two levels up from this file (Cricksy_Scorer/)
 ROOT = pathlib.Path(__file__).resolve().parents[2]

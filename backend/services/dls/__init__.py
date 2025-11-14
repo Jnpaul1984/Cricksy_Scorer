@@ -32,9 +32,7 @@ def _default_tables_dir() -> Path:
 def get_table_info(format_overs: int) -> dict[str, Any]:
     """Return metadata without fully constructing DLSTable (cheap file read)."""
     if format_overs not in _SUPPORTED:
-        raise ValueError(
-            f"Unsupported format: {format_overs}. Supported: {sorted(_SUPPORTED)}"
-        )
+        raise ValueError(f"Unsupported format: {format_overs}. Supported: {sorted(_SUPPORTED)}")
     fpath = _default_tables_dir() / _SUPPORTED[format_overs]
     if not fpath.exists():
         raise FileNotFoundError(f"DLS table file not found: {fpath}")
@@ -57,9 +55,7 @@ def get_table_info(format_overs: int) -> dict[str, Any]:
 def load_international_table(format_overs: int) -> DLSTable:
     """Load and cache the ICC Standard Edition table for 20 or 50 overs."""
     if format_overs not in _SUPPORTED:
-        raise ValueError(
-            f"Unsupported format: {format_overs}. Supported: {sorted(_SUPPORTED)}"
-        )
+        raise ValueError(f"Unsupported format: {format_overs}. Supported: {sorted(_SUPPORTED)}")
     fpath = _default_tables_dir() / _SUPPORTED[format_overs]
     return load_table_from_json(fpath)
 

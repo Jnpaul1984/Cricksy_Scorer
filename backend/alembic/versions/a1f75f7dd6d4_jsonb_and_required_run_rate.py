@@ -24,9 +24,7 @@ def _fill_null(table: str, column: str, json_literal: str) -> None:
     json_literal must be a valid JSON string like '{}' or '[]' (no casts here).
     Works regardless of column's current type (json/text/jsonb).
     """
-    op.execute(
-        sa.text(f"UPDATE {table} SET {column} = {json_literal} WHERE {column} IS NULL")
-    )
+    op.execute(sa.text(f"UPDATE {table} SET {column} = {json_literal} WHERE {column} IS NULL"))
 
 
 def _to_jsonb(table: str, column: str) -> None:
@@ -62,9 +60,7 @@ def upgrade():
     insp = sa.inspect(bind)
     cols = {c["name"] for c in insp.get_columns("games")}
     if "required_run_rate" not in cols:
-        op.add_column(
-            "games", sa.Column("required_run_rate", sa.Float(), nullable=True)
-        )
+        op.add_column("games", sa.Column("required_run_rate", sa.Float(), nullable=True))
 
     # Drop required_run_rate if present
     bind = op.get_bind()

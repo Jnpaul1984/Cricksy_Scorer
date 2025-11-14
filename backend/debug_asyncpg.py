@@ -17,8 +17,8 @@ import os
 import pathlib
 import time
 import traceback
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 _ENABLED = os.getenv("CRICKSY_DEBUG_ASYNCPG") == "1"
 

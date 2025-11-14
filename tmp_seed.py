@@ -1,11 +1,12 @@
 import os
 
 os.environ["CRICKSY_IN_MEMORY_DB"] = "1"
-from backend.main import fastapi_app, get_db
-from backend.testsupport.in_memory_crud import InMemoryCrudRepository
-from backend import main
-from backend.sql_app import crud
 from fastapi.testclient import TestClient
+
+from backend import main
+from backend.main import fastapi_app, get_db
+from backend.sql_app import crud
+from backend.testsupport.in_memory_crud import InMemoryCrudRepository
 
 repo = InMemoryCrudRepository()
 

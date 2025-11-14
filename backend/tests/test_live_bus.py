@@ -3,6 +3,7 @@ Tests for the live event bus module.
 """
 
 import pytest
+
 from backend.services import live_bus
 
 

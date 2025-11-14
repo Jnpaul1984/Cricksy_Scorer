@@ -9,9 +9,11 @@ Provides fixtures and utilities for integration testing including:
 - Assertion helpers
 """
 
-import pytest
 from typing import Any
+
+import pytest
 from fastapi.testclient import TestClient
+
 from backend.main import _fastapi as app
 
 

@@ -1,33 +1,32 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from collections.abc import AsyncGenerator
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
-import asyncio
 
 import socketio  # type: ignore[import-not-found]
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-# DB dependency and in-memory wiring
-# sqlalchemy AsyncSession is provided by database.get_db dependency when needed
-
 from backend.config import settings as default_settings
 from backend.error_handlers import install_exception_handlers  # NEW
 
 # Observability and error handling (install on FastAPI app, not ASGI wrapper)
-from backend.middleware.observability import (
+from backend.middleware.observability import (  # NEW
     AccessLogMiddleware,
     CorrelationIdMiddleware,
-)  # NEW
+)
 from backend.routes.dls import router as dls_router
 from backend.routes.game_admin import router as game_admin_router
 from backend.routes.gameplay import get_db as gameplay_get_db
-from backend.routes.gameplay import router as gameplay_router  # type: ignore[attr-defined]
+from backend.routes.gameplay import (
+    router as gameplay_router,  # type: ignore[attr-defined]
+)
 from backend.routes.games_core import router as games_core_router  # NEW
 from backend.routes.games_dls import router as games_dls_router
 
@@ -46,6 +45,10 @@ from backend.socket_handlers import register_sio
 from backend.sql_app import database as db
 from backend.sql_app.database import get_db as db_get_db  # type: ignore[unused-ignore]
 
+# DB dependency and in-memory wiring
+# sqlalchemy AsyncSession is provided by database.get_db dependency when needed
+
+
 __all__ = ["create_app"]
 
 # Optional in-memory CRUD support
@@ -53,12 +56,8 @@ InMemoryCrudRepoClass: Any | None = None
 enable_in_memory_crud_fn: Any | None = None
 _memory_repo: Any | None = None
 try:
-    from backend.testsupport.in_memory_crud import (
-        InMemoryCrudRepository as _IMRepo,
-    )
-    from backend.testsupport.in_memory_crud import (
-        enable_in_memory_crud as _enable_fn,
-    )
+    from backend.testsupport.in_memory_crud import InMemoryCrudRepository as _IMRepo
+    from backend.testsupport.in_memory_crud import enable_in_memory_crud as _enable_fn
 
     InMemoryCrudRepoClass = _IMRepo
     enable_in_memory_crud_fn = _enable_fn

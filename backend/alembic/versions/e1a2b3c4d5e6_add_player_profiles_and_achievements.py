@@ -5,8 +5,8 @@ Revises: d2bd42f8d9e8
 Create Date: 2025-11-01 23:42:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
@@ -20,7 +20,8 @@ def upgrade() -> None:
     # create the enum type if it doesn't already exist
     conn = op.get_bind()
     conn.execute(
-        sa.text("""
+        sa.text(
+            """
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'achievement_type') THEN
@@ -31,7 +32,8 @@ def upgrade() -> None:
         );
       END IF;
     END$$;
-    """)
+    """
+        )
     )
 
     achievement_type_enum = postgresql.ENUM(
@@ -129,14 +131,16 @@ def upgrade() -> None:
 def downgrade() -> None:
     conn = op.get_bind()
     conn.execute(
-        sa.text("""
+        sa.text(
+            """
     DO $$
     BEGIN
       IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'achievement_type') THEN
         DROP TYPE achievement_type;
       END IF;
     END$$;
-    """)
+    """
+        )
     )
     op.drop_index("ix_player_achievements_type", table_name="player_achievements")
     op.drop_index("ix_player_achievements_player_id", table_name="player_achievements")

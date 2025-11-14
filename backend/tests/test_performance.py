@@ -6,8 +6,10 @@ and ensure the application can handle realistic workloads.
 """
 
 import time
+
 import pytest
 from fastapi.testclient import TestClient
+
 from backend.main import _fastapi as app
 
 

@@ -10,6 +10,7 @@ This test validates that:
 
 import pytest
 from fastapi.testclient import TestClient
+
 from backend.main import _fastapi as app
 
 

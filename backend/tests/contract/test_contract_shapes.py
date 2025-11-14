@@ -1,4 +1,5 @@
 import os
+
 from backend.tests._ci_utils import traced_request
 
 API = os.getenv("API_BASE", "http://localhost:8000").rstrip("/")
