@@ -17,6 +17,23 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # create the enum type if it doesn't already exist
+    conn = op.get_bind()
+    conn.execute(
+        sa.text("""
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'achievement_type') THEN
+        CREATE TYPE achievement_type AS ENUM (
+          'century', 'half_century', 'five_wickets', 'best_scorer',
+          'best_bowler', 'hat_trick', 'golden_duck', 'maiden_over',
+          'six_sixes', 'perfect_catch'
+        );
+      END IF;
+    END$$;
+    """)
+    )
+
     achievement_type_enum = postgresql.ENUM(
         "century",
         "half_century",
@@ -87,19 +104,7 @@ def upgrade() -> None:
         sa.Column("game_id", sa.String(), nullable=True),
         sa.Column(
             "achievement_type",
-            sa.Enum(
-                "century",
-                "half_century",
-                "five_wickets",
-                "best_scorer",
-                "best_bowler",
-                "hat_trick",
-                "golden_duck",
-                "maiden_over",
-                "six_sixes",
-                "perfect_catch",
-                name="achievement_type",
-            ),
+            achievement_type_enum,
             nullable=False,
         ),
         sa.Column("title", sa.String(), nullable=False),
@@ -122,6 +127,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    conn = op.get_bind()
+    conn.execute(
+        sa.text("""
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'achievement_type') THEN
+        DROP TYPE achievement_type;
+      END IF;
+    END$$;
+    """)
+    )
     op.drop_index("ix_player_achievements_type", table_name="player_achievements")
     op.drop_index("ix_player_achievements_player_id", table_name="player_achievements")
     op.drop_index("ix_player_achievements_earned_at", table_name="player_achievements")
