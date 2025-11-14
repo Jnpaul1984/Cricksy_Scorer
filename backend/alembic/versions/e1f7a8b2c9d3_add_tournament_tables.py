@@ -3,24 +3,20 @@
 Revision ID: e1f7a8b2c9d3
 Revises: d2bd42f8d9e8
 Create Date: 2025-11-01 23:42:00.000000
-
 """
-
-from collections.abc import Sequence
 
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = "e1f7a8b2c9d3"
-down_revision: str | None = "d2bd42f8d9e8"
-branch_labels: str | Sequence[str] | None = None
-depends_on: str | Sequence[str] | None = None
+revision = "e1f7a8b2c9d3"
+down_revision = "d2bd42f8d9e8"
+branch_labels = None
+depends_on = None
 
 
 def upgrade() -> None:
-    # Create tournaments table
     op.create_table(
         "tournaments",
         sa.Column("id", sa.String(), nullable=False),
@@ -46,7 +42,6 @@ def upgrade() -> None:
     )
     op.create_index("ix_tournaments_status", "tournaments", ["status"])
 
-    # Create tournament_teams table
     op.create_table(
         "tournament_teams",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -65,7 +60,6 @@ def upgrade() -> None:
     op.create_index("ix_tournament_teams_tournament_id", "tournament_teams", ["tournament_id"])
     op.create_index("ix_tournament_teams_points", "tournament_teams", ["points"])
 
-    # Create fixtures table
     op.create_table(
         "fixtures",
         sa.Column("id", sa.String(), nullable=False),

@@ -1,6 +1,6 @@
 # sql_app/crud.py
 import json
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,8 +31,8 @@ def _coerce_result_to_text(value: Any) -> str | None:
     try:
         from dataclasses import asdict, is_dataclass
 
-        if is_dataclass(value):
-            return json.dumps(asdict(value), ensure_ascii=False)
+        if is_dataclass(value) and not isinstance(value, type):
+            return json.dumps(asdict(cast(Any, value)), ensure_ascii=False)
     except Exception:
         pass
 

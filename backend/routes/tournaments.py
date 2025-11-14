@@ -72,7 +72,9 @@ async def delete_tournament(
 
 
 @router.post(
-    "/{tournament_id}/teams", response_model=schemas.TournamentTeamResponse, status_code=201
+    "/{tournament_id}/teams",
+    response_model=schemas.TournamentTeamResponse,
+    status_code=201,
 )
 async def add_team(
     tournament_id: str,

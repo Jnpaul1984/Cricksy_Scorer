@@ -56,7 +56,7 @@ def sample_achievement():
         "achievement_type": "half_century",
         "title": "Half Century Hero",
         "description": "Scored 50 runs in the match against Team B",
-        "badge_icon": "🏏",
+        "badge_icon": "­ƒÅÅ",
         "game_id": "game-456",
         "metadata": {
             "runs": 50,

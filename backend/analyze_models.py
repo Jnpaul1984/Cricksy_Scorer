@@ -6,9 +6,9 @@ from pathlib import Path
 
 def analyze_model(model_path: str, model_name: str):
     """Analyze a pickled model and print its properties."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Analyzing: {model_name}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     try:
         with open(model_path, "rb") as f:
@@ -27,7 +27,7 @@ def analyze_model(model_path: str, model_name: str):
 
         if hasattr(model, "feature_names_in_"):
             features = model.feature_names_in_
-            print(f"\n✓ Features found: {len(features)} features")
+            print(f"\nÔ£ô Features found: {len(features)} features")
             print("First 10 features:")
             for i, feat in enumerate(features[:10], 1):
                 print(f"  {i}. {feat}")
@@ -48,7 +48,7 @@ def analyze_model(model_path: str, model_name: str):
             print("✓ XGBoost model detected")
 
     except Exception as e:
-        print(f"✗ Error loading model: {e}")
+        print(f"Ô£ù Error loading model: {e}")
 
 
 if __name__ == "__main__":
@@ -70,8 +70,8 @@ if __name__ == "__main__":
         if path.exists():
             analyze_model(str(path), name)
         else:
-            print(f"\n⚠ Model not found: {path}")
+            print(f"\nÔÜá Model not found: {path}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Analysis complete!")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")

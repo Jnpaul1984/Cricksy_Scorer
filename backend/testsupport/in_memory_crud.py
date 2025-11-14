@@ -37,7 +37,9 @@ class InMemoryCrudRepository:
             team_a=team_a,
             team_b=team_b,
             match_type=(
-                game.match_type.value if isinstance(game.match_type, Enum) else str(game.match_type)
+                game.match_type.value
+                if isinstance(game.match_type, Enum)
+                else str(game.match_type)
             ),
             overs_limit=game.overs_limit,
             days_limit=game.days_limit,
@@ -108,7 +110,9 @@ class InMemoryCrudRepository:
                 result_value = json.dumps(result_value, ensure_ascii=False, default=str)
             else:
                 try:
-                    result_value = json.dumps(result_value, ensure_ascii=False, default=str)
+                    result_value = json.dumps(
+                        result_value, ensure_ascii=False, default=str
+                    )
                 except Exception:
                     result_value = str(result_value)
             game_model.result = result_value
@@ -146,4 +150,7 @@ def enable_in_memory_crud(repository: InMemoryCrudRepository) -> None:
         target_any.update_game = repository.update_game
         target_any.list_games_with_result = repository.list_games_with_result
         with suppress(Exception):
-            print("DEBUG: patched target create_game ->", getattr(target_any, "create_game", None))
+            print(
+                "DEBUG: patched target create_game ->",
+                getattr(target_any, "create_game", None),
+            )

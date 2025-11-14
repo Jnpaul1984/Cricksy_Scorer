@@ -1,14 +1,4 @@
-"""
-Model Re-export Utility
-=======================
-This script helps re-export models that have version compatibility issues.
-
-Run this script on the machine where you originally trained the models,
-or provide the original training environment.
-
-Usage:
-    python fix_models.py
-"""
+"""Model re-export helper for refreshing serialized ML models."""
 
 import pickle
 from pathlib import Path
@@ -16,130 +6,109 @@ from pathlib import Path
 import joblib
 
 
-def fix_model(old_path: Path, new_path: Path, model_name: str):
-    """
-    Attempt to load and re-save a model with current library versions.
-
-    Args:
-        old_path: Path to the problematic model
-        new_path: Path where to save the fixed model
-        model_name: Descriptive name for logging
-    """
-    print(f"\n{'='*60}")
+def fix_model(old_path: Path, new_path: Path, model_name: str) -> bool:
+    """Load an existing model and re-save it with current dependencies."""
+    print("=" * 60)
     print(f"Fixing: {model_name}")
-    print(f"{'='*60}")
+    print("=" * 60)
 
     if not old_path.exists():
-        print(f"❌ Model file not found: {old_path}")
+        print(f"ERROR: Model file not found: {old_path}")
         return False
 
     try:
-        # Try loading with pickle first
-        print(f"📂 Loading model from: {old_path}")
-        with open(old_path, "rb") as f:
-            model = pickle.load(f)
+        print(f"Loading model from {old_path}")
+        with open(old_path, "rb") as handle:
+            model = pickle.load(handle)
 
-        print("✅ Model loaded successfully!")
+        print("Model loaded successfully")
         print(f"   Type: {type(model).__name__}")
 
-        # Check if it has the expected methods
         if hasattr(model, "predict"):
-            print("   ✓ Has predict method")
+            print("   - Has predict method")
         if hasattr(model, "predict_proba"):
-            print("   ✓ Has predict_proba method")
-
-        # Show features if available
+            print("   - Has predict_proba method")
         if hasattr(model, "feature_names_in_"):
-            print(f"   ✓ Features: {len(model.feature_names_in_)} features")
+            print(f"   - Feature count: {len(model.feature_names_in_)}")
 
-        # Re-save using joblib (recommended for sklearn/xgboost)
-        print(f"\n💾 Re-saving model to: {new_path}")
+        print(f"\nRe-saving model to {new_path}")
         joblib.dump(model, new_path, compress=3)
 
-        # Verify the new file
-        print("🔍 Verifying re-saved model...")
+        print("Verifying re-saved model...")
         joblib.load(new_path)
-        print("✅ Verification successful!")
+        print("Verification successful")
 
-        # Backup the old file
         backup_path = old_path.with_suffix(".pkl.backup")
         old_path.rename(backup_path)
-        print(f"📦 Original backed up to: {backup_path.name}")
+        print(f"Original backed up to {backup_path.name}")
 
-        # Move new file to original location
         new_path.rename(old_path)
-        print(f"✅ Fixed model saved to: {old_path.name}")
-
+        print(f"Fixed model written to {old_path.name}")
         return True
 
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        print("\n⚠️  This model needs to be re-exported from the original training environment.")
-        print("    If you have access to the training code, please:")
+    except Exception as exc:
+        print(f"ERROR: {exc}")
+        print("\nAction required: re-export the model inside the original training environment.")
+        print("If you have access to the training code:")
         print("    1. Load the model in the original environment")
-        print("    2. Use joblib.dump(model, 'model_name.pkl', compress=3)")
-        print("    3. Replace the file in ml_models/")
+        print("    2. Run joblib.dump(model, 'model_name.pkl', compress=3)")
+        print("    3. Replace the file inside backend/ml_models/")
         return False
 
 
-def main():
-    """Main function to fix problematic models."""
+def main() -> None:
+    """CLI entrypoint for refreshing all known models."""
     base_path = Path(__file__).parent / "ml_models"
 
     print("=" * 60)
     print("MODEL FIX UTILITY")
     print("=" * 60)
     print("Current library versions:")
+
     try:
-        import sklearn
+        import sklearn  # type: ignore[import-not-found]
 
         print(f"  scikit-learn: {sklearn.__version__}")
     except ImportError:
         print("  scikit-learn: Not installed")
 
     try:
-        import xgboost
+        import xgboost  # type: ignore[import-not-found]
 
         print(f"  xgboost: {xgboost.__version__}")
     except ImportError:
         print("  xgboost: Not installed")
 
-    # Models to fix
-    models_to_fix = [
-        {
-            "name": "T20 Win Predictor",
-            "path": base_path / "win_probability" / "t20_win_predictor_v2.pkl",
-            "temp_path": base_path / "win_probability" / "t20_win_predictor_v2_fixed.pkl",
-        },
-        {
-            "name": "ODI Score Predictor",
-            "path": base_path / "score_predictor" / "odi_score_predictor_v2.pkl",
-            "temp_path": base_path / "score_predictor" / "odi_score_predictor_v2_fixed.pkl",
-        },
+    models_to_fix: list[tuple[str, Path, Path]] = [
+        (
+            "T20 Win Predictor",
+            base_path / "win_probability" / "t20_win_predictor_v2.pkl",
+            base_path / "win_probability" / "t20_win_predictor_v2_fixed.pkl",
+        ),
+        (
+            "ODI Score Predictor",
+            base_path / "score_predictor" / "odi_score_predictor_v2.pkl",
+            base_path / "score_predictor" / "odi_score_predictor_v2_fixed.pkl",
+        ),
     ]
 
-    results = []
-    for model_info in models_to_fix:
-        success = fix_model(model_info["path"], model_info["temp_path"], model_info["name"])
-        results.append((model_info["name"], success))
+    results: list[tuple[str, bool]] = []
+    for name, path, temp_path in models_to_fix:
+        success = fix_model(path, temp_path, name)
+        results.append((name, success))
 
-    # Summary
-    print(f"\n{'='*60}")
-    print("SUMMARY")
-    print(f"{'='*60}")
+    print("\nSUMMARY")
+    print("=" * 60)
     for name, success in results:
-        status = "✅ FIXED" if success else "❌ NEEDS MANUAL FIX"
-        print(f"{status}: {name}")
+        status = "OK" if success else "NEEDS ATTENTION"
+        print(f"{status:<17} - {name}")
 
-    all_fixed = all(success for _, success in results)
-    if all_fixed:
-        print("\n🎉 All models fixed successfully!")
+    if all(flag for _, flag in results):
+        print("\nAll models refreshed successfully.")
     else:
-        print("\n⚠️  Some models need manual re-export from training environment")
-        print("\nAlternative: If you can't access the training environment,")
-        print("consider retraining the models or using the working models only.")
-
-    print(f"{'='*60}\n")
+        print("\nSome models still need manual exports.")
+        print("Refer to the instructions above for the remaining files.")
+    print("=" * 60)
 
 
 if __name__ == "__main__":

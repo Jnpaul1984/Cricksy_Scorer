@@ -103,15 +103,23 @@ class Game(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
 
     # Existing team JSON (name + players[{id,name}, ...])
-    team_a: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
-    team_b: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
+    team_a: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=_empty_dict, nullable=False
+    )
+    team_b: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=_empty_dict, nullable=False
+    )
 
     # --- Match Setup Fields ---
     match_type: Mapped[str] = mapped_column(
         String, default="custom", nullable=False
     )  # e.g., T20, ODI, Test, custom
-    overs_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None for unlimited
-    days_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)  # For multi-day matches
+    overs_limit: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # None for unlimited
+    days_limit: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # For multi-day matches
     dls_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )  # Duckworth-Lewis-Stern toggle
@@ -175,7 +183,9 @@ class Game(Base):
 
     # Chase context (nullable when not chasing)
     target: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    par_score: Mapped[int | None] = mapped_column(Integer, nullable=True)  # if you wire DLS
+    par_score: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # if you wire DLS
     required_run_rate: Mapped[float | None] = mapped_column(
         Float, nullable=True
     )  # computed; convenience
@@ -196,7 +206,9 @@ class Game(Base):
 
     # Innings / result
     current_inning: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    first_inning_summary: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    first_inning_summary: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True
+    )
     result: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Relationship backref from GameContributor is set below
@@ -282,7 +294,9 @@ Index(
 class Sponsor(Base):
     __tablename__ = "sponsors"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4())
+    )
     name: Mapped[str] = mapped_column(String, nullable=False)
 
     # stored as relative path under STATIC_DIR, e.g. "sponsors/<uuid>.svg"
@@ -290,7 +304,9 @@ class Sponsor(Base):
 
     click_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     weight: Mapped[int] = mapped_column(Integer, nullable=False, default=1)  # 1..5
-    surfaces: Mapped[list[str]] = mapped_column(JSON, default=lambda: ["all"], nullable=False)
+    surfaces: Mapped[list[str]] = mapped_column(
+        JSON, default=lambda: ["all"], nullable=False
+    )
 
     start_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -351,7 +367,9 @@ class PlayerProfile(Base):
 
     # Batting statistics
     total_matches: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    total_innings_batted: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_innings_batted: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
     total_runs_scored: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_balls_faced: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_fours: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -362,11 +380,17 @@ class PlayerProfile(Base):
     half_centuries: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Bowling statistics
-    total_innings_bowled: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    total_overs_bowled: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    total_innings_bowled: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    total_overs_bowled: Mapped[float] = mapped_column(
+        Float, default=0.0, nullable=False
+    )
     total_runs_conceded: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_wickets: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    best_bowling_figures: Mapped[str | None] = mapped_column(String, nullable=True)  # "5/23"
+    best_bowling_figures: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # "5/23"
     five_wicket_hauls: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     maidens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
@@ -475,7 +499,9 @@ class PlayerAchievement(Base):
     description: Mapped[str] = mapped_column(
         Text, nullable=False
     )  # e.g., "Scored 105 runs vs Team B"
-    badge_icon: Mapped[str | None] = mapped_column(String, nullable=True)  # emoji or icon class
+    badge_icon: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # emoji or icon class
 
     earned_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -502,14 +528,20 @@ class PlayerAchievement(Base):
 class Tournament(Base):
     __tablename__ = "tournaments"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4())
+    )
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     tournament_type: Mapped[str] = mapped_column(
         String, nullable=False, default="league"
     )  # league, knockout, round-robin
-    start_date: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    end_date: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    start_date: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    end_date: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     status: Mapped[str] = mapped_column(
         String, nullable=False, default="upcoming"
     )  # upcoming, ongoing, completed
@@ -540,7 +572,10 @@ class TournamentTeam(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tournament_id: Mapped[str] = mapped_column(
-        String, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
+        String,
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     team_name: Mapped[str] = mapped_column(String, nullable=False)
     team_data: Mapped[dict[str, Any]] = mapped_column(
@@ -567,9 +602,14 @@ class TournamentTeam(Base):
 class Fixture(Base):
     __tablename__ = "fixtures"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4())
+    )
     tournament_id: Mapped[str] = mapped_column(
-        String, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
+        String,
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     match_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     team_a_name: Mapped[str] = mapped_column(String, nullable=False)

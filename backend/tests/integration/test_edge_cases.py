@@ -23,7 +23,9 @@ def test_delivery_without_openers(game_helper):
     bowler = game_helper.team_b_players[0]["id"]
 
     # Try to post delivery without setting openers
-    response = game_helper.post_delivery(batsman_id=striker, bowler_id=bowler, runs_scored=1)
+    response = game_helper.post_delivery(
+        batsman_id=striker, bowler_id=bowler, runs_scored=1
+    )
 
     # Should fail with 409 or 422
     assert response.status_code in [
@@ -78,14 +80,19 @@ def test_delivery_after_wicket_without_selection(game_helper, assert_helper):
     assert_helper.assert_pending_batsman(snapshot, True)
 
     # Try to post next delivery without selecting batsman
-    response = game_helper.post_delivery(batsman_id=non_striker, bowler_id=bowler, runs_scored=1)
+    response = game_helper.post_delivery(
+        batsman_id=non_striker, bowler_id=bowler, runs_scored=1
+    )
 
     # Should fail with 409
-    assert response.status_code == 409, f"Expected 409 Conflict, got {response.status_code}"
+    assert (
+        response.status_code == 409
+    ), f"Expected 409 Conflict, got {response.status_code}"
 
     error = response.json()
     assert (
-        "batter" in error.get("detail", "").lower() or "batsman" in error.get("detail", "").lower()
+        "batter" in error.get("detail", "").lower()
+        or "batsman" in error.get("detail", "").lower()
     ), "Error message should mention batter/batsman"
 
 
@@ -352,7 +359,9 @@ def test_excessive_runs(game_helper):
     bowler = game_helper.team_b_players[0]["id"]
 
     # Try to post delivery with 100 runs
-    response = game_helper.post_delivery(batsman_id=striker, bowler_id=bowler, runs_scored=100)
+    response = game_helper.post_delivery(
+        batsman_id=striker, bowler_id=bowler, runs_scored=100
+    )
 
     # Backend might accept (no validation) or reject
     # Just verify it doesn't crash

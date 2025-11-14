@@ -140,7 +140,11 @@ def total_resources_team1(
     """
     # Sort by when they occurred
     ints = sorted(
-        [i for i in interruptions if "at_delivery_index" in i and "new_overs_limit" in i],
+        [
+            i
+            for i in interruptions
+            if "at_delivery_index" in i and "new_overs_limit" in i
+        ],
         key=lambda i: int(i["at_delivery_index"]),
     )
 
@@ -321,7 +325,9 @@ def compute_dls_target(
     wickets1 = max(0, min(9, int(team1_wickets_lost)))
     wickets2 = max(0, min(9, int(team2_wkts_lost_now)))
 
-    overs_left_team1 = max(0.0, min(float(format_overs), float(team1_overs_left_at_end)))
+    overs_left_team1 = max(
+        0.0, min(float(format_overs), float(team1_overs_left_at_end))
+    )
     overs_left_team2 = max(0.0, min(float(format_overs), float(team2_overs_left_now)))
 
     R_start = env.table.R(format_overs, 0)

@@ -19,9 +19,9 @@ from sklearn.model_selection import train_test_split
 
 def load_match_data(match_format: Literal["t20", "odi"]) -> pd.DataFrame:
     """Load all CSV files for a specific match format."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Loading {match_format.upper()} match data...")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     snapshots_dir = Path(__file__).parent / "snapshots" / match_format
     csv_files = list(snapshots_dir.glob("*.csv"))
@@ -42,10 +42,10 @@ def load_match_data(match_format: Literal["t20", "odi"]) -> pd.DataFrame:
             if (i + 1) % 500 == 0:
                 print(f"  Loaded {i + 1}/{len(csv_files)} files...")
         except Exception as e:
-            print(f"  ⚠️  Error loading {file.name}: {e}")
+            print(f"  [WARN] Error loading {file.name}: {e}")
 
     combined_df = pd.concat(dfs, ignore_index=True)
-    print(f"\n✓ Loaded {len(combined_df):,} total match states from {len(dfs)} matches")
+    print(f"\n[OK] Loaded {len(combined_df):,} total match states from {len(dfs)} matches")
     print(f"  Columns: {list(combined_df.columns)}")
 
     return combined_df
@@ -155,7 +155,7 @@ def engineer_features(df: pd.DataFrame, match_format: str) -> pd.DataFrame:
     # Fill any remaining NaNs
     df = df.fillna(0)
 
-    print("✓ Feature engineering complete")
+    print("[OK] Feature engineering complete")
     print(f"  Total features: {df.shape[1]}")
 
     return df
@@ -164,9 +164,9 @@ def engineer_features(df: pd.DataFrame, match_format: str) -> pd.DataFrame:
 def train_score_predictor(match_format: Literal["t20", "odi"]) -> None:
     """Train and save score predictor for specified format."""
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"TRAINING {match_format.upper()} SCORE PREDICTOR")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     # Load data
     df = load_match_data(match_format)
@@ -234,9 +234,9 @@ def train_score_predictor(match_format: Literal["t20", "odi"]) -> None:
     model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
 
     # Evaluate
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("MODEL EVALUATION")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     y_pred = model.predict(X_test)
 
@@ -246,7 +246,7 @@ def train_score_predictor(match_format: Literal["t20", "odi"]) -> None:
 
     print(f"\nMean Absolute Error (MAE): {mae:.2f} runs")
     print(f"Root Mean Squared Error (RMSE): {rmse:.2f} runs")
-    print(f"R² Score: {r2:.4f}")
+    print(f"R^2 Score: {r2:.4f}")
 
     # Sample predictions
     print("\nSample Predictions (first 10):")
@@ -269,10 +269,10 @@ def train_score_predictor(match_format: Literal["t20", "odi"]) -> None:
     output_dir = Path(__file__).parent / "ml_models" / "score_predictor"
     output_path = output_dir / f"{match_format}_score_predictor_v3.pkl"
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Saving model to: {output_path}")
     joblib.dump(model, output_path, compress=3)
-    print("✓ Model saved successfully!")
+    print("[OK] Model saved successfully!")
 
     # Save metadata
     metadata = {
@@ -293,8 +293,8 @@ def train_score_predictor(match_format: Literal["t20", "odi"]) -> None:
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)
 
-    print(f"✓ Metadata saved to: {metadata_path}")
-    print(f"{'='*60}\n")
+    print(f"[OK] Metadata saved to: {metadata_path}")
+    print(f"{'=' * 60}\n")
 
 
 def main():
@@ -307,7 +307,7 @@ def main():
         try:
             train_score_predictor(match_format)
         except Exception as e:
-            print(f"\n❌ Error training {match_format.upper()} model: {e}")
+            print(f"\n[ERROR] Error training {match_format.upper()} model: {e}")
             import traceback
 
             traceback.print_exc()

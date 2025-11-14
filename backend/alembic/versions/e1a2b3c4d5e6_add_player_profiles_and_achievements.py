@@ -3,7 +3,6 @@
 Revision ID: e1a2b3c4d5e6
 Revises: d2bd42f8d9e8
 Create Date: 2025-11-01 23:42:00.000000
-
 """
 
 from alembic import op
@@ -18,7 +17,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create achievement_type enum
     achievement_type_enum = postgresql.ENUM(
         "century",
         "half_century",
@@ -35,7 +33,6 @@ def upgrade() -> None:
     )
     achievement_type_enum.create(op.get_bind(), checkfirst=True)
 
-    # Create player_profiles table
     op.create_table(
         "player_profiles",
         sa.Column("player_id", sa.String(), nullable=False),
@@ -75,13 +72,14 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("player_id"),
     )
     op.create_index(
-        "ix_player_profiles_batting_avg", "player_profiles", ["total_runs_scored", "times_out"]
+        "ix_player_profiles_batting_avg",
+        "player_profiles",
+        ["total_runs_scored", "times_out"],
     )
     op.create_index("ix_player_profiles_player_id", "player_profiles", ["player_id"])
     op.create_index("ix_player_profiles_total_runs", "player_profiles", ["total_runs_scored"])
     op.create_index("ix_player_profiles_total_wickets", "player_profiles", ["total_wickets"])
 
-    # Create player_achievements table
     op.create_table(
         "player_achievements",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -108,7 +106,10 @@ def upgrade() -> None:
         sa.Column("description", sa.Text(), nullable=False),
         sa.Column("badge_icon", sa.String(), nullable=True),
         sa.Column(
-            "earned_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "earned_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column("achievement_metadata", sa.JSON(), nullable=False, server_default="{}"),
         sa.ForeignKeyConstraint(["game_id"], ["games.id"], ondelete="SET NULL"),
@@ -121,7 +122,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Drop indexes and tables
     op.drop_index("ix_player_achievements_type", table_name="player_achievements")
     op.drop_index("ix_player_achievements_player_id", table_name="player_achievements")
     op.drop_index("ix_player_achievements_earned_at", table_name="player_achievements")
@@ -133,5 +133,4 @@ def downgrade() -> None:
     op.drop_index("ix_player_profiles_batting_avg", table_name="player_profiles")
     op.drop_table("player_profiles")
 
-    # Drop enum type
     sa.Enum(name="achievement_type").drop(op.get_bind(), checkfirst=True)

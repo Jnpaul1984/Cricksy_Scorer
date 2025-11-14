@@ -105,7 +105,10 @@ async def get_tournament_teams(db: AsyncSession, tournament_id: str) -> list[mod
     result = await db.execute(
         select(models.TournamentTeam)
         .where(models.TournamentTeam.tournament_id == tournament_id)
-        .order_by(models.TournamentTeam.points.desc(), models.TournamentTeam.net_run_rate.desc())
+        .order_by(
+            models.TournamentTeam.points.desc(),
+            models.TournamentTeam.net_run_rate.desc(),
+        )
     )
     return list(result.scalars().all())
 

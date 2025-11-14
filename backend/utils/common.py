@@ -10,7 +10,9 @@ UTC = getattr(dt, "UTC", dt.UTC)
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5MB
 
 
-def detect_image_ext(data: bytes, content_type: str | None, filename: str | None) -> str | None:
+def detect_image_ext(
+    data: bytes, content_type: str | None, filename: str | None
+) -> str | None:
     """
     Return 'svg' | 'png' | 'webp' if valid, else None.
     Uses content-type, extension, and simple signature checks.
@@ -26,7 +28,11 @@ def detect_image_ext(data: bytes, content_type: str | None, filename: str | None
     if ct == "image/png" or ext == ".png" or data.startswith(b"\x89PNG\r\n\x1a\n"):
         return "png"
     # WEBP
-    if ct == "image/webp" or ext == ".webp" or (data[:4] == b"RIFF" and data[8:12] == b"WEBP"):
+    if (
+        ct == "image/webp"
+        or ext == ".webp"
+        or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")
+    ):
         return "webp"
     return None
 
