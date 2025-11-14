@@ -83,5 +83,23 @@ class Settings(BaseSettings):
     def backend_cors_origins(self) -> str:
         return self.BACKEND_CORS_ORIGINS
 
+    # Feature flags for upload/OCR functionality
+    ENABLE_UPLOADS: bool = os.getenv("CRICKSY_ENABLE_UPLOADS", "0") == "1"
+    ENABLE_OCR: bool = os.getenv("CRICKSY_ENABLE_OCR", "0") == "1"
+
+    # S3 / Object Storage (for uploads)
+    S3_BUCKET: str = os.getenv("CRICKSY_S3_BUCKET", "cricksy-uploads")
+    S3_REGION: str = os.getenv("CRICKSY_S3_REGION", "us-east-1")
+    S3_ACCESS_KEY: str = os.getenv("CRICKSY_S3_ACCESS_KEY", "")
+    S3_SECRET_KEY: str = os.getenv("CRICKSY_S3_SECRET_KEY", "")
+    S3_ENDPOINT_URL: str | None = os.getenv("CRICKSY_S3_ENDPOINT_URL")  # for MinIO or local testing
+    PRESIGNED_URL_EXPIRATION: int = int(os.getenv("CRICKSY_PRESIGNED_URL_EXPIRATION", "3600"))
+
+    # Redis (for Celery/RQ and WebSocket adapter)
+    REDIS_URL: str = os.getenv("CRICKSY_REDIS_URL", "redis://localhost:6379/0")
+    
+    # WebSocket Redis adapter (for scaling Socket.IO)
+    ENABLE_REDIS_ADAPTER: bool = os.getenv("CRICKSY_ENABLE_REDIS_ADAPTER", "0") == "1"
+
 
 settings = Settings()

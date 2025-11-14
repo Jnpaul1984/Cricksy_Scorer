@@ -235,9 +235,26 @@ def create_app(
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
 
-    _sio = socketio.AsyncServer(
-        async_mode="asgi", cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS
-    )  # type: ignore[call-arg]
+    # Create Socket.IO server with optional Redis adapter
+    sio_kwargs: dict[str, Any] = {
+        "async_mode": "asgi",
+        "cors_allowed_origins": settings.SIO_CORS_ALLOWED_ORIGINS,
+    }
+    
+    # Enable Redis adapter for production scaling
+    if settings.ENABLE_REDIS_ADAPTER:
+        try:
+            import socketio.redis_manager as redis_mgr
+            
+            redis_manager = redis_mgr.AsyncRedisManager(settings.REDIS_URL)
+            sio_kwargs["client_manager"] = redis_manager
+            logging.info(f"Socket.IO Redis adapter enabled: {settings.REDIS_URL}")
+        except ImportError:
+            logging.warning("Redis adapter requested but socketio.redis_manager not available")
+        except Exception as e:
+            logging.error(f"Failed to setup Redis adapter: {e}")
+    
+    _sio = socketio.AsyncServer(**sio_kwargs)  # type: ignore[call-arg]
     sio = _sio
     fastapi_app = FastAPI(title=settings.API_TITLE)
     fastapi_app.state.sio = sio
@@ -290,6 +307,11 @@ def create_app(
     fastapi_app.include_router(prediction_router)
     fastapi_app.include_router(players_router)
     fastapi_app.include_router(tournaments_router)
+    
+    # Include uploads router (feature-flagged)
+    if settings.ENABLE_UPLOADS:
+        from backend.routes.uploads import router as uploads_router
+        fastapi_app.include_router(uploads_router)
 
     # In-process database startup/shutdown hooks.
     # TestClient and other in-process runners create pools on the same event loop.
