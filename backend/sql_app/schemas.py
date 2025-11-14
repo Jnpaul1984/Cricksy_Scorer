@@ -234,7 +234,9 @@ class ScoreDelivery(BaseModel):
             self.runs_scored = None
         elif self.extra in ("wd", "b", "lb"):
             if self.runs_scored is None:
-                raise ValueError("runs_scored is required when extra in {'wd','b','lb'}")
+                raise ValueError(
+                    "runs_scored is required when extra in {'wd','b','lb'}"
+                )
             if self.runs_off_bat not in (None, 0):
                 raise ValueError("runs_off_bat must be 0/None unless extra == 'nb'")
         else:
@@ -288,7 +290,9 @@ class MatchResult(BaseModel):
 
 class MatchResultRequest(BaseModel):
     match_id: UUID  # ... existing code ...
-    winner: str | None = None  # ID or name of the winning team or None for tie/no result
+    winner: str | None = (
+        None  # ID or name of the winning team or None for tie/no result
+    )
     team_a_score: int  # Total score of Team A
     team_b_score: int | None = None  # Total score of Team B (nullable for incomplete)
 

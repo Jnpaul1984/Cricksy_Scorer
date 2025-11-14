@@ -48,7 +48,9 @@ def create_game_if_needed() -> str:
     if r.status_code >= 400:
         import pytest
 
-        pytest.skip(f"Cannot create game automatically (HTTP {r.status_code}): {r.text[:300]}")
+        pytest.skip(
+            f"Cannot create game automatically (HTTP {r.status_code}): {r.text[:300]}"
+        )
     g = r.json()
     return g.get("id") or g.get("gid") or (g.get("game") or {}).get("id")
 
@@ -74,7 +76,9 @@ def ensure_innings_players(snap, batting, bowling):
     bat_ids, bowl_ids = ids(batting), ids(bowling)
     assert len(bat_ids) >= 2 and len(bowl_ids) >= 2, "need 2 batters and 1+ bowlers"
     s = snap.get("current_striker_id") or (snap.get("current_striker") or {}).get("id")
-    n = snap.get("current_non_striker_id") or (snap.get("current_non_striker") or {}).get("id")
+    n = snap.get("current_non_striker_id") or (
+        snap.get("current_non_striker") or {}
+    ).get("id")
     b = (
         snap.get("current_bowler_id")
         or (snap.get("current_bowler") or {}).get("id")
@@ -96,7 +100,9 @@ def next_bowler(curr: str | None, bowlers: list[str]) -> str:
     return bowlers[0] if bowlers else curr or ""
 
 
-def post_ball(gid, s, n, b, runs: int, bowl_ids: list[str], avoid_id: str | None = None):
+def post_ball(
+    gid, s, n, b, runs: int, bowl_ids: list[str], avoid_id: str | None = None
+):
     """
     Post one legal delivery with your backend's shape (runs_off_bat = 0).
     If server rejects with 'consecutive overs', choose a bowler different from BOTH:
@@ -131,9 +137,15 @@ def post_ball(gid, s, n, b, runs: int, bowl_ids: list[str], avoid_id: str | None
 
     # Fresh snapshot
     snap = snapshot(gid)
-    ss = snap.get("current_striker_id") or (snap.get("current_striker") or {}).get("id") or s
+    ss = (
+        snap.get("current_striker_id")
+        or (snap.get("current_striker") or {}).get("id")
+        or s
+    )
     nn = (
-        snap.get("current_non_striker_id") or (snap.get("current_non_striker") or {}).get("id") or n
+        snap.get("current_non_striker_id")
+        or (snap.get("current_non_striker") or {}).get("id")
+        or n
     )
     cbi = snap.get("current_bowler_id") or (snap.get("current_bowler") or {}).get("id")
     lbi = snap.get("last_ball_bowler_id")
@@ -187,12 +199,16 @@ def play_innings(gid, batting, bowling, overs=2):
     balls_in_innings = overs * 6
     bat_ids = ids(batting)
     bowl_ids = ids(bowling)
-    assert len(bat_ids) >= 2 and len(bowl_ids) >= 2, "need at least 2 batters and 2 bowlers"
+    assert (
+        len(bat_ids) >= 2 and len(bowl_ids) >= 2
+    ), "need at least 2 batters and 2 bowlers"
 
     pattern = [1, 0, 2, 1, 0, 0]  # deterministic variety
 
     def choose_bowler(snap, prev_over_bowler: str | None):
-        cbi = snap.get("current_bowler_id") or (snap.get("current_bowler") or {}).get("id")
+        cbi = snap.get("current_bowler_id") or (snap.get("current_bowler") or {}).get(
+            "id"
+        )
         lbi = snap.get("last_ball_bowler_id")
 
         # If mid-over, use current_bowler_id.

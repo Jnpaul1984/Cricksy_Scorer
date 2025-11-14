@@ -59,13 +59,21 @@ class MLModelService:
         try:
             if model_type == "win_probability":
                 model_path = (
-                    self._base_path / "win_probability" / f"{match_format}_win_predictor_v3.pkl"
+                    self._base_path
+                    / "win_probability"
+                    / f"{match_format}_win_predictor_v3.pkl"
                 )
             else:  # score_predictor
                 if match_format == "t20":
-                    model_path = self._base_path / "score_predictor" / "t20_score_predictor.pkl"
+                    model_path = (
+                        self._base_path / "score_predictor" / "t20_score_predictor.pkl"
+                    )
                 else:
-                    model_path = self._base_path / "score_predictor" / "odi_score_predictor_v3.pkl"
+                    model_path = (
+                        self._base_path
+                        / "score_predictor"
+                        / "odi_score_predictor_v3.pkl"
+                    )
 
             if not model_path.exists():
                 logger.warning(f"Model not found: {model_path}")
@@ -121,7 +129,9 @@ class MLModelService:
                 ]
 
                 # Build feature vector
-                feature_vector = pd.DataFrame([{k: features.get(k, 0) for k in required_features}])
+                feature_vector = pd.DataFrame(
+                    [{k: features.get(k, 0) for k in required_features}]
+                )
             else:
                 # Assume it's a numpy array
                 feature_vector = np.array(features).reshape(1, -1)
@@ -185,7 +195,9 @@ class MLModelService:
                 ]
 
                 # Build feature vector
-                feature_vector = pd.DataFrame([{k: features.get(k, 0) for k in required_features}])
+                feature_vector = pd.DataFrame(
+                    [{k: features.get(k, 0) for k in required_features}]
+                )
             else:
                 # Assume it's a numpy array
                 feature_vector = np.array(features).reshape(1, -1)

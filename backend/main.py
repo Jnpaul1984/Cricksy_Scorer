@@ -18,7 +18,15 @@ from backend.sql_app import models  # Re-exported for tests
 from backend.sql_app import schemas  # Re-exported for tests
 from backend.sql_app.database import get_db as get_db
 
-__all__ = ["ConcreteGameState", "app", "crud", "fastapi_app", "get_db", "models", "schemas"]
+__all__ = [
+    "ConcreteGameState",
+    "app",
+    "crud",
+    "fastapi_app",
+    "get_db",
+    "models",
+    "schemas",
+]
 
 configure_logging(json=True, level=logging.INFO)
 
@@ -53,7 +61,9 @@ try:
     from backend.services import game_helpers as _gh
 
     _recompute_totals_and_runtime = getattr(_gh, "_recompute_totals_and_runtime", None)
-    _rebuild_scorecards_from_deliveries = getattr(_gh, "_rebuild_scorecards_from_deliveries", None)
+    _rebuild_scorecards_from_deliveries = getattr(
+        _gh, "_rebuild_scorecards_from_deliveries", None
+    )
     _maybe_finalize_match = getattr(_gh, "_maybe_finalize_match", None)
     _ensure_target_if_chasing = getattr(_gh, "_ensure_target_if_chasing", None)
 except Exception:

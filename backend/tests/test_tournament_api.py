@@ -44,7 +44,7 @@ async def test_list_tournaments():
                 "tournament_type": "league",
             },
         )
-        
+
         # List tournaments
         response = await client.get("/tournaments/")
         assert response.status_code == 200
@@ -66,7 +66,7 @@ async def test_get_tournament():
             },
         )
         tournament_id = create_response.json()["id"]
-        
+
         # Get the tournament
         response = await client.get(f"/tournaments/{tournament_id}")
         assert response.status_code == 200
@@ -88,7 +88,7 @@ async def test_update_tournament():
             },
         )
         tournament_id = create_response.json()["id"]
-        
+
         # Update the tournament
         response = await client.patch(
             f"/tournaments/{tournament_id}",
@@ -116,7 +116,7 @@ async def test_add_team_to_tournament():
             },
         )
         tournament_id = create_response.json()["id"]
-        
+
         # Add a team
         response = await client.post(
             f"/tournaments/{tournament_id}/teams",
@@ -146,7 +146,7 @@ async def test_get_teams():
             },
         )
         tournament_id = create_response.json()["id"]
-        
+
         await client.post(
             f"/tournaments/{tournament_id}/teams",
             json={"team_name": "Team A", "team_data": {}},
@@ -155,7 +155,7 @@ async def test_get_teams():
             f"/tournaments/{tournament_id}/teams",
             json={"team_name": "Team B", "team_data": {}},
         )
-        
+
         # Get teams
         response = await client.get(f"/tournaments/{tournament_id}/teams")
         assert response.status_code == 200
@@ -176,7 +176,7 @@ async def test_create_fixture():
             },
         )
         tournament_id = create_response.json()["id"]
-        
+
         # Create a fixture
         response = await client.post(
             "/tournaments/fixtures",
@@ -208,7 +208,7 @@ async def test_get_fixtures():
             },
         )
         tournament_id = create_response.json()["id"]
-        
+
         # Create fixtures
         await client.post(
             "/tournaments/fixtures",
@@ -219,7 +219,7 @@ async def test_get_fixtures():
                 "team_b_name": "Team B",
             },
         )
-        
+
         # Get fixtures
         response = await client.get(f"/tournaments/{tournament_id}/fixtures")
         assert response.status_code == 200
@@ -240,12 +240,12 @@ async def test_get_points_table():
             },
         )
         tournament_id = create_response.json()["id"]
-        
+
         await client.post(
             f"/tournaments/{tournament_id}/teams",
             json={"team_name": "Team A", "team_data": {}},
         )
-        
+
         # Get points table
         response = await client.get(f"/tournaments/{tournament_id}/points-table")
         assert response.status_code == 200
