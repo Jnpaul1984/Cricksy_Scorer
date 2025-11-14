@@ -39,6 +39,7 @@ from backend.routes.players import router as players_router
 from backend.routes.prediction import router as prediction_router
 from backend.routes.sponsors import router as sponsors_router
 from backend.routes.tournaments import router as tournaments_router
+from backend.routes.uploads import router as uploads_router
 from backend.services.live_bus import set_socketio_server as _set_bus_sio
 
 # Socket handlers and live bus
@@ -290,6 +291,7 @@ def create_app(
     fastapi_app.include_router(prediction_router)
     fastapi_app.include_router(players_router)
     fastapi_app.include_router(tournaments_router)
+    fastapi_app.include_router(uploads_router)
 
     # In-process database startup/shutdown hooks.
     # TestClient and other in-process runners create pools on the same event loop.

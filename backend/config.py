@@ -83,5 +83,25 @@ class Settings(BaseSettings):
     def backend_cors_origins(self) -> str:
         return self.BACKEND_CORS_ORIGINS
 
+    # Feature flags
+    ENABLE_UPLOADS: bool = os.getenv("CRICKSY_ENABLE_UPLOADS", "1") == "1"
+    ENABLE_OCR: bool = os.getenv("CRICKSY_ENABLE_OCR", "1") == "1"
+
+    # S3/MinIO configuration
+    S3_ENDPOINT_URL: str | None = os.getenv("CRICKSY_S3_ENDPOINT_URL")  # MinIO dev, None for AWS prod
+    S3_ACCESS_KEY: str = os.getenv("CRICKSY_S3_ACCESS_KEY", "")
+    S3_SECRET_KEY: str = os.getenv("CRICKSY_S3_SECRET_KEY", "")
+    S3_BUCKET: str = os.getenv("CRICKSY_S3_BUCKET", "cricksy-uploads")
+    S3_REGION: str = os.getenv("CRICKSY_S3_REGION", "us-east-1")
+    S3_PRESIGNED_URL_EXPIRY: int = int(os.getenv("CRICKSY_S3_PRESIGNED_URL_EXPIRY", "3600"))  # 1 hour
+
+    # Redis configuration for Celery and Socket.IO
+    REDIS_URL: str = os.getenv("CRICKSY_REDIS_URL", "redis://localhost:6379/0")
+    REDIS_SOCKETIO_URL: str = os.getenv("CRICKSY_REDIS_SOCKETIO_URL", "redis://localhost:6379/1")
+
+    # Celery configuration
+    CELERY_BROKER_URL: str = os.getenv("CRICKSY_CELERY_BROKER_URL", REDIS_URL)
+    CELERY_RESULT_BACKEND: str = os.getenv("CRICKSY_CELERY_RESULT_BACKEND", REDIS_URL)
+
 
 settings = Settings()

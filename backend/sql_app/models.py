@@ -647,3 +647,73 @@ class Fixture(Base):
         Index("ix_fixtures_status", "status"),
         Index("ix_fixtures_scheduled_date", "scheduled_date"),
     )
+
+
+# -----------------------------
+# Upload model for scorecard uploads and OCR processing
+# -----------------------------
+
+
+class UploadStatus(str, enum.Enum):
+    """Status of an upload."""
+
+    initiated = "initiated"  # Presigned URL generated, awaiting upload
+    uploaded = "uploaded"  # File uploaded to S3/MinIO
+    processing = "processing"  # OCR worker processing
+    parsed = "parsed"  # OCR complete, parsed_preview available
+    applied = "applied"  # Data confirmed and applied to delivery ledger
+    failed = "failed"  # Processing failed
+    cancelled = "cancelled"  # User cancelled
+
+
+class Upload(Base):
+    """Track scorecard image uploads and OCR processing."""
+
+    __tablename__ = "uploads"
+
+    # Primary key
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True
+    )
+
+    # User/game context
+    game_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # File metadata
+    filename: Mapped[str] = mapped_column(String, nullable=False)
+    content_type: Mapped[str] = mapped_column(String, nullable=False)
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # S3/MinIO storage
+    s3_bucket: Mapped[str] = mapped_column(String, nullable=False)
+    s3_key: Mapped[str] = mapped_column(String, nullable=False)
+    presigned_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Processing status
+    status: Mapped[UploadStatus] = mapped_column(
+        SAEnum(UploadStatus, name="upload_status"),
+        default=UploadStatus.initiated,
+        nullable=False,
+        index=True,
+    )
+
+    # OCR results (JSON)
+    # Contains parsed scorecard data for human review before applying
+    parsed_preview: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=_empty_dict, nullable=False
+    )
+
+    # Error tracking
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Timestamps
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    processed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    applied_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
