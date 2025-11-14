@@ -18,7 +18,15 @@ from backend.sql_app import models  # Re-exported for tests
 from backend.sql_app import schemas  # Re-exported for tests
 from backend.sql_app.database import get_db as get_db
 
-__all__ = ["ConcreteGameState", "app", "crud", "fastapi_app", "get_db", "models", "schemas"]
+__all__ = [
+    "ConcreteGameState",
+    "app",
+    "crud",
+    "fastapi_app",
+    "get_db",
+    "models",
+    "schemas",
+]
 
 configure_logging(json=True, level=logging.INFO)
 

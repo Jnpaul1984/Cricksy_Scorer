@@ -84,7 +84,10 @@ def engineer_features(df: pd.DataFrame, match_format: str) -> pd.DataFrame:
     if match_format == "t20":
         df["match_phase_id"] = (
             pd.cut(
-                df["completed_overs"], bins=[0, 6, 15, 20], labels=[0, 1, 2], include_lowest=True
+                df["completed_overs"],
+                bins=[0, 6, 15, 20],
+                labels=[0, 1, 2],
+                include_lowest=True,
             )
             .cat.codes.fillna(0)
             .astype(int)
@@ -92,7 +95,10 @@ def engineer_features(df: pd.DataFrame, match_format: str) -> pd.DataFrame:
     else:  # ODI
         df["match_phase_id"] = (
             pd.cut(
-                df["completed_overs"], bins=[0, 10, 40, 50], labels=[0, 1, 2], include_lowest=True
+                df["completed_overs"],
+                bins=[0, 10, 40, 50],
+                labels=[0, 1, 2],
+                include_lowest=True,
             )
             .cat.codes.fillna(0)
             .astype(int)

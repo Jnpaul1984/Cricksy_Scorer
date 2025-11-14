@@ -99,7 +99,10 @@ class InMemoryTournamentRepository:
         return [self._serialize_tournament(rec) for rec in window]
 
     async def update_tournament(
-        self, db: object, tournament_id: str, tournament_update: schemas.TournamentUpdate
+        self,
+        db: object,
+        tournament_id: str,
+        tournament_update: schemas.TournamentUpdate,
     ) -> schemas.TournamentResponse | None:
         record = self._tournaments.get(tournament_id)
         if record is None:
