@@ -113,8 +113,8 @@ describe('ChartLine.vue', () => {
     const manyOvers = {
       labels: Array.from({ length: 50 }, (_, i) => `Over ${i + 1}`),
       series: [
-        { 
-          label: 'Innings 1', 
+        {
+          label: 'Innings 1',
           data: Array.from({ length: 50 }, (_, i) => i * 5) // Cumulative
         }
       ]

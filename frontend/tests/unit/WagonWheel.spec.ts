@@ -76,13 +76,13 @@ describe('WagonWheel.vue', () => {
     })
 
     const strokeLines = wrapper.findAll('line.stroke-line')
-    
+
     // First stroke is a four (blue)
     expect(strokeLines[0].attributes('stroke')).toBe('#2563eb')
-    
+
     // Second stroke is a six (green)
     expect(strokeLines[1].attributes('stroke')).toBe('#22c55e')
-    
+
     // Third stroke is other (gray)
     expect(strokeLines[2].attributes('stroke')).toBe('#94a3b8')
   })
@@ -112,12 +112,12 @@ describe('WagonWheel.vue', () => {
     // Verify strokes are rendered
     const strokeLines = wrapper.findAll('line.stroke-line')
     expect(strokeLines.length).toBe(5)
-    
+
     // Count strokes by type
     const sixes = sampleStrokes.filter(s => s.kind === '6').length
     const fours = sampleStrokes.filter(s => s.kind === '4').length
     const others = sampleStrokes.filter(s => s.kind === 'other').length
-    
+
     expect(sixes).toBe(1)
     expect(fours).toBe(2)
     expect(others).toBe(2)
@@ -130,7 +130,7 @@ describe('WagonWheel.vue', () => {
 
     const strokeLines = wrapper.findAll('line.stroke-line')
     const firstTitle = strokeLines[0].find('title')
-    
+
     expect(firstTitle.exists()).toBe(true)
     expect(firstTitle.text()).toContain('4 runs')
     expect(firstTitle.text()).toContain('0°')
@@ -148,14 +148,14 @@ describe('WagonWheel.vue', () => {
 
   it('handles single run correctly in tooltip', () => {
     const wrapper = mount(WagonWheel, {
-      props: { 
-        strokes: [{ angleDeg: 0, runs: 1, kind: 'other' as const }] 
+      props: {
+        strokes: [{ angleDeg: 0, runs: 1, kind: 'other' as const }]
       }
     })
 
     const strokeLine = wrapper.find('line.stroke-line')
     const title = strokeLine.find('title')
-    
+
     expect(title.text()).toContain('1 run')
     expect(title.text()).not.toContain('runs')
   })

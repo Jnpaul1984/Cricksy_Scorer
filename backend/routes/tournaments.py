@@ -1,4 +1,5 @@
 """Tournament management API endpoints"""
+
 from __future__ import annotations
 
 from typing import Annotated, Any
@@ -70,7 +71,9 @@ async def delete_tournament(
 # Team management endpoints
 
 
-@router.post("/{tournament_id}/teams", response_model=schemas.TournamentTeamResponse, status_code=201)
+@router.post(
+    "/{tournament_id}/teams", response_model=schemas.TournamentTeamResponse, status_code=201
+)
 async def add_team(
     tournament_id: str,
     team: schemas.TeamAdd,

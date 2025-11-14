@@ -130,25 +130,25 @@ interface Game {
   id: string
   status: GameStatus
   current_inning: number
-  
+
   // Current state
   total_runs: number
   total_wickets: number
   overs_completed: number
   balls_this_over: number
-  
+
   // Players
   current_striker_id: string
   current_non_striker_id: string
   current_bowler_id: string
-  
+
   // Scorecards
   batting_scorecard: Record<string, BatterStats>
   bowling_scorecard: Record<string, BowlerStats>
-  
+
   // Event ledger (source of truth)
   deliveries: Delivery[]
-  
+
   // Historical data
   innings_history: InningsRecord[]
 }
@@ -207,12 +207,12 @@ Composable for Socket.IO integration:
 ```typescript
 export function useRealtime(gameId: string) {
   const socket = useSocket()
-  
+
   onMounted(() => {
     socket.emit('join', { game_id: gameId })
     socket.on('state:update', handleStateUpdate)
   })
-  
+
   onUnmounted(() => {
     socket.emit('leave', { game_id: gameId })
   })

@@ -44,15 +44,15 @@ const options = {
     intersect: false,
   },
   plugins: {
-    legend: { 
+    legend: {
       position: 'bottom' as const,
       labels: {
         padding: 12,
         usePointStyle: true,
       }
     },
-    tooltip: { 
-      mode: 'index' as const, 
+    tooltip: {
+      mode: 'index' as const,
       intersect: false,
       backgroundColor: 'rgba(0, 0, 0, 0.8)',
       padding: 12,
@@ -73,14 +73,14 @@ const options = {
     },
   },
   scales: {
-    x: { 
+    x: {
       display: true,
       grid: {
         display: true,
         color: 'rgba(0, 0, 0, 0.05)',
       }
     },
-    y: { 
+    y: {
       beginAtZero: true,
       title: {
         display: true,
