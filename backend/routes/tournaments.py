@@ -18,7 +18,7 @@ async def create_tournament(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Create a new tournament"""
-    return await tournament_crud.create_tournament(db, tournament)
+    return await tournament_crud.create_tournament_eager(db, tournament)
 
 
 @router.get("/", response_model=list[schemas.TournamentResponse])

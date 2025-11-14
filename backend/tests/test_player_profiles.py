@@ -7,17 +7,12 @@ import os
 import sys
 
 import pytest
-from fastapi.testclient import TestClient
 
 # Ensure backend is on path for local runs
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # Set in-memory mode for testing
 os.environ["CRICKSY_IN_MEMORY_DB"] = "1"
-
-from backend.main import app
-
-client = TestClient(app)
 
 
 @pytest.fixture

@@ -16,7 +16,8 @@ from backend.main import _fastapi as app
 @pytest.fixture
 def api_client():
     """Create a test client for the FastAPI app."""
-    return TestClient(app)
+    with TestClient(app) as client:
+        yield client
 
 
 def test_wicket_delivery_is_recorded(api_client):
@@ -386,9 +387,7 @@ def test_multiple_wickets_in_sequence(api_client):
         # Select next batsman (if not the last wicket)
         if i < 2:
             next_batsman_id = team_a_players[i + 3]["id"]
-            api_client.post(
-                f"/games/{game_id}/next-batter", json={"batter_id": next_batsman_id}
-            )
+            api_client.post(f"/games/{game_id}/next-batter", json={"batter_id": next_batsman_id})
 
     # Get deliveries and count wickets
     deliveries_response = api_client.get(f"/games/{game_id}/deliveries")
@@ -452,9 +451,7 @@ def test_dismissal_types_are_recorded(api_client):
         # Select next batsman (if not last)
         if i < len(dismissal_types) - 1:
             next_batsman_id = team_a_players[i + 5]["id"]
-            api_client.post(
-                f"/games/{game_id}/next-batter", json={"batter_id": next_batsman_id}
-            )
+            api_client.post(f"/games/{game_id}/next-batter", json={"batter_id": next_batsman_id})
 
     # Get deliveries and verify dismissal types
     deliveries_response = api_client.get(f"/games/{game_id}/deliveries")

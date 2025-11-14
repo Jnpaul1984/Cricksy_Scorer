@@ -2,14 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app  # socketio.ASGIApp wrapping the FastAPI app
 
-client = TestClient(app)
+
+@pytest.fixture
+def client() -> TestClient:
+    with TestClient(app) as client:
+        yield client
 
 
-def _create_game_and_post_result() -> str:
+def _create_game_and_post_result(client: TestClient) -> str:
     # Create a game via the real backend
     create_resp = client.post(
         "/games",
@@ -38,14 +43,14 @@ def _create_game_and_post_result() -> str:
     return game_id
 
 
-def test_results_endpoint_with_valid_id():
-    game_id = _create_game_and_post_result()
+def test_results_endpoint_with_valid_id(client: TestClient):
+    game_id = _create_game_and_post_result(client)
     response = client.get(f"/games/{game_id}/results")
     assert response.status_code == 200
 
 
-def test_results_endpoint():
-    _ = _create_game_and_post_result()
+def test_results_endpoint(client: TestClient):
+    _ = _create_game_and_post_result(client)
 
     response = client.get("/games/results")
     assert response.status_code == 200

@@ -59,7 +59,7 @@ def install_exception_handlers(app: FastAPI) -> None:
             err_type="validation_error",
             message="Invalid request.",
             details=exc.errors(),
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
 
     @app.exception_handler(ValidationError)
@@ -83,7 +83,7 @@ def install_exception_handlers(app: FastAPI) -> None:
             err_type="validation_error",
             message="Invalid data.",
             details=details,
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
 
     @app.exception_handler(IntegrityError)

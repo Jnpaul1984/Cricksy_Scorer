@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import inspect
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.sql_app import models, schemas
+
+
+async def _maybe_await(result: Any) -> None:
+    """Await AsyncMock/awaitable results transparently."""
+    if inspect.isawaitable(result):
+        await result
 
 
 async def create_tournament(
@@ -20,7 +29,7 @@ async def create_tournament(
         start_date=tournament_in.start_date,
         end_date=tournament_in.end_date,
     )
-    db.add(tournament)
+    await _maybe_await(db.add(tournament))
     await db.commit()
     await db.refresh(tournament)
     return tournament
@@ -94,7 +103,7 @@ async def add_team_to_tournament(
         team_name=team_data.team_name,
         team_data=team_data.team_data,
     )
-    db.add(team)
+    await _maybe_await(db.add(team))
     await db.commit()
     await db.refresh(team)
     return team
@@ -170,7 +179,7 @@ async def create_fixture(db: AsyncSession, fixture_in: schemas.FixtureCreate) ->
         venue=fixture_in.venue,
         scheduled_date=fixture_in.scheduled_date,
     )
-    db.add(fixture)
+    await _maybe_await(db.add(fixture))
     await db.commit()
     await db.refresh(fixture)
     return fixture
@@ -235,3 +244,20 @@ async def get_points_table(db: AsyncSession, tournament_id: str) -> list[schemas
         )
         for team in teams
     ]
+
+
+async def create_tournament_eager(
+    db: AsyncSession, tournament_create: schemas.TournamentCreate
+) -> models.Tournament:
+    """Create tournament and re-query with teams eagerly loaded."""
+    # Use existing create_tournament to insert/commit the tournament
+    created = await create_tournament(db, tournament_create)
+
+    # Re-query to eagerly load teams (so Pydantic/fastapi won't trigger lazy IO)
+    result = await db.execute(
+        select(models.Tournament)
+        .options(selectinload(models.Tournament.teams))
+        .filter_by(id=created.id)
+    )
+    tournament_with_teams = result.scalar_one()
+    return tournament_with_teams

@@ -7,6 +7,11 @@ import pathlib
 import httpx
 from urllib.parse import urlsplit
 
+if os.getenv("CRICKSY_IN_MEMORY_DB") is None:
+    default_api = os.getenv("API_BASE", "http://localhost:8000")
+    if default_api.startswith("http://localhost") or default_api.startswith("http://127.0.0.1"):
+        os.environ["CRICKSY_IN_MEMORY_DB"] = "1"
+
 _USE_INPROC = os.getenv("CRICKSY_IN_MEMORY_DB") == "1"
 if _USE_INPROC:
     from fastapi.testclient import TestClient
@@ -32,7 +37,7 @@ def traced_request(method: str, url: str, **kw) -> httpx.Response:
         path = parsed.path or "/"
         if parsed.query:
             path = f"{path}?{parsed.query}"
-        resp = _local_client.request(method, path, timeout=timeout, **kw)
+        resp = _local_client.request(method, path, **kw)
     else:
         resp = httpx.request(method, url, timeout=timeout, **kw)
     t1 = time.time()

@@ -18,7 +18,8 @@ from backend.main import _fastapi as app
 @pytest.fixture
 def api_client():
     """Create a test client for the FastAPI app."""
-    return TestClient(app)
+    with TestClient(app) as client:
+        yield client
 
 
 @pytest.fixture
@@ -108,15 +109,11 @@ class GameHelper:
         # Use first two players if not specified
         if striker_id is None:
             striker_id = (
-                self.team_a_players[0]["id"]
-                if team == "A"
-                else self.team_b_players[0]["id"]
+                self.team_a_players[0]["id"] if team == "A" else self.team_b_players[0]["id"]
             )
         if non_striker_id is None:
             non_striker_id = (
-                self.team_a_players[1]["id"]
-                if team == "A"
-                else self.team_b_players[1]["id"]
+                self.team_a_players[1]["id"] if team == "A" else self.team_b_players[1]["id"]
             )
 
         response = self.client.post(
@@ -276,9 +273,7 @@ class AssertionHelper:
 
         if runs is not None:
             actual_runs = summary.get("runs")
-            assert (
-                actual_runs == runs
-            ), f"Expected {runs} runs in summary, got {actual_runs}"
+            assert actual_runs == runs, f"Expected {runs} runs in summary, got {actual_runs}"
 
         if wickets is not None:
             actual_wickets = summary.get("wickets")
@@ -288,9 +283,7 @@ class AssertionHelper:
 
         if overs is not None:
             actual_overs = summary.get("overs")
-            assert (
-                actual_overs == overs
-            ), f"Expected {overs} overs in summary, got {actual_overs}"
+            assert actual_overs == overs, f"Expected {overs} overs in summary, got {actual_overs}"
 
     @staticmethod
     def assert_game_result(snapshot: dict, expected_winner: str | None = None):

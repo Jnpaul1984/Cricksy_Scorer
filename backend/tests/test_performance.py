@@ -14,7 +14,8 @@ from backend.main import _fastapi as app
 @pytest.fixture
 def client():
     """Create a test client for the FastAPI app."""
-    return TestClient(app)
+    with TestClient(app) as client:
+        yield client
 
 
 @pytest.fixture
@@ -98,9 +99,7 @@ class TestGameCreationPerformance:
         print(f"Max: {max_time:.2f}ms")
 
         # Assert performance target
-        assert (
-            avg_time < 100
-        ), f"Game creation too slow: {avg_time:.2f}ms (target: <100ms)"
+        assert avg_time < 100, f"Game creation too slow: {avg_time:.2f}ms (target: <100ms)"
 
 
 class TestDeliveryPerformance:
@@ -174,9 +173,7 @@ class TestDeliveryPerformance:
         print(f"Min: {min_time:.2f}ms")
         print(f"Max: {max_time:.2f}ms")
 
-        assert (
-            avg_time < 50
-        ), f"Delivery posting too slow: {avg_time:.2f}ms (target: <50ms)"
+        assert avg_time < 50, f"Delivery posting too slow: {avg_time:.2f}ms (target: <50ms)"
 
     def test_full_over_performance(self, client):
         """
@@ -236,9 +233,7 @@ class TestDeliveryPerformance:
         print(f"Total time: {total_time:.2f}ms")
         print(f"Average per delivery: {avg_per_delivery:.2f}ms")
 
-        assert (
-            total_time < 600
-        ), f"Two overs too slow: {total_time:.2f}ms (target: <600ms)"
+        assert total_time < 600, f"Two overs too slow: {total_time:.2f}ms (target: <600ms)"
 
 
 class TestSnapshotPerformance:
@@ -313,9 +308,7 @@ class TestSnapshotPerformance:
         print(f"Min: {min_time:.2f}ms")
         print(f"Max: {max_time:.2f}ms")
 
-        assert (
-            avg_time < 50
-        ), f"Snapshot retrieval too slow: {avg_time:.2f}ms (target: <50ms)"
+        assert avg_time < 50, f"Snapshot retrieval too slow: {avg_time:.2f}ms (target: <50ms)"
 
 
 class TestFullMatchPerformance:
@@ -362,11 +355,7 @@ class TestFullMatchPerformance:
 
         # First innings: 2 overs (12 deliveries)
         for i in range(12):
-            bowler = (
-                team_b_players[0]["id"]
-                if (i // 6) % 2 == 0
-                else team_b_players[1]["id"]
-            )
+            bowler = team_b_players[0]["id"] if (i // 6) % 2 == 0 else team_b_players[1]["id"]
             response = client.post(
                 f"/games/{game_id}/deliveries",
                 json={
@@ -386,20 +375,14 @@ class TestFullMatchPerformance:
             },
         )
         if response.status_code != 200:
-            print(
-                f"\nStart next innings failed: {response.status_code} - {response.json()}"
-            )
+            print(f"\nStart next innings failed: {response.status_code} - {response.json()}")
         assert (
             response.status_code == 200
         ), f"Start next innings failed: {response.status_code} - {response.json()}"
 
         # Second innings: 2 overs (12 deliveries)
         for i in range(12):
-            bowler = (
-                team_a_players[0]["id"]
-                if (i // 6) % 2 == 0
-                else team_a_players[1]["id"]
-            )
+            bowler = team_a_players[0]["id"] if (i // 6) % 2 == 0 else team_a_players[1]["id"]
             response = client.post(
                 f"/games/{game_id}/deliveries",
                 json={
@@ -408,9 +391,7 @@ class TestFullMatchPerformance:
                 },
             )
             if response.status_code != 200:
-                print(
-                    f"\nSecond innings delivery {i}: {response.status_code} - {response.json()}"
-                )
+                print(f"\nSecond innings delivery {i}: {response.status_code} - {response.json()}")
             assert response.status_code == 200
 
         end = time.time()
@@ -423,9 +404,7 @@ class TestFullMatchPerformance:
         print(f"Total time: {total_time:.2f}s")
         print(f"Average per delivery: {avg_per_delivery:.2f}ms")
 
-        assert (
-            total_time < 2
-        ), f"Complete match too slow: {total_time:.2f}s (target: <2s)"
+        assert total_time < 2, f"Complete match too slow: {total_time:.2f}s (target: <2s)"
 
 
 class TestDLSPerformance:
@@ -466,9 +445,7 @@ class TestDLSPerformance:
         print(f"Min: {min_time:.2f}ms")
         print(f"Max: {max_time:.2f}ms")
 
-        assert (
-            avg_time < 10
-        ), f"DLS calculation too slow: {avg_time:.2f}ms (target: <10ms)"
+        assert avg_time < 10, f"DLS calculation too slow: {avg_time:.2f}ms (target: <10ms)"
 
 
 if __name__ == "__main__":
