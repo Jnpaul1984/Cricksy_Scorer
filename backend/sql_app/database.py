@@ -35,3 +35,16 @@ else:
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
         yield session
+
+
+def get_database_url() -> str:
+    """Get the synchronous database URL for Celery workers."""
+    if USE_IN_MEMORY_DB:
+        return "sqlite:///cricksy_scorer_test.db"
+    else:
+        # Convert asyncpg URL to psycopg2 URL for synchronous operations
+        url = os.getenv(
+            "DATABASE_URL",
+            "postgresql+asyncpg://postgres:RubyAnita2018@localhost:5555/cricksy_scorer",
+        )
+        return url.replace("postgresql+asyncpg://", "postgresql://").replace("+asyncpg", "")

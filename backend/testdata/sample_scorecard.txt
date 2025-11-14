@@ -1,0 +1,29 @@
+Sample Cricket Scorecard
+
+MATCH: Team A vs Team B
+Date: November 10, 2025
+Venue: Test Ground
+
+Team A Innings
+156/4 (20.0 overs)
+
+Batsman            Runs  Balls  4s  6s
+J. Smith           45    32     6   1
+R. Johnson         38    28     4   2
+M. Williams        25    18     2   1
+T. Brown           12    15     1   0
+Extras             36
+Total              156/4
+
+Fall of Wickets: 67-1, 98-2, 132-3, 156-4
+
+Bowling Analysis
+
+Bowler             Overs  Mdns  Runs  Wkts
+P. Anderson        4.0    0     28    1
+S. Thompson        4.0    1     32    2
+K. Roberts         4.0    0     41    0
+D. Miller          4.0    0     35    1
+
+Team B Innings
+(To Bat)
