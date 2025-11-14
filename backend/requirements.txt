@@ -61,3 +61,10 @@ watchfiles==1.1.0
 websockets==15.0.1
 wsproto==1.2.0
 aiosqlite==0.20.0
+# Upload and OCR dependencies
+boto3==1.35.0
+celery==5.4.0
+redis==5.1.1
+pytesseract==0.3.13
+pdf2image==1.17.0
+Pillow==11.0.0

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 # Match what tests reset and assert
 _sio_server: Any | None = None
+
+logger = logging.getLogger(__name__)
 
 
 def set_socketio_server(sio: Any) -> None:
@@ -16,22 +19,59 @@ def set_socketio_server(sio: Any) -> None:
 async def emit(
     event: str, data: Any, *, room: str | None = None, namespace: str | None = None
 ) -> None:
-    """Generic async emitter with best-effort error containment."""
+    """
+    Generic async emitter with best-effort error containment and non-blocking behavior.
+    
+    Emits are now non-blocking by default using asyncio.create_task to avoid
+    blocking request handlers on slow socket operations.
+    """
     if _sio_server is None:
         return
     try:
-        await _sio_server.emit(event, data, room=room, namespace=namespace)
-    except Exception:
+        # Emit in background to avoid blocking
+        asyncio.create_task(
+            _sio_server.emit(event, data, room=room, namespace=namespace)
+        )
+    except Exception as e:
         # Avoid breaking request handlers on emit failures
+        logger.error(f"Socket emit error for event {event}: {e}", exc_info=True)
         return
+
+
+def _compact_game_state(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """
+    Create a compact version of game state by removing redundant data.
+    
+    Only include fields that have changed or are essential for UI updates.
+    """
+    # Keep only essential fields
+    compact = {
+        "id": snapshot.get("id"),
+        "status": snapshot.get("status"),
+        "current_inning": snapshot.get("current_inning"),
+        "total_runs": snapshot.get("total_runs"),
+        "total_wickets": snapshot.get("total_wickets"),
+        "overs_completed": snapshot.get("overs_completed"),
+        "balls_this_over": snapshot.get("balls_this_over"),
+    }
+    
+    # Optionally include latest delivery only
+    deliveries = snapshot.get("deliveries", [])
+    if deliveries:
+        compact["latest_delivery"] = deliveries[-1]
+    
+    return compact
 
 
 # Convenience emitters used by routes
 async def emit_state_update(game_id: str, snapshot: dict[str, Any]) -> None:
-    await emit("state:update", {"id": game_id, "snapshot": snapshot}, room=game_id)
+    """Emit compact state update with delta."""
+    compact_snapshot = _compact_game_state(snapshot)
+    await emit("state:update", {"id": game_id, "snapshot": compact_snapshot}, room=game_id)
 
 
 async def emit_game_update(game_id: str, payload: dict[str, Any]) -> None:
+    """Emit game update with compact payload."""
     # Tests expect the raw payload (no id merged in)
     await emit("game:update", payload, room=game_id)
 

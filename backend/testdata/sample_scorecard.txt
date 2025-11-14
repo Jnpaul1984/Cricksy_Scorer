@@ -1,0 +1,70 @@
+MATCH SCORECARD
+================
+
+Tigers vs Lions - T20 Match
+Venue: School Ground
+Date: 10 Nov 2025
+
+TIGERS INNINGS
+--------------
+
+Batsman         Runs  Balls
+J Smith         45    32
+M Johnson       23    18
+R Williams      12    15
+T Brown         8     6
+(not out)
+
+Total: 88/3 (10.2 overs)
+
+BOWLING FIGURES
+---------------
+
+Bowler         O   M   R   W
+P Davies       3   0   18  1
+K Wilson       2.2 0   22  1
+L Anderson     3   0   28  0
+S Miller       2   0   20  1
+
+DELIVERIES
+----------
+
+Over 1 (P Davies)
+1.1 runs 0
+1.2 runs 1
+1.3 runs 4
+1.4 runs 0
+1.5 runs 2
+1.6 runs 1
+
+Over 2 (K Wilson)
+2.1 runs 0
+2.2 runs 0
+2.3 W (J Smith caught)
+2.4 runs 1
+2.5 runs 6
+2.6 runs 0
+
+Over 3 (P Davies)
+3.1 runs 1
+3.2 runs 0
+3.3 runs 4
+3.4 runs 0
+3.5 runs 1
+3.6 runs 2
+
+Over 4 (L Anderson)
+4.1 runs 0
+4.2 runs 4
+4.3 runs 1
+4.4 runs 0
+4.5 runs 1
+4.6 runs 0
+
+Over 5 (K Wilson)
+5.1 runs 2
+5.2 runs 0
+5.3 runs 1
+5.4 W (M Johnson lbw)
+5.5 runs 0
+5.6 runs 1
