@@ -8,9 +8,9 @@ event loop from pytest/anyio on Windows.
 If you prefer to run tests in WSL or CI, you can remove this file.
 """
 
+import contextlib
 import os
 import sys
-import contextlib
 
 # Force AnyIO to use asyncio backend unless explicitly overridden.
 os.environ.setdefault("ANYIO_BACKEND", "asyncio")

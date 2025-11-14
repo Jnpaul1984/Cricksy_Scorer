@@ -14,21 +14,11 @@ from typing import Any, cast
 from pydantic import BaseModel
 
 # Centralized constants/rules
-from backend.domain.constants import (
-    CREDIT_BOWLER as _CREDIT_BOWLER,
-)
-from backend.domain.constants import (
-    INVALID_ON_NO_BALL as _INVALID_ON_NO_BALL,
-)
-from backend.domain.constants import (
-    INVALID_ON_WIDE as _INVALID_ON_WIDE,
-)
-from backend.domain.constants import (
-    as_extra_code as _as_extra_code,
-)
-from backend.domain.constants import (
-    norm_extra as _norm_extra,
-)
+from backend.domain.constants import CREDIT_BOWLER as _CREDIT_BOWLER
+from backend.domain.constants import INVALID_ON_NO_BALL as _INVALID_ON_NO_BALL
+from backend.domain.constants import INVALID_ON_WIDE as _INVALID_ON_WIDE
+from backend.domain.constants import as_extra_code as _as_extra_code
+from backend.domain.constants import norm_extra as _norm_extra
 
 
 def _complete_over_runtime(g: Any, bowler_id: str | None) -> None:
@@ -157,9 +147,7 @@ def score_one(
         extra_runs = runs_scored
 
     team_add = (
-        off_bat_runs
-        + (1 if is_nb else 0)
-        + (extra_runs if extra_norm in ("wd", "b", "lb") else 0)
+        off_bat_runs + (1 if is_nb else 0) + (extra_runs if extra_norm in ("wd", "b", "lb") else 0)
     )
     g.total_runs = int(getattr(g, "total_runs", 0)) + team_add
 

@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.services.prediction_service import get_win_probability
-from backend.sql_app.database import get_db
 from backend.sql_app import crud
+from backend.sql_app.database import get_db
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
 

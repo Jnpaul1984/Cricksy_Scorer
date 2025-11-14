@@ -17,15 +17,9 @@ from backend.sql_app.database import get_db
 from backend.utils.common import (
     MAX_UPLOAD_BYTES,
 )
-from backend.utils.common import (
-    detect_image_ext as _detect_image_ext,
-)
-from backend.utils.common import (
-    iso_or_none as _iso_or_none,
-)
-from backend.utils.common import (
-    parse_iso_dt as _parse_iso_dt,
-)
+from backend.utils.common import detect_image_ext as _detect_image_ext
+from backend.utils.common import iso_or_none as _iso_or_none
+from backend.utils.common import parse_iso_dt as _parse_iso_dt
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
@@ -86,9 +80,7 @@ async def create_sponsor(
 
     ext = _detect_image_ext(data, logo.content_type, logo.filename)
     if ext is None:
-        raise HTTPException(
-            status_code=400, detail="Only SVG, PNG or WebP images are allowed"
-        )
+        raise HTTPException(status_code=400, detail="Only SVG, PNG or WebP images are allowed")
 
     try:
         parsed_any: Any = json.loads(surfaces) if surfaces else ["all"]
@@ -98,16 +90,12 @@ async def create_sponsor(
         ) from err
 
     if not isinstance(parsed_any, list):
-        raise HTTPException(
-            status_code=400, detail="surfaces must be a JSON array of strings"
-        )
+        raise HTTPException(status_code=400, detail="surfaces must be a JSON array of strings")
 
     parsed_list: list[Any] = cast(list[Any], parsed_any)
     for itm in parsed_list:
         if not isinstance(itm, str):
-            raise HTTPException(
-                status_code=400, detail="surfaces must be a JSON array of strings"
-            )
+            raise HTTPException(status_code=400, detail="surfaces must be a JSON array of strings")
     surfaces_list: list[str] = [str(itm) for itm in parsed_list] or ["all"]
 
     start_dt = _parse_iso_dt(start_at)
@@ -252,15 +240,11 @@ async def log_sponsor_impressions(
     game_ids = {it.game_id for it in items}
     sponsor_ids = {it.sponsor_id for it in items}
 
-    res_games = await db.execute(
-        select(models.Game.id).where(models.Game.id.in_(list(game_ids)))
-    )
+    res_games = await db.execute(select(models.Game.id).where(models.Game.id.in_(list(game_ids))))
     found_games = {g for (g,) in await res_games.all()}
     missing_games = [g for g in game_ids if g not in found_games]
     if missing_games:
-        raise HTTPException(
-            status_code=400, detail=f"Unknown game_id(s): {missing_games}"
-        )
+        raise HTTPException(status_code=400, detail=f"Unknown game_id(s): {missing_games}")
 
     res_sps = await db.execute(
         select(models.Sponsor.id).where(models.Sponsor.id.in_(list(sponsor_ids)))
@@ -268,9 +252,7 @@ async def log_sponsor_impressions(
     found_sps = {s for (s,) in await res_sps.all()}
     missing_sps = [s for s in sponsor_ids if s not in found_sps]
     if missing_sps:
-        raise HTTPException(
-            status_code=400, detail=f"Unknown sponsor_id(s): {missing_sps}"
-        )
+        raise HTTPException(status_code=400, detail=f"Unknown sponsor_id(s): {missing_sps}")
 
     rows: list[models.SponsorImpression] = []
     now = dt.datetime.now(UTC)

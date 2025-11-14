@@ -20,9 +20,7 @@ def _get_table(fmt: FormatOvers):
     return load_international_table(int(fmt))
 
 
-def resource_remaining(
-    fmt: FormatOvers, *, balls_left: int, wickets_lost: int
-) -> float:
+def resource_remaining(fmt: FormatOvers, *, balls_left: int, wickets_lost: int) -> float:
     """
     Return the DLS resource percentage remaining for the given match format,
     balls left, and wickets lost.
@@ -34,14 +32,8 @@ def resource_remaining(
     return float(tbl.resource(balls_left=balls_left, wickets_lost=wickets_lost))
 
 
-def calc_target(
-    team1_score: int, team1_res: float, team2_res: float, G50: int = 245
-) -> int:
+def calc_target(team1_score: int, team1_res: float, team2_res: float, G50: int = 245) -> int:
     """
     Standard Edition target calculation wrapper.
     """
-    return int(
-        calculate_dls_target(
-            int(team1_score), float(team1_res), float(team2_res), int(G50)
-        )
-    )
+    return int(calculate_dls_target(int(team1_score), float(team1_res), float(team2_res), int(G50)))

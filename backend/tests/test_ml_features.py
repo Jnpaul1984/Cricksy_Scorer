@@ -2,11 +2,12 @@
 Tests for ML feature engineering
 """
 
-import pytest
 import numpy as np
+import pytest
+
 from backend.services.ml_features import (
-    build_win_predictor_features,
     build_score_predictor_features,
+    build_win_predictor_features,
 )
 
 

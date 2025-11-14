@@ -23,9 +23,7 @@ def _players_on_side(game: models.Game, side: schemas.TeamSide) -> list[dict[str
     return cast(list[dict[str, Any]], team.get("players", []) or [])
 
 
-def _ensure_player_on_team(
-    player_id: str | None, team_players: list[dict[str, Any]]
-) -> bool:
+def _ensure_player_on_team(player_id: str | None, team_players: list[dict[str, Any]]) -> bool:
     if not player_id:
         return True
     return any(p.get("id") == player_id for p in team_players)
@@ -48,12 +46,8 @@ async def set_team_roles(
     players = _players_on_side(game, payload.side)
     if payload.captain_id and not _ensure_player_on_team(payload.captain_id, players):
         raise HTTPException(status_code=400, detail="captain_id not in team players")
-    if payload.wicket_keeper_id and not _ensure_player_on_team(
-        payload.wicket_keeper_id, players
-    ):
-        raise HTTPException(
-            status_code=400, detail="wicket_keeper_id not in team players"
-        )
+    if payload.wicket_keeper_id and not _ensure_player_on_team(payload.wicket_keeper_id, players):
+        raise HTTPException(status_code=400, detail="wicket_keeper_id not in team players")
 
     # Cast to Any so Pylance doesn't treat attributes as Column[...]
     g = cast(Any, game)
@@ -115,8 +109,7 @@ async def add_contributor(
             .where(
                 models.GameContributor.game_id == game_id,
                 models.GameContributor.user_id == body.user_id,
-                models.GameContributor.role
-                == models.GameContributorRoleEnum(role_value),
+                models.GameContributor.role == models.GameContributorRoleEnum(role_value),
             )
             .values(display_name=body.display_name)
             .returning(models.GameContributor)

@@ -9,6 +9,7 @@ These tests verify that the backend correctly handles:
 """
 
 import pytest
+
 from .conftest import GameHelper
 
 

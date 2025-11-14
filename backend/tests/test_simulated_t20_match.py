@@ -1,9 +1,10 @@
 import json
 import os
+
 import backend.main as main  # Import the module to access private functions
-from backend.main import (
+from backend.main import (  # Assuming ConcreteGameState is defined in backend.main
     ConcreteGameState,
-)  # Assuming ConcreteGameState is defined in backend.main
+)
 
 
 def _mk_delivery(

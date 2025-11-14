@@ -9,6 +9,7 @@ Tests complete workflows:
 """
 
 import os
+
 import pytest
 from starlette.testclient import TestClient
 

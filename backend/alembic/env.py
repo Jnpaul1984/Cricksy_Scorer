@@ -1,5 +1,8 @@
+from __future__ import annotations
+
+# ruff: noqa: E402
 import asyncio
-import os  # NEW
+import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path

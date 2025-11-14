@@ -9,6 +9,7 @@ Tests cover:
 """
 
 import pytest
+
 from backend.services import live_bus
 from backend.services.scoring_service import score_one
 

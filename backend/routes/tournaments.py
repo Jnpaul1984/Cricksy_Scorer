@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from backend.sql_app import schemas, tournament_crud
-from backend.sql_app.database import get_db
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.sql_app import schemas, tournament_crud
+from backend.sql_app.database import get_db
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 

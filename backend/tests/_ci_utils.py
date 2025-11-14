@@ -1,11 +1,12 @@
 # From the repo root (Cricksy_Scorer)
 
 import json
-import time
 import os
 import pathlib
-import httpx
+import time
 from urllib.parse import urlsplit
+
+import httpx
 
 if os.getenv("CRICKSY_IN_MEMORY_DB") is None:
     default_api = os.getenv("API_BASE", "http://localhost:8000")
@@ -15,6 +16,7 @@ if os.getenv("CRICKSY_IN_MEMORY_DB") is None:
 _USE_INPROC = os.getenv("CRICKSY_IN_MEMORY_DB") == "1"
 if _USE_INPROC:
     from fastapi.testclient import TestClient
+
     import backend.main as main
 
     _local_client = TestClient(main.fastapi_app)

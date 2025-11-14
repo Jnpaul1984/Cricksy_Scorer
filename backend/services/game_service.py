@@ -64,12 +64,8 @@ async def create_game(
     players_b_list = payload.players_b
     if not players_a_list or not players_b_list:
         per_side = int(payload.players_per_team or 11)
-        players_a_list = players_a_list or [
-            f"PlayerA{i}" for i in range(1, per_side + 1)
-        ]
-        players_b_list = players_b_list or [
-            f"PlayerB{i}" for i in range(1, per_side + 1)
-        ]
+        players_a_list = players_a_list or [f"PlayerA{i}" for i in range(1, per_side + 1)]
+        players_b_list = players_b_list or [f"PlayerB{i}" for i in range(1, per_side + 1)]
 
     team_a: dict[str, Any] = {
         "name": payload.team_a_name,
@@ -85,22 +81,16 @@ async def create_game(
     decision = (payload.decision or "").strip().lower()
     if toss:
         if toss == payload.team_a_name:
-            batting_team_name = (
-                payload.team_a_name if decision == "bat" else payload.team_b_name
-            )
+            batting_team_name = payload.team_a_name if decision == "bat" else payload.team_b_name
         elif toss == payload.team_b_name:
-            batting_team_name = (
-                payload.team_b_name if decision == "bat" else payload.team_a_name
-            )
+            batting_team_name = payload.team_b_name if decision == "bat" else payload.team_a_name
         else:
             batting_team_name = payload.team_a_name
     else:
         batting_team_name = payload.team_a_name
 
     bowling_team_name = (
-        payload.team_b_name
-        if batting_team_name == payload.team_a_name
-        else payload.team_a_name
+        payload.team_b_name if batting_team_name == payload.team_a_name else payload.team_a_name
     )
 
     # Pre-seed scorecards

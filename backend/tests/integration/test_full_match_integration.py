@@ -84,9 +84,7 @@ def test_complete_match_with_wickets(game_helper, assert_helper):
 
     # Post 3 normal deliveries (first over)
     for i in range(3):
-        response = game_helper.post_delivery(
-            batsman_id=striker, bowler_id=bowler1, runs_scored=1
-        )
+        response = game_helper.post_delivery(batsman_id=striker, bowler_id=bowler1, runs_scored=1)
         assert response.status_code == 200
 
     # Post a wicket delivery (4th ball of first over)
@@ -121,9 +119,7 @@ def test_complete_match_with_wickets(game_helper, assert_helper):
     # Second over (6 balls with different bowler)
     for i in range(6):
         batsman = new_batsman if i % 2 == 0 else non_striker
-        response = game_helper.post_delivery(
-            batsman_id=batsman, bowler_id=bowler2, runs_scored=1
-        )
+        response = game_helper.post_delivery(batsman_id=batsman, bowler_id=bowler2, runs_scored=1)
         assert response.status_code == 200
 
     # Start second innings
@@ -267,15 +263,11 @@ def test_match_with_extras(game_helper, assert_helper):
     ]
 
     for extra in extras:
-        response = game_helper.post_delivery(
-            batsman_id=striker, bowler_id=bowler, **extra
-        )
+        response = game_helper.post_delivery(batsman_id=striker, bowler_id=bowler, **extra)
         assert response.status_code == 200
 
     # Post normal delivery
-    response = game_helper.post_delivery(
-        batsman_id=striker, bowler_id=bowler, runs_scored=4
-    )
+    response = game_helper.post_delivery(batsman_id=striker, bowler_id=bowler, runs_scored=4)
     assert response.status_code == 200
 
     # Verify
@@ -370,9 +362,7 @@ def test_match_with_wickets_and_extras(game_helper, assert_helper):
     game_helper.select_next_batsman(new_batsman)
 
     # Post no-ball with runs
-    game_helper.post_delivery(
-        new_batsman, bowler, runs_scored=5, extra_type="nb", runs_off_bat=4
-    )
+    game_helper.post_delivery(new_batsman, bowler, runs_scored=5, extra_type="nb", runs_off_bat=4)
 
     # Post normal delivery
     game_helper.post_delivery(new_batsman, bowler, runs_scored=4)
@@ -397,9 +387,7 @@ def test_innings_transition(game_helper, assert_helper):
 
     # Play first innings (6 balls)
     for i in range(6):
-        response = game_helper.post_delivery(
-            batsman_id=striker, bowler_id=bowler, runs_scored=2
-        )
+        response = game_helper.post_delivery(batsman_id=striker, bowler_id=bowler, runs_scored=2)
         assert response.status_code == 200
 
     # Get snapshot after first innings
@@ -424,9 +412,7 @@ def test_innings_transition(game_helper, assert_helper):
 
     # Play second innings (6 balls)
     for i in range(6):
-        response = game_helper.post_delivery(
-            batsman_id=striker2, bowler_id=bowler2, runs_scored=1
-        )
+        response = game_helper.post_delivery(batsman_id=striker2, bowler_id=bowler2, runs_scored=1)
         assert response.status_code == 200
 
     # Finalize and verify result

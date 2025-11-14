@@ -1,6 +1,6 @@
+import json
 import os
 import pathlib
-import json
 import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
