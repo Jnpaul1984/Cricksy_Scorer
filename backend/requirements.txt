@@ -10,7 +10,7 @@ cffi==1.17.1
 click==8.2.1
 colorama==0.4.6
 cryptography==45.0.5
-ecdsa>=0.19.2
+ecdsa==0.19.1
 fastapi==0.109.1
 flake8==6.1.0
 greenlet==3.2.3
