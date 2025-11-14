@@ -74,33 +74,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate AWS auth inputs
-        id: validate-aws
-        env:
-          ROLE_ARN: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN }}
-          ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          SECRET_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          if [ -z "$ROLE_ARN" ] && ( [ -z "$ACCESS_KEY" ] || [ -z "$SECRET_KEY" ] ); then
-            echo "No AWS credentials are configured for this repository."
-            echo "Either add the secret AWS_GITHUB_DEPLOY_ROLE_ARN (for OIDC role assume) or set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (for secret-based auth)."
-            echo "::error::Missing AWS credentials. Add them at: https://github.com/Jnpaul1984/Cricksy_Scorer/settings/secrets/actions"
-            exit 1
-          fi
-
-      - name: Configure AWS credentials (OIDC role-to-assume)
-        if: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN != '' }}
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Configure AWS credentials (access keys)
-        if: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN == '' }}
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
