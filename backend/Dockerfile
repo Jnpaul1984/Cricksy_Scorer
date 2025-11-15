@@ -29,15 +29,8 @@ RUN set -eux; \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# --- dev-only deps for CI ---
-# File actually lives at backend/requirements-dev.txt in the repo,
-# so we copy it from there into the image.
-COPY backend/requirements-dev.txt .
-
-# Install dev deps only in CI and only if the file exists
-RUN if [ "$ENV" = "ci" ] && [ -f requirements-dev.txt ]; then \
-      pip install --no-cache-dir -r requirements-dev.txt; \
-    fi
+# No dev requirements in the runtime image.
+# Dev/test tooling should be installed in a separate CI step, not in this container.
 
 COPY . .
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
