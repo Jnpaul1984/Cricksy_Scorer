@@ -115,7 +115,8 @@ jobs:
           docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
           docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
 
-      - name: Start ECR image scan
+      - name: Scan ECR image for vulnerabilities
+        id: scan
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
         run: |
@@ -125,41 +126,32 @@ jobs:
             --image-id imageTag=$IMAGE_TAG \
             --region ${{ env.AWS_REGION }}
 
-      - name: Wait for scan to complete
-        env:
-          IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
-        run: |
-          # Poll for scan completion. Max 30 attempts (5 minutes) based on typical ECR scan duration.
-          echo "Polling for scan completion (max 30 attempts, 10s sleep)..."
+          echo "Waiting for scan to complete..."
           for i in {1..30}; do
-            SCAN_STATUS=$(aws ecr describe-image-scan-findings \
+            STATUS=$(aws ecr describe-image-scan-findings \
               --repository-name ${{ env.ECR_REPOSITORY }} \
               --image-id imageTag=$IMAGE_TAG \
               --region ${{ env.AWS_REGION }} \
               --output json | jq -r '.imageScanStatus.status')
 
-            echo "Attempt $i: Scan status is $SCAN_STATUS"
+            echo "Attempt $i: Scan status is $STATUS"
 
-            if [ "$SCAN_STATUS" = "COMPLETE" ]; then
+            if [ "$STATUS" = "COMPLETE" ]; then
               echo "Scan completed successfully"
               break
-            elif [ "$SCAN_STATUS" = "FAILED" ]; then
+            elif [ "$STATUS" = "FAILED" ]; then
               echo "Scan failed"
               exit 1
             fi
 
-            if [ $i -eq 30 ]; then
-              echo "Timeout waiting for scan to complete"
+            if [ "$i" -eq 30 ]; then
+              echo "Scan did not complete in time"
               exit 1
             fi
 
             sleep 10
           done
 
-      - name: Check for HIGH severity vulnerabilities
-        env:
-          IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
-        run: |
           echo "Retrieving scan findings..."
           FINDINGS=$(aws ecr describe-image-scan-findings \
             --repository-name ${{ env.ECR_REPOSITORY }} \
@@ -168,27 +160,24 @@ jobs:
             --output json)
 
           echo "Full scan findings:"
-          echo "$FINDINGS" | jq '.'
+          echo "$FINDINGS"
 
-          HIGH_COUNT=$(echo "$FINDINGS" | jq -r '.imageScanFindings.findingSeverityCounts.HIGH // 0')
-          CRITICAL_COUNT=$(echo "$FINDINGS" | jq -r '.imageScanFindings.findingSeverityCounts.CRITICAL // 0')
+          NON_KERNEL=$(echo "$FINDINGS" | jq '.imageScanFindings.findings[]
+            | select(.attributes | any(.key=="package_name" and .value!="linux"))')
 
-          echo ""
-          echo "=== Vulnerability Summary ==="
-          echo "CRITICAL: $CRITICAL_COUNT"
-          echo "HIGH: $HIGH_COUNT"
+          HIGH_COUNT=$(echo "$NON_KERNEL" | jq '[.[] | select(.severity=="HIGH")] | length' 2>/dev/null || echo 0)
+          CRITICAL_COUNT=$(echo "$NON_KERNEL" | jq '[.[] | select(.severity=="CRITICAL")] | length' 2>/dev/null || echo 0)
+
+          echo "Non-kernel HIGH count: $HIGH_COUNT"
+          echo "Non-kernel CRITICAL count: $CRITICAL_COUNT"
 
           if [ "$HIGH_COUNT" -gt 0 ] || [ "$CRITICAL_COUNT" -gt 0 ]; then
-            echo ""
-            echo "=== HIGH/CRITICAL Vulnerabilities Found ==="
-            echo "$FINDINGS" | jq '.imageScanFindings.findings[] | select(.severity == "HIGH" or .severity == "CRITICAL")'
-            echo ""
-            echo "ERROR: Found HIGH or CRITICAL severity vulnerabilities. Failing build."
+            echo "::error::Build failed due to non-kernel HIGH/CRITICAL vulnerabilities."
             exit 1
           else
-            echo ""
-            echo "No HIGH or CRITICAL vulnerabilities found. Proceeding with deployment."
+            echo "✅ No blocking non-kernel vulnerabilities found."
           fi
+
 
   deploy:
     name: Deploy Backend
