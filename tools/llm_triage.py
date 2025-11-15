@@ -1,8 +1,8 @@
-import os
 import json
+import os
 import pathlib
-import sys
 import subprocess
+import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ARTI = ROOT / "artifacts"

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import sys
+from contextlib import suppress
 from enum import Enum
 from importlib import import_module
-from contextlib import suppress
 from typing import Any, cast
 
 from backend.sql_app import crud, models, schemas
@@ -37,9 +37,7 @@ class InMemoryCrudRepository:
             team_a=team_a,
             team_b=team_b,
             match_type=(
-                game.match_type.value
-                if isinstance(game.match_type, Enum)
-                else str(game.match_type)
+                game.match_type.value if isinstance(game.match_type, Enum) else str(game.match_type)
             ),
             overs_limit=game.overs_limit,
             days_limit=game.days_limit,
@@ -110,9 +108,7 @@ class InMemoryCrudRepository:
                 result_value = json.dumps(result_value, ensure_ascii=False, default=str)
             else:
                 try:
-                    result_value = json.dumps(
-                        result_value, ensure_ascii=False, default=str
-                    )
+                    result_value = json.dumps(result_value, ensure_ascii=False, default=str)
                 except Exception:
                     result_value = str(result_value)
             game_model.result = result_value

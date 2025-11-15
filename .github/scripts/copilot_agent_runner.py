@@ -15,6 +15,7 @@ as a repository secret in GitHub Actions before running the workflow.
 """
 
 from __future__ import annotations
+
 import os
 import sys
 

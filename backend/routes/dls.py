@@ -56,9 +56,7 @@ def _team1_runs(g: Any) -> int:
 
 
 @router.post("/{game_id}/dls/revised-target", response_model=DLSRevisedOut)
-async def dls_revised_target(
-    game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)
-):
+async def dls_revised_target(game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)):
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -87,9 +85,7 @@ async def dls_revised_target(
 
 
 @router.post("/{game_id}/dls/par", response_model=DLSParOut)
-async def dls_par_now(
-    game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)
-):
+async def dls_par_now(game_id: str, body: DLSRequest, db: AsyncSession = Depends(get_db)):
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -109,9 +105,7 @@ async def dls_par_now(
     )
     S1 = _team1_runs(g)
 
-    balls_so_far = int(getattr(g, "overs_completed", 0)) * 6 + int(
-        getattr(g, "balls_this_over", 0)
-    )
+    balls_so_far = int(getattr(g, "overs_completed", 0)) * 6 + int(getattr(g, "balls_this_over", 0))
     wkts_so_far = int(getattr(g, "total_wickets", 0))
 
     R_start = env.table.R(M, 0)
@@ -120,6 +114,4 @@ async def dls_par_now(
 
     par = dlsmod.par_score_now(S1=S1, R1_total=R1_total, R2_used_so_far=R2_used)
     runs_now = int(getattr(g, "total_runs", 0))
-    return DLSParOut(
-        R1_total=R1_total, R2_used=R2_used, S1=S1, par=par, ahead_by=runs_now - par
-    )
+    return DLSParOut(R1_total=R1_total, R2_used=R2_used, S1=S1, par=par, ahead_by=runs_now - par)

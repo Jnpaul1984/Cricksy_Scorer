@@ -12,7 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # NOTE: add crud here so we can honor in-memory mode via dependency overrides
-from backend.sql_app import models, schemas, crud
+from backend.sql_app import crud, models, schemas
 from backend.sql_app.database import get_db  # async generator -> AsyncSession
 
 UTC = getattr(dt, "UTC", dt.UTC)
@@ -34,9 +34,7 @@ class TeamJSON(TypedDict, total=False):
 def _ids_from_team_json(team_json: dict[str, Any] | None) -> set[str]:
     if not team_json:
         return set()
-    players: Sequence[PlayerJSON] = cast(
-        Sequence[PlayerJSON], team_json.get("players") or []
-    )
+    players: Sequence[PlayerJSON] = cast(Sequence[PlayerJSON], team_json.get("players") or [])
     ids: set[str] = set()
     for p in players:
         pid = p.get("id")
@@ -255,9 +253,7 @@ async def get_game_results(
 
     raw = getattr(game, "result", None)
     try:
-        payload: dict[str, Any] = (
-            json.loads(raw) if isinstance(raw, str) else (raw or {})
-        )
+        payload: dict[str, Any] = json.loads(raw) if isinstance(raw, str) else (raw or {})
     except Exception:
         payload = {}
 
@@ -270,9 +266,7 @@ async def get_game_results(
 
     return schemas.MatchResult(
         winner_team_id=str(winner_team_id) if winner_team_id is not None else None,
-        winner_team_name=(
-            str(winner_team_name) if winner_team_name is not None else None
-        ),
+        winner_team_name=(str(winner_team_name) if winner_team_name is not None else None),
         method=payload.get("method"),
         margin=margin,
         result_text=str(result_text) if result_text is not None else None,
@@ -321,9 +315,7 @@ async def post_game_results(
 
         def _team_name(obj: Any, key_json: str, key_legacy: str) -> str:
             try:
-                v = (getattr(obj, key_json, {}) or {}).get("name") or getattr(
-                    obj, key_legacy, None
-                )
+                v = (getattr(obj, key_json, {}) or {}).get("name") or getattr(obj, key_legacy, None)
                 return str(v or "")
             except Exception:
                 return ""
@@ -433,9 +425,7 @@ async def list_game_results(
     # fall back to in-memory CRUD repository when configured.
     rows = None
     try:
-        res = await db.execute(
-            select(models.Game).where(models.Game.result.isnot(None))
-        )
+        res = await db.execute(select(models.Game).where(models.Game.result.isnot(None)))
         # scalars().all() is not awaitable; cast to concrete list for typing
         rows = cast(list[models.Game], res.scalars().all())
     except Exception:

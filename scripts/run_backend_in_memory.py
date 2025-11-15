@@ -20,7 +20,6 @@ for path in (ROOT, BACKEND_DIR):
 
 import backend.main as backend_main  # type: ignore  # noqa: E402
 
-
 # Force the backend to run with the light-weight in-memory CRUD layer.
 os.environ.setdefault("CRICKSY_IN_MEMORY_DB", "1")
 

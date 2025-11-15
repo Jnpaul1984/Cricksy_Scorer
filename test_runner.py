@@ -1,6 +1,8 @@
 import threading
 import time
+
 import requests
+
 import scripts.run_backend_in_memory as runner
 
 thread = threading.Thread(target=runner.main, daemon=True)

@@ -78,12 +78,8 @@ def _team1_resources_completed(g: models.Game, fmt: Literal[20, 50]) -> float:
 
 
 @router.get("/{game_id}/dls/preview", response_model=DLSPreviewOut)
-def dls_preview(
-    game_id: str, G50: int = 245, db: Session = Depends(get_db)
-) -> DLSPreviewOut:
-    g: models.Game | None = (
-        db.query(models.Game).filter(models.Game.id == game_id).first()
-    )
+def dls_preview(game_id: str, G50: int = 245, db: Session = Depends(get_db)) -> DLSPreviewOut:
+    g: models.Game | None = db.query(models.Game).filter(models.Game.id == game_id).first()
     if not g:
         raise HTTPException(404, "Game not found")
     if not getattr(g, "innings1_completed", False):
@@ -108,15 +104,10 @@ def dls_preview(
 
 
 @router.post("/{game_id}/dls/apply", response_model=DLSApplyOut)
-def dls_apply(
-    game_id: str, G50: int = 245, db: Session = Depends(get_db)
-) -> DLSApplyOut:
+def dls_apply(game_id: str, G50: int = 245, db: Session = Depends(get_db)) -> DLSApplyOut:
     # Lock row so two scorers can't apply at the same time
     g: models.Game | None = (
-        db.query(models.Game)
-        .filter(models.Game.id == game_id)
-        .with_for_update()
-        .first()
+        db.query(models.Game).filter(models.Game.id == game_id).with_for_update().first()
     )
     if not g:
         raise HTTPException(404, "Game not found")
@@ -168,9 +159,7 @@ def dls_apply(
 def reduce_overs(
     game_id: str, body: ReduceOversIn, db: Session = Depends(get_db)
 ) -> ReduceOversOut:
-    g: models.Game | None = (
-        db.query(models.Game).filter(models.Game.id == game_id).first()
-    )
+    g: models.Game | None = db.query(models.Game).filter(models.Game.id == game_id).first()
     if not g:
         raise HTTPException(404, "Game not found")
 
