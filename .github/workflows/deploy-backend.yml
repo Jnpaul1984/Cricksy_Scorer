@@ -64,15 +64,16 @@ jobs:
         run: |
           pytest -v
 
-  deploy-backend:
-    name: Deploy Backend
+  build-and-scan:
+    name: Build and Scan Backend Image
     runs-on: ubuntu-latest
     needs: [test-backend-postgres]
     env:
       AWS_REGION: us-east-1
       ECR_REPOSITORY: cricksy-backend
-      ECS_CLUSTER: cricksy-ai-cluster
-      ECS_SERVICE: cricksy-ai-backend-service
+    outputs:
+      image_uri: ${{ steps.build-push.outputs.image_uri }}
+      image_tag: ${{ steps.build-push.outputs.image_tag }}
 
     steps:
       - name: Checkout
@@ -88,20 +89,85 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build backend image
+      - name: Build, tag and push image to ECR
+        id: build-push
         working-directory: backend
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
-          docker build -f Dockerfile -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest .
-          docker tag $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA}
+          set -euo pipefail
+          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          SHORT_SHA=$(echo ${GITHUB_SHA} | cut -c1-12)
+          TAG=${SHORT_SHA}-${TIMESTAMP}
+          IMAGE_URI=${ECR_REGISTRY}/${{ env.ECR_REPOSITORY }}:${TAG}
 
-      - name: Push backend image
-        env:
-          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          echo "Building image ${IMAGE_URI}"
+          docker build -f Dockerfile -t "${IMAGE_URI}" .
+
+          echo "Pushing ${IMAGE_URI}"
+          docker push "${IMAGE_URI}"
+
+          # Also tag and push as latest
+          docker tag "${IMAGE_URI}" "${ECR_REGISTRY}/${{ env.ECR_REPOSITORY }}:latest"
+          docker push "${ECR_REGISTRY}/${{ env.ECR_REPOSITORY }}:latest"
+
+          echo "image_uri=${IMAGE_URI}" >> $GITHUB_OUTPUT
+          echo "image_tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Start ECR image scan
+        id: start-scan
         run: |
-          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
-          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA}
+          set -euo pipefail
+          IMAGE_TAG=${{ steps.build-push.outputs.image_tag }}
+          echo "Starting image scan for tag ${IMAGE_TAG}"
+          aws ecr start-image-scan --repository-name ${{ env.ECR_REPOSITORY }} --image-id imageTag=${IMAGE_TAG} --output json
+
+      - name: Wait for ECR image scan completion and fail if HIGH findings
+        id: wait-scan
+        run: |
+          set -euo pipefail
+          IMAGE_TAG=${{ steps.build-push.outputs.image_tag }}
+
+          echo "Polling ECR scan status for ${IMAGE_TAG}"
+          for i in $(seq 1 30); do
+            RESP=$(aws ecr describe-image-scan-findings --repository-name ${{ env.ECR_REPOSITORY }} --image-id imageTag=${IMAGE_TAG} --output json)
+            STATUS=$(echo "$RESP" | jq -r '.imageScanStatus.status')
+            if [ "$STATUS" = "COMPLETE" ]; then
+              echo "Scan complete"
+              HIGH_COUNT=$(echo "$RESP" | jq '.imageScanFindings.findings | map(select(.severity=="HIGH")) | length')
+              echo "High findings: $HIGH_COUNT"
+              if [ "$HIGH_COUNT" -gt 0 ]; then
+                echo "Failing workflow: high severity vulnerabilities found"
+                echo "$RESP" | jq '.imageScanFindings.findings | map(select(.severity=="HIGH"))'
+                exit 1
+              fi
+              exit 0
+            fi
+            echo "Scan status: $STATUS. Retrying in 10s... ($i/30)"
+            sleep 10
+          done
+          echo "Scan did not complete in time"
+          exit 1
+
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    needs: [build-and-scan]
+    env:
+      AWS_REGION: us-east-1
+      ECR_REPOSITORY: cricksy-backend
+      ECS_CLUSTER: cricksy-ai-cluster
+      ECS_SERVICE: cricksy-ai-backend-service
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Force new ECS deployment
         run: |
@@ -122,6 +188,7 @@ jobs:
           AWS_REGION: ${{ env.AWS_REGION }}
           ECS_CLUSTER: ${{ env.ECS_CLUSTER }}
           ECS_SERVICE: ${{ env.ECS_SERVICE }}
+          LOG_GROUP: /cricksy-ai/api
         run: |
           set -euo pipefail
 
@@ -130,7 +197,7 @@ jobs:
             --cluster "$ECS_CLUSTER" \
             --services "$ECS_SERVICE" \
             --region "$AWS_REGION" \
-            --query 'services[0].events' -o json || true
+            --output json || true
 
           echo
           echo "=== Current service summary (taskDefinition, deployments) ==="
@@ -138,70 +205,59 @@ jobs:
             --cluster "$ECS_CLUSTER" \
             --services "$ECS_SERVICE" \
             --region "$AWS_REGION" \
-            --query 'services[0].[taskDefinition,deployments]' -o json || true
+            --output json \
+            --query 'services[].{taskDefinition:taskDefinition, deployments:deployments}' || true
 
           echo
           echo "=== Stopped tasks for service ==="
-          STOPPED_TASKS=$(aws ecs list-tasks \
+          STOPPED_ARNS=$(aws ecs list-tasks \
             --cluster "$ECS_CLUSTER" \
             --service-name "$ECS_SERVICE" \
             --desired-status STOPPED \
             --region "$AWS_REGION" \
-            --output text || true)
+            --output json \
+            --query 'taskArns[]' || echo "[]")
 
-          if [ -z "${STOPPED_TASKS:-}" ]; then
-            echo "No stopped tasks found"
-            exit 0
-          fi
-
-          echo "Stopped task ARNs: $STOPPED_TASKS"
-          echo
-          echo "=== Describe stopped tasks (stoppedReason, exitCode, containers) ==="
-          aws ecs describe-tasks \
-            --cluster "$ECS_CLUSTER" \
-            --tasks $STOPPED_TASKS \
-            --region "$AWS_REGION" \
-            --query 'tasks[*].{Arn:taskArn,LastStatus:lastStatus,StoppedReason:stoppedReason,Containers:containers}' -o json || true
-
-          echo
-          echo "=== Task definition & logConfiguration (if present) ==="
-          TASK_DEF_ARN=$(aws ecs describe-services \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE" \
-            --region "$AWS_REGION" \
-            --query 'services[0].taskDefinition' --output text || true)
-
-          if [ -n "$TASK_DEF_ARN" ] && [ "$TASK_DEF_ARN" != "None" ]; then
-            aws ecs describe-task-definition \
-              --task-definition "$TASK_DEF_ARN" \
-              --region "$AWS_REGION" \
-              --query 'taskDefinition.containerDefinitions[*].logConfiguration' -o json || true
-
-            # try to locate awslogs group/stream-prefix for the first container
-            LOG_GROUP=$(aws ecs describe-task-definition \
-              --task-definition "$TASK_DEF_ARN" \
-              --region "$AWS_REGION" \
-              --query 'taskDefinition.containerDefinitions[0].logConfiguration.options."awslogs-group"' --output text 2>/dev/null || true)
-
-            LOG_STREAM_PREFIX=$(aws ecs describe-task-definition \
-              --task-definition "$TASK_DEF_ARN" \
-              --region "$AWS_REGION" \
-              --query 'taskDefinition.containerDefinitions[0].logConfiguration.options."awslogs-stream-prefix"' --output text 2>/dev/null || true)
-
-            if [ "$LOG_GROUP" != "None" ] && [ -n "$LOG_GROUP" ]; then
-              echo
-              echo "=== CloudWatch log streams matching stopped tasks (log group: $LOG_GROUP) ==="
-              for arn in $STOPPED_TASKS; do
-                task_id=${arn##*/}
-                aws logs describe-log-streams \
-                  --log-group-name "$LOG_GROUP" \
-                  --query "logStreams[?contains(logStreamName, \`$task_id\`)].logStreamName" -o json --region "$AWS_REGION" || true
-              done
-              echo
-              echo "If you want to fetch events from a matching log stream, add logs:GetLogEvents and logs:DescribeLogStreams to the deploy role and I can expand this step to print recent events."
-            else
-              echo "No awslogs configuration found in task definition or unable to determine log group."
-            fi
+          if [ -z "$STOPPED_ARNS" ] || [ "$STOPPED_ARNS" = "[]" ] || [ "$STOPPED_ARNS" = "null" ]; then
+            echo "No stopped tasks"
           else
-            echo "No taskDefinition ARN found for the service."
+            echo "Stopped task ARNs: $STOPPED_ARNS"
+
+            echo "=== Describe stopped tasks (stoppedReason, exitCode, containers) ==="
+            TASK_ARNS=$(echo "$STOPPED_ARNS" | jq -r '.[]' | tr '\n' ' ')
+            if [ -n "$TASK_ARNS" ]; then
+              aws ecs describe-tasks \
+                --cluster "$ECS_CLUSTER" \
+                --tasks $TASK_ARNS \
+                --region "$AWS_REGION" \
+                --output json \
+                --query 'tasks[].{taskArn:taskArn, stoppedReason:stoppedReason, stoppedAt:stoppedAt, containers:containers[*].{name:name,exitCode:exitCode,reason:reason}}' || true
+
+              TD_ARN=$(aws ecs describe-tasks \
+                --cluster "$ECS_CLUSTER" \
+                --tasks $TASK_ARNS \
+                --region "$AWS_REGION" \
+                --output json \
+                --query 'tasks[0].taskDefinitionArn' || echo "null")
+
+              TD_ARN=$(echo "$TD_ARN" | jq -r '.' 2>/dev/null || echo "null")
+
+              if [ -n "$TD_ARN" ] && [ "$TD_ARN" != "null" ]; then
+                echo "Task definition: $TD_ARN"
+                aws ecs describe-task-definition \
+                  --task-definition "$TD_ARN" \
+                  --region "$AWS_REGION" \
+                  --output json || true
+              fi
+
+              # If log permissions exist, print last events of the most recent log stream
+              echo "=== CloudWatch log streams matching stopped tasks (log group: $LOG_GROUP) ==="
+              aws logs describe-log-streams \
+                --log-group-name "$LOG_GROUP" \
+                --order-by LastEventTime \
+                --descending \
+                --limit 5 \
+                --region "$AWS_REGION" \
+                --output json || echo "Unable to access CloudWatch logs"
+            fi
           fi
