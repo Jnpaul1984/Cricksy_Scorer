@@ -1,46 +1,14 @@
-# VCS
 .git
-.gitignore
-.gitattributes
-
-# Python
-__pycache__/
-*.py[cod]
+__pycache__
+*.pyc
 *.pyo
 *.pyd
-*.so
-*.egg-info/
-.eggs/
-.pytest_cache/
-.mypy_cache/
-.venv/
-venv/
-.venv*/
-site/
-
-# Node / Frontend
-node_modules/
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
-frontend/.cache/
-
-# Editor/OS
-.DS_Store
-Thumbs.db
-
-# Coverage / Artifacts / Reports
-.coverage
-coverage.xml
-htmlcov/
-artifacts/
-reports/
-
-# Misc
 .env
 .env.*
+.vscode
+.idea
 *.log
-
-# Tests (exclude from image)
-backend/tests/
-backend/tests/**
+dist
+build
+node_modules
+frontend/node_modules
