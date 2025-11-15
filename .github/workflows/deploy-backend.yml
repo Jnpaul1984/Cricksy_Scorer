@@ -52,7 +52,7 @@ jobs:
         working-directory: .
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
-          PYTHONPATH: ${{ github.workspace }}
+          PYTHONPATH: ${{ github.workspace }}/backend
         run: |
           alembic -c backend/alembic.ini upgrade head
 
@@ -60,7 +60,7 @@ jobs:
         working-directory: .
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
-          PYTHONPATH: ${{ github.workspace }}/backend
+          PYTHONPATH: ${{ github.workspace }}/backend/backend
         run: |
           pytest -v
 
