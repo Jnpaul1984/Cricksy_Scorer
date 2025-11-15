@@ -26,11 +26,12 @@ RUN set -eux; \
       echo "No known package manager found; skipping curl install"; \
     fi
 
-COPY requirements.txt .
+# Install backend dependencies: requirements live in backend/
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# No dev requirements in the runtime image.
-# Dev/test tooling should be installed in a separate CI step, not in this container.
+# Copy only the backend app code into /app
+COPY backend/ .
 
-COPY . .
+# Uvicorn will now find /app/main.py -> module "main"
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
