@@ -178,6 +178,8 @@ jobs:
         --services "$ECS_SERVICE" \
         --region "$AWS_REGION"
 
-     
+     name: Wait for service to stabilize
+        run: |
+          aws ecs wait services-stable \
             --cluster ${{ env.ECS_CLUSTER }} \
             --services ${{ env.ECS_SERVICE }}
