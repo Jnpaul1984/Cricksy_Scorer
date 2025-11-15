@@ -11,11 +11,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN set -eux; \
     if command -v apt-get >/dev/null 2>&1; then \
       apt-get update; \
+      # Upgrade installed packages (pick up distro security fixes) \
       apt-get -y --no-install-recommends upgrade; \
+      # Install curl, ca-certificates and build tools (ensure package present) \
       apt-get -y --no-install-recommends install curl ca-certificates build-essential; \
+      # Try to explicitly upgrade curl package if a newer candidate exists (do not fail build if no candidate) \
       apt-get -y --only-upgrade install curl || true; \
       rm -rf /var/lib/apt/lists/*; \
     elif command -v apk >/dev/null 2>&1; then \
+      # Alpine: install/upgrade curl and ca-certificates \
       apk update && apk add --no-cache curl ca-certificates build-base; \
       apk upgrade curl || true; \
     else \
@@ -26,8 +30,14 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # --- dev-only deps for CI ---
-COPY requirements-dev.txt .
-RUN if [ "$ENV" = "ci" ]; then pip install --no-cache-dir -r requirements-dev.txt; fi
+# File actually lives at backend/requirements-dev.txt in the repo,
+# so we copy it from there into the image.
+COPY backend/requirements-dev.txt .
+
+# Install dev deps only in CI and only if the file exists
+RUN if [ "$ENV" = "ci" ] && [ -f requirements-dev.txt ]; then \
+      pip install --no-cache-dir -r requirements-dev.txt; \
+    fi
 
 COPY . .
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
