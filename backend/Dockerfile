@@ -26,12 +26,12 @@ RUN set -eux; \
       echo "No known package manager found; skipping curl install"; \
     fi
 
-# Install backend dependencies: requirements live in backend/
+# Install backend dependencies (requirements live in backend/)
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy only the backend app code into /app
-COPY backend/ .
+# Preserve the backend package structure inside the container
+COPY backend/ ./backend
 
-# Uvicorn will now find /app/main.py -> module "main"
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start the FastAPI app from the backend package
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
