@@ -1,0 +1,50 @@
+SAMPLE CRICKET SCORECARD
+========================
+
+Match: Team A vs Team B
+Format: T20
+Date: 2024-11-10
+Venue: Test Ground
+
+TEAM A - 1st Innings
+---------------------
+Player Name         Runs  Balls  4s  6s  SR
+J. Smith            45    32     6   1   140.62
+M. Johnson          28    21     3   2   133.33
+R. Williams         12    15     1   0   80.00
+S. Brown            67    48     8   3   139.58
+T. Davis            23    18     2   1   127.78
+Extras              15
+Total               190/4 (20.0 overs)
+
+Fall of Wickets: 78/1, 102/2, 145/3, 190/4
+
+Bowling: Team B
+P. Wilson           4-0-35-1
+A. Taylor           4-0-42-2
+K. Anderson         4-0-38-0
+L. Thomas           4-0-40-1
+M. Roberts          4-0-35-0
+
+TEAM B - 2nd Innings
+---------------------
+Player Name         Runs  Balls  4s  6s  SR
+P. Wilson           34    28     4   1   121.43
+A. Taylor           52    38     6   2   136.84
+K. Anderson         19    16     2   0   118.75
+L. Thomas           41    32     5   1   128.12
+M. Roberts          28    18     3   1   155.56
+Extras              12
+Total               186/4 (20.0 overs)
+
+Fall of Wickets: 65/1, 89/2, 142/3, 186/4
+
+Bowling: Team A
+J. Smith            4-0-38-1
+M. Johnson          4-0-36-2
+R. Williams         4-0-44-0
+S. Brown            4-0-35-1
+T. Davis            4-0-33-0
+
+Result: Team A won by 4 runs
+Player of the Match: S. Brown (67 runs, 1 wicket)
