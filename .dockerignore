@@ -12,3 +12,6 @@ dist
 build
 node_modules
 frontend/node_modules
+
+# IMPORTANT: always include backend in the Docker build context
+!backend
