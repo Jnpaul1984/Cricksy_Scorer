@@ -7,8 +7,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     ENV=ci
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl build-essential && rm -rf /var/lib/apt/lists/*
+# Ensure curl and ca-certificates are present and up-to-date on common bases.
+# Note: This defensive approach supports both Debian (apt-get) and Alpine (apk)
+# base images, even though the current base (python:3.12-slim) is Debian-based.
+RUN set -eux; \
+    if command -v apt-get >/dev/null 2>&1; then \
+      apt-get update && apt-get install -y --no-install-recommends curl ca-certificates build-essential && rm -rf /var/lib/apt/lists/*; \
+    elif command -v apk >/dev/null 2>&1; then \
+      apk add --no-cache curl ca-certificates build-base; \
+    else \
+      echo "No known package manager found; skipping curl install"; \
+    fi
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
