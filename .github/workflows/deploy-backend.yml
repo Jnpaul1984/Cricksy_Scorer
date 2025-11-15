@@ -54,7 +54,7 @@ jobs:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           PYTHONPATH: ${{ github.workspace }}
         run: |
-          alembic upgrade head
+          alembic -c backend/alembic.ini upgrade head
 
       - name: Run backend tests
         working-directory: .
