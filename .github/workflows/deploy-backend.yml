@@ -69,116 +69,44 @@ jobs:
       ECR_REPOSITORY: cricksy-backend
       ECS_CLUSTER: cricksy-ai-cluster
       ECS_SERVICE: cricksy-ai-backend-service
-      TASK_FAMILY: cricksy-ai-backend
-      CONTAINER_NAME: backend
-      
+
     steps:
-  - name: Checkout
-    uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Configure AWS credentials
-    uses: aws-actions/configure-aws-credentials@v4
-    with:
-      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      aws-region: ${{ env.AWS_REGION }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-  - name: Login to Amazon ECR
-    id: ecr-login
-    uses: aws-actions/amazon-ecr-login@v2
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
 
-  - name: Build, tag and push image (use immutable tag = github.sha)
-    id: build-push
-    working-directory: backend
-    env:
-      ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-    run: |
-      set -euo pipefail
-      IMAGE_TAG=${{ github.sha }}
-      FULL_IMAGE=${ECR_REGISTRY}/${{ env.ECR_REPOSITORY }}:${IMAGE_TAG}
+      - name: Build backend image
+        working-directory: backend
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker build -f Dockerfile -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest .
+          docker tag $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA}
 
-      echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
-      echo "FULL_IMAGE=$FULL_IMAGE" >> $GITHUB_OUTPUT
+      - name: Push backend image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA}
 
-      # ensure repository exists
-      if ! aws ecr describe-repositories --repository-names "${{ env.ECR_REPOSITORY }}" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
-        aws ecr create-repository --repository-name "${{ env.ECR_REPOSITORY }}" --region "${{ env.AWS_REGION }}"
-      fi
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment
 
-      # build and push the tagged image
-      docker build -f Dockerfile -t "${{ env.ECR_REPOSITORY }}:${IMAGE_TAG}" .
-      docker tag "${{ env.ECR_REPOSITORY }}:${IMAGE_TAG}" "${FULL_IMAGE}"
-      docker push "${FULL_IMAGE}"
-
-  - name: Register new task definition with the image tag
-    id: register-task-def
-    env:
-      IMAGE_URI: ${{ steps.build-push.outputs.FULL_IMAGE }}
-    run: |
-      set -euo pipefail
-
-      TASK_FAMILY="${{ env.TASK_FAMILY }}"
-      CONTAINER_NAME="${{ env.CONTAINER_NAME }}"
-      IMAGE="${{ env.IMAGE_URI }}"
-      REGION="${{ env.AWS_REGION }}"
-
-      echo "Registering new task definition for family: $TASK_FAMILY with image: $IMAGE"
-
-      aws ecs describe-task-definition --task-definition "$TASK_FAMILY" --region "$REGION" > taskdef.json
-
-      # build new task definition JSON, set the container image and ensure PYTHONPATH env var exists
-      jq --arg image "$IMAGE" --arg container "$CONTAINER_NAME" '
-        .taskDefinition
-        | {
-            family: .family,
-            networkMode: .networkMode,
-            containerDefinitions:
-              (.containerDefinitions
-                | map(
-                    if .name == $container then .image = $image else . end
-                  )
-                | map(
-                    .environment =
-                      ( ( .environment // [] )
-                        | map(select(.name != "PYTHONPATH"))
-                        + [{ name: "PYTHONPATH", value: "/app" }]
-                      )
-                  )
-              ),
-            volumes: .volumes,
-            taskRoleArn: .taskRoleArn,
-            executionRoleArn: .executionRoleArn,
-            requiresCompatibilities: .requiresCompatibilities,
-            cpu: .cpu,
-            memory: .memory
-          }' taskdef.json > new-taskdef.json
-
-      aws ecs register-task-definition --cli-input-json file://new-taskdef.json --region "$REGION" > registered.json
-      TASK_DEF_ARN=$(jq -r '.taskDefinition.taskDefinitionArn' registered.json)
-      echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
-
-  - name: Update ECS service to new task definition and wait until stable
-    env:
-      ECS_CLUSTER: ${{ env.ECS_CLUSTER }}
-      ECS_SERVICE: ${{ env.ECS_SERVICE }}
-      AWS_REGION: ${{ env.AWS_REGION }}
-    run: |
-      set -euo pipefail
-      TASK_DEF_ARN="${{ steps.register-task-def.outputs.task_def_arn }}"
-      echo "Updating service $ECS_SERVICE on cluster $ECS_CLUSTER to use $TASK_DEF_ARN"
-      aws ecs update-service \
-        --cluster "$ECS_CLUSTER" \
-        --service "$ECS_SERVICE" \
-        --task-definition "$TASK_DEF_ARN" \
-        --force-new-deployment \
-        --region "$AWS_REGION"
-
-      aws ecs wait services-stable \
-        --cluster "$ECS_CLUSTER" \
-        --services "$ECS_SERVICE" \
-        --region "$AWS_REGION"
-
-     name: Wait for service to stabilize
+      - name: Wait for service to stabilize
         run: |
           aws ecs wait services-stable \
             --cluster ${{ env.ECS_CLUSTER }} \
