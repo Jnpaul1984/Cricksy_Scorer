@@ -46,11 +46,24 @@ echo "Fetching current task definition..."
 aws ecs describe-task-definition --task-definition "${TASK_FAMILY}" --region "$AWS_REGION" > taskdef.json
 
 echo "Updating container image..."
-jq --arg image "$FULL_IMAGE" --arg container "$CONTAINER_NAME" \
-  '.taskDefinition | {
+jq --arg image "$FULL_IMAGE" --arg container "$CONTAINER_NAME" --arg py "/app" '
+  .taskDefinition
+  | {
       family: .family,
       networkMode: .networkMode,
-      containerDefinitions: (.containerDefinitions | map(if .name == $container then .image = $image else . end)),
+      containerDefinitions:
+        (.containerDefinitions
+         | map(
+             if .name == $container then .image = $image else . end
+           )
+         | map(
+             .environment =
+               ( ( .environment // [] )
+                 | map(select(.name != "PYTHONPATH"))
+                 + [{ name: "PYTHONPATH", value: $py }]
+               )
+           )
+        ),
       volumes: .volumes,
       taskRoleArn: .taskRoleArn,
       executionRoleArn: .executionRoleArn,
@@ -58,6 +71,7 @@ jq --arg image "$FULL_IMAGE" --arg container "$CONTAINER_NAME" \
       cpu: .cpu,
       memory: .memory
     }' taskdef.json > new-taskdef.json
+
 
 echo "Registering new task definition..."
 aws ecs register-task-definition --cli-input-json file://new-taskdef.json --region "$AWS_REGION" > registered-taskdef.json
