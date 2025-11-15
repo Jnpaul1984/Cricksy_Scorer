@@ -1,5 +1,3 @@
-﻿Set-Location C:\Users\SRLF\Cricksy_Scorer
-@'
 #!/usr/bin/env bash
 set -euo pipefail
 AWS_REGION="${AWS_REGION:-us-east-1}"
@@ -8,13 +6,13 @@ ECR_REPOSITORY="${ECR_REPOSITORY:-cricksy-backend}"
 IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD)}"
 TASK_FAMILY="${TASK_FAMILY:-cricksy-ai-backend}"
 CONTAINER_NAME="${CONTAINER_NAME:-backend}"
-ECS_CLUSTER="${ECS_CLUSTER:-cricksy-ai-backend-cluster}"
+ECS_CLUSTER="${ECS_CLUSTER:-cricksy-ai-cluster}"
 ECS_SERVICE="${ECS_SERVICE:-cricksy-ai-backend-service}"
 CREATE_WORKFLOW="${CREATE_WORKFLOW:-no}"
 
 command -v aws >/dev/null || { echo "aws CLI not found"; exit 1; }
 command -v docker >/dev/null || { echo "docker not found"; exit 1; }
-command -v jq >/div>null || { echo "jq not found"; exit 1; }
+command -v jq >/dev/null || { echo "jq not found"; exit 1; }
 
 echo "AWS region: $AWS_REGION"
 echo "ECR registry: $ECR_REGISTRY"

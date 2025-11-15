@@ -1,0 +1,58 @@
+{
+  "family": "cricksy-ai-backend",
+  "networkMode": "awsvpc",
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "365183982031.dkr.ecr.us-east-1.amazonaws.com/cricksy-backend:8e6a6e3",
+      "cpu": 0,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "BACKEND_CORS_ORIGINS",
+          "value": "https://cricksy-ai.web.app,https://app.cricksy-ai.com,https://api.cricksy-ai.com,http://localhost:5173"
+        },
+        {
+          "name": "PYTHONPATH",
+          "value": "C:/Program Files/Git/app"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:365183982031:secret:cricksy-ai/db-url-Z78VB5"
+        },
+        {
+          "name": "APP_SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:365183982031:secret:cricksy-ai/app-secret-key-azyzM8"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/cricksy-ai/api",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "backend"
+        }
+      },
+      "systemControls": []
+    }
+  ],
+  "volumes": [],
+  "taskRoleArn": "arn:aws:iam::365183982031:role/cricksy-ai-ecs-task",
+  "executionRoleArn": "arn:aws:iam::365183982031:role/cricksy-ai-ecs-task-exec",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024"
+}
