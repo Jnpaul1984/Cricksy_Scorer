@@ -92,7 +92,7 @@ jobs:
       - name: Build deterministic image tag
         id: tag
         run: |
-          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-12)
+          SHORT_SHA=${GITHUB_SHA:0:12}
           TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
           IMAGE_TAG="${SHORT_SHA}-${TIMESTAMP}"
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
@@ -129,6 +129,7 @@ jobs:
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
         run: |
+          # Poll for scan completion. Max 30 attempts (5 minutes) based on typical ECR scan duration.
           echo "Polling for scan completion (max 30 attempts, 10s sleep)..."
           for i in {1..30}; do
             SCAN_STATUS=$(aws ecr describe-image-scan-findings \
