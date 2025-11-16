@@ -5,6 +5,11 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+def _bool_env(env_key: str, default: str = "0") -> bool:
+    """Parse boolean environment variable."""
+    return os.getenv(env_key, default).lower() in ("1", "true", "yes", "on")
+
+
 # Resolve relative to backend/ directory
 _ROOT = Path(__file__).resolve().parent
 
@@ -78,6 +83,21 @@ class Settings(BaseSettings):
     @property
     def backend_cors_origins(self) -> str:
         return self.BACKEND_CORS_ORIGINS
+
+    # Feature Flags (default enabled in development)
+    ENABLE_UPLOADS: bool = _bool_env("ENABLE_UPLOADS", "1")
+    ENABLE_OCR: bool = _bool_env("ENABLE_OCR", "1")
+
+    # Upload Settings
+    S3_UPLOAD_BUCKET: str = os.getenv("S3_UPLOAD_BUCKET", "cricksy-uploads")
+    MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
+
+    # Worker Settings (Celery + Redis)
+    CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+    CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+
+    # Redis for Socket.IO adapter
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/1")
 
 
 settings = Settings()

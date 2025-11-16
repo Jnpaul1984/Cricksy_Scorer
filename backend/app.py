@@ -38,6 +38,7 @@ from backend.routes.players import router as players_router
 from backend.routes.prediction import router as prediction_router
 from backend.routes.sponsors import router as sponsors_router
 from backend.routes.tournaments import router as tournaments_router
+from backend.routes.uploads import router as uploads_router  # NEW
 from backend.services.live_bus import set_socketio_server as _set_bus_sio
 
 # Socket handlers and live bus
@@ -228,8 +229,29 @@ def create_app(
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
 
+    # Configure Socket.IO with optional Redis adapter
+    client_manager = None
+    if hasattr(settings, "REDIS_URL") and settings.REDIS_URL:
+        try:
+            # Try to use Redis adapter for multi-server Socket.IO
+            import redis
+            from socketio import AsyncRedisManager
+
+            redis_url = settings.REDIS_URL
+            logging.info(f"Configuring Socket.IO with Redis adapter: {redis_url}")
+            client_manager = AsyncRedisManager(redis_url)
+        except ImportError:
+            logging.warning(
+                "Redis adapter requested but dependencies not available. "
+                "Install with: pip install redis"
+            )
+        except Exception as e:
+            logging.warning(f"Failed to configure Redis adapter: {e}")
+
     _sio = socketio.AsyncServer(
-        async_mode="asgi", cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS
+        async_mode="asgi",
+        cors_allowed_origins=settings.SIO_CORS_ALLOWED_ORIGINS,
+        client_manager=client_manager,  # NEW: Add Redis adapter if available
     )  # type: ignore[call-arg]
     sio = _sio
     fastapi_app = FastAPI(title=settings.API_TITLE)
@@ -279,6 +301,7 @@ def create_app(
     fastapi_app.include_router(prediction_router)
     fastapi_app.include_router(players_router)
     fastapi_app.include_router(tournaments_router)
+    fastapi_app.include_router(uploads_router)  # NEW
 
     # Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
     use_in_memory = bool(getattr(settings, "IN_MEMORY_DB", False)) or (
