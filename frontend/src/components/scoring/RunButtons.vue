@@ -19,6 +19,7 @@ const emit = defineEmits<{
 }>()
 
 const gameStore = useGameStore()
+const proTooltip = 'Requires Coach Pro or Organization Pro'
 
 /** Local UI state */
 const submitting = ref(false)
@@ -78,7 +79,7 @@ async function score(runs: number) {
         type="button"
         :disabled="isDisabled"
         :aria-disabled="isDisabled ? 'true' : 'false'"
-        :title="isDisabled ? 'Select striker, non-striker (different) and bowler first' : `Record ${runs} run${runs===1?'':'s'}`"
+        :title="!canScore ? proTooltip : isDisabled ? 'Select striker, non-striker (different) and bowler first' : `Record ${runs} run${runs===1?'':'s'}`"
         :class="['run-button', `runs-${runs}`]"
         @click="score(runs)"
       >

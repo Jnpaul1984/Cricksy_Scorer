@@ -4,6 +4,10 @@ import type { AuthUser, UserRole } from '@/types/auth';
 import { getCurrentUser, logout as authLogout } from '@/services/auth';
 import { getStoredToken, setStoredToken } from '@/services/api';
 
+const SCORING_ROLES: ReadonlyArray<UserRole> = ['coach_pro', 'org_pro', 'superuser'];
+const ANALYTICS_ROLES: ReadonlyArray<UserRole> = ['analyst_pro', 'org_pro', 'superuser'];
+const TOURNAMENT_ROLES: ReadonlyArray<UserRole> = ['org_pro', 'superuser'];
+
 function isUnauthorizedError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   const status = (err as { status?: number }).status;
@@ -17,48 +21,34 @@ export const useAuthStore = defineStore('auth', {
     loading: false,
   }),
   getters: {
+    currentUser: (state): AuthUser | null => state.user,
     isLoggedIn: (state) => Boolean(state.user),
     role: (state): UserRole | null => state.user?.role ?? null,
-    isFreeUser(): boolean {
-      return this.role === 'free';
-    },
-    isPlayerPro(): boolean {
-      return this.role === 'player_pro';
-    },
-    isCoachPro(): boolean {
-      return this.role === 'coach_pro';
-    },
-    isAnalystPro(): boolean {
-      return this.role === 'analyst_pro';
-    },
-    isOrgPro(): boolean {
-      return this.role === 'org_pro';
-    },
-    isSuperuser(): boolean {
-      return this.role === 'superuser';
-    },
+    is: (state) => (role: UserRole) => (state.user?.role ?? null) === role,
+    isFreeUser: (state) => !state.user || state.user.role === 'free',
+    isPlayerPro: (state) => state.user?.role === 'player_pro',
+    isCoachPro: (state) => state.user?.role === 'coach_pro',
+    isAnalystPro: (state) => state.user?.role === 'analyst_pro',
+    isOrgPro: (state) => state.user?.role === 'org_pro',
+    isSuperuser: (state) => state.user?.role === 'superuser',
+    canScore: (state) => SCORING_ROLES.includes((state.user?.role ?? 'free') as UserRole),
+    canAnalyze: (state) => ANALYTICS_ROLES.includes((state.user?.role ?? 'free') as UserRole),
+    canManageTournaments: (state) => TOURNAMENT_ROLES.includes((state.user?.role ?? 'free') as UserRole),
     // Legacy helpers used across the app
-    isOrg(): boolean {
-      return this.isOrgPro;
-    },
-    isCoach(): boolean {
-      return this.isCoachPro;
-    },
-    isAnalyst(): boolean {
-      return this.isAnalystPro;
-    },
-    isPlayer(): boolean {
-      return this.isPlayerPro;
-    },
-    isSuper(): boolean {
-      return this.isSuperuser;
-    },
+    isOrg: (state) => state.user?.role === 'org_pro',
+    isCoach: (state) => state.user?.role === 'coach_pro',
+    isAnalyst: (state) => state.user?.role === 'analyst_pro',
+    isPlayer: (state) => state.user?.role === 'player_pro',
+    isSuper: (state) => state.user?.role === 'superuser',
   },
   actions: {
     hasAnyRole(roles: UserRole[]): boolean {
-      const currentRole = this.role;
+      const currentRole = this.user?.role ?? null;
       if (!currentRole) return false;
       return roles.includes(currentRole);
+    },
+    requireRole(...roles: UserRole[]): boolean {
+      return this.hasAnyRole(roles);
     },
     async loadUser() {
       const storedToken = getStoredToken();

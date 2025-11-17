@@ -50,7 +50,6 @@ const {
 const hasAnalyticsAccess = computed(
   () => Boolean(isOrgPro.value || isAnalystPro.value || isSuperuser.value),
 )
-const isBasicPlan = computed(() => Boolean(isFreeUser.value || isPlayerPro.value))
 
 
 /* Read ?apiBase=... so Cypress can point this view at the backend */
@@ -424,31 +423,11 @@ const shotMapDeliveries = computed(() => {
 </script>
 
 <template>
-  <section class="analytics-access">
-    <div v-if="!isLoggedIn" class="access-banner info">
-      <p>
-        Sign in with an Org Pro or Analyst Pro account to unlock full analytics.
-        You can still use basic scoring without an account.
-        <RouterLink to="/login" class="link-inline">Sign in</RouterLink>
-      </p>
-    </div>
-    <div v-else-if="isBasicPlan" class="access-banner warn">
-      <p>
-        You're currently on a player plan. Advanced analytics are reserved for Org Pro
-        and Analyst Pro accounts.
-      </p>
-    </div>
-  </section>
-
-  <section v-if="!hasAnalyticsAccess" class="locked-analytics">
-    <p>Upgrade to Org Pro or Analyst Pro to view team trend breakdowns.</p>
-    <p class="hint">Scoring, scoreboards, and match viewing remain available to everyone.</p>
-  </section>
-
+\n
   <main v-if="hasAnalyticsAccess" class="container analytics">
     <header class="analytics-header">
       <h1>Match Analytics</h1>
-      <span v-if="hasAnalyticsAccess" class="access-chip">Access: {{ role }}</span>
+      <span class="access-chip">Access: {{ role || 'analyst_pro' }}</span>
     </header>
 
     <section class="card">
@@ -601,6 +580,11 @@ const shotMapDeliveries = computed(() => {
       </div>
     </section>
   </main>
+  <section v-else class="analytics-locked-full">
+    <h1>Analytics is restricted to Analyst Pro or higher.</h1>
+    <p>Sign in with an Analyst Pro, Organization Pro, or Superuser account to unlock these insights.</p>
+    <RouterLink to="/login" class="login-link">Sign in</RouterLink>
+  </section>
 </template>
 
 <style scoped>
@@ -614,8 +598,6 @@ const shotMapDeliveries = computed(() => {
 .access-banner.info { background: #eef2ff; color: #1e3a8a; }
 .access-banner.warn { background: #fffbea; color: #92400e; }
 .access-chip { background: #ecfdf5; color: #047857; padding: 0.35rem 0.75rem; border-radius: 999px; font-size: 0.9rem; }
-.link-inline { margin-left: 0.25rem; color: #1d4ed8; text-decoration: underline; }
-.locked-analytics { max-width: 700px; margin: 1rem auto; padding: 1.5rem; text-align: center; border: 1px dashed #cbd5f5; border-radius: 12px; background: #f8fafc; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .shot-map-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; list-style: none; padding: 0; margin: 0; }
 .shot-map-list li { display: flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -637,4 +619,7 @@ const shotMapDeliveries = computed(() => {
 .summary { margin-top: 8px; font-size: 13px; }
 .empty { color: #6b7280; font-size: 13px; }
 .hint { display: block; margin-top: 8px; color: #6b7280; font-size: 12px; }
+
+.analytics-locked-full { min-height: 70vh; display: grid; gap: 12px; place-items: center; text-align: center; padding: 2rem; color: #1e293b; }
+.login-link { color: #1d4ed8; text-decoration: underline; font-weight: 600; }
 </style>

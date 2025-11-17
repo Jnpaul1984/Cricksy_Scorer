@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="tournament-dashboard">
     <div class="tournament-banner info" v-if="!isLoggedIn">
       View-only mode. Sign in with an Org Pro account to create and manage tournaments.

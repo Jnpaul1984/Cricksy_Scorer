@@ -1,16 +1,21 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { reactive, computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router'
 
 import PlayersEditor from '@/components/PlayersEditor.vue'
+import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import type { GameState } from '@/types'
 import { getErrorMessage } from '@/utils/api'
 
 const router = useRouter()
 const game = useGameStore()
+const auth = useAuthStore()
 const creating = ref(false)
 const errorMsg = ref<string | null>(null)
+const canCreateMatch = computed(() => auth.requireRole('org_pro', 'superuser'))
+const isCoachAccount = computed(() => auth.role === 'coach_pro')
+const contributorInvitePath = '/contributors/invite'
 
 type Form = {
   team_a_name: string
@@ -36,7 +41,7 @@ const form = reactive<Form>({
   decision: 'bat',
 })
 
-// ✅ arrays controlled by PlayersEditor
+// âœ… arrays controlled by PlayersEditor
 const playersA = ref<string[]>([])
 const playersB = ref<string[]>([])
 
@@ -48,6 +53,10 @@ const canSubmit = computed(() => {
 
 async function onSubmit() {
   if (!canSubmit.value || creating.value) return
+  if (!canCreateMatch.value) {
+    errorMsg.value = 'Only Organization Pro or Superuser accounts can create matches.'
+    return
+  }
   creating.value = true
   errorMsg.value = null
   try {
@@ -78,7 +87,16 @@ async function onSubmit() {
 
 <template>
   <div class="setup">
-    <div class="card">
+    <div v-if="!canCreateMatch" class="access-banner">
+      <p v-if="isCoachAccount">
+        Coach Pro accounts can join as scorers via the contributor invite flow.
+        <RouterLink :to="contributorInvitePath">Open contributor invite</RouterLink>
+      </p>
+      <p v-else>
+        Only Organization Pro or Superuser accounts can create matches. Please upgrade to continue.
+      </p>
+    </div>
+    <div class="card" :aria-disabled="!canCreateMatch">
       <h2>Create Match</h2>
 
       <form class="form" @submit.prevent="onSubmit">
@@ -93,7 +111,7 @@ async function onSubmit() {
           </div>
         </div>
 
-        <!-- 🎯 New players editors -->
+        <!-- ðŸŽ¯ New players editors -->
         <div class="row">
           <PlayersEditor
             v-model="playersA"
@@ -150,7 +168,7 @@ async function onSubmit() {
           <div>
             <label>Toss Winner</label>
             <select v-model="form.toss_winner_team">
-              <option value="">— select —</option>
+              <option value="">â€” select â€”</option>
               <option v-if="form.team_a_name" :value="form.team_a_name">{{ form.team_a_name }}</option>
               <option v-if="form.team_b_name" :value="form.team_b_name">{{ form.team_b_name }}</option>
             </select>
@@ -167,12 +185,12 @@ async function onSubmit() {
 
         <div class="actions">
           <button class="primary" type="submit" :disabled="!canSubmit || creating">
-            {{ creating ? 'Creating…' : 'Create New Match' }}
+            {{ creating ? 'Creatingâ€¦' : 'Create New Match' }}
           </button>
         </div>
 
         <div v-if="errorMsg" class="error">
-          ❌ {{ errorMsg }}
+          âŒ {{ errorMsg }}
         </div>
       </form>
     </div>
@@ -181,6 +199,7 @@ async function onSubmit() {
 
 <style scoped>
 .setup{min-height:100vh;padding:2rem;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
+.access-banner{max-width:900px;margin:0 auto 1rem;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:14px;padding:1rem;color:#fff;line-height:1.4}
 .card{max-width:900px;margin:0 auto;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:18px;padding:1.25rem}
 h2{color:#fff;margin:0 0 1rem}
 .form{display:block}
@@ -192,6 +211,7 @@ input,select{padding:.7rem;border-radius:10px;border:1px solid rgba(255,255,255,
 .actions{display:flex;justify-content:flex-end;margin-top:1rem}
 .primary{background:linear-gradient(135deg,#f44336,#b71c1c);color:#fff;border:none;padding:.9rem 1.4rem;border-radius:28px;cursor:pointer;font-weight:700}
 .primary:disabled{opacity:.6;cursor:not-allowed}
+.invite-link{margin-left:1rem;color:#fff;text-decoration:underline}
 .error{margin-top:.75rem;color:#ffb3b3}
 @media(max-width:800px){.two{grid-template-columns:1fr}}
 </style>

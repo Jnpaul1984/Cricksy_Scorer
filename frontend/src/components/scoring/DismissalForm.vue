@@ -32,6 +32,7 @@ const emit = defineEmits<{
 }>()
 
 const gameStore = useGameStore()
+const proTooltip = 'Requires Coach Pro or Organization Pro'
 
 const dismissalType = ref<DismissalType>('bowled')
 const dismissed = ref<'striker' | 'non_striker'>('striker')
@@ -158,7 +159,14 @@ async function submit() {
       ></textarea>
     </div>
 
-    <button class="submit" :disabled="!canSubmit" @click="submit">Record Wicket</button>
+    <button
+      class="submit"
+      :disabled="!canSubmit"
+      :title="!canScore ? proTooltip : !canSubmit ? 'Select striker, non-striker, bowler, and dismissal first' : undefined"
+      @click="submit"
+    >
+      Record Wicket
+    </button>
   </div>
 </template>
 

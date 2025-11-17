@@ -1,7 +1,8 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 
+import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { API_BASE } from '@/utils/api'
 
@@ -16,6 +17,22 @@ const KEY = (id: string) => `cricksy.xi.${id}`
 const route = useRoute()
 const router = useRouter()
 const game = useGameStore()
+const auth = useAuthStore()
+const redirectTarget = computed(() => route.fullPath || `/game/${gameId.value}/select-xi`)
+
+async function ensureScorerAccess(): Promise<boolean> {
+  if (auth.token && !auth.user && !auth.loading) {
+    try { await auth.loadUser() } catch { /* ignore */ }
+  }
+  if (!auth.requireRole('coach_pro', 'org_pro', 'superuser')) {
+    await router.replace({
+      path: '/login',
+      query: { redirect: redirectTarget.value },
+    })
+    return false
+  }
+  return true
+}
 
 const gameId = computed(() => (route.params.gameId as string) || '')
 const loading = ref(true)
@@ -179,6 +196,8 @@ async function continueToScoring() {
 
 
 onMounted(async () => {
+  const allowed = await ensureScorerAccess()
+  if (!allowed) return
   if (!gameId.value) return router.replace('/')
   try {
     if (!game.currentGame || gameId.value !== game.currentGame.id) {
@@ -197,12 +216,12 @@ onMounted(async () => {
 <template>
   <div class="wrap">
     <div class="header">
-      <RouterLink to="/" class="back">← Back</RouterLink>
+      <RouterLink to="/" class="back">â† Back</RouterLink>
       <h2>Select Playing XI</h2>
       <div class="spacer"></div>
     </div>
 
-    <div v-if="loading" class="loading">Loading match…</div>
+    <div v-if="loading" class="loading">Loading matchâ€¦</div>
     <div v-else-if="!game.currentGame" class="error">No match found.</div>
     <div v-else class="grid">
       <section class="team">
@@ -279,12 +298,12 @@ onMounted(async () => {
 
     </div>
 
-    <div v-if="errorMsg" class="error">❌ {{ errorMsg }}</div>
+    <div v-if="errorMsg" class="error">âŒ {{ errorMsg }}</div>
 
     <div v-if="game.currentGame" class="actions">
       <button class="secondary" @click="$router.replace('/')">Cancel</button>
       <button class="primary" :disabled="!canContinue || saving" @click="continueToScoring">
-        {{ saving ? 'Saving…' : 'Save & Continue' }}
+        {{ saving ? 'Savingâ€¦' : 'Save & Continue' }}
       </button>
     </div>
   </div>
