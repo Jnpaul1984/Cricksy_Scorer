@@ -10,9 +10,44 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.config import ConfigDict
 
+from backend.sql_app.models import RoleEnum
+
 UTC = getattr(dt, "UTC", dt.UTC)
 TeamItem: TypeAlias = str | UUID | Mapping[str, object]  # noqa: UP040
 ExtraCode = Literal["wd", "nb", "b", "lb"]
+
+
+class UserBase(BaseModel):
+    email: str
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+class UserRead(UserBase):
+    id: str
+    is_active: bool
+    is_superuser: bool
+    role: RoleEnum
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    user_id: str | None = None
+    email: str | None = None
+
+
+class UserRoleUpdate(BaseModel):
+    role: RoleEnum
+
+
 # ===================================================================
 # Base & Re-usable Models
 # ===================================================================

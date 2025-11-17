@@ -48,6 +48,38 @@ class GameContributorRoleEnum(str, enum.Enum):
     analytics = "analytics"
 
 
+class RoleEnum(str, enum.Enum):
+    free = "free"
+    player_pro = "player_pro"
+    coach_pro = "coach_pro"
+    analyst_pro = "analyst_pro"
+    org_pro = "org_pro"
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    email: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    role: Mapped[RoleEnum] = mapped_column(
+        SAEnum(RoleEnum, name="user_role"),
+        default=RoleEnum.free,
+        server_default=RoleEnum.free.value,
+        nullable=False,
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 # -----------------------------
 # Helpers for safe JSON defaults
 # (avoid default={} or default=[])
@@ -488,7 +520,6 @@ class PlayerAchievement(Base):
     player_profile: Mapped[PlayerProfile] = relationship(back_populates="achievements")
 
     __table_args__ = (
-        Index("ix_player_achievements_player_id", "player_id"),
         Index("ix_player_achievements_type", "achievement_type"),
         Index("ix_player_achievements_earned_at", "earned_at"),
     )
@@ -559,10 +590,7 @@ class TournamentTeam(Base):
     # Relationships
     tournament: Mapped[Tournament] = relationship(back_populates="teams")
 
-    __table_args__ = (
-        Index("ix_tournament_teams_tournament_id", "tournament_id"),
-        Index("ix_tournament_teams_points", "points"),
-    )
+    __table_args__ = (Index("ix_tournament_teams_points", "points"),)
 
 
 class Fixture(Base):
@@ -607,7 +635,6 @@ class Fixture(Base):
     tournament: Mapped[Tournament] = relationship(back_populates="fixtures")
 
     __table_args__ = (
-        Index("ix_fixtures_tournament_id", "tournament_id"),
         Index("ix_fixtures_status", "status"),
         Index("ix_fixtures_scheduled_date", "scheduled_date"),
     )

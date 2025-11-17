@@ -21,6 +21,7 @@ from backend.middleware.observability import (  # NEW
     AccessLogMiddleware,
     CorrelationIdMiddleware,
 )
+from backend.routes.auth_router import router as auth_router
 from backend.routes.dls import router as dls_router
 from backend.routes.game_admin import router as game_admin_router
 from backend.routes.gameplay import get_db as gameplay_get_db
@@ -38,6 +39,7 @@ from backend.routes.players import router as players_router
 from backend.routes.prediction import router as prediction_router
 from backend.routes.sponsors import router as sponsors_router
 from backend.routes.tournaments import router as tournaments_router
+from backend.routes.users_router import router as users_router
 from backend.services.live_bus import set_socketio_server as _set_bus_sio
 
 # Socket handlers and live bus
@@ -267,6 +269,7 @@ def create_app(
     _set_bus_sio(sio)
 
     # Include routers
+    fastapi_app.include_router(auth_router)
     fastapi_app.include_router(games_dls_router)
     fastapi_app.include_router(interruptions_router)
     fastapi_app.include_router(games_router)
@@ -279,6 +282,7 @@ def create_app(
     fastapi_app.include_router(prediction_router)
     fastapi_app.include_router(players_router)
     fastapi_app.include_router(tournaments_router)
+    fastapi_app.include_router(users_router)
 
     # Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
     use_in_memory = bool(getattr(settings, "IN_MEMORY_DB", False)) or (

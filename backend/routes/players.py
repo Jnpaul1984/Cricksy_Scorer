@@ -11,6 +11,7 @@ from sqlalchemy import Float, cast, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend import security
 from backend.sql_app.database import get_db
 from backend.sql_app.models import AchievementType, PlayerAchievement, PlayerProfile
 from backend.sql_app.schemas import (
@@ -121,7 +122,11 @@ async def get_player_achievements(
     ]
 
 
-@router.post("/{player_id}/achievements", response_model=PlayerAchievementResponse)
+@router.post(
+    "/{player_id}/achievements",
+    response_model=PlayerAchievementResponse,
+    dependencies=[security.coach_or_org_required],
+)
 async def award_achievement(
     player_id: str,
     payload: AwardAchievementRequest,
@@ -171,7 +176,11 @@ async def award_achievement(
     )
 
 
-@router.get("/leaderboard", response_model=LeaderboardResponse)
+@router.get(
+    "/leaderboard",
+    response_model=LeaderboardResponse,
+    dependencies=[security.analyst_or_org_required],
+)
 async def get_leaderboard(
     metric: Literal[
         "batting_average",
