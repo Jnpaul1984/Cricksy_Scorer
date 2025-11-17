@@ -8,12 +8,18 @@
 import { io, Socket } from "socket.io-client";
 
 import type { ScoreUpdatePayload } from "./api";
-import { API_BASE } from "./api";
 
-const SOCKET_URL =
+const LIVE_SOCKET_PATH = "/ws/live";
+const BASE_SOCKET_URL =
   import.meta.env.VITE_SOCKET_URL ||
-  API_BASE ||
-  (typeof window !== "undefined" ? window.location.origin : "");
+  (typeof window !== "undefined" ? window.location.origin : "") ||
+  "";
+
+const SOCKET_URL = (() => {
+  const trimmed = BASE_SOCKET_URL.replace(/\/+$/, "");
+  if (!trimmed) return LIVE_SOCKET_PATH;
+  return trimmed.endsWith(LIVE_SOCKET_PATH) ? trimmed : `${trimmed}${LIVE_SOCKET_PATH}`;
+})();
 
 export type LiveEvents = {
   /** Emitted by server after a successful delivery POST and recompute */
