@@ -8,7 +8,8 @@ import App from './App.vue'
 import router from './router'
 
 import pinia from '@/stores'
-import { API_BASE } from '@/services/api';
+import { API_BASE, setUnauthorizedHandler } from '@/services/api';
+import { useAuthStore } from '@/stores/authStore';
 
 // Global styles first (safe to keep here)
 import '@picocss/pico/css/pico.min.css'
@@ -23,6 +24,14 @@ if (!mountEl.__vue_app__) {
   // Plugins
   app.use(pinia)
   app.use(router)
+
+  const authStore = useAuthStore(pinia)
+  setUnauthorizedHandler(() => {
+    authStore.logout()
+    if (router.currentRoute.value.path !== '/login') {
+      router.push('/login')
+    }
+  })
 
   // Global error handler
   app.config.errorHandler = (error, instance, info) => {

@@ -8,6 +8,7 @@ import PartnershipHeatmap from '@/components/analytics/PartnershipHeatmap.vue'
 import PhaseSplits from '@/components/analytics/PhaseSplits.vue'
 import RunRateComparison from '@/components/analytics/RunRateComparison.vue'
 import WagonWheel from '@/components/analytics/WagonWheel.vue'
+import { useAuthStore } from '@/stores/authStore'
 
 type UUID = string
 
@@ -35,6 +36,7 @@ const results = ref<Array<{ id: UUID; team_a_name: string; team_b_name: string; 
 const selectedId = ref<UUID>('' as UUID)
 const snapshot = ref<any | null>(null)
 const deliveries = ref<Delivery[]>([])
+const auth = useAuthStore()
 
 /* Read ?apiBase=... so Cypress can point this view at the backend */
 function apiBase(): string {
@@ -407,6 +409,7 @@ const shotMapDeliveries = computed(() => {
 </script>
 
 <template>
+  <section v-if="auth.isOrg || auth.isAnalyst || auth.isSuper">
   <main class="container analytics">
     <h1>Match Analytics</h1>
 
@@ -560,6 +563,10 @@ const shotMapDeliveries = computed(() => {
       </div>
     </section>
   </main>
+  </section>
+  <section v-else class="no-access">
+    <p>Analytics are available for analyst, organization, or admin accounts.</p>
+  </section>
 </template>
 
 <style scoped>
@@ -588,4 +595,5 @@ const shotMapDeliveries = computed(() => {
 .summary { margin-top: 8px; font-size: 13px; }
 .empty { color: #6b7280; font-size: 13px; }
 .hint { display: block; margin-top: 8px; color: #6b7280; font-size: 12px; }
+.no-access { max-width: 600px; margin: 3rem auto; padding: 2rem; text-align: center; color: #475569; }
 </style>

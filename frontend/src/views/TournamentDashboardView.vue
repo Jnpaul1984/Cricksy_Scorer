@@ -1,5 +1,5 @@
 <template>
-  <div class="tournament-dashboard">
+  <div v-if="auth.isOrg || auth.isSuper" class="tournament-dashboard">
     <div class="header">
       <h1>Tournament Dashboard</h1>
       <button @click="showCreateModal = true" class="btn-primary">Create Tournament</button>
@@ -69,14 +69,19 @@
       </div>
     </div>
   </div>
+  <div v-else class="no-access">
+    <p>You do not have access to tournament management on this account.</p>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import apiService from '@/utils/api'
+import { useAuthStore } from '@/stores/authStore'
 
 const router = useRouter()
+const auth = useAuthStore()
 const tournaments = ref<any[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -332,5 +337,13 @@ onMounted(() => {
   gap: 1rem;
   justify-content: flex-end;
   margin-top: 1.5rem;
+}
+
+.no-access {
+  max-width: 600px;
+  margin: 3rem auto;
+  padding: 2rem;
+  text-align: center;
+  color: #666;
 }
 </style>

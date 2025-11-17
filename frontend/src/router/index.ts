@@ -1,5 +1,8 @@
 import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router'
 
+import { useAuthStore } from '@/stores/authStore'
+import { getStoredToken } from '@/services/api'
+
 // Choose routing strategy at build/deploy time
 // - history (default): clean URLs like /game/123/scoring (needs server fallback to index.html)
 // - hash: URLs like /#/game/123/scoring (works on any static host)
@@ -90,12 +93,10 @@ const router = createRouter({
 })
 
 // ---------------------------------------------------------------------------
-// Legacy hash-link fallback when running in HISTORY mode
-// If someone visits a URL like "/#/embed/<id>?theme=dark" (older share links),
-// transparently redirect to the proper route so they don't land on the Setup page.
+// Legacy hash-link fallback when running in HISTORY mode + RBAC protections
 // ---------------------------------------------------------------------------
-if (ROUTER_MODE !== 'hash') {
-  router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
+  if (ROUTER_MODE !== 'hash') {
     // Only intervene on the very first navigation to "/" when a hash is present
     if ((to.fullPath === '/' || to.name === 'setup') && typeof window !== 'undefined') {
       const raw = window.location.hash || '' // e.g. "#/embed/abc?theme=dark"
@@ -116,8 +117,34 @@ if (ROUTER_MODE !== 'hash') {
         }
       }
     }
-    next()
-  })
-}
+  }
+
+  const auth = useAuthStore()
+
+  if (!auth.token) {
+    const storedToken = getStoredToken()
+    if (storedToken) {
+      auth.$patch({ token: storedToken })
+    }
+  }
+
+  if (!auth.user && auth.token) {
+    await auth.loadUser()
+  }
+
+  const orgProtected = ['/tournaments', '/analytics']
+  const isOrgProtected = orgProtected.some(prefix => to.path.startsWith(prefix))
+
+  if (isOrgProtected) {
+    if (!auth.isLoggedIn) {
+      return next({ path: '/login', query: { redirect: to.fullPath } })
+    }
+    if (!auth.isOrg && !auth.isSuper) {
+      return next('/')
+    }
+  }
+
+  return next()
+})
 
 export default router
