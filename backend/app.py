@@ -32,6 +32,7 @@ from backend.routes.games_core import router as games_core_router  # NEW
 from backend.routes.games_dls import router as games_dls_router
 
 # Routers
+from backend.routes.coach_pro import router as coach_pro_router
 from backend.routes.games_router import router as games_router
 from backend.routes.health import router as health_router
 from backend.routes.interruptions import router as interruptions_router
@@ -281,6 +282,7 @@ def create_app(
     fastapi_app.include_router(games_core_router)
     fastapi_app.include_router(prediction_router)
     fastapi_app.include_router(players_router)
+    fastapi_app.include_router(coach_pro_router)
     fastapi_app.include_router(tournaments_router)
     fastapi_app.include_router(users_router)
 

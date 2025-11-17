@@ -766,6 +766,54 @@ class PlayerSummaryRead(PlayerSummaryBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CoachPlayerAssignmentBase(BaseModel):
+    coach_user_id: str
+    player_profile_id: str
+
+
+class CoachPlayerAssignmentCreate(CoachPlayerAssignmentBase):
+    pass
+
+
+class CoachPlayerAssignmentRead(CoachPlayerAssignmentBase):
+    id: str
+    is_active: bool
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CoachingSessionBase(BaseModel):
+    scheduled_at: dt.datetime
+    duration_minutes: int
+    focus_area: str
+    notes: str | None = None
+    outcome: str | None = None
+
+
+class CoachingSessionCreate(CoachingSessionBase):
+    coach_user_id: str | None = None
+
+
+class CoachingSessionUpdate(BaseModel):
+    scheduled_at: dt.datetime | None = None
+    duration_minutes: int | None = None
+    focus_area: str | None = None
+    notes: str | None = None
+    outcome: str | None = None
+
+
+class CoachingSessionRead(CoachingSessionBase):
+    id: str
+    coach_user_id: str
+    player_profile_id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class AwardAchievementRequest(BaseModel):
     """Request schema for awarding an achievement to a player."""
 
