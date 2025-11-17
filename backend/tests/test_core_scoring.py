@@ -8,6 +8,8 @@ Tests cover:
 - Score calculation accuracy
 """
 
+from copy import deepcopy
+
 import pytest
 
 from backend.services import live_bus
@@ -199,6 +201,87 @@ def test_score_one_no_ball_delivery():
     assert g.balls_this_over == 0  # No balls don't add to balls count
 
 
+def test_clean_over_six_legal_balls():
+    """Ensure a full over of legal balls has correct totals and run rate."""
+    g = MockGame()
+    outcomes = [0, 1, 2, 3, 4, 6]
+
+    for runs in outcomes:
+        score_one(
+            g,
+            striker_id="p1",
+            non_striker_id="p2",
+            bowler_id="p3",
+            runs_scored=runs,
+            extra=None,
+            is_wicket=False,
+            dismissal_type=None,
+            dismissed_player_id=None,
+        )
+
+    assert g.total_runs == sum(outcomes)
+    assert g.overs_completed == 1
+    assert g.balls_this_over == 0
+    assert g.pending_new_over is True
+    run_rate = g.total_runs / max(g.overs_completed, 1)
+    assert pytest.approx(run_rate, rel=1e-6) == 16.0
+
+
+def test_wides_and_no_balls_respect_ball_counts_and_extras():
+    """Cover wides/no-balls flow to ensure extras & legal balls are tracked."""
+    g = MockGame()
+
+    wide_delivery = score_one(
+        g,
+        striker_id="p1",
+        non_striker_id="p2",
+        bowler_id="p3",
+        runs_scored=2,
+        extra="wd",
+        is_wicket=False,
+        dismissal_type=None,
+        dismissed_player_id=None,
+    )
+    assert wide_delivery["extra_type"] == "wd"
+    assert wide_delivery["extra_runs"] == 2
+    assert wide_delivery["runs_scored"] == 2
+    assert g.balls_this_over == 0
+
+    no_ball_delivery = score_one(
+        g,
+        striker_id="p1",
+        non_striker_id="p2",
+        bowler_id="p3",
+        runs_scored=2,
+        extra="nb",
+        is_wicket=False,
+        dismissal_type=None,
+        dismissed_player_id=None,
+    )
+    assert no_ball_delivery["extra_type"] == "nb"
+    assert no_ball_delivery["runs_off_bat"] == 2
+    assert no_ball_delivery["runs_scored"] == 3
+    assert g.balls_this_over == 0  # Still no legal ball recorded
+
+    legal_delivery = score_one(
+        g,
+        striker_id="p1",
+        non_striker_id="p2",
+        bowler_id="p3",
+        runs_scored=1,
+        extra=None,
+        is_wicket=False,
+        dismissal_type=None,
+        dismissed_player_id=None,
+    )
+    assert legal_delivery["runs_off_bat"] == 1
+    assert legal_delivery["ball_number"] == 1  # First legal ball of the over
+
+    assert g.total_runs == 6  # 2 (wd) + 3 (nb) + 1 (legal)
+    assert g.balls_this_over == 1
+    assert g.current_striker_id == "p2"  # Strike rotated on the single
+
+
 def test_score_one_wicket_delivery():
     """Test scoring a wicket delivery."""
     g = MockGame()
@@ -226,6 +309,73 @@ def test_score_one_wicket_delivery():
     assert g.total_runs == 0
     assert g.balls_this_over == 1
     assert g.pending_new_batter is True
+
+
+def test_wicket_marks_batter_out_and_retains_strike_until_replaced():
+    """Ensure wicket flow keeps striker on strike until a new batter arrives."""
+    g = MockGame()
+
+    delivery = score_one(
+        g,
+        striker_id="p1",
+        non_striker_id="p2",
+        bowler_id="p3",
+        runs_scored=0,
+        extra=None,
+        is_wicket=True,
+        dismissal_type="caught",
+        dismissed_player_id="p1",
+    )
+
+    assert delivery["dismissal_type"] == "caught"
+    assert g.pending_new_batter is True
+    assert g.current_striker_id == "p1"  # Awaiting replacement
+    assert g.current_non_striker_id == "p2"
+    assert g.batting_scorecard["p1"]["is_out"] is True
+
+
+def test_wicket_on_last_ball_of_over_sets_correct_state():
+    """Last ball wicket should still finish the over and flag pending batter."""
+    g = MockGame()
+
+    for _ in range(5):
+        score_one(
+            g,
+            striker_id="p1",
+            non_striker_id="p2",
+            bowler_id="p3",
+            runs_scored=1,
+            extra=None,
+            is_wicket=False,
+            dismissal_type=None,
+            dismissed_player_id=None,
+        )
+
+    assert g.balls_this_over == 5
+    assert g.overs_completed == 0
+
+    wicket_delivery = score_one(
+        g,
+        striker_id="p1",
+        non_striker_id="p2",
+        bowler_id="p3",
+        runs_scored=0,
+        extra=None,
+        is_wicket=True,
+        dismissal_type="bowled",
+        dismissed_player_id="p1",
+    )
+
+    assert wicket_delivery["ball_number"] == 6
+    assert g.overs_completed == 1
+    assert g.balls_this_over == 0
+    assert g.pending_new_over is True
+    assert g.pending_new_batter is True
+    assert g.current_bowler_id is None
+    assert g.last_ball_bowler_id == "p3"
+    # Striker stays the dismissed batter until replacement arrives
+    assert g.current_striker_id == "p1"
+    assert g.current_non_striker_id == "p2"
 
 
 def test_score_one_complete_over():
@@ -413,6 +563,88 @@ def test_undo_wicket_delivery():
     # Verify state restored
     assert g.pending_new_batter is False
     assert g.balls_this_over == 0
+
+
+def test_service_level_undo_replays_deliveries_like_backend():
+    """Mirror backend undo logic: replay ledger without last delivery."""
+    g = MockGame()
+    recorded: list[dict] = []
+
+    def _record(**kwargs):
+        delivery = score_one(g, **kwargs)
+        recorded.append(delivery)
+        return delivery
+
+    _record(
+        striker_id="p1",
+        non_striker_id="p2",
+        bowler_id="p3",
+        runs_scored=4,
+        extra=None,
+        is_wicket=False,
+        dismissal_type=None,
+        dismissed_player_id=None,
+    )
+    _record(
+        striker_id="p1",
+        non_striker_id="p2",
+        bowler_id="p3",
+        runs_scored=1,
+        extra=None,
+        is_wicket=False,
+        dismissal_type=None,
+        dismissed_player_id=None,
+    )
+
+    expected_runs = g.total_runs
+    expected_balls = g.balls_this_over
+    expected_striker = g.current_striker_id
+    expected_non_striker = g.current_non_striker_id
+    expected_scorecard = deepcopy(g.batting_scorecard)
+
+    # Third delivery is a wicket we plan to undo
+    _record(
+        striker_id="p1",
+        non_striker_id="p2",
+        bowler_id="p3",
+        runs_scored=0,
+        extra=None,
+        is_wicket=True,
+        dismissal_type="bowled",
+        dismissed_player_id="p1",
+    )
+    assert g.pending_new_batter is True
+    assert g.batting_scorecard["p1"]["is_out"] is True
+
+    trimmed = recorded[:-1]
+    replay = MockGame()
+    for entry in trimmed:
+        extra_type = entry["extra_type"]
+        if extra_type == "nb":
+            replay_runs = entry["runs_off_bat"]
+        elif extra_type in ("wd", "b", "lb"):
+            replay_runs = entry["extra_runs"]
+        else:
+            replay_runs = entry["runs_off_bat"]
+
+        score_one(
+            replay,
+            striker_id=entry["striker_id"],
+            non_striker_id=entry["non_striker_id"],
+            bowler_id=entry["bowler_id"],
+            runs_scored=replay_runs,
+            extra=extra_type,
+            is_wicket=entry["is_wicket"],
+            dismissal_type=entry["dismissal_type"],
+            dismissed_player_id=entry["dismissed_player_id"],
+        )
+
+    assert replay.total_runs == expected_runs
+    assert replay.balls_this_over == expected_balls
+    assert replay.current_striker_id == expected_striker
+    assert replay.current_non_striker_id == expected_non_striker
+    assert replay.pending_new_batter is False
+    assert replay.batting_scorecard["p1"] == expected_scorecard["p1"]
 
 
 @pytest.mark.asyncio
