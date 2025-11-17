@@ -16,14 +16,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import { API_BASE } from '@/utils/api'
+import { useGameStore } from '@/stores/gameStore'
 
 const route = useRoute()
 const gameId = computed(() => String(route.params.gameId))
+const gameStore = useGameStore()
 
 const q = route.query
 const theme = (q.theme as string) === 'dark' ? 'dark'
@@ -38,6 +40,14 @@ const sponsorClickable = String(q.sponsorClickable ?? 'false') === 'true'
 
 const fallbackOrigin = typeof window !== 'undefined' ? window.location.origin : ''
 const apiBase = ((q.apiBase as string) || API_BASE || fallbackOrigin).replace(/\/$/, '')
+
+onMounted(() => {
+  gameStore.setPublicViewerMode(true)
+})
+
+onBeforeUnmount(() => {
+  gameStore.setPublicViewerMode(false)
+})
 </script>
 
 <style scoped>

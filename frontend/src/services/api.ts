@@ -85,14 +85,19 @@ export function getErrorMessage(err: unknown): string {
 
 export type TossDecision = 'bat' | 'bowl';
 
+type ApiRequestOptions = RequestInit & {
+  /** If true, do NOT attach the Authorization header even if a token is present. */
+  noAuth?: boolean;
+};
+
 /** Low-level fetch wrapper that preserves JSON errors from FastAPI. */
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: ApiRequestOptions): Promise<T> {
   const method = (init?.method || 'GET').toUpperCase()
   const hasBody = init?.body !== undefined && init?.body !== null
   const isForm = typeof FormData !== 'undefined' && init?.body instanceof FormData
   const isUrlParams = typeof URLSearchParams !== 'undefined' && init?.body instanceof URLSearchParams
   const isJSONish = hasBody && !isForm && !isUrlParams && typeof init?.body === 'string'
-  const authHeader = getAuthHeader()
+  const authHeader = init?.noAuth ? null : getAuthHeader()
 
   const res = await fetch(url(path), {
     // For GETs, make results uncacheable so live UI always sees fresh data.
@@ -127,6 +132,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (res.status === 204) return undefined as unknown as T
   return (await res.json()) as T
+}
+
+export function apiRequestPublic<T>(
+  path: string,
+  init?: RequestInit
+): Promise<T> {
+  const base: ApiRequestOptions = init ? { ...init } : {}
+  base.noAuth = true
+  return request<T>(path, base)
 }
 
 export { request as apiRequest };
