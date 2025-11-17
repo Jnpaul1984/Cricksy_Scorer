@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 
-import type { AuthUser } from '@/types/auth';
+import type { AuthUser, UserRole } from '@/types/auth';
 import { getCurrentUser, logout as authLogout } from '@/services/auth';
 import { getStoredToken, setStoredToken } from '@/services/api';
 
@@ -18,24 +18,48 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isLoggedIn: (state) => Boolean(state.user),
-    role: (state) => state.user?.role ?? 'free',
-    isOrg(): boolean {
-      return this.role === 'org_pro';
+    role: (state): UserRole | null => state.user?.role ?? null,
+    isFreeUser(): boolean {
+      return this.role === 'free';
     },
-    isCoach(): boolean {
-      return this.role === 'coach_pro';
-    },
-    isAnalyst(): boolean {
-      return this.role === 'analyst_pro';
-    },
-    isPlayer(): boolean {
+    isPlayerPro(): boolean {
       return this.role === 'player_pro';
     },
-    isSuper(): boolean {
+    isCoachPro(): boolean {
+      return this.role === 'coach_pro';
+    },
+    isAnalystPro(): boolean {
+      return this.role === 'analyst_pro';
+    },
+    isOrgPro(): boolean {
+      return this.role === 'org_pro';
+    },
+    isSuperuser(): boolean {
       return this.role === 'superuser';
+    },
+    // Legacy helpers used across the app
+    isOrg(): boolean {
+      return this.isOrgPro;
+    },
+    isCoach(): boolean {
+      return this.isCoachPro;
+    },
+    isAnalyst(): boolean {
+      return this.isAnalystPro;
+    },
+    isPlayer(): boolean {
+      return this.isPlayerPro;
+    },
+    isSuper(): boolean {
+      return this.isSuperuser;
     },
   },
   actions: {
+    hasAnyRole(roles: UserRole[]): boolean {
+      const currentRole = this.role;
+      if (!currentRole) return false;
+      return roles.includes(currentRole);
+    },
     async loadUser() {
       const storedToken = getStoredToken();
       this.token = storedToken;

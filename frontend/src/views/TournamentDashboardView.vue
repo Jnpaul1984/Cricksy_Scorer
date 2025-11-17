@@ -1,8 +1,31 @@
 <template>
-  <div v-if="auth.isOrg || auth.isSuper" class="tournament-dashboard">
+  <div class="tournament-dashboard">
+    <div class="tournament-banner info" v-if="!isLoggedIn">
+      View-only mode. Sign in with an Org Pro account to create and manage tournaments.
+      <RouterLink to="/login" class="link-inline">Sign in</RouterLink>
+    </div>
+    <div class="tournament-banner warn" v-else-if="!canManageTournaments">
+      Tournament management is reserved for Org Pro and Superuser accounts.
+    </div>
+    <div class="tournament-banner success" v-else>
+      You're managing tournaments as {{ auth.role || 'org_pro' }}.
+    </div>
+
     <div class="header">
       <h1>Tournament Dashboard</h1>
-      <button @click="showCreateModal = true" class="btn-primary">Create Tournament</button>
+      <div class="header-actions">
+        <button
+          class="btn-primary"
+          @click="openCreateModal"
+          :disabled="!canManageTournaments"
+          :title="!canManageTournaments ? managementHint : undefined"
+        >
+          Create Tournament
+        </button>
+        <small v-if="!canManageTournaments && isLoggedIn" class="hint-inline">
+          {{ managementHint }}
+        </small>
+      </div>
     </div>
 
     <div v-if="loading" class="loading">Loading tournaments...</div>
@@ -33,7 +56,7 @@
     </div>
 
     <!-- Create Tournament Modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
+    <div v-if="showCreateModal && canManageTournaments" class="modal-overlay" @click.self="showCreateModal = false">
       <div class="modal">
         <h2>Create Tournament</h2>
         <form @submit.prevent="createTournament">
@@ -63,25 +86,25 @@
           </div>
           <div class="modal-actions">
             <button type="button" @click="showCreateModal = false" class="btn-secondary">Cancel</button>
-            <button type="submit" class="btn-primary">Create</button>
+            <button type="submit" class="btn-primary" :disabled="!canManageTournaments">Create</button>
           </div>
         </form>
       </div>
     </div>
   </div>
-  <div v-else class="no-access">
-    <p>You do not have access to tournament management on this account.</p>
-  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import apiService from '@/utils/api'
 import { useAuthStore } from '@/stores/authStore'
 
 const router = useRouter()
 const auth = useAuthStore()
+const canManageTournaments = computed(() => auth.hasAnyRole(['org_pro', 'superuser']))
+const isLoggedIn = computed(() => auth.isLoggedIn)
+const managementHint = 'Tournament management is reserved for Org Pro accounts.'
 const tournaments = ref<any[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -106,7 +129,19 @@ async function loadTournaments() {
   }
 }
 
+function openCreateModal() {
+  if (!canManageTournaments.value) {
+    alert(managementHint)
+    return
+  }
+  showCreateModal.value = true
+}
+
 async function createTournament() {
+  if (!canManageTournaments.value) {
+    alert(managementHint)
+    return
+  }
   try {
     const body = {
       name: newTournament.value.name,
@@ -150,12 +185,38 @@ onMounted(() => {
   max-width: 1200px;
   margin: 0 auto;
 }
+.tournament-banner {
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+}
+.tournament-banner.info {
+  background: #eef2ff;
+  color: #1e3a8a;
+}
+.tournament-banner.warn {
+  background: #fffbea;
+  color: #92400e;
+}
+.tournament-banner.success {
+  background: #ecfdf5;
+  color: #065f46;
+}
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .tournaments-grid {
@@ -250,6 +311,15 @@ onMounted(() => {
 .error {
   color: #d32f2f;
 }
+.hint-inline {
+  color: #92400e;
+  font-size: 0.9rem;
+}
+.link-inline {
+  color: #1d4ed8;
+  margin-left: 0.25rem;
+  text-decoration: underline;
+}
 
 .btn-primary {
   background: #1976d2;
@@ -339,11 +409,4 @@ onMounted(() => {
   margin-top: 1.5rem;
 }
 
-.no-access {
-  max-width: 600px;
-  margin: 3rem auto;
-  padding: 2rem;
-  text-align: center;
-  color: #666;
-}
 </style>
