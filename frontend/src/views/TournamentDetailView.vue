@@ -1,651 +1,715 @@
 <template>
-  <div class="tournament-detail">
-    <div v-if="loading" class="loading">Loading tournament...</div>
-    <div v-else-if="error" class="error">{{ error }}</div>
-    <template v-else-if="tournament">
-      <div class="header">
-        <button @click="goBack" class="btn-back">← Back</button>
-        <div class="title-section">
-          <h1>{{ tournament.name }}</h1>
-          <span class="badge" :class="`status-${tournament.status}`">{{ tournament.status }}</span>
+  <section class="tournament-detail">
+    <header class="td-header">
+      <div class="td-header-main">
+        <button class="td-back" type="button" @click="goBack">
+          ⬅ Back to tournaments
+        </button>
+
+        <div class="td-title-block" v-if="tournament">
+          <h1 class="td-title">
+            {{ tournament.name }}
+          </h1>
+          <p class="td-subtitle">
+            <span class="td-type-pill">
+              {{ formatType(tournament.tournament_type || 'league') }}
+            </span>
+            <span
+              class="td-status-pill"
+              :data-status="tournament.status || 'upcoming'"
+            >
+              {{ formatStatus(tournament.status || 'upcoming') }}
+            </span>
+          </p>
         </div>
       </div>
 
-      <div class="tabs">
-        <button
-          v-for="tab in tabs"
-          :key="tab"
-          @click="activeTab = tab"
-          :class="{ active: activeTab === tab }"
-          class="tab"
-        >
-          {{ tab }}
+      <!-- Management actions (Org Pro / Super only) -->
+      <div class="td-actions" v-if="canManageTournaments && tournament">
+        <span class="td-role-label">
+          Management access: {{ accessLabel }}
+        </span>
+        <div class="td-actions-buttons">
+          <button type="button" class="td-btn td-btn-outline" @click="reload">
+            Refresh
+          </button>
+          <button type="button" class="td-btn td-btn-primary" disabled>
+            Edit tournament (coming soon)
+          </button>
+          <button type="button" class="td-btn td-btn-danger" disabled>
+            Delete tournament (locked in beta)
+          </button>
+        </div>
+      </div>
+
+      <!-- Read-only banner for non-managers -->
+      <div
+        v-else-if="tournament && canViewDetail"
+        class="td-banner td-banner-info"
+      >
+        <p>
+          You are viewing this tournament in
+          <strong>read-only mode</strong>.
+          Only Organization Pro and Superuser accounts can manage tournaments.
+        </p>
+      </div>
+    </header>
+
+    <!-- Loading state -->
+    <div v-if="loading && !loaded" class="td-state td-state-loading">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Loading tournament details...</p>
+    </div>
+
+    <!-- Not found -->
+    <div v-else-if="notFound" class="td-state td-state-empty">
+      <h2>We couldn’t find that tournament.</h2>
+      <p>
+        It may have been removed, renamed, or you might have an outdated link.
+      </p>
+      <button type="button" class="td-btn td-btn-outline" @click="goBack">
+        Back to tournaments
+      </button>
+    </div>
+
+    <!-- Auth / RBAC block -->
+    <div v-else-if="!canViewDetail" class="td-state td-state-locked">
+      <h2>Access restricted</h2>
+      <p>
+        Your current account does not have permission to view tournament details
+        on this device.
+      </p>
+      <p class="td-muted">
+        Sign in with an <strong>Organization Pro</strong>, <strong>Coach Pro</strong>,
+        or <strong>Analyst Pro</strong> account to unlock full access.
+      </p>
+      <button
+        type="button"
+        class="td-btn td-btn-primary"
+        @click="goToLogin"
+      >
+        Go to login
+      </button>
+    </div>
+
+    <!-- Generic error -->
+    <div v-else-if="errorMessage" class="td-state td-state-error">
+      <h2>Something went wrong.</h2>
+      <p>{{ errorMessage }}</p>
+      <div class="td-state-actions">
+        <button type="button" class="td-btn td-btn-outline" @click="reload">
+          Try again
+        </button>
+        <button type="button" class="td-btn td-btn-ghost" @click="goBack">
+          Back to tournaments
         </button>
       </div>
+    </div>
 
-      <!-- Overview Tab -->
-      <div v-if="activeTab === 'Overview'" class="tab-content">
-        <div class="info-section">
-          <p v-if="tournament.description">{{ tournament.description }}</p>
-          <div class="meta-info">
-            <div class="info-item">
-              <strong>Type:</strong> {{ tournament.tournament_type }}
+    <!-- Main content -->
+    <div v-else-if="tournament" class="td-layout">
+      <!-- Left column: overview + points -->
+      <div class="td-column">
+        <section class="td-card">
+          <h2>Overview</h2>
+          <dl class="td-meta">
+            <div>
+              <dt>Format</dt>
+              <dd>{{ formatType(tournament.tournament_type || 'league') }}</dd>
             </div>
-            <div v-if="tournament.start_date" class="info-item">
-              <strong>Start:</strong> {{ formatDate(tournament.start_date) }}
+            <div>
+              <dt>Status</dt>
+              <dd>{{ formatStatus(tournament.status || 'upcoming') }}</dd>
             </div>
-            <div v-if="tournament.end_date" class="info-item">
-              <strong>End:</strong> {{ formatDate(tournament.end_date) }}
+            <div v-if="tournament.start_date || tournament.end_date">
+              <dt>Dates</dt>
+              <dd>
+                <span v-if="tournament.start_date">
+                  {{ formatDate(tournament.start_date) }}
+                </span>
+                <span v-if="tournament.start_date && tournament.end_date"> – </span>
+                <span v-if="tournament.end_date">
+                  {{ formatDate(tournament.end_date) }}
+                </span>
+              </dd>
             </div>
+            <div v-if="tournament.description">
+              <dt>Description</dt>
+              <dd>{{ tournament.description }}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="td-card">
+          <div class="td-card-header">
+            <h2>Points Table</h2>
+            <p class="td-card-subtitle" v-if="pointsTable.length === 0">
+              No teams have been added yet.
+            </p>
           </div>
-        </div>
+
+          <table v-if="pointsTable.length" class="td-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Team</th>
+                <th>Played</th>
+                <th>Won</th>
+                <th>Lost</th>
+                <th>Tied</th>
+                <th>NR</th>
+                <th>Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(row, idx) in pointsTable"
+                :key="row.id || row.team_name || idx"
+              >
+                <td>{{ idx + 1 }}</td>
+                <td>{{ row.team_name || '—' }}</td>
+                <td>{{ row.matches_played ?? row.played ?? 0 }}</td>
+                <td>{{ row.wins ?? 0 }}</td>
+                <td>{{ row.losses ?? 0 }}</td>
+                <td>{{ row.ties ?? 0 }}</td>
+                <td>{{ row.no_results ?? 0 }}</td>
+                <td>{{ row.points ?? 0 }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
       </div>
 
-      <!-- Teams Tab -->
-      <div v-if="activeTab === 'Teams'" class="tab-content">
-        <div class="section-header">
-          <h2>Teams</h2>
-          <button @click="showAddTeamModal = true" class="btn-primary">Add Team</button>
-        </div>
-        <div v-if="teams.length === 0" class="empty-state">
-          No teams added yet
-        </div>
-        <div v-else class="teams-list">
-          <div v-for="team in teams" :key="team.id" class="team-card">
-            <h3>{{ team.team_name }}</h3>
-            <div class="team-stats">
-              <span>Played: {{ team.matches_played }}</span>
-              <span>Won: {{ team.matches_won }}</span>
-              <span>Lost: {{ team.matches_lost }}</span>
-              <span>Points: {{ team.points }}</span>
-            </div>
+      <!-- Right column: teams + fixtures -->
+      <div class="td-column">
+        <section class="td-card">
+          <div class="td-card-header">
+            <h2>Teams</h2>
+            <p class="td-card-subtitle" v-if="teams.length === 0">
+              No teams registered yet.
+            </p>
           </div>
-        </div>
-      </div>
 
-      <!-- Points Table Tab -->
-      <div v-if="activeTab === 'Points Table'" class="tab-content">
-        <h2>Points Table</h2>
-        <div v-if="pointsTable.length === 0" class="empty-state">
-          No standings yet
-        </div>
-        <table v-else class="points-table">
-          <thead>
-            <tr>
-              <th>Pos</th>
-              <th>Team</th>
-              <th>P</th>
-              <th>W</th>
-              <th>L</th>
-              <th>D</th>
-              <th>Pts</th>
-              <th>NRR</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(entry, index) in pointsTable" :key="index">
-              <td>{{ index + 1 }}</td>
-              <td>{{ entry.team_name }}</td>
-              <td>{{ entry.matches_played }}</td>
-              <td>{{ entry.matches_won }}</td>
-              <td>{{ entry.matches_lost }}</td>
-              <td>{{ entry.matches_drawn }}</td>
-              <td><strong>{{ entry.points }}</strong></td>
-              <td>{{ entry.net_run_rate.toFixed(3) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+          <ul v-if="teams.length" class="td-list">
+            <li v-for="team in teams" :key="team.id || team.team_name">
+              <div class="td-list-main">
+                <strong>{{ team.team_name }}</strong>
+                <span class="td-list-secondary">
+                  {{ (team.matches_played ?? 0) }} matches •
+                  {{ (team.points ?? 0) }} pts
+                </span>
+              </div>
+            </li>
+          </ul>
 
-      <!-- Fixtures Tab -->
-      <div v-if="activeTab === 'Fixtures'" class="tab-content">
-        <div class="section-header">
-          <h2>Fixtures</h2>
-          <button @click="showAddFixtureModal = true" class="btn-primary">Add Fixture</button>
-        </div>
-        <div v-if="fixtures.length === 0" class="empty-state">
-          No fixtures scheduled
-        </div>
-        <div v-else class="fixtures-list">
-          <div v-for="fixture in fixtures" :key="fixture.id" class="fixture-card">
-            <div class="fixture-header">
-              <span v-if="fixture.match_number" class="match-number">Match {{ fixture.match_number }}</span>
-              <span class="badge" :class="`status-${fixture.status}`">{{ fixture.status }}</span>
-            </div>
-            <div class="fixture-teams">
-              <span>{{ fixture.team_a_name }}</span>
-              <span class="vs">vs</span>
-              <span>{{ fixture.team_b_name }}</span>
-            </div>
-            <div v-if="fixture.venue" class="fixture-venue">📍 {{ fixture.venue }}</div>
-            <div v-if="fixture.scheduled_date" class="fixture-date">
-              {{ formatDateTime(fixture.scheduled_date) }}
-            </div>
-            <div v-if="fixture.result" class="fixture-result">{{ fixture.result }}</div>
+          <p v-if="teams.length && !canManageTournaments" class="td-muted td-footnote">
+            Teams are managed by Organization Pro accounts.
+          </p>
+        </section>
+
+        <section class="td-card">
+          <div class="td-card-header">
+            <h2>Fixtures</h2>
+            <p class="td-card-subtitle" v-if="fixtures.length === 0">
+              No fixtures have been scheduled yet.
+            </p>
           </div>
-        </div>
-      </div>
 
-      <!-- Add Team Modal -->
-      <div v-if="showAddTeamModal" class="modal-overlay" @click.self="showAddTeamModal = false">
-        <div class="modal">
-          <h2>Add Team</h2>
-          <form @submit.prevent="addTeam">
-            <div class="form-group">
-              <label>Team Name *</label>
-              <input v-model="newTeam.name" type="text" required placeholder="e.g., Mumbai Indians" />
-            </div>
-            <div class="modal-actions">
-              <button type="button" @click="showAddTeamModal = false" class="btn-secondary">Cancel</button>
-              <button type="submit" class="btn-primary">Add</button>
-            </div>
-          </form>
-        </div>
-      </div>
+          <ul v-if="fixtures.length" class="td-list">
+            <li v-for="fixture in fixtures" :key="fixture.id">
+              <div class="td-list-main">
+                <strong>
+                  {{ fixture.team_a_name }} vs {{ fixture.team_b_name }}
+                </strong>
+                <span class="td-list-secondary">
+                  <span v-if="fixture.venue">
+                    {{ fixture.venue }}
+                  </span>
+                  <span v-if="fixture.scheduled_date">
+                    • {{ formatDate(fixture.scheduled_date) }}
+                  </span>
+                  <span>
+                    • {{ formatFixtureStatus(fixture.status || 'scheduled') }}
+                  </span>
+                </span>
+              </div>
+            </li>
+          </ul>
 
-      <!-- Add Fixture Modal -->
-      <div v-if="showAddFixtureModal" class="modal-overlay" @click.self="showAddFixtureModal = false">
-        <div class="modal">
-          <h2>Add Fixture</h2>
-          <form @submit.prevent="addFixture">
-            <div class="form-group">
-              <label>Match Number</label>
-              <input v-model.number="newFixture.match_number" type="number" placeholder="Optional" />
-            </div>
-            <div class="form-group">
-              <label>Team A *</label>
-              <input v-model="newFixture.team_a_name" type="text" required />
-            </div>
-            <div class="form-group">
-              <label>Team B *</label>
-              <input v-model="newFixture.team_b_name" type="text" required />
-            </div>
-            <div class="form-group">
-              <label>Venue</label>
-              <input v-model="newFixture.venue" type="text" placeholder="Stadium name" />
-            </div>
-            <div class="form-group">
-              <label>Scheduled Date</label>
-              <input v-model="newFixture.scheduled_date" type="datetime-local" />
-            </div>
-            <div class="modal-actions">
-              <button type="button" @click="showAddFixtureModal = false" class="btn-secondary">Cancel</button>
-              <button type="submit" class="btn-primary">Add</button>
-            </div>
-          </form>
-        </div>
+          <p v-if="fixtures.length && !canManageTournaments" class="td-muted td-footnote">
+            Fixtures are managed by Organization Pro accounts.
+          </p>
+        </section>
       </div>
-    </template>
-  </div>
+    </div>
+  </section>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import apiService from '@/utils/api'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
-const router = useRouter()
+import apiService, { getErrorMessage } from '@/services/api'
+import { useAuthStore } from '@/stores/authStore'
+
+type Tournament = Record<string, any>
+type TournamentTeam = Record<string, any>
+type TournamentFixture = Record<string, any>
+type PointsRow = Record<string, any>
+
 const route = useRoute()
-const tournamentId = route.params.tournamentId as string
+const router = useRouter()
+const authStore = useAuthStore()
 
-const tournament = ref<any>(null)
-const teams = ref<any[]>([])
-const pointsTable = ref<any[]>([])
-const fixtures = ref<any[]>([])
+const tournamentId = computed(() => String(route.params.tournamentId ?? ''))
+
 const loading = ref(true)
-const error = ref('')
+const loaded = ref(false)
+const notFound = ref(false)
+const errorMessage = ref<string | null>(null)
 
-const activeTab = ref('Overview')
-const tabs = ['Overview', 'Teams', 'Points Table', 'Fixtures']
+const tournament = ref<Tournament | null>(null)
+const teams = ref<TournamentTeam[]>([])
+const fixtures = ref<TournamentFixture[]>([])
+const pointsTable = ref<PointsRow[]>([])
 
-const showAddTeamModal = ref(false)
-const newTeam = ref({ name: '' })
+const hasUser = computed(() => !!authStore.currentUser)
 
-const showAddFixtureModal = ref(false)
-const newFixture = ref({
-  match_number: null as number | null,
-  team_a_name: '',
-  team_b_name: '',
-  venue: '',
-  scheduled_date: '',
+const canViewDetail = computed(() =>
+  authStore.hasAnyRole([
+    'free',
+    'player_pro',
+    'coach_pro',
+    'analyst_pro',
+    'org_pro',
+    'superuser',
+  ]),
+)
+
+const canManageTournaments = computed(() => authStore.canManageTournaments)
+
+const accessLabel = computed(() => {
+  const role = authStore.currentUser?.role
+  if (!role) return 'Not signed in'
+  if (role === 'org_pro') return 'Organization Pro'
+  if (role === 'superuser') return 'Superuser'
+  if (role === 'analyst_pro') return 'Analyst (read-only)'
+  if (role === 'coach_pro') return 'Coach (read-only)'
+  if (role === 'player_pro') return 'Player (read-only)'
+  return 'Free (view-only)'
 })
 
+function goBack() {
+  router.push({ name: 'tournaments' })
+}
+
+function goToLogin() {
+  const redirect = router.currentRoute.value.fullPath
+  router.push({ name: 'login', query: { redirect } })
+}
+
 async function loadTournament() {
+  if (!tournamentId.value) {
+    notFound.value = true
+    loading.value = false
+    loaded.value = true
+    return
+  }
+
+  loading.value = true
+  errorMessage.value = null
+  notFound.value = false
+
   try {
-    loading.value = true
-    error.value = ''
-    tournament.value = await apiService.getTournament(tournamentId)
-    await Promise.all([loadTeams(), loadPointsTable(), loadFixtures()])
-  } catch (e: any) {
-    error.value = e.message || 'Failed to load tournament'
+    const [t, pts, teamRows, fixtureRows] = await Promise.all([
+      apiService.getTournament(tournamentId.value),
+      apiService.getPointsTable(tournamentId.value),
+      apiService.getTournamentTeams(tournamentId.value),
+      apiService.getTournamentFixtures(tournamentId.value),
+    ])
+
+    tournament.value = t
+    pointsTable.value = Array.isArray(pts) ? pts : []
+    teams.value = Array.isArray(teamRows) ? teamRows : []
+    fixtures.value = Array.isArray(fixtureRows) ? fixtureRows : []
+  } catch (err: any) {
+    const status = (err as any)?.status
+    if (status === 404) {
+      notFound.value = true
+      tournament.value = null
+      pointsTable.value = []
+      teams.value = []
+      fixtures.value = []
+    } else if (status === 401) {
+      errorMessage.value =
+        'Your session has expired or you are not authorized. Please sign in again.'
+    } else {
+      errorMessage.value = getErrorMessage(err)
+    }
   } finally {
     loading.value = false
+    loaded.value = true
   }
 }
 
-async function loadTeams() {
-  try {
-    teams.value = await apiService.getTournamentTeams(tournamentId)
-  } catch (e: any) {
-    console.error('Failed to load teams:', e)
-  }
-}
-
-async function loadPointsTable() {
-  try {
-    pointsTable.value = await apiService.getPointsTable(tournamentId)
-  } catch (e: any) {
-    console.error('Failed to load points table:', e)
-  }
-}
-
-async function loadFixtures() {
-  try {
-    fixtures.value = await apiService.getTournamentFixtures(tournamentId)
-  } catch (e: any) {
-    console.error('Failed to load fixtures:', e)
-  }
-}
-
-async function addTeam() {
-  try {
-    await apiService.addTeamToTournament(tournamentId, {
-      team_name: newTeam.value.name,
-      team_data: {},
-    })
-    showAddTeamModal.value = false
-    newTeam.value = { name: '' }
-    await Promise.all([loadTeams(), loadPointsTable()])
-  } catch (e: any) {
-    alert(e.message || 'Failed to add team')
-  }
-}
-
-async function addFixture() {
-  try {
-    const body = {
-      tournament_id: tournamentId,
-      match_number: newFixture.value.match_number || null,
-      team_a_name: newFixture.value.team_a_name,
-      team_b_name: newFixture.value.team_b_name,
-      venue: newFixture.value.venue || null,
-      scheduled_date: newFixture.value.scheduled_date || null,
-    }
-    await apiService.createFixture(body)
-    showAddFixtureModal.value = false
-    newFixture.value = {
-      match_number: null,
-      team_a_name: '',
-      team_b_name: '',
-      venue: '',
-      scheduled_date: '',
-    }
-    await loadFixtures()
-  } catch (e: any) {
-    alert(e.message || 'Failed to add fixture')
-  }
-}
-
-function goBack() {
-  router.push('/tournaments')
-}
-
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString()
-}
-
-function formatDateTime(dateStr: string) {
-  return new Date(dateStr).toLocaleString()
+function reload() {
+  loadTournament()
 }
 
 onMounted(() => {
   loadTournament()
 })
+
+watch(
+  () => tournamentId.value,
+  (next, prev) => {
+    if (next && next !== prev) {
+      loadTournament()
+    }
+  },
+)
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) return ''
+  try {
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return String(value)
+    return d.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  } catch {
+    return String(value)
+  }
+}
+
+function formatType(raw: string): string {
+  const v = (raw || '').toLowerCase()
+  if (v === 'league') return 'League'
+  if (v === 'knockout') return 'Knockout'
+  if (v === 'round_robin') return 'Round robin'
+  return v || 'League'
+}
+
+function formatStatus(raw: string): string {
+  const v = (raw || '').toLowerCase()
+  if (v === 'upcoming') return 'Upcoming'
+  if (v === 'ongoing') return 'Ongoing'
+  if (v === 'completed') return 'Completed'
+  if (v === 'cancelled') return 'Cancelled'
+  return v || 'Upcoming'
+}
+
+function formatFixtureStatus(raw: string): string {
+  const v = (raw || '').toLowerCase()
+  if (v === 'scheduled') return 'Scheduled'
+  if (v === 'in_progress') return 'In progress'
+  if (v === 'completed') return 'Completed'
+  if (v === 'abandoned') return 'Abandoned'
+  return v || 'Scheduled'
+}
 </script>
 
 <style scoped>
 .tournament-detail {
-  padding: 2rem;
   max-width: 1200px;
-  margin: 0 auto;
-}
-
-.header {
-  margin-bottom: 2rem;
-}
-
-.btn-back {
-  background: none;
-  border: none;
-  color: #1976d2;
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 0.5rem 0;
-  margin-bottom: 1rem;
-}
-
-.title-section {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.title-section h1 {
-  margin: 0;
-}
-
-.badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-.status-upcoming {
-  background: #e3f2fd;
-  color: #1976d2;
-}
-
-.status-ongoing {
-  background: #e8f5e9;
-  color: #388e3c;
-}
-
-.status-completed {
-  background: #f5f5f5;
-  color: #757575;
-}
-
-.status-scheduled {
-  background: #fff3e0;
-  color: #f57c00;
-}
-
-.status-in_progress {
-  background: #e8f5e9;
-  color: #388e3c;
-}
-
-.status-cancelled {
-  background: #ffebee;
-  color: #c62828;
-}
-
-.tabs {
-  display: flex;
-  gap: 0.5rem;
-  border-bottom: 2px solid #e0e0e0;
-  margin-bottom: 2rem;
-}
-
-.tab {
-  background: none;
-  border: none;
-  padding: 1rem 1.5rem;
-  cursor: pointer;
-  font-size: 1rem;
-  color: #666;
-  position: relative;
-}
-
-.tab.active {
-  color: #1976d2;
-  font-weight: 500;
-}
-
-.tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: #1976d2;
-}
-
-.tab-content {
-  animation: fadeIn 0.3s;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-}
-
-.section-header h2 {
-  margin: 0;
-}
-
-.info-section {
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 1.5rem;
-}
-
-.meta-info {
-  display: flex;
-  gap: 2rem;
-  margin-top: 1rem;
-}
-
-.info-item {
-  color: #666;
-}
-
-.teams-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 1rem;
-}
-
-.team-card {
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.team-card h3 {
-  margin: 0 0 1rem 0;
-}
-
-.team-stats {
+  margin: 1.5rem auto 3rem;
+  padding: 0 1rem 2rem;
   display: flex;
   flex-direction: column;
+  gap: 1.5rem;
+}
+
+.td-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.td-header-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.td-back {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--pico-primary, #2563eb);
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.td-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.td-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.td-subtitle {
+  display: flex;
   gap: 0.5rem;
-  color: #666;
+  align-items: center;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.td-type-pill,
+.td-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.td-type-pill {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+}
+
+.td-status-pill[data-status='upcoming'] {
+  background: rgba(234, 179, 8, 0.1);
+  color: #854d0e;
+}
+
+.td-status-pill[data-status='ongoing'] {
+  background: rgba(22, 163, 74, 0.1);
+  color: #166534;
+}
+
+.td-status-pill[data-status='completed'] {
+  background: rgba(55, 65, 81, 0.1);
+  color: #111827;
+}
+
+.td-status-pill[data-status='cancelled'] {
+  background: rgba(248, 113, 113, 0.1);
+  color: #b91c1c;
+}
+
+.td-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.td-actions-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.td-role-label {
+  font-size: 0.85rem;
+  color: var(--pico-muted-border-color, #6b7280);
+}
+
+.td-btn {
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.td-btn-primary {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.td-btn-outline {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+}
+
+.td-btn-danger {
+  border: 1px solid #b91c1c;
+  background: #b91c1c;
+  color: #fff;
+}
+
+.td-btn-ghost {
+  border: none;
+  background: transparent;
+  color: var(--pico-primary, #2563eb);
+}
+
+.td-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .td-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.td-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.td-card {
+  border-radius: 0.75rem;
+  background: var(--pico-card-background-color, #fff);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.06);
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.td-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.td-card-subtitle {
+  font-size: 0.85rem;
+  color: var(--pico-muted-border-color, #6b7280);
+  margin: 0;
+}
+
+.td-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin: 0;
+}
+
+.td-meta div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.td-meta dt {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pico-muted-border-color, #6b7280);
+}
+
+.td-meta dd {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.td-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 0.9rem;
 }
 
-.points-table {
-  width: 100%;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  border-collapse: collapse;
-  overflow: hidden;
-}
-
-.points-table th,
-.points-table td {
-  padding: 1rem;
+.td-table th,
+.td-table td {
+  padding: 0.45rem 0.35rem;
   text-align: left;
 }
 
-.points-table th {
-  background: #f5f5f5;
-  font-weight: 600;
-  color: #333;
+.td-table thead {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 
-.points-table tbody tr:hover {
-  background: #f9f9f9;
+.td-table tbody tr:nth-child(even) {
+  background: rgba(15, 23, 42, 0.015);
 }
 
-.points-table tbody tr {
-  border-top: 1px solid #e0e0e0;
-}
-
-.fixtures-list {
+.td-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.5rem;
 }
 
-.fixture-card {
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 1.5rem;
-}
-
-.fixture-header {
+.td-list-main {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 1rem;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
-.match-number {
-  font-weight: 600;
-  color: #666;
+.td-list-secondary {
+  font-size: 0.85rem;
+  color: var(--pico-muted-border-color, #6b7280);
 }
 
-.fixture-teams {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  font-size: 1.1rem;
-  font-weight: 500;
-  margin-bottom: 0.5rem;
+.td-muted {
+  font-size: 0.85rem;
+  color: var(--pico-muted-border-color, #6b7280);
 }
 
-.vs {
-  color: #999;
-  font-size: 0.9rem;
-}
-
-.fixture-venue,
-.fixture-date {
-  color: #666;
-  font-size: 0.9rem;
+.td-footnote {
   margin-top: 0.5rem;
 }
 
-.fixture-result {
-  margin-top: 0.5rem;
-  padding: 0.5rem;
-  background: #f5f5f5;
-  border-radius: 4px;
-  font-size: 0.9rem;
-}
-
-.empty-state {
+.td-state {
+  border-radius: 0.75rem;
+  padding: 2rem 1.5rem;
   text-align: center;
-  padding: 3rem;
-  color: #999;
+  background: var(--pico-card-background-color, #fff);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.06);
 }
 
-.loading,
-.error {
-  padding: 2rem;
-  text-align: center;
+.td-state-loading .spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 3px solid rgba(37, 99, 235, 0.25);
+  border-top-color: #2563eb;
+  margin: 0 auto 0.75rem;
+  animation: spin 0.9s linear infinite;
 }
 
-.error {
-  color: #d32f2f;
+.td-state-empty h2,
+.td-state-error h2,
+.td-state-locked h2 {
+  margin-bottom: 0.4rem;
 }
 
-.btn-primary {
-  background: #1976d2;
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-}
-
-.btn-primary:hover {
-  background: #1565c0;
-}
-
-.btn-secondary {
-  background: #f5f5f5;
-  color: #333;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-}
-
-.btn-secondary:hover {
-  background: #e0e0e0;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+.td-state-actions {
+  margin-top: 1rem;
   display: flex;
-  align-items: center;
   justify-content: center;
-  z-index: 1000;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
-.modal {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  max-width: 500px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
+.td-banner {
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
 }
 
-.modal h2 {
-  margin-top: 0;
+.td-banner-info {
+  background: rgba(59, 130, 246, 0.08);
+  color: #1d4ed8;
 }
 
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  color: #333;
-  font-weight: 500;
-}
-
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 1.5rem;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

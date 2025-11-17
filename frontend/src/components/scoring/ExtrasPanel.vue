@@ -21,6 +21,7 @@ const emit = defineEmits<{
 const gameStore = useGameStore()
 const byeRuns = ref<number>(1)
 const legByeRuns = ref<number>(1)
+const proTooltip = 'Requires Coach Pro or Organization Pro'
 
 /**
  * Record an extra delivery
@@ -53,8 +54,8 @@ async function score(extra: 'wd' | 'nb' | 'b' | 'lb', runs: number = 1) {
     <h4>Extras</h4>
 
     <div class="extras-buttons">
-      <button class="extra-button wide" :disabled="!canScore" @click="score('wd', 1)">Wide (Wd)</button>
-      <button class="extra-button no-ball" :disabled="!canScore" @click="score('nb', 1)">No Ball (Nb)</button>
+      <button class="extra-button wide" :disabled="!canScore" :title="!canScore ? proTooltip : undefined" @click="score('wd', 1)">Wide (Wd)</button>
+      <button class="extra-button no-ball" :disabled="!canScore" :title="!canScore ? proTooltip : undefined" @click="score('nb', 1)">No Ball (Nb)</button>
     </div>
 
     <div class="extras-row">
@@ -69,7 +70,7 @@ async function score(extra: 'wd' | 'nb' | 'b' | 'lb', runs: number = 1) {
         <option v-for="n in [1,2,3,4]" :key="'b-'+n" :value="n">{{ n }}</option>
       </select>
       <small id="sel-byes-hint" class="sr-only">Choose number of byes</small>
-      <button class="extra-button bye" :disabled="!canScore" @click="score('b', byeRuns)">Add</button>
+      <button class="extra-button bye" :disabled="!canScore" :title="!canScore ? proTooltip : undefined" @click="score('b', byeRuns)">Add</button>
     </div>
 
     <div class="extras-row">
@@ -84,7 +85,7 @@ async function score(extra: 'wd' | 'nb' | 'b' | 'lb', runs: number = 1) {
         <option v-for="n in [1,2,3,4]" :key="'lb-'+n" :value="n">{{ n }}</option>
       </select>
       <small id="sel-leg-byes-hint" class="sr-only">Choose number of leg byes</small>
-      <button class="extra-button leg-bye" :disabled="!canScore" @click="score('lb', legByeRuns)">Add</button>
+      <button class="extra-button leg-bye" :disabled="!canScore" :title="!canScore ? proTooltip : undefined" @click="score('lb', legByeRuns)">Add</button>
     </div>
   </div>
 </template>

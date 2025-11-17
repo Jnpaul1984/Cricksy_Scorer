@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /* eslint-disable */
 /* --- Vue & Router --- */
 
@@ -14,8 +14,9 @@ import DeliveryTable from '@/components/DeliveryTable.vue'
 import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
+import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { API_BASE } from '@/utils/api'
+import apiService, { API_BASE, apiRequest } from '@/utils/api'
 
 const isDev = import.meta.env.DEV
 const normId = (v: unknown) => String(v ?? '').trim()
@@ -86,13 +87,28 @@ watch(extra, (t) => {
 const route = useRoute()
 const router = useRouter()
 const gameStore = useGameStore()
+const authStore = useAuthStore()
 
-// Reactive refs from the store
-const { canScore, liveSnapshot } = storeToRefs(gameStore)
+// Reactive refs from the stores
+const { canScore: storeCanScore, liveSnapshot } = storeToRefs(gameStore)
 const { needsNewBatter, needsNewOver } = storeToRefs(gameStore)
 const { extrasBreakdown } = storeToRefs(gameStore)
 const { dlsKind } = storeToRefs(gameStore)
 const { runsRequired, targetSafe, requiredRunRate, ballsBowledTotal } = storeToRefs(gameStore)
+const {
+  canScore: roleCanScore,
+  isFreeUser,
+  isPlayerPro,
+  role: authRole,
+} = storeToRefs(authStore)
+const canScore = computed(() => Boolean(storeCanScore.value && roleCanScore.value))
+const proTooltip = 'Requires Coach Pro or Organization Pro'
+const showScoringUpsell = computed(
+  () => !roleCanScore.value && (!authRole.value || isFreeUser.value || isPlayerPro.value),
+)
+const showAnalystReadOnly = computed(
+  () => !roleCanScore.value && authRole.value === 'analyst_pro',
+)
 // Allow a manual start even if the server gate didn't flip yet
 const canForceStartInnings = computed(() =>
   Boolean(gameId.value) &&
@@ -101,6 +117,7 @@ const canForceStartInnings = computed(() =>
 )
 
 function forceStartInnings(): void {
+  if (!roleCanScore.value) return
   if (!canForceStartInnings.value) return
 
   // If the normal conditions aren't met, warn before proceeding
@@ -191,29 +208,28 @@ async function submitSimple() {
       } else if (!isWicket.value && extra.value === 'none') {
         await gameStore.scoreRuns(gameId.value, offBat.value, shotMap.value ?? null)
       } else {
-        const res = await fetch(`${apiBase}/games/${encodeURIComponent(gameId.value)}/deliveries`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            extra_type: extra.value !== 'none' ? extra.value : null,
-            extra_runs: extra.value === 'wd'
+        const payload = {
+          extra_type: extra.value !== 'none' ? extra.value : null,
+          extra_runs: extra.value === 'wd'
+            ? extraRuns.value
+            : (extra.value === 'b' || extra.value === 'lb')
               ? extraRuns.value
-              : (extra.value === 'b' || extra.value === 'lb')
-                ? extraRuns.value
-                : undefined,
-            runs_off_bat: extra.value === 'nb'
+              : undefined,
+          runs_off_bat: extra.value === 'nb'
+            ? offBat.value
+            : extra.value === 'none'
               ? offBat.value
-              : extra.value === 'none'
-                ? offBat.value
-                : undefined,
-            is_wicket: true,
-            dismissal_type: (dismissal.value || 'bowled'),
-            dismissed_player_name: (dismissedName.value || null),
-            shot_map: (extra.value === 'none' || extra.value === 'nb') ? (shotMap.value ?? null) : null,
-            fielder_id: needsFielder.value ? (selectedFielderId.value || null) : null,
-          }),
+              : undefined,
+          is_wicket: true,
+          dismissal_type: (dismissal.value || 'bowled'),
+          dismissed_player_name: (dismissedName.value || null),
+          shot_map: (extra.value === 'none' || extra.value === 'nb') ? (shotMap.value ?? null) : null,
+          fielder_id: needsFielder.value ? (selectedFielderId.value || null) : null,
+        }
+        await apiRequest(`/games/${encodeURIComponent(gameId.value)}/deliveries`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
         })
-        if (!res.ok) throw new Error(await res.text())
       }
     }
 
@@ -248,7 +264,7 @@ const lastDelivery = computed<any | null>(() =>
 const canDeleteLast = computed<boolean>(() =>
   Boolean(lastDelivery.value) &&
   !needsNewInningsLive.value &&
-  !isStartingInnings.value &&        // â† add this guard
+  !isStartingInnings.value &&        // Ã¢â€ Â add this guard
   pendingCount.value === 0
 )
 
@@ -264,7 +280,7 @@ async function deleteLastDelivery(): Promise<void> {
     } else if (typeof anyStore.undoLastDelivery === 'function') {
       await anyStore.undoLastDelivery(id)
     } else {
-      await fetch(`${apiBase}/games/${encodeURIComponent(id)}/undo-last`, { method: 'POST' })
+      await apiService.undoLast(id)
     }
     showToast('Last delivery deleted', 'success')
 
@@ -393,6 +409,7 @@ const apiBase =
 async function startWeatherDelay() {
   const id = gameId.value
   if (!id) return
+  if (!roleCanScore.value) return
   try {
     await gameStore.startInterruption('weather', weatherNote.value || undefined)
     showToast('Weather delay started', 'success')
@@ -406,6 +423,7 @@ async function startWeatherDelay() {
 async function resumeAfterWeather() {
   const id = gameId.value
   if (!id) return
+  if (!roleCanScore.value) return
   try {
     await gameStore.stopInterruption('weather')
     showToast('Play resumed', 'success')
@@ -608,7 +626,7 @@ function obOf(d:any){
   return { over: 0, ball: 0 }
 }
 
-// âœ… stable identity: innings + over + ball only
+// Ã¢Å“â€¦ stable identity: innings + over + ball only
 function makeKey(d:any): string {
   const inn = Number(d.innings ?? d.inning ?? d.inning_no ?? d.innings_no ?? d.inning_number ?? 0)
   const { over, ball } = obOf(d)
@@ -651,7 +669,7 @@ const dedupedDeliveries = computed<DeliveryRowForTable[]>(() => {
   }).sort((a, b) => (a.over_number - b.over_number) || (a.ball_number - b.ball_number))
 })
 
-// ðŸ”§ NEW: helpers to scope deliveries to the current innings
+// Ã°Å¸â€Â§ NEW: helpers to scope deliveries to the current innings
 function inningsOf(d:any): number | null {
   const v = Number(d.innings ?? d.inning ?? d.inning_no ?? d.innings_no ?? d.inning_number)
   return Number.isFinite(v) ? v : null
@@ -669,7 +687,7 @@ const deliveriesThisInningsRaw = computed<any[]>(() => {
     // strict: only include items with a timestamp after start
     return arr.filter(d => d.at_utc && String(d.at_utc) >= inningsStartIso.value!)
   }
-  return [] // no markers, no timestamps â€” donâ€™t risk mixing innings
+  return [] // no markers, no timestamps Ã¢â‚¬â€ donÃ¢â‚¬â„¢t risk mixing innings
 })
 
 
@@ -697,8 +715,8 @@ const deliveriesThisInnings = computed<DeliveryRowForTable[]>(() => {
       non_striker_id: normId(d.non_striker_id),
       bowler_id: normId(d.bowler_id),
       extra: (d.extra ?? d.extra_type ?? undefined) as DeliveryRowForTable['extra'] | undefined,
-      extra_runs: Number(d.extra_runs ?? 0),                       // âœ… added
-      runs_off_bat: Number(d.runs_off_bat ?? d.runs ?? 0),        // âœ… added
+      extra_runs: Number(d.extra_runs ?? 0),                       // Ã¢Å“â€¦ added
+      runs_off_bat: Number(d.runs_off_bat ?? d.runs ?? 0),        // Ã¢Å“â€¦ added
       is_wicket: Boolean(d.is_wicket),
       commentary: d.commentary as string | undefined,
       dismissed_player_id: (d.dismissed_player_id ? normId(d.dismissed_player_id) : null) as UUID | null,
@@ -764,7 +782,7 @@ const bowlingDerivedByPlayer = computed<Record<string, { balls: number; runs: nu
   return out
 })
 
-// === Current bowler figures (match the scorecardâ€™s logic) ====================
+// === Current bowler figures (match the scorecardÃ¢â‚¬â„¢s logic) ====================
 const currentBowlerDerived = computed(() => {
   const id = currentBowlerId.value
   if (!id) return null
@@ -809,13 +827,14 @@ function oversDisplayFromBalls(balls: number): string {
   return `${ov}.${rem}`
 }
 function econ(runsConceded: number, ballsBowled: number): string {
-  if (!ballsBowled) return 'â€”'
+  if (!ballsBowled) return 'Ã¢â‚¬â€'
   const overs = ballsBowled / 6
   return (runsConceded / overs).toFixed(2)
 }
 
 const cantScoreReasons = computed(() => {
   const rs:string[] = []
+  if (!roleCanScore.value) rs.push(proTooltip)
   const firstBall = Number(currentOverBalls.value || 0) === 0
   if (!gameStore.currentGame) rs.push('No game loaded')
   else {
@@ -855,7 +874,7 @@ const isStartingInnings = ref(false)
 // First-innings summary captured locally when we flip to innings 2
 const firstInnings = ref<{ runs: number; wickets: number; overs: string } | null>(null)
 
-// ðŸ”§ NEW: if backend publishes an innings start, adopt it
+// Ã°Å¸â€Â§ NEW: if backend publishes an innings start, adopt it
 watch(() => (stateAny.value?.innings_start_at as string | undefined), (t) => {
   if (t) inningsStartIso.value = String(t)
 }, { immediate: true })
@@ -887,7 +906,7 @@ const allOut = computed(() => {
   return wickets >= maxOut
 })
 
-// Overs exhausted fallback â€” IMPORTANT: use current_over_balls (your storeâ€™s field)
+// Overs exhausted fallback Ã¢â‚¬â€ IMPORTANT: use current_over_balls (your storeÃ¢â‚¬â„¢s field)
 const ballsThisOver = computed(() => Number(stateAny.value?.current_over_balls ?? 0))
 const ballsPerInningsLimit = computed(() =>
   (oversLimit.value ? oversLimit.value * 6 : Infinity)
@@ -1017,7 +1036,7 @@ const legalBallsThisOver = computed(() => {
   ).length
 })
 
-// Local fallback: if weâ€™ve bowled 6 legal balls and no innings gate is up, prompt next over.
+// Local fallback: if weÃ¢â‚¬â„¢ve bowled 6 legal balls and no innings gate is up, prompt next over.
 const needsNewOverDerived = computed(() =>
   legalBallsThisOver.value === 6 && !needsNewInningsLive.value
 )
@@ -1029,6 +1048,7 @@ const nextNonStrikerId = ref<UUID>('' as UUID)
 const openingBowlerId = ref<UUID>('' as UUID)
 
 function openStartInnings(): void {
+  if (!roleCanScore.value) return
   // sensible defaults
   const bat = nextBattingXI.value
   const bowl = nextBowlingXI.value
@@ -1040,6 +1060,7 @@ function openStartInnings(): void {
 function closeStartInnings(): void { startInningsDlg.value?.close() }
 
 async function confirmStartInnings(): Promise<void> {
+  if (!roleCanScore.value) return
   console.log('[confirmStartInnings] clicked');
   const id = gameId.value
   if (!id) return
@@ -1066,16 +1087,11 @@ async function confirmStartInnings(): Promise<void> {
     if (typeof anyStore.startNextInnings === 'function') {
       await anyStore.startNextInnings(id, payload)
     } else {
-      const res = await fetch(`${apiBase}/games/${encodeURIComponent(id)}/innings/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) throw new Error(await res.text())
+      await apiService.startNextInnings(id, payload)
       await gameStore.loadGame(id)
     }
 
-    // ðŸ”§ Optimistic local clear so the dialog actually goes away now
+    // Ã°Å¸â€Â§ Optimistic local clear so the dialog actually goes away now
     // (server snapshot will arrive and confirm shortly)
     gameStore.mergeGamePatch({ status: 'in_progress' } as any)
     inningsFlipAt.value = Date.now()
@@ -1160,7 +1176,7 @@ function showToast(message: string, type: ToastType = 'success', ms = 1800): voi
   if (toastTimer) window.clearTimeout(toastTimer)
   toastTimer = window.setTimeout(() => (toast.value = null), ms) as unknown as number
 }
-function onScored(): void { showToast(pendingCount.value > 0 ? 'Saved (queued) âœ“' : 'Saved âœ“', 'success') }
+function onScored(): void { showToast(pendingCount.value > 0 ? 'Saved (queued) Ã¢Å“â€œ' : 'Saved Ã¢Å“â€œ', 'success') }
 function onError(message: string): void { showToast(message || 'Something went wrong', 'error', 3000) }
 
 // ================== Lifecycle ==================
@@ -1177,8 +1193,8 @@ onMounted(async () => {
     // Gate prompts after initial load
     if (liveSnapshot.value) syncBattersFromSnapshot(liveSnapshot.value as any)
     if (currentBowlerId.value) selectedBowler.value = currentBowlerId.value as UUID
-    if (needsNewBatterLive.value) openSelectBatter()
-    if (needsNewOverLive.value)  openStartOver()
+    if (roleCanScore.value && needsNewBatterLive.value) openSelectBatter()
+    if (roleCanScore.value && needsNewOverLive.value)  openStartOver()
   } catch (e) {
     showToast('Failed to load or connect', 'error', 3000)
     console.error('load/init failed:', e)
@@ -1252,8 +1268,9 @@ watch([bowlingPlayers, xiLoaded, currentBowlerId], () => {
   if (id && !bowlingPlayers.value.some(p => p.id === id) && id !== currentBowlerId.value) selectedBowler.value = '' as unknown as UUID
 })
 watch(needsNewInningsLive, (v) => {
+  if (!roleCanScore.value) return
   if (!v) return
-  if (isStartingInnings.value) return               // donâ€™t pop while weâ€™re starting
+  if (isStartingInnings.value) return               // donÃ¢â‚¬â„¢t pop while weÃ¢â‚¬â„¢re starting
   if (startInningsDlg.value?.open) return           // already open
   if (v) {
     selectedBowler.value = '' as any   // force explicit choice for the new innings
@@ -1271,16 +1288,20 @@ watch(() => stateAny.value?.needs_new_innings, (v) => {
 
 
 // Only open these gates if an innings is NOT required
-watch(needsNewBatterLive, (v) => { if (v && !needsNewInningsLive.value) openSelectBatter() })
+watch(needsNewBatterLive, (v) => {
+  if (!roleCanScore.value) return
+  if (v && !needsNewInningsLive.value) openSelectBatter()
+})
 watch([needsNewOverLive, needsNewOverDerived], ([serverGate, localGate]) => {
+  if (!roleCanScore.value) return
   if ((serverGate || localGate) && !needsNewInningsLive.value) {
     // Keep any user-chosen next bowler; just nudge the dialog if you want.
     if (!selectedBowler.value) {
       selectedBowler.value = (eligibleNextOverBowlers.value[0]?.id || '') as UUID
-      }
-      selectedNextOverBowlerId.value = selectedBowler.value as UUID
-      openStartOver()
     }
+    selectedNextOverBowlerId.value = selectedBowler.value as UUID
+    openStartOver()
+  }
 })
 
 watch([battingPlayers, needsNewInningsLive], ([list]) => {
@@ -1307,7 +1328,7 @@ function reconnect(): void {
   if (!id) return
   try {
     gameStore.initLive(id)
-    showToast('Reconnectingâ€¦', 'info')
+    showToast('ReconnectingÃ¢â‚¬Â¦', 'info')
   } catch {
     showToast('Reconnect failed', 'error', 2500)
   }
@@ -1316,7 +1337,7 @@ function flushNow(): void {
   const id = gameId.value
   if (!id) return
   gameStore.flushQueue(id)
-  showToast('Flushing queueâ€¦', 'info')
+  showToast('Flushing queueÃ¢â‚¬Â¦', 'info')
 }
 
 // ================== Start Over & Mid-over Change ==================
@@ -1338,10 +1359,15 @@ const candidateBatters = computed<Player[]>(() => {
 
 
 
-function openSelectBatter(): void { selectedNextBatterId.value = '' as UUID; selectBatterDlg.value?.showModal() }
+function openSelectBatter(): void {
+  if (!roleCanScore.value) return
+  selectedNextBatterId.value = '' as UUID
+  selectBatterDlg.value?.showModal()
+}
 function closeSelectBatter(): void { selectBatterDlg.value?.close() }
 
 async function confirmSelectBatter() {
+  if (!roleCanScore.value) return
   const batter = normId(selectedNextBatterId.value)
   if (!batter) return
 
@@ -1356,7 +1382,7 @@ async function confirmSelectBatter() {
     if (sId)  selectedStriker.value = sId as string
     if (nsId) selectedNonStriker.value = nsId as string
   } else {
-    // Fallback: use last deliveryâ€™s dismissed id to decide end
+    // Fallback: use last deliveryÃ¢â‚¬â„¢s dismissed id to decide end
     const last: any =
       liveSnapshot.value?.last_delivery ??
       (gameStore.currentGame as any)?.deliveries?.slice(-1)?.[0]
@@ -1374,6 +1400,7 @@ async function confirmSelectBatter() {
 
 
 function openStartOver(): void {
+  if (!roleCanScore.value) return
   const first = eligibleNextOverBowlers.value[0]?.id ?? '' as UUID
   selectedNextOverBowlerId.value = first as UUID
   startOverDlg.value?.showModal()
@@ -1382,6 +1409,7 @@ function closeStartOver(): void { startOverDlg.value?.close() }
 
 // Store only
 async function confirmStartOver(): Promise<void> {
+  if (!roleCanScore.value) return
   const id = gameId.value
   const bowler = selectedNextOverBowlerId.value
   if (!id || !bowler) return
@@ -1398,7 +1426,11 @@ async function confirmStartOver(): Promise<void> {
   }
 }
 
-function openChangeBowler(): void { selectedReplacementBowlerId.value = '' as UUID; changeBowlerDlg.value?.showModal() }
+function openChangeBowler(): void {
+  if (!roleCanScore.value) return
+  selectedReplacementBowlerId.value = '' as UUID
+  changeBowlerDlg.value?.showModal()
+}
 function closeChangeBowler(): void { changeBowlerDlg.value?.close() }
 
 async function confirmChangeBowler(): Promise<void> {
@@ -1443,7 +1475,7 @@ async function confirmChangeBowler(): Promise<void> {
     </header>
 
     <main class="content">
-      <!-- Live scoreboard preview â€” widget reads from store; interruptions polling disabled -->
+      <!-- Live scoreboard preview Ã¢â‚¬â€ widget reads from store; interruptions polling disabled -->
       <ScoreboardWidget
         :game-id="gameId"
         :theme="theme"
@@ -1456,6 +1488,17 @@ async function confirmChangeBowler(): Promise<void> {
       />
 
       <PresenceBar class="mb-3" :game-id="gameId" :status="gameStore.connectionStatus" :pending="pendingCount" />
+      <div v-if="showScoringUpsell" class="rbac-banner warn" role="alert">
+        <strong>Scoring is a Pro feature.</strong>
+        <span>
+          Please log in with a Coach Pro or Organization Pro account to enter deliveries.
+          <RouterLink to="/login">Sign in</RouterLink>
+        </span>
+      </div>
+      <div v-else-if="showAnalystReadOnly" class="rbac-banner info" role="status">
+        <strong>Read-only mode.</strong>
+        <span>Analyst Pro accounts can monitor scoring but cannot submit deliveries.</span>
+      </div>
 
       <section
         v-if="Number((gameStore.currentGame as any)?.current_inning) === 2 && (firstInnings || targetSafe != null)"
@@ -1474,7 +1517,7 @@ async function confirmChangeBowler(): Promise<void> {
           <div v-if="requiredRunRate != null" class="col">
             <strong>Req RPO:</strong> {{ requiredRunRate.toFixed(2) }}
             <small v-if="runsRequired != null && ballsRemaining >= 0" class="hint">
-              Â· Need {{ runsRequired }} off {{ ballsRemaining }} balls ({{ oversRemainingDisplay }} overs)
+              Ã‚Â· Need {{ runsRequired }} off {{ ballsRemaining }} balls ({{ oversRemainingDisplay }} overs)
             </small>
           </div>
         </div>
@@ -1488,7 +1531,7 @@ async function confirmChangeBowler(): Promise<void> {
           <div class="col">
             <label class="lbl">Striker</label>
             <select v-model="selectedStriker" class="sel" aria-label="Select striker">
-              <option disabled value="">Choose strikerâ€¦</option>
+              <option disabled value="">Choose strikerÃ¢â‚¬Â¦</option>
               <option
                 v-for="p in battingPlayers"
                 :key="p.id"
@@ -1503,7 +1546,7 @@ async function confirmChangeBowler(): Promise<void> {
           <div class="col">
             <label class="lbl">Non-striker</label>
             <select v-model="selectedNonStriker" class="sel" aria-label="Select non-striker">
-              <option disabled value="">Choose non-strikerâ€¦</option>
+              <option disabled value="">Choose non-strikerÃ¢â‚¬Â¦</option>
               <option
                 v-for="p in battingPlayers"
                 :key="p.id"
@@ -1518,7 +1561,7 @@ async function confirmChangeBowler(): Promise<void> {
           <div class="col">
             <label class="lbl">Bowler</label>
             <select v-model="selectedBowler" class="sel" aria-label="Select bowler">
-              <option disabled value="">Choose bowlerâ€¦</option>
+              <option disabled value="">Choose bowlerÃ¢â‚¬Â¦</option>
               <option v-for="p in bowlingPlayers" :key="p.id" :value="p.id">
                 {{ p.name }}
               </option>
@@ -1539,7 +1582,7 @@ async function confirmChangeBowler(): Promise<void> {
               Start Next Over
             </button>
             <small class="hint">
-              {{ !currentBowlerId ? 'No active bowler yet â€” start the over.' : 'Disables previous overâ€™s last bowler.' }}
+              {{ !currentBowlerId ? 'No active bowler yet Ã¢â‚¬â€ start the over.' : 'Disables previous overÃ¢â‚¬â„¢s last bowler.' }}
             </small>
           </div>
           <div class="col">
@@ -1547,11 +1590,11 @@ async function confirmChangeBowler(): Promise<void> {
             <small class="hint">Allowed once per over (injury).</small>
           </div>
           <div v-if="currentBowler" class="col bowler-now">
-            <strong>Current:</strong> {{ currentBowler.name }} Â·
+            <strong>Current:</strong> {{ currentBowler.name }} Ã‚Â·
             <span>{{ currentBowlerDerived?.wkts ?? 0 }}-{{ currentBowlerDerived?.runs ?? 0 }}
               ({{ currentBowlerDerived?.oversText ?? '0.0' }})
             </span>
-            <span> Â· Econ {{ currentBowlerDerived?.econText ?? 'â€”' }}</span>
+            <span> Ã‚Â· Econ {{ currentBowlerDerived?.econText ?? 'Ã¢â‚¬â€' }}</span>
           </div>
         </div>
       </section>
@@ -1564,14 +1607,14 @@ async function confirmChangeBowler(): Promise<void> {
             <small class="hint">Pause/resume play; logs delay.</small>
           </div>
           <div class="col">
-            <button class="btn" @click="jumpToReduceOvers">Reduce oversâ€¦</button>
+            <button class="btn" @click="jumpToReduceOvers">Reduce oversÃ¢â‚¬Â¦</button>
             <small class="hint">Adjust match or innings limit.</small>
           </div>
           <div class="col">
             <button class="btn btn-ghost" :disabled="!canForceStartInnings" @click="forceStartInnings">
               Start next innings (fallback)
             </button>
-            <small class="hint">Use if the innings gate doesnâ€™t appear.</small>
+            <small class="hint">Use if the innings gate doesnÃ¢â‚¬â„¢t appear.</small>
           </div>
           <!-- NEW: toggle for subs card -->
           <div class="col">
@@ -1587,9 +1630,42 @@ async function confirmChangeBowler(): Promise<void> {
 
       <!-- Gate banners -->
       <div v-if="needsNewBatterLive || needsNewOverLive || needsNewInningsLive" class="placeholder mb-3" role="status" aria-live="polite">
-        <div v-if="needsNewInningsLive">New innings required. <button class="btn btn-ghost" @click="openStartInnings">Start next innings</button></div>
-        <div v-else-if="needsNewBatterLive">New batter required. <button class="btn btn-ghost" @click="openSelectBatter">Select next batter</button></div>
-        <div v-else-if="needsNewOverLive">New over required. <button class="btn btn-ghost" @click="openStartOver">Choose bowler</button></div>
+        <div v-if="needsNewInningsLive">
+          New innings required.
+          <button
+            v-if="roleCanScore"
+            class="btn btn-ghost"
+            :title="!roleCanScore ? proTooltip : undefined"
+            @click="openStartInnings"
+          >
+            Start next innings
+          </button>
+          <small v-else class="hint">Waiting for an authorized scorer.</small>
+        </div>
+        <div v-else-if="needsNewBatterLive">
+          New batter required.
+          <button
+            v-if="roleCanScore"
+            class="btn btn-ghost"
+            :title="!roleCanScore ? proTooltip : undefined"
+            @click="openSelectBatter"
+          >
+            Select next batter
+          </button>
+          <small v-else class="hint">Waiting for an authorized scorer.</small>
+        </div>
+        <div v-else-if="needsNewOverLive">
+          New over required.
+          <button
+            v-if="roleCanScore"
+            class="btn btn-ghost"
+            :title="!roleCanScore ? proTooltip : undefined"
+            @click="openStartOver"
+          >
+            Choose bowler
+          </button>
+          <small v-else class="hint">Waiting for an authorized scorer.</small>
+        </div>
       </div>
       <small v-if="(!canScore || !canSubmitSimple) && cantScoreReasons.length" class="hint">
         {{ cantScoreReasons[0] }}
@@ -1604,7 +1680,7 @@ async function confirmChangeBowler(): Promise<void> {
       currentBowlerId: {{ currentBowlerId }} | needsNewOverLive: {{ needsNewOverLive }} (store: {{ needsNewOver }})
       needsNewInningsLive: {{ needsNewInningsLive }}
       allOut: {{ allOut }} | wicketsFromDeliveries: {{ wicketsFromDeliveries }}
-      oversExhausted: {{ oversExhausted }} | legalBallsBowled: {{ legalBallsBowled }} / {{ oversLimit*6 || 'âˆž' }} | current_over_balls: {{ stateAny?.current_over_balls }}
+      oversExhausted: {{ oversExhausted }} | legalBallsBowled: {{ legalBallsBowled }} / {{ oversLimit*6 || 'Ã¢Ë†Å¾' }} | current_over_balls: {{ stateAny?.current_over_balls }}
       inningsStartIso: {{ inningsStartIso }}
       ballsThisInnings(legal): {{ legalBallsBowled }}
       </pre>
@@ -1668,7 +1744,7 @@ async function confirmChangeBowler(): Promise<void> {
             class="sel"
             aria-label="Select fielder"
           >
-            <option disabled value="">Select fielderâ€¦</option>
+            <option disabled value="">Select fielderÃ¢â‚¬Â¦</option>
             <option v-for="p in fielderOptions" :key="p.id" :value="p.id">
               {{ p.name }}{{ bowlingXIIds.has(p.id) ? '' : ' (sub)' }}
             </option>
@@ -1682,7 +1758,7 @@ async function confirmChangeBowler(): Promise<void> {
           <!-- /NEW -->
 
           <select v-if="isWicket" v-model="dismissedName" class="sel" aria-label="Select dismissed batter">
-            <option disabled value="">Select dismissed batter…</option>
+            <option disabled value="">Select dismissed batterâ€¦</option>
             <option v-for="p in dismissedOptions" :key="p.id" :value="p.name">{{ p.name }}</option>
           </select>
         </div>
@@ -1703,14 +1779,14 @@ async function confirmChangeBowler(): Promise<void> {
 class="btn btn-ghost"
                     :disabled="!canDeleteLast || deletingLast"
                     @click="deleteLastDelivery">
-              {{ deletingLast ? 'Deletingâ€¦' : 'Delete last delivery' }}
+              {{ deletingLast ? 'DeletingÃ¢â‚¬Â¦' : 'Delete last delivery' }}
             </button>
             <small v-if="pendingCount > 0" class="hint">
               Wait for queued actions to finish before deleting.
             </small>
 
             <small v-if="!canScore" class="hint">
-              Select striker/non-striker/bowler and clear any â€œNew over / New batterâ€ prompts.
+              Select striker/non-striker/bowler and clear any Ã¢â‚¬Å“New over / New batterÃ¢â‚¬Â prompts.
             </small>
           </div>
         </div>
@@ -1780,7 +1856,7 @@ class="btn btn-ghost"
                       style="width:90px;"
                     />
                     <button class="btn" :disabled="loadingDls" @click="refreshDls">
-                      {{ loadingDls ? 'Loadingâ€¦' : 'Preview' }}
+                      {{ loadingDls ? 'LoadingÃ¢â‚¬Â¦' : 'Preview' }}
                     </button>
                   </div>
 
@@ -1797,7 +1873,7 @@ class="btn btn-ghost"
                     </div>
 
                     <button class="btn btn-primary" :disabled="applyingDls" @click="applyDls">
-                      {{ applyingDls ? 'Applyingâ€¦' : 'Apply DLS Target' }}
+                      {{ applyingDls ? 'ApplyingÃ¢â‚¬Â¦' : 'Apply DLS Target' }}
                     </button>
 
                     <small v-if="gameStore.dlsApplied" class="hint">DLS target applied.</small>
@@ -1824,21 +1900,21 @@ class="btn btn-ghost"
                   <div class="row-inline" style="flex-wrap:wrap;">
                     <label class="lbl">New limit</label>
                     <input v-model.number="oversNew" class="inp" type="number" min="1" step="1" style="width:90px;">
-                    <small class="hint">Current limit: {{ oversLimit || 'â€”' }} overs</small>
+                    <small class="hint">Current limit: {{ oversLimit || 'Ã¢â‚¬â€' }} overs</small>
                   </div>
 
                   <button class="btn btn-primary" :disabled="!canReduce || reducingOvers" @click="doReduceOvers">
-                    {{ reducingOvers ? 'Updatingâ€¦' : 'Apply Overs Limit' }}
+                    {{ reducingOvers ? 'UpdatingÃ¢â‚¬Â¦' : 'Apply Overs Limit' }}
                   </button>
                 </div>
               </div>
 
               <!-- Live Par helper -->
               <div class="card dls-card" style="margin-top:12px;">
-                <h4>DLS â€” Par Now</h4>
+                <h4>DLS Ã¢â‚¬â€ Par Now</h4>
                 <div class="dls-grid">
                   <button class="btn" :disabled="computingPar" @click="updateParNow">
-                    {{ computingPar ? 'Computingâ€¦' : 'Update Live Par' }}
+                    {{ computingPar ? 'ComputingÃ¢â‚¬Â¦' : 'Update Live Par' }}
                   </button>
                   <small v-if="(gameStore.dlsPanel as any)?.par != null" class="hint">
                     Par: {{ (gameStore.dlsPanel as any).par }}
@@ -1857,7 +1933,7 @@ class="btn btn-ghost"
       <div class="modal">
         <header class="modal-hdr">
           <h3 id="share-title">Share & Monetize</h3>
-          <button class="x" aria-label="Close modal" @click="closeShare">âœ•</button>
+          <button class="x" aria-label="Close modal" @click="closeShare">Ã¢Å“â€¢</button>
         </header>
 
         <section class="modal-body">
@@ -1880,9 +1956,9 @@ class="btn btn-ghost"
           </div>
 
           <div class="note">
-            <strong>Tip (TV/OBS):</strong> Add a <em>Browser Source</em> with the iframeâ€™s
+            <strong>Tip (TV/OBS):</strong> Add a <em>Browser Source</em> with the iframeÃ¢â‚¬â„¢s
             <code>src</code> URL (or paste this embed into a simple HTML file). Set width to your canvas,
-            height â‰ˆ <b>{{ height }}</b> px, and enable transparency if you want rounded corners to blend.
+            height Ã¢â€°Ë† <b>{{ height }}</b> px, and enable transparency if you want rounded corners to blend.
           </div>
         </section>
 
@@ -1894,12 +1970,12 @@ class="btn btn-ghost"
     </div>
 
     <!-- Start Over Modal -->
-    <dialog ref="startOverDlg">
+    <dialog v-if="roleCanScore" ref="startOverDlg">
       <form method="dialog" class="dlg">
         <h3>Start next over</h3>
         <p>Select a bowler (cannot be the bowler who delivered the last ball of previous over).</p>
         <select v-model="selectedNextOverBowlerId" class="sel">
-          <option disabled value="">Choose bowlerâ€¦</option>
+          <option disabled value="">Choose bowlerÃ¢â‚¬Â¦</option>
           <option v-for="p in eligibleNextOverBowlers" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
         <footer>
@@ -1910,26 +1986,26 @@ class="btn btn-ghost"
     </dialog>
 
     <!-- Start Next Innings Modal -->
-    <dialog ref="startInningsDlg">
+    <dialog v-if="roleCanScore" ref="startInningsDlg">
       <form method="dialog" class="dlg">
         <h3>Start next innings</h3>
         <p>Select openers and (optional) opening bowler.</p>
 
         <label class="lbl">Striker</label>
         <select v-model="nextStrikerId" class="sel">
-          <option disabled value="">Choose strikerâ€¦</option>
+          <option disabled value="">Choose strikerÃ¢â‚¬Â¦</option>
           <option v-for="p in nextBattingXI" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
 
         <label class="lbl">Non-striker</label>
         <select v-model="nextNonStrikerId" class="sel">
-          <option disabled value="">Choose non-strikerâ€¦</option>
+          <option disabled value="">Choose non-strikerÃ¢â‚¬Â¦</option>
           <option v-for="p in nextBattingXI" :key="p.id" :value="p.id" :disabled="p.id === nextStrikerId">{{ p.name }}</option>
         </select>
 
         <label class="lbl">Opening bowler (optional)</label>
         <select v-model="openingBowlerId" class="sel">
-          <option value="">â€” None (choose later) â€”</option>
+          <option value="">Ã¢â‚¬â€ None (choose later) Ã¢â‚¬â€</option>
           <option v-for="p in nextBowlingXI" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
 
@@ -1948,12 +2024,12 @@ class="btn btn-ghost"
     </dialog>
 
     <!-- Select Next Batter Modal (Gate) -->
-    <dialog ref="selectBatterDlg">
+    <dialog v-if="roleCanScore" ref="selectBatterDlg">
       <form method="dialog" class="dlg">
         <h3>Select next batter</h3>
         <p>Pick a batter who is not out.</p>
         <select v-model="selectedNextBatterId" class="sel">
-          <option disabled value="">Choose batterâ€¦</option>
+          <option disabled value="">Choose batterÃ¢â‚¬Â¦</option>
           <option v-for="p in candidateBatters" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
         <footer>
@@ -1967,13 +2043,19 @@ class="btn btn-ghost"
     <dialog ref="weatherDlg">
       <form method="dialog" class="dlg">
         <h3>Weather interruption</h3>
-        <p>Add an optional note (e.g., â€œRain, covers onâ€).</p>
+        <p>Add an optional note (e.g., Ã¢â‚¬Å“Rain, covers onÃ¢â‚¬Â).</p>
         <input v-model="weatherNote" class="inp" placeholder="Note (optional)" />
         <footer>
           <button type="button" class="btn" @click="closeWeather">Close</button>
           <button type="button" class="btn" @click.prevent="resumeAfterWeather">Resume play</button>
           <button type="button" class="btn btn-primary" @click.prevent="startWeatherDelay">Start delay</button>
-          <button class="btn" :disabled="needsNewInningsLive || !canStartOverNow" @click="openStartOver">Start Next Over</button>
+          <button
+            v-if="roleCanScore"
+            class="btn"
+            :disabled="needsNewInningsLive || !canStartOverNow"
+            :title="!roleCanScore ? proTooltip : undefined"
+            @click="openStartOver"
+          >Start Next Over</button>
         </footer>
       </form>
     </dialog>
@@ -1984,7 +2066,7 @@ class="btn btn-ghost"
         <h3>Mid-over change (injury)</h3>
         <p>Pick a replacement to finish this over. You can do this only once per over.</p>
         <select v-model="selectedReplacementBowlerId" class="sel">
-          <option disabled value="">Choose replacementâ€¦</option>
+          <option disabled value="">Choose replacementÃ¢â‚¬Â¦</option>
           <option v-for="p in replacementOptions" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
         <footer>
@@ -2197,4 +2279,8 @@ class="btn btn-ghost"
 dialog::backdrop { background: rgba(0,0,0,0.2); }
 dialog .dlg { display: flex; flex-direction: column; gap: 10px; min-width: 320px; }
 dialog footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+.rbac-banner{border-radius:12px;padding:12px 16px;margin-bottom:12px;border:1px solid rgba(248,113,113,.4);background:rgba(248,113,113,.08);color:#7f1d1d;display:flex;flex-direction:column;gap:4px}
+.rbac-banner.warn{border-color:rgba(248,113,113,.6);background:rgba(248,113,113,.12);color:#7f1d1d}
+.rbac-banner.info{border-color:rgba(59,130,246,.4);background:rgba(59,130,246,.12);color:#1d4ed8}
 </style>

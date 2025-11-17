@@ -8,6 +8,7 @@ const props = defineProps<{
   canScore: boolean
 }>()
 const game = useGameStore()
+const proTooltip = 'Requires Coach Pro or Organization Pro'
 
 async function doRun(n: number) {
   if (!props.canScore) return
@@ -46,14 +47,20 @@ async function wicket() {
 <template>
   <div class="pad">
     <div class="row runs">
-      <button v-for="n in [0,1,2,3,4,5,6]" :key="n" :disabled="!canScore" @click="doRun(n)">
+      <button
+        v-for="n in [0,1,2,3,4,5,6]"
+        :key="n"
+        :disabled="!canScore"
+        :title="!canScore ? proTooltip : undefined"
+        @click="doRun(n)"
+      >
         {{ n }}
       </button>
     </div>
     <div class="row">
-      <button class="wd" :disabled="!canScore" @click="extra('wd')">Wd</button>
-      <button class="nb" :disabled="!canScore" @click="extra('nb')">Nb</button>
-      <button class="wkt" :disabled="!canScore" @click="wicket">Wkt</button>
+      <button class="wd" :disabled="!canScore" :title="!canScore ? proTooltip : undefined" @click="extra('wd')">Wd</button>
+      <button class="nb" :disabled="!canScore" :title="!canScore ? proTooltip : undefined" @click="extra('nb')">Nb</button>
+      <button class="wkt" :disabled="!canScore" :title="!canScore ? proTooltip : undefined" @click="wicket">Wkt</button>
     </div>
   </div>
 </template>

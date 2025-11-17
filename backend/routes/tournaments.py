@@ -7,13 +7,19 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend import security
 from backend.sql_app import schemas, tournament_crud
 from backend.sql_app.database import get_db
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 
 
-@router.post("/", response_model=schemas.TournamentResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=schemas.TournamentResponse,
+    status_code=201,
+    dependencies=[security.org_only_required],
+)
 async def create_tournament(
     tournament: schemas.TournamentCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -110,7 +116,12 @@ async def get_points_table(
 # Fixture management endpoints
 
 
-@router.post("/fixtures", response_model=schemas.FixtureResponse, status_code=201)
+@router.post(
+    "/fixtures",
+    response_model=schemas.FixtureResponse,
+    status_code=201,
+    dependencies=[security.org_only_required],
+)
 async def create_fixture(
     fixture: schemas.FixtureCreate,
     db: Annotated[AsyncSession, Depends(get_db)],

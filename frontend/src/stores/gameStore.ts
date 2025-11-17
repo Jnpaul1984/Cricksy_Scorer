@@ -30,6 +30,7 @@ import {
   type Snapshot as ApiSnapshot,
   type Interruption as ApiInterruption,
 } from '@/utils/api'
+import { apiRequest, apiRequestPublic } from '@/services/api'
 
 
 // ---- Socket helpers
@@ -445,6 +446,10 @@ export const useGameStore = defineStore('game', () => {
   const connectionStatus = ref<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
   const lastLiveAt = ref<number | null>(null)
   const liveSnapshot = ref<UiSnapshot | null>(null)
+  const recentDeliveries = ref<any[]>([])
+  const loadingSnapshot = ref(false)
+  const loadingRecentDeliveries = ref(false)
+  const isPublicViewer = ref(false)
   const needsNewBatter = computed(() =>
     Boolean(liveSnapshot.value?.needs_new_batter ?? (currentGame.value as any)?.needs_new_batter ?? false)
   )
@@ -483,6 +488,10 @@ export const useGameStore = defineStore('game', () => {
     } catch { /* noop */ }
   }
   loadQueue()
+
+  function setPublicViewerMode(flag: boolean) {
+    isPublicViewer.value = !!flag
+  }
 
   // ========================================================================
   // Proxies & Status
@@ -706,6 +715,43 @@ async function backfillRecentDeliveries(limit = 60): Promise<void> {
   }
 }
 
+  async function fetchSnapshot(gameId: string): Promise<UiSnapshot | null> {
+    if (!gameId) return null
+    loadingSnapshot.value = true
+    try {
+      const req = isPublicViewer.value ? apiRequestPublic : apiRequest
+      const snap = await req<ApiSnapshot>(`/games/${encodeURIComponent(gameId)}/snapshot`)
+      if (!snap) return null
+      const coerced = coerceSnapshot(snap)
+      liveSnapshot.value = coerced
+      applySnapshotToGame(coerced)
+      syncOversLimitFrom(snap)
+      applyDlsPanelFrom(snap)
+      return coerced
+    } finally {
+      loadingSnapshot.value = false
+    }
+  }
+
+  async function fetchRecentDeliveries(gameId: string, limit = 12): Promise<any[]> {
+    if (!gameId) {
+      recentDeliveries.value = []
+      return []
+    }
+    loadingRecentDeliveries.value = true
+    try {
+      const req = isPublicViewer.value ? apiRequestPublic : apiRequest
+      const path = `/games/${encodeURIComponent(gameId)}/recent_deliveries?limit=${encodeURIComponent(String(limit))}`
+      const result = await req<{ game_id: string; count: number; deliveries: any[] }>(path)
+      const rows = Array.isArray(result?.deliveries) ? result.deliveries : []
+      recentDeliveries.value = rows
+      return rows
+    } finally {
+      loadingRecentDeliveries.value = false
+    }
+  }
+
+
   // ========================================================================
   // Score helpers
   // ========================================================================
@@ -903,19 +949,22 @@ function stabilizeBattersFromLastDelivery(prevGame: GameState, snap: UiSnapshot)
   // Merge liveSnapshot + game for simple access in views
     const state = computed(() => {
       const g: any = currentGame.value || {}
-      const s: any = liveSnapshot.value || {}
-      return {
-        balls_this_over: Number(g.balls_this_over ?? s.balls_this_over ?? 0),
-        current_bowler_id: s.current_bowler_id ?? g.current_bowler_id ?? null,
-        last_ball_bowler_id: s.last_ball_bowler_id ?? g.last_ball_bowler_id ?? null,
-        current_over_balls: Number(s.current_over_balls ?? g.current_over_balls ?? g.balls_this_over ?? 0),
-        mid_over_change_used: Boolean(s.mid_over_change_used ?? g.mid_over_change_used ?? false),
-        balls_bowled_total: Number(s.balls_bowled_total ?? g.balls_bowled_total ?? 0),
-        needs_new_batter: Boolean(s.needs_new_batter ?? false),
-        needs_new_over: Boolean(s.needs_new_over ?? false),
-        needs_new_innings: Boolean((liveSnapshot.value as any)?.needs_new_innings ?? (currentGame.value as any)?.needs_new_innings ?? false),
-      }
-    })
+    const s: any = liveSnapshot.value || {}
+    return {
+      balls_this_over: Number(g.balls_this_over ?? s.balls_this_over ?? 0),
+      current_bowler_id: s.current_bowler_id ?? g.current_bowler_id ?? null,
+      last_ball_bowler_id: s.last_ball_bowler_id ?? g.last_ball_bowler_id ?? null,
+      current_over_balls: Number(s.current_over_balls ?? g.current_over_balls ?? g.balls_this_over ?? 0),
+      mid_over_change_used: Boolean(s.mid_over_change_used ?? g.mid_over_change_used ?? false),
+      balls_bowled_total: Number(s.balls_bowled_total ?? g.balls_bowled_total ?? 0),
+      needs_new_batter: Boolean(s.needs_new_batter ?? false),
+      needs_new_over: Boolean(s.needs_new_over ?? false),
+      needs_new_innings: Boolean(
+        (liveSnapshot.value as any)?.needs_new_innings ?? (currentGame.value as any)?.needs_new_innings ?? false
+      ),
+      recent_deliveries: recentDeliveries.value,
+    }
+  })
 
 // === RRR & Target helpers ====================================================
 // Total runs for a single delivery based on extra type (defensive for mixed payloads)
@@ -1903,25 +1952,16 @@ async function postDeliveryAuthoritative(
   try {
     uiState.value.loading = true
 
-    const game = await apiService.getGame(gameId)
+    const game = isPublicViewer.value
+      ? await apiRequestPublic<any>(`/games/${encodeURIComponent(gameId)}`)
+      : await apiService.getGame(gameId)
     currentGame.value = coerceGameFromApi(game)
     interruptions.value = ((currentGame.value as any)?.interruptions ?? []).map(normalizeInterruption)
     // Pull a fresh snapshot & wire DLS panel if present
     try {
-      const snap = await apiService.getSnapshot(gameId)
-      if (snap) {
-        applySnapshotToGame(coerceSnapshot(snap))
-        syncOversLimitFrom(snap)
-        if ((snap as any)?.dls?.method === 'DLS') {
-          dlsPanel.value = {
-            method: 'DLS',
-            par: typeof (snap as any).dls.par === 'number' ? (snap as any).dls.par : undefined,
-            target: typeof (snap as any).dls.target === 'number' ? (snap as any).dls.target : undefined,
-          }
-        }
-
-        await backfillRecentDeliveries(60)
-      }
+      await fetchSnapshot(gameId)
+      await backfillRecentDeliveries(60)
+      await fetchRecentDeliveries(gameId, 12)
       void refreshInterruptions()
     } catch { /* ignore */ }
 
@@ -2503,6 +2543,7 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     isLive.value = false
     liveGameId.value = null
     commentaryFeed.value = []
+    recentDeliveries.value = []
 
     // ⬇️ ADD: reset DLS bits
     dlsPanel.value = null
@@ -2520,6 +2561,10 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     currentGame,
     uiState,
     operationLoading,
+    isPublicViewer,
+    loadingSnapshot,
+    loadingRecentDeliveries,
+    recentDeliveries,
 
     // Proxies
     isLoading,
@@ -2666,5 +2711,8 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     clearError,
     clearGame,
     mergeGamePatch,
+    setPublicViewerMode,
+    fetchSnapshot,
+    fetchRecentDeliveries,
   }
 })

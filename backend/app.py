@@ -21,16 +21,20 @@ from backend.middleware.observability import (  # NEW
     AccessLogMiddleware,
     CorrelationIdMiddleware,
 )
+from backend.routes.analyst_pro import router as analyst_pro_router
+from backend.routes.auth_router import router as auth_router
 from backend.routes.dls import router as dls_router
 from backend.routes.game_admin import router as game_admin_router
 from backend.routes.gameplay import get_db as gameplay_get_db
 from backend.routes.gameplay import (
     router as gameplay_router,  # type: ignore[attr-defined]
 )
+from backend.routes.fan_mode import router as fan_mode_router
 from backend.routes.games_core import router as games_core_router  # NEW
 from backend.routes.games_dls import router as games_dls_router
 
 # Routers
+from backend.routes.coach_pro import router as coach_pro_router
 from backend.routes.games_router import router as games_router
 from backend.routes.health import router as health_router
 from backend.routes.interruptions import router as interruptions_router
@@ -38,6 +42,7 @@ from backend.routes.players import router as players_router
 from backend.routes.prediction import router as prediction_router
 from backend.routes.sponsors import router as sponsors_router
 from backend.routes.tournaments import router as tournaments_router
+from backend.routes.users_router import router as users_router
 from backend.services.live_bus import set_socketio_server as _set_bus_sio
 
 # Socket handlers and live bus
@@ -267,6 +272,7 @@ def create_app(
     _set_bus_sio(sio)
 
     # Include routers
+    fastapi_app.include_router(auth_router)
     fastapi_app.include_router(games_dls_router)
     fastapi_app.include_router(interruptions_router)
     fastapi_app.include_router(games_router)
@@ -278,7 +284,11 @@ def create_app(
     fastapi_app.include_router(games_core_router)
     fastapi_app.include_router(prediction_router)
     fastapi_app.include_router(players_router)
+    fastapi_app.include_router(fan_mode_router)
+    fastapi_app.include_router(analyst_pro_router)
+    fastapi_app.include_router(coach_pro_router)
     fastapi_app.include_router(tournaments_router)
+    fastapi_app.include_router(users_router)
 
     # Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
     use_in_memory = bool(getattr(settings, "IN_MEMORY_DB", False)) or (

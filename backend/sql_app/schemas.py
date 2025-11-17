@@ -10,9 +10,44 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.config import ConfigDict
 
+from backend.sql_app.models import FanFavoriteType, PlayerCoachingNoteVisibility, RoleEnum
+
 UTC = getattr(dt, "UTC", dt.UTC)
 TeamItem: TypeAlias = str | UUID | Mapping[str, object]  # noqa: UP040
 ExtraCode = Literal["wd", "nb", "b", "lb"]
+
+
+class UserBase(BaseModel):
+    email: str
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+class UserRead(UserBase):
+    id: str
+    is_active: bool
+    is_superuser: bool
+    role: RoleEnum
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    user_id: str | None = None
+    email: str | None = None
+
+
+class UserRoleUpdate(BaseModel):
+    role: RoleEnum
+
+
 # ===================================================================
 # Base & Re-usable Models
 # ===================================================================
@@ -665,6 +700,180 @@ class PlayerProfileResponse(PlayerProfileStats):
     """Schema for complete player profile including achievements."""
 
     achievements: list[PlayerAchievementResponse] = Field(default_factory=list)
+
+
+class PlayerFormBase(BaseModel):
+    period_start: dt.date
+    period_end: dt.date
+    matches_played: int
+    runs: int
+    wickets: int
+    batting_average: float | None = None
+    strike_rate: float | None = None
+    economy: float | None = None
+    form_score: float | None = None
+
+
+class PlayerFormCreate(PlayerFormBase):
+    pass
+
+
+class PlayerFormRead(PlayerFormBase):
+    id: str
+    player_id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerCoachingNotesBase(BaseModel):
+    strengths: str
+    weaknesses: str
+    action_plan: str | None = None
+    visibility: PlayerCoachingNoteVisibility = PlayerCoachingNoteVisibility.private_to_coach
+
+
+class PlayerCoachingNotesCreate(PlayerCoachingNotesBase):
+    pass
+
+
+class PlayerCoachingNotesRead(PlayerCoachingNotesBase):
+    id: str
+    player_id: str
+    coach_user_id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerSummaryBase(BaseModel):
+    total_matches: int
+    total_runs: int
+    total_wickets: int
+    batting_average: float | None = None
+    bowling_average: float | None = None
+    strike_rate: float | None = None
+
+
+class PlayerSummaryRead(PlayerSummaryBase):
+    id: str
+    player_id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CoachPlayerAssignmentBase(BaseModel):
+    coach_user_id: str
+    player_profile_id: str
+
+
+class CoachPlayerAssignmentCreate(CoachPlayerAssignmentBase):
+    pass
+
+
+class CoachPlayerAssignmentRead(CoachPlayerAssignmentBase):
+    id: str
+    is_active: bool
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CoachingSessionBase(BaseModel):
+    scheduled_at: dt.datetime
+    duration_minutes: int
+    focus_area: str
+    notes: str | None = None
+    outcome: str | None = None
+
+
+class CoachingSessionCreate(CoachingSessionBase):
+    coach_user_id: str | None = None
+
+
+class CoachingSessionUpdate(BaseModel):
+    scheduled_at: dt.datetime | None = None
+    duration_minutes: int | None = None
+    focus_area: str | None = None
+    notes: str | None = None
+    outcome: str | None = None
+
+
+class CoachingSessionRead(CoachingSessionBase):
+    id: str
+    coach_user_id: str
+    player_profile_id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AnalyticsQuery(BaseModel):
+    entity: Literal["players", "matches", "form", "sessions"]
+    player_id: str | None = None
+    from_date: dt.date | None = None
+    to_date: dt.date | None = None
+
+
+class AnalyticsResult(BaseModel):
+    query: AnalyticsQuery
+    summary_stats: dict[str, Any] = Field(default_factory=dict)
+    sample_rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class FanMatchBase(BaseModel):
+    home_team_name: str
+    away_team_name: str
+    match_type: str = "T20"
+    overs_limit: int | None = None
+
+
+class FanMatchCreate(FanMatchBase):
+    pass
+
+
+class FanMatchRead(FanMatchBase):
+    id: str
+    is_fan_match: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FanFavoriteBase(BaseModel):
+    favorite_type: FanFavoriteType
+    player_profile_id: str | None = None
+    team_id: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_target(self):
+        has_player = self.player_profile_id is not None
+        has_team = self.team_id is not None
+        if has_player == has_team:
+            raise ValueError("Provide either player_profile_id or team_id")
+        if self.favorite_type == FanFavoriteType.player and not has_player:
+            raise ValueError("player_profile_id required for player favorites")
+        if self.favorite_type == FanFavoriteType.team and not has_team:
+            raise ValueError("team_id required for team favorites")
+        return self
+
+
+class FanFavoriteCreate(FanFavoriteBase):
+    pass
+
+
+class FanFavoriteRead(FanFavoriteBase):
+    id: str
+    created_at: dt.datetime
+    player_name: str | None = None
+    team_name: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AwardAchievementRequest(BaseModel):

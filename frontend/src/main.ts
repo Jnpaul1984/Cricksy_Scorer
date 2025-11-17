@@ -8,6 +8,8 @@ import App from './App.vue'
 import router from './router'
 
 import pinia from '@/stores'
+import { API_BASE, setUnauthorizedHandler } from '@/services/api';
+import { useAuthStore } from '@/stores/authStore';
 
 // Global styles first (safe to keep here)
 import '@picocss/pico/css/pico.min.css'
@@ -22,6 +24,14 @@ if (!mountEl.__vue_app__) {
   // Plugins
   app.use(pinia)
   app.use(router)
+
+  const authStore = useAuthStore(pinia)
+  setUnauthorizedHandler(() => {
+    authStore.logout()
+    if (router.currentRoute.value.path !== '/login') {
+      router.push('/login')
+    }
+  })
 
   // Global error handler
   app.config.errorHandler = (error, instance, info) => {
@@ -49,7 +59,7 @@ if (!mountEl.__vue_app__) {
   if (import.meta.env.DEV) {
     console.log('🏏 Cricksy Scorer application initialized successfully')
     console.log('Environment:', import.meta.env.MODE)
-    console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL ?? '(not set)')
+    console.log('API Base URL:', API_BASE || '(not set)')
   }
   if (import.meta.env.DEV) {
     ;(window as any).loadMatch = (match: any) => {

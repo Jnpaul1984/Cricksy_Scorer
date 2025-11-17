@@ -71,7 +71,7 @@ function onError(m: string) { emit('error', m) }
       />
     </div>
 
-    <UndoLastBall :game-id="gameId" :disabled="true" class="mt" />
+    <UndoLastBall v-if="canScore" :game-id="gameId" :disabled="true" class="mt" />
   </div>
 </template>
 

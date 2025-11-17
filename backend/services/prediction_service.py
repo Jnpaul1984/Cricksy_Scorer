@@ -196,7 +196,7 @@ class WinProbabilityPredictor:
         current_rr = (total_runs / total_balls) * 6 if total_balls > 0 else 0.0
 
         # Project final score
-        wickets_remaining = 10 - total_wickets
+        wickets_remaining = max(0, 10 - total_wickets)
         balls_remaining = total_balls_limit - total_balls
 
         # Wicket factor: reduce projected RR as wickets fall
@@ -287,7 +287,7 @@ class WinProbabilityPredictor:
 
         # Calculate runs needed
         runs_needed = target - total_runs
-        wickets_remaining = 10 - total_wickets
+        wickets_remaining = max(0, 10 - total_wickets)
 
         # Already won or lost
         if runs_needed <= 0:
@@ -365,9 +365,20 @@ class WinProbabilityPredictor:
                 f"runs_needed={runs_needed}, balls={balls_remaining}"
             )
 
+            batting_prob = batting_prob_ml
+            if (
+                runs_needed > 0
+                and balls_remaining > 0
+                and wickets_remaining <= 3
+                and required_rr >= 15.0
+            ):
+                batting_prob = min(batting_prob, 10.0)
+
+            bowling_prob = 100.0 - batting_prob
+
             return {
-                "batting_team_win_prob": round(batting_prob_ml, 1),
-                "bowling_team_win_prob": round(100.0 - batting_prob_ml, 1),
+                "batting_team_win_prob": round(batting_prob, 1),
+                "bowling_team_win_prob": round(bowling_prob, 1),
                 "confidence": round(confidence, 1),
                 "factors": {
                     "runs_needed": runs_needed,

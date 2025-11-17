@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -46,6 +48,58 @@ class GameContributorRoleEnum(str, enum.Enum):
     scorer = "scorer"
     commentary = "commentary"
     analytics = "analytics"
+
+
+class RoleEnum(str, enum.Enum):
+    free = "free"
+    player_pro = "player_pro"
+    coach_pro = "coach_pro"
+    analyst_pro = "analyst_pro"
+    org_pro = "org_pro"
+
+
+class PlayerCoachingNoteVisibility(str, enum.Enum):
+    private_to_coach = "private_to_coach"
+    org_only = "org_only"
+
+
+class FanFavoriteType(str, enum.Enum):
+    player = "player"
+    team = "team"
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    email: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    role: Mapped[RoleEnum] = mapped_column(
+        SAEnum(RoleEnum, name="user_role"),
+        default=RoleEnum.free,
+        server_default=RoleEnum.free.value,
+        nullable=False,
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    fan_matches: Mapped[list[Game]] = relationship(back_populates="created_by_user")
+    fan_favorites: Mapped[list[FanFavorite]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    coach_assignments: Mapped[list[CoachPlayerAssignment]] = relationship(
+        back_populates="coach_user", cascade="all, delete-orphan"
+    )
+    coaching_sessions: Mapped[list[CoachingSession]] = relationship(
+        back_populates="coach_user", cascade="all, delete-orphan"
+    )
 
 
 # -----------------------------
@@ -98,7 +152,9 @@ class Game(Base):
     __tablename__ = "games"
 
     # Identifiers
-    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True
+    )
 
     # Existing team JSON (name + players[{id,name}, ...])
     team_a: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
@@ -196,11 +252,26 @@ class Game(Base):
     current_inning: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     first_inning_summary: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     result: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    is_fan_match: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=func.false(),
+    )
+    created_by_user: Mapped[User | None] = relationship(back_populates="fan_matches")
 
     # Relationship backref from GameContributor is set below
     contributors: Mapped[list[GameContributor]] = relationship(
         back_populates="game", cascade="all, delete-orphan"
     )
+
+    __table_args__ = (Index("ix_games_is_fan_match", "is_fan_match"),)
 
     def get_winner(self):
         """
@@ -388,6 +459,19 @@ class PlayerProfile(Base):
     achievements: Mapped[list[PlayerAchievement]] = relationship(
         back_populates="player_profile", cascade="all, delete-orphan"
     )
+    form_entries: Mapped[list[PlayerForm]] = relationship(
+        back_populates="player_profile", cascade="all, delete-orphan"
+    )
+    coaching_notes: Mapped[list[PlayerCoachingNotes]] = relationship(
+        back_populates="player_profile", cascade="all, delete-orphan"
+    )
+    summary: Mapped[PlayerSummary] = relationship(back_populates="player_profile", uselist=False)
+    coach_assignments: Mapped[list[CoachPlayerAssignment]] = relationship(
+        back_populates="player_profile", cascade="all, delete-orphan"
+    )
+    coaching_sessions: Mapped[list[CoachingSession]] = relationship(
+        back_populates="player_profile", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_player_profiles_total_runs", "total_runs_scored"),
@@ -488,9 +572,247 @@ class PlayerAchievement(Base):
     player_profile: Mapped[PlayerProfile] = relationship(back_populates="achievements")
 
     __table_args__ = (
-        Index("ix_player_achievements_player_id", "player_id"),
         Index("ix_player_achievements_type", "achievement_type"),
         Index("ix_player_achievements_earned_at", "earned_at"),
+    )
+
+
+# ===== Player Pro =====
+
+
+class PlayerForm(Base):
+    __tablename__ = "player_forms"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    player_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    period_start: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    matches_played: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    wickets: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    batting_average: Mapped[float | None] = mapped_column(Float, nullable=True)
+    strike_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    economy: Mapped[float | None] = mapped_column(Float, nullable=True)
+    form_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    player_profile: Mapped[PlayerProfile] = relationship(back_populates="form_entries")
+
+    __table_args__ = (Index("ix_player_forms_period", "player_id", "period_start", "period_end"),)
+
+
+class PlayerCoachingNotes(Base):
+    __tablename__ = "player_coaching_notes"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    player_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    coach_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    strengths: Mapped[str] = mapped_column(Text, nullable=False)
+    weaknesses: Mapped[str] = mapped_column(Text, nullable=False)
+    action_plan: Mapped[str | None] = mapped_column(Text, nullable=True)
+    visibility: Mapped[PlayerCoachingNoteVisibility] = mapped_column(
+        SAEnum(PlayerCoachingNoteVisibility, name="coaching_note_visibility"),
+        nullable=False,
+        default=PlayerCoachingNoteVisibility.private_to_coach,
+        server_default=PlayerCoachingNoteVisibility.private_to_coach.value,
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    player_profile: Mapped[PlayerProfile] = relationship(back_populates="coaching_notes")
+
+    __table_args__ = (Index("ix_player_coaching_notes_visibility", "visibility"),)
+
+
+class PlayerSummary(Base):
+    __tablename__ = "player_summaries"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    player_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    total_matches: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_wickets: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    batting_average: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bowling_average: Mapped[float | None] = mapped_column(Float, nullable=True)
+    strike_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    player_profile: Mapped[PlayerProfile] = relationship(back_populates="summary")
+
+    __table_args__ = (
+        Index("ix_player_summaries_player_id", "player_id"),
+        Index("ix_player_summaries_totals", "total_runs", "total_wickets"),
+    )
+
+
+class CoachPlayerAssignment(Base):
+    __tablename__ = "coach_player_assignments"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    coach_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    player_profile_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+        server_default=func.true(),
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    coach_user: Mapped[User] = relationship(back_populates="coach_assignments")
+    player_profile: Mapped[PlayerProfile] = relationship(back_populates="coach_assignments")
+
+    __table_args__ = (
+        Index(
+            "ix_coach_assignments_unique",
+            "coach_user_id",
+            "player_profile_id",
+            unique=True,
+        ),
+    )
+
+
+class CoachingSession(Base):
+    __tablename__ = "coaching_sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    coach_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    player_profile_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    scheduled_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    focus_area: Mapped[str] = mapped_column(String, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    coach_user: Mapped[User] = relationship(back_populates="coaching_sessions")
+    player_profile: Mapped[PlayerProfile] = relationship(back_populates="coaching_sessions")
+
+    __table_args__ = (
+        Index("ix_coaching_sessions_coach_time", "coach_user_id", "scheduled_at"),
+        Index("ix_coaching_sessions_player_time", "player_profile_id", "scheduled_at"),
+    )
+
+
+class FanFavorite(Base):
+    __tablename__ = "fan_favorites"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    favorite_type: Mapped[FanFavoriteType] = mapped_column(
+        SAEnum(FanFavoriteType, name="fan_favorite_type"),
+        nullable=False,
+    )
+    player_profile_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    team_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped[User] = relationship(back_populates="fan_favorites")
+    player_profile: Mapped[PlayerProfile | None] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(
+            "(player_profile_id IS NOT NULL AND team_id IS NULL) OR "
+            "(player_profile_id IS NULL AND team_id IS NOT NULL)",
+            name="ck_fan_favorites_target",
+        ),
+        Index("ix_fan_favorites_user_type", "user_id", "favorite_type"),
+        Index(
+            "ix_fan_favorites_user_player",
+            "user_id",
+            "player_profile_id",
+        ),
+        Index("ix_fan_favorites_user_team", "user_id", "team_id"),
     )
 
 
@@ -559,10 +881,7 @@ class TournamentTeam(Base):
     # Relationships
     tournament: Mapped[Tournament] = relationship(back_populates="teams")
 
-    __table_args__ = (
-        Index("ix_tournament_teams_tournament_id", "tournament_id"),
-        Index("ix_tournament_teams_points", "points"),
-    )
+    __table_args__ = (Index("ix_tournament_teams_points", "points"),)
 
 
 class Fixture(Base):
@@ -607,7 +926,6 @@ class Fixture(Base):
     tournament: Mapped[Tournament] = relationship(back_populates="fixtures")
 
     __table_args__ = (
-        Index("ix_fixtures_tournament_id", "tournament_id"),
         Index("ix_fixtures_status", "status"),
         Index("ix_fixtures_scheduled_date", "scheduled_date"),
     )

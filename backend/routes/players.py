@@ -4,26 +4,49 @@ Handles player statistics, achievements, and leaderboards.
 """
 
 import datetime as dt
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import Float, cast, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend import security
 from backend.sql_app.database import get_db
-from backend.sql_app.models import AchievementType, PlayerAchievement, PlayerProfile
+from backend.sql_app.models import (
+    AchievementType,
+    PlayerAchievement,
+    PlayerCoachingNoteVisibility,
+    PlayerCoachingNotes,
+    PlayerForm,
+    PlayerProfile,
+    PlayerSummary,
+    RoleEnum,
+    User,
+)
 from backend.sql_app.schemas import (
     AwardAchievementRequest,
     LeaderboardEntry,
     LeaderboardResponse,
     PlayerAchievementResponse,
+    PlayerCoachingNotesCreate,
+    PlayerCoachingNotesRead,
+    PlayerFormCreate,
+    PlayerFormRead,
     PlayerProfileResponse,
+    PlayerSummaryRead,
 )
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
 router = APIRouter(prefix="/api/players", tags=["players"])
+
+
+async def _ensure_player_profile(db: AsyncSession, player_id: str) -> PlayerProfile:
+    profile = await db.get(PlayerProfile, player_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Player profile not found")
+    return profile
 
 
 @router.get("/{player_id}/profile", response_model=PlayerProfileResponse)
@@ -121,7 +144,135 @@ async def get_player_achievements(
     ]
 
 
-@router.post("/{player_id}/achievements", response_model=PlayerAchievementResponse)
+@router.get(
+    "/{player_id}/form",
+    response_model=list[PlayerFormRead],
+)
+async def list_player_form_entries(
+    player_id: str,
+    _current_user: Annotated[
+        User, Depends(security.require_roles(["coach_pro", "analyst_pro", "org_pro"]))
+    ],
+    db: AsyncSession = Depends(get_db),
+) -> list[PlayerForm]:
+    await _ensure_player_profile(db, player_id)
+    result = await db.execute(
+        select(PlayerForm)
+        .where(PlayerForm.player_id == player_id)
+        .order_by(desc(PlayerForm.period_end))
+    )
+    return result.scalars().all()
+
+
+@router.post(
+    "/{player_id}/form",
+    response_model=PlayerFormRead,
+)
+async def create_player_form_entry(
+    player_id: str,
+    form_data: PlayerFormCreate,
+    _current_user: Annotated[User, Depends(security.require_roles(["coach_pro", "org_pro"]))],
+    db: AsyncSession = Depends(get_db),
+) -> PlayerForm:
+    await _ensure_player_profile(db, player_id)
+    form_entry = PlayerForm(player_id=player_id, **form_data.model_dump(mode="python"))
+    db.add(form_entry)
+    await db.commit()
+    await db.refresh(form_entry)
+    return form_entry
+
+
+@router.get(
+    "/{player_id}/notes",
+    response_model=list[PlayerCoachingNotesRead],
+)
+async def list_player_coaching_notes(
+    player_id: str,
+    current_user: Annotated[
+        User, Depends(security.require_roles(["coach_pro", "analyst_pro", "org_pro"]))
+    ],
+    db: AsyncSession = Depends(get_db),
+) -> list[PlayerCoachingNotes]:
+    await _ensure_player_profile(db, player_id)
+    stmt = (
+        select(PlayerCoachingNotes)
+        .where(PlayerCoachingNotes.player_id == player_id)
+        .order_by(desc(PlayerCoachingNotes.created_at))
+    )
+    if current_user.role == RoleEnum.analyst_pro:
+        stmt = stmt.where(PlayerCoachingNotes.visibility == PlayerCoachingNoteVisibility.org_only)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+@router.post(
+    "/{player_id}/notes",
+    response_model=PlayerCoachingNotesRead,
+)
+async def create_player_coaching_note(
+    player_id: str,
+    note_data: PlayerCoachingNotesCreate,
+    current_user: Annotated[User, Depends(security.require_roles(["coach_pro", "org_pro"]))],
+    db: AsyncSession = Depends(get_db),
+) -> PlayerCoachingNotes:
+    await _ensure_player_profile(db, player_id)
+    note = PlayerCoachingNotes(
+        player_id=player_id,
+        coach_user_id=current_user.id,
+        **note_data.model_dump(mode="python"),
+    )
+    db.add(note)
+    await db.commit()
+    await db.refresh(note)
+    return note
+
+
+@router.put(
+    "/{player_id}/notes/{note_id}",
+    response_model=PlayerCoachingNotesRead,
+)
+async def update_player_coaching_note(
+    player_id: str,
+    note_id: str,
+    note_data: PlayerCoachingNotesCreate,
+    _current_user: Annotated[User, Depends(security.require_roles(["coach_pro", "org_pro"]))],
+    db: AsyncSession = Depends(get_db),
+) -> PlayerCoachingNotes:
+    await _ensure_player_profile(db, player_id)
+    note = await db.get(PlayerCoachingNotes, note_id)
+    if note is None or note.player_id != player_id:
+        raise HTTPException(status_code=404, detail="Coaching note not found")
+    for field, value in note_data.model_dump(mode="python").items():
+        setattr(note, field, value)
+    await db.commit()
+    await db.refresh(note)
+    return note
+
+
+@router.get(
+    "/{player_id}/summary",
+    response_model=PlayerSummaryRead,
+)
+async def get_player_summary(
+    player_id: str,
+    _current_user: Annotated[
+        User,
+        Depends(security.require_roles(["player_pro", "coach_pro", "analyst_pro", "org_pro"])),
+    ],
+    db: AsyncSession = Depends(get_db),
+) -> PlayerSummary:
+    result = await db.execute(select(PlayerSummary).where(PlayerSummary.player_id == player_id))
+    summary = result.scalar_one_or_none()
+    if summary is None:
+        raise HTTPException(status_code=404, detail="Player summary not found")
+    return summary
+
+
+@router.post(
+    "/{player_id}/achievements",
+    response_model=PlayerAchievementResponse,
+    dependencies=[security.coach_or_org_required],
+)
 async def award_achievement(
     player_id: str,
     payload: AwardAchievementRequest,
@@ -171,7 +322,11 @@ async def award_achievement(
     )
 
 
-@router.get("/leaderboard", response_model=LeaderboardResponse)
+@router.get(
+    "/leaderboard",
+    response_model=LeaderboardResponse,
+    dependencies=[security.analyst_or_org_required],
+)
 async def get_leaderboard(
     metric: Literal[
         "batting_average",
