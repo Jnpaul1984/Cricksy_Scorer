@@ -814,6 +814,19 @@ class CoachingSessionRead(CoachingSessionBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AnalyticsQuery(BaseModel):
+    entity: Literal["players", "matches", "form", "sessions"]
+    player_id: str | None = None
+    from_date: dt.date | None = None
+    to_date: dt.date | None = None
+
+
+class AnalyticsResult(BaseModel):
+    query: AnalyticsQuery
+    summary_stats: dict[str, Any] = Field(default_factory=dict)
+    sample_rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class AwardAchievementRequest(BaseModel):
     """Request schema for awarding an achievement to a player."""
 

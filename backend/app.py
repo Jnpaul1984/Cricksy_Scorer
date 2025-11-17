@@ -21,6 +21,7 @@ from backend.middleware.observability import (  # NEW
     AccessLogMiddleware,
     CorrelationIdMiddleware,
 )
+from backend.routes.analyst_pro import router as analyst_pro_router
 from backend.routes.auth_router import router as auth_router
 from backend.routes.dls import router as dls_router
 from backend.routes.game_admin import router as game_admin_router
@@ -282,6 +283,7 @@ def create_app(
     fastapi_app.include_router(games_core_router)
     fastapi_app.include_router(prediction_router)
     fastapi_app.include_router(players_router)
+    fastapi_app.include_router(analyst_pro_router)
     fastapi_app.include_router(coach_pro_router)
     fastapi_app.include_router(tournaments_router)
     fastapi_app.include_router(users_router)
