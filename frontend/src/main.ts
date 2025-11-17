@@ -8,6 +8,7 @@ import App from './App.vue'
 import router from './router'
 
 import pinia from '@/stores'
+import { API_BASE } from '@/services/api';
 
 // Global styles first (safe to keep here)
 import '@picocss/pico/css/pico.min.css'
@@ -49,7 +50,7 @@ if (!mountEl.__vue_app__) {
   if (import.meta.env.DEV) {
     console.log('🏏 Cricksy Scorer application initialized successfully')
     console.log('Environment:', import.meta.env.MODE)
-    console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL ?? '(not set)')
+    console.log('API Base URL:', API_BASE || '(not set)')
   }
   if (import.meta.env.DEV) {
     ;(window as any).loadMatch = (match: any) => {

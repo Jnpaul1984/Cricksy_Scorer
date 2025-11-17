@@ -8,35 +8,20 @@ import type {
   LeaderboardMetric,
   AwardAchievementRequest,
 } from "@/types/player"
-import { API_BASE } from "@/utils/api"
-
-const API_BASE_URL =
-  API_BASE || (typeof window !== "undefined" ? window.location.origin.replace(/\/+$/, "") : "")
+import { apiRequest } from '@/services/api';
 
 /**
  * Get player profile with statistics and achievements
  */
 export async function getPlayerProfile(playerId: string): Promise<PlayerProfile> {
-  const response = await fetch(`${API_BASE_URL}/api/players/${playerId}/profile`)
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch player profile: ${response.statusText}`)
-  }
-
-  return response.json()
+  return apiRequest<PlayerProfile>(`/api/players/${playerId}/profile`)
 }
 
 /**
  * Get all achievements for a player
  */
 export async function getPlayerAchievements(playerId: string): Promise<PlayerAchievement[]> {
-  const response = await fetch(`${API_BASE_URL}/api/players/${playerId}/achievements`)
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch player achievements: ${response.statusText}`)
-  }
-
-  return response.json()
+  return apiRequest<PlayerAchievement[]>(`/api/players/${playerId}/achievements`)
 }
 
 /**
@@ -46,19 +31,10 @@ export async function awardAchievement(
   playerId: string,
   achievement: AwardAchievementRequest,
 ): Promise<PlayerAchievement> {
-  const response = await fetch(`${API_BASE_URL}/api/players/${playerId}/achievements`, {
+  return apiRequest<PlayerAchievement>(`/api/players/${playerId}/achievements`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify(achievement),
   })
-
-  if (!response.ok) {
-    throw new Error(`Failed to award achievement: ${response.statusText}`)
-  }
-
-  return response.json()
 }
 
 /**
@@ -68,13 +44,5 @@ export async function getLeaderboard(
   metric: LeaderboardMetric = 'total_runs',
   limit: number = 10,
 ): Promise<Leaderboard> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/players/leaderboard?metric=${metric}&limit=${limit}`,
-  )
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch leaderboard: ${response.statusText}`)
-  }
-
-  return response.json()
+  return apiRequest<Leaderboard>(`/api/players/leaderboard?metric=${metric}&limit=${limit}`)
 }
