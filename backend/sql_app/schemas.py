@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.config import ConfigDict
 
-from backend.sql_app.models import RoleEnum
+from backend.sql_app.models import PlayerCoachingNoteVisibility, RoleEnum
 
 UTC = getattr(dt, "UTC", dt.UTC)
 TeamItem: TypeAlias = str | UUID | Mapping[str, object]  # noqa: UP040
@@ -700,6 +700,70 @@ class PlayerProfileResponse(PlayerProfileStats):
     """Schema for complete player profile including achievements."""
 
     achievements: list[PlayerAchievementResponse] = Field(default_factory=list)
+
+
+class PlayerFormBase(BaseModel):
+    period_start: dt.date
+    period_end: dt.date
+    matches_played: int
+    runs: int
+    wickets: int
+    batting_average: float | None = None
+    strike_rate: float | None = None
+    economy: float | None = None
+    form_score: float | None = None
+
+
+class PlayerFormCreate(PlayerFormBase):
+    pass
+
+
+class PlayerFormRead(PlayerFormBase):
+    id: str
+    player_id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerCoachingNotesBase(BaseModel):
+    strengths: str
+    weaknesses: str
+    action_plan: str | None = None
+    visibility: PlayerCoachingNoteVisibility = PlayerCoachingNoteVisibility.private_to_coach
+
+
+class PlayerCoachingNotesCreate(PlayerCoachingNotesBase):
+    pass
+
+
+class PlayerCoachingNotesRead(PlayerCoachingNotesBase):
+    id: str
+    player_id: str
+    coach_user_id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerSummaryBase(BaseModel):
+    total_matches: int
+    total_runs: int
+    total_wickets: int
+    batting_average: float | None = None
+    bowling_average: float | None = None
+    strike_rate: float | None = None
+
+
+class PlayerSummaryRead(PlayerSummaryBase):
+    id: str
+    player_id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AwardAchievementRequest(BaseModel):
