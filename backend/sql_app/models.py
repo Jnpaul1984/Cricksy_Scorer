@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Float,
@@ -62,6 +63,11 @@ class PlayerCoachingNoteVisibility(str, enum.Enum):
     org_only = "org_only"
 
 
+class FanFavoriteType(str, enum.Enum):
+    player = "player"
+    team = "team"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -83,6 +89,10 @@ class User(Base):
     )
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    fan_matches: Mapped[list[Game]] = relationship(back_populates="created_by_user")
+    fan_favorites: Mapped[list[FanFavorite]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
     )
     coach_assignments: Mapped[list[CoachPlayerAssignment]] = relationship(
         back_populates="coach_user", cascade="all, delete-orphan"
@@ -142,7 +152,9 @@ class Game(Base):
     __tablename__ = "games"
 
     # Identifiers
-    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True
+    )
 
     # Existing team JSON (name + players[{id,name}, ...])
     team_a: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
@@ -240,11 +252,26 @@ class Game(Base):
     current_inning: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     first_inning_summary: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     result: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    is_fan_match: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=func.false(),
+    )
+    created_by_user: Mapped[User | None] = relationship(back_populates="fan_matches")
 
     # Relationship backref from GameContributor is set below
     contributors: Mapped[list[GameContributor]] = relationship(
         back_populates="game", cascade="all, delete-orphan"
     )
+
+    __table_args__ = (Index("ix_games_is_fan_match", "is_fan_match"),)
 
     def get_winner(self):
         """
@@ -743,6 +770,49 @@ class CoachingSession(Base):
     __table_args__ = (
         Index("ix_coaching_sessions_coach_time", "coach_user_id", "scheduled_at"),
         Index("ix_coaching_sessions_player_time", "player_profile_id", "scheduled_at"),
+    )
+
+
+class FanFavorite(Base):
+    __tablename__ = "fan_favorites"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    favorite_type: Mapped[FanFavoriteType] = mapped_column(
+        SAEnum(FanFavoriteType, name="fan_favorite_type"),
+        nullable=False,
+    )
+    player_profile_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    team_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped[User] = relationship(back_populates="fan_favorites")
+    player_profile: Mapped[PlayerProfile | None] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(
+            "(player_profile_id IS NOT NULL AND team_id IS NULL) OR "
+            "(player_profile_id IS NULL AND team_id IS NOT NULL)",
+            name="ck_fan_favorites_target",
+        ),
+        Index("ix_fan_favorites_user_type", "user_id", "favorite_type"),
+        Index(
+            "ix_fan_favorites_user_player",
+            "user_id",
+            "player_profile_id",
+        ),
+        Index("ix_fan_favorites_user_team", "user_id", "team_id"),
     )
 
 

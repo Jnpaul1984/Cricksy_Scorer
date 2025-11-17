@@ -29,6 +29,7 @@ from backend.routes.gameplay import get_db as gameplay_get_db
 from backend.routes.gameplay import (
     router as gameplay_router,  # type: ignore[attr-defined]
 )
+from backend.routes.fan_mode import router as fan_mode_router
 from backend.routes.games_core import router as games_core_router  # NEW
 from backend.routes.games_dls import router as games_dls_router
 
@@ -283,6 +284,7 @@ def create_app(
     fastapi_app.include_router(games_core_router)
     fastapi_app.include_router(prediction_router)
     fastapi_app.include_router(players_router)
+    fastapi_app.include_router(fan_mode_router)
     fastapi_app.include_router(analyst_pro_router)
     fastapi_app.include_router(coach_pro_router)
     fastapi_app.include_router(tournaments_router)

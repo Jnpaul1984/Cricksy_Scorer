@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.config import ConfigDict
 
-from backend.sql_app.models import PlayerCoachingNoteVisibility, RoleEnum
+from backend.sql_app.models import FanFavoriteType, PlayerCoachingNoteVisibility, RoleEnum
 
 UTC = getattr(dt, "UTC", dt.UTC)
 TeamItem: TypeAlias = str | UUID | Mapping[str, object]  # noqa: UP040
@@ -825,6 +825,55 @@ class AnalyticsResult(BaseModel):
     query: AnalyticsQuery
     summary_stats: dict[str, Any] = Field(default_factory=dict)
     sample_rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class FanMatchBase(BaseModel):
+    home_team_name: str
+    away_team_name: str
+    match_type: str = "T20"
+    overs_limit: int | None = None
+
+
+class FanMatchCreate(FanMatchBase):
+    pass
+
+
+class FanMatchRead(FanMatchBase):
+    id: str
+    is_fan_match: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FanFavoriteBase(BaseModel):
+    favorite_type: FanFavoriteType
+    player_profile_id: str | None = None
+    team_id: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_target(self):
+        has_player = self.player_profile_id is not None
+        has_team = self.team_id is not None
+        if has_player == has_team:
+            raise ValueError("Provide either player_profile_id or team_id")
+        if self.favorite_type == FanFavoriteType.player and not has_player:
+            raise ValueError("player_profile_id required for player favorites")
+        if self.favorite_type == FanFavoriteType.team and not has_team:
+            raise ValueError("team_id required for team favorites")
+        return self
+
+
+class FanFavoriteCreate(FanFavoriteBase):
+    pass
+
+
+class FanFavoriteRead(FanFavoriteBase):
+    id: str
+    created_at: dt.datetime
+    player_name: str | None = None
+    team_name: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AwardAchievementRequest(BaseModel):
