@@ -2,26 +2,81 @@
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
+import os
+import uuid
+from typing import Any
+
+os.environ.setdefault("APP_SECRET_KEY", "test-secret-key")
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_app.db")
+os.environ.setdefault("CRICKSY_IN_MEMORY_DB", "0")
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from backend.main import _fastapi as app
+from backend.sql_app import models
+from backend.sql_app.database import SessionLocal, engine
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
 
+def _auth_headers(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _run_async(coro: Any):
+    return asyncio.run(coro)
+
+
+async def _init_models() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(models.Base.metadata.create_all)
+
+
+async def _init_models() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(models.Base.metadata.create_all)
+
+
+async def _set_user_role(email: str, role: models.RoleEnum) -> None:
+    async with SessionLocal() as session:
+        result = await session.execute(select(models.User).where(models.User.email == email))
+        user = result.scalar_one()
+        user.role = role
+        await session.commit()
+
+
+def _register_and_login_org_user(client: TestClient) -> str:
+    email = f"org-{uuid.uuid4().hex}@example.com"
+    password = "secret123"
+    _run_async(_init_models())
+    resp = client.post("/auth/register", json={"email": email, "password": password})
+    assert resp.status_code == 201, resp.text
+    _run_async(_set_user_role(email, models.RoleEnum.org_pro))
+    login_resp = client.post(
+        "/auth/login",
+        data={"username": email, "password": password},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert login_resp.status_code == 200, login_resp.text
+    return login_resp.json()["access_token"]
+
+
 @pytest.fixture
-def client() -> TestClient:
+def org_client() -> tuple[TestClient, str]:
     with TestClient(app) as client:
-        yield client
+        token = _register_and_login_org_user(client)
+        yield client, token
 
 
-def test_create_tournament(client: TestClient):
-    """Test POST /tournaments"""
+def test_create_tournament(org_client: tuple[TestClient, str]):
+    client, token = org_client
     response = client.post(
         "/tournaments/",
+        headers=_auth_headers(token),
         json={
             "name": "Test League 2024",
             "description": "A test cricket league",
@@ -36,11 +91,11 @@ def test_create_tournament(client: TestClient):
     assert "id" in data
 
 
-def test_list_tournaments(client: TestClient):
-    """Test GET /tournaments"""
-    # First create a tournament
+def test_list_tournaments(org_client: tuple[TestClient, str]):
+    client, token = org_client
     create_resp = client.post(
         "/tournaments/",
+        headers=_auth_headers(token),
         json={
             "name": "Test League",
             "tournament_type": "league",
@@ -48,7 +103,6 @@ def test_list_tournaments(client: TestClient):
     )
     assert create_resp.status_code == 201
 
-    # List tournaments
     response = client.get("/tournaments/")
     assert response.status_code == 200
     data = response.json()
@@ -56,11 +110,11 @@ def test_list_tournaments(client: TestClient):
     assert len(data) > 0
 
 
-def test_get_tournament(client: TestClient):
-    """Test GET /tournaments/{id}"""
-    # Create a tournament
+def test_get_tournament(org_client: tuple[TestClient, str]):
+    client, token = org_client
     create_response = client.post(
         "/tournaments/",
+        headers=_auth_headers(token),
         json={
             "name": "Test League",
             "tournament_type": "league",
@@ -68,7 +122,6 @@ def test_get_tournament(client: TestClient):
     )
     tournament_id = create_response.json()["id"]
 
-    # Get the tournament
     response = client.get(f"/tournaments/{tournament_id}")
     assert response.status_code == 200
     data = response.json()
@@ -76,10 +129,11 @@ def test_get_tournament(client: TestClient):
     assert data["name"] == "Test League"
 
 
-def test_update_tournament(client: TestClient):
-    """Test PATCH /tournaments/{id}"""
+def test_update_tournament(org_client: tuple[TestClient, str]):
+    client, token = org_client
     create_response = client.post(
         "/tournaments/",
+        headers=_auth_headers(token),
         json={
             "name": "Test League",
             "tournament_type": "league",
@@ -87,9 +141,9 @@ def test_update_tournament(client: TestClient):
     )
     tournament_id = create_response.json()["id"]
 
-    # Update the tournament
     response = client.patch(
         f"/tournaments/{tournament_id}",
+        headers=_auth_headers(token),
         json={
             "name": "Updated Test League",
             "status": "ongoing",
@@ -101,10 +155,11 @@ def test_update_tournament(client: TestClient):
     assert data["status"] == "ongoing"
 
 
-def test_add_team_to_tournament(client: TestClient):
-    """Test POST /tournaments/{id}/teams"""
+def test_add_team_to_tournament(org_client: tuple[TestClient, str]):
+    client, token = org_client
     create_response = client.post(
         "/tournaments/",
+        headers=_auth_headers(token),
         json={
             "name": "Test League",
             "tournament_type": "league",
@@ -112,9 +167,9 @@ def test_add_team_to_tournament(client: TestClient):
     )
     tournament_id = create_response.json()["id"]
 
-    # Add a team
     response = client.post(
         f"/tournaments/{tournament_id}/teams",
+        headers=_auth_headers(token),
         json={
             "team_name": "Mumbai Indians",
             "team_data": {"players": []},
@@ -128,10 +183,11 @@ def test_add_team_to_tournament(client: TestClient):
     assert data["points"] == 0
 
 
-def test_get_teams(client: TestClient):
-    """Test GET /tournaments/{id}/teams"""
+def test_get_teams(org_client: tuple[TestClient, str]):
+    client, token = org_client
     create_response = client.post(
         "/tournaments/",
+        headers=_auth_headers(token),
         json={
             "name": "Test League",
             "tournament_type": "league",
@@ -141,10 +197,12 @@ def test_get_teams(client: TestClient):
 
     client.post(
         f"/tournaments/{tournament_id}/teams",
+        headers=_auth_headers(token),
         json={"team_name": "Team A", "team_data": {}},
     )
     client.post(
         f"/tournaments/{tournament_id}/teams",
+        headers=_auth_headers(token),
         json={"team_name": "Team B", "team_data": {}},
     )
 
@@ -154,10 +212,11 @@ def test_get_teams(client: TestClient):
     assert len(data) == 2
 
 
-def test_create_fixture(client: TestClient):
-    """Test POST /tournaments/fixtures"""
+def test_create_fixture(org_client: tuple[TestClient, str]):
+    client, token = org_client
     create_response = client.post(
         "/tournaments/",
+        headers=_auth_headers(token),
         json={
             "name": "Test League",
             "tournament_type": "league",
@@ -167,6 +226,7 @@ def test_create_fixture(client: TestClient):
 
     response = client.post(
         "/tournaments/fixtures",
+        headers=_auth_headers(token),
         json={
             "tournament_id": tournament_id,
             "match_number": 1,
@@ -182,10 +242,11 @@ def test_create_fixture(client: TestClient):
     assert data["status"] == "scheduled"
 
 
-def test_get_fixtures(client: TestClient):
-    """Test GET /tournaments/{id}/fixtures"""
+def test_get_fixtures(org_client: tuple[TestClient, str]):
+    client, token = org_client
     create_response = client.post(
         "/tournaments/",
+        headers=_auth_headers(token),
         json={
             "name": "Test League",
             "tournament_type": "league",
@@ -195,6 +256,7 @@ def test_get_fixtures(client: TestClient):
 
     client.post(
         "/tournaments/fixtures",
+        headers=_auth_headers(token),
         json={
             "tournament_id": tournament_id,
             "match_number": 1,
@@ -209,10 +271,11 @@ def test_get_fixtures(client: TestClient):
     assert len(data) == 1
 
 
-def test_get_points_table(client: TestClient):
-    """Test GET /tournaments/{id}/points-table"""
+def test_get_points_table(org_client: tuple[TestClient, str]):
+    client, token = org_client
     create_response = client.post(
         "/tournaments/",
+        headers=_auth_headers(token),
         json={
             "name": "Test League",
             "tournament_type": "league",
@@ -222,6 +285,7 @@ def test_get_points_table(client: TestClient):
 
     client.post(
         f"/tournaments/{tournament_id}/teams",
+        headers=_auth_headers(token),
         json={"team_name": "Team A", "team_data": {}},
     )
 
