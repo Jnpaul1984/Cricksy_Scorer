@@ -56,6 +56,7 @@ function onError(m: string) { emit('error', m) }
 
     <div class="grid">
       <ScoreControls
+        v-if="canScore"
         :game-id="gameId"
         :striker-id="strikerId"
         :non-striker-id="nonStrikerId"

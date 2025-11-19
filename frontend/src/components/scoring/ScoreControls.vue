@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { useGameStore } from '@/stores/gameStore'
 
 const props = defineProps<{
-  gameId: string
   canScore: boolean
+  gameId: string
   strikerId: string
   nonStrikerId: string
   bowlerId: string
@@ -21,9 +21,10 @@ const gameStore = useGameStore()
 
 const submitting = ref(false)
 const showWicketModal = ref(false)
+const canScore = computed(() => props.canScore && !submitting.value)
 
 async function doScoreRuns(runs: number) {
-  if (!props.canScore || submitting.value) return
+  if (!canScore.value) return
   submitting.value = true
   try {
     await gameStore.scoreRuns(props.gameId, runs, null)
@@ -36,7 +37,7 @@ async function doScoreRuns(runs: number) {
 }
 
 async function doScoreExtra(code: 'wd'|'nb'|'b'|'lb', runs = 1) {
-  if (!props.canScore || submitting.value) return
+  if (!canScore.value) return
   submitting.value = true
   try {
     await gameStore.scoreExtra(props.gameId, code, runs, null)
@@ -57,22 +58,22 @@ function closeWicket() { showWicketModal.value = false }
     <div class="runs">
       <h4>Runs</h4>
       <div class="runs-grid">
-        <button v-for="r in [0,1,2,3,4,5,6]" :key="r" :disabled="!props.canScore || submitting" @click="doScoreRuns(r)">{{ r }}</button>
+        <button v-for="r in [0,1,2,3,4,5,6]" :key="r" :disabled="!canScore" @click="doScoreRuns(r)">{{ r }}</button>
       </div>
     </div>
 
     <div class="extras">
       <h4>Extras</h4>
       <div class="extras-grid">
-        <button :disabled="!props.canScore || submitting" @click="doScoreExtra('wd', 1)">Wd</button>
-        <button :disabled="!props.canScore || submitting" @click="doScoreExtra('nb', 0)">Nb</button>
-        <button :disabled="!props.canScore || submitting" @click="doScoreExtra('b', 1)">B</button>
-        <button :disabled="!props.canScore || submitting" @click="doScoreExtra('lb', 1)">Lb</button>
+        <button :disabled="!canScore" @click="doScoreExtra('wd', 1)">Wd</button>
+        <button :disabled="!canScore" @click="doScoreExtra('nb', 0)">Nb</button>
+        <button :disabled="!canScore" @click="doScoreExtra('b', 1)">B</button>
+        <button :disabled="!canScore" @click="doScoreExtra('lb', 1)">Lb</button>
       </div>
     </div>
 
     <div class="wicket-row">
-      <button class="wicket-btn" :disabled="!props.canScore || submitting" @click="openWicket">Wicket</button>
+      <button class="wicket-btn" :disabled="!canScore" @click="openWicket">Wicket</button>
     </div>
 
     <slot name="wicket-modal" :visible="showWicketModal" :close="closeWicket" />

@@ -583,6 +583,15 @@ export const useGameStore = defineStore('game', () => {
   })
 
   const canScoreDelivery = computed<boolean>(() => {
+    const backendFlag =
+      (liveSnapshot.value as any)?.canScore ??
+      (liveSnapshot.value as any)?.can_score ??
+      (currentGame.value as any)?.canScore ??
+      (currentGame.value as any)?.can_score ??
+      true
+
+    if (!backendFlag) return false
+
     return Boolean(
       isGameActive.value &&
       uiState.value.selectedStrikerId &&

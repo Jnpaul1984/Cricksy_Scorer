@@ -14,9 +14,10 @@ import DeliveryTable from '@/components/DeliveryTable.vue'
 import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
+import { apiService } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import apiService, { API_BASE, apiRequest } from '@/utils/api'
+import legacyApiService, { API_BASE, apiRequest } from '@/utils/api'
 
 const isDev = import.meta.env.DEV
 const normId = (v: unknown) => String(v ?? '').trim()
@@ -90,7 +91,7 @@ const gameStore = useGameStore()
 const authStore = useAuthStore()
 
 // Reactive refs from the stores
-const { canScore: storeCanScore, liveSnapshot } = storeToRefs(gameStore)
+const { liveSnapshot } = storeToRefs(gameStore)
 const { needsNewBatter, needsNewOver } = storeToRefs(gameStore)
 const { extrasBreakdown } = storeToRefs(gameStore)
 const { dlsKind } = storeToRefs(gameStore)
@@ -101,6 +102,17 @@ const {
   isPlayerPro,
   role: authRole,
 } = storeToRefs(authStore)
+const storeCanScore = computed(() => {
+  if ('canScore' in gameStore) {
+    // @ts-ignore – using store getter
+    return gameStore.canScore
+  }
+  if ('canScoreDelivery' in gameStore) {
+    // @ts-ignore – using store getter
+    return gameStore.canScoreDelivery
+  }
+  return true
+})
 const canScore = computed(() => Boolean(storeCanScore.value && roleCanScore.value))
 const proTooltip = 'Requires Coach Pro or Organization Pro'
 const showScoringUpsell = computed(
@@ -280,7 +292,7 @@ async function deleteLastDelivery(): Promise<void> {
     } else if (typeof anyStore.undoLastDelivery === 'function') {
       await anyStore.undoLastDelivery(id)
     } else {
-      await apiService.undoLast(id)
+        await legacyApiService.undoLast(id)
     }
     showToast('Last delivery deleted', 'success')
 
@@ -1083,11 +1095,16 @@ async function confirmStartInnings(): Promise<void> {
       opening_bowler_id: normId(openingBowlerId.value)   || null,
     }
 
+    await apiService.setOpeners(id, {
+      striker_id:     payload.striker_id,
+      non_striker_id: payload.non_striker_id,
+    })
+
     const anyStore: any = gameStore as any
     if (typeof anyStore.startNextInnings === 'function') {
       await anyStore.startNextInnings(id, payload)
     } else {
-      await apiService.startNextInnings(id, payload)
+      await legacyApiService.startNextInnings(id, payload)
       await gameStore.loadGame(id)
     }
 
