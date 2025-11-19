@@ -10,6 +10,7 @@ export interface AuthUser {
   id: string;
   email: string;
   role: UserRole;
+  is_superuser?: boolean;
   full_name?: string | null;
   is_active?: boolean;
   [key: string]: unknown;

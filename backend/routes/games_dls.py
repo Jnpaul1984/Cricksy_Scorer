@@ -5,7 +5,8 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.services.dls_service import calc_target, resource_remaining
 
@@ -78,9 +79,12 @@ def _team1_resources_completed(g: models.Game, fmt: Literal[20, 50]) -> float:
 
 
 @router.get("/{game_id}/dls/preview", response_model=DLSPreviewOut)
-def dls_preview(game_id: str, G50: int = 245, db: Session = Depends(get_db)) -> DLSPreviewOut:
-    g: models.Game | None = db.query(models.Game).filter(models.Game.id == game_id).first()
-    if not g:
+async def dls_preview(
+    game_id: str, G50: int = 245, db: AsyncSession = Depends(get_db)
+) -> DLSPreviewOut:
+    result = await db.execute(select(models.Game).where(models.Game.id == game_id))
+    g: models.Game | None = result.scalar_one_or_none()
+    if g is None:
         raise HTTPException(404, "Game not found")
     if not getattr(g, "innings1_completed", False):
         raise HTTPException(400, "DLS target requires Team 1 innings completed")
@@ -104,12 +108,14 @@ def dls_preview(game_id: str, G50: int = 245, db: Session = Depends(get_db)) -> 
 
 
 @router.post("/{game_id}/dls/apply", response_model=DLSApplyOut)
-def dls_apply(game_id: str, G50: int = 245, db: Session = Depends(get_db)) -> DLSApplyOut:
-    # Lock row so two scorers can't apply at the same time
-    g: models.Game | None = (
-        db.query(models.Game).filter(models.Game.id == game_id).with_for_update().first()
+async def dls_apply(
+    game_id: str, G50: int = 245, db: AsyncSession = Depends(get_db)
+) -> DLSApplyOut:
+    result = await db.execute(
+        select(models.Game).where(models.Game.id == game_id).with_for_update()
     )
-    if not g:
+    g: models.Game | None = result.scalar_one_or_none()
+    if g is None:
         raise HTTPException(404, "Game not found")
     if not getattr(g, "innings1_completed", False):
         raise HTTPException(400, "DLS target requires Team 1 innings completed")
@@ -130,7 +136,7 @@ def dls_apply(game_id: str, G50: int = 245, db: Session = Depends(get_db)) -> DL
     g.team2_resources = float(team2_res)
 
     db.add(g)
-    db.commit()
+    await db.commit()
 
     # Notify connected clients (scoreboard, scorer UI, etc.)
     publish_game_update(
@@ -156,11 +162,12 @@ def dls_apply(game_id: str, G50: int = 245, db: Session = Depends(get_db)) -> DL
 
 
 @router.patch("/{game_id}/overs/reduce", response_model=ReduceOversOut)
-def reduce_overs(
-    game_id: str, body: ReduceOversIn, db: Session = Depends(get_db)
+async def reduce_overs(
+    game_id: str, body: ReduceOversIn, db: AsyncSession = Depends(get_db)
 ) -> ReduceOversOut:
-    g: models.Game | None = db.query(models.Game).filter(models.Game.id == game_id).first()
-    if not g:
+    result = await db.execute(select(models.Game).where(models.Game.id == game_id))
+    g: models.Game | None = result.scalar_one_or_none()
+    if g is None:
         raise HTTPException(404, "Game not found")
 
     # Business rules are up to you; these are soft examples:
@@ -178,7 +185,7 @@ def reduce_overs(
         g.i2_balls_limit = balls_limit
 
     db.add(g)
-    db.commit()
+    await db.commit()
 
     publish_game_update(
         game_id,

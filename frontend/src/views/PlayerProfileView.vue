@@ -168,6 +168,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+
 import { getPlayerProfile } from '@/services/playerApi'
 import type { PlayerProfile } from '@/types/player'
 

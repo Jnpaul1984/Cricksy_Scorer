@@ -7,8 +7,8 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 
-import pinia from '@/stores'
 import { API_BASE, setUnauthorizedHandler } from '@/services/api';
+import pinia from '@/stores'
 import { useAuthStore } from '@/stores/authStore';
 
 // Global styles first (safe to keep here)

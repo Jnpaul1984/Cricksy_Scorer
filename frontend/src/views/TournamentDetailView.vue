@@ -6,7 +6,7 @@
           ⬅ Back to tournaments
         </button>
 
-        <div class="td-title-block" v-if="tournament">
+        <div v-if="tournament" class="td-title-block">
           <h1 class="td-title">
             {{ tournament.name }}
           </h1>
@@ -25,7 +25,7 @@
       </div>
 
       <!-- Management actions (Org Pro / Super only) -->
-      <div class="td-actions" v-if="canManageTournaments && tournament">
+      <div v-if="canManageTournaments && tournament" class="td-actions">
         <span class="td-role-label">
           Management access: {{ accessLabel }}
         </span>
@@ -143,7 +143,7 @@
         <section class="td-card">
           <div class="td-card-header">
             <h2>Points Table</h2>
-            <p class="td-card-subtitle" v-if="pointsTable.length === 0">
+            <p v-if="pointsTable.length === 0" class="td-card-subtitle">
               No teams have been added yet.
             </p>
           </div>
@@ -185,7 +185,7 @@
         <section class="td-card">
           <div class="td-card-header">
             <h2>Teams</h2>
-            <p class="td-card-subtitle" v-if="teams.length === 0">
+            <p v-if="teams.length === 0" class="td-card-subtitle">
               No teams registered yet.
             </p>
           </div>
@@ -210,7 +210,7 @@
         <section class="td-card">
           <div class="td-card-header">
             <h2>Fixtures</h2>
-            <p class="td-card-subtitle" v-if="fixtures.length === 0">
+            <p v-if="fixtures.length === 0" class="td-card-subtitle">
               No fixtures have been scheduled yet.
             </p>
           </div>

@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from pydantic import BaseModel
 
 from backend import dls as dlsmod
-from backend.sql_app import schemas
+from backend.sql_app import models, schemas
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
@@ -230,11 +230,30 @@ def _compute_snapshot_flags(g: GameState) -> dict[str, bool]:
     return {"needs_new_batter": need_new_batter, "needs_new_over": need_new_over}
 
 
+def _is_game_in_progress(status: object | None) -> bool:
+    if isinstance(status, models.GameStatus):
+        return status == models.GameStatus.in_progress
+    if status is None:
+        return False
+    return str(status).lower() == models.GameStatus.in_progress.value
+
+
+def _safe_int(value: object | None) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, (int, float, str)):
+        try:
+            return int(value)
+        except Exception:
+            return 0
+    return 0
+
+
 def _extras_breakdown(g: GameState) -> dict[str, int]:
     wides = no_balls = byes = leg_byes = penalty = 0
     for d in _dedup_deliveries(g):
         x = _norm_extra(d.get("extra_type"))
-        ex = int(d.get("extra_runs") or 0)
+        ex = _safe_int(d.get("extra_runs"))
         if x == "wd":
             wides += max(1, ex or 1)
         elif x == "nb":
@@ -385,6 +404,35 @@ def build_snapshot(
     needs_new_batter = flags["needs_new_batter"]
     needs_new_innings = bool(getattr(g, "needs_new_innings", False) or is_break)
 
+    overs_limit_val = _safe_int(getattr(g, "overs_limit", None))
+    overs_completed = _safe_int(getattr(g, "overs_completed", 0))
+    balls_this_over = _safe_int(getattr(g, "balls_this_over", 0))
+    balls_bowled_total_raw = _safe_int(getattr(g, "balls_bowled_total", None))
+    balls_bowled = balls_bowled_total_raw or (overs_completed * 6 + balls_this_over)
+    balls_limit = overs_limit_val * 6
+    all_out = _safe_int(getattr(g, "total_wickets", 0)) >= 10
+    overs_exhausted = balls_limit > 0 and balls_bowled >= balls_limit
+    status_in_progress = _is_game_in_progress(getattr(g, "status", None))
+    current_inning_no = getattr(g, "current_inning", None)
+    current_over_exists = (
+        getattr(g, "overs_completed", None) is not None
+        or getattr(g, "balls_this_over", None) is not None
+    )
+    current_striker_id = getattr(g, "current_striker_id", None)
+    current_non_striker_id = getattr(g, "current_non_striker_id", None)
+    can_score = bool(
+        status_in_progress
+        and current_inning_no is not None
+        and current_striker_id is not None
+        and current_non_striker_id is not None
+        and current_over_exists
+        and cur_bowler_id is not None
+        and not overs_exhausted
+        and not all_out
+        and not needs_new_over
+        and not needs_new_innings
+    )
+
     extras_totals = _extras_breakdown(g)
     fall_of_wickets = _fall_of_wickets(g)
 
@@ -450,6 +498,7 @@ def build_snapshot(
         "needs_new_over": needs_new_over,
         "needs_new_batter": needs_new_batter,
         "needs_new_innings": needs_new_innings,
+        "canScore": can_score,
         "dls": _dls_panel_for(g, base_dir),
     }
 

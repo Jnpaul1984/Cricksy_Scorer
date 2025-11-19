@@ -3,9 +3,12 @@ import { ref, toRefs } from 'vue'
 
 import CommentaryInput from './CommentaryInput.vue'
 import DismissalForm from './DismissalForm.vue'
-import ExtrasPanel from './ExtrasPanel.vue'
-import RunButtons from './RunButtons.vue'
+import ScoreControls from './ScoreControls.vue'
 import UndoLastBall from './UndoLastBall.vue'
+import WicketModal from './WicketModal.vue'
+
+import { useAuthStore } from '@/stores/authStore'
+import { useGameStore } from '@/stores/gameStore'
 
 import type { Player } from '@/types'
 
@@ -18,6 +21,21 @@ const props = defineProps<{
   battingPlayers: Player[]
 }>()
 const { gameId, canScore, strikerId, nonStrikerId, bowlerId, battingPlayers } = toRefs(props)
+
+const authStore = useAuthStore()
+const gameStore = useGameStore()
+
+if (import.meta.env.DEV) {
+  console.log('[ScoringPanel debug]', {
+    role: authStore.role,
+    isSuperuser: authStore.isSuperuser,
+    authCanScore: authStore.canScore,
+    gameCanScore: gameStore.canScore,
+    striker: gameStore.currentStriker?.id ?? null,
+    nonStriker: gameStore.currentNonStriker?.id ?? null,
+    bowler: gameStore.state?.current_bowler_id ?? null,
+  })
+}
 
 const emit = defineEmits<{
   (e:'scored'): void
@@ -37,7 +55,7 @@ function onError(m: string) { emit('error', m) }
     <CommentaryInput v-model="note" class="mb" />
 
     <div class="grid">
-      <RunButtons
+      <ScoreControls
         :game-id="gameId"
         :striker-id="strikerId"
         :non-striker-id="nonStrikerId"
@@ -46,18 +64,20 @@ function onError(m: string) { emit('error', m) }
         :commentary="note"
         @scored="onScored"
         @error="onError"
-      />
-
-      <ExtrasPanel
-        :game-id="gameId"
-        :striker-id="strikerId"
-        :non-striker-id="nonStrikerId"
-        :bowler-id="bowlerId"
-        :can-score="canScore"
-        :commentary="note"
-        @scored="onScored"
-        @error="onError"
-      />
+      >
+        <template #wicket-modal="{ visible, close }">
+            <WicketModal
+              :game-id="gameId"
+              :visible="visible"
+              :striker-id="strikerId"
+              :non-striker-id="nonStrikerId"
+              :bowler-id="bowlerId"
+              @close="close"
+              @scored="onScored"
+              @error="onError"
+            />
+        </template>
+      </ScoreControls>
 
       <DismissalForm
         :game-id="gameId"
@@ -72,6 +92,19 @@ function onError(m: string) { emit('error', m) }
     </div>
 
     <UndoLastBall v-if="canScore" :game-id="gameId" :disabled="true" class="mt" />
+
+    <div v-if="import.meta.env.DEV" class="debug-panel">
+      <p>Debug status</p>
+      <ul>
+        <li>Role: {{ authStore.role }}</li>
+        <li>Is superuser: {{ authStore.isSuperuser }}</li>
+        <li>Auth can score: {{ authStore.canScore }}</li>
+        <li>Game can score: {{ gameStore.canScore }}</li>
+        <li>Striker: {{ gameStore.currentStriker?.id ?? 'n/a' }}</li>
+        <li>Non-striker: {{ gameStore.currentNonStriker?.id ?? 'n/a' }}</li>
+        <li>Bowler: {{ gameStore.state?.current_bowler_id ?? 'n/a' }}</li>
+      </ul>
+    </div>
   </div>
 </template>
 

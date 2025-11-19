@@ -195,6 +195,15 @@ class MatchType(str, Enum):
 # ===================================================================
 
 
+class InterruptionRecord(BaseModel):
+    type: str | None = None
+    note: str | None = None
+    at_delivery_index: int | None = None
+    new_overs_limit: int | None = None
+
+    model_config = ConfigDict(from_attributes=True, extra="allow")
+
+
 class GameCreate(BaseModel):
     team_a_name: str
     team_b_name: str
@@ -207,7 +216,7 @@ class GameCreate(BaseModel):
     days_limit: int | None = Field(None, ge=1, le=7)
     overs_per_day: int | None = Field(None, ge=1, le=120)
     dls_enabled: bool = False
-    interruptions: list[dict[str, str | None]] = Field(default_factory=list)
+    interruptions: list[InterruptionRecord] = Field(default_factory=list)
 
     toss_winner_team: str
     decision: Literal["bat", "bowl"]
@@ -351,7 +360,7 @@ class Game(BaseModel):
     overs_limit: int | None
     days_limit: int | None
     dls_enabled: bool
-    interruptions: list[dict[str, str | None]] = Field(
+    interruptions: list[InterruptionRecord] = Field(
         default_factory=list, description="Weather/other delays"
     )
 
@@ -494,6 +503,7 @@ class Snapshot(BaseModel):
     total_wickets: int
     overs_completed: int
     balls_this_over: int
+    canScore: bool
 
     target: int | None = None
     overs_limit: int | None = None

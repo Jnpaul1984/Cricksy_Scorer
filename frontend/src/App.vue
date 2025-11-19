@@ -2,14 +2,14 @@
 import { onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 
-import logoAvif480 from '@/assets/optimized/logo-w480.avif'
-import logoAvif768 from '@/assets/optimized/logo-w768.avif'
 import logoAvif1024 from '@/assets/optimized/logo-w1024.avif'
-import logoAvif1440 from '@/assets/optimized/logo-w1440.avif'
-import logoWebp480 from '@/assets/optimized/logo-w480.webp'
-import logoWebp768 from '@/assets/optimized/logo-w768.webp'
 import logoWebp1024 from '@/assets/optimized/logo-w1024.webp'
+import logoAvif1440 from '@/assets/optimized/logo-w1440.avif'
 import logoWebp1440 from '@/assets/optimized/logo-w1440.webp'
+import logoAvif480 from '@/assets/optimized/logo-w480.avif'
+import logoWebp480 from '@/assets/optimized/logo-w480.webp'
+import logoAvif768 from '@/assets/optimized/logo-w768.avif'
+import logoWebp768 from '@/assets/optimized/logo-w768.webp'
 
 onMounted(() => {
   // hide the tiny fallback text from index.html once Vue is mounted

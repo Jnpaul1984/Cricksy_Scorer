@@ -20,8 +20,8 @@ import { computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
-import { API_BASE } from '@/utils/api'
 import { useGameStore } from '@/stores/gameStore'
+import { API_BASE } from '@/utils/api'
 
 const route = useRoute()
 const gameId = computed(() => String(route.params.gameId))

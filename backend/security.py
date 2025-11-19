@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import datetime as dt
 import hashlib
 import hmac
@@ -17,6 +18,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import settings
 from backend.sql_app import models, schemas
 from backend.sql_app.database import get_db
+from contextlib import suppress
+
+# In-memory user cache used when the app is running with IN_MEMORY_DB for local/dev
+_in_memory_users: dict[str, models.User] = {}
+
+
+def add_in_memory_user(user: models.User) -> None:
+    # Dev-only in-memory cache. Ignore weird collisions/tests.
+    with suppress(Exception):
+        _in_memory_users[user.email] = user
+
+
+def find_in_memory_user_by_email(email: str) -> models.User | None:
+    return _in_memory_users.get(email)
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
@@ -113,7 +129,14 @@ def create_access_token(data: dict[str, Any], expires_delta: dt.timedelta | None
 async def get_user_by_email(db: AsyncSession, email: str) -> models.User | None:
     stmt = select(models.User).where(models.User.email == email)
     res = await db.execute(stmt)
-    return res.scalar_one_or_none()
+    user = res.scalar_one_or_none()
+    # If running in IN_MEMORY_DB mode, allow fallback to the in-memory user cache
+    in_memory_enabled = False
+    with contextlib.suppress(Exception):
+        in_memory_enabled = bool(getattr(settings, "IN_MEMORY_DB", False))
+    if user is None and in_memory_enabled:
+        return find_in_memory_user_by_email(email)
+    return user
 
 
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> models.User | None:
@@ -146,7 +169,14 @@ async def get_current_user(
     res = await db.execute(stmt)
     user = res.scalar_one_or_none()
     if user is None:
-        raise credentials_exception
+        # If running in in-memory mode allow fallback to the in-memory cache by email
+        in_memory_enabled = False
+        with contextlib.suppress(Exception):
+            in_memory_enabled = bool(getattr(settings, "IN_MEMORY_DB", False))
+        if in_memory_enabled and token_data.email:
+            user = find_in_memory_user_by_email(token_data.email)
+        if user is None:
+            raise credentials_exception
     return user
 
 
