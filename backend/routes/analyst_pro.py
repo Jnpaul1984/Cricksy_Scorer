@@ -120,7 +120,7 @@ async def export_matches(
             {
                 "game_id": game.id,
                 "match_type": game.match_type,
-                "status": game.status.value if hasattr(game.status, "value") else game.status,
+                "status": (game.status.value if hasattr(game.status, "value") else game.status),
                 "team_a": team_a_name,
                 "team_b": team_b_name,
                 "overs_limit": game.overs_limit,
@@ -248,9 +248,9 @@ async def run_analytics_query(
         sample_rows = [
             {
                 "game_id": game.id,
-                "team_a": game.team_a.get("name") if isinstance(game.team_a, dict) else None,
-                "team_b": game.team_b.get("name") if isinstance(game.team_b, dict) else None,
-                "status": game.status.value if hasattr(game.status, "value") else game.status,
+                "team_a": (game.team_a.get("name") if isinstance(game.team_a, dict) else None),
+                "team_b": (game.team_b.get("name") if isinstance(game.team_b, dict) else None),
+                "status": (game.status.value if hasattr(game.status, "value") else game.status),
             }
             for game in sample_result.scalars().all()
         ]
