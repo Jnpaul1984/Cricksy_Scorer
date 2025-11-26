@@ -247,7 +247,7 @@ def _player_name(
             try:
                 if p.get("id") == pid:
                     return p.get("name")
-            except Exception:
+            except Exception:  # nosec B112
                 continue
     return None
 

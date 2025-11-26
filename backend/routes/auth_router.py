@@ -116,7 +116,7 @@ async def login_for_access_token(
         data={"sub": str(user.id), "email": user.email},
         expires_delta=access_token_expires,
     )
-    return schemas.Token(access_token=access_token, token_type="bearer")
+    return schemas.Token(access_token=access_token, token_type="bearer")  # nosec B106
 
 
 @router.get("/me", response_model=schemas.UserRead)
