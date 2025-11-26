@@ -148,3 +148,6 @@ async def read_users_me(
         is_superuser=bool(getattr(current_user, "is_superuser", False)),
         role=role_param,
     )
+
+
+# Trigger CI

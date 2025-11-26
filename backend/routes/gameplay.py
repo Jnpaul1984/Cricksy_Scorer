@@ -213,8 +213,9 @@ async def start_over(
 async def get_deliveries(
     game_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    innings: int
-    | None = Query(None, ge=1, le=4, description="Filter by innings number"),
+    innings: int | None = Query(
+        None, ge=1, le=4, description="Filter by innings number"
+    ),
     limit: int = Query(500, ge=1, le=500, description="Max number of rows to return"),
     order: Literal["desc", "asc"] = Query("desc", description="desc = newest-first"),
 ) -> dict[str, Any]:
