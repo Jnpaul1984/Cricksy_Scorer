@@ -4,9 +4,11 @@ import sys
 import os
 
 # Set test environment variables BEFORE importing backend modules
-os.environ["CRICKSY_IN_MEMORY_DB"] = "1"
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:?cache=shared"
-os.environ["APP_SECRET_KEY"] = "test-secret-key"
+# Only use in-memory SQLite if DATABASE_URL is not already set (e.g. by CI or local env)
+if "DATABASE_URL" not in os.environ:
+    os.environ["CRICKSY_IN_MEMORY_DB"] = "1"
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:?cache=shared"
+    os.environ["APP_SECRET_KEY"] = "test-secret-key"
 
 import pytest
 from backend.sql_app.database import Base, engine
