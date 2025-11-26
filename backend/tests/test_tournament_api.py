@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import os
 import uuid
-from typing import Any
 
 os.environ.setdefault("APP_SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_app.db")
@@ -27,15 +25,6 @@ def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _run_async(coro: Any):
-    return asyncio.run(coro)
-
-
-async def _init_models() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(models.Base.metadata.create_all)
-
-
 async def _init_models() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(models.Base.metadata.create_all)
@@ -49,13 +38,13 @@ async def _set_user_role(email: str, role: models.RoleEnum) -> None:
         await session.commit()
 
 
-def _register_and_login_org_user(client: TestClient) -> str:
+async def _register_and_login_org_user(client: TestClient) -> str:
     email = f"org-{uuid.uuid4().hex}@example.com"
     password = "secret123"
-    _run_async(_init_models())
+    await _init_models()
     resp = client.post("/auth/register", json={"email": email, "password": password})
     assert resp.status_code == 201, resp.text
-    _run_async(_set_user_role(email, models.RoleEnum.org_pro))
+    await _set_user_role(email, models.RoleEnum.org_pro)
     login_resp = client.post(
         "/auth/login",
         data={"username": email, "password": password},
@@ -66,13 +55,13 @@ def _register_and_login_org_user(client: TestClient) -> str:
 
 
 @pytest.fixture
-def org_client() -> tuple[TestClient, str]:
+async def org_client() -> tuple[TestClient, str]:
     with TestClient(app) as client:
-        token = _register_and_login_org_user(client)
+        token = await _register_and_login_org_user(client)
         yield client, token
 
 
-def test_create_tournament(org_client: tuple[TestClient, str]):
+async def test_create_tournament(org_client: tuple[TestClient, str]):
     client, token = org_client
     response = client.post(
         "/tournaments/",
@@ -91,7 +80,7 @@ def test_create_tournament(org_client: tuple[TestClient, str]):
     assert "id" in data
 
 
-def test_list_tournaments(org_client: tuple[TestClient, str]):
+async def test_list_tournaments(org_client: tuple[TestClient, str]):
     client, token = org_client
     create_resp = client.post(
         "/tournaments/",
@@ -110,7 +99,7 @@ def test_list_tournaments(org_client: tuple[TestClient, str]):
     assert len(data) > 0
 
 
-def test_get_tournament(org_client: tuple[TestClient, str]):
+async def test_get_tournament(org_client: tuple[TestClient, str]):
     client, token = org_client
     create_response = client.post(
         "/tournaments/",
@@ -129,7 +118,7 @@ def test_get_tournament(org_client: tuple[TestClient, str]):
     assert data["name"] == "Test League"
 
 
-def test_update_tournament(org_client: tuple[TestClient, str]):
+async def test_update_tournament(org_client: tuple[TestClient, str]):
     client, token = org_client
     create_response = client.post(
         "/tournaments/",
@@ -155,7 +144,7 @@ def test_update_tournament(org_client: tuple[TestClient, str]):
     assert data["status"] == "ongoing"
 
 
-def test_add_team_to_tournament(org_client: tuple[TestClient, str]):
+async def test_add_team_to_tournament(org_client: tuple[TestClient, str]):
     client, token = org_client
     create_response = client.post(
         "/tournaments/",
@@ -183,7 +172,7 @@ def test_add_team_to_tournament(org_client: tuple[TestClient, str]):
     assert data["points"] == 0
 
 
-def test_get_teams(org_client: tuple[TestClient, str]):
+async def test_get_teams(org_client: tuple[TestClient, str]):
     client, token = org_client
     create_response = client.post(
         "/tournaments/",
@@ -212,7 +201,7 @@ def test_get_teams(org_client: tuple[TestClient, str]):
     assert len(data) == 2
 
 
-def test_create_fixture(org_client: tuple[TestClient, str]):
+async def test_create_fixture(org_client: tuple[TestClient, str]):
     client, token = org_client
     create_response = client.post(
         "/tournaments/",
@@ -242,7 +231,7 @@ def test_create_fixture(org_client: tuple[TestClient, str]):
     assert data["status"] == "scheduled"
 
 
-def test_get_fixtures(org_client: tuple[TestClient, str]):
+async def test_get_fixtures(org_client: tuple[TestClient, str]):
     client, token = org_client
     create_response = client.post(
         "/tournaments/",
@@ -271,7 +260,7 @@ def test_get_fixtures(org_client: tuple[TestClient, str]):
     assert len(data) == 1
 
 
-def test_get_points_table(org_client: tuple[TestClient, str]):
+async def test_get_points_table(org_client: tuple[TestClient, str]):
     client, token = org_client
     create_response = client.post(
         "/tournaments/",

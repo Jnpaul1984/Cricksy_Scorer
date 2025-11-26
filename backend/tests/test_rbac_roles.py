@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 from typing import Any
 
@@ -20,10 +19,6 @@ from backend.sql_app.database import get_db
 
 def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
-
-
-def _run_async(coro):
-    return asyncio.run(coro)
 
 
 async def _set_user_flags(
@@ -99,19 +94,19 @@ def client() -> TestClient:
     fastapi_app.dependency_overrides.pop(get_db, None)
 
 
-def promote_to_superuser(client: TestClient, email: str) -> None:
+async def promote_to_superuser(client: TestClient, email: str) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    _run_async(_set_user_flags(session_maker, email, is_superuser=True))
+    await _set_user_flags(session_maker, email, is_superuser=True)
 
 
-def set_role(client: TestClient, email: str, role: models.RoleEnum) -> None:
+async def set_role(client: TestClient, email: str, role: models.RoleEnum) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    _run_async(_set_user_flags(session_maker, email, role=role))
+    await _set_user_flags(session_maker, email, role=role)
 
 
-def ensure_profile(client: TestClient, player_id: str) -> None:
+async def ensure_profile(client: TestClient, player_id: str) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    _run_async(_ensure_player_profile(session_maker, player_id))
+    await _ensure_player_profile(session_maker, player_id)
 
 
 def test_new_users_start_as_free(client: TestClient) -> None:
@@ -119,10 +114,10 @@ def test_new_users_start_as_free(client: TestClient) -> None:
     assert data["role"] == models.RoleEnum.free.value
 
 
-def test_superuser_can_update_roles(client: TestClient) -> None:
+async def test_superuser_can_update_roles(client: TestClient) -> None:
     admin = register_user(client, "admin@example.com")
     target = register_user(client, "member@example.com")
-    promote_to_superuser(client, "admin@example.com")
+    await promote_to_superuser(client, "admin@example.com")
     admin_token = login_user(client, "admin@example.com")
 
     resp = client.post(
@@ -173,11 +168,11 @@ def test_free_user_blocked_from_org_endpoint(client: TestClient) -> None:
     assert resp.status_code == 403
 
 
-def test_coach_user_can_award_achievement(client: TestClient) -> None:
+async def test_coach_user_can_award_achievement(client: TestClient) -> None:
     register_user(client, "coach@example.com")
-    set_role(client, "coach@example.com", models.RoleEnum.coach_pro)
+    await set_role(client, "coach@example.com", models.RoleEnum.coach_pro)
     token = login_user(client, "coach@example.com")
-    ensure_profile(client, "player-coach")
+    await ensure_profile(client, "player-coach")
 
     resp = client.post(
         "/api/players/player-coach/achievements",
@@ -193,11 +188,11 @@ def test_coach_user_can_award_achievement(client: TestClient) -> None:
     assert body["player_id"] == "player-coach"
 
 
-def test_org_user_can_access_coach_and_analyst_endpoints(client: TestClient) -> None:
+async def test_org_user_can_access_coach_and_analyst_endpoints(client: TestClient) -> None:
     register_user(client, "org@example.com")
-    set_role(client, "org@example.com", models.RoleEnum.org_pro)
+    await set_role(client, "org@example.com", models.RoleEnum.org_pro)
     token = login_user(client, "org@example.com")
-    ensure_profile(client, "player-org")
+    await ensure_profile(client, "player-org")
 
     resp_coach = client.post(
         "/api/players/player-org/achievements",

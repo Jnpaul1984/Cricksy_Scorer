@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import os
 from typing import Any
@@ -24,10 +23,6 @@ UTC = getattr(dt, "UTC", dt.UTC)
 
 def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
-
-
-def _run_async(coro):
-    return asyncio.run(coro)
 
 
 async def _set_user_role(
@@ -98,25 +93,25 @@ def login_user(client: TestClient, email: str, password: str = "secret123") -> s
     return resp.json()["access_token"]
 
 
-def set_role(client: TestClient, email: str, role: models.RoleEnum) -> None:
+async def set_role(client: TestClient, email: str, role: models.RoleEnum) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    _run_async(_set_user_role(session_maker, email, role))
+    await _set_user_role(session_maker, email, role)
 
 
-def ensure_profile(client: TestClient, player_id: str) -> None:
+async def ensure_profile(client: TestClient, player_id: str) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    _run_async(_ensure_player_profile(session_maker, player_id))
+    await _ensure_player_profile(session_maker, player_id)
 
 
-def test_non_privileged_roles_blocked(client: TestClient) -> None:
+async def test_non_privileged_roles_blocked(client: TestClient) -> None:
     player_id = "player-rbac"
-    ensure_profile(client, player_id)
+    await ensure_profile(client, player_id)
 
     free_user = register_user(client, "free@example.com")
     player_user = register_user(client, "player@example.com")
     analyst_user = register_user(client, "analyst@example.com")
-    set_role(client, player_user["email"], models.RoleEnum.player_pro)
-    set_role(client, analyst_user["email"], models.RoleEnum.analyst_pro)
+    await set_role(client, player_user["email"], models.RoleEnum.player_pro)
+    await set_role(client, analyst_user["email"], models.RoleEnum.analyst_pro)
 
     payload = {
         "scheduled_at": (dt.datetime.now(UTC) + dt.timedelta(days=1)).isoformat(),
@@ -139,15 +134,15 @@ def test_non_privileged_roles_blocked(client: TestClient) -> None:
         assert resp_session.status_code == 403
 
 
-def test_org_assigns_coach_and_views_assignments(client: TestClient) -> None:
+async def test_org_assigns_coach_and_views_assignments(client: TestClient) -> None:
     player_id = "player-assign"
-    ensure_profile(client, player_id)
+    await ensure_profile(client, player_id)
 
     coach = register_user(client, "coach@example.com")
-    set_role(client, coach["email"], models.RoleEnum.coach_pro)
+    await set_role(client, coach["email"], models.RoleEnum.coach_pro)
 
     org = register_user(client, "org@example.com")
-    set_role(client, org["email"], models.RoleEnum.org_pro)
+    await set_role(client, org["email"], models.RoleEnum.org_pro)
     org_token = login_user(client, org["email"])
 
     resp_assign = client.post(
@@ -163,16 +158,16 @@ def test_org_assigns_coach_and_views_assignments(client: TestClient) -> None:
     assert any(a["player_profile_id"] == player_id for a in assignments)
 
 
-def test_coach_manages_sessions_for_assigned_player(client: TestClient) -> None:
+async def test_coach_manages_sessions_for_assigned_player(client: TestClient) -> None:
     player_id = "player-coach"
-    ensure_profile(client, player_id)
+    await ensure_profile(client, player_id)
 
     coach = register_user(client, "coach-session@example.com")
-    set_role(client, coach["email"], models.RoleEnum.coach_pro)
+    await set_role(client, coach["email"], models.RoleEnum.coach_pro)
     coach_token = login_user(client, coach["email"])
 
     org = register_user(client, "org-session@example.com")
-    set_role(client, org["email"], models.RoleEnum.org_pro)
+    await set_role(client, org["email"], models.RoleEnum.org_pro)
     org_token = login_user(client, org["email"])
 
     assign_resp = client.post(
@@ -217,16 +212,16 @@ def test_coach_manages_sessions_for_assigned_player(client: TestClient) -> None:
     assert update_resp.json()["outcome"] == "Improved bat speed"
 
 
-def test_org_creates_sessions_for_any_assigned_coach(client: TestClient) -> None:
+async def test_org_creates_sessions_for_any_assigned_coach(client: TestClient) -> None:
     player_id = "player-org-session"
-    ensure_profile(client, player_id)
+    await ensure_profile(client, player_id)
 
     coach = register_user(client, "coach-assigned@example.com")
-    set_role(client, coach["email"], models.RoleEnum.coach_pro)
+    await set_role(client, coach["email"], models.RoleEnum.coach_pro)
     coach_id = coach["id"]
 
     org = register_user(client, "org-controller@example.com")
-    set_role(client, org["email"], models.RoleEnum.org_pro)
+    await set_role(client, org["email"], models.RoleEnum.org_pro)
     org_token = login_user(client, org["email"])
 
     client.post(
@@ -267,18 +262,18 @@ def test_org_creates_sessions_for_any_assigned_coach(client: TestClient) -> None
     assert update_resp.json()["notes"] == "Focus on release point"
 
 
-def test_coach_cannot_manage_unassigned_player(client: TestClient) -> None:
+async def test_coach_cannot_manage_unassigned_player(client: TestClient) -> None:
     player_one = "player-one"
     player_two = "player-two"
-    ensure_profile(client, player_one)
-    ensure_profile(client, player_two)
+    await ensure_profile(client, player_one)
+    await ensure_profile(client, player_two)
 
     coach = register_user(client, "coach-guard@example.com")
-    set_role(client, coach["email"], models.RoleEnum.coach_pro)
+    await set_role(client, coach["email"], models.RoleEnum.coach_pro)
     coach_token = login_user(client, coach["email"])
 
     org = register_user(client, "org-guard@example.com")
-    set_role(client, org["email"], models.RoleEnum.org_pro)
+    await set_role(client, org["email"], models.RoleEnum.org_pro)
     org_token = login_user(client, org["email"])
 
     client.post(
@@ -316,7 +311,7 @@ def test_coach_cannot_manage_unassigned_player(client: TestClient) -> None:
 
     # Another coach should not be able to update this session (create second coach)
     coach_two = register_user(client, "coach-two@example.com")
-    set_role(client, coach_two["email"], models.RoleEnum.coach_pro)
+    await set_role(client, coach_two["email"], models.RoleEnum.coach_pro)
     coach_two_token = login_user(client, coach_two["email"])
 
     resp_update = client.put(

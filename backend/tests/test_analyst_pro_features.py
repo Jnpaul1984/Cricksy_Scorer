@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import os
 from typing import Any
@@ -23,10 +22,6 @@ UTC = getattr(dt, "UTC", dt.UTC)
 
 def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
-
-
-def _run_async(coro):
-    return asyncio.run(coro)
 
 
 async def _set_user_role(
@@ -164,33 +159,31 @@ def login_user(client: TestClient, email: str, password: str = "secret123") -> s
     return resp.json()["access_token"]
 
 
-def set_role(client: TestClient, email: str, role: models.RoleEnum) -> None:
+async def set_role(client: TestClient, email: str, role: models.RoleEnum) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    _run_async(_set_user_role(session_maker, email, role))
+    await _set_user_role(session_maker, email, role)
 
 
-def ensure_player_bundle(client: TestClient, player_id: str) -> None:
+async def ensure_player_bundle(client: TestClient, player_id: str) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    _run_async(_ensure_player_bundle(session_maker, player_id))
+    await _ensure_player_bundle(session_maker, player_id)
 
 
-def ensure_game(client: TestClient, game_id: str) -> None:
+async def ensure_game(client: TestClient, game_id: str) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    _run_async(_ensure_game(session_maker, game_id))
+    await _ensure_game(session_maker, game_id)
 
 
-def add_form_entry(
+async def add_form_entry(
     client: TestClient, player_id: str, runs: int, wickets: int, offset: int
 ) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    _run_async(
-        _add_form_entry(session_maker, player_id, runs=runs, wickets=wickets, offset_days=offset)
-    )
+    await _add_form_entry(session_maker, player_id, runs=runs, wickets=wickets, offset_days=offset)
 
 
-def test_role_gating_for_analyst_endpoints(client: TestClient) -> None:
-    ensure_player_bundle(client, "player-role")
-    ensure_game(client, "game-role")
+async def test_role_gating_for_analyst_endpoints(client: TestClient) -> None:
+    await ensure_player_bundle(client, "player-role")
+    await ensure_game(client, "game-role")
 
     restricted_roles = [
         ("free@example.com", None),
@@ -201,7 +194,7 @@ def test_role_gating_for_analyst_endpoints(client: TestClient) -> None:
     for email, role in restricted_roles:
         register_user(client, email)
         if role is not None:
-            set_role(client, email, role)
+            await set_role(client, email, role)
         token = login_user(client, email)
         endpoints = [
             ("GET", "/api/analyst/players/export"),
@@ -221,10 +214,10 @@ def test_role_gating_for_analyst_endpoints(client: TestClient) -> None:
             assert resp.status_code == 403, f"{method} {path} should be forbidden for {email}"
 
 
-def test_analyst_exports_json_and_csv(client: TestClient) -> None:
-    ensure_player_bundle(client, "player-export")
+async def test_analyst_exports_json_and_csv(client: TestClient) -> None:
+    await ensure_player_bundle(client, "player-export")
     analyst = register_user(client, "analyst@example.com")
-    set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
+    await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
     analyst_token = login_user(client, analyst["email"])
 
     resp_json = client.get(
@@ -242,11 +235,11 @@ def test_analyst_exports_json_and_csv(client: TestClient) -> None:
     assert "player_id" in resp_csv.text
 
 
-def test_match_and_form_exports(client: TestClient) -> None:
-    ensure_player_bundle(client, "player-form")
-    ensure_game(client, "game-form")
+async def test_match_and_form_exports(client: TestClient) -> None:
+    await ensure_player_bundle(client, "player-form")
+    await ensure_game(client, "game-form")
     org = register_user(client, "org@example.com")
-    set_role(client, org["email"], models.RoleEnum.org_pro)
+    await set_role(client, org["email"], models.RoleEnum.org_pro)
     org_token = login_user(client, org["email"])
 
     resp_matches = client.get("/api/analyst/matches/export", headers=_auth_headers(org_token))
@@ -262,14 +255,14 @@ def test_match_and_form_exports(client: TestClient) -> None:
     assert form_entries[0]["player_id"] == "player-form"
 
 
-def test_analytics_query_form_summary(client: TestClient) -> None:
+async def test_analytics_query_form_summary(client: TestClient) -> None:
     player_id = "player-analytics"
-    ensure_player_bundle(client, player_id)
-    add_form_entry(client, player_id, runs=150, wickets=5, offset=10)
-    add_form_entry(client, player_id, runs=90, wickets=2, offset=20)
+    await ensure_player_bundle(client, player_id)
+    await add_form_entry(client, player_id, runs=150, wickets=5, offset=10)
+    await add_form_entry(client, player_id, runs=90, wickets=2, offset=20)
 
     analyst = register_user(client, "analyst-query@example.com")
-    set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
+    await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
     token = login_user(client, analyst["email"])
 
     payload = {

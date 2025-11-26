@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import os
 from typing import Any
@@ -21,10 +20,6 @@ from backend.sql_app.database import get_db
 
 def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
-
-
-def _run_async(coro):
-    return asyncio.run(coro)
 
 
 async def _set_user_role(
@@ -175,27 +170,27 @@ def login_user(client: TestClient, email: str, password: str = "secret123") -> s
     return resp.json()["access_token"]
 
 
-def set_role(client: TestClient, email: str, role: models.RoleEnum) -> None:
+async def set_role(client: TestClient, email: str, role: models.RoleEnum) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    _run_async(_set_user_role(session_maker, email, role))
+    await _set_user_role(session_maker, email, role)
 
 
-def ensure_profile(client: TestClient, player_id: str) -> None:
+async def ensure_profile(client: TestClient, player_id: str) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    _run_async(_ensure_player_profile(session_maker, player_id))
+    await _ensure_player_profile(session_maker, player_id)
 
 
-def ensure_summary(client: TestClient, player_id: str) -> models.PlayerSummary:
+async def ensure_summary(client: TestClient, player_id: str) -> models.PlayerSummary:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    return _run_async(_ensure_player_summary(session_maker, player_id))
+    return await _ensure_player_summary(session_maker, player_id)
 
 
-def create_form_entry(client: TestClient, player_id: str) -> models.PlayerForm:
+async def create_form_entry(client: TestClient, player_id: str) -> models.PlayerForm:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    return _run_async(_create_player_form_entry(session_maker, player_id))
+    return await _create_player_form_entry(session_maker, player_id)
 
 
-def create_coaching_note(
+async def create_coaching_note(
     client: TestClient,
     player_id: str,
     coach_user_id: str,
@@ -206,23 +201,21 @@ def create_coaching_note(
     action_plan: str | None = None,
 ) -> models.PlayerCoachingNotes:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    return _run_async(
-        _create_coaching_note(
-            session_maker,
-            player_id,
-            coach_user_id,
-            visibility=visibility,
-            strengths=strengths,
-            weaknesses=weaknesses,
-            action_plan=action_plan,
-        )
+    return await _create_coaching_note(
+        session_maker,
+        player_id,
+        coach_user_id,
+        visibility=visibility,
+        strengths=strengths,
+        weaknesses=weaknesses,
+        action_plan=action_plan,
     )
 
 
-def test_free_role_blocked_from_player_pro_endpoints(client: TestClient) -> None:
+async def test_free_role_blocked_from_player_pro_endpoints(client: TestClient) -> None:
     player_id = "player-free"
-    ensure_profile(client, player_id)
-    ensure_summary(client, player_id)
+    await ensure_profile(client, player_id)
+    await ensure_summary(client, player_id)
 
     register_user(client, "free@example.com")
     token = login_user(client, "free@example.com")
@@ -237,13 +230,13 @@ def test_free_role_blocked_from_player_pro_endpoints(client: TestClient) -> None
     assert resp_summary.status_code == 403
 
 
-def test_player_role_access_summary_only(client: TestClient) -> None:
+async def test_player_role_access_summary_only(client: TestClient) -> None:
     player_id = "player-pro"
-    ensure_profile(client, player_id)
-    summary = ensure_summary(client, player_id)
+    await ensure_profile(client, player_id)
+    summary = await ensure_summary(client, player_id)
 
     register_user(client, "player@example.com")
-    set_role(client, "player@example.com", models.RoleEnum.player_pro)
+    await set_role(client, "player@example.com", models.RoleEnum.player_pro)
     token = login_user(client, "player@example.com")
 
     resp_form = client.get(f"/api/players/{player_id}/form", headers=_auth_headers(token))
@@ -259,13 +252,13 @@ def test_player_role_access_summary_only(client: TestClient) -> None:
     assert data["total_matches"] == summary.total_matches
 
 
-def test_coach_role_full_access_form_and_notes(client: TestClient) -> None:
+async def test_coach_role_full_access_form_and_notes(client: TestClient) -> None:
     player_id = "player-coach"
-    ensure_profile(client, player_id)
-    ensure_summary(client, player_id)
+    await ensure_profile(client, player_id)
+    await ensure_summary(client, player_id)
 
     register_user(client, "coach@example.com")
-    set_role(client, "coach@example.com", models.RoleEnum.coach_pro)
+    await set_role(client, "coach@example.com", models.RoleEnum.coach_pro)
     token = login_user(client, "coach@example.com")
 
     form_payload = {
@@ -332,15 +325,15 @@ def test_coach_role_full_access_form_and_notes(client: TestClient) -> None:
     assert resp_summary.status_code == 200
 
 
-def test_analyst_role_read_only_access(client: TestClient) -> None:
+async def test_analyst_role_read_only_access(client: TestClient) -> None:
     player_id = "player-analyst"
-    ensure_profile(client, player_id)
-    ensure_summary(client, player_id)
+    await ensure_profile(client, player_id)
+    await ensure_summary(client, player_id)
 
     coach = register_user(client, "coach-prep@example.com")
-    set_role(client, "coach-prep@example.com", models.RoleEnum.coach_pro)
-    create_form_entry(client, player_id)
-    create_coaching_note(
+    await set_role(client, "coach-prep@example.com", models.RoleEnum.coach_pro)
+    await create_form_entry(client, player_id)
+    await create_coaching_note(
         client,
         player_id,
         coach_user_id=coach["id"],
@@ -349,7 +342,7 @@ def test_analyst_role_read_only_access(client: TestClient) -> None:
         weaknesses="Susceptible to yorkers",
         action_plan="Work on yorker defense",
     )
-    private_note = create_coaching_note(
+    private_note = await create_coaching_note(
         client,
         player_id,
         coach_user_id=coach["id"],
@@ -360,7 +353,7 @@ def test_analyst_role_read_only_access(client: TestClient) -> None:
     )
 
     analyst = register_user(client, "analyst@example.com")
-    set_role(client, "analyst@example.com", models.RoleEnum.analyst_pro)
+    await set_role(client, "analyst@example.com", models.RoleEnum.analyst_pro)
     token = login_user(client, "analyst@example.com")
 
     resp_form = client.get(f"/api/players/{player_id}/form", headers=_auth_headers(token))
@@ -418,13 +411,13 @@ def test_analyst_role_read_only_access(client: TestClient) -> None:
     assert resp_note_update.status_code == 403
 
 
-def test_org_role_full_access(client: TestClient) -> None:
+async def test_org_role_full_access(client: TestClient) -> None:
     player_id = "player-org"
-    ensure_profile(client, player_id)
-    ensure_summary(client, player_id)
+    await ensure_profile(client, player_id)
+    await ensure_summary(client, player_id)
 
     register_user(client, "org@example.com")
-    set_role(client, "org@example.com", models.RoleEnum.org_pro)
+    await set_role(client, "org@example.com", models.RoleEnum.org_pro)
     token = login_user(client, "org@example.com")
 
     form_payload = {

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 from typing import Any
 
@@ -20,10 +19,6 @@ from backend.sql_app.database import get_db
 
 def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
-
-
-def _run_async(coro):
-    return asyncio.run(coro)
 
 
 async def _set_user_role(
@@ -94,12 +89,12 @@ def login_user(client: TestClient, email: str, password: str = "secret123") -> s
     return resp.json()["access_token"]
 
 
-def ensure_player_profile(client: TestClient, player_id: str) -> None:
+async def ensure_player_profile(client: TestClient, player_id: str) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    _run_async(_ensure_player_profile(session_maker, player_id))
+    await _ensure_player_profile(session_maker, player_id)
 
 
-def test_auth_required_for_fan_routes(client: TestClient) -> None:
+async def test_auth_required_for_fan_routes(client: TestClient) -> None:
     payload = {
         "home_team_name": "Home",
         "away_team_name": "Away",
@@ -116,7 +111,7 @@ def test_auth_required_for_fan_routes(client: TestClient) -> None:
     assert resp_fav.status_code == 401
 
 
-def test_fan_matches_are_user_scoped(client: TestClient) -> None:
+async def test_fan_matches_are_user_scoped(client: TestClient) -> None:
     user_a = register_user(client, "fan-a@example.com")
     token_a = login_user(client, user_a["email"])
 
@@ -153,8 +148,8 @@ def test_fan_matches_are_user_scoped(client: TestClient) -> None:
     assert detail_b.status_code == 404
 
 
-def test_favorites_lifecycle_and_isolation(client: TestClient) -> None:
-    ensure_player_profile(client, "player-1")
+async def test_favorites_lifecycle_and_isolation(client: TestClient) -> None:
+    await ensure_player_profile(client, "player-1")
     user = register_user(client, "fan@example.com")
     token = login_user(client, user["email"])
 

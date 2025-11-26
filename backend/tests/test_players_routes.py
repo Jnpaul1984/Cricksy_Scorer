@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import asyncio
 import os
-from typing import Any
 
 os.environ.setdefault("APP_SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_app.db")
@@ -20,10 +18,6 @@ def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _run_async(coro: Any):
-    return asyncio.run(coro)
-
-
 async def _init_models() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(models.Base.metadata.create_all)
@@ -37,15 +31,15 @@ async def _set_user_role(email: str, role: models.RoleEnum) -> None:
         await session.commit()
 
 
-def test_award_achievement_and_profile_flow():
-    _run_async(_init_models())
+async def test_award_achievement_and_profile_flow():
+    await _init_models()
 
     payload = {
         "game_id": None,
         "achievement_type": "century",
         "title": "Century Master",
         "description": "Scored 150 runs in a match",
-        "badge_icon": "�Y'�",
+        "badge_icon": "Y'",
         "metadata": {"runs": 150, "balls": 120},
     }
 
@@ -54,7 +48,7 @@ def test_award_achievement_and_profile_flow():
         password = "secret123"
         register_resp = client.post("/auth/register", json={"email": email, "password": password})
         assert register_resp.status_code == 201
-        _run_async(_set_user_role(email, models.RoleEnum.org_pro))
+        await _set_user_role(email, models.RoleEnum.org_pro)
         login_resp = client.post(
             "/auth/login",
             data={"username": email, "password": password},

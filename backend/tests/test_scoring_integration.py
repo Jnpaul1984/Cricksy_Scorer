@@ -33,7 +33,6 @@ GET /games/{game_id}/snapshot (backend.routes.gameplay.get_snapshot)
         # rebuilds runtime fields, dedupes ledger, returns canonical view
 """
 
-import asyncio
 import os
 from typing import Any
 
@@ -128,14 +127,11 @@ def _game_state(client: TestClient, game_id: str) -> dict[str, Any]:
     return response.json()
 
 
-def _force_game_status(game_id: str, status: str = "in_progress") -> None:
-    async def _update():
-        game = await crud.get_game(None, game_id=game_id)
-        assert game is not None, "Unable to locate game for status adjustment"
-        game.status = status
-        await crud.update_game(None, game_model=game)
-
-    asyncio.run(_update())
+async def _force_game_status(game_id: str, status: str = "in_progress") -> None:
+    game = await crud.get_game(None, game_id=game_id)
+    assert game is not None, "Unable to locate game for status adjustment"
+    game.status = status
+    await crud.update_game(None, game_model=game)
 
 
 def test_create_game_and_score_delivery(client):
@@ -772,7 +768,7 @@ def test_undo_last_delivery_reverts_snapshot_and_ledger(client: TestClient):
     assert state["balls_this_over"] == 1
 
 
-def test_mid_over_bowler_change_reflects_in_snapshot(client: TestClient):
+async def test_mid_over_bowler_change_reflects_in_snapshot(client: TestClient):
     """Changing the bowler mid-over should update snapshot + runtime state."""
     game_id, batters, bowlers = _bootstrap_game(client)
     striker_id = batters[0]["id"]
@@ -795,7 +791,7 @@ def test_mid_over_bowler_change_reflects_in_snapshot(client: TestClient):
     )
 
     # In-memory repo stores GameStatus enums; normalize to literal for route validation
-    _force_game_status(game_id, "in_progress")
+    await _force_game_status(game_id, "in_progress")
 
     change_resp = client.post(
         f"/games/{game_id}/overs/change_bowler", json={"new_bowler_id": new_bowler}
