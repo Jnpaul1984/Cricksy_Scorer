@@ -18,10 +18,10 @@ for path in (ROOT, BACKEND_DIR):
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
 
-import backend.main as backend_main  # type: ignore  # noqa: E402
-
 # Force the backend to run with the light-weight in-memory CRUD layer.
 os.environ.setdefault("CRICKSY_IN_MEMORY_DB", "1")
+
+import backend.main as backend_main  # type: ignore  # noqa: E402
 
 
 def main() -> None:

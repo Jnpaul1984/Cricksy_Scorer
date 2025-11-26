@@ -7,8 +7,8 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 
-import pinia from '@/stores'
 import { API_BASE, setUnauthorizedHandler } from '@/services/api';
+import pinia from '@/stores'
 import { useAuthStore } from '@/stores/authStore';
 
 // Global styles first (safe to keep here)
@@ -51,6 +51,11 @@ if (!mountEl.__vue_app__) {
   // Mount once
   const vm = app.mount('#app')
   mountEl.__vue_app__ = vm
+
+  // Expose app for Cypress E2E tests
+  if (typeof window !== 'undefined') {
+    ;(window as any).app = app
+  }
 
   // Logs
   console.log('🔧 Vue app mounted to #app element')

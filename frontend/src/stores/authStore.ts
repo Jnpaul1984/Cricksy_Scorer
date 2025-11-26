@@ -1,12 +1,17 @@
 import { defineStore } from 'pinia';
 
-import type { AuthUser, UserRole } from '@/types/auth';
-import { getCurrentUser, logout as authLogout } from '@/services/auth';
 import { getStoredToken, setStoredToken } from '@/services/api';
+import { getCurrentUser, logout as authLogout } from '@/services/auth';
+import type { AuthUser, UserRole } from '@/types/auth';
 
-const SCORING_ROLES: ReadonlyArray<UserRole> = ['coach_pro', 'org_pro', 'superuser'];
-const ANALYTICS_ROLES: ReadonlyArray<UserRole> = ['analyst_pro', 'org_pro', 'superuser'];
-const TOURNAMENT_ROLES: ReadonlyArray<UserRole> = ['org_pro', 'superuser'];
+export interface AuthState {
+  user: AuthUser | null;
+  token: string | null;
+  loading: boolean;
+}
+
+const isSuperuser = (state: AuthState): boolean =>
+  state.user?.role === 'superuser' || Boolean(state.user?.is_superuser);
 
 function isUnauthorizedError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
@@ -15,8 +20,8 @@ function isUnauthorizedError(err: unknown): boolean {
 }
 
 export const useAuthStore = defineStore('auth', {
-  state: () => ({
-    user: null as AuthUser | null,
+  state: (): AuthState => ({
+    user: null,
     token: getStoredToken(),
     loading: false,
   }),
@@ -27,23 +32,27 @@ export const useAuthStore = defineStore('auth', {
     is: (state) => (role: UserRole) => (state.user?.role ?? null) === role,
     isFreeUser: (state) => !state.user || state.user.role === 'free',
     isPlayerPro: (state) => state.user?.role === 'player_pro',
-    isCoachPro: (state) => state.user?.role === 'coach_pro',
-    isAnalystPro: (state) => state.user?.role === 'analyst_pro',
-    isOrgPro: (state) => state.user?.role === 'org_pro',
-    isSuperuser: (state) => state.user?.role === 'superuser',
-    canScore: (state) => SCORING_ROLES.includes((state.user?.role ?? 'free') as UserRole),
-    canAnalyze: (state) => ANALYTICS_ROLES.includes((state.user?.role ?? 'free') as UserRole),
-    canManageTournaments: (state) => TOURNAMENT_ROLES.includes((state.user?.role ?? 'free') as UserRole),
+    isCoachPro: (state) => state.user?.role === 'coach_pro' || isSuperuser(state),
+    isAnalystPro: (state) => state.user?.role === 'analyst_pro' || isSuperuser(state),
+    isOrgPro: (state) => state.user?.role === 'org_pro' || isSuperuser(state),
+    isSuperuser,
+    canScore: (state) =>
+      isSuperuser(state) || state.user?.role === 'coach_pro' || state.user?.role === 'org_pro',
+    canAnalyze: (state) =>
+      isSuperuser(state) || state.user?.role === 'analyst_pro' || state.user?.role === 'org_pro',
+    canManageTournaments: (state) =>
+      isSuperuser(state) || state.user?.role === 'org_pro',
     // Legacy helpers used across the app
-    isOrg: (state) => state.user?.role === 'org_pro',
-    isCoach: (state) => state.user?.role === 'coach_pro',
-    isAnalyst: (state) => state.user?.role === 'analyst_pro',
+    isOrg: (state) => state.user?.role === 'org_pro' || isSuperuser(state),
+    isCoach: (state) => state.user?.role === 'coach_pro' || isSuperuser(state),
+    isAnalyst: (state) => state.user?.role === 'analyst_pro' || isSuperuser(state),
     isPlayer: (state) => state.user?.role === 'player_pro',
-    isSuper: (state) => state.user?.role === 'superuser',
+    isSuper: (state) => isSuperuser(state),
   },
   actions: {
     hasAnyRole(roles: UserRole[]): boolean {
       const currentRole = this.user?.role ?? null;
+      if (this.isSuperuser) return true;
       if (!currentRole) return false;
       return roles.includes(currentRole);
     },

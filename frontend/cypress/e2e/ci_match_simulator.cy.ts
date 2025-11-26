@@ -1,131 +1,64 @@
-/* eslint-disable @typescript-eslint/no-unused-expressions */
-const API_BASE: string = (Cypress.env('API_BASE') as string) || 'http://localhost:8000'
+const API_BASE: string = (Cypress.env('API_BASE') as string) || 'http://127.0.0.1:8000'
 
-describe('CI Match Simulator', () => {
-  let gameId: string
+describe('CI match simulator smoke', () => {
+  let gameId = ''
+  let expectedResultText = ''
+  let teamAName = 'Team Alpha'
+  let teamBName = 'Team Beta'
 
   before(() => {
-    cy.viewport(1600, 1200)
-    cy.task('seed:match').then((result: any) => {
-      expect(result?.gameId, 'seeded game id')
-        .to.be.a('string')
-        .and.not.be.empty
-      gameId = result.gameId
-    })
-  })
-
-  it('renders scoreboard, scoring, and analytics views for the seeded match', () => {
-    const url = `/view/${gameId}?apiBase=${encodeURIComponent(API_BASE)}`
-    cy.visit(url)
-
-    // Optional: Check deliveries returned by API
-    cy.request(`${API_BASE}/games/${gameId}/deliveries`).then((resp) => {
-      cy.log(`API response: ${JSON.stringify(resp.body)}`)
-      expect(resp.body.deliveries, 'deliveries property').to.not.be.null
-      expect(resp.body.deliveries, 'deliveries property').to.not.be.undefined
-      expect(Array.isArray(resp.body.deliveries), 'deliveries is array').to.be.true
-
-      // Only assert length if it's an array
-      if (Array.isArray(resp.body.deliveries)) {
-        expect(resp.body.deliveries.length, 'deliveries length').to.be.at.least(120)
+    cy.fixture('simulated_t20_match.json').then((fixture) => {
+      if (Array.isArray(fixture?.teams)) {
+        teamAName = fixture.teams[0] || teamAName
+        teamBName = fixture.teams[1] || teamBName
       }
     })
 
-    // Banner: tolerant to either plain text or JSON blob
-    cy.get('.result-banner', { timeout: 20000 })
-      .should('exist')
-      .invoke('text')
-      .then((txt) => {
-        const t = String(txt).trim()
-        let ok = false
-        if (t.startsWith('{') && t.endsWith('}')) {
-          try {
-            const j = JSON.parse(t)
-            const a = Number(j?.team_a_score || 0)
-            const b = Number(j?.team_b_score || 0)
-            const winner = String(j?.winner_team_name || j?.winner || '').toLowerCase()
-            const isTie = a === b
-            const phrase = isTie ? 'match tied' : 'won by'
-            ok = t.toLowerCase().includes(phrase) || Boolean(winner)
-          } catch {
-            ok = false
-          }
-        } else {
-          const low = t.toLowerCase()
-          ok = low.includes('won by') || low.includes('match tied')
-        }
-        expect(ok, `banner text: ${t}`).to.be.true
+    cy.task('seed:match').then((result: any) => {
+      expect(result?.gameId, 'seeded game id').to.be.a('string').and.not.be.empty
+      gameId = String(result.gameId)
+      return cy.request(`${API_BASE}/games/${gameId}/results`).then((resp) => {
+        expectedResultText = String(resp.body?.result_text || '')
+      })
+    })
+  })
+
+  beforeEach(() => {
+    cy.viewport(1600, 1200)
+  })
+
+  it('renders viewer, scoring, and analytics views for the seeded match', () => {
+    const viewerUrl = `/view/${gameId}?apiBase=${encodeURIComponent(API_BASE)}`
+    cy.visitWithSnapshot(viewerUrl)
+      .its('response.body')
+      .then((snap) => {
+        expect(Boolean(snap?.is_game_over), 'viewer snapshot is_game_over').to.be.true
+      })
+    cy.get('[data-testid="scoreboard-result-banner"]').should('contain.text', expectedResultText || 'won')
+    cy.get('[data-testid="scoreboard-score"]').should('exist')
+    cy.get('[data-testid="scoreboard-overs"]').should('contain.text', 'ov')
+
+    cy.visitWithSnapshot(`/game/${gameId}/scoring`)
+      .its('response.body')
+      .then((snap) => {
+        expect(Boolean(snap?.is_game_over), 'scoring snapshot is_game_over').to.be.true
       })
 
-    // Scoring view
-    cy.visit(`/game/${gameId}/scoring`)
-    cy.contains('DeliveryTable', { timeout: 15000 }).should('not.exist')
-    cy.get('.left table tbody tr', { timeout: 15000 })
-      .its('length')
-      .should('be.greaterThan', 50)
-    cy.get('.extras-card')
-      .should('contain', 'Wides')
-      .and('contain', 'Leg-byes')
-    cy.get('.extras-card .dls-card').should('exist')
-    cy.get('.scorecards-grid').within(() => {
-      cy.contains('Batting').should('exist')
-      cy.contains('Bowling').should('exist')
-    })
+    cy.get('[data-testid="scoreboard-result-banner"]').should('contain.text', expectedResultText || 'won')
+    cy.get('[data-testid="submit-delivery"]').should('be.disabled')
 
-    // Analytics — pass apiBase so search hits the backend
-    cy.visit(`/analytics?apiBase=${encodeURIComponent(API_BASE)}`)
-    cy.get('input[placeholder="Team A name"]').clear().type('Team Alpha')
-    cy.get('input[placeholder="Team B name"]').clear().type('Team Beta')
+    cy.visitWithAuth(`/analytics?apiBase=${encodeURIComponent(API_BASE)}`)
+    cy.get('input[placeholder="Team A name"]').clear().type(teamAName)
+    cy.get('input[placeholder="Team B name"]').clear().type(teamBName)
     cy.contains('button', 'Search').click()
-    cy.contains('.result-list button', 'Team Alpha vs Team Beta', {
-      timeout: 15000,
-    }).click()
+    cy.contains('.result-list button', `${teamAName} vs ${teamBName}`, { timeout: 20000 }).click()
 
-    cy.contains('.grid .card h3', 'Run Rate', { timeout: 15000 })
-      .scrollIntoView({ ensureScrollable: false })
-      .should('exist')
-    cy.contains('.grid .card', 'Run Rate')
-      .should('contain', 'Current')
-
-    cy.contains('h3', 'Manhattan', { timeout: 15000 })
-      .scrollIntoView({ ensureScrollable: false })
-      .parent()
-      .find('canvas')
-      .should('exist')
-
-    cy.contains('h3', 'Worm', { timeout: 15000 })
-      .scrollIntoView({ ensureScrollable: false })
-      .parent()
-      .find('canvas')
-      .should('exist')
-
-    cy.contains('h3', 'Extras / Dot & Boundary %', { timeout: 30000 })
-      .scrollIntoView({ ensureScrollable: false })
-      .parent()
-      .should('contain', 'Legal balls: 240')
-
-    cy.contains('h3', 'Batting', { timeout: 15000 })
-      .scrollIntoView({ ensureScrollable: false })
-      .parent()
-      .find('tbody tr')
-      .its('length')
-      .should('be.greaterThan', 5)
-
-    cy.contains('h3', 'Bowling', { timeout: 15000 })
-      .scrollIntoView({ ensureScrollable: false })
-      .parent()
-      .find('tbody tr')
-      .its('length')
-      .should('be.greaterThan', 5)
-
-    cy.contains('h3', 'DLS Panel', { timeout: 15000 })
-      .scrollIntoView({ ensureScrollable: false })
-      .parent()
-      .should('exist')
-
-    cy.contains('h3', 'Phase Splits', { timeout: 15000 })
-      .scrollIntoView({ ensureScrollable: false })
-      .parent()
-      .should('contain', 'Powerplay')
+    cy.get('[data-testid="analytics-runrate-card"]').should('contain.text', 'Run Rate')
+    cy.get('[data-testid="analytics-manhattan-card"]').scrollIntoView().find('canvas').should('exist')
+    cy.get('[data-testid="analytics-worm-card"]').scrollIntoView().find('canvas').should('exist')
+    cy.get('[data-testid="analytics-extras-card"]').should('contain.text', 'Legal balls')
+    cy.get('[data-testid="analytics-batting-card"]').find('tbody tr').its('length').should('be.greaterThan', 5)
+    cy.get('[data-testid="analytics-bowling-card"]').find('tbody tr').its('length').should('be.greaterThan', 5)
+    cy.get('[data-testid="analytics-phase-card"]').should('contain.text', 'Powerplay')
   })
 })

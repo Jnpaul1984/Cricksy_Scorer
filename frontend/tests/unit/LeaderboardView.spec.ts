@@ -1,8 +1,9 @@
 import { mount } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
-import LeaderboardView from '@/views/LeaderboardView.vue'
+
 import * as playerApi from '@/services/playerApi'
+import LeaderboardView from '@/views/LeaderboardView.vue'
 
 // Mock the playerApi module
 vi.mock('@/services/playerApi')

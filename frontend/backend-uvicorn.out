@@ -1,0 +1,791 @@
+DEBUG: crud.create_game is create_game
+{"method": "POST", "path": "/games", "status": 500, "client_ip": "127.0.0.1", "user_agent": "node", "duration_ms": 4110.79, "event": "request_failed", "level": "error", "logger": "access", "timestamp": "2025-11-25T04:26:34.101829Z", "exception": "Traceback (most recent call last):\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 151, in call_next\n    message = await recv_stream.receive()\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\anyio\\streams\\memory.py\", line 126, in receive\n    raise EndOfStream from None\nanyio.EndOfStream\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\middleware\\observability.py\", line 68, in dispatch\n    response = await call_next(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 159, in call_next\n    raise app_exc\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 144, in coro\n    await self.app(scope, receive_or_disconnect, send_no_error)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 182, in __call__\n    with recv_stream, send_stream, collapse_excgroups():\n                                   ~~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\contextlib.py\", line 162, in __exit__\n    self.gen.throw(value)\n    ~~~~~~~~~~~~~~^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_utils.py\", line 85, in collapse_excgroups\n    raise exc\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 184, in __call__\n    response = await self.dispatch_func(request, call_next)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\middleware\\observability.py\", line 43, in dispatch\n    response = await call_next(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 159, in call_next\n    raise app_exc\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 144, in coro\n    await self.app(scope, receive_or_disconnect, send_no_error)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\exceptions.py\", line 63, in __call__\n    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_exception_handler.py\", line 53, in wrapped_app\n    raise exc\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_exception_handler.py\", line 42, in wrapped_app\n    await app(scope, receive, sender)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\middleware\\asyncexitstack.py\", line 18, in __call__\n    await self.app(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\routing.py\", line 716, in __call__\n    await self.middleware_stack(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\routing.py\", line 736, in app\n    await route.handle(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\routing.py\", line 290, in handle\n    await self.app(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\routing.py\", line 123, in app\n    await wrap_app_handling_exceptions(app, request)(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_exception_handler.py\", line 53, in wrapped_app\n    raise exc\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_exception_handler.py\", line 42, in wrapped_app\n    await app(scope, receive, sender)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\routing.py\", line 109, in app\n    response = await f(request)\n               ^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\routing.py\", line 389, in app\n    raw_response = await run_endpoint_function(\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<3 lines>...\n    )\n    ^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\routing.py\", line 288, in run_endpoint_function\n    return await dependant.call(**values)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\routes\\games_core.py\", line 41, in create_game\n    db_game = await _games_impl.create_game_impl(payload, db)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\routes\\games.py\", line 36, in create_game_impl\n    db_game = await game_service.create_game(payload, db)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\services\\game_service.py\", line 131, in create_game\n    db_game = await crud.create_game(\n              ^^^^^^^^^^^^^^^^^^^^^^^\n    ...<9 lines>...\n    )\n    ^\n  File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\sql_app\\crud.py\", line 105, in create_game\n    await db.commit()\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\ext\\asyncio\\session.py\", line 1000, in commit\n    await greenlet_spawn(self.sync_session.commit)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\_concurrency_py3k.py\", line 201, in greenlet_spawn\n    result = context.throw(*sys.exc_info())\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 2030, in commit\n    trans.commit(_to_root=True)\n    ~~~~~~~~~~~~^^^^^^^^^^^^^^^\n  File \"<string>\", line 2, in commit\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    ret_value = fn(self, *arg, **kw)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1311, in commit\n    self._prepare_impl()\n    ~~~~~~~~~~~~~~~~~~^^\n  File \"<string>\", line 2, in _prepare_impl\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    ret_value = fn(self, *arg, **kw)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1286, in _prepare_impl\n    self.session.flush()\n    ~~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 4331, in flush\n    self._flush(objects)\n    ~~~~~~~~~~~^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 4466, in _flush\n    with util.safe_reraise():\n         ~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\langhelpers.py\", line 224, in __exit__\n    raise exc_value.with_traceback(exc_tb)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 4427, in _flush\n    flush_context.execute()\n    ~~~~~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\unitofwork.py\", line 466, in execute\n    rec.execute(self)\n    ~~~~~~~~~~~^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\unitofwork.py\", line 642, in execute\n    util.preloaded.orm_persistence.save_obj(\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        self.mapper,\n        ^^^^^^^^^^^^\n        uow.states_for_mapper_hierarchy(self.mapper, False, False),\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        uow,\n        ^^^^\n    )\n    ^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\persistence.py\", line 68, in save_obj\n    ) in _organize_states_for_save(base_mapper, states, uowtransaction):\n         ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\persistence.py\", line 223, in _organize_states_for_save\n    for state, dict_, mapper, connection in _connections_for_states(\n                                            ~~~~~~~~~~~~~~~~~~~~~~~^\n        base_mapper, uowtransaction, states\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ):\n    ^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\persistence.py\", line 1759, in _connections_for_states\n    connection = uowtransaction.transaction.connection(base_mapper)\n  File \"<string>\", line 2, in connection\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    ret_value = fn(self, *arg, **kw)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1037, in connection\n    return self._connection_for_bind(bind, execution_options)\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 2, in _connection_for_bind\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    ret_value = fn(self, *arg, **kw)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1173, in _connection_for_bind\n    conn = self._parent._connection_for_bind(\n        bind, execution_options\n    )\n  File \"<string>\", line 2, in _connection_for_bind\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    ret_value = fn(self, *arg, **kw)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1187, in _connection_for_bind\n    conn = bind.connect()\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\base.py\", line 3277, in connect\n    return self._connection_cls(self)\n           ~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\base.py\", line 143, in __init__\n    self._dbapi_connection = engine.raw_connection()\n                             ~~~~~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\base.py\", line 3301, in raw_connection\n    return self.pool.connect()\n           ~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 447, in connect\n    return _ConnectionFairy._checkout(self)\n           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 1264, in _checkout\n    fairy = _ConnectionRecord.checkout(pool)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 711, in checkout\n    rec = pool._do_get()\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\impl.py\", line 177, in _do_get\n    with util.safe_reraise():\n         ~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\langhelpers.py\", line 224, in __exit__\n    raise exc_value.with_traceback(exc_tb)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\impl.py\", line 175, in _do_get\n    return self._create_connection()\n           ~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 388, in _create_connection\n    return _ConnectionRecord(self)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 673, in __init__\n    self.__connect()\n    ~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 899, in __connect\n    with util.safe_reraise():\n         ~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\langhelpers.py\", line 224, in __exit__\n    raise exc_value.with_traceback(exc_tb)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 895, in __connect\n    self.dbapi_connection = connection = pool._invoke_creator(self)\n                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\create.py\", line 661, in connect\n    return dialect.connect(*cargs, **cparams)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\default.py\", line 629, in connect\n    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\dialects\\postgresql\\asyncpg.py\", line 955, in connect\n    await_only(creator_fn(*arg, **kw)),\n    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\_concurrency_py3k.py\", line 132, in await_only\n    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501\n           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\_concurrency_py3k.py\", line 196, in greenlet_spawn\n    value = await result\n            ^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connection.py\", line 2421, in connect\n    return await connect_utils._connect(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<20 lines>...\n    )\n    ^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 1075, in _connect\n    raise last_error or exceptions.TargetServerAttributeNotMatched(\n    ...<2 lines>...\n    )\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 1049, in _connect\n    conn = await _connect_addr(\n           ^^^^^^^^^^^^^^^^^^^^\n    ...<6 lines>...\n    )\n    ^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 886, in _connect_addr\n    return await __connect_addr(params, True, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 931, in __connect_addr\n    tr, pr = await connector\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 802, in _create_ssl_connection\n    tr, pr = await loop.create_connection(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<2 lines>...\n        host, port)\n        ^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\base_events.py\", line 1171, in create_connection\n    raise exceptions[0]\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\base_events.py\", line 1141, in create_connection\n    sock = await self._connect_sock(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n        exceptions, addrinfo, laddr_infos)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\base_events.py\", line 1044, in _connect_sock\n    await self.sock_connect(sock, address)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\proactor_events.py\", line 726, in sock_connect\n    return await self._proactor.connect(sock, address)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\windows_events.py\", line 804, in _poll\n    value = callback(transferred, key, ov)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\windows_events.py\", line 600, in finish_connect\n    ov.getresult()\n    ~~~~~~~~~~~~^^\nConnectionRefusedError: [WinError 1225] The remote computer refused the network connection"}
+Traceback (most recent call last):
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 151, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\anyio\streams\memory.py", line 126, in receive
+    raise EndOfStream from None
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\SRLF\Cricksy_Scorer\backend\middleware\observability.py", line 68, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 159, in call_next
+    raise app_exc
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 182, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_utils.py", line 85, in collapse_excgroups
+    raise exc
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 184, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\Cricksy_Scorer\backend\middleware\observability.py", line 43, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 159, in call_next
+    raise app_exc
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 123, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 109, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 389, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 288, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\Cricksy_Scorer\backend\routes\games_core.py", line 41, in create_game
+    db_game = await _games_impl.create_game_impl(payload, db)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\Cricksy_Scorer\backend\routes\games.py", line 36, in create_game_impl
+    db_game = await game_service.create_game(payload, db)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\Cricksy_Scorer\backend\services\game_service.py", line 131, in create_game
+    db_game = await crud.create_game(
+              ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\SRLF\Cricksy_Scorer\backend\sql_app\crud.py", line 105, in create_game
+    await db.commit()
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 1000, in commit
+    await greenlet_spawn(self.sync_session.commit)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 2030, in commit
+    trans.commit(_to_root=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "<string>", line 2, in commit
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1311, in commit
+    self._prepare_impl()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "<string>", line 2, in _prepare_impl
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1286, in _prepare_impl
+    self.session.flush()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+    ~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+    ~~~~~~~~~~~^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self.mapper,
+        ^^^^^^^^^^^^
+        uow.states_for_mapper_hierarchy(self.mapper, False, False),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        uow,
+        ^^^^
+    )
+    ^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\persistence.py", line 68, in save_obj
+    ) in _organize_states_for_save(base_mapper, states, uowtransaction):
+         ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\persistence.py", line 223, in _organize_states_for_save
+    for state, dict_, mapper, connection in _connections_for_states(
+                                            ~~~~~~~~~~~~~~~~~~~~~~~^
+        base_mapper, uowtransaction, states
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\persistence.py", line 1759, in _connections_for_states
+    connection = uowtransaction.transaction.connection(base_mapper)
+  File "<string>", line 2, in connection
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1037, in connection
+    return self._connection_for_bind(bind, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1173, in _connection_for_bind
+    conn = self._parent._connection_for_bind(
+        bind, execution_options
+    )
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1187, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py", line 3277, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py", line 3301, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 447, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 1264, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 711, in checkout
+    rec = pool._do_get()
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\impl.py", line 177, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\impl.py", line 175, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 388, in _create_connection
+    return _ConnectionRecord(self)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 673, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 899, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 895, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\create.py", line 661, in connect
+    return dialect.connect(*cargs, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\default.py", line 629, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connection.py", line 2421, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<20 lines>...
+    )
+    ^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 1075, in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+    ...<2 lines>...
+    )
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 1049, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 886, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 931, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 802, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        host, port)
+        ^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1171, in create_connection
+    raise exceptions[0]
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1141, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1044, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+{"path": "/games", "method": "POST", "request_id": "757a0a6f-82da-4319-a767-30d086a3ba84", "event": "unhandled_exception", "level": "error", "logger": "errors", "timestamp": "2025-11-25T04:26:34.164873Z", "exception": "  + Exception Group Traceback (most recent call last):\n  |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_utils.py\", line 79, in collapse_excgroups\n  |     yield\n  |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 183, in __call__\n  |     async with anyio.create_task_group() as task_group:\n  |                ~~~~~~~~~~~~~~~~~~~~~~~^^\n  |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\anyio\\_backends\\_asyncio.py\", line 772, in __aexit__\n  |     raise BaseExceptionGroup(\n  |         \"unhandled errors in a TaskGroup\", self._exceptions\n  |     ) from None\n  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)\n  +-+---------------- 1 ----------------\n    | Traceback (most recent call last):\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\errors.py\", line 164, in __call__\n    |     await self.app(scope, receive, _send)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\cors.py\", line 85, in __call__\n    |     await self.app(scope, receive, send)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 182, in __call__\n    |     with recv_stream, send_stream, collapse_excgroups():\n    |                                    ~~~~~~~~~~~~~~~~~~^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\contextlib.py\", line 162, in __exit__\n    |     self.gen.throw(value)\n    |     ~~~~~~~~~~~~~~^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_utils.py\", line 85, in collapse_excgroups\n    |     raise exc\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 184, in __call__\n    |     response = await self.dispatch_func(request, call_next)\n    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\middleware\\observability.py\", line 68, in dispatch\n    |     response = await call_next(request)\n    |                ^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 159, in call_next\n    |     raise app_exc\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 144, in coro\n    |     await self.app(scope, receive_or_disconnect, send_no_error)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 182, in __call__\n    |     with recv_stream, send_stream, collapse_excgroups():\n    |                                    ~~~~~~~~~~~~~~~~~~^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\contextlib.py\", line 162, in __exit__\n    |     self.gen.throw(value)\n    |     ~~~~~~~~~~~~~~^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_utils.py\", line 85, in collapse_excgroups\n    |     raise exc\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 184, in __call__\n    |     response = await self.dispatch_func(request, call_next)\n    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\middleware\\observability.py\", line 43, in dispatch\n    |     response = await call_next(request)\n    |                ^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 159, in call_next\n    |     raise app_exc\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 144, in coro\n    |     await self.app(scope, receive_or_disconnect, send_no_error)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\exceptions.py\", line 63, in __call__\n    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_exception_handler.py\", line 53, in wrapped_app\n    |     raise exc\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_exception_handler.py\", line 42, in wrapped_app\n    |     await app(scope, receive, sender)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\middleware\\asyncexitstack.py\", line 18, in __call__\n    |     await self.app(scope, receive, send)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\routing.py\", line 716, in __call__\n    |     await self.middleware_stack(scope, receive, send)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\routing.py\", line 736, in app\n    |     await route.handle(scope, receive, send)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\routing.py\", line 290, in handle\n    |     await self.app(scope, receive, send)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\routing.py\", line 123, in app\n    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_exception_handler.py\", line 53, in wrapped_app\n    |     raise exc\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_exception_handler.py\", line 42, in wrapped_app\n    |     await app(scope, receive, sender)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\routing.py\", line 109, in app\n    |     response = await f(request)\n    |                ^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\routing.py\", line 389, in app\n    |     raw_response = await run_endpoint_function(\n    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |     ...<3 lines>...\n    |     )\n    |     ^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\routing.py\", line 288, in run_endpoint_function\n    |     return await dependant.call(**values)\n    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\routes\\games_core.py\", line 41, in create_game\n    |     db_game = await _games_impl.create_game_impl(payload, db)\n    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\routes\\games.py\", line 36, in create_game_impl\n    |     db_game = await game_service.create_game(payload, db)\n    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\services\\game_service.py\", line 131, in create_game\n    |     db_game = await crud.create_game(\n    |               ^^^^^^^^^^^^^^^^^^^^^^^\n    |     ...<9 lines>...\n    |     )\n    |     ^\n    |   File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\sql_app\\crud.py\", line 105, in create_game\n    |     await db.commit()\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\ext\\asyncio\\session.py\", line 1000, in commit\n    |     await greenlet_spawn(self.sync_session.commit)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\_concurrency_py3k.py\", line 201, in greenlet_spawn\n    |     result = context.throw(*sys.exc_info())\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 2030, in commit\n    |     trans.commit(_to_root=True)\n    |     ~~~~~~~~~~~~^^^^^^^^^^^^^^^\n    |   File \"<string>\", line 2, in commit\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    |     ret_value = fn(self, *arg, **kw)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1311, in commit\n    |     self._prepare_impl()\n    |     ~~~~~~~~~~~~~~~~~~^^\n    |   File \"<string>\", line 2, in _prepare_impl\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    |     ret_value = fn(self, *arg, **kw)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1286, in _prepare_impl\n    |     self.session.flush()\n    |     ~~~~~~~~~~~~~~~~~~^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 4331, in flush\n    |     self._flush(objects)\n    |     ~~~~~~~~~~~^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 4466, in _flush\n    |     with util.safe_reraise():\n    |          ~~~~~~~~~~~~~~~~~^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\langhelpers.py\", line 224, in __exit__\n    |     raise exc_value.with_traceback(exc_tb)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 4427, in _flush\n    |     flush_context.execute()\n    |     ~~~~~~~~~~~~~~~~~~~~~^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\unitofwork.py\", line 466, in execute\n    |     rec.execute(self)\n    |     ~~~~~~~~~~~^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\unitofwork.py\", line 642, in execute\n    |     util.preloaded.orm_persistence.save_obj(\n    |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n    |         self.mapper,\n    |         ^^^^^^^^^^^^\n    |         uow.states_for_mapper_hierarchy(self.mapper, False, False),\n    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |         uow,\n    |         ^^^^\n    |     )\n    |     ^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\persistence.py\", line 68, in save_obj\n    |     ) in _organize_states_for_save(base_mapper, states, uowtransaction):\n    |          ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\persistence.py\", line 223, in _organize_states_for_save\n    |     for state, dict_, mapper, connection in _connections_for_states(\n    |                                             ~~~~~~~~~~~~~~~~~~~~~~~^\n    |         base_mapper, uowtransaction, states\n    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |     ):\n    |     ^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\persistence.py\", line 1759, in _connections_for_states\n    |     connection = uowtransaction.transaction.connection(base_mapper)\n    |   File \"<string>\", line 2, in connection\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    |     ret_value = fn(self, *arg, **kw)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1037, in connection\n    |     return self._connection_for_bind(bind, execution_options)\n    |            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"<string>\", line 2, in _connection_for_bind\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    |     ret_value = fn(self, *arg, **kw)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1173, in _connection_for_bind\n    |     conn = self._parent._connection_for_bind(\n    |         bind, execution_options\n    |     )\n    |   File \"<string>\", line 2, in _connection_for_bind\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    |     ret_value = fn(self, *arg, **kw)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1187, in _connection_for_bind\n    |     conn = bind.connect()\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\base.py\", line 3277, in connect\n    |     return self._connection_cls(self)\n    |            ~~~~~~~~~~~~~~~~~~~~^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\base.py\", line 143, in __init__\n    |     self._dbapi_connection = engine.raw_connection()\n    |                              ~~~~~~~~~~~~~~~~~~~~~^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\base.py\", line 3301, in raw_connection\n    |     return self.pool.connect()\n    |            ~~~~~~~~~~~~~~~~~^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 447, in connect\n    |     return _ConnectionFairy._checkout(self)\n    |            ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 1264, in _checkout\n    |     fairy = _ConnectionRecord.checkout(pool)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 711, in checkout\n    |     rec = pool._do_get()\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\impl.py\", line 177, in _do_get\n    |     with util.safe_reraise():\n    |          ~~~~~~~~~~~~~~~~~^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\langhelpers.py\", line 224, in __exit__\n    |     raise exc_value.with_traceback(exc_tb)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\impl.py\", line 175, in _do_get\n    |     return self._create_connection()\n    |            ~~~~~~~~~~~~~~~~~~~~~~~^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 388, in _create_connection\n    |     return _ConnectionRecord(self)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 673, in __init__\n    |     self.__connect()\n    |     ~~~~~~~~~~~~~~^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 899, in __connect\n    |     with util.safe_reraise():\n    |          ~~~~~~~~~~~~~~~~~^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\langhelpers.py\", line 224, in __exit__\n    |     raise exc_value.with_traceback(exc_tb)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 895, in __connect\n    |     self.dbapi_connection = connection = pool._invoke_creator(self)\n    |                                          ~~~~~~~~~~~~~~~~~~~~^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\create.py\", line 661, in connect\n    |     return dialect.connect(*cargs, **cparams)\n    |            ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\default.py\", line 629, in connect\n    |     return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501\n    |            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\dialects\\postgresql\\asyncpg.py\", line 955, in connect\n    |     await_only(creator_fn(*arg, **kw)),\n    |     ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\_concurrency_py3k.py\", line 132, in await_only\n    |     return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501\n    |            ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\_concurrency_py3k.py\", line 196, in greenlet_spawn\n    |     value = await result\n    |             ^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connection.py\", line 2421, in connect\n    |     return await connect_utils._connect(\n    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |     ...<20 lines>...\n    |     )\n    |     ^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 1075, in _connect\n    |     raise last_error or exceptions.TargetServerAttributeNotMatched(\n    |     ...<2 lines>...\n    |     )\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 1049, in _connect\n    |     conn = await _connect_addr(\n    |            ^^^^^^^^^^^^^^^^^^^^\n    |     ...<6 lines>...\n    |     )\n    |     ^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 886, in _connect_addr\n    |     return await __connect_addr(params, True, *args)\n    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 931, in __connect_addr\n    |     tr, pr = await connector\n    |              ^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 802, in _create_ssl_connection\n    |     tr, pr = await loop.create_connection(\n    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |     ...<2 lines>...\n    |         host, port)\n    |         ^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\base_events.py\", line 1171, in create_connection\n    |     raise exceptions[0]\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\base_events.py\", line 1141, in create_connection\n    |     sock = await self._connect_sock(\n    |            ^^^^^^^^^^^^^^^^^^^^^^^^^\n    |         exceptions, addrinfo, laddr_infos)\n    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\base_events.py\", line 1044, in _connect_sock\n    |     await self.sock_connect(sock, address)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\proactor_events.py\", line 726, in sock_connect\n    |     return await self._proactor.connect(sock, address)\n    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\windows_events.py\", line 804, in _poll\n    |     value = callback(transferred, key, ov)\n    |   File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\windows_events.py\", line 600, in finish_connect\n    |     ov.getresult()\n    |     ~~~~~~~~~~~~^^\n    | ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection\n    +------------------------------------\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\errors.py\", line 164, in __call__\n    await self.app(scope, receive, _send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\cors.py\", line 85, in __call__\n    await self.app(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 182, in __call__\n    with recv_stream, send_stream, collapse_excgroups():\n                                   ~~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\contextlib.py\", line 162, in __exit__\n    self.gen.throw(value)\n    ~~~~~~~~~~~~~~^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_utils.py\", line 85, in collapse_excgroups\n    raise exc\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 184, in __call__\n    response = await self.dispatch_func(request, call_next)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\middleware\\observability.py\", line 68, in dispatch\n    response = await call_next(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 159, in call_next\n    raise app_exc\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 144, in coro\n    await self.app(scope, receive_or_disconnect, send_no_error)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 182, in __call__\n    with recv_stream, send_stream, collapse_excgroups():\n                                   ~~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\contextlib.py\", line 162, in __exit__\n    self.gen.throw(value)\n    ~~~~~~~~~~~~~~^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_utils.py\", line 85, in collapse_excgroups\n    raise exc\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 184, in __call__\n    response = await self.dispatch_func(request, call_next)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\middleware\\observability.py\", line 43, in dispatch\n    response = await call_next(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 159, in call_next\n    raise app_exc\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\base.py\", line 144, in coro\n    await self.app(scope, receive_or_disconnect, send_no_error)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\middleware\\exceptions.py\", line 63, in __call__\n    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_exception_handler.py\", line 53, in wrapped_app\n    raise exc\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_exception_handler.py\", line 42, in wrapped_app\n    await app(scope, receive, sender)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\middleware\\asyncexitstack.py\", line 18, in __call__\n    await self.app(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\routing.py\", line 716, in __call__\n    await self.middleware_stack(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\routing.py\", line 736, in app\n    await route.handle(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\routing.py\", line 290, in handle\n    await self.app(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\routing.py\", line 123, in app\n    await wrap_app_handling_exceptions(app, request)(scope, receive, send)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_exception_handler.py\", line 53, in wrapped_app\n    raise exc\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\starlette\\_exception_handler.py\", line 42, in wrapped_app\n    await app(scope, receive, sender)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\routing.py\", line 109, in app\n    response = await f(request)\n               ^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\routing.py\", line 389, in app\n    raw_response = await run_endpoint_function(\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<3 lines>...\n    )\n    ^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastapi\\routing.py\", line 288, in run_endpoint_function\n    return await dependant.call(**values)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\routes\\games_core.py\", line 41, in create_game\n    db_game = await _games_impl.create_game_impl(payload, db)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\routes\\games.py\", line 36, in create_game_impl\n    db_game = await game_service.create_game(payload, db)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\services\\game_service.py\", line 131, in create_game\n    db_game = await crud.create_game(\n              ^^^^^^^^^^^^^^^^^^^^^^^\n    ...<9 lines>...\n    )\n    ^\n  File \"C:\\Users\\SRLF\\Cricksy_Scorer\\backend\\sql_app\\crud.py\", line 105, in create_game\n    await db.commit()\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\ext\\asyncio\\session.py\", line 1000, in commit\n    await greenlet_spawn(self.sync_session.commit)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\_concurrency_py3k.py\", line 201, in greenlet_spawn\n    result = context.throw(*sys.exc_info())\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 2030, in commit\n    trans.commit(_to_root=True)\n    ~~~~~~~~~~~~^^^^^^^^^^^^^^^\n  File \"<string>\", line 2, in commit\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    ret_value = fn(self, *arg, **kw)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1311, in commit\n    self._prepare_impl()\n    ~~~~~~~~~~~~~~~~~~^^\n  File \"<string>\", line 2, in _prepare_impl\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    ret_value = fn(self, *arg, **kw)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1286, in _prepare_impl\n    self.session.flush()\n    ~~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 4331, in flush\n    self._flush(objects)\n    ~~~~~~~~~~~^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 4466, in _flush\n    with util.safe_reraise():\n         ~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\langhelpers.py\", line 224, in __exit__\n    raise exc_value.with_traceback(exc_tb)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 4427, in _flush\n    flush_context.execute()\n    ~~~~~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\unitofwork.py\", line 466, in execute\n    rec.execute(self)\n    ~~~~~~~~~~~^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\unitofwork.py\", line 642, in execute\n    util.preloaded.orm_persistence.save_obj(\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        self.mapper,\n        ^^^^^^^^^^^^\n        uow.states_for_mapper_hierarchy(self.mapper, False, False),\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        uow,\n        ^^^^\n    )\n    ^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\persistence.py\", line 68, in save_obj\n    ) in _organize_states_for_save(base_mapper, states, uowtransaction):\n         ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\persistence.py\", line 223, in _organize_states_for_save\n    for state, dict_, mapper, connection in _connections_for_states(\n                                            ~~~~~~~~~~~~~~~~~~~~~~~^\n        base_mapper, uowtransaction, states\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ):\n    ^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\persistence.py\", line 1759, in _connections_for_states\n    connection = uowtransaction.transaction.connection(base_mapper)\n  File \"<string>\", line 2, in connection\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    ret_value = fn(self, *arg, **kw)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1037, in connection\n    return self._connection_for_bind(bind, execution_options)\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 2, in _connection_for_bind\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    ret_value = fn(self, *arg, **kw)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1173, in _connection_for_bind\n    conn = self._parent._connection_for_bind(\n        bind, execution_options\n    )\n  File \"<string>\", line 2, in _connection_for_bind\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\state_changes.py\", line 137, in _go\n    ret_value = fn(self, *arg, **kw)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\orm\\session.py\", line 1187, in _connection_for_bind\n    conn = bind.connect()\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\base.py\", line 3277, in connect\n    return self._connection_cls(self)\n           ~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\base.py\", line 143, in __init__\n    self._dbapi_connection = engine.raw_connection()\n                             ~~~~~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\base.py\", line 3301, in raw_connection\n    return self.pool.connect()\n           ~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 447, in connect\n    return _ConnectionFairy._checkout(self)\n           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 1264, in _checkout\n    fairy = _ConnectionRecord.checkout(pool)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 711, in checkout\n    rec = pool._do_get()\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\impl.py\", line 177, in _do_get\n    with util.safe_reraise():\n         ~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\langhelpers.py\", line 224, in __exit__\n    raise exc_value.with_traceback(exc_tb)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\impl.py\", line 175, in _do_get\n    return self._create_connection()\n           ~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 388, in _create_connection\n    return _ConnectionRecord(self)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 673, in __init__\n    self.__connect()\n    ~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 899, in __connect\n    with util.safe_reraise():\n         ~~~~~~~~~~~~~~~~~^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\langhelpers.py\", line 224, in __exit__\n    raise exc_value.with_traceback(exc_tb)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\pool\\base.py\", line 895, in __connect\n    self.dbapi_connection = connection = pool._invoke_creator(self)\n                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\create.py\", line 661, in connect\n    return dialect.connect(*cargs, **cparams)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\engine\\default.py\", line 629, in connect\n    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501\n           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\dialects\\postgresql\\asyncpg.py\", line 955, in connect\n    await_only(creator_fn(*arg, **kw)),\n    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\_concurrency_py3k.py\", line 132, in await_only\n    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501\n           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\sqlalchemy\\util\\_concurrency_py3k.py\", line 196, in greenlet_spawn\n    value = await result\n            ^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connection.py\", line 2421, in connect\n    return await connect_utils._connect(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<20 lines>...\n    )\n    ^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 1075, in _connect\n    raise last_error or exceptions.TargetServerAttributeNotMatched(\n    ...<2 lines>...\n    )\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 1049, in _connect\n    conn = await _connect_addr(\n           ^^^^^^^^^^^^^^^^^^^^\n    ...<6 lines>...\n    )\n    ^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 886, in _connect_addr\n    return await __connect_addr(params, True, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 931, in __connect_addr\n    tr, pr = await connector\n             ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\asyncpg\\connect_utils.py\", line 802, in _create_ssl_connection\n    tr, pr = await loop.create_connection(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<2 lines>...\n        host, port)\n        ^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\base_events.py\", line 1171, in create_connection\n    raise exceptions[0]\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\base_events.py\", line 1141, in create_connection\n    sock = await self._connect_sock(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n        exceptions, addrinfo, laddr_infos)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\base_events.py\", line 1044, in _connect_sock\n    await self.sock_connect(sock, address)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\proactor_events.py\", line 726, in sock_connect\n    return await self._proactor.connect(sock, address)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\windows_events.py\", line 804, in _poll\n    value = callback(transferred, key, ov)\n  File \"C:\\Users\\SRLF\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\windows_events.py\", line 600, in finish_connect\n    ov.getresult()\n    ~~~~~~~~~~~~^^\nConnectionRefusedError: [WinError 1225] The remote computer refused the network connection"}
+  + Exception Group Traceback (most recent call last):
+  |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_utils.py", line 79, in collapse_excgroups
+  |     yield
+  |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 183, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |                ~~~~~~~~~~~~~~~~~~~~~~~^^
+  |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\anyio\_backends\_asyncio.py", line 772, in __aexit__
+  |     raise BaseExceptionGroup(
+  |         "unhandled errors in a TaskGroup", self._exceptions
+  |     ) from None
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 182, in __call__
+    |     with recv_stream, send_stream, collapse_excgroups():
+    |                                    ~~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 162, in __exit__
+    |     self.gen.throw(value)
+    |     ~~~~~~~~~~~~~~^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_utils.py", line 85, in collapse_excgroups
+    |     raise exc
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 184, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\Cricksy_Scorer\backend\middleware\observability.py", line 68, in dispatch
+    |     response = await call_next(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 159, in call_next
+    |     raise app_exc
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 182, in __call__
+    |     with recv_stream, send_stream, collapse_excgroups():
+    |                                    ~~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 162, in __exit__
+    |     self.gen.throw(value)
+    |     ~~~~~~~~~~~~~~^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_utils.py", line 85, in collapse_excgroups
+    |     raise exc
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 184, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\Cricksy_Scorer\backend\middleware\observability.py", line 43, in dispatch
+    |     response = await call_next(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 159, in call_next
+    |     raise app_exc
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 716, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 736, in app
+    |     await route.handle(scope, receive, send)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 290, in handle
+    |     await self.app(scope, receive, send)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 123, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 109, in app
+    |     response = await f(request)
+    |                ^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 389, in app
+    |     raw_response = await run_endpoint_function(
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     ...<3 lines>...
+    |     )
+    |     ^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 288, in run_endpoint_function
+    |     return await dependant.call(**values)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\Cricksy_Scorer\backend\routes\games_core.py", line 41, in create_game
+    |     db_game = await _games_impl.create_game_impl(payload, db)
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\Cricksy_Scorer\backend\routes\games.py", line 36, in create_game_impl
+    |     db_game = await game_service.create_game(payload, db)
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\Cricksy_Scorer\backend\services\game_service.py", line 131, in create_game
+    |     db_game = await crud.create_game(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^
+    |     ...<9 lines>...
+    |     )
+    |     ^
+    |   File "C:\Users\SRLF\Cricksy_Scorer\backend\sql_app\crud.py", line 105, in create_game
+    |     await db.commit()
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 1000, in commit
+    |     await greenlet_spawn(self.sync_session.commit)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    |     result = context.throw(*sys.exc_info())
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 2030, in commit
+    |     trans.commit(_to_root=True)
+    |     ~~~~~~~~~~~~^^^^^^^^^^^^^^^
+    |   File "<string>", line 2, in commit
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    |     ret_value = fn(self, *arg, **kw)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1311, in commit
+    |     self._prepare_impl()
+    |     ~~~~~~~~~~~~~~~~~~^^
+    |   File "<string>", line 2, in _prepare_impl
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    |     ret_value = fn(self, *arg, **kw)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1286, in _prepare_impl
+    |     self.session.flush()
+    |     ~~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    |     self._flush(objects)
+    |     ~~~~~~~~~~~^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    |     with util.safe_reraise():
+    |          ~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    |     raise exc_value.with_traceback(exc_tb)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    |     flush_context.execute()
+    |     ~~~~~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    |     rec.execute(self)
+    |     ~~~~~~~~~~~^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    |     util.preloaded.orm_persistence.save_obj(
+    |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+    |         self.mapper,
+    |         ^^^^^^^^^^^^
+    |         uow.states_for_mapper_hierarchy(self.mapper, False, False),
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |         uow,
+    |         ^^^^
+    |     )
+    |     ^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\persistence.py", line 68, in save_obj
+    |     ) in _organize_states_for_save(base_mapper, states, uowtransaction):
+    |          ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\persistence.py", line 223, in _organize_states_for_save
+    |     for state, dict_, mapper, connection in _connections_for_states(
+    |                                             ~~~~~~~~~~~~~~~~~~~~~~~^
+    |         base_mapper, uowtransaction, states
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     ):
+    |     ^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\persistence.py", line 1759, in _connections_for_states
+    |     connection = uowtransaction.transaction.connection(base_mapper)
+    |   File "<string>", line 2, in connection
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    |     ret_value = fn(self, *arg, **kw)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1037, in connection
+    |     return self._connection_for_bind(bind, execution_options)
+    |            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "<string>", line 2, in _connection_for_bind
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    |     ret_value = fn(self, *arg, **kw)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1173, in _connection_for_bind
+    |     conn = self._parent._connection_for_bind(
+    |         bind, execution_options
+    |     )
+    |   File "<string>", line 2, in _connection_for_bind
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    |     ret_value = fn(self, *arg, **kw)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1187, in _connection_for_bind
+    |     conn = bind.connect()
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py", line 3277, in connect
+    |     return self._connection_cls(self)
+    |            ~~~~~~~~~~~~~~~~~~~~^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py", line 143, in __init__
+    |     self._dbapi_connection = engine.raw_connection()
+    |                              ~~~~~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py", line 3301, in raw_connection
+    |     return self.pool.connect()
+    |            ~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 447, in connect
+    |     return _ConnectionFairy._checkout(self)
+    |            ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 1264, in _checkout
+    |     fairy = _ConnectionRecord.checkout(pool)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 711, in checkout
+    |     rec = pool._do_get()
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\impl.py", line 177, in _do_get
+    |     with util.safe_reraise():
+    |          ~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    |     raise exc_value.with_traceback(exc_tb)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\impl.py", line 175, in _do_get
+    |     return self._create_connection()
+    |            ~~~~~~~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 388, in _create_connection
+    |     return _ConnectionRecord(self)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 673, in __init__
+    |     self.__connect()
+    |     ~~~~~~~~~~~~~~^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 899, in __connect
+    |     with util.safe_reraise():
+    |          ~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    |     raise exc_value.with_traceback(exc_tb)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 895, in __connect
+    |     self.dbapi_connection = connection = pool._invoke_creator(self)
+    |                                          ~~~~~~~~~~~~~~~~~~~~^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\create.py", line 661, in connect
+    |     return dialect.connect(*cargs, **cparams)
+    |            ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\default.py", line 629, in connect
+    |     return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+    |            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    |     await_only(creator_fn(*arg, **kw)),
+    |     ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    |     return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+    |            ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    |     value = await result
+    |             ^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connection.py", line 2421, in connect
+    |     return await connect_utils._connect(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     ...<20 lines>...
+    |     )
+    |     ^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 1075, in _connect
+    |     raise last_error or exceptions.TargetServerAttributeNotMatched(
+    |     ...<2 lines>...
+    |     )
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 1049, in _connect
+    |     conn = await _connect_addr(
+    |            ^^^^^^^^^^^^^^^^^^^^
+    |     ...<6 lines>...
+    |     )
+    |     ^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 886, in _connect_addr
+    |     return await __connect_addr(params, True, *args)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 931, in __connect_addr
+    |     tr, pr = await connector
+    |              ^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 802, in _create_ssl_connection
+    |     tr, pr = await loop.create_connection(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     ...<2 lines>...
+    |         host, port)
+    |         ^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1171, in create_connection
+    |     raise exceptions[0]
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1141, in create_connection
+    |     sock = await self._connect_sock(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |         exceptions, addrinfo, laddr_infos)
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1044, in _connect_sock
+    |     await self.sock_connect(sock, address)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    |     return await self._proactor.connect(sock, address)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    |     value = callback(transferred, key, ov)
+    |   File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    |     ov.getresult()
+    |     ~~~~~~~~~~~~^^
+    | ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 182, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_utils.py", line 85, in collapse_excgroups
+    raise exc
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 184, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\Cricksy_Scorer\backend\middleware\observability.py", line 68, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 159, in call_next
+    raise app_exc
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 182, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_utils.py", line 85, in collapse_excgroups
+    raise exc
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 184, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\Cricksy_Scorer\backend\middleware\observability.py", line 43, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 159, in call_next
+    raise app_exc
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 123, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 109, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 389, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 288, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\Cricksy_Scorer\backend\routes\games_core.py", line 41, in create_game
+    db_game = await _games_impl.create_game_impl(payload, db)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\Cricksy_Scorer\backend\routes\games.py", line 36, in create_game_impl
+    db_game = await game_service.create_game(payload, db)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\Cricksy_Scorer\backend\services\game_service.py", line 131, in create_game
+    db_game = await crud.create_game(
+              ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\SRLF\Cricksy_Scorer\backend\sql_app\crud.py", line 105, in create_game
+    await db.commit()
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 1000, in commit
+    await greenlet_spawn(self.sync_session.commit)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 2030, in commit
+    trans.commit(_to_root=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "<string>", line 2, in commit
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1311, in commit
+    self._prepare_impl()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "<string>", line 2, in _prepare_impl
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1286, in _prepare_impl
+    self.session.flush()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+    ~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+    ~~~~~~~~~~~^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self.mapper,
+        ^^^^^^^^^^^^
+        uow.states_for_mapper_hierarchy(self.mapper, False, False),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        uow,
+        ^^^^
+    )
+    ^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\persistence.py", line 68, in save_obj
+    ) in _organize_states_for_save(base_mapper, states, uowtransaction):
+         ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\persistence.py", line 223, in _organize_states_for_save
+    for state, dict_, mapper, connection in _connections_for_states(
+                                            ~~~~~~~~~~~~~~~~~~~~~~~^
+        base_mapper, uowtransaction, states
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\persistence.py", line 1759, in _connections_for_states
+    connection = uowtransaction.transaction.connection(base_mapper)
+  File "<string>", line 2, in connection
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1037, in connection
+    return self._connection_for_bind(bind, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1173, in _connection_for_bind
+    conn = self._parent._connection_for_bind(
+        bind, execution_options
+    )
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\orm\session.py", line 1187, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py", line 3277, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\base.py", line 3301, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 447, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 1264, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 711, in checkout
+    rec = pool._do_get()
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\impl.py", line 177, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\impl.py", line 175, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 388, in _create_connection
+    return _ConnectionRecord(self)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 673, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 899, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\pool\base.py", line 895, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\create.py", line 661, in connect
+    return dialect.connect(*cargs, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\engine\default.py", line 629, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connection.py", line 2421, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<20 lines>...
+    )
+    ^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 1075, in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+    ...<2 lines>...
+    )
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 1049, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 886, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 931, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\site-packages\asyncpg\connect_utils.py", line 802, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        host, port)
+        ^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1171, in create_connection
+    raise exceptions[0]
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1141, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1044, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 726, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "C:\Users\SRLF\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection

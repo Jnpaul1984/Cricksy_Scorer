@@ -25,7 +25,7 @@ const props = withDefaults(defineProps<{
   theme: 'dark',
   title: 'Live Scoreboard',
   interruptionsMode: 'auto',
-  pollMs: 30000,
+  pollMs: 5000,
   canControl: false,
 })
 
@@ -58,6 +58,7 @@ let pollTimer: number | null = null
 const ownsLive = ref(false)
 
 async function startFeed() {
+  console.log('[ScoreboardWidget] startFeed gameId:', props.gameId)
   // Ensure we have the game model to render names/score even before first event
   try {
     if (!currentGame.value || (currentGame.value as any).id !== props.gameId) {
@@ -84,7 +85,10 @@ async function startFeed() {
   }
 
   // Always fetch once so the banner can show immediately
-  try { await gameStore.refreshInterruptions() } catch {}
+  try {
+    console.log('[ScoreboardWidget] calling refreshInterruptions')
+    await gameStore.refreshInterruptions()
+  } catch {}
 
   // Poll if: explicitly 'poll' OR 'auto' but not connected
   const shouldPoll =
@@ -382,8 +386,6 @@ const wkts = computed(() =>
         liveSnapshot.value?.total_wickets ??
         currentGame.value?.total_wickets ?? 0)
 )
-
-const scoreline = computed(() => `${runs.value}/${wkts.value}`)
 
 // Rates now based on totalBalls
 const crr = computed(() =>
@@ -853,7 +855,13 @@ const recentDeliveries = computed(() =>
    const id = safeCurrentBowlerId.value
    if (!id) return ''
    const row = (bowlingRowsXI.value || []).find((p: any) => String(p.id) === id)
-   return row?.name ? String(row.name) : ''
+   if (row?.name) return String(row.name)
+
+   // Fallback: look in the team roster
+   const g = currentGame.value
+   if (!g) return ''
+   const p = [...(g.team_a?.players||[]), ...(g.team_b?.players||[])].find(p => String(p.id) === id)
+   return p?.name || ''
  })
 
  const currentBowlerDerived = computed(() => {
@@ -954,7 +962,13 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
     <div v-if="storeError" class="error">{{ storeError }}</div>
     <div v-else class="card">
       <!-- Interruption banner -->
-      <div v-if="showInterruptionBanner" class="interrupt-banner" role="status" aria-live="polite">
+      <div
+        v-if="showInterruptionBanner"
+        class="interrupt-banner"
+        role="status"
+        aria-live="polite"
+        data-testid="interrupt-banner"
+      >
         <span class="icon">⛈</span>
         <strong class="kind">
           {{ (currentInterruption?.kind || 'weather') === 'weather' ? 'Rain delay' : (currentInterruption?.kind || 'Interruption') }}
@@ -968,6 +982,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
           class="btn btn-ghost"
           :disabled="interBusy"
           style="margin-left:auto"
+          data-testid="btn-resume-interruption"
           @click="resumePlay(currentInterruption?.kind as any)"
         >
           {{ interBusy ? 'Resuming…' : 'Resume play' }}
@@ -975,7 +990,13 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
       </div>
 
       <!-- Result banner: show if game is over OR any result text is present -->
-      <div v-if="isGameOver || resultText" class="result-banner" role="status" aria-live="polite">
+      <div
+        v-if="isGameOver || resultText"
+        class="result-banner"
+        role="status"
+        aria-live="polite"
+        data-testid="scoreboard-result-banner"
+      >
         <strong>{{ resultText || 'Match completed' }}</strong>
       </div>
 
@@ -988,8 +1009,10 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         </div>
         <div class="score">
           <span v-if="currentInningNo === 2" class="bt">{{ battingTeamName }}</span>
-          <span class="big">{{ scoreline }}</span>
-          <span class="ov">({{ oversText }} ov)</span>
+          <span class="big" data-testid="scoreboard-score">
+            <span data-testid="scoreboard-runs">{{ runs }}</span>/<span data-testid="scoreboard-wkts">{{ wkts }}</span>
+          </span>
+          <span class="ov" data-testid="scoreboard-overs">({{ oversText }} ov)</span>
         </div>
       </div>
 
@@ -1005,7 +1028,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         <!-- Striker -->
         <div class="pane">
           <div class="pane-title">Striker</div>
-          <div class="row"><div class="label">Name</div><div class="val">{{ strikerRow?.name || '—' }}</div></div>
+          <div class="row"><div class="label">Name</div><div class="val" data-testid="scoreboard-striker-name">{{ strikerRow?.name || '-' }}</div></div>
           <div class="row"><div class="label">Runs (Balls)</div><div class="val">{{ strikerRow?.runs ?? 0 }} ({{ strikerRow?.balls ?? 0 }})</div></div>
           <div class="row"><div class="label">Strike Rate</div><div class="val">{{ fmtSR(strikerRow?.runs ?? 0, strikerRow?.balls ?? 0) }}</div></div>
         </div>
@@ -1013,7 +1036,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         <!-- Non-striker -->
         <div class="pane">
           <div class="pane-title">Non-striker</div>
-          <div class="row"><div class="label">Name</div><div class="val">{{ nonStrikerRow?.name || '—' }}</div></div>
+          <div class="row"><div class="label">Name</div><div class="val" data-testid="scoreboard-nonstriker-name">{{ nonStrikerRow?.name || '-' }}</div></div>
           <div class="row"><div class="label">Runs (Balls)</div><div class="val">{{ nonStrikerRow?.runs ?? 0 }} ({{ nonStrikerRow?.balls ?? 0 }})</div></div>
           <div class="row"><div class="label">Strike Rate</div><div class="val">{{ fmtSR(nonStrikerRow?.runs ?? 0, nonStrikerRow?.balls ?? 0) }}</div></div>
         </div>
@@ -1021,7 +1044,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         <!-- Current bowler -->
         <div class="pane">
           <div class="pane-title">Bowler</div>
-          <div class="row"><div class="label">Name</div><div class="val">{{ safeCurrentBowlerName || '—' }}</div></div>
+          <div class="row"><div class="label">Name</div><div class="val" data-testid="scoreboard-bowler-name">{{ safeCurrentBowlerName || '-' }}</div></div>
           <div class="row">
             <div class="label">Figures</div>
             <div class="val">
@@ -1038,11 +1061,11 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         <div class="info-strip">
           <div class="cell"><span class="lbl">CRR</span><strong>{{ crr }}</strong></div>
           <div v-if="rrr" class="cell"><span class="lbl">RRR</span><strong>{{ rrr }}</strong></div>
-          <div v-if="targetDisplay != null" class="cell">
-            <span class="lbl">Target</span><strong>{{ targetDisplay }}</strong>
+          <div v-if="targetDisplay != null" class="cell" data-testid="scoreboard-target">
+            <span class="lbl">Target</span> <strong>{{ targetDisplay }}</strong>
           </div>
           <div v-if="parTxt" class="cell"><span class="lbl">Par</span><strong>{{ parTxt }}</strong></div>
-          <div class="cell"><span class="lbl">Overs left</span><strong>{{ oversLeft }}</strong></div>
+          <div class="cell" data-testid="scoreboard-overs-left"><span class="lbl">Overs left</span><strong>{{ oversLeft }}</strong></div>
         </div>
 
         <!-- Mini scorecards -->

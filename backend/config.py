@@ -38,6 +38,7 @@ class Settings(BaseSettings):
         alias="CRICKSY_SIO_CORS_ORIGINS",
     )
     LOG_LEVEL: str = Field(default="INFO", alias="CRICKSY_LOG_LEVEL")
+    ENV: str = Field(default="development", alias="CRICKSY_ENV")
 
     @field_validator("STATIC_ROOT", mode="before")
     @classmethod

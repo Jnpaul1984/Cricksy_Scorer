@@ -1,6 +1,7 @@
 /**
  * API service for player profiles, achievements, and leaderboards
  */
+import { apiRequest } from '@/services/api';
 import type {
   PlayerProfile,
   PlayerAchievement,
@@ -8,7 +9,6 @@ import type {
   LeaderboardMetric,
   AwardAchievementRequest,
 } from "@/types/player"
-import { apiRequest } from '@/services/api';
 
 /**
  * Get player profile with statistics and achievements

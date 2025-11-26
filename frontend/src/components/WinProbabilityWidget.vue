@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+
 import WinProbabilityChart from '@/components/analytics/WinProbabilityChart.vue'
 
 export interface WinProbability {

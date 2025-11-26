@@ -306,6 +306,16 @@ def test_full_match_end_to_end():
     assert team_a and team_b, f"unexpected teams: {json.dumps(g)[:600]}"
 
     # Innings 1: A bat, B bowl
+    # Start first innings explicitly
+    bat_ids = ids(team_a)
+    bowl_ids = ids(team_b)
+    payload = {
+        "striker_id": bat_ids[0],
+        "non_striker_id": bat_ids[1],
+        "opening_bowler_id": bowl_ids[0],
+    }
+    R("POST", f"{API}/games/{gid}/innings/start", json=payload)
+
     play_innings(gid, batting=team_a, bowling=team_b, overs=2)
 
     # Innings 2: call your real start endpoint with explicit IDs

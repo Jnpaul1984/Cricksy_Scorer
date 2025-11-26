@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from pydantic import BaseModel
 
 from backend import dls as dlsmod
-from backend.sql_app import schemas
+from backend.sql_app import models, schemas
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
@@ -115,6 +115,92 @@ def _deliveries_for_current_innings(g: GameState) -> list[dict[str, Any]]:
 
     cur = int(getattr(g, "current_inning", 1) or 1)
     return [d for d in rows if int(d.get("inning", 1) or 1) == cur]
+
+
+def _deliveries_for_innings(g: GameState, innings_number: int) -> list[dict[str, Any]]:
+    """Return deliveries filtered to a specific innings number."""
+    raw = getattr(g, "deliveries", []) or []
+    rows: list[dict[str, Any]] = []
+
+    for d_any in raw:
+        d = _to_dict(d_any)
+        if d is None:
+            continue
+        if int(d.get("inning", 1) or 1) == innings_number:
+            rows.append(d)
+
+    return rows
+
+
+def _build_innings_breakdown(g: GameState) -> list[dict[str, Any]]:
+    """Build innings breakdown with runs, wickets, overs for each completed/current innings."""
+    innings_list: list[dict[str, Any]] = []
+    current_inning = int(getattr(g, "current_inning", 1) or 1)
+
+    # Build innings 1
+    if current_inning >= 1:
+        innings_1_deliveries = _deliveries_for_innings(g, 1)
+        runs_1 = sum(int(d.get("runs_scored", 0) or 0) for d in innings_1_deliveries)
+        wickets_1 = sum(1 for d in innings_1_deliveries if d.get("is_wicket"))
+        legal_balls_1 = sum(
+            1 for d in innings_1_deliveries if is_legal_delivery(_norm_extra(d.get("extra_type")))
+        )
+        overs_1 = legal_balls_1 // 6
+        balls_1 = legal_balls_1 % 6
+
+        team_a_name = getattr(g, "team_a", {}).get("name")
+        team_b_name = getattr(g, "team_b", {}).get("name")
+        toss_winner = getattr(g, "toss_winner_team", None)
+        decision = getattr(g, "decision", None)
+
+        batting_team_1 = (
+            team_a_name if toss_winner == team_a_name and decision == "bat" else team_b_name
+        )
+
+        innings_list.append(
+            {
+                "innings_number": 1,
+                "batting_team": batting_team_1,
+                "runs": runs_1,
+                "wickets": wickets_1,
+                "overs": float(f"{overs_1}.{balls_1}"),
+                "balls": legal_balls_1,
+            }
+        )
+
+    # Build innings 2 if in progress or completed
+    if current_inning >= 2:
+        innings_2_deliveries = _deliveries_for_innings(g, 2)
+        runs_2 = sum(int(d.get("runs_scored", 0) or 0) for d in innings_2_deliveries)
+        wickets_2 = sum(1 for d in innings_2_deliveries if d.get("is_wicket"))
+        legal_balls_2 = sum(
+            1 for d in innings_2_deliveries if is_legal_delivery(_norm_extra(d.get("extra_type")))
+        )
+        overs_2 = legal_balls_2 // 6
+        balls_2 = legal_balls_2 % 6
+
+        # Re-fetch names in case they weren't set in block 1 (though they should be)
+        team_a_name = getattr(g, "team_a", {}).get("name")
+        team_b_name = getattr(g, "team_b", {}).get("name")
+        toss_winner = getattr(g, "toss_winner_team", None)
+        decision = getattr(g, "decision", None)
+
+        batting_team_2 = (
+            team_b_name if toss_winner == team_a_name and decision == "bat" else team_a_name
+        )
+
+        innings_list.append(
+            {
+                "innings_number": 2,
+                "batting_team": batting_team_2,
+                "runs": runs_2,
+                "wickets": wickets_2,
+                "overs": float(f"{overs_2}.{balls_2}"),
+                "balls": legal_balls_2,
+            }
+        )
+
+    return innings_list
 
 
 # Dedup key: (over, ball, subindex) where subindex is int for illegal (wd/nb) or "L" for legal.
@@ -221,20 +307,53 @@ def _compute_snapshot_flags(g: GameState) -> dict[str, bool]:
             need_new_batter = bool(e2.get("is_out", False))
 
     have_any_balls = len(_dedup_deliveries(g)) > 0
+
     need_new_over = bool(
         getattr(g, "balls_this_over", 0) == 0
         and have_any_balls
         and not getattr(g, "current_bowler_id", None)
     )
 
+    # Safety check: if we are at the end of an over (balls=0) and the current bowler
+    # is the same as the last bowler, it means we haven't selected a new bowler yet.
+    # This handles cases where the runtime state might not have cleared the bowler ID.
+    cur_bowler = getattr(g, "current_bowler_id", None)
+    last_bowler = getattr(g, "last_ball_bowler_id", None)
+    if (
+        getattr(g, "balls_this_over", 0) == 0
+        and have_any_balls
+        and cur_bowler
+        and str(cur_bowler) == str(last_bowler)
+    ):
+        need_new_over = True
+
     return {"needs_new_batter": need_new_batter, "needs_new_over": need_new_over}
+
+
+def _is_game_in_progress(status: object | None) -> bool:
+    if isinstance(status, models.GameStatus):
+        return status == models.GameStatus.in_progress
+    if status is None:
+        return False
+    return str(status).lower() == models.GameStatus.in_progress.value
+
+
+def _safe_int(value: object | None) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, (int, float, str)):
+        try:
+            return int(value)
+        except Exception:
+            return 0
+    return 0
 
 
 def _extras_breakdown(g: GameState) -> dict[str, int]:
     wides = no_balls = byes = leg_byes = penalty = 0
     for d in _dedup_deliveries(g):
         x = _norm_extra(d.get("extra_type"))
-        ex = int(d.get("extra_runs") or 0)
+        ex = _safe_int(d.get("extra_runs"))
         if x == "wd":
             wides += max(1, ex or 1)
         elif x == "nb":
@@ -385,18 +504,68 @@ def build_snapshot(
     needs_new_batter = flags["needs_new_batter"]
     needs_new_innings = bool(getattr(g, "needs_new_innings", False) or is_break)
 
+    overs_limit_val = _safe_int(getattr(g, "overs_limit", None))
+    overs_completed = _safe_int(getattr(g, "overs_completed", 0))
+    balls_this_over = _safe_int(getattr(g, "balls_this_over", 0))
+    balls_bowled_total_raw = _safe_int(getattr(g, "balls_bowled_total", None))
+    balls_bowled = balls_bowled_total_raw or (overs_completed * 6 + balls_this_over)
+    balls_limit = overs_limit_val * 6
+    all_out = _safe_int(getattr(g, "total_wickets", 0)) >= 10
+    overs_exhausted = balls_limit > 0 and balls_bowled >= balls_limit
+    status_in_progress = _is_game_in_progress(getattr(g, "status", None))
+    current_inning_no = getattr(g, "current_inning", None)
+    current_over_exists = (
+        getattr(g, "overs_completed", None) is not None
+        or getattr(g, "balls_this_over", None) is not None
+    )
+    current_striker_id = getattr(g, "current_striker_id", None)
+    current_non_striker_id = getattr(g, "current_non_striker_id", None)
+    can_score = bool(
+        status_in_progress
+        and current_inning_no is not None
+        and current_striker_id is not None
+        and current_non_striker_id is not None
+        and current_over_exists
+        and cur_bowler_id is not None
+        and not overs_exhausted
+        and not all_out
+        and not needs_new_over
+        and not needs_new_innings
+    )
+
     extras_totals = _extras_breakdown(g)
     fall_of_wickets = _fall_of_wickets(g)
+    innings_breakdown = _build_innings_breakdown(g)
+
+    # Normalize status - should be uppercase for completed games
+    status_raw = getattr(g, "status", "")
+    if hasattr(status_raw, "value"):
+        status_str = str(status_raw.value).upper()
+    else:
+        status_str = str(status_raw).upper()
+
+    # Map status values to match expected format
+    if status_str == "IN_PROGRESS":
+        status_str = "IN_PROGRESS"
+    elif status_str in ("COMPLETE", "COMPLETED"):
+        status_str = "COMPLETED"
 
     snapshot: dict[str, Any] = {
         "id": getattr(g, "id", None),
-        "status": str(getattr(g, "status", "")).upper(),
+        "status": status_str,
         "score": {
             "runs": int(getattr(g, "total_runs", 0)),
             "wickets": int(getattr(g, "total_wickets", 0)),
             "overs": int(getattr(g, "overs_completed", 0)),
         },
-        "overs": f"{int(getattr(g, 'overs_completed', 0))}.{int(getattr(g, 'balls_this_over', 0))}",
+        # Add top-level score fields for compatibility
+        "total_runs": int(getattr(g, "total_runs", 0)),
+        "total_wickets": int(getattr(g, "total_wickets", 0)),
+        "overs_completed": int(getattr(g, "overs_completed", 0)),
+        "balls_this_over": int(getattr(g, "balls_this_over", 0)),
+        "overs": (
+            f"{int(getattr(g, 'overs_completed', 0))}." f"{int(getattr(g, 'balls_this_over', 0))}"
+        ),
         "balls_bowled_total": int(getattr(g, "overs_completed", 0)) * 6
         + int(getattr(g, "balls_this_over", 0)),
         "batsmen": {
@@ -442,6 +611,8 @@ def build_snapshot(
         "batting_scorecard": getattr(g, "batting_scorecard", {}),
         "bowling_scorecard": getattr(g, "bowling_scorecard", {}),
         "current_bowler_id": cur_bowler_id,
+        "current_striker_id": getattr(g, "current_striker_id", None),
+        "current_non_striker_id": getattr(g, "current_non_striker_id", None),
         "batting_team_name": getattr(g, "batting_team_name", None),
         "bowling_team_name": getattr(g, "bowling_team_name", None),
         "current_inning": getattr(g, "current_inning", None),
@@ -450,21 +621,50 @@ def build_snapshot(
         "needs_new_over": needs_new_over,
         "needs_new_batter": needs_new_batter,
         "needs_new_innings": needs_new_innings,
+        "canScore": can_score,
         "dls": _dls_panel_for(g, base_dir),
+        "innings": innings_breakdown,
     }
 
-    # completion/result signals
-    snapshot["is_game_over"] = bool(getattr(g, "is_game_over", False))
+    # completion/result signals - check both is_game_over flag and COMPLETED status
+    # Also check if result is present, as that implies completion
+    is_game_over = (
+        bool(getattr(g, "is_game_over", False))
+        or status_str == "COMPLETED"
+        or (getattr(g, "result", None) is not None)
+    )
+
+    snapshot["is_game_over"] = is_game_over
     res_any = getattr(g, "result", None)
     if isinstance(res_any, BaseModel):
-        snapshot["result"] = res_any.model_dump()
+        result_dict = res_any.model_dump()
     elif isinstance(res_any, str):
         try:
-            snapshot["result"] = json.loads(res_any)
+            result_dict = json.loads(res_any)
         except Exception:
-            snapshot["result"] = {"result_text": res_any}
+            result_dict = {"result_text": res_any}
+    elif isinstance(res_any, dict):
+        result_dict = res_any
     else:
-        snapshot["result"] = res_any
+        result_dict = None
+
+    # Ensure result has required fields when game is over
+    if is_game_over and result_dict:
+        # Ensure winner_team_name is present
+        if "winner_team_name" not in result_dict and "winner_team_id" in result_dict:
+            # Try to derive from batting/bowling team
+            result_dict["winner_team_name"] = result_dict.get("winner_team_id") or ""
+
+        # Ensure result_text is present
+        if "result_text" not in result_dict or not result_dict["result_text"]:
+            # Generate basic result text if missing
+            winner = result_dict.get("winner_team_name", "")
+            method = result_dict.get("method", "")
+            margin = result_dict.get("margin", 0)
+            if winner and method:
+                result_dict["result_text"] = f"{winner} won {method} {margin}"
+
+    snapshot["result"] = result_dict
     snapshot["completed_at"] = getattr(g, "completed_at", None)
 
     # runtime flags used by UI/tests

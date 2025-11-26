@@ -1,0 +1,15 @@
+*** Begin Patch
+*** Update File: .github/workflows/deploy-backend.yml
+@@
+-      - name: Run Alembic migrations
+-        working-directory: .
+-        env:
+-          DATABASE_URL: ${{ env.DATABASE_URL }}
+-          alembic -c backend/alembic.ini upgrade head
++      - name: Run Alembic migrations
++        working-directory: .
++        env:
++          DATABASE_URL: ${{ env.DATABASE_URL }}
++        run: |
++          alembic -c backend/alembic.ini upgrade head
+*** End Patch

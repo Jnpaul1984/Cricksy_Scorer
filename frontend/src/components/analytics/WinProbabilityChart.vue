@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,6 +11,8 @@ import {
   Filler,
   type ChartOptions,
 } from 'chart.js'
+import { computed, ref, watch } from 'vue'
+import { Line } from 'vue-chartjs'
 
 ChartJS.register(
   CategoryScale,

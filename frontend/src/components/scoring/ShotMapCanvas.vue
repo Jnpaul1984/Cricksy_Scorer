@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
-import shotMapAvif480 from '@/assets/optimized/shot-map-field-w480.avif'
-import shotMapAvif768 from '@/assets/optimized/shot-map-field-w768.avif'
 import shotMapAvif1024 from '@/assets/optimized/shot-map-field-w1024.avif'
-import shotMapAvif1440 from '@/assets/optimized/shot-map-field-w1440.avif'
-import shotMapWebp480 from '@/assets/optimized/shot-map-field-w480.webp'
-import shotMapWebp768 from '@/assets/optimized/shot-map-field-w768.webp'
 import shotMapWebp1024 from '@/assets/optimized/shot-map-field-w1024.webp'
+import shotMapAvif1440 from '@/assets/optimized/shot-map-field-w1440.avif'
 import shotMapWebp1440 from '@/assets/optimized/shot-map-field-w1440.webp'
+import shotMapAvif480 from '@/assets/optimized/shot-map-field-w480.avif'
+import shotMapWebp480 from '@/assets/optimized/shot-map-field-w480.webp'
+import shotMapAvif768 from '@/assets/optimized/shot-map-field-w768.avif'
+import shotMapWebp768 from '@/assets/optimized/shot-map-field-w768.webp'
 
 type Point = { x: number; y: number }
 

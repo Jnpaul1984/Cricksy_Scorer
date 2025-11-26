@@ -161,7 +161,7 @@ async def get_game_sponsors(
         .order_by(Sponsor.weight.desc(), Sponsor.created_at.desc())
     )
     res = await db.execute(stmt)
-    rows = await res.scalars().all()
+    rows = res.scalars().all()
 
     out: list[dict[str, Any]] = []
     for r in rows:

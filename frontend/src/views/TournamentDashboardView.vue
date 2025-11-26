@@ -1,13 +1,13 @@
 ﻿<template>
   <div class="tournament-dashboard">
-    <div class="tournament-banner info" v-if="!isLoggedIn">
+    <div v-if="!isLoggedIn" class="tournament-banner info">
       View-only mode. Sign in with an Org Pro account to create and manage tournaments.
       <RouterLink to="/login" class="link-inline">Sign in</RouterLink>
     </div>
-    <div class="tournament-banner warn" v-else-if="!canManageTournaments">
+    <div v-else-if="!canManageTournaments" class="tournament-banner warn">
       Tournament management is reserved for Org Pro and Superuser accounts.
     </div>
-    <div class="tournament-banner success" v-else>
+    <div v-else class="tournament-banner success">
       You're managing tournaments as {{ auth.role || 'org_pro' }}.
     </div>
 
@@ -16,9 +16,9 @@
       <div class="header-actions">
         <button
           class="btn-primary"
-          @click="openCreateModal"
           :disabled="!canManageTournaments"
           :title="!canManageTournaments ? managementHint : undefined"
+          @click="openCreateModal"
         >
           Create Tournament
         </button>
@@ -85,7 +85,7 @@
             <input v-model="newTournament.end_date" type="date" />
           </div>
           <div class="modal-actions">
-            <button type="button" @click="showCreateModal = false" class="btn-secondary">Cancel</button>
+            <button type="button" class="btn-secondary" @click="showCreateModal = false">Cancel</button>
             <button type="submit" class="btn-primary" :disabled="!canManageTournaments">Create</button>
           </div>
         </form>
@@ -97,8 +97,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import apiService from '@/utils/api'
+
 import { useAuthStore } from '@/stores/authStore'
+import apiService from '@/utils/api'
 
 const router = useRouter()
 const auth = useAuthStore()

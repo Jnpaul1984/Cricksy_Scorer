@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
-import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
+import { ref, computed } from 'vue'
 
 import ShotMapPreview from '@/components/ShotMapPreview.vue'
 import ChartBar from '@/components/analytics/ChartBar.vue'
@@ -39,12 +39,9 @@ const snapshot = ref<any | null>(null)
 const deliveries = ref<Delivery[]>([])
 const auth = useAuthStore()
 const {
-  isLoggedIn,
   role,
   isOrgPro,
   isAnalystPro,
-  isPlayerPro,
-  isFreeUser,
   isSuperuser,
 } = storeToRefs(auth)
 const hasAnalyticsAccess = computed(
@@ -449,7 +446,7 @@ const shotMapDeliveries = computed(() => {
     </section>
 
     <section v-if="selectedId && snapshot" class="grid">
-      <div class="card wide">
+      <div class="card wide" data-testid="analytics-runrate-card">
         <h3>Run Rate Comparison</h3>
         <RunRateComparison
           :current-run-rate="crr"
@@ -461,17 +458,17 @@ const shotMapDeliveries = computed(() => {
         />
       </div>
 
-      <div v-if="manhattanChart.labels.length" class="card">
+      <div v-if="manhattanChart.labels.length" class="card" data-testid="analytics-manhattan-card">
         <h3>Manhattan (runs per over)</h3>
         <ChartBar :labels="manhattanChart.labels" :series="manhattanChart.series" />
       </div>
 
-      <div v-if="wormChart.labels.length" class="card">
+      <div v-if="wormChart.labels.length" class="card" data-testid="analytics-worm-card">
         <h3>Worm (cumulative)</h3>
         <ChartLine :labels="wormChart.labels" :series="wormChart.series" />
       </div>
 
-      <div class="card">
+      <div class="card" data-testid="analytics-extras-card">
         <h3>Extras / Dot & Boundary %</h3>
         <div class="extras-grid">
           <template v-for="(value, key) in extrasTotals" :key="key">
@@ -486,7 +483,7 @@ const shotMapDeliveries = computed(() => {
         </div>
       </div>
 
-      <div class="card wide">
+      <div class="card wide" data-testid="analytics-batting-card">
         <h3>Batting</h3>
         <table class="tbl">
           <thead>
@@ -506,7 +503,7 @@ const shotMapDeliveries = computed(() => {
         </table>
       </div>
 
-      <div class="card wide">
+      <div class="card wide" data-testid="analytics-bowling-card">
         <h3>Bowling</h3>
         <table class="tbl">
           <thead>
@@ -533,7 +530,7 @@ const shotMapDeliveries = computed(() => {
         <div v-else class="empty">No partnership data yet.</div>
       </div>
 
-      <div class="card">
+      <div class="card" data-testid="analytics-phase-card">
         <h3>Phase Splits</h3>
         <PhaseSplits :splits="phaseSplits" />
       </div>

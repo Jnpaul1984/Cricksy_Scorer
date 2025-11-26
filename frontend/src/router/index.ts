@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router'
 
-import { useAuthStore } from '@/stores/authStore'
 import { getStoredToken } from '@/services/api'
+import { useAuthStore } from '@/stores/authStore'
 
 // Choose routing strategy at build/deploy time
 // - history (default): clean URLs like /game/123/scoring (needs server fallback to index.html)
@@ -16,6 +16,10 @@ const router = createRouter({
   routes: [
     {
       path: '/',
+      redirect: '/login',
+    },
+    {
+      path: '/setup',
       name: 'setup',
       component: () => import('@/views/MatchSetupView.vue'),
     },
@@ -130,6 +134,23 @@ router.beforeEach(async (to, _from, next) => {
 
   if (!auth.user && auth.token) {
     await auth.loadUser()
+  }
+
+  // --- General auth guard -------------------------------------------------
+  // Public: /login and viewer/embed routes
+  const publicPaths = ['/login']
+  const publicNames = ['viewer-scoreboard', 'embed-scoreboard']
+
+  const isPublic = publicPaths.includes(to.path) || (to.name != null && publicNames.includes(String(to.name)))
+
+  // If not public and not logged in -> redirect to login with return path
+  if (!isPublic && !auth.isLoggedIn) {
+    return next({ path: '/login', query: { redirect: to.fullPath } })
+  }
+
+  // If logged in and trying to reach login, send to setup
+  if (to.path === '/login' && auth.isLoggedIn) {
+    return next('/setup')
   }
 
   const orgProtected = ['/tournaments', '/analytics']

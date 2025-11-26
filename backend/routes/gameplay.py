@@ -126,7 +126,7 @@ async def _maybe_close_innings(g: Any) -> None:
             g.innings_history = innings_history  # type: ignore[assignment]
 
         g.status = models.GameStatus.innings_break
-        g.needs_new_innings = True
+        # g.needs_new_innings is a computed property based on status
         g.needs_new_over = False
         g.needs_new_batter = False
         g.current_striker_id = None
@@ -366,6 +366,77 @@ async def change_bowler_mid_over(
     return snap
 
 
+@router.post("/{game_id}/innings/end")
+async def end_current_innings(
+    game_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """
+    Manually end the current innings and set status to innings_break.
+    Useful for testing or manual control.
+    """
+    db_game = await crud.get_game(db, game_id=game_id)
+    if not db_game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    g: Any = db_game
+
+    # Don't end if already at innings break or completed
+    if g.status == models.GameStatus.innings_break:
+        return {"message": "Already at innings break"}
+    if g.status == models.GameStatus.completed:
+        raise HTTPException(status_code=400, detail="Match already completed")
+
+    # Archive the current innings
+    if not hasattr(g, "innings_history"):
+        g.innings_history = []
+
+    innings_history: list[dict[str, Any]] = list(getattr(g, "innings_history", []) or [])
+    already_archived = any(inn.get("inning_no") == g.current_inning for inn in innings_history)
+
+    if not already_archived:
+        batting_scorecard_map: dict[str, Any] = dict(getattr(g, "batting_scorecard", {}) or {})
+        bowling_scorecard_map: dict[str, Any] = dict(getattr(g, "bowling_scorecard", {}) or {})
+
+        entry = {
+            "inning_no": g.current_inning or 1,
+            "batting_team": g.batting_team_name,
+            "bowling_team": g.bowling_team_name,
+            "runs": g.total_runs,
+            "wickets": g.total_wickets,
+            "overs": _gh("_overs_string_from_ledger", g),
+            "batting_scorecard": batting_scorecard_map,
+            "bowling_scorecard": bowling_scorecard_map,
+            "closed_at": dt.datetime.now(UTC).isoformat(),
+        }
+        innings_history.append(entry)
+        g.innings_history = innings_history
+
+    # Set status to innings break
+    g.status = models.GameStatus.innings_break
+    # g.needs_new_innings is a computed property based on status
+    g.needs_new_over = False
+    g.needs_new_batter = False
+    g.current_striker_id = None
+    g.current_non_striker_id = None
+    g.current_bowler_id = None
+
+    # Persist
+    updated = await crud.update_game(db, game_model=db_game)
+    u = cast(Any, updated)
+
+    # Build snapshot and emit
+    _gh("_rebuild_scorecards_from_deliveries", u)
+    _gh("_recompute_totals_and_runtime", u)
+    snap = _snapshot_from_game(u, None, BASE_DIR)
+
+    from backend.services.live_bus import emit_state_update
+
+    await emit_state_update(game_id, snap)
+
+    return snap
+
+
 @router.post("/{game_id}/innings/start")
 async def start_next_innings(
     game_id: str,
@@ -385,45 +456,64 @@ async def start_next_innings(
     # Ensure legacy attrs exist
     if not isinstance(getattr(g, "innings_history", None), list):
         g.innings_history = []
-    if not hasattr(g, "needs_new_innings"):
-        g.needs_new_innings = True
-    if not hasattr(g, "current_inning") or not g.current_inning:
+    # Handle transition from Inning 0 (Pre-match) -> 1, or Inning N -> N+1
+    current_inn = int(getattr(g, "current_inning", 0) or 0)
+
+    if current_inn == 0:
+        # Starting First Innings
         g.current_inning = 1
+        # Teams and scorecards are already set by create_game
+        g.total_runs = 0
+        g.total_wickets = 0
+        g.overs_completed = 0
+        g.balls_this_over = 0
+    else:
+        # Starting Subsequent Innings
+        prev_batting_team = g.batting_team_name
+        prev_bowling_team = g.bowling_team_name
 
-    prev_batting_team = g.batting_team_name
-    prev_bowling_team = g.bowling_team_name
+        # Archive the COMPLETED innings
+        hist2: list[dict[str, Any]] = list(getattr(g, "innings_history", []) or [])  # type: ignore[assignment]
+        last_archived_no = hist2[-1]["inning_no"] if hist2 else None
 
-    # If the last innings wasnâ€™t archived yet, archive it now
-    hist2: list[dict[str, Any]] = list(getattr(g, "innings_history", []) or [])  # type: ignore[assignment]
-    last_archived_no = hist2[-1]["inning_no"] if hist2 else None
-    if last_archived_no != g.current_inning:
-        batting_scorecard_map: dict[str, Any] = dict(getattr(g, "batting_scorecard", {}) or {})
-        bowling_scorecard_map: dict[str, Any] = dict(getattr(g, "bowling_scorecard", {}) or {})
+        if last_archived_no != current_inn:
+            batting_scorecard_map: dict[str, Any] = dict(getattr(g, "batting_scorecard", {}) or {})
+            bowling_scorecard_map: dict[str, Any] = dict(getattr(g, "bowling_scorecard", {}) or {})
 
-        entry = {
-            "inning_no": g.current_inning,
-            "batting_team": prev_batting_team,
-            "bowling_team": prev_bowling_team,
-            "runs": g.total_runs,
-            "wickets": g.total_wickets,
-            "overs": _gh("_overs_string_from_ledger", g),
-            "batting_scorecard": batting_scorecard_map,
-            "bowling_scorecard": bowling_scorecard_map,
-            # DO NOT destroy the ledger; it spans both innings
-            "closed_at": dt.datetime.now(UTC).isoformat(),
-        }
-        hist2.append(entry)
-        g.innings_history = hist2  # type: ignore[assignment]
+            entry = {
+                "inning_no": current_inn,
+                "batting_team": prev_batting_team,
+                "bowling_team": prev_bowling_team,
+                "runs": g.total_runs,
+                "wickets": g.total_wickets,
+                "overs": _gh("_overs_string_from_ledger", g),
+                "batting_scorecard": batting_scorecard_map,
+                "bowling_scorecard": bowling_scorecard_map,
+                # DO NOT destroy the ledger; it spans both innings
+                "closed_at": dt.datetime.now(UTC).isoformat(),
+            }
+            hist2.append(entry)
+            g.innings_history = hist2  # type: ignore[assignment]
 
-    # Advance innings and flip teams
-    g.current_inning = int(g.current_inning) + 1
-    g.batting_team_name, g.bowling_team_name = prev_bowling_team, prev_batting_team
+        # Advance innings and flip teams
+        g.current_inning = current_inn + 1
+        g.batting_team_name, g.bowling_team_name = prev_bowling_team, prev_batting_team
 
-    # Reset per-innings runtime counters (keep combined deliveries ledger)
-    g.total_runs = 0
-    g.total_wickets = 0
-    g.overs_completed = 0
-    g.balls_this_over = 0
+        # Reset per-innings runtime counters (keep combined deliveries ledger)
+        g.total_runs = 0
+        g.total_wickets = 0
+        g.overs_completed = 0
+        g.balls_this_over = 0
+
+        # (Re)build fresh scorecards for the new batting/bowling teams
+        g.batting_scorecard = _gh(
+            "_mk_batting_scorecard",
+            g.team_a if g.batting_team_name == g.team_a["name"] else g.team_b,
+        )
+        g.bowling_scorecard = _gh(
+            "_mk_bowling_scorecard",
+            g.team_b if g.batting_team_name == g.team_a["name"] else g.team_a,
+        )
 
     # Apply optional openers from body
     g.current_striker_id = body.striker_id or None
@@ -432,26 +522,18 @@ async def start_next_innings(
         g.current_bowler_id = None
     g.current_bowler_id = body.opening_bowler_id or None
 
-    # (Re)build fresh scorecards for the new batting/bowling teams
-    g.batting_scorecard = _gh(
-        "_mk_batting_scorecard",
-        g.team_a if g.batting_team_name == g.team_a["name"] else g.team_b,
-    )
-    g.bowling_scorecard = _gh(
-        "_mk_bowling_scorecard",
-        g.team_b if g.batting_team_name == g.team_a["name"] else g.team_a,
-    )
-
     # Clear â€œgateâ€ flags and mark match live
     if not hasattr(g, "needs_new_over"):
         g.needs_new_over = False
     if not hasattr(g, "needs_new_batter"):
         g.needs_new_batter = False
-    g.needs_new_innings = False
-    g.current_inning = 2
-    if g.first_inning_summary is None:
-        g.first_inning_summary = _gh("_first_innings_summary", g)
-    _gh("_ensure_target_if_chasing", g)
+    # g.needs_new_innings is computed from status
+
+    if g.current_inning >= 2:
+        if g.first_inning_summary is None:
+            g.first_inning_summary = _gh("_first_innings_summary", g)
+        _gh("_ensure_target_if_chasing", g)
+
     g.needs_new_over = g.current_bowler_id is None
     g.needs_new_batter = g.current_striker_id is None or g.current_non_striker_id is None
     g.status = models.GameStatus.in_progress
@@ -674,6 +756,7 @@ async def get_snapshot(
     is_break = str(getattr(g, "status", "")).lower() == "innings_break" or bool(
         getattr(g, "needs_new_innings", False)
     )
+
     snap["needs_new_batter"] = flags["needs_new_batter"]
     snap["needs_new_over"] = False if is_break else flags["needs_new_over"]
     snap["needs_new_innings"] = is_break
@@ -852,6 +935,10 @@ async def add_delivery(
         raise HTTPException(status_code=404, detail="Game not found")
 
     g: Any = db_game
+
+    # Check if game is already completed/finalized
+    if g.status == models.GameStatus.completed:
+        raise HTTPException(status_code=400, detail="Game is already completed")
 
     # Preserve selections from /overs/start or earlier calls
     active_bowler_id = getattr(g, "current_bowler_id", None)

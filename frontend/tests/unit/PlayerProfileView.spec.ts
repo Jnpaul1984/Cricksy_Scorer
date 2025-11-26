@@ -1,8 +1,9 @@
 import { mount } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
-import PlayerProfileView from '@/views/PlayerProfileView.vue'
+
 import * as playerApi from '@/services/playerApi'
+import PlayerProfileView from '@/views/PlayerProfileView.vue'
 
 // Mock the router
 vi.mock('vue-router', () => ({

@@ -26,14 +26,11 @@ describe('gameStore', () => {
 
     it('isGameActive returns true when game is in progress', () => {
       const store = useGameStore()
-      store.currentGame = {
-        id: 'test-game',
-        team_a: { name: 'Team A', players: [] },
-        team_b: { name: 'Team B', players: [] },
-        status: 'in_progress',
-        current_inning: 1,
-      } as any
 
+      store.snapshot = { status: 'GAMESTATUS.IN_PROGRESS' } as any
+      expect(store.isGameActive).toBe(true)
+
+      store.snapshot = { status: 'IN_PROGRESS' } as any
       expect(store.isGameActive).toBe(true)
     })
 
@@ -126,6 +123,65 @@ describe('gameStore', () => {
       } as any
 
       expect(store.battingTeam).toEqual(teamB)
+    })
+  })
+
+  describe('canScore / canScoreDelivery backend gating', () => {
+    type GameStore = ReturnType<typeof useGameStore>
+
+    const setValidSelection = (store: GameStore) => {
+      store.setSelectedStriker('striker-1')
+      store.setSelectedNonStriker('non-striker-1')
+      store.setSelectedBowler('bowler-1')
+    }
+
+    it('backend says no -> cannot score', () => {
+      const store = useGameStore()
+      store.snapshot = {
+        status: 'GAMESTATUS.IN_PROGRESS',
+        canScore: false,
+      } as any
+      setValidSelection(store)
+
+      expect(store.canScoreDelivery).toBe(false)
+    })
+
+    it('backend says yes + valid selection -> can score', () => {
+      const store = useGameStore()
+      store.snapshot = {
+        status: 'GAMESTATUS.IN_PROGRESS',
+        canScore: true,
+      } as any
+      setValidSelection(store)
+
+      expect(store.isGameActive).toBe(true)
+      expect(store.canScoreDelivery).toBe(true)
+    })
+
+    it('no backend flag -> defaults to legacy canScore', () => {
+      const store = useGameStore()
+      store.snapshot = {
+        status: 'GAMESTATUS.IN_PROGRESS',
+      } as any
+      setValidSelection(store)
+
+      expect(store.isGameActive).toBe(true)
+      expect(store.canScoreDelivery).toBe(true)
+      expect(store.canScoreDelivery).toBe(store.canScore)
+    })
+
+    it('backend says yes but striker not selected -> blocked', () => {
+      const store = useGameStore()
+      store.snapshot = {
+        status: 'GAMESTATUS.IN_PROGRESS',
+        canScore: true,
+      } as any
+      setValidSelection(store)
+      store.setSelectedStriker(null)
+      store.setSelectedNonStriker(null)
+      store.liveSnapshot = { canScore: true } as any
+
+      expect(store.canScoreDelivery).toBe(false)
     })
   })
 })

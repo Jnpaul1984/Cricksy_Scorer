@@ -32,6 +32,7 @@ from backend.routes.gameplay import (
 from backend.routes.fan_mode import router as fan_mode_router
 from backend.routes.games_core import router as games_core_router  # NEW
 from backend.routes.games_dls import router as games_dls_router
+from backend.routes.testing import router as testing_router
 
 # Routers
 from backend.routes.coach_pro import router as coach_pro_router
@@ -289,6 +290,7 @@ def create_app(
     fastapi_app.include_router(coach_pro_router)
     fastapi_app.include_router(tournaments_router)
     fastapi_app.include_router(users_router)
+    fastapi_app.include_router(testing_router)
 
     # Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
     use_in_memory = bool(getattr(settings, "IN_MEMORY_DB", False)) or (

@@ -378,7 +378,7 @@ async def post_game_results(
         except Exception:
             # Fallback for older model versions
             game.status = "completed"  # type: ignore[assignment]
-        game.is_game_over = True
+        # game.is_game_over is a computed property based on status
         try:
             game.completed_at = dt.datetime.now(UTC)
         except Exception:

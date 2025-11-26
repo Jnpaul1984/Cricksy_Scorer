@@ -10,6 +10,29 @@ __pycache__/
 .mypy_cache/
 ruff_cache/
 
+# IDE / Editor
+.vscode/
+*.code-workspace
+
+# Firebase local cache
+.firebase/
+
+# Local artifacts and logs
+artifacts/
+artifacts/*.jsonl
+
+# Local databases
+dev.db
+test_app.db
+*.sqlite3
+
+# Local backup / snapshot zips
+backend_zip/
+frontend_zip/
+
+# Misc local reports
+ecr-scan-findings.json
+
 # --- Node/Vue ---
 node_modules/
 frontend/node_modules/
@@ -35,3 +58,11 @@ infra/terraform/terraform.tfvars
 # --- Training data ---
 backend/snapshots/
 snapshots_archive_*.zip
+.vscode/
+dev.db
+test_app.db
+artifacts/
+frontend/.imgopt-cache.json
+backend/routes/gameplay_excerpt.txt
+ecr-scan-findings.json
+backend_debug_me.py

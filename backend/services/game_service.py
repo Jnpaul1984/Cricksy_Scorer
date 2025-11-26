@@ -5,7 +5,7 @@ from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.sql_app import crud, schemas
+from backend.sql_app import crud, schemas, models
 
 
 # Local lightweight helpers (copied from main.py to avoid circular imports)
@@ -54,7 +54,7 @@ async def create_game(
     # to avoid circular typing import
     payload: Any,
     db: AsyncSession,
-) -> schemas.Game:
+) -> models.Game:
     """
     Orchestrate creating a Game row + pre-seeded scorecards.
     Returns the db Game (ORM row) as main.create_game did.

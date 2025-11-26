@@ -77,8 +77,12 @@ def _score_two_innings(
     bowler = bowlers[0]["id"]
 
     client.post(
-        f"/games/{game_id}/set-openers",
-        json={"striker_id": striker, "non_striker_id": non_striker},
+        f"/games/{game_id}/innings/start",
+        json={
+            "striker_id": striker,
+            "non_striker_id": non_striker,
+            "opening_bowler_id": bowler,
+        },
     )
     for _ in range(runs[0]):
         client.post(

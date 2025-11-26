@@ -6,6 +6,7 @@ Create Date: 2025-11-17 05:00:00.000000
 """
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -19,7 +20,12 @@ def upgrade() -> None:
     op.add_column("games", sa.Column("created_by_user_id", sa.String(), nullable=True))
     op.add_column(
         "games",
-        sa.Column("is_fan_match", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column(
+            "is_fan_match",
+            sa.Boolean(),
+            server_default=sa.text("false"),
+            nullable=False,
+        ),
     )
     op.create_index("ix_games_is_fan_match", "games", ["is_fan_match"])
     op.create_index("ix_games_created_by_user_id", "games", ["created_by_user_id"])
@@ -32,14 +38,20 @@ def upgrade() -> None:
         ondelete="SET NULL",
     )
 
-    fan_favorite_type = sa.Enum("player", "team", name="fan_favorite_type")
+    fan_favorite_type = postgresql.ENUM("player", "team", name="fan_favorite_type")
     fan_favorite_type.create(op.get_bind(), checkfirst=True)
+    column_fan_favorite_type = postgresql.ENUM(
+        "player",
+        "team",
+        name="fan_favorite_type",
+        create_type=False,
+    )
 
     op.create_table(
         "fan_favorites",
         sa.Column("id", sa.String(), nullable=False),
         sa.Column("user_id", sa.String(), nullable=False),
-        sa.Column("favorite_type", fan_favorite_type, nullable=False),
+        sa.Column("favorite_type", column_fan_favorite_type, nullable=False),
         sa.Column("player_profile_id", sa.String(), nullable=True),
         sa.Column("team_id", sa.String(), nullable=True),
         sa.Column(
@@ -71,7 +83,7 @@ def downgrade() -> None:
     op.drop_index("ix_fan_favorites_user_player", table_name="fan_favorites")
     op.drop_index("ix_fan_favorites_user_type", table_name="fan_favorites")
     op.drop_table("fan_favorites")
-    fan_favorite_type = sa.Enum(name="fan_favorite_type")
+    fan_favorite_type = postgresql.ENUM(name="fan_favorite_type")
     fan_favorite_type.drop(op.get_bind(), checkfirst=True)
 
     op.drop_constraint("fk_games_created_by_user_id_users", "games", type_="foreignkey")

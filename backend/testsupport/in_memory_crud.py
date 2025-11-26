@@ -48,7 +48,7 @@ class InMemoryCrudRepository:
             decision=game.decision,
             batting_team_name=batting_team,
             bowling_team_name=bowling_team,
-            status=models.GameStatus.in_progress,
+            status=models.GameStatus.innings_break,
             total_runs=0,
             total_wickets=0,
             overs_completed=0,
@@ -60,18 +60,18 @@ class InMemoryCrudRepository:
             bowling_scorecard=bowling_scorecard,
         )
 
-        g.current_inning = 1
+        g.current_inning = 0
         g.current_bowler_id = None
         g.last_ball_bowler_id = None
         g.current_over_balls = 0
         g.mid_over_change_used = False
         g.needs_new_over = True
         g.needs_new_batter = True
-        g.needs_new_innings = False
+        # g.needs_new_innings is computed from status
         g.first_inning_summary = None
         g.target = None
         g.result = None
-        g.is_game_over = False
+        # g.is_game_over is computed from status
         g.completed_at = None
         g.extras_totals = {
             "wides": 0,

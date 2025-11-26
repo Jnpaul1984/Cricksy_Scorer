@@ -186,10 +186,11 @@ def test_simulated_match_via_api(api_client: TestClient) -> None:
     _post_json(
         api_client,
         "POST",
-        f"/games/{game_id}/openers",
+        f"/games/{game_id}/innings/start",
         {
             "striker_id": team_a_ids[first_innings["opening_pair"]["striker"]],
             "non_striker_id": team_a_ids[first_innings["opening_pair"]["non_striker"]],
+            "opening_bowler_id": team_b_ids[first_innings["bowling_order"][0]],
         },
     )
 

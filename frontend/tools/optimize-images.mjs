@@ -1,8 +1,9 @@
 #!/usr/bin/env node
+import crypto from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import crypto from 'crypto'
+
 import sharp from 'sharp'
 
 const __filename = fileURLToPath(import.meta.url)

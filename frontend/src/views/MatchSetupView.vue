@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { reactive, computed, ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 
@@ -41,7 +41,7 @@ const form = reactive<Form>({
   decision: 'bat',
 })
 
-// âœ… arrays controlled by PlayersEditor
+// ✅ arrays controlled by PlayersEditor
 const playersA = ref<string[]>([])
 const playersB = ref<string[]>([])
 
@@ -103,15 +103,23 @@ async function onSubmit() {
         <div class="row two">
           <div>
             <label>Team A Name</label>
-            <input v-model="form.team_a_name" placeholder="e.g., Bagatelle" />
+            <input
+              v-model="form.team_a_name"
+              placeholder="e.g., Bagatelle"
+              data-testid="input-team-a"
+            />
           </div>
           <div>
             <label>Team B Name</label>
-            <input v-model="form.team_b_name" placeholder="e.g., Bridgetown" />
+            <input
+              v-model="form.team_b_name"
+              placeholder="e.g., Bridgetown"
+              data-testid="input-team-b"
+            />
           </div>
         </div>
 
-        <!-- ðŸŽ¯ New players editors -->
+        <!-- 🎯 New players editors -->
         <div class="row">
           <PlayersEditor
             v-model="playersA"
@@ -135,7 +143,7 @@ async function onSubmit() {
         <div class="row two">
           <div>
             <label>Match Type</label>
-            <select v-model="form.match_type">
+            <select v-model="form.match_type" data-testid="select-match-type">
               <option value="limited">Limited Overs</option>
               <option value="multi_day">Multi-day</option>
               <option value="custom">Custom</option>
@@ -143,7 +151,13 @@ async function onSubmit() {
           </div>
           <div v-if="form.match_type === 'limited'">
             <label>Overs (per innings)</label>
-            <input v-model.number="form.overs_limit" type="number" min="1" max="120" />
+            <input
+              v-model.number="form.overs_limit"
+              type="number"
+              min="1"
+              max="120"
+              data-testid="input-overs-limit"
+            />
           </div>
           <template v-else-if="form.match_type === 'multi_day'">
             <div>
@@ -160,15 +174,15 @@ async function onSubmit() {
         <div class="row two">
           <div>
             <label>DLS Enabled</label>
-            <select v-model="form.dls_enabled">
+            <select v-model="form.dls_enabled" data-testid="select-dls-enabled">
               <option :value="false">No</option>
               <option :value="true">Yes</option>
             </select>
           </div>
           <div>
             <label>Toss Winner</label>
-            <select v-model="form.toss_winner_team">
-              <option value="">â€” select â€”</option>
+            <select v-model="form.toss_winner_team" data-testid="select-toss-winner">
+              <option value="">— select —</option>
               <option v-if="form.team_a_name" :value="form.team_a_name">{{ form.team_a_name }}</option>
               <option v-if="form.team_b_name" :value="form.team_b_name">{{ form.team_b_name }}</option>
             </select>
@@ -178,19 +192,19 @@ async function onSubmit() {
         <div class="row">
           <label>Decision</label>
           <div class="toggle">
-            <label><input v-model="form.decision" type="radio" value="bat" /> Bat</label>
-            <label><input v-model="form.decision" type="radio" value="bowl" /> Bowl</label>
+            <label><input v-model="form.decision" type="radio" value="bat" data-testid="radio-bat" /> Bat</label>
+            <label><input v-model="form.decision" type="radio" value="bowl" data-testid="radio-bowl" /> Bowl</label>
           </div>
         </div>
 
         <div class="actions">
-          <button class="primary" type="submit" :disabled="!canSubmit || creating">
-            {{ creating ? 'Creatingâ€¦' : 'Create New Match' }}
+          <button class="primary" type="submit" :disabled="!canSubmit || creating" data-testid="btn-create-match">
+            {{ creating ? 'Creating…' : 'Create New Match' }}
           </button>
         </div>
 
         <div v-if="errorMsg" class="error">
-          âŒ {{ errorMsg }}
+          ❌ {{ errorMsg }}
         </div>
       </form>
     </div>

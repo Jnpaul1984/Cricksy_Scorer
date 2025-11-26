@@ -91,6 +91,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+
 import { getLeaderboard } from '@/services/playerApi'
 import type { Leaderboard, LeaderboardMetric } from '@/types/player'
 

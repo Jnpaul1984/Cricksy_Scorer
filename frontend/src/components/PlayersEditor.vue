@@ -106,7 +106,10 @@ const shortfall = computed(() => Math.max(0, props.min - count.value))
 </script>
 
 <template>
-  <div class="pe">
+<div
+  class="pe"
+  :data-testid="`players-editor-${(teamName || 'team').replace(/\\s+/g, '-').toLowerCase()}`"
+>
     <div class="pe-head">
       <div class="title">
         <strong>{{ label }}</strong>
@@ -144,11 +147,28 @@ const shortfall = computed(() => Math.max(0, props.min - count.value))
         v-model="quick"
         class="quick"
         :placeholder="placeholder"
+        data-testid="players-quick-input"
         @keydown.enter.prevent="handleQuickEnter"
         @paste="onQuickPaste"
       />
-      <button type="button" class="add-btn" :disabled="!quick.trim()" @click="handleQuickEnter">Add</button>
-      <button type="button" class="clear-btn" :disabled="!names.length" @click="commit([])">Clear</button>
+      <button
+        type="button"
+        class="add-btn"
+        :disabled="!quick.trim()"
+        data-testid="players-add-btn"
+        @click="handleQuickEnter"
+      >
+        Add
+      </button>
+      <button
+        type="button"
+        class="clear-btn"
+        :disabled="!names.length"
+        data-testid="players-clear-btn"
+        @click="commit([])"
+      >
+        Clear
+      </button>
     </div>
 
     <p v-if="warn" class="warn">⚠ {{ warn }}</p>

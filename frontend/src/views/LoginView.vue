@@ -35,12 +35,13 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 
-import { login } from '@/services/auth';
 import { getErrorMessage } from '@/services/api';
+import { login } from '@/services/auth';
 
 const router = useRouter();
+const route = useRoute();
 const email = ref('');
 const password = ref('');
 const loading = ref(false);
@@ -54,7 +55,9 @@ async function handleSubmit() {
   try {
     await login(email.value.trim(), password.value);
     successMessage.value = 'Signed in successfully.';
-    router.push('/');
+    // If the router sent us here with a redirect query (saved destination), honor it.
+    const redirectTo = (route.query.redirect as string) || '/';
+    router.push(redirectTo);
   } catch (err) {
     errorMessage.value = getErrorMessage(err);
   } finally {
