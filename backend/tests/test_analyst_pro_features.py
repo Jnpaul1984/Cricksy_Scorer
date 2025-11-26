@@ -77,7 +77,12 @@ async def _ensure_player_bundle(session_maker: async_sessionmaker, player_id: st
 
 
 async def _add_form_entry(
-    session_maker: async_sessionmaker, player_id: str, *, runs: int, wickets: int, offset_days: int
+    session_maker: async_sessionmaker,
+    player_id: str,
+    *,
+    runs: int,
+    wickets: int,
+    offset_days: int,
 ) -> None:
     today = dt.date.today()
     async with session_maker() as session:

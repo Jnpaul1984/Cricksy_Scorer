@@ -10,7 +10,11 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.config import ConfigDict
 
-from backend.sql_app.models import FanFavoriteType, PlayerCoachingNoteVisibility, RoleEnum
+from backend.sql_app.models import (
+    FanFavoriteType,
+    PlayerCoachingNoteVisibility,
+    RoleEnum,
+)
 
 UTC = getattr(dt, "UTC", dt.UTC)
 TeamItem: TypeAlias = str | UUID | Mapping[str, object]  # noqa: UP040

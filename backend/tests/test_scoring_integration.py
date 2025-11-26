@@ -97,7 +97,9 @@ def _extract_game_id(payload: dict[str, Any]) -> str:
     return payload.get("id") or payload.get("gid") or (payload.get("game") or {}).get("id")
 
 
-def _bootstrap_game(client: TestClient) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
+def _bootstrap_game(
+    client: TestClient,
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
     response = client.post("/games", json=DEFAULT_GAME_PAYLOAD)
     assert response.status_code in (200, 201), response.text
     data = response.json()

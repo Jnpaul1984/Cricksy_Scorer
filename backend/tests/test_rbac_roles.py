@@ -188,7 +188,9 @@ async def test_coach_user_can_award_achievement(client: TestClient) -> None:
     assert body["player_id"] == "player-coach"
 
 
-async def test_org_user_can_access_coach_and_analyst_endpoints(client: TestClient) -> None:
+async def test_org_user_can_access_coach_and_analyst_endpoints(
+    client: TestClient,
+) -> None:
     register_user(client, "org@example.com")
     await set_role(client, "org@example.com", models.RoleEnum.org_pro)
     token = login_user(client, "org@example.com")

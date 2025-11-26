@@ -73,7 +73,9 @@ def upgrade() -> None:
     )
     op.create_index("ix_fan_favorites_user_type", "fan_favorites", ["user_id", "favorite_type"])
     op.create_index(
-        "ix_fan_favorites_user_player", "fan_favorites", ["user_id", "player_profile_id"]
+        "ix_fan_favorites_user_player",
+        "fan_favorites",
+        ["user_id", "player_profile_id"],
     )
     op.create_index("ix_fan_favorites_user_team", "fan_favorites", ["user_id", "team_id"])
 

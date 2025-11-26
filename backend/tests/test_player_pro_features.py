@@ -432,7 +432,9 @@ async def test_org_role_full_access(client: TestClient) -> None:
         "form_score": 82.0,
     }
     resp_form = client.post(
-        f"/api/players/{player_id}/form", headers=_auth_headers(token), json=form_payload
+        f"/api/players/{player_id}/form",
+        headers=_auth_headers(token),
+        json=form_payload,
     )
     assert resp_form.status_code == 200, resp_form.text
 
