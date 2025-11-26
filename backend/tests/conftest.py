@@ -2,6 +2,7 @@
 import pathlib
 import sys
 import os
+import asyncio  # Add this
 
 # Set test environment variables BEFORE importing backend modules
 # Only use in-memory SQLite if DATABASE_URL is not already set (e.g. by CI or local env)
@@ -23,47 +24,36 @@ if ROOT_STR not in sys.path:
     sys.path.insert(0, ROOT_STR)
 
 
-@pytest.fixture(autouse=True)
-def reset_db():
-    """Reset the database state before each test."""
-    import asyncio
+@pytest.fixture(scope="session")
+def event_loop():
+    """
+    Create an instance of the default event loop for the test session.
+    This prevents 'Task attached to a different loop' errors when using
+    session-scoped fixtures or shared resources like the DB engine.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
 
+    yield loop
+    loop.close()
+
+
+@pytest.fixture(autouse=True)
+async def reset_db():
+    """Reset the database state before each test."""
     print("\n[DEBUG] reset_db: Starting DB reset...")
 
-    async def _reset_impl():
-        # Check user count before reset
-        from backend.sql_app.database import SessionLocal
-        from backend.sql_app import models
-        from sqlalchemy import select
+    # Import here to avoid circular imports if any
+    import backend.security
 
-        try:
-            async with SessionLocal() as session:
-                result = await session.execute(select(models.User))
-                users = result.scalars().all()
-                print(f"[DEBUG] Users before reset: {len(users)}")
-        except Exception as e:
-            print(f"[DEBUG] Could not count users before reset: {e}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
-            await conn.run_sync(Base.metadata.create_all)
-
-        # Check user count after reset
-        try:
-            async with SessionLocal() as session:
-                result = await session.execute(select(models.User))
-                users = result.scalars().all()
-                print(f"[DEBUG] Users after reset: {len(users)}")
-        except Exception as e:
-            print(f"[DEBUG] Could not count users after reset: {e}")
-
-        # Clear in-memory user cache (critical for tests using IN_MEMORY_DB)
-        import backend.security
-
-        backend.security._in_memory_users.clear()
-        print("[DEBUG] reset_db: Cleared in-memory user cache.")
-
-    # Run the async reset logic in a fresh event loop
-    asyncio.run(_reset_impl())
+    # Clear in-memory user cache (critical for tests using IN_MEMORY_DB)
+    backend.security._in_memory_users.clear()
+    print("[DEBUG] reset_db: Cleared in-memory user cache.")
 
     print("[DEBUG] reset_db: DB reset complete.\n")

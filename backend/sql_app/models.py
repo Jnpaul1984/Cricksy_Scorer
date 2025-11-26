@@ -263,7 +263,7 @@ class Game(Base):
         Boolean,
         nullable=False,
         default=False,
-        server_default=func.false(),
+        server_default="false",
     )
     created_by_user: Mapped[User | None] = relationship(back_populates="fan_matches")
 
