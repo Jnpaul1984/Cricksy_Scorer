@@ -62,8 +62,12 @@ if __name__ == "__main__":
     models = {
         "T20 Win Predictor": base_path / "win_probability" / "t20_win_predictor_v2.pkl",
         "ODI Win Predictor": base_path / "win_probability" / "odi_win_predictor.pkl",
-        "T20 Score Predictor": base_path / "score_predictor" / "t20_score_predictor.pkl",
-        "ODI Score Predictor": base_path / "score_predictor" / "odi_score_predictor_v2.pkl",
+        "T20 Score Predictor": base_path
+        / "score_predictor"
+        / "t20_score_predictor.pkl",
+        "ODI Score Predictor": base_path
+        / "score_predictor"
+        / "odi_score_predictor_v2.pkl",
     }
 
     for name, path in models.items():

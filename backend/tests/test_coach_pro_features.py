@@ -31,18 +31,24 @@ async def _set_user_role(
     role: models.RoleEnum,
 ) -> None:
     async with session_maker() as session:
-        result = await session.execute(select(models.User).where(models.User.email == email))
+        result = await session.execute(
+            select(models.User).where(models.User.email == email)
+        )
         user = result.scalar_one()
         user.role = role
         await session.commit()
 
 
-async def _ensure_player_profile(session_maker: async_sessionmaker, player_id: str) -> None:
+async def _ensure_player_profile(
+    session_maker: async_sessionmaker, player_id: str
+) -> None:
     async with session_maker() as session:
         profile = await session.get(models.PlayerProfile, player_id)
         if profile is None:
             session.add(
-                models.PlayerProfile(player_id=player_id, player_name=f"Player {player_id}")
+                models.PlayerProfile(
+                    player_id=player_id, player_name=f"Player {player_id}"
+                )
             )
             await session.commit()
 
@@ -65,7 +71,9 @@ def client() -> TestClient:
     fastapi_app.dependency_overrides.pop(get_db, None)
 
 
-def register_user(client: TestClient, email: str, password: str = "secret123") -> dict[str, Any]:
+def register_user(
+    client: TestClient, email: str, password: str = "secret123"
+) -> dict[str, Any]:
     resp = client.post("/auth/register", json={"email": email, "password": password})
     assert resp.status_code == 201, resp.text
 
@@ -177,7 +185,9 @@ async def test_coach_manages_sessions_for_assigned_player(client: TestClient) ->
     )
     assert assign_resp.status_code == 200, assign_resp.text
 
-    resp_players = client.get("/api/coaches/me/players", headers=_auth_headers(coach_token))
+    resp_players = client.get(
+        "/api/coaches/me/players", headers=_auth_headers(coach_token)
+    )
     assert resp_players.status_code == 200
     assert len(resp_players.json()) == 1
 

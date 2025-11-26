@@ -57,7 +57,9 @@ def test_register_user(client: TestClient) -> None:
 
 
 def test_login_returns_token(client: TestClient) -> None:
-    client.post("/auth/register", json={"email": "bob@example.com", "password": "hunter2"})
+    client.post(
+        "/auth/register", json={"email": "bob@example.com", "password": "hunter2"}
+    )
     resp = client.post(
         "/auth/login",
         data={"username": "bob@example.com", "password": "hunter2"},
@@ -83,7 +85,9 @@ def test_login_wrong_password(client: TestClient) -> None:
 
 
 def test_me_endpoint_requires_valid_token(client: TestClient) -> None:
-    client.post("/auth/register", json={"email": "dave@example.com", "password": "validpass"})
+    client.post(
+        "/auth/register", json={"email": "dave@example.com", "password": "validpass"}
+    )
     login = client.post(
         "/auth/login",
         data={"username": "dave@example.com", "password": "validpass"},

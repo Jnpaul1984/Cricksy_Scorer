@@ -107,7 +107,9 @@ class WinProbabilityPredictor:
                 "batting_team_win_prob": 50.0,
                 "bowling_team_win_prob": 50.0,
                 "confidence": 0.0,
-                "factors": {"reason": "Match format requires overs limit for prediction"},
+                "factors": {
+                    "reason": "Match format requires overs limit for prediction"
+                },
             }
 
         # Determine match format
@@ -343,7 +345,9 @@ class WinProbabilityPredictor:
             )
 
             # Get ML win probability (returns 0-1, convert to 0-100)
-            batting_prob_ml_raw = ml_service.predict_win_probability(match_format, features)
+            batting_prob_ml_raw = ml_service.predict_win_probability(
+                match_format, features
+            )
 
             # Check if ML returned None
             if batting_prob_ml_raw is None:
@@ -356,7 +360,9 @@ class WinProbabilityPredictor:
             confidence = min(95.0, 40.0 + (progress * 60.0))
 
             # Calculate required run rate for factors
-            required_rr = (runs_needed / balls_remaining) * 6 if balls_remaining > 0 else 99.99
+            required_rr = (
+                (runs_needed / balls_remaining) * 6 if balls_remaining > 0 else 99.99
+            )
             current_rr = (total_runs / total_balls) * 6 if total_balls > 0 else 0.0
 
             logger.info(
@@ -399,7 +405,9 @@ class WinProbabilityPredictor:
 
         # Rule-based fallback (original implementation)
         # Calculate required run rate
-        required_rr = (runs_needed / balls_remaining) * 6 if balls_remaining > 0 else 99.99
+        required_rr = (
+            (runs_needed / balls_remaining) * 6 if balls_remaining > 0 else 99.99
+        )
 
         # Calculate current run rate
         current_rr = (total_runs / total_balls) * 6 if total_balls > 0 else 0.0

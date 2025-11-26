@@ -44,10 +44,14 @@ async def set_overs_limit(
 
     g: Any = db_game
 
-    bowled_balls = int(getattr(g, "overs_completed", 0)) * 6 + int(getattr(g, "balls_this_over", 0))
+    bowled_balls = int(getattr(g, "overs_completed", 0)) * 6 + int(
+        getattr(g, "balls_this_over", 0)
+    )
     new_limit_balls = int(body.overs_limit) * 6
     if new_limit_balls < bowled_balls:
-        raise HTTPException(status_code=400, detail="New limit is less than overs already bowled")
+        raise HTTPException(
+            status_code=400, detail="New limit is less than overs already bowled"
+        )
 
     g.overs_limit = int(body.overs_limit)
 
@@ -101,7 +105,9 @@ async def set_team_roles(
     if payload.captain_id and payload.captain_id not in player_ids:
         raise HTTPException(status_code=400, detail="captain_id not in team players")
     if payload.wicket_keeper_id and payload.wicket_keeper_id not in player_ids:
-        raise HTTPException(status_code=400, detail="wicket_keeper_id not in team players")
+        raise HTTPException(
+            status_code=400, detail="wicket_keeper_id not in team players"
+        )
 
     if payload.side == schemas.TeamSide.A:
         g.team_a_captain_id = payload.captain_id

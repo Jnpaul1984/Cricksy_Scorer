@@ -41,7 +41,9 @@ def _superuser_override():
 def _register_user_with_role(
     client: TestClient, email: str, password: str, role: models.RoleEnum
 ) -> tuple[dict[str, str], str]:
-    register_resp = client.post("/auth/register", json={"email": email, "password": password})
+    register_resp = client.post(
+        "/auth/register", json={"email": email, "password": password}
+    )
     assert register_resp.status_code == 201, register_resp.text
     user = register_resp.json()
 

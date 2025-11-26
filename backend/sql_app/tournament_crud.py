@@ -35,7 +35,9 @@ async def create_tournament(
     return tournament
 
 
-async def get_tournament(db: AsyncSession, tournament_id: str) -> models.Tournament | None:
+async def get_tournament(
+    db: AsyncSession, tournament_id: str
+) -> models.Tournament | None:
     """Get a tournament by ID"""
     result = await db.execute(
         select(models.Tournament)
@@ -109,7 +111,9 @@ async def add_team_to_tournament(
     return team
 
 
-async def get_tournament_teams(db: AsyncSession, tournament_id: str) -> list[models.TournamentTeam]:
+async def get_tournament_teams(
+    db: AsyncSession, tournament_id: str
+) -> list[models.TournamentTeam]:
     """Get all teams in a tournament"""
     result = await db.execute(
         select(models.TournamentTeam)
@@ -169,7 +173,9 @@ async def update_team_stats(
 # Fixture management
 
 
-async def create_fixture(db: AsyncSession, fixture_in: schemas.FixtureCreate) -> models.Fixture:
+async def create_fixture(
+    db: AsyncSession, fixture_in: schemas.FixtureCreate
+) -> models.Fixture:
     """Create a new fixture"""
     fixture = models.Fixture(
         tournament_id=fixture_in.tournament_id,
@@ -187,11 +193,15 @@ async def create_fixture(db: AsyncSession, fixture_in: schemas.FixtureCreate) ->
 
 async def get_fixture(db: AsyncSession, fixture_id: str) -> models.Fixture | None:
     """Get a fixture by ID"""
-    result = await db.execute(select(models.Fixture).where(models.Fixture.id == fixture_id))
+    result = await db.execute(
+        select(models.Fixture).where(models.Fixture.id == fixture_id)
+    )
     return result.scalar_one_or_none()
 
 
-async def get_tournament_fixtures(db: AsyncSession, tournament_id: str) -> list[models.Fixture]:
+async def get_tournament_fixtures(
+    db: AsyncSession, tournament_id: str
+) -> list[models.Fixture]:
     """Get all fixtures for a tournament"""
     result = await db.execute(
         select(models.Fixture)
@@ -229,7 +239,9 @@ async def delete_fixture(db: AsyncSession, fixture_id: str) -> bool:
     return True
 
 
-async def get_points_table(db: AsyncSession, tournament_id: str) -> list[schemas.PointsTableEntry]:
+async def get_points_table(
+    db: AsyncSession, tournament_id: str
+) -> list[schemas.PointsTableEntry]:
     """Get the points table for a tournament"""
     teams = await get_tournament_teams(db, tournament_id)
     return [

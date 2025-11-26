@@ -97,7 +97,9 @@ class TestPlayerProfileStats:
 
         runs_conceded = sample_player_profile["total_runs_conceded"]
         wickets = sample_player_profile["total_wickets"]
-        actual_avg = round(runs_conceded / wickets, 2) if wickets > 0 else float(runs_conceded)
+        actual_avg = (
+            round(runs_conceded / wickets, 2) if wickets > 0 else float(runs_conceded)
+        )
 
         assert actual_avg == expected_avg
         assert actual_avg == 20.0

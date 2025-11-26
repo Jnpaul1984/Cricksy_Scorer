@@ -31,7 +31,9 @@ class TestWinProbabilityPredictor:
         # ML may give wider range based on actual data patterns
         assert 20 <= result["batting_team_win_prob"] <= 80
         assert result["confidence"] < 30
-        assert result["batting_team_win_prob"] + result["bowling_team_win_prob"] == 100.0
+        assert (
+            result["batting_team_win_prob"] + result["bowling_team_win_prob"] == 100.0
+        )
 
     def test_first_innings_strong_position(self):
         """Test first innings with strong batting position"""
@@ -277,4 +279,6 @@ class TestGetWinProbabilityFunction:
 
         # Should use defaults - with ML, first innings early stage may not be exactly 50
         assert "batting_team_win_prob" in result
-        assert 20 <= result["batting_team_win_prob"] <= 80  # Relaxed range for ML predictions
+        assert (
+            20 <= result["batting_team_win_prob"] <= 80
+        )  # Relaxed range for ML predictions

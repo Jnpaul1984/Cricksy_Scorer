@@ -45,7 +45,9 @@ def load_match_data(match_format: Literal["t20", "odi"]) -> pd.DataFrame:
             print(f"  [WARN] Error loading {file.name}: {e}")
 
     combined_df = pd.concat(dfs, ignore_index=True)
-    print(f"\n[OK] Loaded {len(combined_df):,} total match states from {len(dfs)} matches")
+    print(
+        f"\n[OK] Loaded {len(combined_df):,} total match states from {len(dfs)} matches"
+    )
     print(f"  Columns: {list(combined_df.columns)}")
 
     return combined_df
@@ -101,7 +103,9 @@ def engineer_features(df: pd.DataFrame, match_format: str) -> pd.DataFrame:
     # Group by match to calculate rolling features
     def calc_rolling_features(group):
         # Last 5 runs
-        group["last_5_runs"] = group["total_runs"].diff(periods=min(5, len(group))).fillna(0)
+        group["last_5_runs"] = (
+            group["total_runs"].diff(periods=min(5, len(group))).fillna(0)
+        )
 
         # Dot ratio last over (simplified)
         group["dot_ratio_last_over"] = (
@@ -124,17 +128,25 @@ def engineer_features(df: pd.DataFrame, match_format: str) -> pd.DataFrame:
 
         # Boundaries ratio
         group["boundary_ratio"] = (
-            (group["total_runs"].diff().fillna(0) >= 4).rolling(10, min_periods=1).mean()
+            (group["total_runs"].diff().fillna(0) >= 4)
+            .rolling(10, min_periods=1)
+            .mean()
         )
 
         # Momentum (acceleration)
-        group["momentum"] = group["run_rate"].diff().fillna(0).rolling(3, min_periods=1).mean()
+        group["momentum"] = (
+            group["run_rate"].diff().fillna(0).rolling(3, min_periods=1).mean()
+        )
 
         # Wickets fallen recently
-        group["wickets_last_5"] = group["wickets"].diff(periods=min(5, len(group))).fillna(0)
+        group["wickets_last_5"] = (
+            group["wickets"].diff(periods=min(5, len(group))).fillna(0)
+        )
 
         # Run rate variance (consistency)
-        group["run_rate_variance"] = group["run_rate"].rolling(5, min_periods=1).std().fillna(0)
+        group["run_rate_variance"] = (
+            group["run_rate"].rolling(5, min_periods=1).std().fillna(0)
+        )
 
         return group
 
@@ -150,7 +162,9 @@ def engineer_features(df: pd.DataFrame, match_format: str) -> pd.DataFrame:
     df["in_powerplay"] = df["is_powerplay"]
 
     # Projected score based on current RR
-    df["projected_score_simple"] = df["total_runs"] + (df["run_rate"] * df["overs_remaining"])
+    df["projected_score_simple"] = df["total_runs"] + (
+        df["run_rate"] * df["overs_remaining"]
+    )
 
     # Fill any remaining NaNs
     df = df.fillna(0)
@@ -212,7 +226,9 @@ def train_score_predictor(match_format: Literal["t20", "odi"]) -> None:
     print(f"  Min: {y.min()}, Max: {y.max()}")
 
     # Split data
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
 
     print(f"\nTraining set: {X_train.shape[0]:,} samples")
     print(f"Test set: {X_test.shape[0]:,} samples")

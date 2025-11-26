@@ -27,18 +27,24 @@ async def _set_user_role(
     role: models.RoleEnum,
 ) -> None:
     async with session_maker() as session:
-        result = await session.execute(select(models.User).where(models.User.email == email))
+        result = await session.execute(
+            select(models.User).where(models.User.email == email)
+        )
         user = result.scalar_one()
         user.role = role
         await session.commit()
 
 
-async def _ensure_player_profile(session_maker: async_sessionmaker, player_id: str) -> None:
+async def _ensure_player_profile(
+    session_maker: async_sessionmaker, player_id: str
+) -> None:
     async with session_maker() as session:
         profile = await session.get(models.PlayerProfile, player_id)
         if profile is None:
             session.add(
-                models.PlayerProfile(player_id=player_id, player_name=f"Player {player_id}")
+                models.PlayerProfile(
+                    player_id=player_id, player_name=f"Player {player_id}"
+                )
             )
             await session.commit()
 
@@ -61,7 +67,9 @@ def client() -> TestClient:
     fastapi_app.dependency_overrides.pop(get_db, None)
 
 
-def register_user(client: TestClient, email: str, password: str = "secret123") -> dict[str, Any]:
+def register_user(
+    client: TestClient, email: str, password: str = "secret123"
+) -> dict[str, Any]:
     resp = client.post("/auth/register", json={"email": email, "password": password})
     assert resp.status_code == 201, resp.text
 
@@ -133,7 +141,9 @@ async def test_fan_matches_are_user_scoped(client: TestClient) -> None:
     assert len(matches) == 1
     assert matches[0]["id"] == match_id
 
-    detail_resp = client.get(f"/api/fan/matches/{match_id}", headers=_auth_headers(token_a))
+    detail_resp = client.get(
+        f"/api/fan/matches/{match_id}", headers=_auth_headers(token_a)
+    )
     assert detail_resp.status_code == 200
     assert detail_resp.json()["home_team_name"] == "Aces"
 
@@ -144,7 +154,9 @@ async def test_fan_matches_are_user_scoped(client: TestClient) -> None:
     assert list_b.status_code == 200
     assert list_b.json() == []
 
-    detail_b = client.get(f"/api/fan/matches/{match_id}", headers=_auth_headers(token_b))
+    detail_b = client.get(
+        f"/api/fan/matches/{match_id}", headers=_auth_headers(token_b)
+    )
     assert detail_b.status_code == 404
 
 
@@ -161,10 +173,14 @@ async def test_favorites_lifecycle_and_isolation(client: TestClient) -> None:
         "favorite_type": "team",
         "team_id": "Dreamers",
     }
-    resp_player = client.post("/api/fan/favorites", headers=_auth_headers(token), json=fav_player)
+    resp_player = client.post(
+        "/api/fan/favorites", headers=_auth_headers(token), json=fav_player
+    )
     assert resp_player.status_code == 200, resp_player.text
 
-    resp_team = client.post("/api/fan/favorites", headers=_auth_headers(token), json=fav_team)
+    resp_team = client.post(
+        "/api/fan/favorites", headers=_auth_headers(token), json=fav_team
+    )
     assert resp_team.status_code == 200, resp_team.text
 
     list_resp = client.get("/api/fan/favorites", headers=_auth_headers(token))
@@ -173,7 +189,9 @@ async def test_favorites_lifecycle_and_isolation(client: TestClient) -> None:
     assert len(favorites) == 2
     player_fav_id = next(f["id"] for f in favorites if f["favorite_type"] == "player")
 
-    delete_resp = client.delete(f"/api/fan/favorites/{player_fav_id}", headers=_auth_headers(token))
+    delete_resp = client.delete(
+        f"/api/fan/favorites/{player_fav_id}", headers=_auth_headers(token)
+    )
     assert delete_resp.status_code == 204
 
     list_after = client.get("/api/fan/favorites", headers=_auth_headers(token))

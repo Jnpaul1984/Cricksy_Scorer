@@ -134,7 +134,9 @@ class _MemoryExecResult(_FakeResult):
                     if loop is None or not loop.is_running():
                         # Safe to run synchronously
                         try:
-                            self._value = asyncio.get_event_loop().run_until_complete(val)
+                            self._value = asyncio.get_event_loop().run_until_complete(
+                                val
+                            )
                         except Exception:
                             self._value = []  # nosec
                     else:
@@ -200,7 +202,11 @@ class _FakeSession:
         # use the repo class configured at module import time (tests support)
         repo_class = InMemoryCrudRepoClass
         # Detect query for games with result
-        if args and hasattr(args[0], "whereclause") and "result" in str(args[0].whereclause):
+        if (
+            args
+            and hasattr(args[0], "whereclause")
+            and "result" in str(args[0].whereclause)
+        ):
             repo = globals().get("_memory_repo")
             if repo is None and repo_class is not None:
                 repo = repo_class()
@@ -242,7 +248,9 @@ def create_app(
     fastapi_app.state.sio = sio
 
     # Install middlewares and exception handlers on FastAPI app (not ASGI wrapper)
-    fastapi_app.add_middleware(CorrelationIdMiddleware)  # ensures request_id for error payloads
+    fastapi_app.add_middleware(
+        CorrelationIdMiddleware
+    )  # ensures request_id for error payloads
     fastapi_app.add_middleware(AccessLogMiddleware)
     install_exception_handlers(fastapi_app)
 
@@ -250,7 +258,9 @@ def create_app(
     fastapi_app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 
     raw_cors_origins = str(getattr(settings, "BACKEND_CORS_ORIGINS", "")).strip()
-    cors_origins = [origin.strip() for origin in raw_cors_origins.split(",") if origin.strip()]
+    cors_origins = [
+        origin.strip() for origin in raw_cors_origins.split(",") if origin.strip()
+    ]
     if not cors_origins:
         cors_origins = [
             "http://localhost:3000",

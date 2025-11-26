@@ -54,10 +54,14 @@ def upgrade() -> None:
         sa.Column("matches_drawn", sa.Integer(), nullable=False),
         sa.Column("points", sa.Integer(), nullable=False),
         sa.Column("net_run_rate", sa.Float(), nullable=False),
-        sa.ForeignKeyConstraint(["tournament_id"], ["tournaments.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["tournament_id"], ["tournaments.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_tournament_teams_tournament_id", "tournament_teams", ["tournament_id"])
+    op.create_index(
+        "ix_tournament_teams_tournament_id", "tournament_teams", ["tournament_id"]
+    )
     op.create_index("ix_tournament_teams_points", "tournament_teams", ["points"])
 
     op.create_table(
@@ -84,7 +88,9 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(["tournament_id"], ["tournaments.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["tournament_id"], ["tournaments.id"], ondelete="CASCADE"
+        ),
         sa.ForeignKeyConstraint(["game_id"], ["games.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )

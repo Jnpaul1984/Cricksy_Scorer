@@ -25,7 +25,9 @@ async def _init_models() -> None:
 
 async def _set_user_role(email: str, role: models.RoleEnum) -> None:
     async with SessionLocal() as session:
-        result = await session.execute(select(models.User).where(models.User.email == email))
+        result = await session.execute(
+            select(models.User).where(models.User.email == email)
+        )
         user = result.scalar_one()
         user.role = role
         await session.commit()
@@ -46,7 +48,9 @@ async def test_award_achievement_and_profile_flow():
     with TestClient(fastapi_app) as client:
         email = "coach@example.com"
         password = "secret123"
-        register_resp = client.post("/auth/register", json={"email": email, "password": password})
+        register_resp = client.post(
+            "/auth/register", json={"email": email, "password": password}
+        )
         assert register_resp.status_code == 201
         await _set_user_role(email, models.RoleEnum.org_pro)
         login_resp = client.post(

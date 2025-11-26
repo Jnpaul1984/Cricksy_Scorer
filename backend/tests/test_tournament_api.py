@@ -32,7 +32,9 @@ async def _init_models() -> None:
 
 async def _set_user_role(email: str, role: models.RoleEnum) -> None:
     async with SessionLocal() as session:
-        result = await session.execute(select(models.User).where(models.User.email == email))
+        result = await session.execute(
+            select(models.User).where(models.User.email == email)
+        )
         user = result.scalar_one()
         user.role = role
         await session.commit()

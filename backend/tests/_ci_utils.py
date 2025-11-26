@@ -10,7 +10,9 @@ import httpx
 
 if os.getenv("CRICKSY_IN_MEMORY_DB") is None:
     default_api = os.getenv("API_BASE", "http://localhost:8000")
-    if default_api.startswith("http://localhost") or default_api.startswith("http://127.0.0.1"):
+    if default_api.startswith("http://localhost") or default_api.startswith(
+        "http://127.0.0.1"
+    ):
         os.environ["CRICKSY_IN_MEMORY_DB"] = "1"
 
 _USE_INPROC = os.getenv("CRICKSY_IN_MEMORY_DB") == "1"

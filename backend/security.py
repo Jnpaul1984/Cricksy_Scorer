@@ -105,7 +105,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
     salt = _b64url_decode(salt_b64)
     stored_hash = _b64url_decode(hash_b64)
-    new_hash = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, 200_000)
+    new_hash = hashlib.pbkdf2_hmac(
+        "sha256", plain_password.encode("utf-8"), salt, 200_000
+    )
     return hmac.compare_digest(stored_hash, new_hash)
 
 
@@ -115,7 +117,9 @@ def get_password_hash(password: str) -> str:
     return f"{_b64url_encode(salt)}:{_b64url_encode(hashed)}"
 
 
-def create_access_token(data: dict[str, Any], expires_delta: dt.timedelta | None = None) -> str:
+def create_access_token(
+    data: dict[str, Any], expires_delta: dt.timedelta | None = None
+) -> str:
     to_encode = data.copy()
     expire = dt.datetime.now(dt.UTC) + (
         expires_delta
@@ -139,7 +143,9 @@ async def get_user_by_email(db: AsyncSession, email: str) -> models.User | None:
     return user
 
 
-async def authenticate_user(db: AsyncSession, email: str, password: str) -> models.User | None:
+async def authenticate_user(
+    db: AsyncSession, email: str, password: str
+) -> models.User | None:
     user = await get_user_by_email(db, email)
     if not user or not verify_password(password, user.hashed_password):
         return None
@@ -184,7 +190,9 @@ async def get_current_active_user(
     current_user: Annotated[models.User, Depends(get_current_user)],
 ) -> models.User:
     if not current_user.is_active:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user"
+        )
     return current_user
 
 
@@ -196,7 +204,9 @@ def require_roles(allowed_roles: Sequence[str]):
     ) -> models.User:
         role_value = getattr(current_user.role, "value", current_user.role)
         if role_value not in allowed:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role"
+            )
         return current_user
 
     return _checker

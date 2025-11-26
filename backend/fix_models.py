@@ -48,7 +48,9 @@ def fix_model(old_path: Path, new_path: Path, model_name: str) -> bool:
 
     except Exception as exc:
         print(f"ERROR: {exc}")
-        print("\nAction required: re-export the model inside the original training environment.")
+        print(
+            "\nAction required: re-export the model inside the original training environment."
+        )
         print("If you have access to the training code:")
         print("    1. Load the model in the original environment")
         print("    2. Run joblib.dump(model, 'model_name.pkl', compress=3)")

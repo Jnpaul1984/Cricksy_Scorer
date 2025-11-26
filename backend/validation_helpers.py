@@ -200,7 +200,9 @@ def validate_delivery_players(
         raise HTTPException(status_code=422, detail=f"Invalid striker ID: {striker_id}")
 
     if non_striker_id and not validate_player_exists(non_striker_id, team_a, team_b):
-        raise HTTPException(status_code=422, detail=f"Invalid non-striker ID: {non_striker_id}")
+        raise HTTPException(
+            status_code=422, detail=f"Invalid non-striker ID: {non_striker_id}"
+        )
 
     if bowler_id and not validate_player_exists(bowler_id, team_a, team_b):
         raise HTTPException(status_code=422, detail=f"Invalid bowler ID: {bowler_id}")
@@ -210,7 +212,9 @@ def validate_delivery_players(
         validate_batsman_in_batting_team(striker_id, team_a, team_b, batting_team_name)
 
     if non_striker_id:
-        validate_batsman_in_batting_team(non_striker_id, team_a, team_b, batting_team_name)
+        validate_batsman_in_batting_team(
+            non_striker_id, team_a, team_b, batting_team_name
+        )
 
     if bowler_id:
         validate_bowler_in_bowling_team(bowler_id, team_a, team_b, bowling_team_name)

@@ -44,7 +44,9 @@ from backend.sql_app.database import SessionLocal
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--email", required=True, help="Email for the superuser")
-    parser.add_argument("--password", help="Password (optional; will prompt if omitted)")
+    parser.add_argument(
+        "--password", help="Password (optional; will prompt if omitted)"
+    )
     args = parser.parse_args()
 
     email = args.email.strip().lower()

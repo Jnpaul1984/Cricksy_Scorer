@@ -30,20 +30,28 @@ async def _set_user_role(
     role: models.RoleEnum,
 ) -> None:
     async with session_maker() as session:
-        result = await session.execute(select(models.User).where(models.User.email == email))
+        result = await session.execute(
+            select(models.User).where(models.User.email == email)
+        )
         user = result.scalar_one()
         user.role = role
         await session.commit()
 
 
-async def _ensure_player_bundle(session_maker: async_sessionmaker, player_id: str) -> None:
+async def _ensure_player_bundle(
+    session_maker: async_sessionmaker, player_id: str
+) -> None:
     async with session_maker() as session:
         profile = await session.get(models.PlayerProfile, player_id)
         if profile is None:
-            profile = models.PlayerProfile(player_id=player_id, player_name=f"Player {player_id}")
+            profile = models.PlayerProfile(
+                player_id=player_id, player_name=f"Player {player_id}"
+            )
             session.add(profile)
         summary = await session.execute(
-            select(models.PlayerSummary).where(models.PlayerSummary.player_id == player_id)
+            select(models.PlayerSummary).where(
+                models.PlayerSummary.player_id == player_id
+            )
         )
         summary_row = summary.scalar_one_or_none()
         if summary_row is None:
@@ -136,7 +144,9 @@ def client() -> TestClient:
     fastapi_app.dependency_overrides.pop(get_db, None)
 
 
-def register_user(client: TestClient, email: str, password: str = "secret123") -> dict[str, Any]:
+def register_user(
+    client: TestClient, email: str, password: str = "secret123"
+) -> dict[str, Any]:
     resp = client.post("/auth/register", json={"email": email, "password": password})
     assert resp.status_code == 201, resp.text
 
@@ -183,7 +193,9 @@ async def add_form_entry(
     client: TestClient, player_id: str, runs: int, wickets: int, offset: int
 ) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
-    await _add_form_entry(session_maker, player_id, runs=runs, wickets=wickets, offset_days=offset)
+    await _add_form_entry(
+        session_maker, player_id, runs=runs, wickets=wickets, offset_days=offset
+    )
 
 
 async def test_role_gating_for_analyst_endpoints(client: TestClient) -> None:
@@ -216,7 +228,9 @@ async def test_role_gating_for_analyst_endpoints(client: TestClient) -> None:
                     headers=_auth_headers(token),
                     json={"entity": "players"},
                 )
-            assert resp.status_code == 403, f"{method} {path} should be forbidden for {email}"
+            assert (
+                resp.status_code == 403
+            ), f"{method} {path} should be forbidden for {email}"
 
 
 async def test_analyst_exports_json_and_csv(client: TestClient) -> None:
@@ -247,13 +261,17 @@ async def test_match_and_form_exports(client: TestClient) -> None:
     await set_role(client, org["email"], models.RoleEnum.org_pro)
     org_token = login_user(client, org["email"])
 
-    resp_matches = client.get("/api/analyst/matches/export", headers=_auth_headers(org_token))
+    resp_matches = client.get(
+        "/api/analyst/matches/export", headers=_auth_headers(org_token)
+    )
     assert resp_matches.status_code == 200
     matches = resp_matches.json()
     assert len(matches) >= 1
     assert matches[0]["game_id"] == "game-form"
 
-    resp_form = client.get("/api/analyst/player-form/export", headers=_auth_headers(org_token))
+    resp_form = client.get(
+        "/api/analyst/player-form/export", headers=_auth_headers(org_token)
+    )
     assert resp_form.status_code == 200
     form_entries = resp_form.json()
     assert len(form_entries) >= 1

@@ -156,7 +156,9 @@ async def create_favorite(
         team_id=favorite.team_id,
         created_at=favorite.created_at,
         player_name=player_name,
-        team_name=(favorite.team_id if favorite.favorite_type == FanFavoriteType.team else None),
+        team_name=(
+            favorite.team_id if favorite.favorite_type == FanFavoriteType.team else None
+        ),
     )
 
 
@@ -186,7 +188,9 @@ async def list_favorites(
                 created_at=favorite.created_at,
                 player_name=player_name,
                 team_name=(
-                    favorite.team_id if favorite.favorite_type == FanFavoriteType.team else None
+                    favorite.team_id
+                    if favorite.favorite_type == FanFavoriteType.team
+                    else None
                 ),
             )
         )

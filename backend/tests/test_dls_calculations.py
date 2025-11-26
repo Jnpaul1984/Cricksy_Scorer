@@ -81,7 +81,9 @@ class TestResourceTable:
 
         # Should be approximately halfway
         expected = (R_10 + R_11) / 2
-        assert abs(R_10_5 - expected) < 2.0, "Interpolation should be approximately linear"
+        assert (
+            abs(R_10_5 - expected) < 2.0
+        ), "Interpolation should be approximately linear"
 
 
 class TestDLSBasicCalculations:
@@ -198,7 +200,9 @@ class TestDLSRealisticScenarios:
         # The target is the TOTAL target, not remaining runs
         # With reduced overs mid-innings, target should be positive
         assert result.target > 0, "Target should be positive"
-        assert result.target < 160, "Target should be less than team 1 score due to reduced overs"
+        assert (
+            result.target < 160
+        ), "Target should be less than team 1 score due to reduced overs"
 
     def test_odi_scenario(self):
         """
@@ -360,7 +364,9 @@ class TestDLSResourceCalculations:
         )
 
         # Should have close to 100% resources
-        assert 95.0 <= R2 <= 100.0, f"Team 2 should have ~100% resources at start, got {R2}"
+        assert (
+            95.0 <= R2 <= 100.0
+        ), f"Team 2 should have ~100% resources at start, got {R2}"
 
     def test_team2_resources_decrease_with_balls(self):
         """Test that team 2 resources decrease as balls are bowled."""
@@ -390,7 +396,9 @@ class TestDLSResourceCalculations:
             wickets_lost_so_far=0,
         )
 
-        assert R2_start > R2_mid > R2_end, "Resources should decrease as balls are bowled"
+        assert (
+            R2_start > R2_mid > R2_end
+        ), "Resources should decrease as balls are bowled"
         assert R2_end == 0.0, "Resources should be 0 at end of innings"
 
     def test_team1_resources_no_interruptions(self):

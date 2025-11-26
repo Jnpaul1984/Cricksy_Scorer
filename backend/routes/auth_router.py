@@ -85,7 +85,9 @@ async def login_for_access_token(
         )
 
     # Verify password against stored hash
-    password_ok = security.verify_password(form_data.password, user.hashed_password)  # nosec
+    password_ok = security.verify_password(
+        form_data.password, user.hashed_password
+    )  # nosec
 
     # If password is wrong:
     if not password_ok:

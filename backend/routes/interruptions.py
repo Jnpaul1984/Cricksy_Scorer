@@ -89,7 +89,9 @@ def _normalize_history(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
         it = dict(it or {})
         if ("ended_at" not in it) and ("endedAt" not in it) and ("end" not in it):
             # mark closed with a non-null value so it won't be considered open
-            it["ended_at"] = it.get("endedAt") or it.get("end") or (it.get("started_at") or "")
+            it["ended_at"] = (
+                it.get("endedAt") or it.get("end") or (it.get("started_at") or "")
+            )
         out.append(it)
     return out
 
@@ -116,7 +118,9 @@ def _start_core(
     return history
 
 
-def _stop_core(game: Game, kind: Kind | None, at_utc: dt.datetime | None) -> list[dict[str, Any]]:
+def _stop_core(
+    game: Game, kind: Kind | None, at_utc: dt.datetime | None
+) -> list[dict[str, Any]]:
     history: list[dict[str, Any]] = _normalize_history(list(game.interruptions or []))
     idx = _last_open_index(history, kind)
     if idx is None:
@@ -199,7 +203,9 @@ async def upsert_interruption(
         or ("stop" if payload.stop else None)
     )
     if act is None:
-        raise HTTPException(422, "Provide 'action' ('start'|'stop') or boolean 'start'/'stop'")
+        raise HTTPException(
+            422, "Provide 'action' ('start'|'stop') or boolean 'start'/'stop'"
+        )
 
     kind: Kind = payload.kind or payload.type or "weather"
     if act in ("start", "begin"):

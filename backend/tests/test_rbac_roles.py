@@ -29,7 +29,9 @@ async def _set_user_flags(
     role: models.RoleEnum | None = None,
 ) -> None:
     async with session_maker() as session:
-        result = await session.execute(select(models.User).where(models.User.email == email))
+        result = await session.execute(
+            select(models.User).where(models.User.email == email)
+        )
         user = result.scalar_one()
         if is_superuser is not None:
             user.is_superuser = is_superuser
@@ -38,16 +40,22 @@ async def _set_user_flags(
         await session.commit()
 
 
-async def _ensure_player_profile(session_maker: async_sessionmaker, player_id: str) -> None:
+async def _ensure_player_profile(
+    session_maker: async_sessionmaker, player_id: str
+) -> None:
     async with session_maker() as session:
         existing = await session.get(models.PlayerProfile, player_id)
         if existing is None:
-            profile = models.PlayerProfile(player_id=player_id, player_name="Test Player")
+            profile = models.PlayerProfile(
+                player_id=player_id, player_name="Test Player"
+            )
             session.add(profile)
             await session.commit()
 
 
-def register_user(client: TestClient, email: str, password: str = "secret123") -> dict[str, Any]:
+def register_user(
+    client: TestClient, email: str, password: str = "secret123"
+) -> dict[str, Any]:
     resp = client.post("/auth/register", json={"email": email, "password": password})
     assert resp.status_code == 201, resp.text
 

@@ -49,7 +49,9 @@ async def _get_active_assignment(
 async def _ensure_coach_user(db: AsyncSession, coach_user_id: str) -> User:
     coach = await db.get(User, coach_user_id)
     if coach is None or coach.role not in (RoleEnum.coach_pro, RoleEnum.org_pro):
-        raise HTTPException(status_code=400, detail="Coach user not found or invalid role")
+        raise HTTPException(
+            status_code=400, detail="Coach user not found or invalid role"
+        )
     return coach
 
 
@@ -60,7 +62,9 @@ async def assign_player(
     db: AsyncSession = Depends(get_db),
 ) -> CoachPlayerAssignment:
     if not (current_user.is_superuser or current_user.role == RoleEnum.org_pro):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role"
+        )
 
     await _ensure_coach_user(db, assignment.coach_user_id)
     await _ensure_player_profile(db, assignment.player_profile_id)
@@ -91,10 +95,14 @@ async def assign_player(
 
 @router.get("/me/players", response_model=list[CoachPlayerAssignmentRead])
 async def list_assigned_players(
-    current_user: Annotated[User, Depends(security.require_roles(["coach_pro", "org_pro"]))],
+    current_user: Annotated[
+        User, Depends(security.require_roles(["coach_pro", "org_pro"]))
+    ],
     db: AsyncSession = Depends(get_db),
 ) -> list[CoachPlayerAssignment]:
-    stmt = select(CoachPlayerAssignment).where(CoachPlayerAssignment.is_active.is_(True))
+    stmt = select(CoachPlayerAssignment).where(
+        CoachPlayerAssignment.is_active.is_(True)
+    )
     if current_user.role == RoleEnum.coach_pro:
         stmt = stmt.where(CoachPlayerAssignment.coach_user_id == current_user.id)
     result = await db.execute(stmt.order_by(CoachPlayerAssignment.created_at.desc()))
@@ -107,7 +115,9 @@ async def list_assigned_players(
 )
 async def list_coaching_sessions(
     player_id: str,
-    current_user: Annotated[User, Depends(security.require_roles(["coach_pro", "org_pro"]))],
+    current_user: Annotated[
+        User, Depends(security.require_roles(["coach_pro", "org_pro"]))
+    ],
     db: AsyncSession = Depends(get_db),
 ) -> list[CoachingSession]:
     await _ensure_player_profile(db, player_id)
@@ -115,7 +125,9 @@ async def list_coaching_sessions(
     if current_user.role == RoleEnum.coach_pro:
         assignment = await _get_active_assignment(db, current_user.id, player_id)
         if assignment is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coach not assigned")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Coach not assigned"
+            )
         stmt = stmt.where(CoachingSession.coach_user_id == current_user.id)
     result = await db.execute(stmt.order_by(CoachingSession.scheduled_at.desc()))
     return result.scalars().all()
@@ -128,7 +140,9 @@ async def list_coaching_sessions(
 async def create_coaching_session(
     player_id: str,
     session_data: CoachingSessionCreate,
-    current_user: Annotated[User, Depends(security.require_roles(["coach_pro", "org_pro"]))],
+    current_user: Annotated[
+        User, Depends(security.require_roles(["coach_pro", "org_pro"]))
+    ],
     db: AsyncSession = Depends(get_db),
 ) -> CoachingSession:
     await _ensure_player_profile(db, player_id)
@@ -136,7 +150,9 @@ async def create_coaching_session(
         coach_user_id = current_user.id
         assignment = await _get_active_assignment(db, coach_user_id, player_id)
         if assignment is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coach not assigned")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Coach not assigned"
+            )
     else:
         coach_user_id = session_data.coach_user_id or current_user.id
         await _ensure_coach_user(db, coach_user_id)
@@ -170,7 +186,9 @@ async def update_coaching_session(
     player_id: str,
     session_id: str,
     session_data: CoachingSessionUpdate,
-    current_user: Annotated[User, Depends(security.require_roles(["coach_pro", "org_pro"]))],
+    current_user: Annotated[
+        User, Depends(security.require_roles(["coach_pro", "org_pro"]))
+    ],
     db: AsyncSession = Depends(get_db),
 ) -> CoachingSession:
     session = await db.get(CoachingSession, session_id)
@@ -179,10 +197,14 @@ async def update_coaching_session(
 
     if current_user.role == RoleEnum.coach_pro:
         if session.coach_user_id != current_user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+            )
         assignment = await _get_active_assignment(db, current_user.id, player_id)
         if assignment is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coach not assigned")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Coach not assigned"
+            )
 
     update_data = session_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():

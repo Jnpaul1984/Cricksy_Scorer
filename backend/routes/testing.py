@@ -21,7 +21,9 @@ router = APIRouter(prefix="/testing", tags=["testing"])
 
 
 @router.post("/create-scoreable-game")
-async def create_scoreable_game(db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, str]:
+async def create_scoreable_game(
+    db: Annotated[AsyncSession, Depends(get_db)]
+) -> dict[str, str]:
     """
     Test helper that seeds a scoreable game (first over ready, openers set).
     **Enabled only in non-production environments.**

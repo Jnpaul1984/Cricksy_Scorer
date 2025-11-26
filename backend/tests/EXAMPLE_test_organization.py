@@ -323,7 +323,9 @@ def test_future_feature():
 
 
 @pytest.mark.integration
-@pytest.mark.skipif("os.getenv('CRICKSY_IN_MEMORY_DB') == '1'", reason="Requires real database")
+@pytest.mark.skipif(
+    "os.getenv('CRICKSY_IN_MEMORY_DB') == '1'", reason="Requires real database"
+)
 async def test_database_migration():
     """Test that requires real PostgreSQL database"""
     pass
