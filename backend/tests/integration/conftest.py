@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import Response
 
 from backend.main import _fastapi as app
 
@@ -91,12 +92,14 @@ class GameHelper:
         assert response.status_code == 200, f"Failed to create game: {response.text}"
 
         self.game_data = response.json()
+        assert self.game_data is not None
         self.game_id = self.game_data["id"]
         self.team_a_players = self.game_data["team_a"]["players"]
         self.team_b_players = self.game_data["team_b"]["players"]
 
         # Return tuple of (game_id, teams_dict)
         teams = {"team_a": self.team_a_players, "team_b": self.team_b_players}
+        assert self.game_id is not None
         return self.game_id, teams
 
     def set_openers(
@@ -152,7 +155,7 @@ class GameHelper:
         extra_type: str | None = None,
         runs_off_bat: int | None = None,
         fielder_id: str | None = None,
-    ) -> Any:
+    ) -> Response:
         """Post a delivery to the game."""
         assert self.game_id, "Game must be created first"
 
@@ -333,7 +336,7 @@ def create_wicket_over(
     next_batsman_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Create an over with a wicket at specified ball number."""
-    balls = []
+    balls: list[dict[str, Any]] = []
 
     # Balls before wicket
     for r in runs_before:

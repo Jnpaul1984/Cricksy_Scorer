@@ -48,15 +48,11 @@ async def seed_one_game() -> dict[str, Any]:
 
         team_a = {
             "name": team_a_name,
-            "players": [
-                {"id": str(uuid.uuid4()), "name": n} for n in game_create.players_a
-            ],
+            "players": [{"id": str(uuid.uuid4()), "name": n} for n in game_create.players_a],
         }
         team_b = {
             "name": team_b_name,
-            "players": [
-                {"id": str(uuid.uuid4()), "name": n} for n in game_create.players_b
-            ],
+            "players": [{"id": str(uuid.uuid4()), "name": n} for n in game_create.players_b],
         }
 
         # Minimal scorecards

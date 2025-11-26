@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 from collections import deque
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
+from collections.abc import AsyncGenerator
 
 import pytest
 from fastapi.testclient import TestClient

@@ -1,4 +1,5 @@
 pytest
 requests
 types-requests
+types-requests
 mypy

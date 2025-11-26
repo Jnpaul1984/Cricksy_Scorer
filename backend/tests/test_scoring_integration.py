@@ -93,10 +93,8 @@ DEFAULT_GAME_PAYLOAD = {
 }
 
 
-def _extract_game_id(payload: dict[str, Any]) -> str:
-    return (
-        payload.get("id") or payload.get("gid") or (payload.get("game") or {}).get("id")
-    )
+def _extract_game_id(payload: dict[str, Any]) -> str | None:
+    return payload.get("id") or payload.get("gid") or (payload.get("game") or {}).get("id")
 
 
 def _bootstrap_game(
@@ -113,9 +111,7 @@ def _bootstrap_game(
     return game_id, detail_json["team_a"]["players"], detail_json["team_b"]["players"]
 
 
-def _post_delivery(
-    client: TestClient, game_id: str, payload: dict[str, Any]
-) -> dict[str, Any]:
+def _post_delivery(client: TestClient, game_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     response = client.post(f"/games/{game_id}/deliveries", json=payload)
     assert response.status_code == 200, response.text
     return response.json()
