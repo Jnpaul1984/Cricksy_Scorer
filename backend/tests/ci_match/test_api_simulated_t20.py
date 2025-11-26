@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import deque
-from collections.abc import Iterable
+from collections.abc import AsyncGenerator, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,7 @@ from backend.testsupport.in_memory_crud import InMemoryCrudRepository
 def api_client(monkeypatch: pytest.MonkeyPatch) -> Iterable[TestClient]:
     repo = InMemoryCrudRepository()
 
-    async def fake_get_db() -> Iterable[object]:
+    async def fake_get_db() -> AsyncGenerator[object, None]:
         yield object()
 
     fastapi_app = main._fastapi
@@ -51,11 +51,7 @@ def _name_to_id(players: Iterable[dict[str, Any]]) -> dict[str, str]:
 def _post_json(
     client: TestClient, method: str, url: str, payload: dict[str, Any]
 ) -> dict[str, Any]:
-    response = (
-        client.post(url, json=payload)
-        if method == "POST"
-        else client.put(url, json=payload)
-    )
+    response = client.post(url, json=payload) if method == "POST" else client.put(url, json=payload)
     assert response.status_code < 400, response.text
     return response.json() if response.text else {}
 
@@ -205,9 +201,7 @@ def test_simulated_match_via_api(api_client: TestClient) -> None:
         "non_striker_id": team_b_ids[second_innings["opening_pair"]["non_striker"]],
         "opening_bowler_id": team_a_ids[second_innings["bowling_order"][0]],
     }
-    _post_json(
-        api_client, "POST", f"/games/{game_id}/innings/start", start_next_payload
-    )
+    _post_json(api_client, "POST", f"/games/{game_id}/innings/start", start_next_payload)
 
     _play_innings(api_client, game_id, second_innings, team_b_ids, team_a_ids)
 
@@ -217,9 +211,9 @@ def test_simulated_match_via_api(api_client: TestClient) -> None:
 
     assert detail_data["is_game_over"] is True
     assert detail_data["result"]["winner_team_name"] == match["result"]["winner"]
-    assert detail_data["result"]["result_text"].rstrip(".") == match["result"][
-        "summary"
-    ].rstrip(".")
+    assert detail_data["result"]["result_text"].rstrip(".") == match["result"]["summary"].rstrip(
+        "."
+    )
     assert detail_data["target"] == 158
 
     snapshot_resp = api_client.get(f"/games/{game_id}/snapshot")

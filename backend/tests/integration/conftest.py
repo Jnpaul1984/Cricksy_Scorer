@@ -111,15 +111,11 @@ class GameHelper:
         # Use first two players if not specified
         if striker_id is None:
             striker_id = (
-                self.team_a_players[0]["id"]
-                if team == "A"
-                else self.team_b_players[0]["id"]
+                self.team_a_players[0]["id"] if team == "A" else self.team_b_players[0]["id"]
             )
         if non_striker_id is None:
             non_striker_id = (
-                self.team_a_players[1]["id"]
-                if team == "A"
-                else self.team_b_players[1]["id"]
+                self.team_a_players[1]["id"] if team == "A" else self.team_b_players[1]["id"]
             )
 
         # Use /innings/start to ensure game transitions to IN_PROGRESS and Inning 1
@@ -156,7 +152,7 @@ class GameHelper:
         extra_type: str | None = None,
         runs_off_bat: int | None = None,
         fielder_id: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> Any:
         """Post a delivery to the game."""
         assert self.game_id, "Game must be created first"
 
@@ -228,9 +224,7 @@ class GameHelper:
         assert response.status_code == 200, f"Failed to get deliveries: {response.text}"
         return response.json()["deliveries"]
 
-    def post_over(
-        self, batsman_id: str, bowler_id: str, balls: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    def post_over(self, batsman_id: str, bowler_id: str, balls: list[dict[str, Any]]) -> list[Any]:
         """Post a complete over (6 legal deliveries)."""
         responses = []
         for ball in balls:
@@ -292,9 +286,7 @@ class AssertionHelper:
 
         if runs is not None:
             actual_runs = summary.get("runs")
-            assert (
-                actual_runs == runs
-            ), f"Expected {runs} runs in summary, got {actual_runs}"
+            assert actual_runs == runs, f"Expected {runs} runs in summary, got {actual_runs}"
 
         if wickets is not None:
             actual_wickets = summary.get("wickets")
@@ -304,9 +296,7 @@ class AssertionHelper:
 
         if overs is not None:
             actual_overs = summary.get("overs")
-            assert (
-                actual_overs == overs
-            ), f"Expected {overs} overs in summary, got {actual_overs}"
+            assert actual_overs == overs, f"Expected {overs} overs in summary, got {actual_overs}"
 
     @staticmethod
     def assert_game_result(snapshot: dict, expected_winner: str | None = None):
