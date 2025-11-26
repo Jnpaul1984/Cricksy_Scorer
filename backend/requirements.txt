@@ -15,9 +15,9 @@ fastapi>=0.110.1
 flake8==6.1.0
 greenlet==3.2.3
 h11==0.16.0
-httpcore==0.16.3
+httpcore>=1.0.0
 httptools==0.6.4
-httpx==0.23.3
+httpx>=0.27.0
 idna==3.10
 iniconfig==2.1.0
 isort==5.12.0
@@ -34,7 +34,7 @@ passlib==1.7.4
 pathspec==0.12.1
 platformdirs==4.3.8
 pluggy==1.6.0
-pyasn1==0.6.1
+pyasn1==0.4.8
 pycodestyle==2.11.1
 pycparser==2.22
 pydantic==2.5.0
