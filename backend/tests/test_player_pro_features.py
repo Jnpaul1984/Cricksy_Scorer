@@ -28,23 +28,17 @@ async def _set_user_role(
     role: models.RoleEnum,
 ) -> None:
     async with session_maker() as session:
-        result = await session.execute(
-            select(models.User).where(models.User.email == email)
-        )
+        result = await session.execute(select(models.User).where(models.User.email == email))
         user = result.scalar_one()
         user.role = role
         await session.commit()
 
 
-async def _ensure_player_profile(
-    session_maker: async_sessionmaker, player_id: str
-) -> None:
+async def _ensure_player_profile(session_maker: async_sessionmaker, player_id: str) -> None:
     async with session_maker() as session:
         existing = await session.get(models.PlayerProfile, player_id)
         if existing is None:
-            profile = models.PlayerProfile(
-                player_id=player_id, player_name=f"Player {player_id}"
-            )
+            profile = models.PlayerProfile(player_id=player_id, player_name=f"Player {player_id}")
             session.add(profile)
             await session.commit()
 
@@ -65,9 +59,7 @@ async def _ensure_player_summary(
     defaults.update(overrides)
     async with session_maker() as session:
         result = await session.execute(
-            select(models.PlayerSummary).where(
-                models.PlayerSummary.player_id == player_id
-            )
+            select(models.PlayerSummary).where(models.PlayerSummary.player_id == player_id)
         )
         summary = result.scalar_one_or_none()
         if summary is None:
@@ -150,9 +142,7 @@ def client() -> TestClient:
     fastapi_app.dependency_overrides.pop(get_db, None)
 
 
-def register_user(
-    client: TestClient, email: str, password: str = "secret123"
-) -> dict[str, Any]:
+def register_user(client: TestClient, email: str, password: str = "secret123") -> dict[str, Any]:
     resp = client.post("/auth/register", json={"email": email, "password": password})
     assert resp.status_code == 201, resp.text
 
@@ -230,19 +220,13 @@ async def test_free_role_blocked_from_player_pro_endpoints(client: TestClient) -
     register_user(client, "free@example.com")
     token = login_user(client, "free@example.com")
 
-    resp_form = client.get(
-        f"/api/players/{player_id}/form", headers=_auth_headers(token)
-    )
+    resp_form = client.get(f"/api/players/{player_id}/form", headers=_auth_headers(token))
     assert resp_form.status_code == 403
 
-    resp_notes = client.get(
-        f"/api/players/{player_id}/notes", headers=_auth_headers(token)
-    )
+    resp_notes = client.get(f"/api/players/{player_id}/notes", headers=_auth_headers(token))
     assert resp_notes.status_code == 403
 
-    resp_summary = client.get(
-        f"/api/players/{player_id}/summary", headers=_auth_headers(token)
-    )
+    resp_summary = client.get(f"/api/players/{player_id}/summary", headers=_auth_headers(token))
     assert resp_summary.status_code == 403
 
 
@@ -255,19 +239,13 @@ async def test_player_role_access_summary_only(client: TestClient) -> None:
     await set_role(client, "player@example.com", models.RoleEnum.player_pro)
     token = login_user(client, "player@example.com")
 
-    resp_form = client.get(
-        f"/api/players/{player_id}/form", headers=_auth_headers(token)
-    )
+    resp_form = client.get(f"/api/players/{player_id}/form", headers=_auth_headers(token))
     assert resp_form.status_code == 403
 
-    resp_notes = client.get(
-        f"/api/players/{player_id}/notes", headers=_auth_headers(token)
-    )
+    resp_notes = client.get(f"/api/players/{player_id}/notes", headers=_auth_headers(token))
     assert resp_notes.status_code == 403
 
-    resp_summary = client.get(
-        f"/api/players/{player_id}/summary", headers=_auth_headers(token)
-    )
+    resp_summary = client.get(f"/api/players/{player_id}/summary", headers=_auth_headers(token))
     assert resp_summary.status_code == 200
     data = resp_summary.json()
     assert data["player_id"] == summary.player_id
@@ -302,9 +280,7 @@ async def test_coach_role_full_access_form_and_notes(client: TestClient) -> None
     assert resp_create_form.status_code == 200, resp_create_form.text
     form_id = resp_create_form.json()["id"]
 
-    resp_list_form = client.get(
-        f"/api/players/{player_id}/form", headers=_auth_headers(token)
-    )
+    resp_list_form = client.get(f"/api/players/{player_id}/form", headers=_auth_headers(token))
     assert resp_list_form.status_code == 200
     form_entries = resp_list_form.json()
     assert len(form_entries) == 1
@@ -338,21 +314,14 @@ async def test_coach_role_full_access_form_and_notes(client: TestClient) -> None
     assert resp_update_note.status_code == 200, resp_update_note.text
     assert resp_update_note.json()["action_plan"] == "Add video analysis session"
 
-    resp_list_notes = client.get(
-        f"/api/players/{player_id}/notes", headers=_auth_headers(token)
-    )
+    resp_list_notes = client.get(f"/api/players/{player_id}/notes", headers=_auth_headers(token))
     assert resp_list_notes.status_code == 200
     notes = resp_list_notes.json()
     assert len(notes) == 1
     assert notes[0]["id"] == note_id
-    assert (
-        notes[0]["visibility"]
-        == models.PlayerCoachingNoteVisibility.private_to_coach.value
-    )
+    assert notes[0]["visibility"] == models.PlayerCoachingNoteVisibility.private_to_coach.value
 
-    resp_summary = client.get(
-        f"/api/players/{player_id}/summary", headers=_auth_headers(token)
-    )
+    resp_summary = client.get(f"/api/players/{player_id}/summary", headers=_auth_headers(token))
     assert resp_summary.status_code == 200
 
 
@@ -387,26 +356,17 @@ async def test_analyst_role_read_only_access(client: TestClient) -> None:
     await set_role(client, "analyst@example.com", models.RoleEnum.analyst_pro)
     token = login_user(client, "analyst@example.com")
 
-    resp_form = client.get(
-        f"/api/players/{player_id}/form", headers=_auth_headers(token)
-    )
+    resp_form = client.get(f"/api/players/{player_id}/form", headers=_auth_headers(token))
     assert resp_form.status_code == 200
     assert len(resp_form.json()) == 1
 
-    resp_notes = client.get(
-        f"/api/players/{player_id}/notes", headers=_auth_headers(token)
-    )
+    resp_notes = client.get(f"/api/players/{player_id}/notes", headers=_auth_headers(token))
     assert resp_notes.status_code == 200
     note_entries = resp_notes.json()
     assert len(note_entries) == 1
-    assert (
-        note_entries[0]["visibility"]
-        == models.PlayerCoachingNoteVisibility.org_only.value
-    )
+    assert note_entries[0]["visibility"] == models.PlayerCoachingNoteVisibility.org_only.value
 
-    resp_summary = client.get(
-        f"/api/players/{player_id}/summary", headers=_auth_headers(token)
-    )
+    resp_summary = client.get(f"/api/players/{player_id}/summary", headers=_auth_headers(token))
     assert resp_summary.status_code == 200
 
     resp_form_create = client.post(
@@ -514,17 +474,11 @@ async def test_org_role_full_access(client: TestClient) -> None:
         },
     )
     assert resp_update_note.status_code == 200
-    assert (
-        resp_update_note.json()["action_plan"] == "Powerplay rotation + visualization"
-    )
+    assert resp_update_note.json()["action_plan"] == "Powerplay rotation + visualization"
 
-    resp_notes = client.get(
-        f"/api/players/{player_id}/notes", headers=_auth_headers(token)
-    )
+    resp_notes = client.get(f"/api/players/{player_id}/notes", headers=_auth_headers(token))
     assert resp_notes.status_code == 200
     assert len(resp_notes.json()) == 2
 
-    resp_summary = client.get(
-        f"/api/players/{player_id}/summary", headers=_auth_headers(token)
-    )
+    resp_summary = client.get(f"/api/players/{player_id}/summary", headers=_auth_headers(token))
     assert resp_summary.status_code == 200

@@ -52,9 +52,7 @@ def load_match_data(match_format: Literal["t20", "odi"]) -> pd.DataFrame:
             print(f"  [WARN] Error loading {file.name}: {e}")
 
     combined_df = pd.concat(dfs, ignore_index=True)
-    print(
-        f"\n[OK] Loaded {len(combined_df):,} total match states from {len(dfs)} matches"
-    )
+    print(f"\n[OK] Loaded {len(combined_df):,} total match states from {len(dfs)} matches")
     print(f"  Columns: {list(combined_df.columns)}")
 
     return combined_df
@@ -113,9 +111,7 @@ def engineer_features(df: pd.DataFrame, match_format: str) -> pd.DataFrame:
 
     # Target-based features
     df["runs_needed"] = df["final_score"] - df["total_runs"]
-    df["required_run_rate"] = df["runs_needed"] / (df["balls_remaining"] / 6).replace(
-        0, 0.1
-    )
+    df["required_run_rate"] = df["runs_needed"] / (df["balls_remaining"] / 6).replace(0, 0.1)
 
     # Additional features
     df["wickets_per_over"] = df["wickets"] / df["completed_overs"].replace(0, 0.1)

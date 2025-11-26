@@ -77,11 +77,7 @@ class MLModelService:
         match_format: Literal["t20", "odi"],
     ) -> Path:
         if model_type == "win_probability":
-            return (
-                self._base_path
-                / "win_probability"
-                / f"{match_format}_win_predictor_v3.pkl"
-            )
+            return self._base_path / "win_probability" / f"{match_format}_win_predictor_v3.pkl"
         if match_format == "t20":
             return self._base_path / "score_predictor" / "t20_score_predictor.pkl"
         return self._base_path / "score_predictor" / "odi_score_predictor_v3.pkl"
@@ -146,9 +142,7 @@ class MLModelService:
                 ]
 
                 # Build feature vector
-                feature_vector = pd.DataFrame(
-                    [{k: features.get(k, 0) for k in required_features}]
-                )
+                feature_vector = pd.DataFrame([{k: features.get(k, 0) for k in required_features}])
             else:
                 # Assume it's a numpy array
                 feature_vector = np.array(features).reshape(1, -1)
@@ -212,9 +206,7 @@ class MLModelService:
                 ]
 
                 # Build feature vector
-                feature_vector = pd.DataFrame(
-                    [{k: features.get(k, 0) for k in required_features}]
-                )
+                feature_vector = pd.DataFrame([{k: features.get(k, 0) for k in required_features}])
             else:
                 # Assume it's a numpy array
                 feature_vector = np.array(features).reshape(1, -1)

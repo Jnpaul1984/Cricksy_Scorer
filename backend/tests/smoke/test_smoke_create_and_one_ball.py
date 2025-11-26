@@ -67,7 +67,5 @@ def test_smoke_create_and_one_ball():
     assert delivery.get("shot_map") == svg
 
     snap = _get(f"{API}/games/{gid}/snapshot")
-    last = snap.get("last_delivery") or (snap.get("snapshot") or {}).get(
-        "last_delivery"
-    )
+    last = snap.get("last_delivery") or (snap.get("snapshot") or {}).get("last_delivery")
     assert last is not None and last.get("shot_map") == svg

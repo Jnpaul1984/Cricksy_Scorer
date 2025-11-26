@@ -93,10 +93,7 @@ async def _maybe_close_innings(g: Any) -> None:
     balls_limit = (g.overs_limit or 0) * 6
     balls_bowled = int(
         getattr(g, "balls_bowled_total", None)
-        or (
-            int(getattr(g, "overs_completed", 0)) * 6
-            + int(getattr(g, "balls_this_over", 0))
-        )
+        or (int(getattr(g, "overs_completed", 0)) * 6 + int(getattr(g, "balls_this_over", 0)))
     )
 
     if g.status == models.GameStatus.innings_break:
@@ -111,9 +108,7 @@ async def _maybe_close_innings(g: Any) -> None:
 
         # Only archive if not already archived
         innings_history: list[dict[str, Any]] = list(getattr(g, "innings_history", []) or [])  # type: ignore[assignment]
-        already_archived = any(
-            inn.get("inning_no") == g.current_inning for inn in innings_history
-        )
+        already_archived = any(inn.get("inning_no") == g.current_inning for inn in innings_history)
         if not already_archived:
             entry = {
                 "inning_no": g.current_inning or 1,
@@ -213,9 +208,7 @@ async def start_over(
 async def get_deliveries(
     game_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    innings: int | None = Query(
-        None, ge=1, le=4, description="Filter by innings number"
-    ),
+    innings: int | None = Query(None, ge=1, le=4, description="Filter by innings number"),
     limit: int = Query(500, ge=1, le=500, description="Max number of rows to return"),
     order: Literal["desc", "asc"] = Query("desc", description="desc = newest-first"),
 ) -> dict[str, Any]:
@@ -322,28 +315,20 @@ async def change_bowler_mid_over(
         "started",
     }
     if not status_ok:
-        raise HTTPException(
-            status_code=409, detail=f"Game is {getattr(g, 'status', 'unknown')}"
-        )
+        raise HTTPException(status_code=409, detail=f"Game is {getattr(g, 'status', 'unknown')}")
 
     balls_this_over = int(getattr(g, "current_over_balls", 0) or 0)
     current = getattr(g, "current_bowler_id", None)
 
     # Must be mid-over and have an active bowler
     if not current or balls_this_over <= 0:
-        raise HTTPException(
-            status_code=409, detail="Over not in progress; use /overs/start"
-        )
+        raise HTTPException(status_code=409, detail="Over not in progress; use /overs/start")
 
     if getattr(g, "mid_over_change_used", False):
-        raise HTTPException(
-            status_code=409, detail="Mid-over change already used this over"
-        )
+        raise HTTPException(status_code=409, detail="Mid-over change already used this over")
 
     if str(body.new_bowler_id) == str(current):
-        raise HTTPException(
-            status_code=409, detail="New bowler is already the current bowler"
-        )
+        raise HTTPException(status_code=409, detail="New bowler is already the current bowler")
 
     # New bowler must be in the bowling team
     bowling_team_name = getattr(g, "bowling_team_name", None)
@@ -351,9 +336,7 @@ async def change_bowler_mid_over(
     team_b = cast(dict[str, Any], g.team_b)
     if not (bowling_team_name and team_a and team_b):
         raise HTTPException(status_code=500, detail="Teams not initialized on game")
-    bowling_team: dict[str, Any] = (
-        team_a if team_a["name"] == bowling_team_name else team_b
-    )
+    bowling_team: dict[str, Any] = team_a if team_a["name"] == bowling_team_name else team_b
     players: list[dict[str, Any]] = list(bowling_team.get("players", []) or [])  # type: ignore[assignment]
     allowed = {str(p["id"]) for p in players}
     if str(body.new_bowler_id) not in allowed:
@@ -408,20 +391,12 @@ async def end_current_innings(
     if not hasattr(g, "innings_history"):
         g.innings_history = []
 
-    innings_history: list[dict[str, Any]] = list(
-        getattr(g, "innings_history", []) or []
-    )
-    already_archived = any(
-        inn.get("inning_no") == g.current_inning for inn in innings_history
-    )
+    innings_history: list[dict[str, Any]] = list(getattr(g, "innings_history", []) or [])
+    already_archived = any(inn.get("inning_no") == g.current_inning for inn in innings_history)
 
     if not already_archived:
-        batting_scorecard_map: dict[str, Any] = dict(
-            getattr(g, "batting_scorecard", {}) or {}
-        )
-        bowling_scorecard_map: dict[str, Any] = dict(
-            getattr(g, "bowling_scorecard", {}) or {}
-        )
+        batting_scorecard_map: dict[str, Any] = dict(getattr(g, "batting_scorecard", {}) or {})
+        bowling_scorecard_map: dict[str, Any] = dict(getattr(g, "bowling_scorecard", {}) or {})
 
         entry = {
             "inning_no": g.current_inning or 1,
@@ -502,12 +477,8 @@ async def start_next_innings(
         last_archived_no = hist2[-1]["inning_no"] if hist2 else None
 
         if last_archived_no != current_inn:
-            batting_scorecard_map: dict[str, Any] = dict(
-                getattr(g, "batting_scorecard", {}) or {}
-            )
-            bowling_scorecard_map: dict[str, Any] = dict(
-                getattr(g, "bowling_scorecard", {}) or {}
-            )
+            batting_scorecard_map: dict[str, Any] = dict(getattr(g, "batting_scorecard", {}) or {})
+            bowling_scorecard_map: dict[str, Any] = dict(getattr(g, "bowling_scorecard", {}) or {})
 
             entry = {
                 "inning_no": current_inn,
@@ -564,9 +535,7 @@ async def start_next_innings(
         _gh("_ensure_target_if_chasing", g)
 
     g.needs_new_over = g.current_bowler_id is None
-    g.needs_new_batter = (
-        g.current_striker_id is None or g.current_non_striker_id is None
-    )
+    g.needs_new_batter = g.current_striker_id is None or g.current_non_striker_id is None
     g.status = models.GameStatus.in_progress
 
     # Recompute derived/runtime and persist
@@ -579,9 +548,7 @@ async def start_next_innings(
     snap = _snapshot_from_game(u, None, BASE_DIR)
     snap["needs_new_innings"] = False
     snap["needs_new_over"] = g.current_bowler_id is None
-    snap["needs_new_batter"] = (
-        g.current_striker_id is None or g.current_non_striker_id is None
-    )
+    snap["needs_new_batter"] = g.current_striker_id is None or g.current_non_striker_id is None
 
     from backend.services.live_bus import emit_state_update
 
@@ -795,9 +762,7 @@ async def get_snapshot(
     snap["needs_new_innings"] = is_break
 
     # Interruption records + mini cards
-    snap["interruptions"] = cast(
-        list[dict[str, Any]], getattr(g, "interruptions", []) or []
-    )
+    snap["interruptions"] = cast(list[dict[str, Any]], getattr(g, "interruptions", []) or [])
     snap["mini_batting_card"] = _gh("_mini_batting_card", g)
     snap["mini_bowling_card"] = _gh("_mini_bowling_card", g)
 
@@ -835,9 +800,7 @@ async def get_snapshot(
                 # Sum runs from first-innings deliveries using a typed local list to avoid
                 # partially-unknown generator types in static checks.
                 s1 = 0
-                deliveries_list: list[Mapping[str, Any]] = list(
-                    getattr(g, "deliveries", []) or []
-                )
+                deliveries_list: list[Mapping[str, Any]] = list(getattr(g, "deliveries", []) or [])
                 for d in deliveries_list:
                     try:
                         if int(d.get("inning", 1) or 1) == 1:
@@ -851,25 +814,19 @@ async def get_snapshot(
             team2_overs_left_now = max(
                 0.0, float(format_overs) - (overs_completed + (balls_this_over / 6.0))
             )
-            team2_wkts_now = (
-                int(getattr(g, "total_wickets", 0)) if current_innings == 2 else 0
-            )
+            team2_wkts_now = int(getattr(g, "total_wickets", 0)) if current_innings == 2 else 0
 
             R_start = env.table.R(format_overs, 0)
             R_remaining = env.table.R(team2_overs_left_now, team2_wkts_now)
             R2_used = max(0.0, R_start - R_remaining)
 
             try:
-                par_raw = dlsmod.par_score_now(
-                    S1=s1, R1_total=R1_total, R2_used_so_far=R2_used
-                )
+                par_raw = dlsmod.par_score_now(S1=s1, R1_total=R1_total, R2_used_so_far=R2_used)
                 par_now = _to_int_safe(par_raw)
             except Exception:
                 par_now = 0  # nosec
             try:
-                target_raw = dlsmod.revised_target(
-                    S1=s1, R1_total=R1_total, R2_total=R_start
-                )
+                target_raw = dlsmod.revised_target(S1=s1, R1_total=R1_total, R2_total=R_start)
                 target_full = _to_int_safe(target_raw)
             except Exception:
                 target_full = 0  # nosec
@@ -887,12 +844,8 @@ async def get_snapshot(
     # Narrow team objects to concrete mappings before iterating players
     team_a_map: dict[str, Any] = dict(getattr(g, "team_a", {}) or {})
     team_b_map: dict[str, Any] = dict(getattr(g, "team_b", {}) or {})
-    batting_team_map = (
-        team_a_map if g.batting_team_name == team_a_map.get("name") else team_b_map
-    )
-    bowling_team_map = (
-        team_b_map if g.batting_team_name == team_a_map.get("name") else team_a_map
-    )
+    batting_team_map = team_a_map if g.batting_team_name == team_a_map.get("name") else team_b_map
+    bowling_team_map = team_b_map if g.batting_team_name == team_a_map.get("name") else team_a_map
 
     snap["players"] = {
         "batting": [
@@ -911,9 +864,7 @@ async def get_snapshot(
 async def get_recent_deliveries(
     game_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    limit: int = Query(
-        10, ge=1, le=50, description="Max number of most recent deliveries"
-    ),
+    limit: int = Query(10, ge=1, le=50, description="Max number of most recent deliveries"),
 ) -> dict[str, Any]:
     """
     Returns the most-recent `limit` deliveries for a game, newest-first.
@@ -1011,9 +962,7 @@ async def add_delivery(
             team_a = cast(dict[str, Any], g.team_a)
             team_b = cast(dict[str, Any], g.team_b)
             bowling_team = team_a if team_a["name"] == bowling_team_name else team_b
-            players_list: list[Mapping[str, Any]] = list(
-                bowling_team.get("players", []) or []
-            )
+            players_list: list[Mapping[str, Any]] = list(bowling_team.get("players", []) or [])
             allowed: set[str] = set()
             for p in players_list:
                 try:
@@ -1022,9 +971,7 @@ async def add_delivery(
                 except Exception:
                     continue  # nosec
             if incoming not in allowed:
-                raise HTTPException(
-                    status_code=409, detail="Bowler is not in the bowling team"
-                )
+                raise HTTPException(status_code=409, detail="Bowler is not in the bowling team")
 
             g.current_bowler_id = incoming
             g.mid_over_change_used = True
@@ -1034,29 +981,22 @@ async def add_delivery(
         g.current_bowler_id = active_bowler_id
         g.mid_over_change_used = mid_over_change_used
     if not delivery.bowler_id and delivery.bowler_name:
-        resolved = cast(
-            str | None, _gh("_id_by_name", g.team_a, g.team_b, delivery.bowler_name)
-        )
+        resolved = cast(str | None, _gh("_id_by_name", g.team_a, g.team_b, delivery.bowler_name))
         if not resolved:
             raise HTTPException(status_code=404, detail="Unknown bowler name")
         delivery.bowler_id = resolved
 
-    if int(getattr(g, "balls_this_over", 0)) == 0 and not getattr(
-        g, "current_bowler_id", None
-    ):
+    if int(getattr(g, "balls_this_over", 0)) == 0 and not getattr(g, "current_bowler_id", None):
         g.current_bowler_id = delivery.bowler_id
         g.mid_over_change_used = False
 
     # Fill fielder/dismissed by name if needed
     needs_fielder = bool(
         delivery.is_wicket
-        and str(getattr(delivery, "dismissal_type", "")).lower()
-        in {"caught", "run_out", "stumped"}
+        and str(getattr(delivery, "dismissal_type", "")).lower() in {"caught", "run_out", "stumped"}
     )
     if needs_fielder and not delivery.fielder_id and delivery.fielder_name:
-        resolved = cast(
-            str | None, _gh("_id_by_name", g.team_a, g.team_b, delivery.fielder_name)
-        )
+        resolved = cast(str | None, _gh("_id_by_name", g.team_a, g.team_b, delivery.fielder_name))
         if not resolved:
             raise HTTPException(status_code=404, detail="Unknown fielder name")
         delivery.fielder_id = resolved
@@ -1065,9 +1005,7 @@ async def add_delivery(
         if dpn:
             resolved = cast(str | None, _gh("_id_by_name", g.team_a, g.team_b, dpn))
             if not resolved:
-                raise HTTPException(
-                    status_code=404, detail="Unknown dismissed player name"
-                )
+                raise HTTPException(status_code=404, detail="Unknown dismissed player name")
             delivery.dismissed_player_id = resolved
 
     # Comprehensive validation
@@ -1085,10 +1023,7 @@ async def add_delivery(
 
     # UI gating flags & guards
     flags = cast(dict[str, Any], _gh("_compute_snapshot_flags", g) or {})
-    if (
-        getattr(g, "current_bowler_id", None)
-        and int(getattr(g, "balls_this_over", 0)) == 0
-    ):
+    if getattr(g, "current_bowler_id", None) and int(getattr(g, "balls_this_over", 0)) == 0:
         flags["needs_new_over"] = False
     if flags.get("needs_new_batter"):
         raise HTTPException(
@@ -1107,9 +1042,7 @@ async def add_delivery(
     last_id = getattr(g, "last_ball_bowler_id", None)
     eff_bowler = getattr(g, "current_bowler_id", None) or delivery.bowler_id
     if int(getattr(g, "balls_this_over", 0)) == 0 and last_id and eff_bowler == last_id:
-        raise HTTPException(
-            status_code=400, detail="Bowler cannot bowl consecutive overs"
-        )
+        raise HTTPException(status_code=400, detail="Bowler cannot bowl consecutive overs")
 
     # Normalize delivery + score one ball
     x = _gh("_norm_extra", delivery.extra)
@@ -1130,13 +1063,9 @@ async def add_delivery(
                 status_code=409, detail="Select openers before scoring the first ball."
             )
     if not delivery.striker_id:
-        raise HTTPException(
-            status_code=409, detail="Select openers before scoring the first ball."
-        )
+        raise HTTPException(status_code=409, detail="Select openers before scoring the first ball.")
     if not delivery.non_striker_id:
-        raise HTTPException(
-            status_code=409, detail="Select openers before scoring the first ball."
-        )
+        raise HTTPException(status_code=409, detail="Select openers before scoring the first ball.")
 
     effective_bowler_id: str | None = (
         cast(str | None, getattr(g, "current_bowler_id", None)) or delivery.bowler_id
@@ -1308,20 +1237,14 @@ async def undo_last_delivery(
         game.balls_this_over = 0
         game.current_striker_id = None
         game.current_non_striker_id = None
-        batting_team = (
-            game.team_a
-            if game.batting_team_name == game.team_a["name"]
-            else game.team_b
-        )
+        batting_team = game.team_a if game.batting_team_name == game.team_a["name"] else game.team_b
         bowling_team = game.team_b if batting_team is game.team_a else game.team_a
         game.batting_scorecard = _gh("_mk_batting_scorecard", batting_team)
         game.bowling_scorecard = _gh("_mk_bowling_scorecard", bowling_team)
 
     _reset_runtime_and_scorecards(g)
 
-    deliveries_seq: Sequence[Mapping[str, Any]] = cast(
-        Sequence[Mapping[str, Any]], g.deliveries
-    )
+    deliveries_seq: Sequence[Mapping[str, Any]] = cast(Sequence[Mapping[str, Any]], g.deliveries)
     for d in deliveries_seq:
         x = _gh("_norm_extra", d.get("extra_type"))
         if x == "nb":

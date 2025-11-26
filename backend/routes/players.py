@@ -171,9 +171,7 @@ async def list_player_form_entries(
 async def create_player_form_entry(
     player_id: str,
     form_data: PlayerFormCreate,
-    _current_user: Annotated[
-        User, Depends(security.require_roles(["coach_pro", "org_pro"]))
-    ],
+    _current_user: Annotated[User, Depends(security.require_roles(["coach_pro", "org_pro"]))],
     db: AsyncSession = Depends(get_db),
 ) -> PlayerForm:
     await _ensure_player_profile(db, player_id)
@@ -202,9 +200,7 @@ async def list_player_coaching_notes(
         .order_by(desc(PlayerCoachingNotes.created_at))
     )
     if current_user.role == RoleEnum.analyst_pro:
-        stmt = stmt.where(
-            PlayerCoachingNotes.visibility == PlayerCoachingNoteVisibility.org_only
-        )
+        stmt = stmt.where(PlayerCoachingNotes.visibility == PlayerCoachingNoteVisibility.org_only)
     result = await db.execute(stmt)
     return result.scalars().all()
 
@@ -216,9 +212,7 @@ async def list_player_coaching_notes(
 async def create_player_coaching_note(
     player_id: str,
     note_data: PlayerCoachingNotesCreate,
-    current_user: Annotated[
-        User, Depends(security.require_roles(["coach_pro", "org_pro"]))
-    ],
+    current_user: Annotated[User, Depends(security.require_roles(["coach_pro", "org_pro"]))],
     db: AsyncSession = Depends(get_db),
 ) -> PlayerCoachingNotes:
     await _ensure_player_profile(db, player_id)
@@ -241,9 +235,7 @@ async def update_player_coaching_note(
     player_id: str,
     note_id: str,
     note_data: PlayerCoachingNotesCreate,
-    _current_user: Annotated[
-        User, Depends(security.require_roles(["coach_pro", "org_pro"]))
-    ],
+    _current_user: Annotated[User, Depends(security.require_roles(["coach_pro", "org_pro"]))],
     db: AsyncSession = Depends(get_db),
 ) -> PlayerCoachingNotes:
     await _ensure_player_profile(db, player_id)
@@ -265,17 +257,11 @@ async def get_player_summary(
     player_id: str,
     _current_user: Annotated[
         User,
-        Depends(
-            security.require_roles(
-                ["player_pro", "coach_pro", "analyst_pro", "org_pro"]
-            )
-        ),
+        Depends(security.require_roles(["player_pro", "coach_pro", "analyst_pro", "org_pro"])),
     ],
     db: AsyncSession = Depends(get_db),
 ) -> PlayerSummary:
-    result = await db.execute(
-        select(PlayerSummary).where(PlayerSummary.player_id == player_id)
-    )
+    result = await db.execute(select(PlayerSummary).where(PlayerSummary.player_id == player_id))
     summary = result.scalar_one_or_none()
     if summary is None:
         raise HTTPException(status_code=404, detail="Player summary not found")
@@ -296,9 +282,7 @@ async def award_achievement(
     Award an achievement to a player.
     """
     # Verify player profile exists
-    result = await db.execute(
-        select(PlayerProfile).where(PlayerProfile.player_id == player_id)
-    )
+    result = await db.execute(select(PlayerProfile).where(PlayerProfile.player_id == player_id))
     profile = result.scalar_one_or_none()
 
     if not profile:
@@ -383,10 +367,7 @@ async def get_leaderboard(
         # Cast to Float to preserve decimal precision in sorting
         query = query.where(PlayerProfile.total_balls_faced > 0).order_by(
             desc(
-                (
-                    cast(PlayerProfile.total_runs_scored, Float)
-                    / PlayerProfile.total_balls_faced
-                )
+                (cast(PlayerProfile.total_runs_scored, Float) / PlayerProfile.total_balls_faced)
                 * 100
             )
         )
@@ -402,8 +383,7 @@ async def get_leaderboard(
     elif metric == "economy_rate":
         # Cast to Float to preserve decimal precision in sorting
         query = query.where(PlayerProfile.total_overs_bowled > 0).order_by(
-            cast(PlayerProfile.total_runs_conceded, Float)
-            / PlayerProfile.total_overs_bowled
+            cast(PlayerProfile.total_runs_conceded, Float) / PlayerProfile.total_overs_bowled
         )
     elif metric == "total_wickets":
         query = query.order_by(desc(PlayerProfile.total_wickets))

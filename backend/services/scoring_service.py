@@ -147,9 +147,7 @@ def score_one(
         extra_runs = runs_scored
 
     team_add = (
-        off_bat_runs
-        + (1 if is_nb else 0)
-        + (extra_runs if extra_norm in ("wd", "b", "lb") else 0)
+        off_bat_runs + (1 if is_nb else 0) + (extra_runs if extra_norm in ("wd", "b", "lb") else 0)
     )
     g.total_runs = int(getattr(g, "total_runs", 0)) + team_add
 

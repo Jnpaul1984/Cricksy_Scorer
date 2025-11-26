@@ -56,9 +56,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
-        sa.ForeignKeyConstraint(
-            ["player_id"], ["player_profiles.player_id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["player_id"], ["player_profiles.player_id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -99,9 +97,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
         ),
         sa.ForeignKeyConstraint(["coach_user_id"], ["users.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["player_id"], ["player_profiles.player_id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["player_id"], ["player_profiles.player_id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -142,9 +138,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
-        sa.ForeignKeyConstraint(
-            ["player_id"], ["player_profiles.player_id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["player_id"], ["player_profiles.player_id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("player_id"),
     )

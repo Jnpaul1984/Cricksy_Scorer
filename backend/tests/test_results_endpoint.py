@@ -131,9 +131,7 @@ def _score_two_innings(
 
 def test_results_endpoint_with_valid_id(client: TestClient):
     game_id = _create_game(client)
-    _post_results(
-        client, game_id, team_a_score=150, team_b_score=120, winner="Team Alpha"
-    )
+    _post_results(client, game_id, team_a_score=150, team_b_score=120, winner="Team Alpha")
     response = client.get(f"/games/{game_id}/results")
     assert response.status_code == 200
     data = response.json()
@@ -144,9 +142,7 @@ def test_results_endpoint_with_valid_id(client: TestClient):
 def test_results_listing(client: TestClient):
     _create_game(client)
     game_id = _create_game(client)
-    _post_results(
-        client, game_id, team_a_score=130, team_b_score=110, winner="Team Alpha"
-    )
+    _post_results(client, game_id, team_a_score=130, team_b_score=110, winner="Team Alpha")
 
     response = client.get("/games/results")
     assert response.status_code == 200

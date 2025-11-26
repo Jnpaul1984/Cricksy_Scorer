@@ -203,9 +203,7 @@ def build_score_predictor_features(
             balls = over.get("balls", [])
             recent_10_balls.extend(balls)
 
-        recent_6_balls = (
-            recent_10_balls[-6:] if len(recent_10_balls) >= 6 else recent_10_balls
-        )
+        recent_6_balls = recent_10_balls[-6:] if len(recent_10_balls) >= 6 else recent_10_balls
 
         # Dot ratio last over
         dots = sum(1 for b in recent_6_balls if b.get("runs", 0) == 0)

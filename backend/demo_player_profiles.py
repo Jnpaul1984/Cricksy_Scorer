@@ -192,9 +192,7 @@ async def display_leaderboards():
         # Most runs
         print("\n🏆 Most Runs:")
         result = await db.execute(
-            select(PlayerProfile)
-            .order_by(PlayerProfile.total_runs_scored.desc())
-            .limit(3)
+            select(PlayerProfile).order_by(PlayerProfile.total_runs_scored.desc()).limit(3)
         )
         for rank, profile in enumerate(result.scalars().all(), 1):
             print(f"  {rank}. {profile.player_name}: {profile.total_runs_scored} runs")
@@ -212,9 +210,7 @@ async def display_leaderboards():
         result = await db.execute(
             select(PlayerProfile)
             .where(PlayerProfile.times_out >= 10)
-            .order_by(
-                (PlayerProfile.total_runs_scored / PlayerProfile.times_out).desc()
-            )
+            .order_by((PlayerProfile.total_runs_scored / PlayerProfile.times_out).desc())
             .limit(3)
         )
         for rank, profile in enumerate(result.scalars().all(), 1):

@@ -53,9 +53,7 @@ def _to_dict(x: Any) -> dict[str, Any] | None:
         return {str(k): v for k, v in x.items()}
     if isinstance(x, BaseModel):
         try:
-            return {
-                str(k): v for k, v in cast(Mapping[str, Any], x.model_dump()).items()
-            }
+            return {str(k): v for k, v in cast(Mapping[str, Any], x.model_dump()).items()}
         except Exception:
             try:
                 md = x.dict()  # type: ignore[attr-defined]
@@ -145,9 +143,7 @@ def _build_innings_breakdown(g: GameState) -> list[dict[str, Any]]:
         runs_1 = sum(int(d.get("runs_scored", 0) or 0) for d in innings_1_deliveries)
         wickets_1 = sum(1 for d in innings_1_deliveries if d.get("is_wicket"))
         legal_balls_1 = sum(
-            1
-            for d in innings_1_deliveries
-            if is_legal_delivery(_norm_extra(d.get("extra_type")))
+            1 for d in innings_1_deliveries if is_legal_delivery(_norm_extra(d.get("extra_type")))
         )
         overs_1 = legal_balls_1 // 6
         balls_1 = legal_balls_1 % 6
@@ -158,9 +154,7 @@ def _build_innings_breakdown(g: GameState) -> list[dict[str, Any]]:
         decision = getattr(g, "decision", None)
 
         batting_team_1 = (
-            team_a_name
-            if toss_winner == team_a_name and decision == "bat"
-            else team_b_name
+            team_a_name if toss_winner == team_a_name and decision == "bat" else team_b_name
         )
 
         innings_list.append(
@@ -180,9 +174,7 @@ def _build_innings_breakdown(g: GameState) -> list[dict[str, Any]]:
         runs_2 = sum(int(d.get("runs_scored", 0) or 0) for d in innings_2_deliveries)
         wickets_2 = sum(1 for d in innings_2_deliveries if d.get("is_wicket"))
         legal_balls_2 = sum(
-            1
-            for d in innings_2_deliveries
-            if is_legal_delivery(_norm_extra(d.get("extra_type")))
+            1 for d in innings_2_deliveries if is_legal_delivery(_norm_extra(d.get("extra_type")))
         )
         overs_2 = legal_balls_2 // 6
         balls_2 = legal_balls_2 % 6
@@ -194,9 +186,7 @@ def _build_innings_breakdown(g: GameState) -> list[dict[str, Any]]:
         decision = getattr(g, "decision", None)
 
         batting_team_2 = (
-            team_b_name
-            if toss_winner == team_a_name and decision == "bat"
-            else team_a_name
+            team_b_name if toss_winner == team_a_name and decision == "bat" else team_a_name
         )
 
         innings_list.append(
@@ -463,12 +453,8 @@ def _dls_panel_for(g: GameState, base_dir: str | Path | None = None) -> dict[str
         R_remaining = env.table.R(team2_overs_left_now, wkts_now)
         R2_used = max(0.0, R_start - R_remaining)
 
-        target_full = int(
-            dlsmod.revised_target(S1=S1, R1_total=R1_total, R2_total=R_start)
-        )
-        par_now = int(
-            dlsmod.par_score_now(S1=S1, R1_total=R1_total, R2_used_so_far=R2_used)
-        )
+        target_full = int(dlsmod.revised_target(S1=S1, R1_total=R1_total, R2_total=R_start))
+        par_now = int(dlsmod.par_score_now(S1=S1, R1_total=R1_total, R2_used_so_far=R2_used))
         panel: dict[str, Any] = {"method": "DLS", "target": target_full, "par": par_now}
         if int(getattr(g, "current_inning", 1) or 1) >= 2:
             runs_now = int(getattr(g, "total_runs", 0))
@@ -578,8 +564,7 @@ def build_snapshot(
         "overs_completed": int(getattr(g, "overs_completed", 0)),
         "balls_this_over": int(getattr(g, "balls_this_over", 0)),
         "overs": (
-            f"{int(getattr(g, 'overs_completed', 0))}."
-            f"{int(getattr(g, 'balls_this_over', 0))}"
+            f"{int(getattr(g, 'overs_completed', 0))}." f"{int(getattr(g, 'balls_this_over', 0))}"
         ),
         "balls_bowled_total": int(getattr(g, "overs_completed", 0)) * 6
         + int(getattr(g, "balls_this_over", 0)),
@@ -591,9 +576,7 @@ def build_snapshot(
                     getattr(g, "team_b", {}),
                     getattr(g, "current_striker_id", None),
                 ),
-                "runs": _bat_entry(g, getattr(g, "current_striker_id", None)).get(
-                    "runs", 0
-                ),
+                "runs": _bat_entry(g, getattr(g, "current_striker_id", None)).get("runs", 0),
                 "balls": _bat_entry(g, getattr(g, "current_striker_id", None)).get(
                     "balls_faced", 0
                 ),
@@ -608,9 +591,7 @@ def build_snapshot(
                     getattr(g, "team_b", {}),
                     getattr(g, "current_non_striker_id", None),
                 ),
-                "runs": _bat_entry(g, getattr(g, "current_non_striker_id", None)).get(
-                    "runs", 0
-                ),
+                "runs": _bat_entry(g, getattr(g, "current_non_striker_id", None)).get("runs", 0),
                 "balls": _bat_entry(g, getattr(g, "current_non_striker_id", None)).get(
                     "balls_faced", 0
                 ),
@@ -621,9 +602,7 @@ def build_snapshot(
         },
         "current_bowler": {
             "id": cur_bowler_id,
-            "name": _player_name(
-                getattr(g, "team_a", {}), getattr(g, "team_b", {}), cur_bowler_id
-            ),
+            "name": _player_name(getattr(g, "team_a", {}), getattr(g, "team_b", {}), cur_bowler_id),
         },
         "extras_totals": extras_totals,
         "fall_of_wickets": fall_of_wickets,

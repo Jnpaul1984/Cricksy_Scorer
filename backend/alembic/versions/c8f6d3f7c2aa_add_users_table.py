@@ -26,9 +26,7 @@ def upgrade() -> None:
         sa.Column("email", sa.String(), nullable=False),
         sa.Column("hashed_password", sa.String(), nullable=False),
         sa.Column("is_active", sa.Boolean(), server_default=sa.true(), nullable=False),
-        sa.Column(
-            "is_superuser", sa.Boolean(), server_default=sa.false(), nullable=False
-        ),
+        sa.Column("is_superuser", sa.Boolean(), server_default=sa.false(), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

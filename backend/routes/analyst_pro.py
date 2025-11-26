@@ -43,9 +43,7 @@ def _csv_response(
     writer = csv.DictWriter(buffer, fieldnames=headers)
     writer.writeheader()
     for row in rows:
-        writer.writerow(
-            {header: _serialize_value(row.get(header, "")) for header in headers}
-        )
+        writer.writerow({header: _serialize_value(row.get(header, "")) for header in headers})
     buffer.seek(0)
     response = StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv")
     response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
@@ -60,9 +58,7 @@ def _format_export(
 ):
     if export_format == "csv":
         return _csv_response(rows, headers, filename)
-    return [
-        {key: _serialize_value(value) for key, value in row.items()} for row in rows
-    ]
+    return [{key: _serialize_value(value) for key, value in row.items()} for row in rows]
 
 
 @router.get("/players/export")
@@ -124,9 +120,7 @@ async def export_matches(
             {
                 "game_id": game.id,
                 "match_type": game.match_type,
-                "status": (
-                    game.status.value if hasattr(game.status, "value") else game.status
-                ),
+                "status": (game.status.value if hasattr(game.status, "value") else game.status),
                 "team_a": team_a_name,
                 "team_b": team_b_name,
                 "overs_limit": game.overs_limit,
@@ -254,24 +248,16 @@ async def run_analytics_query(
         sample_rows = [
             {
                 "game_id": game.id,
-                "team_a": (
-                    game.team_a.get("name") if isinstance(game.team_a, dict) else None
-                ),
-                "team_b": (
-                    game.team_b.get("name") if isinstance(game.team_b, dict) else None
-                ),
-                "status": (
-                    game.status.value if hasattr(game.status, "value") else game.status
-                ),
+                "team_a": (game.team_a.get("name") if isinstance(game.team_a, dict) else None),
+                "team_b": (game.team_b.get("name") if isinstance(game.team_b, dict) else None),
+                "status": (game.status.value if hasattr(game.status, "value") else game.status),
             }
             for game in sample_result.scalars().all()
         ]
         summary_stats = {"match_count": total_games}
     elif query.entity == "form":
         count_stmt = _apply_form_filters(select(func.count(PlayerForm.id)), query)
-        runs_stmt = _apply_form_filters(
-            select(func.coalesce(func.sum(PlayerForm.runs), 0)), query
-        )
+        runs_stmt = _apply_form_filters(select(func.coalesce(func.sum(PlayerForm.runs), 0)), query)
         wickets_stmt = _apply_form_filters(
             select(func.coalesce(func.sum(PlayerForm.wickets), 0)), query
         )
@@ -304,9 +290,7 @@ async def run_analytics_query(
             "total_wickets": total_wickets,
         }
     elif query.entity == "sessions":
-        count_stmt = _apply_session_filters(
-            select(func.count(CoachingSession.id)), query
-        )
+        count_stmt = _apply_session_filters(select(func.count(CoachingSession.id)), query)
         duration_stmt = _apply_session_filters(
             select(func.coalesce(func.sum(CoachingSession.duration_minutes), 0)),
             query,
@@ -315,9 +299,7 @@ async def run_analytics_query(
         total_minutes = await _scalar(db, duration_stmt)
         sample_result = await db.execute(
             _apply_session_filters(
-                select(CoachingSession)
-                .order_by(CoachingSession.scheduled_at.desc())
-                .limit(20),
+                select(CoachingSession).order_by(CoachingSession.scheduled_at.desc()).limit(20),
                 query,
             )
         )
@@ -338,6 +320,4 @@ async def run_analytics_query(
     else:
         raise HTTPException(status_code=400, detail="Unsupported entity")
 
-    return AnalyticsResult(
-        query=query, summary_stats=summary_stats, sample_rows=sample_rows
-    )
+    return AnalyticsResult(query=query, summary_stats=summary_stats, sample_rows=sample_rows)

@@ -20,9 +20,7 @@ async def update_user_role(
     current_user: Annotated[models.User, Depends(security.get_current_active_user)],
 ) -> schemas.UserRead:
     if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 
     user = await db.get(models.User, user_id)
     if user is None:

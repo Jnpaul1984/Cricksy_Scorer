@@ -135,9 +135,7 @@ def _complete_game_by_result(g: Any) -> bool:
     # 1) Chasing side has reached or surpassed the target â†' win by wickets
     if current_runs >= target:
         margin = max(1, 10 - wkts)
-        method_typed: schemas.MatchMethod | None = cast(
-            schemas.MatchMethod, "by wickets"
-        )
+        method_typed: schemas.MatchMethod | None = cast(schemas.MatchMethod, "by wickets")
         result_text = f"{getattr(g, 'batting_team_name', '')} won by {margin} wickets"
         g.result = schemas.MatchResult(
             winner_team_name=str(getattr(g, "batting_team_name", "")),
@@ -615,9 +613,7 @@ def _recompute_totals_and_runtime(g: Any) -> None:
     if g.balls_this_over > 0:
         g.current_bowler_id = getattr(g, "current_bowler_id", None) or cur_over_bowler
     else:
-        if legal_balls > 0 and str(preselected_bowler or "") == str(
-            last_legal_bowler or ""
-        ):
+        if legal_balls > 0 and str(preselected_bowler or "") == str(last_legal_bowler or ""):
             g.current_bowler_id = None
         else:
             g.current_bowler_id = preselected_bowler
@@ -772,9 +768,7 @@ def _runs_wkts_balls_for_innings(g: Any, inning: int) -> tuple[int, int, int]:
     wkts: int = 0
     balls: int = 0
 
-    ledger: Sequence[Mapping[str, Any]] = cast(
-        Sequence[Mapping[str, Any]], (g.deliveries or [])
-    )
+    ledger: Sequence[Mapping[str, Any]] = cast(Sequence[Mapping[str, Any]], (g.deliveries or []))
 
     for d in ledger:
         if int(d.get("inning", 1) or 1) != int(inning):
@@ -824,9 +818,7 @@ def _maybe_finalize_match(g: Any) -> None:
         batting_name = getattr(g, "batting_team_name", None)
         if not batting_name:
             batting_name = (
-                team_b_name
-                if inning >= 2 and team_b_name
-                else team_a_name or team_b_name
+                team_b_name if inning >= 2 and team_b_name else team_a_name or team_b_name
             )
 
     bowling_name = getattr(g, "bowling_team_name", None)

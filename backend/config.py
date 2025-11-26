@@ -21,9 +21,7 @@ _DEFAULT_CORS = [
 class Settings(BaseSettings):
     """Runtime configuration sourced from environment/Secrets Manager."""
 
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     API_TITLE: str = Field(default="Cricksy Scorer API", alias="CRICKSY_API_TITLE")
     DATABASE_URL: str = Field(..., alias="DATABASE_URL")
@@ -34,9 +32,7 @@ class Settings(BaseSettings):
     )
     IN_MEMORY_DB: bool = Field(default=False, alias="CRICKSY_IN_MEMORY_DB")
     STATIC_ROOT: Path = Field(default=_ROOT / "static", alias="CRICKSY_STATIC_ROOT")
-    SPONSORS_DIR: Path = Field(
-        default=_ROOT / "static" / "sponsors", alias="CRICKSY_SPONSORS_DIR"
-    )
+    SPONSORS_DIR: Path = Field(default=_ROOT / "static" / "sponsors", alias="CRICKSY_SPONSORS_DIR")
     SIO_CORS_ALLOWED_ORIGINS: str | list[str] = Field(
         default="*",
         alias="CRICKSY_SIO_CORS_ORIGINS",

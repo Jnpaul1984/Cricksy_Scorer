@@ -62,9 +62,7 @@ async def test_add_team_to_tournament(mock_session):
 
     # Mock the get_tournament call
     with (
-        patch.object(
-            tournament_crud, "get_tournament", return_value=tournament
-        ) as mock_get,
+        patch.object(tournament_crud, "get_tournament", return_value=tournament) as mock_get,
         patch.object(mock_session, "add") as mock_add,
         patch.object(mock_session, "commit") as mock_commit,
         patch.object(mock_session, "refresh") as mock_refresh,
@@ -182,12 +180,8 @@ async def test_get_points_table(mock_session):
         ),
     ]
 
-    with patch.object(
-        tournament_crud, "get_tournament_teams", return_value=teams
-    ) as mock_get:
-        result = await tournament_crud.get_points_table(
-            mock_session, "test-tournament-id"
-        )
+    with patch.object(tournament_crud, "get_tournament_teams", return_value=teams) as mock_get:
+        result = await tournament_crud.get_points_table(mock_session, "test-tournament-id")
 
         mock_get.assert_called_once_with(mock_session, "test-tournament-id")
         assert len(result) == 2

@@ -57,35 +57,21 @@ def upgrade() -> None:
         sa.Column("player_id", sa.String(), nullable=False),
         sa.Column("player_name", sa.String(), nullable=False),
         sa.Column("total_matches", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column(
-            "total_innings_batted", sa.Integer(), nullable=False, server_default="0"
-        ),
-        sa.Column(
-            "total_runs_scored", sa.Integer(), nullable=False, server_default="0"
-        ),
-        sa.Column(
-            "total_balls_faced", sa.Integer(), nullable=False, server_default="0"
-        ),
+        sa.Column("total_innings_batted", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("total_runs_scored", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("total_balls_faced", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("total_fours", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("total_sixes", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("times_out", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("highest_score", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("centuries", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("half_centuries", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column(
-            "total_innings_bowled", sa.Integer(), nullable=False, server_default="0"
-        ),
-        sa.Column(
-            "total_overs_bowled", sa.Float(), nullable=False, server_default="0.0"
-        ),
-        sa.Column(
-            "total_runs_conceded", sa.Integer(), nullable=False, server_default="0"
-        ),
+        sa.Column("total_innings_bowled", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("total_overs_bowled", sa.Float(), nullable=False, server_default="0.0"),
+        sa.Column("total_runs_conceded", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("total_wickets", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("best_bowling_figures", sa.String(), nullable=True),
-        sa.Column(
-            "five_wicket_hauls", sa.Integer(), nullable=False, server_default="0"
-        ),
+        sa.Column("five_wicket_hauls", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("maidens", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("catches", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("stumpings", sa.Integer(), nullable=False, server_default="0"),
@@ -110,12 +96,8 @@ def upgrade() -> None:
         ["total_runs_scored", "times_out"],
     )
     op.create_index("ix_player_profiles_player_id", "player_profiles", ["player_id"])
-    op.create_index(
-        "ix_player_profiles_total_runs", "player_profiles", ["total_runs_scored"]
-    )
-    op.create_index(
-        "ix_player_profiles_total_wickets", "player_profiles", ["total_wickets"]
-    )
+    op.create_index("ix_player_profiles_total_runs", "player_profiles", ["total_runs_scored"])
+    op.create_index("ix_player_profiles_total_wickets", "player_profiles", ["total_wickets"])
 
     op.create_table(
         "player_achievements",
@@ -136,24 +118,14 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.Column(
-            "achievement_metadata", sa.JSON(), nullable=False, server_default="{}"
-        ),
+        sa.Column("achievement_metadata", sa.JSON(), nullable=False, server_default="{}"),
         sa.ForeignKeyConstraint(["game_id"], ["games.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(
-            ["player_id"], ["player_profiles.player_id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["player_id"], ["player_profiles.player_id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "ix_player_achievements_earned_at", "player_achievements", ["earned_at"]
-    )
-    op.create_index(
-        "ix_player_achievements_player_id", "player_achievements", ["player_id"]
-    )
-    op.create_index(
-        "ix_player_achievements_type", "player_achievements", ["achievement_type"]
-    )
+    op.create_index("ix_player_achievements_earned_at", "player_achievements", ["earned_at"])
+    op.create_index("ix_player_achievements_player_id", "player_achievements", ["player_id"])
+    op.create_index("ix_player_achievements_type", "player_achievements", ["achievement_type"])
 
 
 def downgrade() -> None:
