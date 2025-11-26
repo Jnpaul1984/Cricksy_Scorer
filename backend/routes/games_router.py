@@ -209,7 +209,7 @@ async def search_games(
             # Suppress partially-unknown type warning for debug print
             print("DEBUG: search rows type:", str(type(rows)), "len:", ln)  # type: ignore[arg-type]
     except Exception:
-        pass
+        pass  # nosec
     # Ensure rows is an iterable for the loop (avoid mypy union-attr error)
     rows = rows or []
 

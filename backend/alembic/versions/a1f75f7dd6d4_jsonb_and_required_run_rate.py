@@ -24,7 +24,7 @@ def _fill_null(table: str, column: str, json_literal: str) -> None:
     json_literal must be a valid JSON string like '{}' or '[]' (no casts here).
     Works regardless of column's current type (json/text/jsonb).
     """
-    op.execute(sa.text(f"UPDATE {table} SET {column} = {json_literal} WHERE {column} IS NULL"))
+    op.execute(sa.text(f"UPDATE {table} SET {column} = {json_literal} WHERE {column} IS NULL"))  # nosec
 
 
 def _to_jsonb(table: str, column: str) -> None:

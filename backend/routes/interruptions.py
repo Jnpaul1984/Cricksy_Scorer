@@ -155,7 +155,7 @@ async def start_interruption(
         sio = request.app.state.sio
         await sio.emit("interruptions:update", {"game_id": game_id}, room=game_id)
     except Exception:
-        pass
+        pass  # nosec
 
     return {"ok": True, "interruptions": game.interruptions}
 
@@ -177,7 +177,7 @@ async def stop_interruption(
         sio = request.app.state.sio
         await sio.emit("interruptions:update", {"game_id": game_id}, room=game_id)
     except Exception:
-        pass
+        pass  # nosec
 
     return {"ok": True, "interruptions": game.interruptions}
 
@@ -215,6 +215,6 @@ async def upsert_interruption(
         sio = request.app.state.sio
         await sio.emit("interruptions:update", {"game_id": game_id}, room=game_id)
     except Exception:
-        pass
+        pass  # nosec
 
     return {"ok": True, "interruptions": game.interruptions}

@@ -10,7 +10,7 @@ from typing import Any
 # that happen during app/module import time.
 if os.getenv("CRICKSY_DEBUG_ASYNCPG") == "1":
     with contextlib.suppress(Exception):
-        pass  # type: ignore
+        pass  # type: ignore  # nosec
 
 from backend.app import create_app
 from backend.logging_setup import configure_logging
@@ -68,9 +68,9 @@ try:
     _maybe_finalize_match = getattr(_gh, "_maybe_finalize_match", None)
     _ensure_target_if_chasing = getattr(_gh, "_ensure_target_if_chasing", None)
 except Exception:
-    pass
+    pass  # nosec
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)  # nosec

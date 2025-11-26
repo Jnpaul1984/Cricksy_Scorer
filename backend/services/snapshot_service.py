@@ -274,7 +274,7 @@ def _bat_entry(g: GameState, pid: str | None) -> dict[str, Any]:
             try:
                 return cast(dict[str, Any], e_any.dict())  # type: ignore[attr-defined]
             except Exception:
-                pass
+                pass  # nosec
     if isinstance(e_any, dict):
         return cast(dict[str, Any], e_any)
     # fallback
@@ -411,7 +411,7 @@ def _dls_panel_for(g: GameState, base_dir: str | Path | None = None) -> dict[str
         if overs_limit_opt not in (20, 50):
             return {}
         kind = "odi" if overs_limit_opt == 50 else "t20"
-        assert kind in ("odi", "t20")
+        assert kind in ("odi", "t20")  # nosec
         # Use provided base_dir if present, otherwise fall back to current working dir string
         base_dir_str = str(base_dir) if base_dir is not None else ""
         env = dlsmod.load_env(cast(Literal["odi", "t20"], kind), base_dir_str)

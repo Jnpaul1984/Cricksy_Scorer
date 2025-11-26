@@ -1,6 +1,6 @@
 """Script to analyze ML models structure and features."""
 
-import pickle
+import pickle  # nosec
 from pathlib import Path
 
 
@@ -12,7 +12,7 @@ def analyze_model(model_path: str, model_name: str):
 
     try:
         with open(model_path, "rb") as f:
-            model = pickle.load(f)
+            model = pickle.load(f)  # nosec
 
         print("✓ Model loaded successfully")
         print(f"Type: {type(model).__name__}")

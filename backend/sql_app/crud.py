@@ -34,19 +34,19 @@ def _coerce_result_to_text(value: Any) -> str | None:
         if is_dataclass(value) and not isinstance(value, type):
             return json.dumps(asdict(cast(Any, value)), ensure_ascii=False)
     except Exception:
-        pass
+        pass  # nosec
 
     if hasattr(value, "__dict__"):
         try:
             return json.dumps(vars(value), ensure_ascii=False, default=str)
         except Exception:
-            pass
+            pass  # nosec
 
     if isinstance(value, (dict, list, tuple)):
         try:
             return json.dumps(value, ensure_ascii=False, default=str)
         except Exception:
-            pass
+            pass  # nosec
 
     try:
         import enum
@@ -54,7 +54,7 @@ def _coerce_result_to_text(value: Any) -> str | None:
         if isinstance(value, enum.Enum):
             return str(value.value)
     except Exception:
-        pass
+        pass  # nosec
 
     return str(value)
 

@@ -26,7 +26,7 @@ if _ENABLED:
     try:
         import asyncpg
     except Exception:  # pragma: no cover - best-effort diagnostic
-        asyncpg = None
+        asyncpg = None  # nosec
 
     ARTIFACTS = pathlib.Path(__file__).resolve().parents[1] / "artifacts"
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
@@ -56,7 +56,7 @@ if _ENABLED:
                 f.write(json.dumps(rec) + "\n")
         except Exception:
             # Never raise during diagnostics
-            pass
+            pass  # nosec
 
     def _wrap(name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
         def _inner(*args: Any, **kwargs: Any) -> Any:

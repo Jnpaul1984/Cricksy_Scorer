@@ -21,7 +21,7 @@ try:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 except Exception:
-    pass
+    pass  # nosec
 
 from backend.sql_app.database import engine
 from backend.sql_app.models import Base

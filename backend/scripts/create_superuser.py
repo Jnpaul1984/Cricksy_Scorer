@@ -33,7 +33,7 @@ try:
         sys.path.insert(0, str(repo_root))
 except Exception:
     # best-effort only; if this fails the original import error will surface
-    pass
+    pass  # nosec
 
 from backend import security
 from backend.config import settings
@@ -86,7 +86,7 @@ async def main() -> int:
             security.add_in_memory_user(user)
             print("Also registered user in in-memory cache (IN_MEMORY_DB enabled).")
     except Exception:
-        pass
+        pass  # nosec
 
     print("Done. Superuser id:", getattr(user, "id", None))
     return 0

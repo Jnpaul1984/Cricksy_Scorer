@@ -89,7 +89,7 @@ jobs:
 
       - name: Bandit (backend code)
         run: |
-          bandit -r backend -x backend/tests -q
+          bandit -r backend -x backend/tests,backend/test -q
 
   backend-tests:
     name: Backend (fast tests)

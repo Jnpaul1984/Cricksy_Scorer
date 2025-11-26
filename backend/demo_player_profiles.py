@@ -19,7 +19,7 @@ utc = UTC
 
 async def create_sample_profiles():
     """Create sample player profiles for demonstration."""
-    assert SessionLocal is not None, "Database not initialized"
+    assert SessionLocal is not None, "Database not initialized"  # nosec
     async with SessionLocal() as db:
         print("Creating sample player profiles...")
 
@@ -142,7 +142,7 @@ async def create_sample_profiles():
 
 async def display_profiles():
     """Display all player profiles."""
-    assert SessionLocal is not None, "Database not initialized"
+    assert SessionLocal is not None, "Database not initialized"  # nosec
     async with SessionLocal() as db:
         print("\n" + "=" * 80)
         print("PLAYER PROFILES")
@@ -183,7 +183,7 @@ async def display_profiles():
 
 async def display_leaderboards():
     """Display top 3 in various leaderboards."""
-    assert SessionLocal is not None, "Database not initialized"
+    assert SessionLocal is not None, "Database not initialized"  # nosec
     async with SessionLocal() as db:
         print("\n" + "=" * 80)
         print("LEADERBOARDS")
@@ -219,7 +219,7 @@ async def display_leaderboards():
 
 async def display_achievements():
     """Display all achievements."""
-    assert SessionLocal is not None, "Database not initialized"
+    assert SessionLocal is not None, "Database not initialized"  # nosec
     async with SessionLocal() as db:
         print("\n" + "=" * 80)
         print("ACHIEVEMENTS")

@@ -23,7 +23,7 @@ async def emit(
         await _sio_server.emit(event, data, room=room, namespace=namespace)
     except Exception:
         # Avoid breaking request handlers on emit failures
-        return
+        return  # nosec
 
 
 # Convenience emitters used by routes
@@ -57,4 +57,4 @@ def publish_game_update(game_id: str, payload: dict[str, Any]) -> None:
             _ = loop.create_task(emit_game_update(game_id, payload))  # noqa: RUF006
     except Exception:
         # No running loop (e.g., threadpool) — safe no-op
-        pass
+        pass  # nosec

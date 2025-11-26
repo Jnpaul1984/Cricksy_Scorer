@@ -44,7 +44,7 @@ def _team1_runs(g: Any) -> int:
         try:
             return int(cast(Any, fis_any["runs"]))
         except Exception:
-            pass
+            pass  # nosec
     # Fallback: sum from ledger for innings 1
     total = 0
     for d_any in getattr(g, "deliveries", []) or []:

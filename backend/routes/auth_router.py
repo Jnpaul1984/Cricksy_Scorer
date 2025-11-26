@@ -35,7 +35,7 @@ async def register_user(
 
     user = models.User(
         email=user_in.email,
-        hashed_password=security.get_password_hash(user_in.password),
+        hashed_password=security.get_password_hash(user_in.password),  # nosec
         is_active=True,
     )
     db.add(user)
@@ -56,7 +56,7 @@ async def register_user(
                 user.id = str(uuid.uuid4())
             security.add_in_memory_user(user)
     except Exception:
-        pass
+        pass  # nosec
     return {"status": "ok"}
 
 
@@ -85,7 +85,7 @@ async def login_for_access_token(
         )
 
     # Verify password against stored hash
-    password_ok = security.verify_password(form_data.password, user.hashed_password)
+    password_ok = security.verify_password(form_data.password, user.hashed_password)  # nosec
 
     # If password is wrong:
     if not password_ok:

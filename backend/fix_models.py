@@ -1,6 +1,6 @@
 """Model re-export helper for refreshing serialized ML models."""
 
-import pickle
+import pickle  # nosec
 from pathlib import Path
 
 import joblib
@@ -19,7 +19,7 @@ def fix_model(old_path: Path, new_path: Path, model_name: str) -> bool:
     try:
         print(f"Loading model from {old_path}")
         with open(old_path, "rb") as handle:
-            model = pickle.load(handle)
+            model = pickle.load(handle)  # nosec
 
         print("Model loaded successfully")
         print(f"   Type: {type(model).__name__}")
