@@ -35,10 +35,10 @@ except Exception:
     # best-effort only; if this fails the original import error will surface
     pass
 
+from backend import security
 from backend.config import settings
 from backend.sql_app import models
 from backend.sql_app.database import SessionLocal
-from backend import security
 
 
 async def main() -> int:

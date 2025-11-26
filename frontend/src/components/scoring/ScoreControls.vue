@@ -58,7 +58,15 @@ function closeWicket() { showWicketModal.value = false }
     <div class="runs">
       <h4>Runs</h4>
       <div class="runs-grid">
-        <button v-for="r in [0,1,2,3,4,5,6]" :key="r" :disabled="!canScore" @click="doScoreRuns(r)">{{ r }}</button>
+        <button
+          v-for="r in [0,1,2,3,4,5,6]"
+          :key="r"
+          :disabled="!canScore"
+          :data-testid="`run-${r}`"
+          @click="doScoreRuns(r)"
+        >
+          {{ r }}
+        </button>
       </div>
     </div>
 

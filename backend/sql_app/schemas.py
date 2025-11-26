@@ -308,7 +308,7 @@ class TeamRoleUpdate(BaseModel):
 class MatchMethod(str, Enum):
     by_runs = "by runs"
     by_wickets = "by wickets"
-    tie = "tie"  # ... existing code ...
+    tie = "tie"
     no_result = "no result"
 
 
@@ -331,7 +331,7 @@ class MatchResult(BaseModel):
 
 
 class MatchResultRequest(BaseModel):
-    match_id: UUID  # ... existing code ...
+    match_id: UUID
     winner: str | None = None  # ID or name of the winning team or None for tie/no result
     team_a_score: int  # Total score of Team A
     team_b_score: int | None = None  # Total score of Team B (nullable for incomplete)
@@ -349,7 +349,7 @@ class MatchResultRequest(BaseModel):
 
 
 class Game(BaseModel):
-    game_id: str = Field(default=..., alias="id")
+    id: str
 
     # Teams (stored as JSON in DB)
     team_a: Team
@@ -378,12 +378,14 @@ class Game(BaseModel):
     balls_this_over: int
     current_striker_id: str | None = None
     current_non_striker_id: str | None = None
+    current_bowler_id: str | None = None
     first_inning_summary: dict[str, Any] | None = None
     target: int | None = None
 
     # --- Result / completion (NEW / updated) ---
     result: MatchResult | MatchResultRequest | None = None
     is_game_over: bool = False
+    needs_new_innings: bool = False
     completed_at: dt.datetime | None = None
 
     # --- Team roles ---

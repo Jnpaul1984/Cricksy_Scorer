@@ -21,6 +21,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -297,6 +298,14 @@ class Game(Base):
         team_a_score = self.batting_scorecard.get("total", 0)
         team_b_score = self.bowling_scorecard.get("total", 0)
         return team_a_score, team_b_score
+
+    @property
+    def is_game_over(self) -> bool:
+        return self.status in (GameStatus.completed, GameStatus.abandoned)
+
+    @property
+    def needs_new_innings(self) -> bool:
+        return self.status == GameStatus.innings_break
 
 
 # ---------- Pydantic payloads you already had ----------
@@ -634,7 +643,11 @@ class PlayerCoachingNotes(Base):
     weaknesses: Mapped[str] = mapped_column(Text, nullable=False)
     action_plan: Mapped[str | None] = mapped_column(Text, nullable=True)
     visibility: Mapped[PlayerCoachingNoteVisibility] = mapped_column(
-        SAEnum(PlayerCoachingNoteVisibility, name="coaching_note_visibility"),
+        postgresql.ENUM(
+            PlayerCoachingNoteVisibility,
+            name="coaching_note_visibility",
+            create_type=False,
+        ),
         nullable=False,
         default=PlayerCoachingNoteVisibility.private_to_coach,
         server_default=PlayerCoachingNoteVisibility.private_to_coach.value,
@@ -784,7 +797,11 @@ class FanFavorite(Base):
         index=True,
     )
     favorite_type: Mapped[FanFavoriteType] = mapped_column(
-        SAEnum(FanFavoriteType, name="fan_favorite_type"),
+        postgresql.ENUM(
+            FanFavoriteType,
+            name="fan_favorite_type",
+            create_type=False,
+        ),
         nullable=False,
     )
     player_profile_id: Mapped[str | None] = mapped_column(

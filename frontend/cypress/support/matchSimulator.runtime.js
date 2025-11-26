@@ -179,6 +179,114 @@ function mapPlayers(players) {
   return m
 }
 
+async function createLiveGame(apiBase, { oversLimit = 2 } = {}) {
+  const teamAName = `Cypress A ${Date.now()}`
+  const teamBName = `Cypress B ${Date.now()}`
+  const playersA = Array.from({ length: 11 }, (_, i) => `A Player ${i + 1}`)
+  const playersB = Array.from({ length: 11 }, (_, i) => `B Player ${i + 1}`)
+
+  const game = await httpRequest(apiBase, '/games', {
+    method: 'POST',
+    body: {
+      team_a_name: teamAName,
+      team_b_name: teamBName,
+      players_a: playersA,
+      players_b: playersB,
+      match_type: 'limited',
+      overs_limit: oversLimit,
+      toss_winner_team: teamAName,
+      decision: 'bat',
+    },
+  })
+
+  const gameId = game.id
+  const teamAPlayers = game?.team_a?.players || []
+  const teamBPlayers = game?.team_b?.players || []
+
+  const strikerId = teamAPlayers[0]?.id
+  const nonStrikerId = teamAPlayers[1]?.id
+  const bowlerId = teamBPlayers[0]?.id
+
+  if (!strikerId || !nonStrikerId || !bowlerId) {
+    throw new Error('Missing player ids to start live game')
+  }
+
+  await httpRequest(apiBase, `/games/${encodeURIComponent(gameId)}/innings/start`, {
+    method: 'POST',
+    body: {
+      striker_id: strikerId,
+      non_striker_id: nonStrikerId,
+      opening_bowler_id: bowlerId,
+    },
+  })
+
+  // await startOver(apiBase, gameId, bowlerId)
+
+  return {
+    gameId,
+    strikerId,
+    nonStrikerId,
+    bowlerId,
+    teamAPlayers,
+    teamBPlayers,
+    teamAName,
+    teamBName,
+    nextBowlerId: teamBPlayers[1]?.id ?? null,
+  }
+}
+
+async function bowlLegalBalls(apiBase, gameId, ctx, count = 6) {
+  let striker = ctx.strikerId
+  let nonStriker = ctx.nonStrikerId
+  for (let i = 0; i < count; i += 1) {
+    await postDelivery(apiBase, gameId, {
+      striker_id: striker,
+      non_striker_id: nonStriker,
+      bowler_id: ctx.bowlerId,
+      runs_scored: (i % 2) + 1,
+      is_wicket: false,
+    })
+    // rotate on odd runs
+    if (((i % 2) + 1) % 2 === 1) {
+      ;[striker, nonStriker] = [nonStriker, striker]
+    }
+  }
+  return { striker, nonStriker }
+}
+
+async function seedOverComplete(apiBase, opts = {}) {
+  const live = await createLiveGame(apiBase, opts)
+  await bowlLegalBalls(apiBase, live.gameId, live, 6)
+  return live
+}
+
+async function seedInningsBreak(apiBase, opts = {}) {
+  const live = await createLiveGame(apiBase, { oversLimit: 1, ...opts })
+  await bowlLegalBalls(apiBase, live.gameId, live, 6)
+  // Best-effort nudge backend into innings break if supported
+  try {
+    await httpRequest(apiBase, `/games/${encodeURIComponent(live.gameId)}/innings/end`, {
+      method: 'POST',
+    })
+  } catch {
+    /* ignore if endpoint not supported */
+  }
+  return live
+}
+
+async function seedWeatherDelay(apiBase, opts = {}) {
+  const live = await createLiveGame(apiBase, opts)
+  try {
+    await httpRequest(apiBase, `/games/${encodeURIComponent(live.gameId)}/interruptions/start`, {
+      method: 'POST',
+      body: { kind: 'weather', note: 'Cypress weather pause' },
+    })
+  } catch {
+    /* non-fatal; interruption banner may not show */
+  }
+  return live
+}
+
 export async function seedMatch(apiBase, frontendDir) {
   try {
     const fx = loadFixture(frontendDir)
@@ -209,11 +317,12 @@ export async function seedMatch(apiBase, frontendDir) {
 
     const [inn1, inn2] = fx.innings
 
-    await httpRequest(apiBase, `/games/${encodeURIComponent(gameId)}/openers`, {
+    await httpRequest(apiBase, `/games/${encodeURIComponent(gameId)}/innings/start`, {
       method: 'POST',
       body: {
         striker_id: teamAIds.get(inn1.opening_pair.striker),
         non_striker_id: teamAIds.get(inn1.opening_pair.non_striker),
+        opening_bowler_id: teamBIds.get((inn1.balls[0] || {}).bowler),
       },
     })
 
@@ -265,4 +374,11 @@ export async function seedMatch(apiBase, frontendDir) {
     console.error('[matchSimulator] seedMatch error', err)
     throw err
   }
+}
+
+export {
+  createLiveGame,
+  seedOverComplete,
+  seedInningsBreak,
+  seedWeatherDelay,
 }

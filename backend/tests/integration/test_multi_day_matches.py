@@ -35,8 +35,9 @@ class TestMultiDayMatchCreation:
         assert game_data["match_type"] == "multi_day"
         assert game_data["days_limit"] == 5
         assert game_data["overs_limit"] is None
-        assert game_data["status"] == "IN_PROGRESS"
-        assert game_data["current_inning"] == 1
+        # Game starts in INNINGS_BREAK waiting for openers
+        assert game_data["status"] == "INNINGS_BREAK"
+        assert game_data["current_inning"] == 0
 
     def test_create_three_day_match(self, game_helper: GameHelper):
         """

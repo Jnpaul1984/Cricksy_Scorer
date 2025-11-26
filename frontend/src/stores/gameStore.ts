@@ -446,6 +446,7 @@ export const useGameStore = defineStore('game', () => {
   const connectionStatus = ref<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
   const lastLiveAt = ref<number | null>(null)
   const liveSnapshot = ref<UiSnapshot | null>(null)
+  const snapshot = ref<UiSnapshot | null>(null)
   const recentDeliveries = ref<any[]>([])
   const loadingSnapshot = ref(false)
   const loadingRecentDeliveries = ref(false)
@@ -502,9 +503,13 @@ export const useGameStore = defineStore('game', () => {
   const normalizeStatus = (status: unknown): string =>
     String(status ?? '').toLowerCase()
 
-  const isGameActive = computed<boolean>(
-    () => normalizeStatus(currentGame.value?.status) === 'in_progress'
-  )
+  const isGameActive = computed<boolean>(() => {
+    const snap = snapshot.value ?? liveSnapshot.value ?? null
+    if (!snap?.status) return false
+
+    const normalizedStatus = String(snap.status).replace(/^GAMESTATUS\./, '')
+    return normalizedStatus === 'IN_PROGRESS'
+  })
   const isInningsBreak = computed<boolean>(
     () => normalizeStatus(currentGame.value?.status) === 'innings_break'
   )
@@ -582,23 +587,56 @@ export const useGameStore = defineStore('game', () => {
     return all.find(p => p.id === pid) || null
   })
 
-  const canScoreDelivery = computed<boolean>(() => {
+const canScoreDelivery = computed<boolean>(() => {
+    const snap = snapshot.value ?? liveSnapshot.value ?? null
+    const game = currentGame.value ?? null
+
     const backendFlag =
-      (liveSnapshot.value as any)?.canScore ??
-      (liveSnapshot.value as any)?.can_score ??
-      (currentGame.value as any)?.canScore ??
-      (currentGame.value as any)?.can_score ??
+      (snap as any)?.canScore ??
+      (snap as any)?.can_score ??
+      (game as any)?.canScore ??
+      (game as any)?.can_score ??
       true
 
-    if (!backendFlag) return false
+    const strikerId = uiState.value.selectedStrikerId
+    const nonStrikerId = uiState.value.selectedNonStrikerId
+    const bowlerId = uiState.value.selectedBowlerId
 
-    return Boolean(
+    const needsNewOver = Boolean((snap as any)?.needs_new_over)
+    const needsNewBatter = Boolean((snap as any)?.needs_new_batter)
+    const needsNewInnings = Boolean((snap as any)?.needs_new_innings)
+    const isGameOverSnapshot = Boolean((snap as any)?.is_game_over)
+
+    const legacyCanScore = Boolean(
       isGameActive.value &&
-      uiState.value.selectedStrikerId &&
-      uiState.value.selectedNonStrikerId &&
-      uiState.value.selectedBowlerId &&
-      uiState.value.selectedStrikerId !== uiState.value.selectedNonStrikerId
+      strikerId &&
+      nonStrikerId &&
+      strikerId !== nonStrikerId &&
+      bowlerId &&
+      !needsNewOver &&
+      !needsNewBatter &&
+      !needsNewInnings &&
+      !isGameOverSnapshot &&
+      !uiState.value.scoringDisabled &&
+      !uiState.value.loading
     )
+
+    if (import.meta.env.DEV) {
+      console.debug('[canScore debug]', {
+        backendFlag,
+        legacyCanScore,
+        strikerId,
+        nonStrikerId,
+        bowlerId,
+        needs_new_over: (snap as any)?.needs_new_over,
+        needs_new_batter: (snap as any)?.needs_new_batter,
+        needs_new_innings: (snap as any)?.needs_new_innings,
+        is_game_over: (snap as any)?.is_game_over,
+        finalCanScore: Boolean(backendFlag && legacyCanScore),
+      })
+    }
+
+    return Boolean(backendFlag && legacyCanScore)
   })
 
   // ========================================================================
@@ -709,16 +747,6 @@ async function backfillRecentDeliveries(limit = 60): Promise<void> {
       const exists = g.deliveries.some(x => deliveryKey(x as any) === k)
       if (!exists) g.deliveries.push(d as any)
     }
-    console.log('deliveries total', g.deliveries.length)
-    console.log('current inning', g.current_inning)
-    console.log(
-      'by inning',
-      g.deliveries.reduce((m: Record<number, number>, d: any) => {
-        const inn = d.inning_no || 0
-        m[inn] = (m[inn] || 0) + 1
-        return m
-      }, {})
-    )
   } catch {
     /* non-fatal – just skip */
   }
@@ -1528,6 +1556,25 @@ function deliveryKey(d: LooseDelivery): string {
     const g = currentGame.value as GameState | null
     if (!g || !s) return
 
+    const snapshotRecord = s as any
+    liveSnapshot.value = snapshotRecord
+    ;(currentGame.value as any).snapshot = snapshotRecord
+    snapshot.value = snapshotRecord
+
+    const hasOwnKey = (key: string) => Object.prototype.hasOwnProperty.call(snapshotRecord, key)
+    const strikerId =
+      hasOwnKey('current_striker_id')
+        ? snapshotRecord.current_striker_id
+        : snapshotRecord.batsmen?.striker?.id ?? undefined
+    const nonStrikerId =
+      hasOwnKey('current_non_striker_id')
+        ? snapshotRecord.current_non_striker_id
+        : snapshotRecord.batsmen?.non_striker?.id ?? undefined
+    const bowlerId =
+      hasOwnKey('current_bowler_id')
+        ? snapshotRecord.current_bowler_id
+        : snapshotRecord.current_bowler?.id ?? undefined
+
     // ⬇️ ADD: clear previous-innings state when the inning number changes
     const prevInning = g.current_inning
     if (typeof s.current_inning === 'number' && s.current_inning !== prevInning) {
@@ -1544,11 +1591,6 @@ function deliveryKey(d: LooseDelivery): string {
     }
 
 
-    // Also reset UI selections so pickers show the correct (new) teams
-    uiState.value.selectedStrikerId = null
-    uiState.value.selectedNonStrikerId = null
-    uiState.value.selectedBowlerId = null
-
     if (s.total_runs != null) g.total_runs = s.total_runs
     if (s.total_wickets != null) g.total_wickets = s.total_wickets
     if (s.overs_completed != null) g.overs_completed = s.overs_completed
@@ -1560,8 +1602,13 @@ function deliveryKey(d: LooseDelivery): string {
     const prevBowlName = g.bowling_team_name
     if (s.batting_team_name != null) g.batting_team_name = s.batting_team_name
     if (s.bowling_team_name != null) g.bowling_team_name = s.bowling_team_name
-    // If the team names changed, nuke stale picks
-    if (g.batting_team_name !== prevBatName || g.bowling_team_name !== prevBowlName) {
+
+    // Reset UI selections BEFORE applying new ones (especially if teams changed)
+    const teamsChanged = g.batting_team_name !== prevBatName || g.bowling_team_name !== prevBowlName
+    const statusStr = String(g.status || '').toLowerCase()
+    const isActiveGame = ['in_progress', 'started', 'live'].includes(statusStr)
+    // Only reset UI state if teams changed AND we're not in the middle of an active innings
+    if (teamsChanged && !isActiveGame) {
       uiState.value.selectedStrikerId = null
       uiState.value.selectedNonStrikerId = null
       uiState.value.selectedBowlerId = null
@@ -1569,6 +1616,7 @@ function deliveryKey(d: LooseDelivery): string {
 
     if ((s as any).needs_new_batter != null) (currentGame.value as any).needs_new_batter = Boolean((s as any).needs_new_batter)
     if ((s as any).needs_new_over   != null) (currentGame.value as any).needs_new_over   = Boolean((s as any).needs_new_over)
+    if ((s as any).needs_new_innings != null) (currentGame.value as any).needs_new_innings = Boolean((s as any).needs_new_innings)
 
     // Merge cards only if present
     if (s.batting_scorecard && Object.keys(s.batting_scorecard).length > 0) {
@@ -1578,32 +1626,30 @@ function deliveryKey(d: LooseDelivery): string {
       g.bowling_scorecard = mergeScorecard(g.bowling_scorecard as any, s.bowling_scorecard as any) as any
     }
 
+
     const hasDistinct =
-      s.current_striker_id != null &&
-      s.current_non_striker_id != null &&
-      s.current_striker_id !== s.current_non_striker_id
+      strikerId != null &&
+      nonStrikerId != null &&
+      strikerId !== nonStrikerId
 
+    // ALWAYS apply striker/non-striker/bowler from snapshot if present (not just when teams change)
+    if (strikerId !== undefined) g.current_striker_id = strikerId
+    if (nonStrikerId !== undefined) g.current_non_striker_id = nonStrikerId
+    if (bowlerId !== undefined) (currentGame.value as any).current_bowler_id = bowlerId
+
+    // ALWAYS sync UI state from snapshot IDs (overwrite even if already set)
     if (hasDistinct) {
-      g.current_striker_id = s.current_striker_id!
-      g.current_non_striker_id = s.current_non_striker_id!
-      uiState.value.selectedStrikerId = s.current_striker_id!
-      uiState.value.selectedNonStrikerId = s.current_non_striker_id!
+      uiState.value.selectedStrikerId = String(strikerId)
+      uiState.value.selectedNonStrikerId = String(nonStrikerId)
     } else {
-      // still mirror onto game object if provided, but don’t clobber UI picks yet
-      if (s.current_striker_id != null) g.current_striker_id = s.current_striker_id
-      if (s.current_non_striker_id != null) g.current_non_striker_id = s.current_non_striker_id
+      // Even if not distinct, set UI state if we have values
+      if (strikerId) uiState.value.selectedStrikerId = String(strikerId)
+      if (nonStrikerId) uiState.value.selectedNonStrikerId = String(nonStrikerId)
     }
 
-    // 🔧 bowler from snapshot should drive scoring gate
-    const nextBowler = (s as any).current_bowler_id ?? null
-    if (nextBowler !== null) {
-      ;(currentGame.value as any).current_bowler_id = nextBowler
-      uiState.value.selectedBowlerId = nextBowler
+    if (bowlerId) {
+      uiState.value.selectedBowlerId = String(bowlerId)
     }
-    // Runtime bowling context
-    const nextCurrentBowlerId =
-      (s as any).current_bowler_id ?? (currentGame.value as any).current_bowler_id ?? null
-    ;(currentGame.value as any).current_bowler_id = nextCurrentBowlerId
 
     const nextLastBallBowlerId =
       (s as any).last_ball_bowler_id ?? (currentGame.value as any).last_ball_bowler_id ?? null
@@ -1629,6 +1675,17 @@ function deliveryKey(d: LooseDelivery): string {
     }
 
 
+    if (import.meta.env.DEV) {
+      console.debug('[applySnapshotToGame]', {
+        status: snapshotRecord.status,
+        current_striker_id: snapshotRecord.current_striker_id,
+        current_non_striker_id: snapshotRecord.current_non_striker_id,
+        current_bowler_id: snapshotRecord.current_bowler_id,
+        store_striker_id: (currentGame.value as any).current_striker_id,
+        store_non_striker_id: (currentGame.value as any).current_non_striker_id,
+        store_bowler_id: (currentGame.value as any).current_bowler_id,
+      })
+    }
 
     stabilizeBattersFromLastDelivery(g, s)
   }
@@ -1686,13 +1743,6 @@ function deliveryKey(d: LooseDelivery): string {
       /* ignore */
     }
   }
-
-  console.log(
-    '[applySnapshotToGame] inning',
-    (currentGame.value as any)?.current_inning,
-    'deliveries:',
-    (currentGame.value as any)?.deliveries?.length
-  )
 
   let presenceInitHandler: ((p: { game_id: string; members: Array<{ sid: string; role: string; name: string }> }) => void) | null = null
   let commentaryHandler: ((payload: { game_id: string; text: string; at: string }) => void) | null = null
@@ -1966,6 +2016,7 @@ async function postDeliveryAuthoritative(
       : await apiService.getGame(gameId)
     currentGame.value = coerceGameFromApi(game)
     interruptions.value = ((currentGame.value as any)?.interruptions ?? []).map(normalizeInterruption)
+
     // Pull a fresh snapshot & wire DLS panel if present
     try {
       await fetchSnapshot(gameId)
@@ -1973,6 +2024,24 @@ async function postDeliveryAuthoritative(
       await fetchRecentDeliveries(gameId, 12)
       void refreshInterruptions()
     } catch { /* ignore */ }
+
+    // After snapshot is applied, ensure UI state is synced from game/snapshot if not set
+    const g = currentGame.value
+    const snap = liveSnapshot.value as any
+    const strikerId = snap?.current_striker_id ?? g.current_striker_id
+    const nonStrikerId = snap?.current_non_striker_id ?? g.current_non_striker_id
+    const bowlerId = snap?.current_bowler_id ?? (g as any)?.current_bowler_id
+
+    // ALWAYS sync UI state from server, even if already set (for innings flip scenarios)
+    if (strikerId) {
+      uiState.value.selectedStrikerId = String(strikerId)
+    }
+    if (nonStrikerId) {
+      uiState.value.selectedNonStrikerId = String(nonStrikerId)
+    }
+    if (bowlerId) {
+      uiState.value.selectedBowlerId = String(bowlerId)
+    }
 
     return game
   } catch (e) {
@@ -2218,7 +2287,8 @@ async function changeBowlerMidOver(gameId: string, newBowlerId: string, reason: 
 
   async function submitDelivery(gameId: string, payload: ApiScoreDeliveryRequest): Promise<any> {
     const onlineAndLive = connectionStatus.value === 'connected'
-    if (!onlineAndLive && offlineEnabled.value) {
+    const browserOffline = typeof navigator !== 'undefined' ? navigator.onLine === false : false
+    if (!onlineAndLive && offlineEnabled.value && browserOffline) {
       enqueueDelivery(gameId, payload)
       return { queued: true }
     }
@@ -2246,16 +2316,18 @@ async function changeBowlerMidOver(gameId: string, newBowlerId: string, reason: 
 
    // replace your canScore computed with this
 const canScore = computed<boolean>(() => {
-  const g  = currentGame.value
-  const s  = state.value
+  const g = currentGame.value
+  const s = state.value
   const ui = uiState.value
+  const snap = snapshot.value ?? liveSnapshot.value
 
   // stop everything if the match is done
   if (isGameOver.value) return false
 
-  const status = normalizeStatus(g?.status)
-  const statusOk =
-    !!g && ['in_progress', 'live', 'started'].includes(status)
+  const liveSnap = liveSnapshot.value as any
+  const rawStatus = g?.status ?? snap?.status
+  const normalizedStatus = String(rawStatus ?? '').toUpperCase().replace(/^GAMESTATUS\./, '')
+  const statusOk = ['IN_PROGRESS', 'LIVE', 'STARTED'].includes(normalizedStatus)
 
   const haveBatters =
     !!ui.selectedStrikerId &&
@@ -2275,9 +2347,38 @@ const canScore = computed<boolean>(() => {
     !ui.loading &&
     !ui.scoringDisabled &&
     !needsNewBatter.value &&
-    ( !needsNewOver.value || (firstBallOfOver && uiHasBowler) )
+    (!needsNewOver.value || (firstBallOfOver && uiHasBowler))
 
-  return Boolean(statusOk && haveBatters && bowlerOk && gatesClear)
+  const backendFlag =
+    liveSnap?.canScore ??
+    liveSnap?.can_score ??
+    (g as any)?.canScore ??
+    (g as any)?.can_score ??
+    true
+
+  const finalCanScore = Boolean(backendFlag && statusOk && haveBatters && bowlerOk && gatesClear)
+
+  if (import.meta.env.DEV) {
+    const strikerSet = Boolean(ui.selectedStrikerId)
+    const nonStrikerSet = Boolean(ui.selectedNonStrikerId)
+    const bowlerSet = Boolean(ui.selectedBowlerId) || Boolean(s.current_bowler_id)
+    const inProgress = statusOk
+    console.debug('[canScore debug]', {
+      backendFlag,
+      inProgress,
+      strikerSet,
+      nonStrikerSet,
+      bowlerSet,
+      needs_new_batter: liveSnap?.needs_new_batter,
+      needs_new_over: liveSnap?.needs_new_over,
+      needs_new_innings: liveSnap?.needs_new_innings,
+      is_game_over: liveSnap?.is_game_over,
+      result: liveSnap?.result ?? null,
+      finalCanScore,
+    })
+  }
+
+  return finalCanScore
 })
 
 
@@ -2632,6 +2733,7 @@ async function reduceOversForInnings(gameId: string, innings: 1 | 2, newOvers: n
     connectionStatus,
     lastLiveAt,
     liveSnapshot,
+    snapshot,
     initLive,
     stopLive,
 

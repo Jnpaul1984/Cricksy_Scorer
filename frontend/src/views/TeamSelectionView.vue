@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 
@@ -216,15 +216,15 @@ onMounted(async () => {
 <template>
   <div class="wrap">
     <div class="header">
-      <RouterLink to="/" class="back">â† Back</RouterLink>
+      <RouterLink to="/" class="back">← Back</RouterLink>
       <h2>Select Playing XI</h2>
       <div class="spacer"></div>
     </div>
 
-    <div v-if="loading" class="loading">Loading matchâ€¦</div>
+    <div v-if="loading" class="loading">Loading match…</div>
     <div v-else-if="!game.currentGame" class="error">No match found.</div>
     <div v-else class="grid">
-      <section class="team">
+      <section class="team" data-testid="team-a-section">
         <h3>{{ teamADisplayName }}</h3>
         <p class="hint">Pick 11 players ({{ selectedA.size }}/11)</p>
         <ul>
@@ -232,6 +232,7 @@ onMounted(async () => {
             v-for="p in teamA?.players || []"
             :key="p.id"
             :class="['row', { picked: selectedA.has(p.id), full: selectedA.size >= 11 && !selectedA.has(p.id) }]"
+            data-testid="team-a-player"
             @click="toggleA(p.id)"
           >
             <input type="checkbox" :checked="selectedA.has(p.id)" @change.prevent />
@@ -242,7 +243,12 @@ onMounted(async () => {
     <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
       <div>
         <label class="block text-sm font-medium mb-1">{{ teamADisplayName }} Captain</label>
-        <select v-model="captainA" class="w-full border rounded p-2" :disabled="xiAList.length === 0">
+        <select
+          v-model="captainA"
+          class="w-full border rounded p-2"
+          :disabled="xiAList.length === 0"
+          data-testid="select-captain-a"
+        >
           <option :value="null" disabled>Select captain</option>
           <option v-for="pid in xiAList" :key="pid" :value="pid">
             {{ nameFromId(pid, teamA) }}
@@ -251,7 +257,12 @@ onMounted(async () => {
       </div>
       <div>
         <label class="block text-sm font-medium mb-1">{{ teamADisplayName }} Wicket-keeper</label>
-        <select v-model="keeperA" class="w-full border rounded p-2" :disabled="xiAList.length === 0">
+        <select
+          v-model="keeperA"
+          class="w-full border rounded p-2"
+          :disabled="xiAList.length === 0"
+          data-testid="select-keeper-a"
+        >
           <option :value="null" disabled>Select wicket-keeper</option>
           <option v-for="pid in xiAList" :key="pid" :value="pid">
             {{ nameFromId(pid, teamA) }}
@@ -260,7 +271,7 @@ onMounted(async () => {
       </div>
     </div>
 
-      <section class="team">
+      <section class="team" data-testid="team-b-section">
         <h3>{{ teamBDisplayName }}</h3>
         <p class="hint">Pick 11 players ({{ selectedB.size }}/11)</p>
         <ul>
@@ -268,6 +279,7 @@ onMounted(async () => {
             v-for="p in teamB?.players || []"
             :key="p.id"
             :class="['row', { picked: selectedB.has(p.id), full: selectedB.size >= 11 && !selectedB.has(p.id) }]"
+            data-testid="team-b-player"
             @click="toggleB(p.id)"
           >
             <input type="checkbox" :checked="selectedB.has(p.id)" @change.prevent />
@@ -278,7 +290,12 @@ onMounted(async () => {
     <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
       <div>
         <label class="block text-sm font-medium mb-1">{{ teamBDisplayName }} Captain</label>
-        <select v-model="captainB" class="w-full border rounded p-2" :disabled="xiBList.length === 0">
+        <select
+          v-model="captainB"
+          class="w-full border rounded p-2"
+          :disabled="xiBList.length === 0"
+          data-testid="select-captain-b"
+        >
           <option :value="null" disabled>Select captain</option>
           <option v-for="pid in xiBList" :key="pid" :value="pid">
             {{ nameFromId(pid, teamB) }}
@@ -287,7 +304,12 @@ onMounted(async () => {
       </div>
       <div>
         <label class="block text-sm font-medium mb-1">{{ teamBDisplayName }} Wicket-keeper</label>
-        <select v-model="keeperB" class="w-full border rounded p-2" :disabled="xiBList.length === 0">
+        <select
+          v-model="keeperB"
+          class="w-full border rounded p-2"
+          :disabled="xiBList.length === 0"
+          data-testid="select-keeper-b"
+        >
           <option :value="null" disabled>Select wicket-keeper</option>
           <option v-for="pid in xiBList" :key="pid" :value="pid">
             {{ nameFromId(pid, teamB) }}
@@ -298,12 +320,12 @@ onMounted(async () => {
 
     </div>
 
-    <div v-if="errorMsg" class="error">âŒ {{ errorMsg }}</div>
+    <div v-if="errorMsg" class="error">❌ {{ errorMsg }}</div>
 
     <div v-if="game.currentGame" class="actions">
       <button class="secondary" @click="$router.replace('/')">Cancel</button>
-      <button class="primary" :disabled="!canContinue || saving" @click="continueToScoring">
-        {{ saving ? 'Savingâ€¦' : 'Save & Continue' }}
+      <button class="primary" :disabled="!canContinue || saving" data-testid="btn-save-xi" @click="continueToScoring">
+        {{ saving ? 'Saving…' : 'Save & Continue' }}
       </button>
     </div>
   </div>

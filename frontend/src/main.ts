@@ -52,6 +52,11 @@ if (!mountEl.__vue_app__) {
   const vm = app.mount('#app')
   mountEl.__vue_app__ = vm
 
+  // Expose app for Cypress E2E tests
+  if (typeof window !== 'undefined') {
+    ;(window as any).app = app
+  }
+
   // Logs
   console.log('🔧 Vue app mounted to #app element')
   console.log('📱 App element:', document.getElementById('app'))

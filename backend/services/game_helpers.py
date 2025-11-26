@@ -145,7 +145,7 @@ def _complete_game_by_result(g: Any) -> bool:
             completed_at=dt.datetime.now(UTC),
         )
         g.status = models.GameStatus.completed
-        g.is_game_over = True
+        # g.is_game_over is a computed property based on status
         g.completed_at = g.result.completed_at
         return True
 
@@ -165,7 +165,7 @@ def _complete_game_by_result(g: Any) -> bool:
                 completed_at=dt.datetime.now(UTC),
             )
             g.status = models.GameStatus.completed
-            g.is_game_over = True
+            # g.is_game_over is a computed property based on status
             g.completed_at = g.result.completed_at
             return True
 
@@ -181,7 +181,7 @@ def _complete_game_by_result(g: Any) -> bool:
             completed_at=dt.datetime.now(UTC),
         )
         g.status = models.GameStatus.completed
-        g.is_game_over = True
+        # g.is_game_over is a computed property based on status
         g.completed_at = g.result.completed_at
         return True
 
@@ -609,10 +609,14 @@ def _recompute_totals_and_runtime(g: Any) -> None:
     g.total_wickets = total_wkts
 
     g.last_ball_bowler_id = last_legal_bowler
+
     if g.balls_this_over > 0:
         g.current_bowler_id = getattr(g, "current_bowler_id", None) or cur_over_bowler
     else:
-        g.current_bowler_id = preselected_bowler
+        if legal_balls > 0 and str(preselected_bowler or "") == str(last_legal_bowler or ""):
+            g.current_bowler_id = None
+        else:
+            g.current_bowler_id = preselected_bowler
 
 
 # -------------------------
@@ -692,6 +696,7 @@ def _compute_snapshot_flags(g: Any) -> dict[str, bool]:
         need_new_batter = bool(e2.get("is_out", False))
 
     have_any_balls = len(_dedup_deliveries(g)) > 0
+
     need_new_over = bool(
         getattr(g, "balls_this_over", 0) == 0
         and have_any_balls
@@ -886,10 +891,5 @@ def _maybe_finalize_match(g: Any) -> None:
             completed_at=dt.datetime.now(UTC),
         )
         g.status = models.GameStatus.completed
-        g.is_game_over = True
-        g.completed_at = g.result.completed_at
-        g.status = models.GameStatus.completed
-        g.is_game_over = True
-        g.completed_at = g.result.completed_at
-        g.is_game_over = True
+        # g.is_game_over is a computed property based on status
         g.completed_at = g.result.completed_at

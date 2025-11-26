@@ -9,7 +9,6 @@ import WicketModal from './WicketModal.vue'
 
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-
 import type { Player } from '@/types'
 
 const props = defineProps<{

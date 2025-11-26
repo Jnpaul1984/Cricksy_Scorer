@@ -273,8 +273,6 @@ const teams = ref<TournamentTeam[]>([])
 const fixtures = ref<TournamentFixture[]>([])
 const pointsTable = ref<PointsRow[]>([])
 
-const hasUser = computed(() => !!authStore.currentUser)
-
 const canViewDetail = computed(() =>
   authStore.hasAnyRole([
     'free',

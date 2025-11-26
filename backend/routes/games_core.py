@@ -39,7 +39,7 @@ async def create_game(
 ) -> schemas.Game:
     # Delegate to the existing implementation to avoid duplication
     db_game = await _games_impl.create_game_impl(payload, db)
-    return db_game
+    return schemas.Game.model_validate(db_game, from_attributes=True)
 
 
 @router.get("/games/{game_id}", response_model=schemas.Game)

@@ -6,6 +6,7 @@ Create Date: 2025-11-17 00:30:00.000000
 """
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -16,13 +17,19 @@ depends_on = None
 
 
 def upgrade() -> None:
-    visibility_enum = sa.Enum(
+    visibility_enum = postgresql.ENUM(
         "private_to_coach",
         "org_only",
         name="coaching_note_visibility",
     )
     bind = op.get_bind()
     visibility_enum.create(bind, checkfirst=True)
+    column_visibility_enum = postgresql.ENUM(
+        "private_to_coach",
+        "org_only",
+        name="coaching_note_visibility",
+        create_type=False,
+    )
 
     op.create_table(
         "player_forms",
@@ -73,7 +80,7 @@ def upgrade() -> None:
         sa.Column("action_plan", sa.Text(), nullable=True),
         sa.Column(
             "visibility",
-            visibility_enum,
+            column_visibility_enum,
             nullable=False,
             server_default="private_to_coach",
         ),
@@ -170,6 +177,6 @@ def downgrade() -> None:
     op.drop_index("ix_player_forms_player_id", table_name="player_forms")
     op.drop_table("player_forms")
 
-    visibility_enum = sa.Enum(name="coaching_note_visibility")
+    visibility_enum = postgresql.ENUM(name="coaching_note_visibility")
     bind = op.get_bind()
     visibility_enum.drop(bind, checkfirst=True)

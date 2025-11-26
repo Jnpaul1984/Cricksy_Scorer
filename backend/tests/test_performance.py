@@ -38,12 +38,12 @@ def sample_game(client):
     assert response.status_code == 200
     game_data = response.json()
 
-    # Set openers
+    # Set openers using /innings/start to properly initialize the innings
     team_a_players = game_data["team_a"]["players"]
     team_b_players = game_data["team_b"]["players"]
 
     response = client.post(
-        f"/games/{game_data['id']}/set-openers",
+        f"/games/{game_data['id']}/innings/start",
         json={
             "striker_id": team_a_players[0]["id"],
             "non_striker_id": team_a_players[1]["id"],
@@ -131,7 +131,7 @@ class TestDeliveryPerformance:
         team_b_players = game_data["team_b"]["players"]
 
         response = client.post(
-            f"/games/{game_id}/openers",
+            f"/games/{game_id}/innings/start",
             json={
                 "striker_id": team_a_players[0]["id"],
                 "non_striker_id": team_a_players[1]["id"],
@@ -140,7 +140,7 @@ class TestDeliveryPerformance:
         )
         assert (
             response.status_code == 200
-        ), f"Set openers failed: {response.status_code} - {response.json()}"
+        ), f"Start innings failed: {response.status_code} - {response.json()}"
 
         bowler1_id = team_b_players[0]["id"]
         bowler2_id = team_b_players[1]["id"]
@@ -201,7 +201,7 @@ class TestDeliveryPerformance:
         team_b_players = game_data["team_b"]["players"]
 
         response = client.post(
-            f"/games/{game_id}/openers",
+            f"/games/{game_id}/innings/start",
             json={
                 "striker_id": team_a_players[0]["id"],
                 "non_striker_id": team_a_players[1]["id"],
@@ -210,7 +210,7 @@ class TestDeliveryPerformance:
         )
         assert (
             response.status_code == 200
-        ), f"Set openers failed: {response.status_code} - {response.json()}"
+        ), f"Start innings failed: {response.status_code} - {response.json()}"
 
         bowler1_id = team_b_players[0]["id"]
         bowler2_id = team_b_players[1]["id"]
@@ -265,7 +265,7 @@ class TestSnapshotPerformance:
         team_b_players = game_data["team_b"]["players"]
 
         response = client.post(
-            f"/games/{game_id}/openers",
+            f"/games/{game_id}/innings/start",
             json={
                 "striker_id": team_a_players[0]["id"],
                 "non_striker_id": team_a_players[1]["id"],
@@ -274,7 +274,7 @@ class TestSnapshotPerformance:
         )
         assert (
             response.status_code == 200
-        ), f"Set openers failed: {response.status_code} - {response.json()}"
+        ), f"Start innings failed: {response.status_code} - {response.json()}"
 
         # Post some deliveries first to make the snapshot more realistic
         bowler1_id = team_b_players[0]["id"]
@@ -342,7 +342,7 @@ class TestFullMatchPerformance:
 
         # Set openers
         response = client.post(
-            f"/games/{game_id}/openers",
+            f"/games/{game_id}/innings/start",
             json={
                 "striker_id": team_a_players[0]["id"],
                 "non_striker_id": team_a_players[1]["id"],
@@ -351,7 +351,7 @@ class TestFullMatchPerformance:
         )
         assert (
             response.status_code == 200
-        ), f"Set openers failed: {response.status_code} - {response.json()}"
+        ), f"Start innings failed: {response.status_code} - {response.json()}"
 
         start = time.time()
 

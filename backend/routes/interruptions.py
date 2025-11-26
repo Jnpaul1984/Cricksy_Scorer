@@ -7,9 +7,9 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.sql_app import crud
 from backend.sql_app.database import get_db
 from backend.sql_app.models import Game
 
@@ -133,7 +133,7 @@ def _stop_core(game: Game, kind: Kind | None, at_utc: dt.datetime | None) -> lis
 async def list_interruptions(
     game_id: str, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> dict[str, Any]:
-    game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
+    game = _ensure_game(await crud.get_game(db, game_id))
     game.interruptions = _normalize_history(list(game.interruptions or []))
     return {"ok": True, "interruptions": game.interruptions or []}
 
@@ -145,7 +145,7 @@ async def start_interruption(
     request: Request,  # â¬…ï, add Request
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
-    game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
+    game = _ensure_game(await crud.get_game(db, game_id))
     _start_core(game, payload.kind, payload.note, payload.at_utc)
     await db.commit()
     await db.refresh(game)
@@ -167,7 +167,7 @@ async def stop_interruption(
     request: Request,  # â¬…ï, add Request
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
-    game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
+    game = _ensure_game(await crud.get_game(db, game_id))
     _stop_core(game, payload.kind, payload.at_utc)
     await db.commit()
     await db.refresh(game)
@@ -189,7 +189,7 @@ async def upsert_interruption(
     request: Request,  # â¬…ï, add Request
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
-    game = _ensure_game(await db.scalar(select(Game).where(Game.id == game_id)))
+    game = _ensure_game(await crud.get_game(db, game_id))
 
     act = (
         payload.action

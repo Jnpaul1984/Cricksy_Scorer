@@ -85,4 +85,11 @@ export default [
       '@typescript-eslint/no-explicit-any': 'off',
     },
   },
+  {
+    files: ['cypress/**/*.ts', 'cypress/**/*.js'],
+    rules: {
+      '@typescript-eslint/no-unused-expressions': 'off',
+      '@typescript-eslint/no-namespace': 'off'
+    }
+  }
 ];

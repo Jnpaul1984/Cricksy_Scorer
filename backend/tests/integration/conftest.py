@@ -118,14 +118,27 @@ class GameHelper:
                 self.team_a_players[1]["id"] if team == "A" else self.team_b_players[1]["id"]
             )
 
+        # Use /innings/start to ensure game transitions to IN_PROGRESS and Inning 1
+        # This handles both the initial start and setting openers
         response = self.client.post(
-            f"/games/{self.game_id}/openers",
+            f"/games/{self.game_id}/innings/start",
             json={
                 "striker_id": striker_id,
                 "non_striker_id": non_striker_id,
-                "team": team,
             },
         )
+
+        # If /innings/start fails (e.g. game already in progress), try /openers
+        if response.status_code != 200:
+            response = self.client.post(
+                f"/games/{self.game_id}/openers",
+                json={
+                    "striker_id": striker_id,
+                    "non_striker_id": non_striker_id,
+                    "team": team,
+                },
+            )
+
         assert response.status_code == 200, f"Failed to set openers: {response.text}"
         return response.json()
 

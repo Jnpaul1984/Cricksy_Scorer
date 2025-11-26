@@ -97,8 +97,9 @@ async def create_game(
         bowling_team_name=bowling_team,
         batting_scorecard=batting_scorecard,
         bowling_scorecard=bowling_scorecard,
-        # Keep your existing casing; tests do not assert on this exact literal
-        status="in_progress",
+        # Start at innings 0 / break so the UI prompts "Start Innings"
+        current_inning=0,
+        status="innings_break",
     )
     db.add(db_game)
     await db.commit()
