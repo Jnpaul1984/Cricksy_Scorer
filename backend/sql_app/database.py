@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import declarative_base
+from sqlalchemy.pool import NullPool
 
 from backend.config import settings
 
@@ -24,6 +25,11 @@ _SessionLocal: async_sessionmaker[AsyncSession] | None = None
 
 def _create_engine_and_session() -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
     """Create engine and session maker based on configuration."""
+    import os
+
+    # Check if we're in a testing environment
+    is_testing = os.environ.get("PYTEST_CURRENT_TEST") is not None
+
     if USE_IN_MEMORY_DB:
         # In-memory SQLite for CI and testing
         database_url = "sqlite+aiosqlite:///:memory:?cache=shared"
@@ -39,9 +45,22 @@ def _create_engine_and_session() -> tuple[AsyncEngine, async_sessionmaker[AsyncS
             expire_on_commit=False,
         )
     else:
-        # Production PostgreSQL database
+        # Production or test PostgreSQL database
         database_url = settings.database_url
-        eng = create_async_engine(database_url, pool_pre_ping=True)
+
+        # Use NullPool when testing to avoid event loop issues with asyncpg
+        # NullPool creates a new connection for each request and closes it after,
+        # which prevents "Future attached to a different loop" errors when
+        # Starlette's TestClient creates its own event loop.
+        if is_testing:
+            eng = create_async_engine(
+                database_url,
+                poolclass=NullPool,
+                echo=False,
+            )
+        else:
+            eng = create_async_engine(database_url, pool_pre_ping=True)
+
         session_local = async_sessionmaker(autocommit=False, autoflush=False, bind=eng)
 
     return eng, session_local
