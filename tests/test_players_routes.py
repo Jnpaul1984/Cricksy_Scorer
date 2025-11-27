@@ -43,7 +43,20 @@ def _register_user_with_role(
 ) -> tuple[dict[str, str], str]:
     register_resp = client.post("/auth/register", json={"email": email, "password": password})
     assert register_resp.status_code == 201, register_resp.text
-    user = register_resp.json()
+
+    # Login to get the token and then the user ID
+    login_resp = client.post(
+        "/auth/login",
+        data={"username": email, "password": password},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert login_resp.status_code == 200, login_resp.text
+    token = login_resp.json()["access_token"]
+
+    # Get user details to find the ID
+    me_resp = client.get("/auth/me", headers=_auth_headers(token))
+    assert me_resp.status_code == 200, me_resp.text
+    user = me_resp.json()
 
     with _superuser_override():
         promote = client.post(
@@ -53,13 +66,6 @@ def _register_user_with_role(
         )
         assert promote.status_code == 200, promote.text
 
-    login_resp = client.post(
-        "/auth/login",
-        data={"username": email, "password": password},
-        headers={"content-type": "application/x-www-form-urlencoded"},
-    )
-    assert login_resp.status_code == 200, login_resp.text
-    token = login_resp.json()["access_token"]
     return user, token
 
 

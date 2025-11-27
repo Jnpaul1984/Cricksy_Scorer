@@ -30,4 +30,12 @@ async def update_user_role(
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    return user
+
+    # Explicitly construct UserRead to handle potential None values in mock DB
+    return schemas.UserRead(
+        id=str(getattr(user, "id", "")),
+        email=getattr(user, "email", ""),
+        is_active=bool(getattr(user, "is_active", False)),
+        is_superuser=bool(getattr(user, "is_superuser", False)),
+        role=user.role,
+    )

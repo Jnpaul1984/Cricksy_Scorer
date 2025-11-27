@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import sys
+import uuid
+import datetime as dt
 from contextlib import suppress
 from enum import Enum
 from importlib import import_module
 from typing import Any, cast
 
-from backend.sql_app import crud, models, schemas
+from backend.sql_app import crud, models, schemas, tournament_crud
 
 
 class InMemoryCrudRepository:
@@ -14,6 +16,10 @@ class InMemoryCrudRepository:
 
     def __init__(self) -> None:
         self._games: dict[str, models.Game] = {}
+        self._tournaments: dict[str, models.Tournament] = {}
+        self._tournament_teams: dict[int, models.TournamentTeam] = {}
+        self._fixtures: dict[str, models.Fixture] = {}
+        self._team_id_counter = 1
 
     async def list_games_with_result(self) -> list[models.Game]:
         """Return all games that have a non-null result."""
@@ -115,6 +121,104 @@ class InMemoryCrudRepository:
         self._games[game_model.id] = game_model
         return game_model
 
+    async def create_tournament_eager(
+        self, db: object, tournament: schemas.TournamentCreate
+    ) -> models.Tournament:
+        t_id = str(uuid.uuid4())
+        db_obj = models.Tournament(
+            id=t_id,
+            name=tournament.name,
+            description=tournament.description,
+            tournament_type=tournament.tournament_type,
+            start_date=tournament.start_date,
+            end_date=tournament.end_date,
+            status="upcoming",
+            created_at=dt.datetime.now(dt.UTC),
+            updated_at=dt.datetime.now(dt.UTC),
+            teams=[],
+            fixtures=[],
+        )
+        self._tournaments[t_id] = db_obj
+        return db_obj
+
+    async def get_tournaments(
+        self, db: object, skip: int = 0, limit: int = 100
+    ) -> list[models.Tournament]:
+        return list(self._tournaments.values())[skip : skip + limit]
+
+    async def get_tournament(self, db: object, tournament_id: str) -> models.Tournament | None:
+        return self._tournaments.get(tournament_id)
+
+    async def add_team_to_tournament(
+        self, db: object, tournament_id: str, team_data: schemas.TeamAdd
+    ) -> models.TournamentTeam | None:
+        t = self._tournaments.get(tournament_id)
+        if not t:
+            return None
+
+        team_id = self._team_id_counter
+        self._team_id_counter += 1
+
+        team = models.TournamentTeam(
+            id=team_id,
+            tournament_id=tournament_id,
+            team_name=team_data.team_name,
+            team_data=team_data.team_data,
+            matches_played=0,
+            matches_won=0,
+            matches_lost=0,
+            matches_drawn=0,
+            points=0,
+            net_run_rate=0.0,
+        )
+        self._tournament_teams[team_id] = team
+        return team
+
+    async def get_tournament_teams(
+        self, db: object, tournament_id: str
+    ) -> list[models.TournamentTeam]:
+        return [t for t in self._tournament_teams.values() if t.tournament_id == tournament_id]
+
+    async def create_fixture(self, db: object, fixture_in: schemas.FixtureCreate) -> models.Fixture:
+        f_id = str(uuid.uuid4())
+        fixture = models.Fixture(
+            id=f_id,
+            tournament_id=fixture_in.tournament_id,
+            match_number=fixture_in.match_number,
+            team_a_name=fixture_in.team_a_name,
+            team_b_name=fixture_in.team_b_name,
+            venue=fixture_in.venue,
+            scheduled_date=fixture_in.scheduled_date,
+            status="scheduled",
+            created_at=dt.datetime.now(dt.UTC),
+            updated_at=dt.datetime.now(dt.UTC),
+        )
+        self._fixtures[f_id] = fixture
+        return fixture
+
+    async def get_fixture(self, db: object, fixture_id: str) -> models.Fixture | None:
+        return self._fixtures.get(fixture_id)
+
+    async def get_tournament_fixtures(self, db: object, tournament_id: str) -> list[models.Fixture]:
+        return [f for f in self._fixtures.values() if f.tournament_id == tournament_id]
+
+    async def get_points_table(
+        self, db: object, tournament_id: str
+    ) -> list[schemas.PointsTableEntry]:
+        teams = await self.get_tournament_teams(db, tournament_id)
+        return [
+            schemas.PointsTableEntry(
+                team_name=team.team_name,
+                matches_played=team.matches_played,
+                matches_won=team.matches_won,
+                matches_lost=team.matches_lost,
+                matches_drawn=team.matches_drawn,
+                points=team.points,
+                net_run_rate=team.net_run_rate,
+            )
+            for team in teams
+        ]
+
 
 def enable_in_memory_crud(repository: InMemoryCrudRepository) -> None:
     """Patch the global CRUD module to use the supplied in-memory repository."""
@@ -150,3 +254,27 @@ def enable_in_memory_crud(repository: InMemoryCrudRepository) -> None:
                 "DEBUG: patched target create_game ->",
                 getattr(target_any, "create_game", None),
             )
+
+    # Patch tournament_crud
+    tournament_targets = [tournament_crud]
+    module = sys.modules.get("backend.sql_app.tournament_crud")
+    if module is not None:
+        tournament_targets.append(module)
+
+    for target in tournament_targets:
+        target_any = cast(Any, target)
+        target_any.create_tournament_eager = repository.create_tournament_eager
+        target_any.get_tournaments = repository.get_tournaments
+        target_any.get_tournament = repository.get_tournament
+        target_any.add_team_to_tournament = repository.add_team_to_tournament
+        target_any.get_tournament_teams = repository.get_tournament_teams
+        target_any.create_fixture = repository.create_fixture
+        target_any.get_fixture = repository.get_fixture
+        target_any.get_tournament_fixtures = repository.get_tournament_fixtures
+        target_any.get_points_table = repository.get_points_table
+        target_any.add_team_to_tournament = repository.add_team_to_tournament
+        target_any.get_tournament_teams = repository.get_tournament_teams
+        target_any.create_fixture = repository.create_fixture
+        target_any.get_fixture = repository.get_fixture
+        target_any.get_tournament_fixtures = repository.get_tournament_fixtures
+        target_any.get_points_table = repository.get_points_table

@@ -47,16 +47,8 @@ def _register_org_user(client: TestClient) -> tuple[str, dict[str, str]]:
     password = "secret123"
     resp = client.post("/auth/register", json={"email": email, "password": password})
     assert resp.status_code == 201, resp.text
-    user = resp.json()
 
-    with _superuser_override():
-        promote = client.post(
-            f"/users/{user['id']}/role",
-            json={"role": models.RoleEnum.org_pro.value},
-            headers=_auth_headers("fake"),
-        )
-        assert promote.status_code == 200, promote.text
-
+    # Login to get the token and then the user ID
     login = client.post(
         "/auth/login",
         data={"username": email, "password": password},
@@ -64,7 +56,21 @@ def _register_org_user(client: TestClient) -> tuple[str, dict[str, str]]:
     )
     assert login.status_code == 200, login.text
     token = login.json()["access_token"]
-    return user["id"], _auth_headers(token)
+
+    # Get user details to find the ID
+    me_resp = client.get("/auth/me", headers=_auth_headers(token))
+    assert me_resp.status_code == 200, me_resp.text
+    user_id = me_resp.json()["id"]
+
+    with _superuser_override():
+        promote = client.post(
+            f"/users/{user_id}/role",
+            json={"role": models.RoleEnum.org_pro.value},
+            headers=_auth_headers("fake"),
+        )
+        assert promote.status_code == 200, promote.text
+
+    return user_id, _auth_headers(token)
 
 
 @pytest.fixture

@@ -223,6 +223,22 @@ class _FakeSession:
         # We don't have a real DB in in-memory mode; returning None lets routes 404 cleanly
         return None
 
+    async def get(self, entity: Any, ident: Any, **kwargs: Any) -> Any | None:
+        # Try to find in in-memory users if entity is User
+        try:
+            from backend import security
+            from backend.sql_app import models
+
+            if entity == models.User:
+                # security._in_memory_users is keyed by email.
+                # We have ident (id).
+                for user in security._in_memory_users.values():
+                    if str(user.id) == str(ident):
+                        return user
+        except ImportError:
+            pass
+        return None
+
 
 def create_app(
     settings_override: Any | None = None,
