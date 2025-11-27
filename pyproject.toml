@@ -65,3 +65,13 @@ extend-exclude = '''
   | dist
 )/
 '''
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = "."
+testpaths = ["tests", "backend/tests"]
+addopts = "-q"
+filterwarnings = [
+    "ignore:::fastapi.applications",
+    "ignore:::backend.app",
+]
