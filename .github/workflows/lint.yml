@@ -14,7 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12", "3.13"]
+        # Python 3.13 is not yet supported by asyncpg
+        python-version: ["3.12"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
