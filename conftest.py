@@ -45,42 +45,23 @@ if sys.platform.startswith("win"):
         _asyncio.set_event_loop_policy(_asyncio.WindowsSelectorEventLoopPolicy())
 
 
-# Create a session-scoped event loop that will be used for all tests
-_session_loop: asyncio.AbstractEventLoop | None = None
-
-
-def pytest_configure(config):
-    """
-    Called early during pytest startup, before test collection.
-    We create the event loop here and set it as the current loop,
-    so any module-level imports that create the engine will use this loop.
-    """
-    global _session_loop
-
-    # Create and set the event loop early
-    _session_loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(_session_loop)
-
-
-def pytest_unconfigure(config):
-    """Clean up the session event loop."""
-    global _session_loop
-    if _session_loop is not None:
-        _session_loop.close()
-        _session_loop = None
-
-
 @pytest.fixture(scope="session")
 def event_loop():
     """
-    Return the session event loop created in pytest_configure.
-    This ensures all async tests use the same loop where the engine was created.
+    Create a session-scoped event loop for the entire test session.
+    pytest-asyncio 0.23+ with asyncio_default_fixture_loop_scope="session"
+    will use this loop for all async fixtures.
     """
-    global _session_loop
-    if _session_loop is None:
-        _session_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(_session_loop)
-    return _session_loop
+    # Reset the database engine before creating the loop
+    # This ensures engine will be created on this new loop
+    from backend.sql_app.database import reset_engine
+
+    reset_engine()
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    yield loop
+    loop.close()
 
 
 @pytest_asyncio.fixture(scope="session")

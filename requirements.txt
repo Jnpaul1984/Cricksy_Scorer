@@ -38,7 +38,7 @@ structlog==23.2.0
 
 # Development and testing (optional but recommended)
 pytest==7.4.3
-pytest-asyncio==0.21.1
+pytest-asyncio>=0.23.0
 black==23.11.0
 isort==5.12.0
 flake8==6.1.0
