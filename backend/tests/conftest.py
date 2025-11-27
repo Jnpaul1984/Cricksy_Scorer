@@ -12,6 +12,7 @@ if "DATABASE_URL" not in os.environ:
     os.environ["APP_SECRET_KEY"] = "test-secret-key"
 
 import pytest
+import pytest_asyncio
 from backend.sql_app.database import Base, engine
 
 # Import models to ensure they are registered with Base.metadata
@@ -40,7 +41,7 @@ def event_loop():
     loop.close()
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def reset_db():
     """Reset the database state before each test."""
     print("\n[DEBUG] reset_db: Starting DB reset...")
