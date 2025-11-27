@@ -114,7 +114,9 @@ jobs:
       - name: Run fast unit tests (in-process, no DB)
         working-directory: backend
         env:
-          CRICKSY_IN_MEMORY_DB: 1
+          CRICKSY_IN_MEMORY_DB: "1"
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:?cache=shared"
+          APP_SECRET_KEY: "test-secret-key"
         run: |
           pytest -q tests/test_health.py tests/test_results_endpoint.py
 
@@ -142,7 +144,9 @@ jobs:
       - name: Run integration tests (in-process app)
         working-directory: backend
         env:
-          CRICKSY_IN_MEMORY_DB: 1
+          CRICKSY_IN_MEMORY_DB: "1"
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:?cache=shared"
+          APP_SECRET_KEY: "test-secret-key"
         run: |
           pytest tests/integration/ -v --tb=short --cov=. --cov-report=xml --cov-report=term
 
@@ -177,7 +181,9 @@ jobs:
       - name: Run DLS calculation tests (in-process app)
         working-directory: backend
         env:
-          CRICKSY_IN_MEMORY_DB: 1
+          CRICKSY_IN_MEMORY_DB: "1"
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:?cache=shared"
+          APP_SECRET_KEY: "test-secret-key"
         run: |
           pytest tests/test_dls_calculations.py -v --tb=short
 
