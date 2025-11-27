@@ -26,7 +26,9 @@ def _fill_null(table: str, column: str, json_literal: str) -> None:
     """
     # Use text() for the update statement to handle the dynamic table/column names
     op.execute(
-        sa.text(f"UPDATE {table} SET {column} = {json_literal} WHERE {column} IS NULL")  # nosec B608
+        sa.text(
+            f"UPDATE {table} SET {column} = {json_literal} WHERE {column} IS NULL"
+        )  # nosec B608
     )
 
 
