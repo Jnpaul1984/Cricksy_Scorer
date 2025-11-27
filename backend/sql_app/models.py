@@ -724,7 +724,7 @@ class CoachPlayerAssignment(Base):
         Boolean,
         default=True,
         nullable=False,
-        server_default=func.true(),
+        server_default="true",
     )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
