@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import datetime as dt
 import sys
 import uuid
-import datetime as dt
 from contextlib import suppress
 from enum import Enum
 from importlib import import_module

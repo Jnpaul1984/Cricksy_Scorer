@@ -9,18 +9,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend import security
 from backend.sql_app.database import get_db
 from backend.sql_app.models import (
-    CoachPlayerAssignment,
     CoachingSession,
+    CoachPlayerAssignment,
     PlayerProfile,
     RoleEnum,
     User,
 )
 from backend.sql_app.schemas import (
-    CoachPlayerAssignmentCreate,
-    CoachPlayerAssignmentRead,
     CoachingSessionCreate,
     CoachingSessionRead,
     CoachingSessionUpdate,
+    CoachPlayerAssignmentCreate,
+    CoachPlayerAssignmentRead,
 )
 
 router = APIRouter(prefix="/api/coaches", tags=["coach_pro"])

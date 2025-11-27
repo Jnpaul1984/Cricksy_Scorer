@@ -8,6 +8,7 @@ import hmac
 import json
 import secrets
 from collections.abc import Sequence
+from contextlib import suppress
 from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, status
@@ -18,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import settings
 from backend.sql_app import models, schemas
 from backend.sql_app.database import get_db
-from contextlib import suppress
 
 # In-memory user cache used when the app is running with IN_MEMORY_DB for local/dev
 _in_memory_users: dict[str, models.User] = {}

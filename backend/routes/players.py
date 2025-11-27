@@ -16,8 +16,8 @@ from backend.sql_app.database import get_db
 from backend.sql_app.models import (
     AchievementType,
     PlayerAchievement,
-    PlayerCoachingNoteVisibility,
     PlayerCoachingNotes,
+    PlayerCoachingNoteVisibility,
     PlayerForm,
     PlayerProfile,
     PlayerSummary,

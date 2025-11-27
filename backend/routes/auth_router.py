@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Annotated
 import logging
 import uuid
-
-from backend.config import settings
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -12,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend import security
+from backend.config import settings
 from backend.sql_app import models, schemas
 from backend.sql_app.database import get_db
 

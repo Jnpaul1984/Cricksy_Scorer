@@ -5,7 +5,7 @@ from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.sql_app import crud, schemas, models
+from backend.sql_app import crud, models, schemas
 
 
 # Local lightweight helpers (copied from main.py to avoid circular imports)

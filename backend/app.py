@@ -23,25 +23,25 @@ from backend.middleware.observability import (  # NEW
 )
 from backend.routes.analyst_pro import router as analyst_pro_router
 from backend.routes.auth_router import router as auth_router
+
+# Routers
+from backend.routes.coach_pro import router as coach_pro_router
 from backend.routes.dls import router as dls_router
+from backend.routes.fan_mode import router as fan_mode_router
 from backend.routes.game_admin import router as game_admin_router
 from backend.routes.gameplay import get_db as gameplay_get_db
 from backend.routes.gameplay import (
     router as gameplay_router,  # type: ignore[attr-defined]
 )
-from backend.routes.fan_mode import router as fan_mode_router
 from backend.routes.games_core import router as games_core_router  # NEW
 from backend.routes.games_dls import router as games_dls_router
-from backend.routes.testing import router as testing_router
-
-# Routers
-from backend.routes.coach_pro import router as coach_pro_router
 from backend.routes.games_router import router as games_router
 from backend.routes.health import router as health_router
 from backend.routes.interruptions import router as interruptions_router
 from backend.routes.players import router as players_router
 from backend.routes.prediction import router as prediction_router
 from backend.routes.sponsors import router as sponsors_router
+from backend.routes.testing import router as testing_router
 from backend.routes.tournaments import router as tournaments_router
 from backend.routes.users_router import router as users_router
 from backend.services.live_bus import set_socketio_server as _set_bus_sio

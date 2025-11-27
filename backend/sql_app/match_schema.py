@@ -1,8 +1,9 @@
 """Match schema models based on complete match data structure."""
 
-from typing import Any
-from pydantic import BaseModel
 from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel
 
 
 class DismissalType(str, Enum):

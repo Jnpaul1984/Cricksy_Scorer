@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import settings
 from backend.routes.games_core import CreateGameRequest
 from backend.services import game_helpers as gh
+from backend.services import game_service
 from backend.services.live_bus import emit_state_update
 from backend.services.snapshot_service import build_snapshot
-from backend.services import game_service
 from backend.sql_app import crud, models
 from backend.sql_app.database import get_db
 
