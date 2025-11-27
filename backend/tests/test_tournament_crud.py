@@ -12,6 +12,14 @@ from backend.sql_app import models, schemas, tournament_crud
 UTC = getattr(dt, "UTC", dt.UTC)
 
 
+@pytest.fixture(autouse=True)
+def skip_if_patched():
+    """Skip tests if tournament_crud is patched by in_memory_crud"""
+    # Check a function that is known to be patched
+    if tournament_crud.add_team_to_tournament.__module__ != "backend.sql_app.tournament_crud":
+        pytest.skip("Skipping unit tests because tournament_crud is patched")
+
+
 @pytest.fixture
 def mock_session():
     """Mock database session"""

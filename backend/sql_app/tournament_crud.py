@@ -72,8 +72,8 @@ async def update_tournament(
         setattr(tournament, field, value)
 
     await db.commit()
-    await db.refresh(tournament)
-    return tournament
+    # Re-fetch to ensure we have the latest state and avoid "not persistent" errors
+    return await get_tournament(db, tournament_id)
 
 
 async def delete_tournament(db: AsyncSession, tournament_id: str) -> bool:

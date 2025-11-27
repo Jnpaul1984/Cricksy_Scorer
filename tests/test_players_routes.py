@@ -81,7 +81,7 @@ def test_award_achievement_and_profile_flow():
 
     with TestClient(fastapi_app) as client:
         _, token = _register_user_with_role(
-            client, "coach@example.com", "secret123", models.RoleEnum.coach_pro
+            client, "coach@example.com", "secret123", models.RoleEnum.org_pro
         )
         headers = _auth_headers(token)
 
