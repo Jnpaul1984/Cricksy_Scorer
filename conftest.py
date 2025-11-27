@@ -8,11 +8,12 @@ event loop from pytest/anyio on Windows.
 If you prefer to run tests in WSL or CI, you can remove this file.
 """
 
+import asyncio
 import contextlib
 import os
-import sys
 import pathlib
-import asyncio
+import sys
+
 import pytest
 import pytest_asyncio
 
@@ -44,27 +45,42 @@ if sys.platform.startswith("win"):
         _asyncio.set_event_loop_policy(_asyncio.WindowsSelectorEventLoopPolicy())
 
 
+# Create a session-scoped event loop that will be used for all tests
+_session_loop: asyncio.AbstractEventLoop | None = None
+
+
+def pytest_configure(config):
+    """
+    Called early during pytest startup, before test collection.
+    We create the event loop here and set it as the current loop,
+    so any module-level imports that create the engine will use this loop.
+    """
+    global _session_loop
+
+    # Create and set the event loop early
+    _session_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_session_loop)
+
+
+def pytest_unconfigure(config):
+    """Clean up the session event loop."""
+    global _session_loop
+    if _session_loop is not None:
+        _session_loop.close()
+        _session_loop = None
+
+
 @pytest.fixture(scope="session")
 def event_loop():
     """
-    Create an instance of the default event loop for the test session.
-    This prevents 'Task attached to a different loop' errors when using
-    session-scoped fixtures or shared resources like the DB engine.
+    Return the session event loop created in pytest_configure.
+    This ensures all async tests use the same loop where the engine was created.
     """
-    # Reset the database engine before creating new loop
-    # This ensures engine will be created on the correct event loop
-    from backend.sql_app.database import reset_engine
-
-    reset_engine()
-
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-
-    asyncio.set_event_loop(loop)
-    yield loop
-    loop.close()
+    global _session_loop
+    if _session_loop is None:
+        _session_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(_session_loop)
+    return _session_loop
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -90,8 +106,8 @@ async def _setup_db():
 @pytest_asyncio.fixture(autouse=True)
 async def reset_db(_setup_db):
     """Reset the database state before each test."""
-    from backend.sql_app.database import Base, get_engine
     import backend.security
+    from backend.sql_app.database import Base, get_engine
 
     engine = get_engine()
     async with engine.begin() as conn:
