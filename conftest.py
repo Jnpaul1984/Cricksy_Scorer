@@ -32,11 +32,6 @@ ROOT_STR = str(ROOT)
 if ROOT_STR not in sys.path:
     sys.path.insert(0, ROOT_STR)
 
-from backend.sql_app.database import Base, engine  # noqa: E402
-
-# Import models to ensure they are registered with Base.metadata
-import backend.sql_app.models  # noqa: F401, E402
-
 # On Windows, use the selector event loop policy which is compatible
 # with some libraries (asyncpg, SQLAlchemy asyncpg dialect) that have
 # known issues with the default ProactorEventLoop in certain test
@@ -61,14 +56,33 @@ def event_loop():
     except RuntimeError:
         loop = asyncio.new_event_loop()
 
+    asyncio.set_event_loop(loop)
     yield loop
     loop.close()
 
 
+@pytest_asyncio.fixture(scope="session")
+async def _setup_db():
+    """
+    Session-scoped fixture to set up the database engine and create tables.
+    This runs once at the start of the test session on the correct event loop.
+    """
+    from backend.sql_app.database import Base, engine
+
+    # Create all tables once at session start
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    yield engine
+
+    # Clean up at session end
+    await engine.dispose()
+
+
 @pytest_asyncio.fixture(autouse=True)
-async def reset_db():
+async def reset_db(_setup_db):
     """Reset the database state before each test."""
-    # Import here to avoid circular imports if any
+    from backend.sql_app.database import Base, engine
     import backend.security
 
     async with engine.begin() as conn:
