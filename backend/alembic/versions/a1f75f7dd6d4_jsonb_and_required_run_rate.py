@@ -25,8 +25,6 @@ def _fill_null(table: str, column: str, json_literal: str) -> None:
     Works regardless of column's current type (json/text/jsonb).
     """
     # Use text() for the update statement to handle the dynamic table/column names
-    # B608: We are using f-strings to construct the query, but the values
-    # come from a controlled list above.
     op.execute(
         sa.text(f"UPDATE {table} SET {column} = {json_literal} WHERE {column} IS NULL")  # nosec B608
     )

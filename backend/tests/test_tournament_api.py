@@ -10,7 +10,7 @@ os.environ.setdefault("APP_SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_app.db")
 os.environ.setdefault("CRICKSY_IN_MEMORY_DB", "0")
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator as TypingAsyncGenerator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -57,7 +57,7 @@ async def _register_and_login_org_user(client: TestClient) -> str:
 
 
 @pytest.fixture
-async def org_client() -> AsyncGenerator[tuple[TestClient, str], None]:
+async def org_client() -> TypingAsyncGenerator[tuple[TestClient, str], None]:
     with TestClient(app) as client:
         token = await _register_and_login_org_user(client)
         yield client, token

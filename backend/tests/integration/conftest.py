@@ -47,9 +47,9 @@ class GameHelper:
     def __init__(self, client: TestClient):
         self.client = client
         self.game_id: str | None = None
-        self.game_data: dict | None = None
-        self.team_a_players: list[dict] = []
-        self.team_b_players: list[dict] = []
+        self.game_data: dict[str, Any] | None = None
+        self.team_a_players: list[dict[str, Any]] = []
+        self.team_b_players: list[dict[str, Any]] = []
 
     def create_game(
         self,
