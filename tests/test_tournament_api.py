@@ -7,8 +7,11 @@ import uuid
 from contextlib import contextmanager
 
 os.environ.setdefault("APP_SECRET_KEY", "test-secret-key")
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("CRICKSY_IN_MEMORY_DB", "1")
+
+# Only force in-memory DB if no DATABASE_URL is present (e.g. local run without Postgres)
+if "DATABASE_URL" not in os.environ:
+    os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+    os.environ.setdefault("CRICKSY_IN_MEMORY_DB", "1")
 
 import pytest
 from fastapi.testclient import TestClient
