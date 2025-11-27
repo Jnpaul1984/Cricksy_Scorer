@@ -51,6 +51,12 @@ def event_loop():
     This prevents 'Task attached to a different loop' errors when using
     session-scoped fixtures or shared resources like the DB engine.
     """
+    # Reset the database engine before creating new loop
+    # This ensures engine will be created on the correct event loop
+    from backend.sql_app.database import reset_engine
+
+    reset_engine()
+
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -67,7 +73,9 @@ async def _setup_db():
     Session-scoped fixture to set up the database engine and create tables.
     This runs once at the start of the test session on the correct event loop.
     """
-    from backend.sql_app.database import Base, engine
+    from backend.sql_app.database import Base, get_engine
+
+    engine = get_engine()
 
     # Create all tables once at session start
     async with engine.begin() as conn:
@@ -82,9 +90,10 @@ async def _setup_db():
 @pytest_asyncio.fixture(autouse=True)
 async def reset_db(_setup_db):
     """Reset the database state before each test."""
-    from backend.sql_app.database import Base, engine
+    from backend.sql_app.database import Base, get_engine
     import backend.security
 
+    engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
