@@ -11,9 +11,31 @@ If you prefer to run tests in WSL or CI, you can remove this file.
 import contextlib
 import os
 import sys
+import pathlib
+import asyncio
+import pytest
+import pytest_asyncio
 
 # Force AnyIO to use asyncio backend unless explicitly overridden.
 os.environ.setdefault("ANYIO_BACKEND", "asyncio")
+
+# Set test environment variables BEFORE importing backend modules
+# Only use in-memory SQLite if DATABASE_URL is not already set (e.g. by CI or local env)
+if "DATABASE_URL" not in os.environ:
+    os.environ["CRICKSY_IN_MEMORY_DB"] = "1"
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:?cache=shared"
+    os.environ["APP_SECRET_KEY"] = "test-secret-key"
+
+# Repo root = current directory
+ROOT = pathlib.Path(__file__).resolve().parent
+ROOT_STR = str(ROOT)
+if ROOT_STR not in sys.path:
+    sys.path.insert(0, ROOT_STR)
+
+from backend.sql_app.database import Base, engine  # noqa: E402
+
+# Import models to ensure they are registered with Base.metadata
+import backend.sql_app.models  # noqa: F401, E402
 
 # On Windows, use the selector event loop policy which is compatible
 # with some libraries (asyncpg, SQLAlchemy asyncpg dialect) that have
@@ -25,3 +47,33 @@ if sys.platform.startswith("win"):
 
     with contextlib.suppress(Exception):
         _asyncio.set_event_loop_policy(_asyncio.WindowsSelectorEventLoopPolicy())
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """
+    Create an instance of the default event loop for the test session.
+    This prevents 'Task attached to a different loop' errors when using
+    session-scoped fixtures or shared resources like the DB engine.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+
+    yield loop
+    loop.close()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def reset_db():
+    """Reset the database state before each test."""
+    # Import here to avoid circular imports if any
+    import backend.security
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+
+    # Clear in-memory user cache (critical for tests using IN_MEMORY_DB)
+    backend.security._in_memory_users.clear()
