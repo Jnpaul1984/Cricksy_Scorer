@@ -5,7 +5,7 @@
 /* --- Stores --- */
 import { storeToRefs } from 'pinia'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 
 /* --- UI Components --- */
 import BattingCard from '@/components/BattingCard.vue'
@@ -18,6 +18,7 @@ import { useRoleBadge } from '@/composables/useRoleBadge'
 import { apiService } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
+import { isValidUUID } from '@/utils'
 import legacyApiService, { API_BASE, apiRequest } from '@/utils/api'
 
 const isDev = import.meta.env.DEV
@@ -1631,7 +1632,7 @@ async function confirmChangeBowler(): Promise<void> {
         </div>
 
         <small v-if="selectedStrikerName && selectedBowlerName" class="hint">
-          {{ selectedStrikerName }} facing {{ selectedBowlerName }}.
+          <RouterLink v-if="isValidUUID(selectedStriker)" :to="{ name: 'PlayerProfile', params: { playerId: selectedStriker } }" class="player-link">{{ selectedStrikerName }}</RouterLink><span v-else>{{ selectedStrikerName }}</span> facing <RouterLink v-if="isValidUUID(selectedBowler)" :to="{ name: 'PlayerProfile', params: { playerId: selectedBowler } }" class="player-link">{{ selectedBowlerName }}</RouterLink><span v-else>{{ selectedBowlerName }}</span>.
         </small>
       </section>
 
@@ -1651,7 +1652,7 @@ async function confirmChangeBowler(): Promise<void> {
             <small class="hint">Allowed once per over (injury).</small>
           </div>
           <div v-if="currentBowler" class="col bowler-now">
-            <strong>Current:</strong> {{ currentBowler.name }} Â·
+            <strong>Current:</strong> <RouterLink v-if="isValidUUID(currentBowler.id)" :to="{ name: 'PlayerProfile', params: { playerId: currentBowler.id } }" class="player-link">{{ currentBowler.name }}</RouterLink><span v-else>{{ currentBowler.name }}</span> ·
             <span>{{ currentBowlerDerived?.wkts ?? 0 }}-{{ currentBowlerDerived?.runs ?? 0 }}
               ({{ currentBowlerDerived?.oversText ?? '0.0' }})
             </span>
@@ -2370,4 +2371,14 @@ dialog footer { display: flex; justify-content: flex-end; gap: 8px; }
 .rbac-banner{border-radius:12px;padding:12px 16px;margin-bottom:12px;border:1px solid rgba(248,113,113,.4);background:rgba(248,113,113,.08);color:#7f1d1d;display:flex;flex-direction:column;gap:4px}
 .rbac-banner.warn{border-color:rgba(248,113,113,.6);background:rgba(248,113,113,.12);color:#7f1d1d}
 .rbac-banner.info{border-color:rgba(59,130,246,.4);background:rgba(59,130,246,.12);color:#1d4ed8}
+
+/* Player profile link (inherits styling, no underline) */
+.player-link {
+  color: inherit;
+  text-decoration: none;
+}
+.player-link:hover {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
 </style>

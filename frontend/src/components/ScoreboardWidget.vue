@@ -2,10 +2,12 @@
 /* eslint-disable */
 import { storeToRefs } from 'pinia'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import { useHighlights, type Snapshot as HL } from '@/composables/useHighlights'
 import { useRoleBadge } from '@/composables/useRoleBadge'
 import { useGameStore } from '@/stores/gameStore'
+import { isValidUUID } from '@/utils'
 import { fmtSR, fmtEconomy, oversDisplayFromBalls, oversDisplayFromAny, deriveBowlerFigures } from '@/utils/cricket'
 import WinProbabilityWidget from '@/components/WinProbabilityWidget.vue'
 /* ------------------------------------------------------------------ */
@@ -1050,7 +1052,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         <!-- Striker -->
         <div class="pane">
           <div class="pane-title">Striker</div>
-          <div class="row"><div class="label">Name</div><div class="val" data-testid="scoreboard-striker-name">{{ strikerRow?.name || '-' }}<span v-if="strikerRow?.id" class="role-badge">{{ roleBadge(strikerRow.id) }}</span></div></div>
+          <div class="row"><div class="label">Name</div><div class="val" data-testid="scoreboard-striker-name"><RouterLink v-if="strikerRow?.id && isValidUUID(strikerRow.id)" :to="{ name: 'PlayerProfile', params: { playerId: strikerRow.id } }" class="player-link" target="_blank" rel="noopener noreferrer">{{ strikerRow.name }}</RouterLink><span v-else>{{ strikerRow?.name || '-' }}</span><span v-if="strikerRow?.id" class="role-badge">{{ roleBadge(strikerRow.id) }}</span></div></div>
           <div class="row"><div class="label">Runs (Balls)</div><div class="val">{{ strikerRow?.runs ?? 0 }} ({{ strikerRow?.balls ?? 0 }})</div></div>
           <div class="row"><div class="label">Strike Rate</div><div class="val">{{ fmtSR(strikerRow?.runs ?? 0, strikerRow?.balls ?? 0) }}</div></div>
         </div>
@@ -1058,7 +1060,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         <!-- Non-striker -->
         <div class="pane">
           <div class="pane-title">Non-striker</div>
-          <div class="row"><div class="label">Name</div><div class="val" data-testid="scoreboard-nonstriker-name">{{ nonStrikerRow?.name || '-' }}<span v-if="nonStrikerRow?.id" class="role-badge">{{ roleBadge(nonStrikerRow.id) }}</span></div></div>
+          <div class="row"><div class="label">Name</div><div class="val" data-testid="scoreboard-nonstriker-name"><RouterLink v-if="nonStrikerRow?.id && isValidUUID(nonStrikerRow.id)" :to="{ name: 'PlayerProfile', params: { playerId: nonStrikerRow.id } }" class="player-link" target="_blank" rel="noopener noreferrer">{{ nonStrikerRow.name }}</RouterLink><span v-else>{{ nonStrikerRow?.name || '-' }}</span><span v-if="nonStrikerRow?.id" class="role-badge">{{ roleBadge(nonStrikerRow.id) }}</span></div></div>
           <div class="row"><div class="label">Runs (Balls)</div><div class="val">{{ nonStrikerRow?.runs ?? 0 }} ({{ nonStrikerRow?.balls ?? 0 }})</div></div>
           <div class="row"><div class="label">Strike Rate</div><div class="val">{{ fmtSR(nonStrikerRow?.runs ?? 0, nonStrikerRow?.balls ?? 0) }}</div></div>
         </div>
@@ -1116,7 +1118,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
               </thead>
               <tbody>
                 <tr v-for="b in battingRows" :key="b.id">
-                  <td class="name">{{ b.name }}<span class="role-badge">{{ roleBadge(b.id) }}</span></td>
+                  <td class="name"><RouterLink v-if="isValidUUID(b.id)" :to="{ name: 'PlayerProfile', params: { playerId: b.id } }" class="player-link" target="_blank" rel="noopener noreferrer">{{ b.name }}</RouterLink><span v-else>{{ b.name }}</span><span class="role-badge">{{ roleBadge(b.id) }}</span></td>
                   <td class="num">{{ b.runs }}</td>
                   <td class="num">{{ b.balls }}</td>
                   <td class="num">{{ b.fours }}</td>
@@ -1143,7 +1145,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
               </thead>
               <tbody>
                 <tr v-for="bw in bowlingRows" :key="bw.id">
-                  <td class="name">{{ bw.name }}</td>
+                  <td class="name"><RouterLink v-if="isValidUUID(bw.id)" :to="{ name: 'PlayerProfile', params: { playerId: bw.id } }" class="player-link" target="_blank" rel="noopener noreferrer">{{ bw.name }}</RouterLink><span v-else>{{ bw.name }}</span></td>
                   <td class="num">{{ bw.overs }}</td>
                   <td class="num">{{ bw.maidens }}</td>
                   <td class="num">{{ bw.runs }}</td>
@@ -1398,4 +1400,14 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
   margin-left: 2px;
 }
 :where([data-theme="light"]) .role-badge { color: #d97706; }
+
+/* Player profile link (inherits styling, no underline) */
+.player-link {
+  color: inherit;
+  text-decoration: none;
+}
+.player-link:hover {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
 </style>
