@@ -270,7 +270,7 @@ async def delete_sponsor(
         if logo_file.exists():
             logo_file.unlink()
     except Exception:
-        pass  # Don't fail if file deletion fails
+        pass  # nosec B110 - intentionally ignore file deletion failures
 
     await db.delete(r)
     await db.commit()
