@@ -12,8 +12,25 @@ const LEGACY_BASE =
 const RUNTIME_ORIGIN =
   typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '';
 
-export const API_BASE = (VITE_BASE || LEGACY_BASE || RUNTIME_ORIGIN || '').replace(/\/+$/, '');
-console.info('API_BASE', API_BASE);
+// Parse ?apiBase= from the URL as a runtime override
+function getApiBaseFromUrl(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    const params = new URLSearchParams(window.location.search);
+    // Check hash-based routing (#/route?apiBase=...)
+    const hashParams = window.location.hash.includes('?')
+      ? new URLSearchParams(window.location.hash.split('?')[1])
+      : null;
+    return (params.get('apiBase') || hashParams?.get('apiBase') || '').replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
+
+const URL_OVERRIDE = getApiBaseFromUrl();
+
+export const API_BASE = (URL_OVERRIDE || VITE_BASE || LEGACY_BASE || RUNTIME_ORIGIN || '').replace(/\/+$/, '');
+console.info('API_BASE', API_BASE, '(URL override:', URL_OVERRIDE || 'none', ')');
 
 export const TOKEN_STORAGE_KEY = 'cricksy_token';
 

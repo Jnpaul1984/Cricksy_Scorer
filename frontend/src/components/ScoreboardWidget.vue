@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 
 import { useHighlights, type Snapshot as HL } from '@/composables/useHighlights'
+import { useRoleBadge } from '@/composables/useRoleBadge'
 import { useGameStore } from '@/stores/gameStore'
 import { fmtSR, fmtEconomy, oversDisplayFromBalls, oversDisplayFromAny, deriveBowlerFigures } from '@/utils/cricket'
 import WinProbabilityWidget from '@/components/WinProbabilityWidget.vue'
@@ -392,6 +393,9 @@ const crr = computed(() =>
   totalBallsThisInnings.value ? (runs.value / (totalBallsThisInnings.value / 6)).toFixed(2) : '—'
 )
 
+// Show CRR only when at least one ball has been bowled
+const showCrr = computed(() => totalBallsThisInnings.value > 0)
+
 const parTxt = computed(() => {
   const p = dlsPanel.value as any
   return typeof p?.par === 'number' ? String(p.par) : null
@@ -496,7 +500,16 @@ const oversLimit = computed(() => Number((currentGame.value as any)?.overs_limit
 const target = computed<number | null>(() => (currentGame.value?.target ?? null) as number | null)
 const isSecondInnings = computed(() => Number(currentGame.value?.current_inning ?? 1) === 2)
 
+// Chase mode: second innings with a valid target set
+const isChase = computed(() => isSecondInnings.value && targetSafe.value != null && targetSafe.value > 0)
+
+// RRR: prefer store value, fallback to local calculation
 const rrr = computed(() => {
+  // Use store's requiredRunRate if available
+  if (requiredRunRate.value != null && Number.isFinite(requiredRunRate.value)) {
+    return requiredRunRate.value.toFixed(2)
+  }
+  // Fallback to local calculation
   if (!isSecondInnings.value || target.value == null) return null
   const need = Math.max(0, target.value - runs.value)
   if (!oversLimit.value) return null
@@ -506,9 +519,9 @@ const rrr = computed(() => {
 })
 
 const oversLeft = computed(() => {
-  if (!oversLimit.value) return '—'
+  if (!oversLimit.value) return null
   const rem = Math.max(0, oversLimit.value * 6 - totalBallsThisInnings.value)
-  return oversDisplayFromBalls(rem)
+  return rem > 0 ? oversDisplayFromBalls(rem) : null
 })
 
 // --- First-innings summary (derive from deliveries if innings markers exist)
@@ -810,6 +823,15 @@ const nonStrikerRow = computed(() =>
     : null
 )
 
+/* ---------------------------------- */
+/* Captain / Keeper badge helpers     */
+/* ---------------------------------- */
+const isBattingTeamA = computed(() => battingTeamName.value === teamAName.value)
+const { roleBadge } = useRoleBadge({
+  currentGame,
+  isBattingTeamA,
+})
+
 
 /* --------------------- */
 /* Last 10 balls         */
@@ -1028,7 +1050,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         <!-- Striker -->
         <div class="pane">
           <div class="pane-title">Striker</div>
-          <div class="row"><div class="label">Name</div><div class="val" data-testid="scoreboard-striker-name">{{ strikerRow?.name || '-' }}</div></div>
+          <div class="row"><div class="label">Name</div><div class="val" data-testid="scoreboard-striker-name">{{ strikerRow?.name || '-' }}<span v-if="strikerRow?.id" class="role-badge">{{ roleBadge(strikerRow.id) }}</span></div></div>
           <div class="row"><div class="label">Runs (Balls)</div><div class="val">{{ strikerRow?.runs ?? 0 }} ({{ strikerRow?.balls ?? 0 }})</div></div>
           <div class="row"><div class="label">Strike Rate</div><div class="val">{{ fmtSR(strikerRow?.runs ?? 0, strikerRow?.balls ?? 0) }}</div></div>
         </div>
@@ -1036,7 +1058,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         <!-- Non-striker -->
         <div class="pane">
           <div class="pane-title">Non-striker</div>
-          <div class="row"><div class="label">Name</div><div class="val" data-testid="scoreboard-nonstriker-name">{{ nonStrikerRow?.name || '-' }}</div></div>
+          <div class="row"><div class="label">Name</div><div class="val" data-testid="scoreboard-nonstriker-name">{{ nonStrikerRow?.name || '-' }}<span v-if="nonStrikerRow?.id" class="role-badge">{{ roleBadge(nonStrikerRow.id) }}</span></div></div>
           <div class="row"><div class="label">Runs (Balls)</div><div class="val">{{ nonStrikerRow?.runs ?? 0 }} ({{ nonStrikerRow?.balls ?? 0 }})</div></div>
           <div class="row"><div class="label">Strike Rate</div><div class="val">{{ fmtSR(nonStrikerRow?.runs ?? 0, nonStrikerRow?.balls ?? 0) }}</div></div>
         </div>
@@ -1057,15 +1079,23 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
           </div>
         </div>
 
-        <!-- Info strip -->
+        <!-- Info strip: CRR always (when balls bowled); Target/RRR/Overs left only in chase -->
         <div class="info-strip">
-          <div class="cell"><span class="lbl">CRR</span><strong>{{ crr }}</strong></div>
-          <div v-if="rrr" class="cell"><span class="lbl">RRR</span><strong>{{ rrr }}</strong></div>
-          <div v-if="targetDisplay != null" class="cell" data-testid="scoreboard-target">
+          <div v-if="showCrr" class="cell" data-testid="scoreboard-crr">
+            <span class="lbl">CRR</span> <strong>{{ crr }}</strong>
+          </div>
+          <div v-if="isChase && targetDisplay != null" class="cell" data-testid="scoreboard-target">
             <span class="lbl">Target</span> <strong>{{ targetDisplay }}</strong>
           </div>
-          <div v-if="parTxt" class="cell"><span class="lbl">Par</span><strong>{{ parTxt }}</strong></div>
-          <div class="cell" data-testid="scoreboard-overs-left"><span class="lbl">Overs left</span><strong>{{ oversLeft }}</strong></div>
+          <div v-if="isChase && rrr" class="cell" data-testid="scoreboard-rrr">
+            <span class="lbl">RRR</span> <strong>{{ rrr }}</strong>
+          </div>
+          <div v-if="parTxt" class="cell" data-testid="scoreboard-par">
+            <span class="lbl">Par</span> <strong>{{ parTxt }}</strong>
+          </div>
+          <div v-if="isChase && oversLeft" class="cell" data-testid="scoreboard-overs-left">
+            <span class="lbl">Overs left</span> <strong>{{ oversLeft }}</strong>
+          </div>
         </div>
 
         <!-- Mini scorecards -->
@@ -1086,7 +1116,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
               </thead>
               <tbody>
                 <tr v-for="b in battingRows" :key="b.id">
-                  <td class="name">{{ b.name }}</td>
+                  <td class="name">{{ b.name }}<span class="role-badge">{{ roleBadge(b.id) }}</span></td>
                   <td class="num">{{ b.runs }}</td>
                   <td class="num">{{ b.balls }}</td>
                   <td class="num">{{ b.fours }}</td>
@@ -1358,4 +1388,14 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
 :where([data-theme="light"]) .hl-banner{
   background:#e8fbfe; border-color:#a5ecf6; color:#0e7490;
 }
+
+/* Captain / Keeper role badge */
+.role-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f59e0b;
+  opacity: .85;
+  margin-left: 2px;
+}
+:where([data-theme="light"]) .role-badge { color: #d97706; }
 </style>
