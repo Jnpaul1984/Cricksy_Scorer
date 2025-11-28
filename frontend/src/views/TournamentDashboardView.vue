@@ -158,10 +158,10 @@
           This will permanently remove the tournament, its fixtures, and points table.
         </p>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" @click="showDeleteConfirm = false" :disabled="deleteSubmitting">
+          <button type="button" class="btn-secondary" :disabled="deleteSubmitting" @click="showDeleteConfirm = false">
             Cancel
           </button>
-          <button type="button" class="btn-danger" @click="confirmDelete" :disabled="deleteSubmitting">
+          <button type="button" class="btn-danger" :disabled="deleteSubmitting" @click="confirmDelete">
             {{ deleteSubmitting ? 'Deleting...' : 'Delete Tournament' }}
           </button>
         </div>

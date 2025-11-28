@@ -55,6 +55,13 @@
       </div>
     </header>
 
+    <!-- Toast notification -->
+    <Teleport to="body">
+      <div v-if="toast" class="td-toast" :class="`td-toast-${toast.type}`">
+        {{ toast.message }}
+      </div>
+    </Teleport>
+
     <!-- Loading state -->
     <div v-if="loading && !loaded" class="td-state td-state-loading">
       <div class="spinner" aria-hidden="true"></div>
@@ -163,11 +170,74 @@
           This will permanently remove the tournament, its fixtures, and points table.
         </p>
         <div class="td-modal-actions">
-          <button type="button" class="td-btn td-btn-outline" @click="showDeleteConfirm = false" :disabled="deleteSubmitting">
+          <button type="button" class="td-btn td-btn-outline" :disabled="deleteSubmitting" @click="showDeleteConfirm = false">
             Cancel
           </button>
-          <button type="button" class="td-btn td-btn-danger" @click="confirmDelete" :disabled="deleteSubmitting">
+          <button type="button" class="td-btn td-btn-danger" :disabled="deleteSubmitting" @click="confirmDelete">
             {{ deleteSubmitting ? 'Deleting...' : 'Delete Tournament' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sponsor Create/Edit Modal -->
+    <div v-if="showSponsorModal && canManageTournaments" class="td-modal-overlay" @click.self="closeSponsorModal">
+      <div class="td-modal">
+        <h2>{{ editingSponsor ? 'Edit Sponsor' : 'Add Sponsor' }}</h2>
+        <form @submit.prevent="submitSponsor">
+          <div class="td-form-group">
+            <label>Name *</label>
+            <input v-model="sponsorForm.name" type="text" required placeholder="Sponsor name" />
+          </div>
+          <div v-if="!editingSponsor" class="td-form-group">
+            <label>Logo File *</label>
+            <input type="file" accept=".png,.svg,.webp,image/png,image/svg+xml,image/webp" required @change="onLogoFileChange" />
+            <small class="td-muted">Upload a PNG, SVG, or WebP logo (max 5MB)</small>
+          </div>
+          <div v-else class="td-form-group">
+            <label>Current Logo</label>
+            <img v-if="editingSponsor?.logoUrl" :src="resolveSponsorLogo(editingSponsor.logoUrl)" alt="Current logo" class="td-current-logo" />
+            <small class="td-muted">Logo cannot be changed after creation</small>
+          </div>
+          <div class="td-form-group">
+            <label>Click URL</label>
+            <input v-model="sponsorForm.click_url" type="url" placeholder="https://sponsor-website.com" />
+          </div>
+          <div class="td-form-group">
+            <label>Weight (1-5)</label>
+            <input v-model.number="sponsorForm.weight" type="number" min="1" max="5" />
+            <small class="td-muted">Higher weight = more prominent placement</small>
+          </div>
+          <div class="td-form-group td-checkbox-group">
+            <label>
+              <input v-model="sponsorForm.is_active" type="checkbox" />
+              Active
+            </label>
+          </div>
+          <div class="td-modal-actions">
+            <button type="button" class="td-btn td-btn-outline" @click="closeSponsorModal">Cancel</button>
+            <button type="submit" class="td-btn td-btn-primary" :disabled="sponsorSubmitting">
+              {{ sponsorSubmitting ? 'Saving...' : (editingSponsor ? 'Update' : 'Create') }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Sponsor Delete Confirmation Modal -->
+    <div v-if="showSponsorDeleteConfirm && canManageTournaments" class="td-modal-overlay" @click.self="showSponsorDeleteConfirm = false">
+      <div class="td-modal td-modal-confirm">
+        <h2>Delete Sponsor?</h2>
+        <p class="td-confirm-text">
+          Are you sure you want to delete <strong>{{ sponsorToDelete?.name }}</strong>?
+          This cannot be undone.
+        </p>
+        <div class="td-modal-actions">
+          <button type="button" class="td-btn td-btn-outline" :disabled="sponsorDeleting" @click="showSponsorDeleteConfirm = false">
+            Cancel
+          </button>
+          <button type="button" class="td-btn td-btn-danger" :disabled="sponsorDeleting" @click="confirmDeleteSponsor">
+            {{ sponsorDeleting ? 'Deleting...' : 'Delete Sponsor' }}
           </button>
         </div>
       </div>
@@ -245,6 +315,73 @@
             </tbody>
           </table>
         </section>
+
+        <!-- Sponsors Section (Org Pro / Super only) -->
+        <section v-if="canManageTournaments" class="td-card">
+          <div class="td-card-header td-card-header-row">
+            <div>
+              <h2>Sponsors</h2>
+              <p v-if="sponsors.length === 0" class="td-card-subtitle">
+                No sponsors configured yet.
+              </p>
+            </div>
+            <button type="button" class="td-btn td-btn-primary td-btn-sm" @click="openCreateSponsor">
+              + Add Sponsor
+            </button>
+          </div>
+
+          <div v-if="sponsorsLoading" class="td-state td-state-loading td-state-inline">
+            <div class="spinner spinner-sm" aria-hidden="true"></div>
+            <span>Loading sponsors...</span>
+          </div>
+
+          <table v-else-if="sponsors.length" class="td-table td-table-sponsors">
+            <thead>
+              <tr>
+                <th>Logo</th>
+                <th>Name</th>
+                <th>Click URL</th>
+                <th>Weight</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="sponsor in sponsors" :key="sponsor.id">
+                <td>
+                  <img
+                    v-if="sponsor.logoUrl"
+                    :src="resolveSponsorLogo(sponsor.logoUrl)"
+                    :alt="sponsor.name"
+                    class="td-sponsor-logo"
+                  />
+                  <span v-else class="td-muted">No logo</span>
+                </td>
+                <td>{{ sponsor.name }}</td>
+                <td>
+                  <a v-if="sponsor.clickUrl" :href="sponsor.clickUrl" target="_blank" rel="noopener" class="td-link-truncate">
+                    {{ truncateUrl(sponsor.clickUrl) }}
+                  </a>
+                  <span v-else class="td-muted">—</span>
+                </td>
+                <td>{{ sponsor.weight }}</td>
+                <td>
+                  <span class="td-status-badge" :class="sponsor.is_active !== false ? 'td-status-active' : 'td-status-inactive'">
+                    {{ sponsor.is_active !== false ? 'Active' : 'Inactive' }}
+                  </span>
+                </td>
+                <td class="td-actions-cell">
+                  <button type="button" class="td-btn td-btn-ghost td-btn-sm" @click="openEditSponsor(sponsor)">
+                    Edit
+                  </button>
+                  <button type="button" class="td-btn td-btn-ghost td-btn-sm td-btn-danger-text" @click="openDeleteSponsor(sponsor)">
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
       </div>
 
       <!-- Right column: teams + fixtures -->
@@ -316,7 +453,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import apiService, { getErrorMessage } from '@/services/api'
+import apiService, { API_BASE, getErrorMessage } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 
 type Tournament = Record<string, any>
@@ -355,6 +492,46 @@ const editForm = ref({
 // Delete confirmation state
 const showDeleteConfirm = ref(false)
 const deleteSubmitting = ref(false)
+
+// ================== Sponsor management state ==================
+type Sponsor = {
+  id: string
+  name: string
+  logoUrl?: string | null
+  clickUrl?: string | null
+  weight: number
+  is_active?: boolean
+  surfaces?: string[]
+}
+
+const sponsors = ref<Sponsor[]>([])
+const sponsorsLoading = ref(false)
+const showSponsorModal = ref(false)
+const editingSponsor = ref<Sponsor | null>(null)
+const sponsorSubmitting = ref(false)
+const sponsorLogoFile = ref<File | null>(null)
+const sponsorForm = ref({
+  name: '',
+  logo_url: '',
+  click_url: '',
+  weight: 1,
+  is_active: true,
+})
+
+const showSponsorDeleteConfirm = ref(false)
+const sponsorToDelete = ref<Sponsor | null>(null)
+const sponsorDeleting = ref(false)
+
+// Toast state
+type ToastType = 'success' | 'error' | 'info'
+const toast = ref<{ message: string; type: ToastType } | null>(null)
+let toastTimer: number | null = null
+
+function showToast(message: string, type: ToastType = 'success', ms = 2500): void {
+  toast.value = { message, type }
+  if (toastTimer) window.clearTimeout(toastTimer)
+  toastTimer = window.setTimeout(() => (toast.value = null), ms) as unknown as number
+}
 
 const canViewDetail = computed(() =>
   authStore.hasAnyRole([
@@ -497,8 +674,144 @@ async function confirmDelete() {
   }
 }
 
+// ================== Sponsor functions ==================
+
+async function loadSponsors() {
+  if (!canManageTournaments.value) return
+  sponsorsLoading.value = true
+  try {
+    const data = await apiService.getSponsors()
+    sponsors.value = Array.isArray(data) ? data : []
+  } catch (err: any) {
+    console.error('Failed to load sponsors:', err)
+    sponsors.value = []
+  } finally {
+    sponsorsLoading.value = false
+  }
+}
+
+function resolveSponsorLogo(logoUrl: string | null | undefined): string {
+  if (!logoUrl) return ''
+  // If it's already an absolute URL, use it
+  if (logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
+    return logoUrl
+  }
+  // Otherwise, prepend the API base
+  return `${API_BASE}${logoUrl.startsWith('/') ? '' : '/'}${logoUrl}`
+}
+
+function truncateUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    return u.hostname + (u.pathname !== '/' ? u.pathname.slice(0, 20) + '...' : '')
+  } catch {
+    return url.length > 30 ? url.slice(0, 30) + '...' : url
+  }
+}
+
+function openCreateSponsor() {
+  editingSponsor.value = null
+  sponsorLogoFile.value = null
+  sponsorForm.value = {
+    name: '',
+    logo_url: '',
+    click_url: '',
+    weight: 1,
+    is_active: true,
+  }
+  showSponsorModal.value = true
+}
+
+function openEditSponsor(sponsor: Sponsor) {
+  editingSponsor.value = sponsor
+  sponsorLogoFile.value = null
+  sponsorForm.value = {
+    name: sponsor.name,
+    logo_url: sponsor.logoUrl || '',
+    click_url: sponsor.clickUrl || '',
+    weight: sponsor.weight,
+    is_active: sponsor.is_active !== false,
+  }
+  showSponsorModal.value = true
+}
+
+function closeSponsorModal() {
+  showSponsorModal.value = false
+  editingSponsor.value = null
+  sponsorLogoFile.value = null
+}
+
+function onLogoFileChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (file) {
+    sponsorLogoFile.value = file
+  }
+}
+
+async function submitSponsor() {
+  if (!canManageTournaments.value) return
+  sponsorSubmitting.value = true
+
+  try {
+    if (editingSponsor.value) {
+      // Update existing sponsor
+      await apiService.updateSponsor(editingSponsor.value.id, {
+        name: sponsorForm.value.name,
+        click_url: sponsorForm.value.click_url || null,
+        weight: sponsorForm.value.weight,
+        is_active: sponsorForm.value.is_active,
+      })
+      showToast('Sponsor updated successfully', 'success')
+    } else {
+      // Create new sponsor with file upload
+      if (!sponsorLogoFile.value) {
+        showToast('Please select a logo file', 'error')
+        sponsorSubmitting.value = false
+        return
+      }
+      await apiService.uploadSponsor({
+        name: sponsorForm.value.name,
+        logo: sponsorLogoFile.value,
+        click_url: sponsorForm.value.click_url || null,
+        weight: sponsorForm.value.weight,
+      })
+      showToast('Sponsor created successfully', 'success')
+    }
+    closeSponsorModal()
+    await loadSponsors()
+  } catch (err: any) {
+    showToast(getErrorMessage(err) || 'Failed to save sponsor', 'error', 3000)
+  } finally {
+    sponsorSubmitting.value = false
+  }
+}
+
+function openDeleteSponsor(sponsor: Sponsor) {
+  sponsorToDelete.value = sponsor
+  showSponsorDeleteConfirm.value = true
+}
+
+async function confirmDeleteSponsor() {
+  if (!sponsorToDelete.value || !canManageTournaments.value) return
+  sponsorDeleting.value = true
+
+  try {
+    await apiService.deleteSponsor(sponsorToDelete.value.id)
+    showToast('Sponsor deleted', 'success')
+    showSponsorDeleteConfirm.value = false
+    sponsorToDelete.value = null
+    await loadSponsors()
+  } catch (err: any) {
+    showToast(getErrorMessage(err) || 'Failed to delete sponsor', 'error', 3000)
+  } finally {
+    sponsorDeleting.value = false
+  }
+}
+
 onMounted(() => {
   loadTournament()
+  loadSponsors()
 })
 
 watch(
@@ -926,5 +1239,152 @@ function formatFixtureStatus(raw: string): string {
   gap: 0.75rem;
   justify-content: flex-end;
   margin-top: 1.5rem;
+}
+
+/* Sponsor-related styles */
+.td-card-header-row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.td-btn-sm {
+  padding: 0.25rem 0.65rem;
+  font-size: 0.8rem;
+}
+
+.td-btn-danger-text {
+  color: #b91c1c;
+}
+
+.td-btn-danger-text:hover {
+  background: rgba(185, 28, 28, 0.08);
+}
+
+.td-table-sponsors {
+  font-size: 0.85rem;
+}
+
+.td-table-sponsors th,
+.td-table-sponsors td {
+  padding: 0.5rem 0.4rem;
+  vertical-align: middle;
+}
+
+.td-sponsor-logo {
+  width: 48px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #f9fafb;
+}
+
+.td-link-truncate {
+  color: var(--pico-primary, #2563eb);
+  text-decoration: none;
+  font-size: 0.8rem;
+}
+
+.td-link-truncate:hover {
+  text-decoration: underline;
+}
+
+.td-status-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.td-status-active {
+  background: rgba(22, 163, 74, 0.1);
+  color: #166534;
+}
+
+.td-status-inactive {
+  background: rgba(107, 114, 128, 0.1);
+  color: #4b5563;
+}
+
+.td-actions-cell {
+  white-space: nowrap;
+}
+
+.td-state-inline {
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+  background: transparent;
+  box-shadow: none;
+}
+
+.spinner-sm {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+}
+
+.td-checkbox-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.td-checkbox-group input[type="checkbox"] {
+  width: auto;
+}
+
+.td-current-logo {
+  display: block;
+  width: 80px;
+  height: 50px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #f9fafb;
+  margin-bottom: 0.5rem;
+}
+
+/* Toast notification */
+.td-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  z-index: 2000;
+  animation: toast-in 0.2s ease-out;
+}
+
+.td-toast-success {
+  background: #166534;
+  color: white;
+}
+
+.td-toast-error {
+  background: #b91c1c;
+  color: white;
+}
+
+.td-toast-info {
+  background: #1d4ed8;
+  color: white;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 </style>
