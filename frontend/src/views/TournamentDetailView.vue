@@ -33,11 +33,11 @@
           <button type="button" class="td-btn td-btn-outline" @click="reload">
             Refresh
           </button>
-          <button type="button" class="td-btn td-btn-primary" disabled>
-            Edit tournament (coming soon)
+          <button type="button" class="td-btn td-btn-primary" @click="openEditModal">
+            Edit tournament
           </button>
-          <button type="button" class="td-btn td-btn-danger" disabled>
-            Delete tournament (locked in beta)
+          <button type="button" class="td-btn td-btn-danger" @click="openDeleteConfirm">
+            Delete tournament
           </button>
         </div>
       </div>
@@ -103,6 +103,73 @@
         <button type="button" class="td-btn td-btn-ghost" @click="goBack">
           Back to tournaments
         </button>
+      </div>
+    </div>
+
+    <!-- Edit Tournament Modal -->
+    <div v-if="showEditModal && canManageTournaments && tournament" class="td-modal-overlay" @click.self="showEditModal = false">
+      <div class="td-modal">
+        <h2>Edit Tournament</h2>
+        <form @submit.prevent="submitEdit">
+          <div class="td-form-group">
+            <label>Name *</label>
+            <input v-model="editForm.name" type="text" required placeholder="e.g., Premier League 2024" />
+          </div>
+          <div class="td-form-group">
+            <label>Description</label>
+            <textarea v-model="editForm.description" placeholder="Tournament description"></textarea>
+          </div>
+          <div class="td-form-group">
+            <label>Type</label>
+            <select v-model="editForm.tournament_type">
+              <option value="league">League</option>
+              <option value="knockout">Knockout</option>
+              <option value="round-robin">Round Robin</option>
+            </select>
+          </div>
+          <div class="td-form-group">
+            <label>Status</label>
+            <select v-model="editForm.status">
+              <option value="upcoming">Upcoming</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div class="td-form-group">
+            <label>Start Date</label>
+            <input v-model="editForm.start_date" type="date" />
+          </div>
+          <div class="td-form-group">
+            <label>End Date</label>
+            <input v-model="editForm.end_date" type="date" />
+          </div>
+          <div class="td-modal-actions">
+            <button type="button" class="td-btn td-btn-outline" @click="showEditModal = false">Cancel</button>
+            <button type="submit" class="td-btn td-btn-primary" :disabled="editSubmitting">
+              {{ editSubmitting ? 'Saving...' : 'Save Changes' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div v-if="showDeleteConfirm && canManageTournaments && tournament" class="td-modal-overlay" @click.self="showDeleteConfirm = false">
+      <div class="td-modal td-modal-confirm">
+        <h2>Delete Tournament?</h2>
+        <p class="td-confirm-text">
+          Are you sure you want to delete <strong>{{ tournament.name }}</strong>?
+          This will permanently remove the tournament, its fixtures, and points table.
+        </p>
+        <div class="td-modal-actions">
+          <button type="button" class="td-btn td-btn-outline" @click="showDeleteConfirm = false" :disabled="deleteSubmitting">
+            Cancel
+          </button>
+          <button type="button" class="td-btn td-btn-danger" @click="confirmDelete" :disabled="deleteSubmitting">
+            {{ deleteSubmitting ? 'Deleting...' : 'Delete Tournament' }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -273,6 +340,22 @@ const teams = ref<TournamentTeam[]>([])
 const fixtures = ref<TournamentFixture[]>([])
 const pointsTable = ref<PointsRow[]>([])
 
+// Edit modal state
+const showEditModal = ref(false)
+const editSubmitting = ref(false)
+const editForm = ref({
+  name: '',
+  description: '',
+  tournament_type: 'league',
+  status: 'upcoming',
+  start_date: '',
+  end_date: '',
+})
+
+// Delete confirmation state
+const showDeleteConfirm = ref(false)
+const deleteSubmitting = ref(false)
+
 const canViewDetail = computed(() =>
   authStore.hasAnyRole([
     'free',
@@ -352,6 +435,66 @@ async function loadTournament() {
 
 function reload() {
   loadTournament()
+}
+
+// Edit functions
+function openEditModal() {
+  if (!tournament.value || !canManageTournaments.value) return
+
+  // Pre-fill form with current tournament data
+  editForm.value = {
+    name: tournament.value.name || '',
+    description: tournament.value.description || '',
+    tournament_type: tournament.value.tournament_type || 'league',
+    status: tournament.value.status || 'upcoming',
+    start_date: tournament.value.start_date ? tournament.value.start_date.split('T')[0] : '',
+    end_date: tournament.value.end_date ? tournament.value.end_date.split('T')[0] : '',
+  }
+  showEditModal.value = true
+}
+
+async function submitEdit() {
+  if (!tournament.value || !canManageTournaments.value) return
+
+  editSubmitting.value = true
+  try {
+    const payload = {
+      name: editForm.value.name,
+      description: editForm.value.description || null,
+      tournament_type: editForm.value.tournament_type,
+      status: editForm.value.status,
+      start_date: editForm.value.start_date || null,
+      end_date: editForm.value.end_date || null,
+    }
+    await apiService.updateTournament(tournamentId.value, payload)
+    showEditModal.value = false
+    await loadTournament()
+  } catch (err: any) {
+    alert(getErrorMessage(err) || 'Failed to update tournament')
+  } finally {
+    editSubmitting.value = false
+  }
+}
+
+// Delete functions
+function openDeleteConfirm() {
+  if (!tournament.value || !canManageTournaments.value) return
+  showDeleteConfirm.value = true
+}
+
+async function confirmDelete() {
+  if (!tournament.value || !canManageTournaments.value) return
+
+  deleteSubmitting.value = true
+  try {
+    await apiService.deleteTournament(tournamentId.value)
+    showDeleteConfirm.value = false
+    router.push({ name: 'tournaments' })
+  } catch (err: any) {
+    alert(getErrorMessage(err) || 'Failed to delete tournament')
+  } finally {
+    deleteSubmitting.value = false
+  }
 }
 
 onMounted(() => {
@@ -709,5 +852,79 @@ function formatFixtureStatus(raw: string): string {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Modal styles */
+.td-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.td-modal {
+  background: white;
+  padding: 2rem;
+  border-radius: 0.75rem;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.15);
+}
+
+.td-modal h2 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.25rem;
+}
+
+.td-modal-confirm {
+  max-width: 400px;
+}
+
+.td-confirm-text {
+  color: #4b5563;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.5;
+}
+
+.td-form-group {
+  margin-bottom: 1rem;
+}
+
+.td-form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #333;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.td-form-group input,
+.td-form-group textarea,
+.td-form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+}
+
+.td-form-group textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.td-modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
 }
 </style>

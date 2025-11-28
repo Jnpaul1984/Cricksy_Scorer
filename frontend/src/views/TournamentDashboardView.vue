@@ -35,19 +35,28 @@
         v-for="tournament in tournaments"
         :key="tournament.id"
         class="tournament-card"
-        @click="goToTournament(tournament.id)"
       >
-        <h3>{{ tournament.name }}</h3>
-        <p v-if="tournament.description" class="description">{{ tournament.description }}</p>
-        <div class="meta">
-          <span class="badge" :class="`status-${tournament.status}`">{{ tournament.status }}</span>
-          <span class="type">{{ tournament.tournament_type }}</span>
+        <div class="card-main" @click="goToTournament(tournament.id)">
+          <h3>{{ tournament.name }}</h3>
+          <p v-if="tournament.description" class="description">{{ tournament.description }}</p>
+          <div class="meta">
+            <span class="badge" :class="`status-${tournament.status}`">{{ tournament.status }}</span>
+            <span class="type">{{ tournament.tournament_type }}</span>
+          </div>
+          <div v-if="tournament.start_date" class="dates">
+            {{ formatDate(tournament.start_date) }}
+            <span v-if="tournament.end_date"> - {{ formatDate(tournament.end_date) }}</span>
+          </div>
+          <div class="teams-count">{{ tournament.teams?.length || 0 }} teams</div>
         </div>
-        <div v-if="tournament.start_date" class="dates">
-          {{ formatDate(tournament.start_date) }}
-          <span v-if="tournament.end_date"> - {{ formatDate(tournament.end_date) }}</span>
+        <div v-if="canManageTournaments" class="card-actions">
+          <button class="btn-icon" title="Edit" @click.stop="openEditModal(tournament)">
+            ✏️
+          </button>
+          <button class="btn-icon btn-icon-danger" title="Delete" @click.stop="openDeleteConfirm(tournament)">
+            🗑️
+          </button>
         </div>
-        <div class="teams-count">{{ tournament.teams?.length || 0 }} teams</div>
       </div>
 
       <div v-if="tournaments.length === 0" class="empty-state">
@@ -91,6 +100,73 @@
         </form>
       </div>
     </div>
+
+    <!-- Edit Tournament Modal -->
+    <div v-if="showEditModal && canManageTournaments" class="modal-overlay" @click.self="showEditModal = false">
+      <div class="modal">
+        <h2>Edit Tournament</h2>
+        <form @submit.prevent="submitEdit">
+          <div class="form-group">
+            <label>Name *</label>
+            <input v-model="editForm.name" type="text" required placeholder="e.g., Premier League 2024" />
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea v-model="editForm.description" placeholder="Tournament description"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Type</label>
+            <select v-model="editForm.tournament_type">
+              <option value="league">League</option>
+              <option value="knockout">Knockout</option>
+              <option value="round-robin">Round Robin</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select v-model="editForm.status">
+              <option value="upcoming">Upcoming</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Start Date</label>
+            <input v-model="editForm.start_date" type="date" />
+          </div>
+          <div class="form-group">
+            <label>End Date</label>
+            <input v-model="editForm.end_date" type="date" />
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" @click="showEditModal = false">Cancel</button>
+            <button type="submit" class="btn-primary" :disabled="editSubmitting">
+              {{ editSubmitting ? 'Saving...' : 'Save Changes' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div v-if="showDeleteConfirm && canManageTournaments" class="modal-overlay" @click.self="showDeleteConfirm = false">
+      <div class="modal modal-confirm">
+        <h2>Delete Tournament?</h2>
+        <p class="confirm-text">
+          Are you sure you want to delete <strong>{{ tournamentToDelete?.name }}</strong>?
+          This will permanently remove the tournament, its fixtures, and points table.
+        </p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" @click="showDeleteConfirm = false" :disabled="deleteSubmitting">
+            Cancel
+          </button>
+          <button type="button" class="btn-danger" @click="confirmDelete" :disabled="deleteSubmitting">
+            {{ deleteSubmitting ? 'Deleting...' : 'Delete Tournament' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -117,6 +193,24 @@ const newTournament = ref({
   start_date: '',
   end_date: '',
 })
+
+// Edit modal state
+const showEditModal = ref(false)
+const editSubmitting = ref(false)
+const tournamentToEdit = ref<any>(null)
+const editForm = ref({
+  name: '',
+  description: '',
+  tournament_type: 'league',
+  status: 'upcoming',
+  start_date: '',
+  end_date: '',
+})
+
+// Delete confirmation state
+const showDeleteConfirm = ref(false)
+const deleteSubmitting = ref(false)
+const tournamentToDelete = ref<any>(null)
 
 async function loadTournaments() {
   try {
@@ -164,6 +258,68 @@ async function createTournament() {
     router.push(`/tournaments/${created.id}`)
   } catch (e: any) {
     alert(e.message || 'Failed to create tournament')
+  }
+}
+
+// Edit functions
+function openEditModal(tournament: any) {
+  if (!canManageTournaments.value) return
+  tournamentToEdit.value = tournament
+  editForm.value = {
+    name: tournament.name || '',
+    description: tournament.description || '',
+    tournament_type: tournament.tournament_type || 'league',
+    status: tournament.status || 'upcoming',
+    start_date: tournament.start_date ? tournament.start_date.split('T')[0] : '',
+    end_date: tournament.end_date ? tournament.end_date.split('T')[0] : '',
+  }
+  showEditModal.value = true
+}
+
+async function submitEdit() {
+  if (!tournamentToEdit.value || !canManageTournaments.value) return
+
+  editSubmitting.value = true
+  try {
+    const payload = {
+      name: editForm.value.name,
+      description: editForm.value.description || null,
+      tournament_type: editForm.value.tournament_type,
+      status: editForm.value.status,
+      start_date: editForm.value.start_date || null,
+      end_date: editForm.value.end_date || null,
+    }
+    await apiService.updateTournament(tournamentToEdit.value.id, payload)
+    showEditModal.value = false
+    tournamentToEdit.value = null
+    await loadTournaments()
+  } catch (e: any) {
+    alert(e.message || 'Failed to update tournament')
+  } finally {
+    editSubmitting.value = false
+  }
+}
+
+// Delete functions
+function openDeleteConfirm(tournament: any) {
+  if (!canManageTournaments.value) return
+  tournamentToDelete.value = tournament
+  showDeleteConfirm.value = true
+}
+
+async function confirmDelete() {
+  if (!tournamentToDelete.value || !canManageTournaments.value) return
+
+  deleteSubmitting.value = true
+  try {
+    await apiService.deleteTournament(tournamentToDelete.value.id)
+    showDeleteConfirm.value = false
+    tournamentToDelete.value = null
+    await loadTournaments()
+  } catch (e: any) {
+    alert(e.message || 'Failed to delete tournament')
+  } finally {
+    deleteSubmitting.value = false
   }
 }
 
@@ -231,8 +387,40 @@ onMounted(() => {
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   padding: 1.5rem;
-  cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-main {
+  cursor: pointer;
+  flex: 1;
+}
+
+.card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+
+.btn-icon {
+  background: #f5f5f5;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.2s;
+}
+
+.btn-icon:hover {
+  background: #e0e0e0;
+}
+
+.btn-icon-danger:hover {
+  background: #fee2e2;
 }
 
 .tournament-card:hover {
@@ -408,6 +596,36 @@ onMounted(() => {
   gap: 1rem;
   justify-content: flex-end;
   margin-top: 1.5rem;
+}
+
+.modal-confirm {
+  max-width: 400px;
+}
+
+.confirm-text {
+  color: #4b5563;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.5;
+}
+
+.btn-danger {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
+.btn-danger:disabled,
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 </style>
