@@ -39,9 +39,11 @@ import { useRouter, useRoute } from 'vue-router';
 
 import { getErrorMessage } from '@/services/api';
 import { login } from '@/services/auth';
+import { useAuthStore } from '@/stores/authStore';
 
 const router = useRouter();
 const route = useRoute();
+const authStore = useAuthStore();
 const email = ref('');
 const password = ref('');
 const loading = ref(false);
@@ -53,11 +55,14 @@ async function handleSubmit() {
   successMessage.value = '';
   loading.value = true;
   try {
-    await login(email.value.trim(), password.value);
-    successMessage.value = 'Signed in successfully.';
+    const result = await login(email.value.trim(), password.value);
+    // Update the auth store so the router guard knows we're logged in
+    authStore.token = result.token;
+    authStore.user = result.user;
     // If the router sent us here with a redirect query (saved destination), honor it.
-    const redirectTo = (route.query.redirect as string) || '/';
-    router.push(redirectTo);
+    // Default to /setup (create game page) instead of / which loops back to login.
+    const redirectTo = (route.query.redirect as string) || '/setup';
+    await router.push(redirectTo);
   } catch (err) {
     errorMessage.value = getErrorMessage(err);
   } finally {

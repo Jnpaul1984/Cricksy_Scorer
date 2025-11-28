@@ -44,8 +44,16 @@ try {
   Write-Host 'Ensuring Cypress binary is installed...'
   cmd /c "npx cypress install" | Out-Host
 
-  Write-Host 'Building app...'
-  cmd /c "npm run build" | Out-Host
+  Write-Host 'Building app with VITE_API_BASE...'
+  Write-Host "VITE_API_BASE = $Env:VITE_API_BASE"
+  # Explicitly pass the env var to npm run build
+  $buildEnv = @{
+    VITE_API_BASE = $Env:VITE_API_BASE
+  }
+  foreach ($key in $buildEnv.Keys) {
+    [Environment]::SetEnvironmentVariable($key, $buildEnv[$key], 'Process')
+  }
+  npm run build | Out-Host
 
   Write-Host 'Starting preview on port 3000...'
   $preview = Start-Process -FilePath cmd -ArgumentList "/c","npm","run","preview","--","--port","3000" -PassThru -WindowStyle Hidden -WorkingDirectory $frontendDir

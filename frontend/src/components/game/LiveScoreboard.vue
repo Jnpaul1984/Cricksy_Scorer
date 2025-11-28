@@ -20,6 +20,17 @@
       </div>
     </div>
 
+    <!-- Current batters with role badges -->
+    <div v-if="strikerName || nonStrikerName" class="batters-display">
+      <span v-if="strikerName" class="batter striker">
+        {{ strikerName }}<span class="role-badge">{{ roleBadge(strikerId) }}</span>*
+      </span>
+      <span v-if="strikerName && nonStrikerName" class="separator-dot">·</span>
+      <span v-if="nonStrikerName" class="batter">
+        {{ nonStrikerName }}<span class="role-badge">{{ roleBadge(nonStrikerId) }}</span>
+      </span>
+    </div>
+
     <div v-if="targetRuns" class="target-display">
       <span class="target-label">Target:</span>
       <span class="target-value">{{ targetRuns }}</span>
@@ -37,11 +48,43 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+import { useRoleBadge } from '@/composables/useRoleBadge';
 import { useGameStore } from '@/stores/gameStore';
 
 const gameStore = useGameStore();
 
+// Captain/Keeper badge composable
+const currentGame = computed(() => gameStore.currentGame as any);
+const teamAName = computed(() => String(currentGame.value?.team_a?.name ?? ''));
+// Note: battingTeamName is defined below in "Computed properties" section
+const isBattingTeamA = computed(() => String(currentGame.value?.batting_team_name ?? '') === teamAName.value);
+const { roleBadge } = useRoleBadge({ currentGame, isBattingTeamA });
+
 // Props (none needed - component reads from store)
+
+// Current striker/non-striker
+const strikerId = computed(() => String(currentGame.value?.current_striker_id ?? ''));
+const nonStrikerId = computed(() => String(currentGame.value?.current_non_striker_id ?? ''));
+
+const strikerName = computed(() => {
+  const id = strikerId.value;
+  if (!id || !currentGame.value) return '';
+  const players = [
+    ...(currentGame.value.team_a?.players || []),
+    ...(currentGame.value.team_b?.players || []),
+  ];
+  return players.find((p: any) => String(p.id) === id)?.name || '';
+});
+
+const nonStrikerName = computed(() => {
+  const id = nonStrikerId.value;
+  if (!id || !currentGame.value) return '';
+  const players = [
+    ...(currentGame.value.team_a?.players || []),
+    ...(currentGame.value.team_b?.players || []),
+  ];
+  return players.find((p: any) => String(p.id) === id)?.name || '';
+});
 
 // Computed properties
 const battingTeamName = computed(() =>
@@ -224,6 +267,35 @@ const statusClass = computed(() => {
   0% { opacity: 1; }
   50% { opacity: 0.7; }
   100% { opacity: 1; }
+}
+
+/* Current batters display */
+.batters-display {
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  color: #ecf0f1;
+}
+
+.batter {
+  font-weight: 600;
+}
+
+.batter.striker {
+  color: #2ecc71;
+}
+
+.separator-dot {
+  margin: 0 0.5rem;
+  color: #bdc3c7;
+}
+
+/* Captain / Keeper role badge */
+.role-badge {
+  font-size: 0.75em;
+  font-weight: 700;
+  color: #f39c12;
+  opacity: 0.9;
+  margin-left: 2px;
 }
 
 @media (max-width: 768px) {

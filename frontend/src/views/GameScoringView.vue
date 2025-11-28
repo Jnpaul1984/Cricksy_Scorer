@@ -14,6 +14,7 @@ import DeliveryTable from '@/components/DeliveryTable.vue'
 import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
+import { useRoleBadge } from '@/composables/useRoleBadge'
 import { apiService } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
@@ -89,6 +90,20 @@ const route = useRoute()
 const router = useRouter()
 const gameStore = useGameStore()
 const authStore = useAuthStore()
+
+// Captain/Keeper badge composable
+const currentGame = computed(() => gameStore.currentGame as any)
+const teamAName = computed(() => String(currentGame.value?.team_a?.name ?? ''))
+// Derive batting team name from liveSnapshot (updates on innings change)
+const battingTeamName = computed(() => {
+  const g = currentGame.value
+  if (!g) return ''
+  // Use liveSnapshot's batting_team_name if available, otherwise fall back to game's
+  const snap = liveSnapshot.value as any
+  return snap?.batting_team_name ?? g.batting_team_name ?? ''
+})
+const isBattingTeamA = computed(() => battingTeamName.value === teamAName.value)
+const { roleBadge, bowlerRoleBadge } = useRoleBadge({ currentGame, isBattingTeamA })
 
 // Reactive refs from the stores
 const { liveSnapshot } = storeToRefs(gameStore)
@@ -1577,14 +1592,14 @@ async function confirmChangeBowler(): Promise<void> {
           <div class="col">
             <label class="lbl">Striker</label>
             <select v-model="selectedStriker" class="sel" aria-label="Select striker">
-              <option disabled value="">Choose strikerâ€¦</option>
+              <option disabled value="">Choose striker…</option>
               <option
                 v-for="p in battingPlayers"
                 :key="p.id"
                 :value="p.id"
                 :disabled="p.id === selectedNonStriker"
               >
-                {{ p.name }}
+                {{ p.name }}{{ roleBadge(p.id) }}
               </option>
             </select>
           </div>
@@ -1592,14 +1607,14 @@ async function confirmChangeBowler(): Promise<void> {
           <div class="col">
             <label class="lbl">Non-striker</label>
             <select v-model="selectedNonStriker" class="sel" aria-label="Select non-striker">
-              <option disabled value="">Choose non-strikerâ€¦</option>
+              <option disabled value="">Choose non-striker…</option>
               <option
                 v-for="p in battingPlayers"
                 :key="p.id"
                 :value="p.id"
                 :disabled="p.id === selectedStriker"
               >
-                {{ p.name }}
+                {{ p.name }}{{ roleBadge(p.id) }}
               </option>
             </select>
           </div>
@@ -1607,9 +1622,9 @@ async function confirmChangeBowler(): Promise<void> {
           <div class="col">
             <label class="lbl">Bowler</label>
             <select v-model="selectedBowler" class="sel" aria-label="Select bowler">
-              <option disabled value="">Choose bowlerâ€¦</option>
+              <option disabled value="">Choose bowler…</option>
               <option v-for="p in bowlingPlayers" :key="p.id" :value="p.id">
-                {{ p.name }}
+                {{ p.name }}{{ bowlerRoleBadge(p.id) }}
               </option>
             </select>
           </div>
@@ -1811,7 +1826,7 @@ async function confirmChangeBowler(): Promise<void> {
           >
             <option disabled value="">Select fielderâ€¦</option>
             <option v-for="p in fielderOptions" :key="p.id" :value="p.id">
-              {{ p.name }}{{ bowlingXIIds.has(p.id) ? '' : ' (sub)' }}
+              {{ p.name }}{{ bowlerRoleBadge(p.id) }}{{ bowlingXIIds.has(p.id) ? '' : ' (sub)' }}
             </option>
           </select>
           <small
@@ -2046,7 +2061,7 @@ class="btn btn-ghost"
         <p>Select a bowler (cannot be the bowler who delivered the last ball of previous over).</p>
         <select v-model="selectedNextOverBowlerId" class="sel" data-testid="select-next-over-bowler">
           <option disabled value="">Choose bowlerâ€¦</option>
-          <option v-for="p in eligibleNextOverBowlers" :key="p.id" :value="p.id">{{ p.name }}</option>
+          <option v-for="p in eligibleNextOverBowlers" :key="p.id" :value="p.id">{{ p.name }}{{ bowlerRoleBadge(p.id) }}</option>
         </select>
         <footer>
           <button type="button" class="btn" @click="closeStartOver">Cancel</button>
@@ -2064,19 +2079,19 @@ class="btn btn-ghost"
         <label class="lbl">Striker</label>
         <select v-model="nextStrikerId" class="sel" data-testid="select-next-striker">
           <option disabled value="">Choose strikerâ€¦</option>
-          <option v-for="p in nextBattingXI" :key="p.id" :value="p.id">{{ p.name }}</option>
+          <option v-for="p in nextBattingXI" :key="p.id" :value="p.id">{{ p.name }}{{ roleBadge(p.id) }}</option>
         </select>
 
         <label class="lbl">Non-striker</label>
         <select v-model="nextNonStrikerId" class="sel" data-testid="select-next-nonstriker">
           <option disabled value="">Choose non-strikerâ€¦</option>
-          <option v-for="p in nextBattingXI" :key="p.id" :value="p.id" :disabled="p.id === nextStrikerId">{{ p.name }}</option>
+          <option v-for="p in nextBattingXI" :key="p.id" :value="p.id" :disabled="p.id === nextStrikerId">{{ p.name }}{{ roleBadge(p.id) }}</option>
         </select>
 
         <label class="lbl">Opening bowler (optional)</label>
         <select v-model="openingBowlerId" class="sel" data-testid="select-opening-bowler">
           <option value="">â€” None (choose later) â€”</option>
-          <option v-for="p in nextBowlingXI" :key="p.id" :value="p.id">{{ p.name }}</option>
+          <option v-for="p in nextBowlingXI" :key="p.id" :value="p.id">{{ p.name }}{{ bowlerRoleBadge(p.id) }}</option>
         </select>
 
         <footer>
@@ -2101,7 +2116,7 @@ class="btn btn-ghost"
         <p>Pick a batter who is not out.</p>
         <select v-model="selectedNextBatterId" class="sel" data-testid="select-next-batter">
           <option disabled value="">Choose batterâ€¦</option>
-          <option v-for="p in candidateBatters" :key="p.id" :value="p.id">{{ p.name }}</option>
+          <option v-for="p in candidateBatters" :key="p.id" :value="p.id">{{ p.name }}{{ roleBadge(p.id) }}</option>
         </select>
         <footer>
           <button type="button" class="btn" @click="closeSelectBatter">Cancel</button>
@@ -2139,7 +2154,7 @@ class="btn btn-ghost"
         <p>Pick a replacement to finish this over. You can do this only once per over.</p>
         <select v-model="selectedReplacementBowlerId" class="sel">
           <option disabled value="">Choose replacementâ€¦</option>
-          <option v-for="p in replacementOptions" :key="p.id" :value="p.id">{{ p.name }}</option>
+          <option v-for="p in replacementOptions" :key="p.id" :value="p.id">{{ p.name }}{{ bowlerRoleBadge(p.id) }}</option>
         </select>
         <footer>
           <button type="button" class="btn" @click="closeChangeBowler">Cancel</button>
