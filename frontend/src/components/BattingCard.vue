@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, withDefaults, defineProps } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import { fmtSR } from '@/utils/cricket'
+import { isValidUUID } from '@/utils'
 
 type BatEntry = {
   player_id: string
@@ -108,7 +110,8 @@ v-for="r in rows" :key="r.id"
             :class="[{ out: r.isOut, striker: r.isStriker, nonStriker: r.isNonStriker }]">
           <td class="name" :title="r.name">
             <span v-if="r.isStriker" class="dot" aria-label="on strike" />
-            <span class="nameText">{{ r.name }}</span>
+            <RouterLink v-if="isValidUUID(r.id)" :to="{ name: 'PlayerProfile', params: { playerId: r.id } }" class="player-link nameText">{{ r.name }}</RouterLink>
+            <span v-else class="nameText">{{ r.name }}</span>
           </td>
           <td class="num">{{ r.runs }}</td>
           <td class="num">{{ r.balls }}</td>
@@ -142,4 +145,14 @@ tr.striker .name { color: #e5ff7a; }
 tr.nonStriker .name { color: #a7f3d0; }
 tr.out .name { opacity: .7; }
 .dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#e5ff7a; margin-right:6px; vertical-align: middle; }
+
+/* Player profile link (inherits styling, no underline) */
+.player-link {
+  color: inherit;
+  text-decoration: none;
+}
+.player-link:hover {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
 </style>

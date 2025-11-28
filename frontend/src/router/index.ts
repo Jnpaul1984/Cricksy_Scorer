@@ -34,6 +34,13 @@ const router = createRouter({
       component: () => import('@/views/LoginView.vue'),
     },
     {
+      path: '/player/:playerId',
+      name: 'PlayerProfile',
+      component: () => import('@/views/PlayerProfileView.vue'),
+      props: true,
+    },
+    {
+      // Legacy route - kept for backwards compatibility
       path: '/players/:playerId/profile',
       name: 'player-profile',
       component: () => import('@/views/PlayerProfileView.vue'),
