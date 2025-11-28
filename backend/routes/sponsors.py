@@ -136,6 +136,147 @@ async def create_sponsor(
     }
 
 
+@router.get("/sponsors")
+async def list_sponsors(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[dict[str, Any]]:
+    """List all sponsors (active and inactive)."""
+    Sponsor = models.Sponsor
+    stmt = select(Sponsor).order_by(Sponsor.weight.desc(), Sponsor.created_at.desc())
+    res = await db.execute(stmt)
+    rows = res.scalars().all()
+
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        is_active = getattr(r, "is_active", True)
+        out.append(
+            {
+                "id": str(r.id),
+                "name": str(r.name),
+                "logoUrl": f"/static/{r.logo_path}",
+                "clickUrl": str(r.click_url) if r.click_url else None,
+                "weight": int(r.weight),
+                "surfaces": r.surfaces or ["all"],
+                "is_active": is_active,
+                "start_at": _iso_or_none(r.start_at),
+                "end_at": _iso_or_none(r.end_at),
+                "created_at": _iso_or_none(r.created_at),
+                "updated_at": _iso_or_none(r.updated_at),
+            }
+        )
+    return out
+
+
+@router.get("/sponsors/{sponsor_id}")
+async def get_sponsor(
+    sponsor_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Get a single sponsor by ID."""
+    stmt = select(models.Sponsor).where(models.Sponsor.id == sponsor_id)
+    res = await db.execute(stmt)
+    r = res.scalar_one_or_none()
+    if not r:
+        raise HTTPException(status_code=404, detail="Sponsor not found")
+
+    is_active = getattr(r, "is_active", True)
+    return {
+        "id": str(r.id),
+        "name": str(r.name),
+        "logoUrl": f"/static/{r.logo_path}",
+        "clickUrl": str(r.click_url) if r.click_url else None,
+        "weight": int(r.weight),
+        "surfaces": r.surfaces or ["all"],
+        "is_active": is_active,
+        "start_at": _iso_or_none(r.start_at),
+        "end_at": _iso_or_none(r.end_at),
+        "created_at": _iso_or_none(r.created_at),
+        "updated_at": _iso_or_none(r.updated_at),
+    }
+
+
+class SponsorUpdateIn(BaseModel):
+    name: str | None = None
+    logo_url: str | None = None
+    click_url: str | None = None
+    weight: int | None = None
+    is_active: bool | None = None
+    start_at: str | None = None
+    end_at: str | None = None
+
+
+@router.patch("/sponsors/{sponsor_id}")
+async def update_sponsor(
+    sponsor_id: str,
+    body: SponsorUpdateIn,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Update an existing sponsor (partial update)."""
+    stmt = select(models.Sponsor).where(models.Sponsor.id == sponsor_id)
+    res = await db.execute(stmt)
+    r = res.scalar_one_or_none()
+    if not r:
+        raise HTTPException(status_code=404, detail="Sponsor not found")
+
+    if body.name is not None:
+        r.name = body.name
+    if body.click_url is not None:
+        r.click_url = body.click_url if body.click_url else None
+    if body.weight is not None:
+        if body.weight < 1 or body.weight > 5:
+            raise HTTPException(status_code=400, detail="weight must be between 1 and 5")
+        r.weight = body.weight
+    if body.is_active is not None and hasattr(r, "is_active"):
+        r.is_active = body.is_active
+    if body.start_at is not None:
+        r.start_at = _parse_iso_dt(body.start_at)
+    if body.end_at is not None:
+        r.end_at = _parse_iso_dt(body.end_at)
+
+    await db.commit()
+    await db.refresh(r)
+
+    is_active = getattr(r, "is_active", True)
+    return {
+        "id": str(r.id),
+        "name": str(r.name),
+        "logoUrl": f"/static/{r.logo_path}",
+        "clickUrl": str(r.click_url) if r.click_url else None,
+        "weight": int(r.weight),
+        "surfaces": r.surfaces or ["all"],
+        "is_active": is_active,
+        "start_at": _iso_or_none(r.start_at),
+        "end_at": _iso_or_none(r.end_at),
+        "created_at": _iso_or_none(r.created_at),
+        "updated_at": _iso_or_none(r.updated_at),
+    }
+
+
+@router.delete("/sponsors/{sponsor_id}")
+async def delete_sponsor(
+    sponsor_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, str]:
+    """Delete a sponsor by ID."""
+    stmt = select(models.Sponsor).where(models.Sponsor.id == sponsor_id)
+    res = await db.execute(stmt)
+    r = res.scalar_one_or_none()
+    if not r:
+        raise HTTPException(status_code=404, detail="Sponsor not found")
+
+    # Optionally delete the logo file
+    try:
+        logo_file = SPONSORS_DIR.parent / r.logo_path
+        if logo_file.exists():
+            logo_file.unlink()
+    except Exception:
+        pass  # nosec B110 - intentionally ignore file deletion failures
+
+    await db.delete(r)
+    await db.commit()
+    return {"status": "deleted"}
+
+
 @router.get("/games/{game_id}/sponsors")
 async def get_game_sponsors(
     game_id: str,

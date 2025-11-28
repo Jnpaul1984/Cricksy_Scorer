@@ -2,8 +2,8 @@
 import { computed, withDefaults, defineProps } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { fmtSR } from '@/utils/cricket'
 import { isValidUUID } from '@/utils'
+import { fmtSR } from '@/utils/cricket'
 
 type BatEntry = {
   player_id: string

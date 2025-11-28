@@ -321,12 +321,15 @@ export interface SponsorCreateBody {
   end_at?: string | null;   // ISO-8601
 }
 export interface SponsorRow {
-  id: number;
+  id: string;
   name: string;
   logoUrl: string;
   clickUrl?: string | null;
   weight: number;
   surfaces: string[];
+  is_active?: boolean;
+  start_at?: string | null;
+  end_at?: string | null;
 }
 export interface SponsorImpressionIn {
   game_id: string;
@@ -690,6 +693,35 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
     if (body.end_at) form.append('end_at', body.end_at);
     return request<any>('/sponsors', { method: 'POST', body: form });
   },
+
+  /** List all sponsors (active + inactive) */
+  getSponsors: () =>
+    request<SponsorRow[]>('/sponsors'),
+
+  /** Get a single sponsor by ID */
+  getSponsor: (sponsorId: string) =>
+    request<SponsorRow>(`/sponsors/${encodeURIComponent(sponsorId)}`),
+
+  /** Update an existing sponsor (partial update) */
+  updateSponsor: (sponsorId: string, body: {
+    name?: string;
+    logo_url?: string;
+    click_url?: string | null;
+    weight?: number;
+    is_active?: boolean;
+    start_at?: string | null;
+    end_at?: string | null;
+  }) =>
+    request<SponsorRow>(`/sponsors/${encodeURIComponent(sponsorId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  /** Delete a sponsor */
+  deleteSponsor: (sponsorId: string) =>
+    request<{ status: string }>(`/sponsors/${encodeURIComponent(sponsorId)}`, {
+      method: 'DELETE',
+    }),
 
   getGameSponsors: (gameId: string) =>
     request<SponsorRow[]>(`/games/${encodeURIComponent(gameId)}/sponsors`),
