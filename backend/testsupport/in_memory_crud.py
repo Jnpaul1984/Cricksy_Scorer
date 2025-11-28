@@ -93,6 +93,18 @@ class InMemoryCrudRepository:
         g.innings_history = []
 
         self._games[game_id] = g
+
+        # Also insert into the actual SQLite database for routes that use raw queries
+        try:
+            from sqlalchemy.ext.asyncio import AsyncSession
+
+            if isinstance(db, AsyncSession):
+                db.add(g)
+                await db.commit()
+                await db.refresh(g)
+        except Exception:
+            pass  # nosec - fallback to in-memory only
+
         return g
 
     async def get_game(self, db: object, game_id: str) -> models.Game | None:

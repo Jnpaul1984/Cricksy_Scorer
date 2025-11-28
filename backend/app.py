@@ -341,6 +341,29 @@ def create_app(
         with contextlib.suppress(Exception):
             pass  # nosec
 
+        # Create tables and seed a superuser for in-memory dev mode
+        if bool(getattr(settings, "IN_MEMORY_DB", False)):
+            from backend import security as sec
+            from backend.sql_app import models
+            from backend.sql_app.database import get_engine
+
+            # Create all tables in the in-memory SQLite database
+            engine = get_engine()
+            async with engine.begin() as conn:
+                await conn.run_sync(models.Base.metadata.create_all)
+            print("[DEV] Created in-memory database tables")
+
+            superuser = models.User(
+                id="superuser-dev-id",
+                email="admin@test.com",
+                hashed_password=sec.get_password_hash("admin123"),
+                is_active=True,
+                is_superuser=True,
+                role="org_pro",
+            )
+            sec.add_in_memory_user(superuser)
+            print("[DEV] Seeded superuser: admin@test.com / admin123")
+
     @fastapi_app.on_event("shutdown")  # type: ignore[reportDeprecated]
     async def _shutdown_db_event() -> None:  # type: ignore[reportUnusedFunction]
         import contextlib
