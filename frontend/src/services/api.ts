@@ -534,6 +534,24 @@ export async function patchReduceOvers(gameId: string, innings: 1 | 2, newOvers:
 }
 
 
+/* ----------------------------- Fan Mode types ----------------------------- */
+
+export interface FanMatchCreate {
+  home_team_name: string
+  away_team_name: string
+  match_type?: string
+  overs_limit?: number | null
+}
+
+export interface FanMatchRead {
+  id: string
+  home_team_name: string
+  away_team_name: string
+  match_type: string
+  overs_limit: number | null
+  is_fan_match: boolean
+}
+
 /* ----------------------------- API surface ------------------------------- */
 
 export const apiService = {
@@ -565,6 +583,16 @@ export const apiService = {
       `/games/search${qs ? `?${qs}` : ''}`
     )
   },
+
+  /* Fan Mode */
+  createFanMatch: (body: FanMatchCreate) =>
+    request<FanMatchRead>('/api/fan/matches', { method: 'POST', body: JSON.stringify(body) }),
+
+  listFanMatches: (limit = 20, offset = 0) =>
+    request<FanMatchRead[]>(`/api/fan/matches?limit=${limit}&offset=${offset}`),
+
+  getFanMatch: (matchId: string) =>
+    request<FanMatchRead>(`/api/fan/matches/${encodeURIComponent(matchId)}`),
 
   /* Scoring */
   scoreDelivery: (gameId: string, body: ScoreDeliveryRequest) =>

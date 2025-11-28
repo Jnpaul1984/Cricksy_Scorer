@@ -87,6 +87,20 @@ async function onSubmit() {
 
 <template>
   <div class="setup">
+    <!-- Fan Mode Banner -->
+    <div class="fan-mode-banner">
+      <div class="fan-mode-content">
+        <span class="fan-mode-icon">🏏</span>
+        <div class="fan-mode-text">
+          <strong>Just want to score a quick game?</strong>
+          <span>Try Fan Mode — no rosters, no toss, just cricket!</span>
+        </div>
+        <RouterLink to="/fan" class="fan-mode-btn" data-testid="btn-fan-mode">
+          Fan Mode →
+        </RouterLink>
+      </div>
+    </div>
+
     <div v-if="!canCreateMatch" class="access-banner">
       <p v-if="isCoachAccount">
         Coach Pro accounts can join as scorers via the contributor invite flow.
@@ -213,6 +227,14 @@ async function onSubmit() {
 
 <style scoped>
 .setup{min-height:100vh;padding:2rem;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
+.fan-mode-banner{max-width:900px;margin:0 auto 1rem;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:1rem 1.25rem}
+.fan-mode-content{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.fan-mode-icon{font-size:1.75rem}
+.fan-mode-text{flex:1;min-width:200px;color:#fff;line-height:1.4}
+.fan-mode-text strong{display:block;font-size:1rem}
+.fan-mode-text span{font-size:.9rem;opacity:.8}
+.fan-mode-btn{background:linear-gradient(135deg,#ff6b6b 0%,#ee5a52 100%);color:#fff;text-decoration:none;padding:.6rem 1.25rem;border-radius:20px;font-weight:600;font-size:.9rem;white-space:nowrap;transition:transform .2s,box-shadow .2s}
+.fan-mode-btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(255,107,107,.4)}
 .access-banner{max-width:900px;margin:0 auto 1rem;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:14px;padding:1rem;color:#fff;line-height:1.4}
 .card{max-width:900px;margin:0 auto;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:18px;padding:1.25rem}
 h2{color:#fff;margin:0 0 1rem}
@@ -227,5 +249,5 @@ input,select{padding:.7rem;border-radius:10px;border:1px solid rgba(255,255,255,
 .primary:disabled{opacity:.6;cursor:not-allowed}
 .invite-link{margin-left:1rem;color:#fff;text-decoration:underline}
 .error{margin-top:.75rem;color:#ffb3b3}
-@media(max-width:800px){.two{grid-template-columns:1fr}}
+@media(max-width:800px){.two{grid-template-columns:1fr}.fan-mode-content{flex-direction:column;text-align:center}.fan-mode-text{min-width:auto}}
 </style>

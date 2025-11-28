@@ -52,6 +52,11 @@ const router = createRouter({
       component: () => import('@/views/LeaderboardView.vue'),
     },
     {
+      path: '/fan',
+      name: 'fan-mode',
+      component: () => import('@/views/FanModeView.vue'),
+    },
+    {
       path: '/e2e',
       name: 'e2e-view',
       component: () => import('@/views/E2EView.vue'),
