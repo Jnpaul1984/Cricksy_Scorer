@@ -110,6 +110,22 @@ const router = createRouter({
       component: () => import('@/views/TournamentDetailView.vue'),
     },
 
+    // --- Coach routes ---
+    {
+      path: '/coach/dashboard',
+      name: 'coach-dashboard',
+      component: () => import('@/views/CoachesDashboardView.vue'),
+      meta: { requiresCoach: true },
+    },
+
+    // --- Analyst routes ---
+    {
+      path: '/analyst/workspace',
+      name: 'analyst-workspace',
+      component: () => import('@/views/AnalystWorkspaceView.vue'),
+      meta: { requiresAnalyst: true },
+    },
+
     // Catch-all → setup
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
@@ -183,6 +199,26 @@ router.beforeEach(async (to, _from, next) => {
       return next({ path: '/login', query: { redirect: to.fullPath } })
     }
     if (!auth.isOrg && !auth.isSuper) {
+      return next('/')
+    }
+  }
+
+  // Coach-protected routes
+  if (to.meta.requiresCoach) {
+    if (!auth.isLoggedIn) {
+      return next({ path: '/login', query: { redirect: to.fullPath } })
+    }
+    if (!auth.isCoach && !auth.isOrg && !auth.isSuper) {
+      return next('/')
+    }
+  }
+
+  // Analyst-protected routes
+  if (to.meta.requiresAnalyst) {
+    if (!auth.isLoggedIn) {
+      return next({ path: '/login', query: { redirect: to.fullPath } })
+    }
+    if (!auth.isAnalyst && !auth.isOrg && !auth.isSuper) {
       return next('/')
     }
   }

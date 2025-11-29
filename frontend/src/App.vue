@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
+
 
 import logoAvif1024 from '@/assets/optimized/logo-w1024.avif'
 import logoWebp1024 from '@/assets/optimized/logo-w1024.webp'
@@ -10,6 +11,7 @@ import logoAvif480 from '@/assets/optimized/logo-w480.avif'
 import logoWebp480 from '@/assets/optimized/logo-w480.webp'
 import logoAvif768 from '@/assets/optimized/logo-w768.avif'
 import logoWebp768 from '@/assets/optimized/logo-w768.webp'
+import { useAuthStore } from '@/stores/authStore'
 
 onMounted(() => {
   // hide the tiny fallback text from index.html once Vue is mounted
@@ -27,6 +29,13 @@ const logoAvifSrcset = logoSources.map((src) => `${src.avif} ${src.width}w`).joi
 const logoWebpSrcset = logoSources.map((src) => `${src.webp} ${src.width}w`).join(', ')
 const logoFallbackSrc = logoSources.find((src) => src.width === 768)?.webp ?? logoSources[0].webp
 const logoSizes = '32px'
+
+// Auth store for role-based navigation
+const auth = useAuthStore()
+
+// Computed properties for showing role-based nav items
+const showCoachNav = computed(() => auth.isCoach || auth.isOrg || auth.isSuper)
+const showAnalystNav = computed(() => auth.isAnalyst || auth.isOrg || auth.isSuper)
 </script>
 
 <template>
@@ -52,6 +61,8 @@ const logoSizes = '32px'
       <nav class="nav">
         <RouterLink to="/landing">Home</RouterLink>
         <RouterLink to="/setup">Setup</RouterLink>
+        <RouterLink v-if="showCoachNav" to="/coach/dashboard">Coach</RouterLink>
+        <RouterLink v-if="showAnalystNav" to="/analyst/workspace">Analyst</RouterLink>
         <RouterLink to="/pricing">Pricing</RouterLink>
       </nav>
     </header>
