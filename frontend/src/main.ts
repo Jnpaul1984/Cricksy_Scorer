@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores/authStore';
 
 // Global styles first (safe to keep here)
 import '@picocss/pico/css/pico.min.css'
+import './assets/designSystem.css'
 import './assets/main.css'
 
 // Mount target with a guard so we never double-mount
