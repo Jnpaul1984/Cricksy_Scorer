@@ -110,19 +110,23 @@ function openInNewTab() {
 </script>
 
 <style scoped>
+/* =====================================================
+   VIEWER SCOREBOARD VIEW - Using Design System Tokens
+   ===================================================== */
+
 /* Page shell */
 .view-wrap {
   min-height: 100dvh;
   display: grid;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--space-4);
+  padding: var(--space-4);
   align-content: start;
   background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(34,211,238,.12), transparent 60%),
-    radial-gradient(900px 480px at 100% 0%, rgba(16,185,129,.10), transparent 55%),
-    linear-gradient(180deg, rgba(2,6,23,1) 0%, rgba(2,6,23,.94) 240px, rgba(2,6,23,.94) 100%);
-  color: #e5e7eb;
-  overflow: visible; /* keep any child abs-pos content safe */
+    radial-gradient(1200px 600px at 10% -10%, var(--color-primary-soft), transparent 60%),
+    radial-gradient(900px 480px at 100% 0%, var(--color-secondary-soft), transparent 55%),
+    linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg) 240px, var(--color-bg) 100%);
+  color: var(--color-text);
+  overflow: visible;
 }
 
 /* Header bar */
@@ -130,71 +134,105 @@ function openInNewTab() {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
 }
-.left { display: flex; align-items: baseline; gap: 10px; }
-.title { margin: 0; font-size: 18px; font-weight: 900; letter-spacing: .01em; }
-.meta { font-size: 12px; color: #9ca3af; }
-.right { display: inline-flex; gap: 8px; }
+
+.left {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--h3-size);
+  font-weight: var(--font-extrabold);
+  letter-spacing: 0.01em;
+}
+
+.meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.right {
+  display: inline-flex;
+  gap: var(--space-2);
+}
 
 /* Buttons */
 .btn, .btn-ghost {
   appearance: none;
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-weight: 800;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-weight: var(--font-extrabold);
+  font-size: var(--text-sm);
   cursor: pointer;
   text-decoration: none;
+  transition: background var(--transition-fast);
 }
+
 .btn {
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.08);
-  color: #e5e7eb;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
   backdrop-filter: blur(8px);
 }
-.btn:hover { background: rgba(255,255,255,.12); }
-.btn-ghost {
-  border: 1px solid rgba(255,255,255,.16);
-  background: transparent;
-  color: #e5e7eb;
+
+.btn:hover {
+  background: var(--color-surface-hover);
 }
-.btn-ghost:hover { background: rgba(255,255,255,.06); }
+
+.btn-ghost {
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text);
+}
+
+.btn-ghost:hover {
+  background: var(--color-surface-hover);
+}
 
 /* Decorative stage around the widget */
 .stage {
   position: relative;
   width: min(1100px, 96vw);
   margin: 0 auto;
-  padding: 16px;
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-  border: 1px solid rgba(255,255,255,.10);
-  box-shadow:
-    0 10px 30px rgba(0,0,0,.35),
-    inset 0 1px 0 rgba(255,255,255,.06);
-  overflow: visible; /* <- important so ScoreboardWidget side rails are never clipped */
+  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, var(--color-surface), var(--color-bg));
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  overflow: visible;
 }
 
-/* Light-mode polish for the page shell (not the widget) */
-@media (prefers-color-scheme: light) {
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
   .view-wrap {
     background:
-      radial-gradient(1200px 600px at 10% -10%, rgba(34,211,238,.10), transparent 60%),
-      radial-gradient(900px 480px at 100% 0%, rgba(16,185,129,.08), transparent 55%),
-      linear-gradient(180deg, #f8fafc 0%, #ffffff 240px, #ffffff 100%);
-    color: #0b0f1a;
+      radial-gradient(1200px 600px at 10% -10%, var(--color-primary-soft), transparent 60%),
+      radial-gradient(900px 480px at 100% 0%, var(--color-secondary-soft), transparent 55%),
+      linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg) 240px, var(--color-bg) 100%);
+    color: var(--color-text);
   }
-  .btn, .btn-ghost { color: #0b0f1a; border-color: #e5e7eb; }
-  .btn { background: #ffffff; }
-  .btn:hover { background: #f3f4f6; }
+
+  .btn, .btn-ghost {
+    color: var(--color-text);
+    border-color: var(--color-border);
+  }
+
+  .btn {
+    background: var(--color-surface);
+  }
+
+  .btn:hover {
+    background: var(--color-surface-hover);
+  }
+
   .stage {
-    background: linear-gradient(180deg, #ffffff, #f9fafb);
-    border-color: #e5e7eb;
-    box-shadow:
-      0 10px 30px rgba(2,6,23,.08),
-      inset 0 1px 0 #fff;
+    background: linear-gradient(180deg, var(--color-surface), var(--color-bg));
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-lg);
   }
 }
 </style>
