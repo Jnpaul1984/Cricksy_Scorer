@@ -552,6 +552,24 @@ export interface FanMatchRead {
   is_fan_match: boolean
 }
 
+export type FanFavoriteType = 'player' | 'team'
+
+export interface FanFavoriteCreate {
+  favorite_type: FanFavoriteType
+  player_profile_id?: string | null
+  team_id?: string | null
+}
+
+export interface FanFavoriteRead {
+  id: string
+  favorite_type: FanFavoriteType
+  player_profile_id: string | null
+  team_id: string | null
+  created_at: string
+  player_name?: string | null
+  team_name?: string | null
+}
+
 /* ----------------------------- API surface ------------------------------- */
 
 export const apiService = {
@@ -593,6 +611,21 @@ export const apiService = {
 
   getFanMatch: (matchId: string) =>
     request<FanMatchRead>(`/api/fan/matches/${encodeURIComponent(matchId)}`),
+
+  /* Fan Favorites */
+  getFanFavorites: () =>
+    request<FanFavoriteRead[]>('/api/fan/favorites'),
+
+  createFanFavorite: (payload: FanFavoriteCreate) =>
+    request<FanFavoriteRead>('/api/fan/favorites', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteFanFavorite: (favoriteId: string) =>
+    request<void>(`/api/fan/favorites/${encodeURIComponent(favoriteId)}`, {
+      method: 'DELETE',
+    }),
 
   /* Scoring */
   scoreDelivery: (gameId: string, body: ScoreDeliveryRequest) =>

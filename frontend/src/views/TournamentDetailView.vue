@@ -398,6 +398,17 @@
             <li v-for="team in teams" :key="team.id || team.team_name">
               <div class="td-list-main">
                 <strong>{{ team.team_name }}</strong>
+                <button
+                  v-if="authStore.currentUser && team.id != null"
+                  type="button"
+                  class="td-team-fav-btn"
+                  :class="{ 'td-team-fav-active': isTeamFavorite(team.id) }"
+                  :disabled="togglingTeamFavorite.has(String(team.id))"
+                  :title="isTeamFavorite(team.id) ? 'Remove from favorites' : 'Add to favorites'"
+                  @click.stop="toggleTeamFavorite(team.id)"
+                >
+                  {{ isTeamFavorite(team.id) ? '★' : '☆' }}
+                </button>
                 <span class="td-list-secondary">
                   {{ (team.matches_played ?? 0) }} matches •
                   {{ (team.points ?? 0) }} pts
@@ -453,13 +464,18 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import apiService, { API_BASE, getErrorMessage } from '@/services/api'
+import apiService, { API_BASE, getErrorMessage, type FanFavoriteRead } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 
 type Tournament = Record<string, any>
 type TournamentTeam = Record<string, any>
 type TournamentFixture = Record<string, any>
 type PointsRow = Record<string, any>
+
+// ================== Team favorites state ==================
+// Map of team.id (as string) -> favorite record id (for quick lookup and deletion)
+const teamFavoritesMap = ref<Map<string, string>>(new Map())
+const togglingTeamFavorite = ref<Set<string>>(new Set())
 
 const route = useRoute()
 const router = useRouter()
@@ -612,6 +628,56 @@ async function loadTournament() {
 
 function reload() {
   loadTournament()
+}
+
+// ================== Team favorites functions ==================
+async function loadTeamFavorites() {
+  if (!authStore.currentUser) return
+
+  try {
+    const favorites: FanFavoriteRead[] = await apiService.getFanFavorites()
+    const newMap = new Map<string, string>()
+    for (const fav of favorites) {
+      if (fav.favorite_type === 'team' && fav.team_id != null) {
+        newMap.set(fav.team_id, String(fav.id))
+      }
+    }
+    teamFavoritesMap.value = newMap
+  } catch {
+    // Silently fail – favorites are non-critical
+  }
+}
+
+function isTeamFavorite(teamId: number | string | undefined): boolean {
+  if (teamId == null) return false
+  return teamFavoritesMap.value.has(String(teamId))
+}
+
+async function toggleTeamFavorite(teamId: number | string | undefined): Promise<void> {
+  if (teamId == null || !authStore.currentUser) return
+  const teamIdStr = String(teamId)
+  if (togglingTeamFavorite.value.has(teamIdStr)) return
+
+  togglingTeamFavorite.value.add(teamIdStr)
+  try {
+    const existingFavoriteId = teamFavoritesMap.value.get(teamIdStr)
+    if (existingFavoriteId) {
+      // Remove favorite
+      await apiService.deleteFanFavorite(existingFavoriteId)
+      teamFavoritesMap.value.delete(teamIdStr)
+    } else {
+      // Add favorite
+      const created = await apiService.createFanFavorite({
+        favorite_type: 'team',
+        team_id: teamIdStr,
+      })
+      teamFavoritesMap.value.set(teamIdStr, String(created.id))
+    }
+  } catch (err) {
+    showToast(getErrorMessage(err) || 'Failed to update favorite', 'error')
+  } finally {
+    togglingTeamFavorite.value.delete(teamIdStr)
+  }
 }
 
 // Edit functions
@@ -812,6 +878,7 @@ async function confirmDeleteSponsor() {
 onMounted(() => {
   loadTournament()
   loadSponsors()
+  loadTeamFavorites()
 })
 
 watch(
@@ -1107,6 +1174,33 @@ function formatFixtureStatus(raw: string): string {
 .td-list-secondary {
   font-size: 0.85rem;
   color: var(--pico-muted-border-color, #6b7280);
+}
+
+/* Team favorite button (star icon) */
+.td-team-fav-btn {
+  background: transparent;
+  border: none;
+  padding: 0 0.25rem;
+  font-size: 1rem;
+  cursor: pointer;
+  color: var(--pico-muted-border-color, #6b7280);
+  transition: color 0.15s, transform 0.15s;
+  vertical-align: middle;
+  margin-left: 0.35rem;
+}
+
+.td-team-fav-btn:hover:not(:disabled) {
+  color: #facc15;
+  transform: scale(1.15);
+}
+
+.td-team-fav-btn.td-team-fav-active {
+  color: #facc15;
+}
+
+.td-team-fav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .td-muted {
