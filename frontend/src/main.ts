@@ -11,7 +11,12 @@ import { API_BASE, setUnauthorizedHandler } from '@/services/api';
 import pinia from '@/stores'
 import { useAuthStore } from '@/stores/authStore';
 
-// Global styles first (safe to keep here)
+/**
+ * Global CSS Import Order (do not change):
+ * 1. Pico CSS — base framework styles
+ * 2. designSystem.css — single source of truth for all CSS tokens
+ * 3. main.css — global tweaks that CONSUME tokens (no definitions)
+ */
 import '@picocss/pico/css/pico.min.css'
 import './assets/designSystem.css'
 import './assets/main.css'
