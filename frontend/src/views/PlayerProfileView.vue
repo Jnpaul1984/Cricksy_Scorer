@@ -26,7 +26,19 @@
             <div class="player-name-row">
               <h1>{{ profile.player_name }}</h1>
               <span class="role-badge" :class="roleClass">{{ playerRole }}</span>
+              <button
+                class="follow-btn"
+                :class="{ following: isFavorite, loading: isTogglingFavorite }"
+                :disabled="isTogglingFavorite"
+                :title="isFavorite ? 'Unfollow this player' : 'Follow this player'"
+                @click="toggleFavorite"
+              >
+                <span v-if="isTogglingFavorite" class="btn-spinner"></span>
+                <span v-else-if="isFavorite">★ Following</span>
+                <span v-else>☆ Follow</span>
+              </button>
             </div>
+            <div v-if="favoriteError" class="favorite-error">{{ favoriteError }}</div>
             <div class="player-meta">
               <span class="meta-item">🏏 {{ profile.total_matches }} matches</span>
               <span class="meta-item subdued">ID: {{ profile.player_id.slice(0, 8) }}…</span>
@@ -221,6 +233,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
+import { apiService, getErrorMessage } from '@/services/api'
+import type { FanFavoriteRead } from '@/services/api'
 import { getPlayerProfile } from '@/services/playerApi'
 import type { PlayerProfile } from '@/types/player'
 
@@ -231,6 +245,12 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const profile = ref<PlayerProfile | null>(null)
 const activeTab = ref<TabName>('overview')
+
+// Fan favorites state
+const isFavorite = ref(false)
+const favoriteId = ref<string | null>(null)
+const isTogglingFavorite = ref(false)
+const favoriteError = ref<string | null>(null)
 
 // Derive player role from stats
 const playerRole = computed<string>(() => {
@@ -285,8 +305,61 @@ const loadProfile = async () => {
   }
 }
 
-onMounted(() => {
-  loadProfile()
+// Load current user's favorites and check if this player is followed
+const loadFavorites = async () => {
+  if (!profile.value) return
+
+  try {
+    const favorites: FanFavoriteRead[] = await apiService.getFanFavorites()
+    const match = favorites.find(
+      (f) => f.favorite_type === 'player' && f.player_profile_id === profile.value?.player_id
+    )
+    if (match) {
+      isFavorite.value = true
+      favoriteId.value = match.id
+    } else {
+      isFavorite.value = false
+      favoriteId.value = null
+    }
+  } catch (err) {
+    // Silently fail - user may not be logged in
+    console.warn('Failed to load favorites:', getErrorMessage(err))
+  }
+}
+
+// Toggle follow/unfollow for current player
+const toggleFavorite = async () => {
+  if (!profile.value || isTogglingFavorite.value) return
+
+  isTogglingFavorite.value = true
+  favoriteError.value = null
+
+  try {
+    if (isFavorite.value && favoriteId.value) {
+      // Unfollow
+      await apiService.deleteFanFavorite(favoriteId.value)
+      isFavorite.value = false
+      favoriteId.value = null
+    } else {
+      // Follow
+      const newFavorite = await apiService.createFanFavorite({
+        favorite_type: 'player',
+        player_profile_id: profile.value.player_id,
+      })
+      isFavorite.value = true
+      favoriteId.value = newFavorite.id
+    }
+  } catch (err) {
+    favoriteError.value = getErrorMessage(err)
+    console.error('Failed to toggle favorite:', err)
+  } finally {
+    isTogglingFavorite.value = false
+  }
+}
+
+onMounted(async () => {
+  await loadProfile()
+  await loadFavorites()
 })
 </script>
 
@@ -444,6 +517,58 @@ onMounted(() => {
 .role-default {
   background: #f5f5f5;
   color: #666;
+}
+
+/* Follow Button */
+.follow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--primary, #1976d2);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--primary, #1976d2);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.follow-btn:hover:not(:disabled) {
+  background: var(--primary, #1976d2);
+  color: #fff;
+}
+
+.follow-btn.following {
+  background: var(--primary, #1976d2);
+  color: #fff;
+}
+
+.follow-btn.following:hover:not(:disabled) {
+  background: #c62828;
+  border-color: #c62828;
+}
+
+.follow-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.follow-btn .btn-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.favorite-error {
+  color: #c62828;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
 }
 
 .player-meta {
