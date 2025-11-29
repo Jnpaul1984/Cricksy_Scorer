@@ -50,7 +50,9 @@ const logoSizes = '32px'
       </RouterLink>
 
       <nav class="nav">
-        <RouterLink to="/">Setup</RouterLink>
+        <RouterLink to="/landing">Home</RouterLink>
+        <RouterLink to="/setup">Setup</RouterLink>
+        <RouterLink to="/pricing">Pricing</RouterLink>
       </nav>
     </header>
 

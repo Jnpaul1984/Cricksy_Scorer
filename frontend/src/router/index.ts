@@ -16,7 +16,17 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/login',
+      redirect: '/landing',
+    },
+    {
+      path: '/landing',
+      name: 'landing',
+      component: () => import('@/views/LandingView.vue'),
+    },
+    {
+      path: '/pricing',
+      name: 'pricing',
+      component: () => import('@/views/PricingView.vue'),
     },
     {
       path: '/setup',
@@ -149,9 +159,9 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // --- General auth guard -------------------------------------------------
-  // Public: /login and viewer/embed routes
-  const publicPaths = ['/login']
-  const publicNames = ['viewer-scoreboard', 'embed-scoreboard']
+  // Public: /login, /landing, /pricing and viewer/embed routes
+  const publicPaths = ['/login', '/landing', '/pricing']
+  const publicNames = ['landing', 'pricing', 'viewer-scoreboard', 'embed-scoreboard']
 
   const isPublic = publicPaths.includes(to.path) || (to.name != null && publicNames.includes(String(to.name)))
 
