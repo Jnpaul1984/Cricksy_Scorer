@@ -31,7 +31,7 @@ describe('BattingCard.vue', () => {
       props: { entries: sampleEntries }
     })
 
-    expect(wrapper.find('.card').exists()).toBe(true)
+    expect(wrapper.find('.batting-card').exists()).toBe(true)
     expect(wrapper.find('h3').text()).toBe('Batting')
     expect(wrapper.find('table').exists()).toBe(true)
   })
@@ -77,7 +77,8 @@ describe('BattingCard.vue', () => {
 
     const strikerRow = wrapper.findAll('tbody tr')[0]
     expect(strikerRow.classes()).toContain('striker')
-    expect(strikerRow.find('.dot').exists()).toBe(true)
+    // BaseBadge renders the strike indicator with ds-badge class
+    expect(strikerRow.find('.ds-badge').exists()).toBe(true)
   })
 
   it('highlights non-striker', () => {

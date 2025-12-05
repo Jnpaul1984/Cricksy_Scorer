@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /* eslint-disable */
 /* --- Vue & Router --- */
 
@@ -16,6 +16,7 @@ import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
 import { useRoleBadge } from '@/composables/useRoleBadge'
 import { apiService } from '@/services/api'
+import { generateAICommentary, type AICommentaryRequest } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { isValidUUID } from '@/utils'
@@ -58,6 +59,12 @@ const shotMap = ref<string | null>(null)
 if (import.meta.env?.DEV) {
   console.info('GameScoringView setup refs', { isWicket, extra })
 }
+
+// ================== AI Commentary state ==================
+const aiCommentary = ref<string | null>(null)
+const aiLoading = ref(false)
+const aiError = ref<string | null>(null)
+
 // --- Fielder (XI + subs) for wicket events ---
 const selectedFielderId = ref<UUID>('' as UUID)
 const inningsStartIso = ref<string | null>(null)
@@ -271,12 +278,84 @@ async function submitSimple() {
     shotMap.value = null
     onScored()
 
+    // Generate AI commentary (non-blocking)
+    generateCommentary().catch(() => { /* ignore AI errors */ })
+
     await nextTick()
     maybeRotateFromLastDelivery()
   } catch (e: any) {
     onError(e?.message || 'Scoring failed')
   }
 }
+
+// ================== AI Commentary ==================
+async function generateCommentary(): Promise<void> {
+  if (!gameId.value) return
+
+  // Gather current delivery context
+  const snap = liveSnapshot.value as any
+  const last = snap?.last_delivery ?? lastDelivery.value
+  if (!last && !selectedStriker.value) return
+
+  // Determine over/ball from last delivery or current state
+  const overNum = last?.over_number ?? Math.floor(legalBallsBowled.value / 6)
+  const ballNum = last?.ball_number ?? (legalBallsBowled.value % 6)
+
+  // Calculate total runs for this delivery
+  let totalRuns = 0
+  if (extra.value === 'wd') {
+    totalRuns = extraRuns.value
+  } else if (extra.value === 'nb') {
+    totalRuns = 1 + offBat.value
+  } else if (extra.value === 'b' || extra.value === 'lb') {
+    totalRuns = extraRuns.value
+  } else {
+    totalRuns = offBat.value
+  }
+
+  // Use last delivery data if available (after submit)
+  if (last) {
+    totalRuns = Number(last.runs_scored ?? last.runs_off_bat ?? 0) +
+                Number(last.extra_runs ?? 0)
+  }
+
+  const payload: AICommentaryRequest = {
+    match_id: gameId.value,
+    over: overNum,
+    ball: ballNum,
+    runs: totalRuns,
+    wicket: last?.is_wicket ?? isWicket.value,
+    batter: selectedStrikerName.value || last?.striker_name || 'Batter',
+    bowler: selectedBowlerName.value || last?.bowler_name || 'Bowler',
+    context: {
+      innings: currentInnings.value,
+      total_runs: inningsScore.value.runs,
+      total_wickets: inningsScore.value.wickets,
+      overs: oversDisplay.value,
+      extra_type: last?.extra_type ?? (extra.value !== 'none' ? extra.value : null),
+      dismissal_type: last?.dismissal_type ?? dismissal.value,
+      batting_team: battingTeamName.value,
+    },
+  }
+
+  aiLoading.value = true
+  aiError.value = null
+
+  try {
+    const response = await generateAICommentary(payload)
+    aiCommentary.value = response.commentary
+  } catch (e: any) {
+    aiError.value = e?.message || 'Failed to generate commentary'
+    console.error('AI Commentary error:', e)
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+// Clear AI state when input changes
+watch([extra, offBat, extraRuns, isWicket], () => {
+  aiError.value = null
+})
 
 // --- Delete last delivery ------------------------------
 const deletingLast = ref(false)
@@ -424,11 +503,11 @@ async function updateParNow() {
 watch(() => oversLimit.value, (v) => { if (v && !oversNew.value) oversNew.value = v })
 
 // --- Match controls: Weather + Reduce Overs quick actions ---
-const weatherDlg = ref<HTMLDialogElement | null>(null)
+const weatherDlgOpen = ref(false)
 const weatherNote = ref<string>('')
 
-function openWeather() { weatherDlg.value?.showModal() }
-function closeWeather() { weatherDlg.value?.close() }
+function openWeather() { weatherDlgOpen.value = true }
+function closeWeather() { weatherDlgOpen.value = false }
 
 const apiBase =
   (API_BASE || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '')
@@ -1078,7 +1157,7 @@ const needsNewOverDerived = computed(() =>
 )
 
 // ---- Start Next Innings ----
-const startInningsDlg = ref<HTMLDialogElement | null>(null)
+const startInningsDlgOpen = ref(false)
 const nextStrikerId = ref<UUID>('' as UUID)
 const nextNonStrikerId = ref<UUID>('' as UUID)
 const openingBowlerId = ref<UUID>('' as UUID)
@@ -1091,9 +1170,9 @@ function openStartInnings(): void {
   nextStrikerId.value = (bat[0]?.id ?? '') as UUID
   nextNonStrikerId.value = (bat[1]?.id ?? '') as UUID
   openingBowlerId.value = (bowl[0]?.id ?? '') as UUID
-  startInningsDlg.value?.showModal()
+  startInningsDlgOpen.value = true
 }
-function closeStartInnings(): void { startInningsDlg.value?.close() }
+function closeStartInnings(): void { startInningsDlgOpen.value = false }
 
 async function confirmStartInnings(): Promise<void> {
   if (!roleCanScore.value) return
@@ -1332,13 +1411,13 @@ watch([bowlingPlayers, xiLoaded, currentBowlerId], () => {
 watch(needsNewInningsLive, (v) => {
   if (!roleCanScore.value) return
   if (!v) return
-  if (isStartingInnings.value) return               // donâ€™t pop while weâ€™re starting
-  if (startInningsDlg.value?.open) return           // already open
+  if (isStartingInnings.value) return               // don't pop while we're starting
+  if (startInningsDlgOpen.value) return             // already open
   if (v) {
     selectedBowler.value = '' as any   // force explicit choice for the new innings
   }
-  try { startOverDlg.value?.close() } catch {}
-  try { selectBatterDlg.value?.close() } catch {}
+  startOverDlgOpen.value = false
+  selectBatterDlgOpen.value = false
   nextTick().then(() => openStartInnings())
 })
 
@@ -1403,11 +1482,11 @@ function flushNow(): void {
 }
 
 // ================== Start Over & Mid-over Change ==================
-const startOverDlg = ref<HTMLDialogElement | null>(null)
-const changeBowlerDlg = ref<HTMLDialogElement | null>(null)
+const startOverDlgOpen = ref(false)
+const changeBowlerDlgOpen = ref(false)
 const selectedNextOverBowlerId = ref<UUID>('' as UUID)
 const selectedReplacementBowlerId = ref<UUID>('' as UUID)
-const selectBatterDlg = ref<HTMLDialogElement | null>(null)
+const selectBatterDlgOpen = ref(false)
 const selectedNextBatterId = ref<UUID>('' as UUID)
 const canStartOverNow = computed(() => needsNewOverLive.value || !currentBowlerId.value)
 const candidateBatters = computed<Player[]>(() => {
@@ -1424,9 +1503,9 @@ const candidateBatters = computed<Player[]>(() => {
 function openSelectBatter(): void {
   if (!roleCanScore.value) return
   selectedNextBatterId.value = '' as UUID
-  selectBatterDlg.value?.showModal()
+  selectBatterDlgOpen.value = true
 }
-function closeSelectBatter(): void { selectBatterDlg.value?.close() }
+function closeSelectBatter(): void { selectBatterDlgOpen.value = false }
 
 async function confirmSelectBatter() {
   if (!roleCanScore.value) return
@@ -1465,9 +1544,9 @@ function openStartOver(): void {
   if (!roleCanScore.value) return
   const first = eligibleNextOverBowlers.value[0]?.id ?? '' as UUID
   selectedNextOverBowlerId.value = first as UUID
-  startOverDlg.value?.showModal()
+  startOverDlgOpen.value = true
 }
-function closeStartOver(): void { startOverDlg.value?.close() }
+function closeStartOver(): void { startOverDlgOpen.value = false }
 
 // Store only
 async function confirmStartOver(): Promise<void> {
@@ -1491,9 +1570,9 @@ async function confirmStartOver(): Promise<void> {
 function openChangeBowler(): void {
   if (!roleCanScore.value) return
   selectedReplacementBowlerId.value = '' as UUID
-  changeBowlerDlg.value?.showModal()
+  changeBowlerDlgOpen.value = true
 }
-function closeChangeBowler(): void { changeBowlerDlg.value?.close() }
+function closeChangeBowler(): void { changeBowlerDlgOpen.value = false }
 
 async function confirmChangeBowler(): Promise<void> {
   const id = gameId.value
@@ -1894,6 +1973,41 @@ class="btn btn-ghost"
 
             <BowlingCard :entries="bowlingEntries" />
 
+            <!-- AI Commentary Panel -->
+            <div class="card ai-commentary-panel">
+              <div class="ai-header">
+                <h4>AI Commentary</h4>
+                <button
+                  v-if="!aiLoading && aiCommentary"
+                  class="btn btn-ghost ai-regen-btn"
+                  title="Regenerate commentary"
+                  @click="generateCommentary"
+                >
+                  ↻
+                </button>
+              </div>
+
+              <div v-if="aiLoading" class="ai-skeleton">
+                <div class="ai-skeleton-line" />
+                <div class="ai-skeleton-line short" />
+              </div>
+
+              <div v-else-if="aiError" class="ai-error">
+                <p class="ai-error-text">{{ aiError }}</p>
+                <button class="btn btn-ghost" @click="generateCommentary">
+                  Try Again
+                </button>
+              </div>
+
+              <p v-else-if="aiCommentary" class="ai-output">
+                {{ aiCommentary }}
+              </p>
+
+              <p v-else class="ai-placeholder">
+                Commentary will appear here as the match progresses.
+              </p>
+            </div>
+
             <!-- NEW: compact fielding subs card -->
             <div v-if="showSubsCard" class="card subs-card">
               <div class="subs-hdr">
@@ -2015,29 +2129,28 @@ class="btn btn-ghost"
     </main>
 
     <!-- Share & Monetize Modal -->
-    <div v-if="shareOpen" class="backdrop" role="dialog" aria-modal="true" aria-labelledby="share-title" @click.self="closeShare">
-      <div class="modal">
-        <header class="modal-hdr">
-          <h3 id="share-title">Share & Monetize</h3>
-          <button class="x" aria-label="Close modal" @click="closeShare">âœ•</button>
+    <div v-if="shareOpen" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="share-title" @click.self="closeShare">
+      <BaseCard padding="lg" class="modal-card modal-card--wide">
+        <header class="modal-header">
+          <h3 id="share-title" class="modal-title">Share & Monetize</h3>
+          <BaseButton variant="ghost" size="sm" aria-label="Close modal" @click="closeShare">âœ•</BaseButton>
         </header>
 
-        <section class="modal-body">
-          <div class="row">
+        <div class="modal-content">
+          <div class="form-group">
             <label class="lbl">Embed code (read-only)</label>
             <div class="code-wrap">
               <textarea ref="codeRef" class="code" readonly :value="iframeCode" aria-label="Embed iframe HTML"></textarea>
-              <button class="copy" @click="copyEmbed">{{ copied ? 'Copied!' : 'Copy' }}</button>
+              <BaseButton variant="secondary" size="sm" class="copy" @click="copyEmbed">{{ copied ? 'Copied!' : 'Copy' }}</BaseButton>
             </div>
           </div>
 
-          <div class="row grid two">
+          <div class="form-row">
             <div>
-              <label class="lbl">Preview URL</label>
-              <input class="inp wide" :value="embedUrl" readonly @focus="(e) => (e.target as HTMLInputElement | null)?.select()" />
+              <BaseInput :model-value="embedUrl" label="Preview URL" readonly @focus="(e: FocusEvent) => (e.target as HTMLInputElement | null)?.select()" />
             </div>
             <div class="align-end">
-              <a class="btn btn-ghost" :href="embedUrl" target="_blank" rel="noopener">Open preview</a>
+              <BaseButton variant="ghost" as="a" :href="embedUrl" target="_blank" rel="noopener">Open preview</BaseButton>
             </div>
           </div>
 
@@ -2046,124 +2159,130 @@ class="btn btn-ghost"
             <code>src</code> URL (or paste this embed into a simple HTML file). Set width to your canvas,
             height â‰ˆ <b>{{ height }}</b> px, and enable transparency if you want rounded corners to blend.
           </div>
-        </section>
+        </div>
 
-        <footer class="modal-ftr">
-          <div class="spacer"></div>
-          <button class="btn btn-primary" @click="copyEmbed">{{ copied ? 'Copied!' : 'Copy embed' }}</button>
-        </footer>
-      </div>
+        <div class="modal-actions">
+          <BaseButton variant="ghost" @click="closeShare">Close</BaseButton>
+          <BaseButton variant="primary" @click="copyEmbed">{{ copied ? 'Copied!' : 'Copy embed' }}</BaseButton>
+        </div>
+      </BaseCard>
     </div>
 
     <!-- Start Over Modal -->
-    <dialog v-if="roleCanScore" ref="startOverDlg" data-testid="modal-start-over">
-      <form method="dialog" class="dlg">
-        <h3>Start next over</h3>
-        <p>Select a bowler (cannot be the bowler who delivered the last ball of previous over).</p>
+    <div v-if="roleCanScore && startOverDlgOpen" class="modal-backdrop" role="dialog" aria-modal="true" data-testid="modal-start-over">
+      <BaseCard padding="lg" class="modal-card">
+        <h3 class="modal-title">Start next over</h3>
+        <p class="modal-body-text">Select a bowler (cannot be the bowler who delivered the last ball of previous over).</p>
         <select v-model="selectedNextOverBowlerId" class="sel" data-testid="select-next-over-bowler">
           <option disabled value="">Choose bowlerâ€¦</option>
           <option v-for="p in eligibleNextOverBowlers" :key="p.id" :value="p.id">{{ p.name }}{{ bowlerRoleBadge(p.id) }}</option>
         </select>
-        <footer>
-          <button type="button" class="btn" @click="closeStartOver">Cancel</button>
-          <button type="button" class="btn btn-primary" :disabled="!selectedNextOverBowlerId" data-testid="confirm-start-over" @click.prevent="confirmStartOver">Start</button>
-        </footer>
-      </form>
-    </dialog>
+        <div class="modal-actions">
+          <BaseButton variant="ghost" @click="closeStartOver">Cancel</BaseButton>
+          <BaseButton variant="primary" :disabled="!selectedNextOverBowlerId" data-testid="confirm-start-over" @click="confirmStartOver">Start</BaseButton>
+        </div>
+      </BaseCard>
+    </div>
 
     <!-- Start Next Innings Modal -->
-    <dialog v-if="roleCanScore" ref="startInningsDlg" data-testid="modal-start-innings">
-      <form method="dialog" class="dlg">
-        <h3>Start next innings</h3>
-        <p>Select openers and (optional) opening bowler.</p>
+    <div v-if="roleCanScore && startInningsDlgOpen" class="modal-backdrop" role="dialog" aria-modal="true" data-testid="modal-start-innings">
+      <BaseCard padding="lg" class="modal-card">
+        <h3 class="modal-title">Start next innings</h3>
+        <p class="modal-body-text">Select openers and (optional) opening bowler.</p>
 
-        <label class="lbl">Striker</label>
-        <select v-model="nextStrikerId" class="sel" data-testid="select-next-striker">
-          <option disabled value="">Choose strikerâ€¦</option>
-          <option v-for="p in nextBattingXI" :key="p.id" :value="p.id">{{ p.name }}{{ roleBadge(p.id) }}</option>
-        </select>
+        <div class="form-group">
+          <label class="lbl">Striker</label>
+          <select v-model="nextStrikerId" class="sel" data-testid="select-next-striker">
+            <option disabled value="">Choose strikerâ€¦</option>
+            <option v-for="p in nextBattingXI" :key="p.id" :value="p.id">{{ p.name }}{{ roleBadge(p.id) }}</option>
+          </select>
+        </div>
 
-        <label class="lbl">Non-striker</label>
-        <select v-model="nextNonStrikerId" class="sel" data-testid="select-next-nonstriker">
-          <option disabled value="">Choose non-strikerâ€¦</option>
-          <option v-for="p in nextBattingXI" :key="p.id" :value="p.id" :disabled="p.id === nextStrikerId">{{ p.name }}{{ roleBadge(p.id) }}</option>
-        </select>
+        <div class="form-group">
+          <label class="lbl">Non-striker</label>
+          <select v-model="nextNonStrikerId" class="sel" data-testid="select-next-nonstriker">
+            <option disabled value="">Choose non-strikerâ€¦</option>
+            <option v-for="p in nextBattingXI" :key="p.id" :value="p.id" :disabled="p.id === nextStrikerId">{{ p.name }}{{ roleBadge(p.id) }}</option>
+          </select>
+        </div>
 
-        <label class="lbl">Opening bowler (optional)</label>
-        <select v-model="openingBowlerId" class="sel" data-testid="select-opening-bowler">
-          <option value="">â€” None (choose later) â€”</option>
-          <option v-for="p in nextBowlingXI" :key="p.id" :value="p.id">{{ p.name }}{{ bowlerRoleBadge(p.id) }}</option>
-        </select>
+        <div class="form-group">
+          <label class="lbl">Opening bowler (optional)</label>
+          <select v-model="openingBowlerId" class="sel" data-testid="select-opening-bowler">
+            <option value="">— None (choose later) —</option>
+            <option v-for="p in nextBowlingXI" :key="p.id" :value="p.id">{{ p.name }}{{ bowlerRoleBadge(p.id) }}</option>
+          </select>
+        </div>
 
-        <footer>
-          <button type="button" class="btn" @click="closeStartInnings">Cancel</button>
-          <button
-            type="button"
-            class="btn btn-primary"
+        <div class="modal-actions">
+          <BaseButton variant="ghost" @click="closeStartInnings">Cancel</BaseButton>
+          <BaseButton
+            variant="primary"
             :disabled="!nextStrikerId || !nextNonStrikerId || nextStrikerId===nextNonStrikerId"
             data-testid="confirm-start-innings"
-            @click.prevent="confirmStartInnings"
+            @click="confirmStartInnings"
           >
             Start innings
-          </button>
-        </footer>
-      </form>
-    </dialog>
+          </BaseButton>
+        </div>
+      </BaseCard>
+    </div>
 
     <!-- Select Next Batter Modal (Gate) -->
-    <dialog v-if="roleCanScore" ref="selectBatterDlg" data-testid="modal-select-batter">
-      <form method="dialog" class="dlg">
-        <h3>Select next batter</h3>
-        <p>Pick a batter who is not out.</p>
+    <div v-if="roleCanScore && selectBatterDlgOpen" class="modal-backdrop" role="dialog" aria-modal="true" data-testid="modal-select-batter">
+      <BaseCard padding="lg" class="modal-card">
+        <h3 class="modal-title">Select next batter</h3>
+        <p class="modal-body-text">Pick a batter who is not out.</p>
         <select v-model="selectedNextBatterId" class="sel" data-testid="select-next-batter">
-          <option disabled value="">Choose batterâ€¦</option>
+          <option disabled value="">Choose batter…</option>
           <option v-for="p in candidateBatters" :key="p.id" :value="p.id">{{ p.name }}{{ roleBadge(p.id) }}</option>
         </select>
-        <footer>
-          <button type="button" class="btn" @click="closeSelectBatter">Cancel</button>
-          <button type="button" class="btn btn-primary" :disabled="!selectedNextBatterId" data-testid="confirm-select-batter" @click.prevent="confirmSelectBatter">Confirm</button>
-        </footer>
-      </form>
-    </dialog>
+        <div class="modal-actions">
+          <BaseButton variant="ghost" @click="closeSelectBatter">Cancel</BaseButton>
+          <BaseButton variant="primary" :disabled="!selectedNextBatterId" data-testid="confirm-select-batter" @click="confirmSelectBatter">Confirm</BaseButton>
+        </div>
+      </BaseCard>
+    </div>
 
     <!-- Weather Interruption Modal -->
-    <dialog ref="weatherDlg">
-      <form method="dialog" class="dlg">
-        <h3>Weather interruption</h3>
-        <p>Add an optional note (e.g., â€œRain, covers onâ€).</p>
-        <input v-model="weatherNote" class="inp" placeholder="Note (optional)" data-testid="input-weather-note" />
-        <footer>
-          <button type="button" class="btn" data-testid="btn-weather-close" @click="closeWeather">Close</button>
-          <button type="button" class="btn" data-testid="btn-weather-resume" @click.prevent="resumeAfterWeather">Resume play</button>
-          <button type="button" class="btn btn-primary" data-testid="btn-weather-start" @click.prevent="startWeatherDelay">Start delay</button>
-          <button
+    <div v-if="weatherDlgOpen" class="modal-backdrop" role="dialog" aria-modal="true">
+      <BaseCard padding="lg" class="modal-card">
+        <h3 class="modal-title">Weather interruption</h3>
+        <p class="modal-body-text">Add an optional note (e.g., "Rain, covers on").</p>
+        <div class="form-group">
+          <BaseInput v-model="weatherNote" label="Note" placeholder="Note (optional)" data-testid="input-weather-note" />
+        </div>
+        <div class="modal-actions modal-actions--wrap">
+          <BaseButton variant="ghost" data-testid="btn-weather-close" @click="closeWeather">Close</BaseButton>
+          <BaseButton variant="secondary" data-testid="btn-weather-resume" @click="resumeAfterWeather">Resume play</BaseButton>
+          <BaseButton variant="primary" data-testid="btn-weather-start" @click="startWeatherDelay">Start delay</BaseButton>
+          <BaseButton
             v-if="roleCanScore"
-            class="btn"
+            variant="secondary"
             :disabled="needsNewInningsLive || !canStartOverNow"
             :title="!roleCanScore ? proTooltip : undefined"
             data-testid="btn-weather-start-over"
             @click="openStartOver"
-          >Start Next Over</button>
-        </footer>
-      </form>
-    </dialog>
+          >Start Next Over</BaseButton>
+        </div>
+      </BaseCard>
+    </div>
 
     <!-- Mid-over Change Modal -->
-    <dialog ref="changeBowlerDlg">
-      <form method="dialog" class="dlg">
-        <h3>Mid-over change (injury)</h3>
-        <p>Pick a replacement to finish this over. You can do this only once per over.</p>
+    <div v-if="changeBowlerDlgOpen" class="modal-backdrop" role="dialog" aria-modal="true">
+      <BaseCard padding="lg" class="modal-card">
+        <h3 class="modal-title">Mid-over change (injury)</h3>
+        <p class="modal-body-text">Pick a replacement to finish this over. You can do this only once per over.</p>
         <select v-model="selectedReplacementBowlerId" class="sel">
-          <option disabled value="">Choose replacementâ€¦</option>
+          <option disabled value="">Choose replacement…</option>
           <option v-for="p in replacementOptions" :key="p.id" :value="p.id">{{ p.name }}{{ bowlerRoleBadge(p.id) }}</option>
         </select>
-        <footer>
-          <button type="button" class="btn" @click="closeChangeBowler">Cancel</button>
-          <button type="button" class="btn btn-primary" :disabled="!selectedReplacementBowlerId" @click.prevent="confirmChangeBowler">Change</button>
-          <button class="btn" :disabled="needsNewInningsLive || !canUseMidOverChange" @click="openChangeBowler">Mid-over Change</button>
-        </footer>
-      </form>
-    </dialog>
+        <div class="modal-actions">
+          <BaseButton variant="ghost" @click="closeChangeBowler">Cancel</BaseButton>
+          <BaseButton variant="primary" :disabled="!selectedReplacementBowlerId" @click="confirmChangeBowler">Change</BaseButton>
+        </div>
+      </BaseCard>
+    </div>
   </div>
 </template>
 
@@ -2455,6 +2574,91 @@ class="btn btn-ghost"
   height: 100%;
 }
 
+/* AI Commentary Panel */
+.ai-commentary-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.ai-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ai-header h4 {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.ai-regen-btn {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  min-width: auto;
+}
+
+.ai-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ai-skeleton-line {
+  background: var(--color-border-subtle);
+  height: 0.9rem;
+  border-radius: var(--radius-sm);
+  animation: ai-pulse 1.3s ease-in-out infinite;
+}
+
+.ai-skeleton-line.short {
+  width: 60%;
+}
+
+@keyframes ai-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.ai-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  background: var(--color-error-soft);
+}
+
+.ai-error-text {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-error);
+}
+
+.ai-output {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text);
+}
+
+.ai-placeholder {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 /* Subs card */
 .subs-card {
   padding: var(--space-3);
@@ -2680,7 +2884,82 @@ class="btn btn-ghost"
   cursor: pointer;
 }
 
-/* Dialog (native) */
+/* Standard Modal Pattern */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, #000 65%, transparent);
+  z-index: var(--z-modal-backdrop);
+  padding: var(--space-4);
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 420px;
+}
+
+.modal-card--wide {
+  max-width: 760px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.modal-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  margin: 0 0 var(--space-2);
+}
+
+.modal-content {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.modal-body-text {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-4);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.modal-actions--wrap {
+  flex-wrap: wrap;
+}
+
+.form-group {
+  margin-bottom: var(--space-3);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.note {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  background: var(--color-surface-hover);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+}
+
+/* Dialog (native) - can be removed once all modals converted */
 dialog::backdrop {
   background: rgba(0, 0, 0, 0.2);
 }

@@ -175,7 +175,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/authStore'
-import apiService from '@/utils/api'
+import api from '@/utils/api'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -216,7 +216,7 @@ async function loadTournaments() {
   try {
     loading.value = true
     error.value = ''
-    tournaments.value = await apiService.getTournaments()
+    tournaments.value = await api.getTournaments()
   } catch (e: any) {
     error.value = e.message || 'Failed to load tournaments'
   } finally {
@@ -245,7 +245,7 @@ async function createTournament() {
       start_date: newTournament.value.start_date || null,
       end_date: newTournament.value.end_date || null,
     }
-    const created = await apiService.createTournament(body)
+    const created = await api.createTournament(body)
     showCreateModal.value = false
     newTournament.value = {
       name: '',
@@ -289,7 +289,7 @@ async function submitEdit() {
       start_date: editForm.value.start_date || null,
       end_date: editForm.value.end_date || null,
     }
-    await apiService.updateTournament(tournamentToEdit.value.id, payload)
+    await api.updateTournament(tournamentToEdit.value.id, payload)
     showEditModal.value = false
     tournamentToEdit.value = null
     await loadTournaments()
@@ -312,7 +312,7 @@ async function confirmDelete() {
 
   deleteSubmitting.value = true
   try {
-    await apiService.deleteTournament(tournamentToDelete.value.id)
+    await api.deleteTournament(tournamentToDelete.value.id)
     showDeleteConfirm.value = false
     tournamentToDelete.value = null
     await loadTournaments()

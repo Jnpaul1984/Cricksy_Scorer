@@ -7,10 +7,12 @@ const ChartStub = defineComponent({
     data: {
       type: Object,
       required: false,
+      default: undefined,
     },
     options: {
       type: Object,
       required: false,
+      default: undefined,
     },
   },
   setup(props, { attrs }) {

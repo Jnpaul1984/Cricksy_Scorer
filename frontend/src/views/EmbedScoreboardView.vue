@@ -1,17 +1,15 @@
 <template>
   <div class="embed-wrap">
-    <div class="embed-card">
-      <ScoreboardWidget
-        :theme="theme"
-        :title="title"
-        :logo="logo"
-        :api-base="apiBase"
-        :game-id="gameId"
-        :sponsors-url="sponsorsUrl"
-        :sponsor-rotate-ms="sponsorRotateMs"
-        :sponsor-clickable="sponsorClickable"
-      />
-    </div>
+    <ScoreboardWidget
+      :theme="theme"
+      :title="title"
+      :logo="logo"
+      :api-base="apiBase"
+      :game-id="gameId"
+      :sponsors-url="sponsorsUrl"
+      :sponsor-rotate-ms="sponsorRotateMs"
+      :sponsor-clickable="sponsorClickable"
+    />
   </div>
 </template>
 
@@ -51,6 +49,34 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.embed-wrap { min-height: 100dvh; display: grid; place-items: center; background: #000; }
-.embed-card { width: min(92vw, 780px); }
+/* =====================================================
+   EMBED SCOREBOARD VIEW - Minimal iframe-friendly wrapper
+   Uses Design System Tokens
+   ===================================================== */
+
+.embed-wrap {
+  /* Fill the entire iframe viewport */
+  width: 100%;
+  min-height: 100dvh;
+
+  /* Center the widget */
+  display: grid;
+  place-items: center;
+
+  /* Use design system background */
+  background: var(--color-bg);
+
+  /* Minimal padding to prevent edge clipping */
+  padding: var(--space-2);
+  box-sizing: border-box;
+
+  /* Prevent scrollbars from iframe sizing issues */
+  overflow: hidden;
+}
+
+/* ScoreboardWidget sizing */
+.embed-wrap > :deep(*) {
+  width: min(100%, 780px);
+  max-width: 100%;
+}
 </style>

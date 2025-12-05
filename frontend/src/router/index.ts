@@ -16,7 +16,15 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/login',
+      name: 'LandingPage',
+      component: () => import('@/views/LandingPageView.vue'),
+      meta: { requiresAuth: false, title: 'Cricksy — AI Cricket Analytics' },
+    },
+    {
+      path: '/pricing',
+      name: 'PricingPage',
+      component: () => import('@/views/PricingPageView.vue'),
+      meta: { requiresAuth: false, title: 'Pricing — Cricksy' },
     },
     {
       path: '/setup',
@@ -60,6 +68,30 @@ const router = createRouter({
       path: '/e2e',
       name: 'e2e-view',
       component: () => import('@/views/E2EView.vue'),
+    },
+    {
+      path: '/design-system',
+      name: 'DesignSystemShowcase',
+      component: () => import('@/views/DesignSystemShowcaseView.vue'),
+      meta: { requiresAuth: false, internal: true, title: 'Design System' },
+    },
+    {
+      path: '/coaches',
+      name: 'CoachesDashboard',
+      component: () => import('@/views/CoachesDashboardView.vue'),
+      meta: { requiresAuth: true, title: 'Coaches Dashboard' },
+    },
+    {
+      path: '/analyst',
+      name: 'AnalystWorkspace',
+      component: () => import('@/views/AnalystWorkspaceView.vue'),
+      meta: { requiresAuth: true, title: 'Analyst Workspace — Cricksy' },
+    },
+    {
+      path: '/analyst/match/:matchId',
+      name: 'MatchCaseStudy',
+      component: () => import('@/views/MatchCaseStudyView.vue'),
+      meta: { requiresAuth: true, title: 'Match Case Study — Cricksy' },
     },
     {
       path: '/game/:gameId/select-xi',
@@ -149,9 +181,9 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // --- General auth guard -------------------------------------------------
-  // Public: /login and viewer/embed routes
-  const publicPaths = ['/login']
-  const publicNames = ['viewer-scoreboard', 'embed-scoreboard']
+  // Public: /login, landing page, pricing, and viewer/embed routes
+  const publicPaths = ['/', '/login', '/pricing']
+  const publicNames = ['LandingPage', 'PricingPage', 'viewer-scoreboard', 'embed-scoreboard']
 
   const isPublic = publicPaths.includes(to.path) || (to.name != null && publicNames.includes(String(to.name)))
 

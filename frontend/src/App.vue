@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 
 import logoAvif1024 from '@/assets/optimized/logo-w1024.avif'
@@ -10,6 +10,11 @@ import logoAvif480 from '@/assets/optimized/logo-w480.avif'
 import logoWebp480 from '@/assets/optimized/logo-w480.webp'
 import logoAvif768 from '@/assets/optimized/logo-w768.avif'
 import logoWebp768 from '@/assets/optimized/logo-w768.webp'
+import { useAuthStore } from '@/stores/authStore'
+
+const isDev = computed(() => import.meta.env.DEV)
+const auth = useAuthStore()
+const showCoachesLink = computed(() => auth.isLoggedIn || isDev.value)
 
 onMounted(() => {
   // hide the tiny fallback text from index.html once Vue is mounted
@@ -51,6 +56,9 @@ const logoSizes = '32px'
 
       <nav class="nav">
         <RouterLink to="/">Setup</RouterLink>
+        <RouterLink v-if="showCoachesLink" :to="{ name: 'CoachesDashboard' }">Coaches</RouterLink>
+        <RouterLink v-if="showCoachesLink" :to="{ name: 'AnalystWorkspace' }">Analyst Workspace</RouterLink>
+        <RouterLink v-if="isDev" to="/design-system" class="nav-dev">Design System</RouterLink>
       </nav>
     </header>
 
@@ -115,6 +123,10 @@ const logoSizes = '32px'
 }
 .nav a.router-link-active {
   color: #fff;
+}
+.nav-dev {
+  opacity: 0.6;
+  font-size: 0.85em;
 }
 
 /* Main */
