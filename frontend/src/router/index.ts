@@ -16,15 +16,17 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'LandingPage',
-      component: () => import('@/views/LandingPageView.vue'),
-      meta: { requiresAuth: false, title: 'Cricksy — AI Cricket Analytics' },
+      redirect: '/landing',
+    },
+    {
+      path: '/landing',
+      name: 'landing',
+      component: () => import('@/views/LandingView.vue'),
     },
     {
       path: '/pricing',
-      name: 'PricingPage',
-      component: () => import('@/views/PricingPageView.vue'),
-      meta: { requiresAuth: false, title: 'Pricing — Cricksy' },
+      name: 'pricing',
+      component: () => import('@/views/PricingView.vue'),
     },
     {
       path: '/setup',
@@ -132,6 +134,22 @@ const router = createRouter({
       component: () => import('@/views/TournamentDetailView.vue'),
     },
 
+    // --- Coach routes ---
+    {
+      path: '/coach/dashboard',
+      name: 'coach-dashboard',
+      component: () => import('@/views/CoachesDashboardView.vue'),
+      meta: { requiresCoach: true },
+    },
+
+    // --- Analyst routes ---
+    {
+      path: '/analyst/workspace',
+      name: 'analyst-workspace',
+      component: () => import('@/views/AnalystWorkspaceView.vue'),
+      meta: { requiresAnalyst: true },
+    },
+
     // Catch-all → setup
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
@@ -181,9 +199,9 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // --- General auth guard -------------------------------------------------
-  // Public: /login, landing page, pricing, and viewer/embed routes
-  const publicPaths = ['/', '/login', '/pricing']
-  const publicNames = ['LandingPage', 'PricingPage', 'viewer-scoreboard', 'embed-scoreboard']
+  // Public: /login, /landing, /pricing and viewer/embed routes
+  const publicPaths = ['/login', '/landing', '/pricing']
+  const publicNames = ['landing', 'pricing', 'viewer-scoreboard', 'embed-scoreboard']
 
   const isPublic = publicPaths.includes(to.path) || (to.name != null && publicNames.includes(String(to.name)))
 
@@ -205,6 +223,26 @@ router.beforeEach(async (to, _from, next) => {
       return next({ path: '/login', query: { redirect: to.fullPath } })
     }
     if (!auth.isOrg && !auth.isSuper) {
+      return next('/')
+    }
+  }
+
+  // Coach-protected routes
+  if (to.meta.requiresCoach) {
+    if (!auth.isLoggedIn) {
+      return next({ path: '/login', query: { redirect: to.fullPath } })
+    }
+    if (!auth.isCoach && !auth.isOrg && !auth.isSuper) {
+      return next('/')
+    }
+  }
+
+  // Analyst-protected routes
+  if (to.meta.requiresAnalyst) {
+    if (!auth.isLoggedIn) {
+      return next({ path: '/login', query: { redirect: to.fullPath } })
+    }
+    if (!auth.isAnalyst && !auth.isOrg && !auth.isSuper) {
       return next('/')
     }
   }

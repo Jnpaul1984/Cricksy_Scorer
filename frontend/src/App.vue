@@ -2,6 +2,7 @@
 import { computed, onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 
+
 import logoAvif1024 from '@/assets/optimized/logo-w1024.avif'
 import logoWebp1024 from '@/assets/optimized/logo-w1024.webp'
 import logoAvif1440 from '@/assets/optimized/logo-w1440.avif'
@@ -13,8 +14,6 @@ import logoWebp768 from '@/assets/optimized/logo-w768.webp'
 import { useAuthStore } from '@/stores/authStore'
 
 const isDev = computed(() => import.meta.env.DEV)
-const auth = useAuthStore()
-const showCoachesLink = computed(() => auth.isLoggedIn || isDev.value)
 
 onMounted(() => {
   // hide the tiny fallback text from index.html once Vue is mounted
@@ -32,6 +31,13 @@ const logoAvifSrcset = logoSources.map((src) => `${src.avif} ${src.width}w`).joi
 const logoWebpSrcset = logoSources.map((src) => `${src.webp} ${src.width}w`).join(', ')
 const logoFallbackSrc = logoSources.find((src) => src.width === 768)?.webp ?? logoSources[0].webp
 const logoSizes = '32px'
+
+// Auth store for role-based navigation
+const auth = useAuthStore()
+
+// Computed properties for showing role-based nav items
+const showCoachNav = computed(() => auth.isCoach || auth.isOrg || auth.isSuper)
+const showAnalystNav = computed(() => auth.isAnalyst || auth.isOrg || auth.isSuper)
 </script>
 
 <template>
@@ -55,9 +61,11 @@ const logoSizes = '32px'
       </RouterLink>
 
       <nav class="nav">
-        <RouterLink to="/">Setup</RouterLink>
-        <RouterLink v-if="showCoachesLink" :to="{ name: 'CoachesDashboard' }">Coaches</RouterLink>
-        <RouterLink v-if="showCoachesLink" :to="{ name: 'AnalystWorkspace' }">Analyst Workspace</RouterLink>
+        <RouterLink to="/landing">Home</RouterLink>
+        <RouterLink to="/setup">Setup</RouterLink>
+        <RouterLink v-if="showCoachNav" to="/coach/dashboard">Coach</RouterLink>
+        <RouterLink v-if="showAnalystNav" to="/analyst/workspace">Analyst</RouterLink>
+        <RouterLink to="/pricing">Pricing</RouterLink>
         <RouterLink v-if="isDev" to="/design-system" class="nav-dev">Design System</RouterLink>
       </nav>
     </header>
