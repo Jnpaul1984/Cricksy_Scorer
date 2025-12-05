@@ -125,7 +125,7 @@ async def _create_coaching_note(
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(reset_db) -> TestClient:
     # Use the global SessionLocal and engine from backend.sql_app.database
     from backend.sql_app.database import SessionLocal
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseCard } from '@/components'
 import { fmtEconomy, oversDisplayFromBalls } from '@/utils/cricket'
 
 type BowlEntry = {
@@ -38,17 +39,17 @@ function oversText(e: BowlEntry) {
 </script>
 
 <template>
-  <div class="card">
+  <BaseCard as="section" padding="md" class="bowling-card">
     <h3>Bowling</h3>
     <table v-if="props.entries.length">
       <thead>
         <tr>
           <th>Player</th>
-          <th>O</th>
-          <th>M</th>
-          <th>R</th>
-          <th>W</th>
-          <th>Econ</th>
+          <th class="num">O</th>
+          <th class="num">M</th>
+          <th class="num">R</th>
+          <th class="num">W</th>
+          <th class="num">Econ</th>
         </tr>
       </thead>
       <tbody>
@@ -63,16 +64,47 @@ function oversText(e: BowlEntry) {
       </tbody>
     </table>
     <div v-else class="empty">No bowling entries yet.</div>
-  </div>
+  </BaseCard>
 </template>
 
 <style scoped>
-.card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 12px; }
-h3 { margin: 0 0 8px; font-size: 14px; font-weight: 800; }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 6px 8px; border-top: 1px dashed rgba(255,255,255,.08); }
-thead th { border-top: 0; text-align: left; font-size: 12px; color: #9ca3af; font-weight: 700; }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
-.name { font-weight: 700; }
-.empty { color: #9ca3af; font-size: 13px; padding: 8px 0; }
+/* BaseCard handles background/border/radius/padding */
+.bowling-card h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--font-extrabold);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: var(--space-2);
+  border-top: 1px dashed var(--color-border-subtle);
+}
+
+thead th {
+  border-top: 0;
+  text-align: left;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-weight: var(--font-bold);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.name {
+  font-weight: var(--font-bold);
+}
+
+.empty {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  padding: var(--space-2) 0;
+}
 </style>

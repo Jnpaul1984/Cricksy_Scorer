@@ -7,14 +7,18 @@
       role="status"
       aria-live="assertive"
     >
-      <div class="badge" :data-kind="event">
+      <BaseBadge
+        :variant="badgeVariant"
+        class="event-badge"
+        :data-kind="event"
+      >
         <span v-if="event === 'FOUR'">FOUR!</span>
         <span v-else-if="event === 'SIX'">SIX!</span>
         <span v-else-if="event === 'WICKET'">WICKET!</span>
         <span v-else-if="event === 'DUCK'">🦆 DUCK!</span>
         <span v-else-if="event === 'FIFTY'">50</span>
         <span v-else-if="event === 'HUNDRED'">100</span>
-      </div>
+      </BaseBadge>
 
       <!-- simple confetti-ish bits (for positive events) -->
       <div v-if="confettiOn" class="confetti">
@@ -27,6 +31,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { BaseBadge } from "@/components";
 import type { EventType } from "@/composables/useHighlights";
 
 const props = defineProps<{
@@ -39,6 +44,23 @@ const props = defineProps<{
 const confettiOn = computed(
   () => props.event === "FOUR" || props.event === "SIX" || props.event === "FIFTY" || props.event === "HUNDRED"
 );
+
+// Map event types to badge variants
+const badgeVariant = computed(() => {
+  switch (props.event) {
+    case "FOUR":
+    case "FIFTY":
+      return "success";
+    case "SIX":
+    case "HUNDRED":
+      return "primary";
+    case "WICKET":
+    case "DUCK":
+      return "danger";
+    default:
+      return "neutral";
+  }
+});
 </script>
 
 <style scoped>
@@ -51,34 +73,48 @@ const confettiOn = computed(
   z-index: 60;
 }
 
-.badge {
+/* Override BaseBadge styles for large event display */
+.event-badge {
+  --dur: 1.8s;
   font-weight: 800;
   font-size: clamp(2.5rem, 6vw, 5rem);
   line-height: 1;
-  padding: 0.5em 0.8em;
-  border-radius: 1rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  padding: var(--space-lg) var(--space-xl);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   transform: translateZ(0);
-  animation: pulse 0.6s ease-out, floatUp var(--dur, 1.8s) ease-out;
-  --dur: 1.8s;
-  color: white;
+  animation: pulse 0.6s ease-out, floatUp var(--dur) ease-out;
+  color: var(--color-on-surface);
 }
 
-/* Color themes per event */
-.badge[data-kind="FOUR"],
-.badge[data-kind="FIFTY"] { background: linear-gradient(135deg, #00b894, #00cec9); }
+/* Color themes per event - gradients for visual impact */
+.event-badge[data-kind="FOUR"],
+.event-badge[data-kind="FIFTY"] {
+  background: linear-gradient(135deg, var(--color-success), var(--color-success-soft, var(--color-success)));
+}
 
-.badge[data-kind="SIX"],
-.badge[data-kind="HUNDRED"] { background: linear-gradient(135deg, #0984e3, #6c5ce7); }
+.event-badge[data-kind="SIX"],
+.event-badge[data-kind="HUNDRED"] {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-soft, var(--color-primary)));
+}
 
-.badge[data-kind="WICKET"] { background: linear-gradient(135deg, #d63031, #e17055); }
-.badge[data-kind="DUCK"]   { background: linear-gradient(135deg, #2d3436, #636e72); }
+.event-badge[data-kind="WICKET"] {
+  background: linear-gradient(135deg, var(--color-danger), var(--color-danger-soft, var(--color-danger)));
+}
+
+.event-badge[data-kind="DUCK"] {
+  background: linear-gradient(135deg, var(--color-surface-alt), var(--color-muted));
+}
 
 /* Transition wrapper */
 .overlay-pop-enter-active,
-.overlay-pop-leave-active { transition: opacity 220ms ease; }
+.overlay-pop-leave-active {
+  transition: opacity 220ms ease;
+}
 .overlay-pop-enter-from,
-.overlay-pop-leave-to { opacity: 0; }
+.overlay-pop-leave-to {
+  opacity: 0;
+}
 
 /* Confetti sprinkles */
 .confetti {
@@ -86,6 +122,7 @@ const confettiOn = computed(
   inset: 0;
   overflow: hidden;
 }
+
 .confetti i {
   --x: calc((var(--i) - 12) * 3%);
   --delay: calc((var(--i) * 40ms));
@@ -99,6 +136,7 @@ const confettiOn = computed(
   opacity: 0.95;
   animation: fall var(--dur, 1.8s) linear var(--delay) forwards;
 }
+
 .confetti i:nth-child(n)  { --i: 1; }
 .confetti i:nth-child(2)  { --i: 2; }
 .confetti i:nth-child(3)  { --i: 3; }

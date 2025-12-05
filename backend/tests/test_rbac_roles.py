@@ -76,7 +76,7 @@ def login_user(client: TestClient, email: str, password: str = "secret123") -> s
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(reset_db) -> TestClient:
     # Use the global SessionLocal and engine from backend.sql_app.database
     # This ensures we share the same in-memory DB that reset_db cleans up.
     from backend.sql_app.database import SessionLocal

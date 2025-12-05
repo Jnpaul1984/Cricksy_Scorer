@@ -464,7 +464,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import apiService, { API_BASE, getErrorMessage, type FanFavoriteRead } from '@/services/api'
+import api, { API_BASE, getErrorMessage, type FanFavoriteRead } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 
 type Tournament = Record<string, any>
@@ -596,10 +596,10 @@ async function loadTournament() {
 
   try {
     const [t, pts, teamRows, fixtureRows] = await Promise.all([
-      apiService.getTournament(tournamentId.value),
-      apiService.getPointsTable(tournamentId.value),
-      apiService.getTournamentTeams(tournamentId.value),
-      apiService.getTournamentFixtures(tournamentId.value),
+      api.getTournament(tournamentId.value),
+      api.getPointsTable(tournamentId.value),
+      api.getTournamentTeams(tournamentId.value),
+      api.getTournamentFixtures(tournamentId.value),
     ])
 
     tournament.value = t
@@ -635,7 +635,7 @@ async function loadTeamFavorites() {
   if (!authStore.currentUser) return
 
   try {
-    const favorites: FanFavoriteRead[] = await apiService.getFanFavorites()
+    const favorites: FanFavoriteRead[] = await api.getFanFavorites()
     const newMap = new Map<string, string>()
     for (const fav of favorites) {
       if (fav.favorite_type === 'team' && fav.team_id != null) {
@@ -663,11 +663,11 @@ async function toggleTeamFavorite(teamId: number | string | undefined): Promise<
     const existingFavoriteId = teamFavoritesMap.value.get(teamIdStr)
     if (existingFavoriteId) {
       // Remove favorite
-      await apiService.deleteFanFavorite(existingFavoriteId)
+      await api.deleteFanFavorite(existingFavoriteId)
       teamFavoritesMap.value.delete(teamIdStr)
     } else {
       // Add favorite
-      const created = await apiService.createFanFavorite({
+      const created = await api.createFanFavorite({
         favorite_type: 'team',
         team_id: teamIdStr,
       })
@@ -709,7 +709,7 @@ async function submitEdit() {
       start_date: editForm.value.start_date || null,
       end_date: editForm.value.end_date || null,
     }
-    await apiService.updateTournament(tournamentId.value, payload)
+    await api.updateTournament(tournamentId.value, payload)
     showEditModal.value = false
     await loadTournament()
   } catch (err: any) {
@@ -730,7 +730,7 @@ async function confirmDelete() {
 
   deleteSubmitting.value = true
   try {
-    await apiService.deleteTournament(tournamentId.value)
+    await api.deleteTournament(tournamentId.value)
     showDeleteConfirm.value = false
     router.push({ name: 'tournaments' })
   } catch (err: any) {
@@ -746,7 +746,7 @@ async function loadSponsors() {
   if (!canManageTournaments.value) return
   sponsorsLoading.value = true
   try {
-    const data = await apiService.getSponsors()
+    const data = await api.getSponsors()
     sponsors.value = Array.isArray(data) ? data : []
   } catch (err: any) {
     console.error('Failed to load sponsors:', err)
@@ -822,7 +822,7 @@ async function submitSponsor() {
   try {
     if (editingSponsor.value) {
       // Update existing sponsor
-      await apiService.updateSponsor(editingSponsor.value.id, {
+      await api.updateSponsor(editingSponsor.value.id, {
         name: sponsorForm.value.name,
         click_url: sponsorForm.value.click_url || null,
         weight: sponsorForm.value.weight,
@@ -836,7 +836,7 @@ async function submitSponsor() {
         sponsorSubmitting.value = false
         return
       }
-      await apiService.uploadSponsor({
+      await api.uploadSponsor({
         name: sponsorForm.value.name,
         logo: sponsorLogoFile.value,
         click_url: sponsorForm.value.click_url || null,
@@ -863,7 +863,7 @@ async function confirmDeleteSponsor() {
   sponsorDeleting.value = true
 
   try {
-    await apiService.deleteSponsor(sponsorToDelete.value.id)
+    await api.deleteSponsor(sponsorToDelete.value.id)
     showToast('Sponsor deleted', 'success')
     showSponsorDeleteConfirm.value = false
     sponsorToDelete.value = null

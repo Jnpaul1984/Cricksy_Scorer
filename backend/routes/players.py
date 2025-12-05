@@ -6,12 +6,8 @@ Handles player statistics, achievements, and leaderboards.
 import datetime as dt
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import Float, cast, desc, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from backend import security
+from backend.services.ai_player_insights import PlayerAiInsights, build_player_ai_insights
 from backend.sql_app.database import get_db
 from backend.sql_app.models import (
     AchievementType,
@@ -36,6 +32,10 @@ from backend.sql_app.schemas import (
     PlayerProfileResponse,
     PlayerSummaryRead,
 )
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import Float, cast, desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
@@ -111,6 +111,29 @@ async def get_player_profile(
             for ach in profile.achievements
         ],
     )
+
+
+@router.get("/{player_id}/ai-insights", response_model=PlayerAiInsights)
+async def get_player_ai_insights(
+    player_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> PlayerAiInsights:
+    """
+    Get AI-generated insights for a player.
+
+    Returns a summary, strengths, weaknesses, recent form analysis,
+    and relevant tags based on the player's profile and form data.
+
+    This is a rule-based V1 implementation. Future versions will use
+    LLM integration for richer, more contextual insights.
+    """
+    try:
+        return await build_player_ai_insights(db, player_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from None
 
 
 @router.get("/{player_id}/achievements", response_model=list[PlayerAchievementResponse])

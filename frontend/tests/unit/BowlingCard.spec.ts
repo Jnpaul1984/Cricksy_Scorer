@@ -28,7 +28,7 @@ describe('BowlingCard.vue', () => {
       props: { entries: sampleEntries }
     })
 
-    expect(wrapper.find('.card').exists()).toBe(true)
+    expect(wrapper.find('.bowling-card').exists()).toBe(true)
     expect(wrapper.find('h3').text()).toBe('Bowling')
     expect(wrapper.find('table').exists()).toBe(true)
   })

@@ -1,19 +1,30 @@
 <template>
   <main class="view-wrap">
-    <header class="bar">
+    <BaseCard as="header" padding="sm" class="bar">
       <div class="left">
         <h2 class="title">Scoreboard Viewer</h2>
-        <span v-if="gameId" class="meta">Game: {{ gameId }}</span>
+        <BaseBadge v-if="gameId" variant="neutral" :uppercase="false">
+          Game: {{ gameId.slice(0, 8) }}…
+        </BaseBadge>
       </div>
 
       <div class="right">
-        <button class="btn" @click="openInNewTab">Open in new tab</button>
-        <a class="btn btn-ghost" :href="viewerUrl" target="_blank" rel="noopener">Share link</a>
+        <BaseButton variant="secondary" size="sm" @click="openInNewTab">
+          Open in new tab
+        </BaseButton>
+        <a
+          class="ds-btn ds-btn--ghost ds-btn--sm"
+          :href="viewerUrl"
+          target="_blank"
+          rel="noopener"
+        >
+          Share link
+        </a>
       </div>
-    </header>
+    </BaseCard>
 
     <!-- Decorative stage that keeps rails visible and looks nice in OBS/embeds -->
-    <section class="stage">
+    <BaseCard as="section" padding="lg" class="stage">
       <ScoreboardWidget
         :game-id="gameId"
         :title="resolvedTitle"
@@ -24,7 +35,7 @@
         interruptions-mode="auto"
         :poll-ms="5000"
       />
-    </section>
+    </BaseCard>
   </main>
 </template>
 
@@ -32,6 +43,7 @@
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
+import { BaseButton, BaseCard, BaseBadge } from '@/components'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import { useGameStore } from '@/stores/gameStore'
 import { API_BASE } from '@/utils/api'
@@ -139,7 +151,7 @@ function openInNewTab() {
 
 .left {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-3);
 }
 
@@ -150,47 +162,9 @@ function openInNewTab() {
   letter-spacing: 0.01em;
 }
 
-.meta {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-
 .right {
   display: inline-flex;
   gap: var(--space-2);
-}
-
-/* Buttons */
-.btn, .btn-ghost {
-  appearance: none;
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
-  font-weight: var(--font-extrabold);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  text-decoration: none;
-  transition: background var(--transition-fast);
-}
-
-.btn {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  backdrop-filter: blur(8px);
-}
-
-.btn:hover {
-  background: var(--color-surface-hover);
-}
-
-.btn-ghost {
-  border: 1px solid var(--color-border-strong);
-  background: transparent;
-  color: var(--color-text);
-}
-
-.btn-ghost:hover {
-  background: var(--color-surface-hover);
 }
 
 /* Decorative stage around the widget */
@@ -198,41 +172,23 @@ function openInNewTab() {
   position: relative;
   width: min(1100px, 96vw);
   margin: 0 auto;
-  padding: var(--space-4);
-  border-radius: var(--radius-xl);
   background: linear-gradient(180deg, var(--color-surface), var(--color-bg));
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-lg);
   overflow: visible;
 }
 
-/* Dark mode adjustments */
-@media (prefers-color-scheme: dark) {
-  .view-wrap {
-    background:
-      radial-gradient(1200px 600px at 10% -10%, var(--color-primary-soft), transparent 60%),
-      radial-gradient(900px 480px at 100% 0%, var(--color-secondary-soft), transparent 55%),
-      linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg) 240px, var(--color-bg) 100%);
-    color: var(--color-text);
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .bar {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
   }
 
-  .btn, .btn-ghost {
-    color: var(--color-text);
-    border-color: var(--color-border);
+  .left {
+    flex-wrap: wrap;
   }
 
-  .btn {
-    background: var(--color-surface);
-  }
-
-  .btn:hover {
-    background: var(--color-surface-hover);
-  }
-
-  .stage {
-    background: linear-gradient(180deg, var(--color-surface), var(--color-bg));
-    border-color: var(--color-border);
-    box-shadow: var(--shadow-lg);
+  .right {
+    justify-content: flex-start;
   }
 }
 </style>

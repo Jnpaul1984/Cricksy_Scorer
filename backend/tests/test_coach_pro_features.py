@@ -48,7 +48,7 @@ async def _ensure_player_profile(session_maker: async_sessionmaker, player_id: s
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(reset_db) -> TestClient:
     # Use the global SessionLocal and engine from backend.sql_app.database
     from backend.sql_app.database import SessionLocal
 

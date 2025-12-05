@@ -72,6 +72,30 @@ const router = createRouter({
       component: () => import('@/views/E2EView.vue'),
     },
     {
+      path: '/design-system',
+      name: 'DesignSystemShowcase',
+      component: () => import('@/views/DesignSystemShowcaseView.vue'),
+      meta: { requiresAuth: false, internal: true, title: 'Design System' },
+    },
+    {
+      path: '/coaches',
+      name: 'CoachesDashboard',
+      component: () => import('@/views/CoachesDashboardView.vue'),
+      meta: { requiresAuth: true, title: 'Coaches Dashboard' },
+    },
+    {
+      path: '/analyst',
+      name: 'AnalystWorkspace',
+      component: () => import('@/views/AnalystWorkspaceView.vue'),
+      meta: { requiresAuth: true, title: 'Analyst Workspace — Cricksy' },
+    },
+    {
+      path: '/analyst/match/:matchId',
+      name: 'MatchCaseStudy',
+      component: () => import('@/views/MatchCaseStudyView.vue'),
+      meta: { requiresAuth: true, title: 'Match Case Study — Cricksy' },
+    },
+    {
       path: '/game/:gameId/select-xi',
       name: 'team-select',
       component: () => import('@/views/TeamSelectionView.vue'),

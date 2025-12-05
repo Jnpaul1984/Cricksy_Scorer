@@ -30,6 +30,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  battingTeam: undefined,
+  bowlingTeam: undefined,
   theme: 'dark',
   showChart: true,
   compact: false,

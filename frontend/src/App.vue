@@ -13,6 +13,8 @@ import logoAvif768 from '@/assets/optimized/logo-w768.avif'
 import logoWebp768 from '@/assets/optimized/logo-w768.webp'
 import { useAuthStore } from '@/stores/authStore'
 
+const isDev = computed(() => import.meta.env.DEV)
+
 onMounted(() => {
   // hide the tiny fallback text from index.html once Vue is mounted
   const el = document.getElementById('app')
@@ -64,6 +66,7 @@ const showAnalystNav = computed(() => auth.isAnalyst || auth.isOrg || auth.isSup
         <RouterLink v-if="showCoachNav" to="/coach/dashboard">Coach</RouterLink>
         <RouterLink v-if="showAnalystNav" to="/analyst/workspace">Analyst</RouterLink>
         <RouterLink to="/pricing">Pricing</RouterLink>
+        <RouterLink v-if="isDev" to="/design-system" class="nav-dev">Design System</RouterLink>
       </nav>
     </header>
 
@@ -128,6 +131,10 @@ const showAnalystNav = computed(() => auth.isAnalyst || auth.isOrg || auth.isSup
 }
 .nav a.router-link-active {
   color: #fff;
+}
+.nav-dev {
+  opacity: 0.6;
+  font-size: 0.85em;
 }
 
 /* Main */

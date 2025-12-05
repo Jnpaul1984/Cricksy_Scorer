@@ -1,462 +1,473 @@
-<script setup lang="ts">
-/**
- * CoachesDashboardView.vue
- * Coach-focused dashboard for managing players, sessions, and form alerts.
- * Layout-only V1 – data fetching to be wired in future sprints.
- */
-
-// TODO: Wire real data in Week X
-// - Fetch players from API
-// - Fetch upcoming sessions from calendar/schedule service
-// - Fetch form alerts from analytics service
-</script>
-
+<!-- frontend/src/views/CoachesDashboardView.vue -->
 <template>
-  <div class="coach-dashboard">
-    <header class="page-header">
-      <h1 class="page-title">Coach Dashboard</h1>
-      <p class="page-subtitle">Manage your players, sessions, and track performance trends.</p>
-    </header>
+  <div class="coaches-page">
+    <BaseCard as="section" padding="lg" class="coaches-dashboard">
+      <header class="dashboard-header">
+        <div class="title-block">
+          <h1>Coaches Dashboard</h1>
+          <p class="subtitle">Quick view of team performance and current match state.</p>
+        </div>
+        <div class="header-actions">
+          <BaseInput
+            v-model="selectedTeam"
+            placeholder="Select team..."
+            class="team-selector"
+          />
+          <BaseButton variant="secondary" size="sm" @click="openScoring">
+            Open Scoring Console
+          </BaseButton>
+          <BaseButton variant="ghost" size="sm" @click="openAnalyst">
+            Analyst Workspace
+          </BaseButton>
+        </div>
+      </header>
 
-    <div class="dashboard-grid">
-      <!-- My Players Section -->
-      <section class="dashboard-card players-section">
-        <div class="card-header">
-          <h2 class="card-title">
-            <span class="card-icon">👥</span>
-            My Players
-          </h2>
-          <button class="card-action-btn">+ Add Player</button>
-        </div>
-        <div class="card-content">
-          <!-- TODO: Wire real data in Week X -->
-          <ul class="player-list">
-            <li class="player-item placeholder">
-              <div class="player-avatar">JS</div>
-              <div class="player-info">
-                <span class="player-name">John Smith</span>
-                <span class="player-role">All-rounder</span>
-              </div>
-              <span class="player-form form-good">↑ Good</span>
-            </li>
-            <li class="player-item placeholder">
-              <div class="player-avatar">AK</div>
-              <div class="player-info">
-                <span class="player-name">Arun Kumar</span>
-                <span class="player-role">Batsman</span>
-              </div>
-              <span class="player-form form-neutral">→ Steady</span>
-            </li>
-            <li class="player-item placeholder">
-              <div class="player-avatar">MB</div>
-              <div class="player-info">
-                <span class="player-name">Mike Brown</span>
-                <span class="player-role">Bowler</span>
-              </div>
-              <span class="player-form form-warning">↓ Needs Work</span>
-            </li>
-          </ul>
-          <p class="placeholder-note">
-            <!-- TODO: Wire real data in Week X -->
-            Placeholder data – connect to player API
-          </p>
-        </div>
-      </section>
+      <div class="grid">
+        <!-- Left column: match snapshot + key players -->
+        <div class="grid-main">
+          <!-- Match Snapshot -->
+          <BaseCard as="section" padding="md" class="match-snapshot">
+            <div class="section-header">
+              <h2>Current Match</h2>
+              <BaseBadge :variant="matchStatusVariant">{{ matchStatus }}</BaseBadge>
+            </div>
 
-      <!-- Upcoming Sessions Section -->
-      <section class="dashboard-card sessions-section">
-        <div class="card-header">
-          <h2 class="card-title">
-            <span class="card-icon">📅</span>
-            Upcoming Sessions
-          </h2>
-          <button class="card-action-btn">Schedule</button>
-        </div>
-        <div class="card-content">
-          <!-- TODO: Wire real data in Week X -->
-          <ul class="session-list">
-            <li class="session-item placeholder">
-              <div class="session-date">
-                <span class="date-day">28</span>
-                <span class="date-month">Nov</span>
-              </div>
-              <div class="session-info">
-                <span class="session-title">Team Practice</span>
-                <span class="session-time">10:00 AM – 12:00 PM</span>
-              </div>
-            </li>
-            <li class="session-item placeholder">
-              <div class="session-date">
-                <span class="date-day">30</span>
-                <span class="date-month">Nov</span>
-              </div>
-              <div class="session-info">
-                <span class="session-title">Batting Drills</span>
-                <span class="session-time">2:00 PM – 4:00 PM</span>
-              </div>
-            </li>
-            <li class="session-item placeholder">
-              <div class="session-date">
-                <span class="date-day">02</span>
-                <span class="date-month">Dec</span>
-              </div>
-              <div class="session-info">
-                <span class="session-title">Match vs. City XI</span>
-                <span class="session-time">9:00 AM</span>
-              </div>
-            </li>
-          </ul>
-          <p class="placeholder-note">
-            <!-- TODO: Wire real data in Week X -->
-            Placeholder data – connect to calendar/schedule API
-          </p>
-        </div>
-      </section>
+            <div v-if="hasActiveMatch" class="scoreboard-container">
+              <ScoreboardWidget
+                :game-id="currentGameId"
+                :can-control="false"
+              />
+            </div>
+            <div v-else class="empty-state">
+              <p>No active match. Start a new match from the Setup screen.</p>
+              <BaseButton variant="primary" size="sm" @click="goToSetup">
+                Go to Setup
+              </BaseButton>
+            </div>
+          </BaseCard>
 
-      <!-- Recent Form Alerts Section -->
-      <section class="dashboard-card alerts-section">
-        <div class="card-header">
-          <h2 class="card-title">
-            <span class="card-icon">⚠️</span>
-            Recent Form Alerts
-          </h2>
-          <button class="card-action-btn">View All</button>
+          <!-- Key Players -->
+          <BaseCard as="section" padding="md" class="key-players">
+            <div class="section-header">
+              <h2>Key Players</h2>
+            </div>
+
+            <div class="players-grid">
+              <div
+                v-for="player in keyPlayers"
+                :key="player.id"
+                class="player-card"
+              >
+                <div class="player-info">
+                  <span class="player-name">{{ player.name }}</span>
+                  <div class="player-roles">
+                    <BaseBadge
+                      v-for="role in player.roles"
+                      :key="role"
+                      variant="neutral"
+                      condensed
+                    >
+                      {{ role }}
+                    </BaseBadge>
+                  </div>
+                </div>
+                <div class="player-stats">
+                  <div class="stat">
+                    <span class="stat-value">{{ player.runs }}</span>
+                    <span class="stat-label">Runs</span>
+                  </div>
+                  <div class="stat">
+                    <span class="stat-value">{{ player.wickets }}</span>
+                    <span class="stat-label">Wkts</span>
+                  </div>
+                  <div class="stat">
+                    <span class="stat-value">{{ player.avg }}</span>
+                    <span class="stat-label">Avg</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </BaseCard>
         </div>
-        <div class="card-content">
-          <!-- TODO: Wire real data in Week X -->
-          <ul class="alert-list">
-            <li class="alert-item alert-warning placeholder">
-              <span class="alert-icon">📉</span>
-              <div class="alert-info">
-                <span class="alert-title">Mike Brown – Bowling Economy Up</span>
-                <span class="alert-desc">Economy rate increased 15% over last 3 matches</span>
+
+        <!-- Right column: quick stats + notes -->
+        <aside class="grid-side">
+          <!-- Quick Stats -->
+          <BaseCard as="section" padding="md" class="quick-stats">
+            <h3>Season Overview</h3>
+            <div class="stats-grid">
+              <div class="stat-tile">
+                <span class="stat-value">{{ seasonStats.matches }}</span>
+                <span class="stat-label">Matches</span>
               </div>
-            </li>
-            <li class="alert-item alert-success placeholder">
-              <span class="alert-icon">🔥</span>
-              <div class="alert-info">
-                <span class="alert-title">Arun Kumar – Hot Streak</span>
-                <span class="alert-desc">3 consecutive 50+ scores</span>
+              <div class="stat-tile">
+                <span class="stat-value">{{ seasonStats.wins }}</span>
+                <span class="stat-label">Wins</span>
               </div>
-            </li>
-            <li class="alert-item alert-info placeholder">
-              <span class="alert-icon">💡</span>
-              <div class="alert-info">
-                <span class="alert-title">John Smith – Milestone Approaching</span>
-                <span class="alert-desc">12 runs away from 1000 career runs</span>
+              <div class="stat-tile">
+                <span class="stat-value">{{ seasonStats.losses }}</span>
+                <span class="stat-label">Losses</span>
               </div>
-            </li>
-          </ul>
-          <p class="placeholder-note">
-            <!-- TODO: Wire real data in Week X -->
-            Placeholder data – connect to analytics/alerts API
-          </p>
-        </div>
-      </section>
-    </div>
+              <div class="stat-tile">
+                <span class="stat-value">{{ seasonStats.nrr }}</span>
+                <span class="stat-label">NRR</span>
+              </div>
+            </div>
+          </BaseCard>
+
+          <!-- Coach Notes -->
+          <BaseCard as="section" padding="md" class="coach-notes">
+            <h3>Coach Notes</h3>
+            <textarea
+              v-model="coachNote"
+              class="notes-input"
+              placeholder="Add notes about tactics, player form, or upcoming match prep..."
+              rows="6"
+            />
+            <div class="notes-actions">
+              <BaseButton
+                variant="primary"
+                size="sm"
+                :disabled="!coachNote.trim()"
+                @click="saveNote"
+              >
+                Save Note
+              </BaseButton>
+              <span v-if="noteSaved" class="note-saved">✓ Saved</span>
+            </div>
+            <!-- TODO: Persist notes to backend / local storage -->
+          </BaseCard>
+
+          <!-- Quick Links -->
+          <BaseCard as="section" padding="md" class="quick-links">
+            <h3>Quick Links</h3>
+            <div class="links-list">
+              <BaseButton variant="ghost" size="sm" full-width @click="goToLeaderboard">
+                View Leaderboard
+              </BaseButton>
+              <BaseButton variant="ghost" size="sm" full-width @click="goToAnalytics">
+                Team Analytics
+              </BaseButton>
+            </div>
+          </BaseCard>
+        </aside>
+      </div>
+    </BaseCard>
   </div>
 </template>
 
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+
+import { BaseCard, BaseButton, BaseBadge, BaseInput } from '@/components'
+import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
+import { useGameStore } from '@/stores/gameStore'
+
+const router = useRouter()
+const gameStore = useGameStore()
+
+// --- Selectors (readonly) ---
+const selectedTeam = ref('')
+
+// Pull current game ID from store if available
+const currentGameId = computed(() => gameStore.currentGame?.id ?? '')
+const hasActiveMatch = computed(() => !!currentGameId.value)
+
+const matchStatus = computed(() => {
+  if (!hasActiveMatch.value) return 'NO MATCH'
+  const status = gameStore.currentGame?.status
+  if (status === 'IN_PROGRESS') return 'LIVE'
+  if (status === 'COMPLETED') return 'COMPLETED'
+  return status ?? 'PENDING'
+})
+
+const matchStatusVariant = computed(() => {
+  switch (matchStatus.value) {
+    case 'LIVE':
+      return 'success'
+    case 'COMPLETED':
+      return 'neutral'
+    case 'NO MATCH':
+      return 'warning'
+    default:
+      return 'neutral'
+  }
+})
+
+// --- Mock Key Players (TODO: Wire to store/API) ---
+const keyPlayers = ref([
+  { id: '1', name: 'J. Smith', roles: ['C'], runs: 342, wickets: 2, avg: 42.75 },
+  { id: '2', name: 'R. Patel', roles: ['WK'], runs: 287, wickets: 0, avg: 35.88 },
+  { id: '3', name: 'A. Johnson', roles: ['All'], runs: 156, wickets: 14, avg: 26.00 },
+  { id: '4', name: 'M. Williams', roles: [], runs: 198, wickets: 0, avg: 33.00 },
+  { id: '5', name: 'S. Kumar', roles: [], runs: 45, wickets: 18, avg: 15.00 },
+  { id: '6', name: 'T. Brown', roles: [], runs: 89, wickets: 8, avg: 22.25 },
+])
+
+// --- Mock Season Stats (TODO: Wire to store/API) ---
+const seasonStats = ref({
+  matches: 12,
+  wins: 8,
+  losses: 3,
+  nrr: '+0.85',
+})
+
+// --- Coach Notes (local only for now) ---
+const coachNote = ref('')
+const noteSaved = ref(false)
+
+function saveNote() {
+  // TODO: Persist to backend or local storage
+  noteSaved.value = true
+  setTimeout(() => {
+    noteSaved.value = false
+  }, 2000)
+}
+
+// --- Navigation Actions ---
+function openScoring() {
+  if (currentGameId.value) {
+    router.push({ name: 'GameScoringView', params: { gameId: currentGameId.value } })
+  } else {
+    router.push({ name: 'setup' })
+  }
+}
+
+function openAnalyst() {
+  router.push({ name: 'AnalystWorkspace' })
+}
+
+function goToSetup() {
+  router.push({ name: 'setup' })
+}
+
+function goToLeaderboard() {
+  router.push({ name: 'leaderboard' })
+}
+
+function goToAnalytics() {
+  router.push({ name: 'AnalyticsView' })
+}
+</script>
+
 <style scoped>
-.coach-dashboard {
-  padding: var(--space-5) var(--space-4);
+.coaches-page {
+  min-height: 100vh;
+  padding: var(--space-lg);
+  background: var(--color-background, var(--color-surface));
+}
+
+.coaches-dashboard {
   max-width: 1200px;
   margin: 0 auto;
-  color: var(--color-text);
 }
 
-/* Page Header */
-.page-header {
-  margin-bottom: var(--space-6);
+/* Header */
+.dashboard-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
 }
 
-.page-title {
-  font-family: var(--font-heading);
-  font-size: var(--text-3xl);
-  font-weight: var(--font-bold);
-  color: var(--color-primary);
-  margin: 0 0 var(--space-2);
+.title-block h1 {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-2xl);
 }
 
-.page-subtitle {
-  font-size: var(--text-base);
-  color: var(--color-text-secondary);
+.subtitle {
   margin: 0;
+  color: var(--color-muted);
 }
 
-/* Dashboard Grid */
-.dashboard-grid {
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.team-selector {
+  min-width: 180px;
+}
+
+/* Grid Layout */
+.grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--space-5);
+  gap: var(--space-lg);
+  grid-template-columns: 1fr;
 }
 
-/* Dashboard Card */
-.dashboard-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: 2fr 1fr;
+  }
 }
 
-.card-header {
+.grid-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.grid-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* Section Headers */
+.section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4);
-  background: var(--color-bg);
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
 }
 
-.card-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-heading);
+.section-header h2 {
+  margin: 0;
   font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  margin: 0;
-  color: var(--color-text);
 }
 
-.card-icon {
-  font-size: 1.25rem;
+/* Match Snapshot */
+.scoreboard-container {
+  margin-top: var(--space-sm);
 }
 
-.card-action-btn {
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
-  border: none;
+.empty-state {
+  text-align: center;
+  padding: var(--space-xl) var(--space-md);
+  color: var(--color-muted);
+}
+
+.empty-state p {
+  margin: 0 0 var(--space-md);
+}
+
+/* Key Players */
+.players-grid {
+  display: grid;
+  gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.player-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-surface-alt);
   border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.card-action-btn:hover {
-  background: var(--color-primary);
-  color: #0f172a;
-}
-
-.card-content {
-  padding: var(--space-4);
-}
-
-/* Player List */
-.player-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.player-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
-.player-item:last-child {
-  border-bottom: none;
-}
-
-.player-avatar {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  font-size: var(--text-sm);
-  font-weight: var(--font-bold);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
 }
 
 .player-info {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-xs);
 }
 
 .player-name {
-  font-weight: var(--font-medium);
-  color: var(--color-text);
+  font-weight: 600;
+  font-size: var(--text-md);
 }
 
-.player-role {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-
-.player-form {
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-}
-
-.form-good {
-  background: var(--color-success-soft);
-  color: var(--color-success);
-}
-
-.form-neutral {
-  background: var(--color-info-soft);
-  color: var(--color-info);
-}
-
-.form-warning {
-  background: var(--color-warning-soft);
-  color: var(--color-warning);
-}
-
-/* Session List */
-.session-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.session-item {
+.player-roles {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--color-border-subtle);
+  gap: var(--space-xs);
 }
 
-.session-item:last-child {
-  border-bottom: none;
+.player-stats {
+  display: flex;
+  gap: var(--space-md);
 }
 
-.session-date {
+.stat {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  background: var(--color-primary);
-  color: #0f172a;
-  border-radius: var(--radius-md);
 }
 
-.date-day {
+.stat-value {
+  font-weight: 700;
   font-size: var(--text-lg);
-  font-weight: var(--font-bold);
-  line-height: 1;
+  color: var(--color-primary);
 }
 
-.date-month {
+.stat-label {
   font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  text-transform: uppercase;
+  color: var(--color-muted);
 }
 
-.session-info {
-  flex: 1;
+/* Quick Stats */
+.quick-stats h3,
+.coach-notes h3,
+.quick-links h3 {
+  margin: 0 0 var(--space-md);
+  font-size: var(--text-md);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-sm);
+}
+
+.stat-tile {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-}
-
-.session-title {
-  font-weight: var(--font-medium);
-  color: var(--color-text);
-}
-
-.session-time {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-
-/* Alert List */
-.alert-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.alert-item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  margin-bottom: var(--space-2);
+  align-items: center;
+  padding: var(--space-md);
+  background: var(--color-surface-alt);
   border-radius: var(--radius-md);
+  text-align: center;
 }
 
-.alert-item:last-child {
-  margin-bottom: 0;
+.stat-tile .stat-value {
+  font-size: var(--text-xl);
 }
 
-.alert-warning {
-  background: var(--color-warning-soft);
-}
-
-.alert-success {
-  background: var(--color-success-soft);
-}
-
-.alert-info {
-  background: var(--color-info-soft);
-}
-
-.alert-icon {
-  font-size: 1.25rem;
-  flex-shrink: 0;
-}
-
-.alert-info-container {
-  flex: 1;
-}
-
-.alert-info {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.alert-title {
-  font-weight: var(--font-medium);
-  color: var(--color-text);
+.stat-tile .stat-label {
   font-size: var(--text-sm);
 }
 
-.alert-desc {
-  font-size: var(--text-xs);
-  color: var(--color-text-secondary);
+/* Coach Notes */
+.notes-input {
+  width: 100%;
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  color: var(--color-on-surface);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  resize: vertical;
 }
 
-/* Placeholder Note */
-.placeholder-note {
-  margin: var(--space-3) 0 0;
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  background: var(--color-bg);
-  border-radius: var(--radius-sm);
-  text-align: center;
-  font-style: italic;
+.notes-input::placeholder {
+  color: var(--color-muted);
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  .coach-dashboard {
-    padding: var(--space-4) var(--space-3);
-  }
+.notes-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
 
-  .page-title {
-    font-size: var(--text-2xl);
-  }
+.note-saved {
+  color: var(--color-success);
+  font-size: var(--text-sm);
+}
 
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
+/* Quick Links */
+.links-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
 }
 </style>

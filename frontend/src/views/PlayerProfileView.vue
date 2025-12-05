@@ -9,34 +9,35 @@
 
       <!-- Error State -->
       <div v-else-if="error" class="error-container">
-        <div class="error-card">
+        <BaseCard class="error-card">
           <div class="error-icon">⚠️</div>
           <h2>Unable to Load Profile</h2>
           <p>{{ error }}</p>
-          <button class="retry-btn" @click="loadProfile">Try Again</button>
-        </div>
+          <BaseButton variant="primary" @click="loadProfile">Try Again</BaseButton>
+        </BaseCard>
       </div>
 
       <!-- Profile Content -->
       <div v-else-if="profile" class="profile-content">
         <!-- Player Header -->
-        <header class="player-header">
+        <BaseCard as="header" class="player-header">
           <div class="player-avatar">{{ playerInitials }}</div>
           <div class="player-info">
             <div class="player-name-row">
               <h1>{{ profile.player_name }}</h1>
-              <span class="role-badge" :class="roleClass">{{ playerRole }}</span>
-              <button
+              <BaseBadge :variant="roleBadgeVariant">{{ playerRole }}</BaseBadge>
+              <BaseButton
+                :variant="isFavorite ? 'primary' : 'ghost'"
+                size="sm"
                 class="follow-btn"
-                :class="{ following: isFavorite, loading: isTogglingFavorite }"
-                :disabled="isTogglingFavorite"
-                :title="isFavorite ? 'Unfollow this player' : 'Follow this player'"
+                :class="{ following: isFavorite }"
+                :loading="isTogglingFavorite"
+                :aria-label="isFavorite ? 'Unfollow this player' : 'Follow this player'"
                 @click="toggleFavorite"
               >
-                <span v-if="isTogglingFavorite" class="btn-spinner"></span>
-                <span v-else-if="isFavorite">★ Following</span>
+                <span v-if="isFavorite">★ Following</span>
                 <span v-else>☆ Follow</span>
-              </button>
+              </BaseButton>
             </div>
             <div v-if="favoriteError" class="favorite-error">{{ favoriteError }}</div>
             <div class="player-meta">
@@ -44,35 +45,38 @@
               <span class="meta-item subdued">ID: {{ profile.player_id.slice(0, 8) }}…</span>
             </div>
           </div>
-        </header>
+        </BaseCard>
 
         <!-- Tab Navigation -->
-        <nav class="tabs-nav">
-          <button
-            :class="['tab-btn', { active: activeTab === 'overview' }]"
+        <BaseCard as="nav" padding="sm" class="tabs-nav">
+          <BaseButton
+            :variant="activeTab === 'overview' ? 'primary' : 'ghost'"
+            class="tab-btn"
             data-tab="overview"
             @click="activeTab = 'overview'"
           >
             Overview
-          </button>
-          <button
-            :class="['tab-btn', { active: activeTab === 'batting' }]"
+          </BaseButton>
+          <BaseButton
+            :variant="activeTab === 'batting' ? 'primary' : 'ghost'"
+            class="tab-btn"
             data-tab="batting"
             @click="activeTab = 'batting'"
           >
             Batting
-          </button>
-          <button
-            :class="['tab-btn', { active: activeTab === 'bowling' }]"
+          </BaseButton>
+          <BaseButton
+            :variant="activeTab === 'bowling' ? 'primary' : 'ghost'"
+            class="tab-btn"
             data-tab="bowling"
             @click="activeTab = 'bowling'"
           >
             Bowling
-          </button>
-        </nav>
+          </BaseButton>
+        </BaseCard>
 
         <!-- Tab Content -->
-        <div class="tab-content">
+        <BaseCard class="tab-content">
           <!-- Overview Tab -->
           <div v-if="activeTab === 'overview'" class="tab-panel">
             <!-- Key Stats Grid -->
@@ -223,7 +227,111 @@
               </div>
             </dl>
           </div>
-        </div>
+        </BaseCard>
+
+        <!-- AI Insights Section -->
+        <section class="ai-insights-section">
+          <BaseCard padding="lg" class="ai-insights-card">
+            <header class="ai-insights-header">
+              <h2 class="ai-insights-title">AI Insights</h2>
+              <div class="ai-insights-actions">
+                <BaseBadge
+                  v-if="aiRecentForm?.trend"
+                  variant="neutral"
+                  class="trend-badge"
+                >
+                  Trend: {{ aiRecentForm.trend }}
+                </BaseBadge>
+                <BaseButton
+                  size="sm"
+                  variant="ghost"
+                  :disabled="aiInsightsLoading"
+                  @click="loadAIInsights"
+                >
+                  <span v-if="aiInsightsLoading">Refreshing…</span>
+                  <span v-else>Refresh</span>
+                </BaseButton>
+              </div>
+            </header>
+
+            <!-- Loading state -->
+            <div v-if="aiInsightsLoading" class="ai-insights-loading">
+              <div class="skeleton-line" />
+              <div class="skeleton-line" />
+              <div class="skeleton-line" />
+              <div class="skeleton-line" />
+            </div>
+
+            <!-- Error state -->
+            <p v-else-if="aiInsightsError" class="ai-insights-error">
+              {{ aiInsightsError }}
+            </p>
+
+            <!-- Content -->
+            <div v-else-if="aiInsights" class="ai-insights-grid">
+              <!-- Summary -->
+              <section class="ai-insights-summary">
+                <h3>Summary</h3>
+                <p>{{ aiSummary }}</p>
+              </section>
+
+              <!-- Strengths -->
+              <section class="ai-insights-strengths">
+                <h3>Strengths</h3>
+                <ul v-if="aiStrengths.length">
+                  <li v-for="(item, idx) in aiStrengths" :key="idx">
+                    {{ item }}
+                  </li>
+                </ul>
+                <p v-else class="ai-insights-empty">No strengths identified yet.</p>
+              </section>
+
+              <!-- Weaknesses -->
+              <section class="ai-insights-weaknesses">
+                <h3>Weaknesses</h3>
+                <ul v-if="aiWeaknesses.length">
+                  <li v-for="(item, idx) in aiWeaknesses" :key="idx">
+                    {{ item }}
+                  </li>
+                </ul>
+                <p v-else class="ai-insights-empty">No weaknesses identified yet.</p>
+              </section>
+
+              <!-- Recent form -->
+              <section class="ai-insights-form">
+                <h3>Recent Form</h3>
+                <p v-if="aiRecentForm && aiRecentForm.matches_considered">
+                  Last {{ aiRecentForm.matches_considered }} innings:
+                  <strong>{{ aiRecentForm.recent_runs.join(', ') }}</strong><br />
+                  Average: <strong>{{ aiRecentForm.average.toFixed(1) }}</strong>
+                </p>
+                <p v-else class="ai-insights-empty">
+                  Not enough recent innings to compute form.
+                </p>
+              </section>
+
+              <!-- Tags -->
+              <section v-if="aiTags.length" class="ai-insights-tags">
+                <h3>Tags</h3>
+                <div class="ai-insights-tag-list">
+                  <BaseBadge
+                    v-for="tag in aiTags"
+                    :key="tag"
+                    variant="neutral"
+                    class="ai-tag"
+                  >
+                    {{ tag.replace(/_/g, ' ') }}
+                  </BaseBadge>
+                </div>
+              </section>
+            </div>
+
+            <!-- No data yet -->
+            <div v-else class="ai-insights-empty">
+              AI hasn't generated insights for this player yet.
+            </div>
+          </BaseCard>
+        </section>
       </div>
     </div>
   </div>
@@ -233,8 +341,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
-import { apiService, getErrorMessage } from '@/services/api'
-import type { FanFavoriteRead } from '@/services/api'
+import { BaseButton, BaseCard, BaseBadge } from '@/components'
+import { apiService, getErrorMessage, getPlayerAIInsights } from '@/services/api'
+import type { FanFavoriteRead, PlayerAIInsights } from '@/services/api'
 import { getPlayerProfile } from '@/services/playerApi'
 import type { PlayerProfile } from '@/types/player'
 
@@ -252,6 +361,11 @@ const favoriteId = ref<string | null>(null)
 const isTogglingFavorite = ref(false)
 const favoriteError = ref<string | null>(null)
 
+// AI Insights state
+const aiInsightsLoading = ref(false)
+const aiInsightsError = ref<string | null>(null)
+const aiInsights = ref<PlayerAIInsights | null>(null)
+
 // Derive player role from stats
 const playerRole = computed<string>(() => {
   if (!profile.value) return 'Player'
@@ -262,13 +376,13 @@ const playerRole = computed<string>(() => {
   return 'Player'
 })
 
-// Role badge class for styling
-const roleClass = computed<string>(() => {
+// Role badge variant for BaseBadge component
+const roleBadgeVariant = computed<'success' | 'warning' | 'primary' | 'neutral'>(() => {
   switch (playerRole.value) {
-    case 'All-rounder': return 'role-allrounder'
-    case 'Bowler': return 'role-bowler'
-    case 'Batter': return 'role-batter'
-    default: return 'role-default'
+    case 'All-rounder': return 'success'
+    case 'Bowler': return 'warning'
+    case 'Batter': return 'primary'
+    default: return 'neutral'
   }
 })
 
@@ -287,6 +401,13 @@ const formatStat = (value: number | null | undefined, decimals = 2): string => {
   if (value === null || value === undefined || isNaN(value)) return '—'
   return value.toFixed(decimals)
 }
+
+// AI Insights computed helpers
+const aiSummary = computed(() => aiInsights.value?.summary ?? '')
+const aiRecentForm = computed(() => aiInsights.value?.recent_form ?? null)
+const aiStrengths = computed<string[]>(() => aiInsights.value?.strengths ?? [])
+const aiWeaknesses = computed<string[]>(() => aiInsights.value?.weaknesses ?? [])
+const aiTags = computed<string[]>(() => aiInsights.value?.tags ?? [])
 
 const loadProfile = async () => {
   loading.value = true
@@ -357,9 +478,28 @@ const toggleFavorite = async () => {
   }
 }
 
+// Load AI insights for current player
+const loadAIInsights = async () => {
+  const playerId = route.params.playerId as string
+  if (!playerId) return
+
+  aiInsightsLoading.value = true
+  aiInsightsError.value = null
+
+  try {
+    aiInsights.value = await getPlayerAIInsights(playerId)
+  } catch (err) {
+    aiInsightsError.value = getErrorMessage(err) || 'Failed to load AI insights'
+    console.warn('Failed to load AI insights:', err)
+  } finally {
+    aiInsightsLoading.value = false
+  }
+}
+
 onMounted(async () => {
   await loadProfile()
   await loadFavorites()
+  await loadAIInsights()
 })
 </script>
 
@@ -412,10 +552,6 @@ onMounted(async () => {
 
 .error-card {
   text-align: center;
-  padding: var(--space-6);
-  background: var(--color-surface);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
   max-width: 400px;
 }
 
@@ -436,30 +572,11 @@ onMounted(async () => {
   margin-bottom: var(--space-5);
 }
 
-.retry-btn {
-  padding: var(--space-3) var(--space-5);
-  background: var(--color-primary);
-  color: var(--color-text-inverse);
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-weight: var(--font-semibold);
-  transition: background var(--transition-fast);
-}
-
-.retry-btn:hover {
-  background: var(--color-primary-hover);
-}
-
 /* Player Header */
 .player-header {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-5);
-  background: var(--color-surface);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
   margin-bottom: var(--space-4);
 }
 
@@ -497,79 +614,10 @@ onMounted(async () => {
   color: var(--color-text);
 }
 
-.role-badge {
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.role-allrounder {
-  background: var(--color-success-soft);
-  color: var(--color-success);
-}
-
-.role-bowler {
-  background: var(--color-warning-soft);
-  color: var(--color-warning);
-}
-
-.role-batter {
-  background: var(--color-info-soft);
-  color: var(--color-info);
-}
-
-.role-default {
-  background: var(--color-surface-hover);
-  color: var(--color-text-muted);
-}
-
 /* Follow Button */
-.follow-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--color-primary);
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  white-space: nowrap;
-}
-
-.follow-btn:hover:not(:disabled) {
-  background: var(--color-primary);
-  color: var(--color-text-inverse);
-}
-
-.follow-btn.following {
-  background: var(--color-primary);
-  color: var(--color-text-inverse);
-}
-
 .follow-btn.following:hover:not(:disabled) {
   background: var(--color-error);
   border-color: var(--color-error);
-}
-
-.follow-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.follow-btn .btn-spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: var(--radius-pill);
-  animation: spin 0.8s linear infinite;
 }
 
 .favorite-error {
@@ -596,41 +644,11 @@ onMounted(async () => {
 .tabs-nav {
   display: flex;
   gap: var(--space-2);
-  background: var(--color-surface);
-  padding: var(--space-2);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
   margin-bottom: var(--space-4);
 }
 
 .tab-btn {
   flex: 1;
-  padding: var(--space-3) var(--space-4);
-  border: none;
-  background: transparent;
-  border-radius: var(--radius-md);
-  font-size: var(--text-base);
-  font-weight: var(--font-medium);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.tab-btn:hover {
-  background: var(--color-surface-hover);
-}
-
-.tab-btn.active {
-  background: var(--color-primary);
-  color: var(--color-text-inverse);
-}
-
-/* Tab Content */
-.tab-content {
-  background: var(--color-surface);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
-  padding: var(--space-5);
 }
 
 .tab-panel h3 {
@@ -717,12 +735,13 @@ onMounted(async () => {
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   background: linear-gradient(135deg, var(--color-accent), var(--color-warning));
-  color: #5d4037;
+  color: var(--color-text-inverse);
   border-radius: var(--radius-pill);
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   cursor: default;
   transition: transform var(--transition-fast);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .achievement-pill:hover {
@@ -792,9 +811,145 @@ onMounted(async () => {
     flex-wrap: wrap;
   }
 
-  .tab-btn {
+  .tabs-nav .tab-btn {
     flex: none;
     min-width: calc(33% - var(--space-2));
+  }
+}
+
+/* AI Insights Section */
+.ai-insights-section {
+  margin-top: var(--space-6);
+}
+
+.ai-insights-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ai-insights-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.ai-insights-title {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.ai-insights-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.trend-badge {
+  text-transform: capitalize;
+}
+
+.ai-insights-loading .skeleton-line {
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-alt, var(--color-border));
+  animation: pulse 1.2s ease-in-out infinite;
+  margin-bottom: var(--space-2);
+}
+
+.ai-insights-loading .skeleton-line:nth-child(1) { width: 90%; }
+.ai-insights-loading .skeleton-line:nth-child(2) { width: 75%; }
+.ai-insights-loading .skeleton-line:nth-child(3) { width: 60%; }
+.ai-insights-loading .skeleton-line:nth-child(4) { width: 45%; }
+
+.ai-insights-error {
+  font-size: var(--text-xs);
+  color: var(--color-error, var(--color-danger, #dc2626));
+}
+
+.ai-insights-empty {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.ai-insights-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+@media (min-width: 768px) {
+  .ai-insights-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.ai-insights-grid section h3 {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+}
+
+.ai-insights-grid section p,
+.ai-insights-grid section li {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  line-height: var(--leading-relaxed);
+}
+
+.ai-insights-grid section ul {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.ai-insights-grid section li {
+  margin-bottom: var(--space-1);
+}
+
+.ai-insights-strengths ul li {
+  list-style-type: "✓ ";
+}
+
+.ai-insights-weaknesses ul li {
+  list-style-type: "⚠ ";
+}
+
+.ai-insights-form strong {
+  color: var(--color-primary);
+}
+
+.ai-insights-tags {
+  grid-column: 1 / -1;
+}
+
+.ai-insights-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ai-tag {
+  text-transform: capitalize;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+@media (max-width: 768px) {
+  .ai-insights-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .ai-insights-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 </style>
