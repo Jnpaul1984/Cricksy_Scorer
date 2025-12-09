@@ -123,9 +123,7 @@ async def build_player_ai_insights(
         profile.form_entries,
         key=lambda f: f.period_end,
         reverse=True,
-    )[
-        :8
-    ]  # Last 8 form periods
+    )[:8]  # Last 8 form periods
 
     # Extract runs from form entries (reverse to chronological order)
     recent_runs = [f.runs for f in reversed(form_entries)]

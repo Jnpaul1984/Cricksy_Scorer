@@ -20,8 +20,8 @@ os.environ.setdefault("ANYIO_BACKEND", "asyncio")
 # Set test environment variables BEFORE importing backend modules
 if "DATABASE_URL" not in os.environ:
     os.environ["CRICKSY_IN_MEMORY_DB"] = "1"
-    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:?cache=shared"
-    os.environ["APP_SECRET_KEY"] = "test-secret-key"  # noqa: S105
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory?cache=shared"
+    os.environ["APP_SECRET_KEY"] = "test-secret-key"
 
 # On Windows, use the selector event loop policy
 if sys.platform.startswith("win"):
@@ -73,4 +73,4 @@ async def reset_db(_setup_db):
         await conn.run_sync(Base.metadata.create_all)
 
     # Clear in-memory user cache (critical for tests using IN_MEMORY_DB)
-    backend.security._in_memory_users.clear()  # noqa: SLF001
+    backend.security._in_memory_users.clear()
