@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from pydantic import BaseModel
+
 from backend.api.schemas.case_study import (
     CaseStudyKeyPlayer,
     CaseStudyMatch,
@@ -21,7 +23,6 @@ from backend.api.schemas.case_study import (
     MatchCaseStudyResponse,
 )
 from backend.services.analytics_case_study import build_match_case_study
-from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
 # Pydantic Schema

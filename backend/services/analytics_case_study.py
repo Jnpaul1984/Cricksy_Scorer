@@ -11,6 +11,9 @@ from collections import defaultdict
 from datetime import date, datetime
 from typing import Any, Literal
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.api.schemas.case_study import (
     CaseStudyAIBlock,
     CaseStudyDismissalByBowlerType,
@@ -31,8 +34,6 @@ from backend.api.schemas.case_study import (
 )
 from backend.sql_app.database import get_session_local
 from backend.sql_app.models import Game
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 # -----------------------------------------------------------------------------
 # Phase Definitions

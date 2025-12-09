@@ -12,11 +12,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Literal
 
-from backend.sql_app.models import PlayerForm, PlayerProfile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+from backend.sql_app.models import PlayerForm, PlayerProfile
 
 # ---------------------------------------------------------------------------
 # Pydantic Schemas

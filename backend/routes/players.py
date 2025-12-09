@@ -6,6 +6,11 @@ Handles player statistics, achievements, and leaderboards.
 import datetime as dt
 from typing import Annotated, Literal
 
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import Float, cast, desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from backend import security
 from backend.services.ai_player_insights import PlayerAiInsights, build_player_ai_insights
 from backend.sql_app.database import get_db
@@ -32,10 +37,6 @@ from backend.sql_app.schemas import (
     PlayerProfileResponse,
     PlayerSummaryRead,
 )
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import Float, cast, desc, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 UTC = getattr(dt, "UTC", dt.UTC)
 

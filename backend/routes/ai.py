@@ -8,6 +8,9 @@ This module provides API endpoints for:
 
 from __future__ import annotations
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.services.ai_commentary import (
     AiCommentaryResponse,
     DeliveryContextRequest,
@@ -15,8 +18,6 @@ from backend.services.ai_commentary import (
 )
 from backend.sql_app import crud
 from backend.sql_app.database import get_db
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 

@@ -9,6 +9,8 @@ Exposes:
 from datetime import date
 from typing import Annotated, Any
 
+from fastapi import APIRouter, Depends, HTTPException, status
+
 from backend import security
 from backend.api.schemas.analyst_matches import (
     AnalystMatchListItem,
@@ -17,7 +19,6 @@ from backend.api.schemas.analyst_matches import (
 from backend.api.schemas.case_study import MatchCaseStudyResponse
 from backend.services.ai_match_summary import MatchAiSummary, build_match_ai_summary
 from backend.services.analytics_case_study import build_match_case_study
-from fastapi import APIRouter, Depends, HTTPException, status
 
 router = APIRouter(
     prefix="/analytics/matches",
