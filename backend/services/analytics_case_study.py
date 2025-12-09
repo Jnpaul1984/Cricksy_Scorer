@@ -40,7 +40,9 @@ from backend.sql_app.models import Game
 # -----------------------------------------------------------------------------
 
 
-def _get_phase_ranges(match_format: str, overs_per_side: int) -> list[tuple[str, str, int, int]]:
+def _get_phase_ranges(
+    match_format: str, overs_per_side: int
+) -> list[tuple[str, str, int, int]]:
     """
     Return phase definitions based on match format.
 
