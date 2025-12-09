@@ -40,9 +40,7 @@ from backend.sql_app.models import Game
 # -----------------------------------------------------------------------------
 
 
-def _get_phase_ranges(
-    match_format: str, overs_per_side: int
-) -> list[tuple[str, str, int, int]]:
+def _get_phase_ranges(match_format: str, overs_per_side: int) -> list[tuple[str, str, int, int]]:
     """
     Return phase definitions based on match format.
 
@@ -376,9 +374,9 @@ def _compute_player_stats(
                     innings=1,
                     runs=bs["runs"],
                     balls=bs["balls"],
-                    strike_rate=round((bs["runs"] / bs["balls"] * 100), 1)
-                    if bs["balls"] > 0
-                    else 0.0,
+                    strike_rate=(
+                        round((bs["runs"] / bs["balls"] * 100), 1) if bs["balls"] > 0 else 0.0
+                    ),
                     boundaries={"fours": bs["fours"], "sixes": bs["sixes"]},
                 )
 
@@ -483,18 +481,22 @@ def _compute_dismissal_patterns(
             CaseStudyDismissalByBowlerType(type=k, wickets=v)
             for k, v in sorted(by_type.items(), key=lambda x: -x[1])
         ],
-        by_shot_type=[
-            CaseStudyDismissalByShotType(shot=k, wickets=v)
-            for k, v in sorted(by_shot.items(), key=lambda x: -x[1])
-        ]
-        if by_shot
-        else [],
-        by_zone=[
-            CaseStudyDismissalByZone(zone=k, wickets=v)
-            for k, v in sorted(by_zone.items(), key=lambda x: -x[1])
-        ]
-        if by_zone
-        else [],
+        by_shot_type=(
+            [
+                CaseStudyDismissalByShotType(shot=k, wickets=v)
+                for k, v in sorted(by_shot.items(), key=lambda x: -x[1])
+            ]
+            if by_shot
+            else []
+        ),
+        by_zone=(
+            [
+                CaseStudyDismissalByZone(zone=k, wickets=v)
+                for k, v in sorted(by_zone.items(), key=lambda x: -x[1])
+            ]
+            if by_zone
+            else []
+        ),
     )
 
 
