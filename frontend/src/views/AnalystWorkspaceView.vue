@@ -1,666 +1,1183 @@
-<script setup lang="ts">
-/**
- * AnalystWorkspaceView.vue
- * Analyst-focused workspace for match analysis, team performance, and data exports.
- * Layout-only V1 – data fetching to be wired in future sprints.
- */
-
-// TODO: Wire real data in Week X
-// - Fetch matches from matches API
-// - Fetch team performance metrics from analytics service
-// - Implement custom query builder and export functionality
-</script>
-
 <template>
   <div class="analyst-workspace">
-    <header class="page-header">
-      <h1 class="page-title">Analyst Workspace</h1>
-      <p class="page-subtitle">Deep dive into match data, team performance, and generate custom reports.</p>
-    </header>
+    <!-- HEADER -->
+    <section class="aw-header">
+      <div class="aw-header-text">
+        <div class="aw-title-row">
+          <h1>Analyst Workspace</h1>
+          <BaseBadge variant="primary" :uppercase="false">Beta</BaseBadge>
+        </div>
+        <p class="aw-subtitle">
+          Slice ball-by-ball data by phase, player, and match context to find patterns, trends, and weaknesses.
+        </p>
+      </div>
 
-    <div class="workspace-layout">
-      <!-- Left Panel: Matches List -->
-      <aside class="matches-panel">
-        <div class="panel-header">
-          <h2 class="panel-title">
-            <span class="panel-icon">🏏</span>
-            Matches
-          </h2>
-          <input
-            type="search"
-            class="search-input"
-            placeholder="Search matches..."
-          />
-        </div>
-        <div class="panel-content">
-          <!-- TODO: Wire real data in Week X -->
-          <ul class="match-list">
-            <li class="match-item active placeholder">
-              <div class="match-teams">Team A vs Team B</div>
-              <div class="match-meta">
-                <span class="match-date">Nov 25, 2025</span>
-                <span class="match-status status-completed">Completed</span>
-              </div>
-            </li>
-            <li class="match-item placeholder">
-              <div class="match-teams">City XI vs County CC</div>
-              <div class="match-meta">
-                <span class="match-date">Nov 22, 2025</span>
-                <span class="match-status status-completed">Completed</span>
-              </div>
-            </li>
-            <li class="match-item placeholder">
-              <div class="match-teams">Lions vs Tigers</div>
-              <div class="match-meta">
-                <span class="match-date">Nov 18, 2025</span>
-                <span class="match-status status-completed">Completed</span>
-              </div>
-            </li>
-            <li class="match-item placeholder">
-              <div class="match-teams">Eagles vs Hawks</div>
-              <div class="match-meta">
-                <span class="match-date">Nov 15, 2025</span>
-                <span class="match-status status-completed">Completed</span>
-              </div>
-            </li>
-            <li class="match-item placeholder">
-              <div class="match-teams">Rangers vs Strikers</div>
-              <div class="match-meta">
-                <span class="match-date">Nov 10, 2025</span>
-                <span class="match-status status-completed">Completed</span>
-              </div>
-            </li>
-          </ul>
-          <p class="placeholder-note">
-            <!-- TODO: Wire real data in Week X -->
-            Placeholder data – connect to matches API
-          </p>
-        </div>
+      <!-- View / context controls -->
+      <div class="aw-header-actions">
+        <BaseButton variant="ghost" size="sm" @click="refreshData">
+          Refresh data
+        </BaseButton>
+        <BaseBadge variant="neutral" :uppercase="false">
+          Last sync: {{ lastSyncLabel }}
+        </BaseBadge>
+      </div>
+    </section>
+
+    <!-- MAIN LAYOUT -->
+    <section class="aw-main">
+      <!-- LEFT: FILTER PANEL -->
+      <aside class="aw-filters">
+        <BaseCard padding="lg" class="aw-filters-card">
+          <h2 class="aw-section-title">Filters</h2>
+
+          <div class="aw-filter-group">
+            <BaseInput
+              v-model="filters.search"
+              label="Search"
+              placeholder="Player, team, opponent, venue..."
+            />
+          </div>
+
+          <div class="aw-filter-group">
+            <p class="aw-filter-label">Format</p>
+            <div class="aw-chip-row">
+              <BaseButton
+                v-for="format in formatOptions"
+                :key="format.value"
+                variant="ghost"
+                size="sm"
+                class="aw-chip"
+                :class="{ 'aw-chip--active': filters.format === format.value }"
+                @click="filters.format = format.value"
+              >
+                {{ format.label }}
+              </BaseButton>
+            </div>
+          </div>
+
+          <div class="aw-filter-group">
+            <p class="aw-filter-label">Match phase</p>
+            <div class="aw-chip-row">
+              <BaseButton
+                v-for="phase in phaseOptions"
+                :key="phase.value"
+                variant="ghost"
+                size="sm"
+                class="aw-chip"
+                :class="{ 'aw-chip--active': filters.phase === phase.value }"
+                @click="filters.phase = phase.value"
+              >
+                {{ phase.label }}
+              </BaseButton>
+            </div>
+          </div>
+
+          <div class="aw-filter-group">
+            <p class="aw-filter-label">Perspective</p>
+            <div class="aw-chip-row">
+              <BaseButton
+                v-for="perspective in perspectiveOptions"
+                :key="perspective.value"
+                variant="ghost"
+                size="sm"
+                class="aw-chip"
+                :class="{ 'aw-chip--active': filters.perspective === perspective.value }"
+                @click="filters.perspective = perspective.value"
+              >
+                {{ perspective.label }}
+              </BaseButton>
+            </div>
+          </div>
+
+          <div class="aw-filter-footer">
+            <BaseButton variant="ghost" size="sm" @click="resetFilters">
+              Reset filters
+            </BaseButton>
+          </div>
+        </BaseCard>
+
+        <!-- AI Callouts Panel -->
+        <AiCalloutsPanel
+          v-if="workspaceCallouts.length > 0"
+          title="AI Insights"
+          description="Patterns detected across your matches."
+          :callouts="workspaceCallouts"
+          :max-items="4"
+          @select="handleCalloutSelect"
+        />
       </aside>
 
-      <!-- Main Content Area -->
-      <main class="main-content">
-        <!-- Team Performance Overview -->
-        <section class="content-section">
-          <div class="section-header">
-            <h2 class="section-title">
-              <span class="section-icon">📊</span>
-              Team Performance Overview
-            </h2>
-            <div class="section-actions">
-              <select class="select-input">
-                <option>Last 5 Matches</option>
-                <option>Last 10 Matches</option>
-                <option>This Season</option>
-                <option>All Time</option>
-              </select>
-            </div>
-          </div>
-          <div class="section-content">
-            <!-- TODO: Wire real data in Week X -->
-            <div class="performance-grid">
-              <div class="performance-card placeholder">
-                <div class="perf-chart-placeholder">
-                  <span class="chart-icon">📈</span>
-                  <span class="chart-label">Run Rate Trend</span>
-                </div>
-                <div class="perf-summary">
-                  <span class="perf-value">7.2</span>
-                  <span class="perf-label">Avg Run Rate</span>
-                </div>
-              </div>
-              <div class="performance-card placeholder">
-                <div class="perf-chart-placeholder">
-                  <span class="chart-icon">🎯</span>
-                  <span class="chart-label">Wickets by Type</span>
-                </div>
-                <div class="perf-summary">
-                  <span class="perf-value">18</span>
-                  <span class="perf-label">Total Wickets</span>
-                </div>
-              </div>
-              <div class="performance-card placeholder">
-                <div class="perf-chart-placeholder">
-                  <span class="chart-icon">🏆</span>
-                  <span class="chart-label">Win/Loss Ratio</span>
-                </div>
-                <div class="perf-summary">
-                  <span class="perf-value">3-2</span>
-                  <span class="perf-label">W/L Record</span>
-                </div>
-              </div>
-              <div class="performance-card placeholder">
-                <div class="perf-chart-placeholder">
-                  <span class="chart-icon">⚡</span>
-                  <span class="chart-label">Powerplay Performance</span>
-                </div>
-                <div class="perf-summary">
-                  <span class="perf-value">52</span>
-                  <span class="perf-label">Avg PP Score</span>
-                </div>
-              </div>
-            </div>
-            <p class="placeholder-note">
-              <!-- TODO: Wire real data in Week X -->
-              Placeholder charts – connect to analytics API and integrate Chart.js/D3
-            </p>
-          </div>
+      <!-- RIGHT: CONTENT -->
+      <div class="aw-content">
+        <!-- SUMMARY CARDS -->
+        <section class="aw-summary">
+          <BaseCard padding="md" class="aw-summary-card">
+            <p class="aw-summary-label">Avg runs per over</p>
+            <p class="aw-summary-value">{{ summary.avgRunsPerOver }}</p>
+            <p class="aw-summary-footnote">Filtered matches</p>
+          </BaseCard>
+
+          <BaseCard padding="md" class="aw-summary-card">
+            <p class="aw-summary-label">Wickets in selected phase</p>
+            <p class="aw-summary-value">{{ summary.wicketsInPhase }}</p>
+            <p class="aw-summary-footnote">{{ currentPhaseLabel }}</p>
+          </BaseCard>
+
+          <BaseCard padding="md" class="aw-summary-card">
+            <p class="aw-summary-label">Top impact bowler</p>
+            <p class="aw-summary-value">{{ summary.topBowler || '—' }}</p>
+            <p class="aw-summary-footnote">By wickets + economy</p>
+          </BaseCard>
         </section>
 
-        <!-- Custom Queries / Exports -->
-        <section class="content-section">
-          <div class="section-header">
-            <h2 class="section-title">
-              <span class="section-icon">🔍</span>
-              Custom Queries & Exports
-            </h2>
-          </div>
-          <div class="section-content">
-            <!-- TODO: Wire real data in Week X -->
-            <div class="query-builder placeholder">
-              <div class="query-row">
-                <label class="query-label">Metric:</label>
-                <select class="select-input">
-                  <option>Batting Average</option>
-                  <option>Strike Rate</option>
-                  <option>Economy Rate</option>
-                  <option>Wickets Taken</option>
-                </select>
+        <!-- TABS -->
+        <section class="aw-tabs">
+          <nav class="aw-tabs-nav">
+            <BaseButton
+              v-for="tab in tabs"
+              :key="tab.value"
+              variant="ghost"
+              size="sm"
+              class="aw-tab-btn"
+              :class="{ 'aw-tab-btn--active': activeTab === tab.value }"
+              @click="activeTab = tab.value"
+            >
+              {{ tab.label }}
+            </BaseButton>
+          </nav>
+
+          <!-- TAB PANELS -->
+          <BaseCard padding="lg" class="aw-tab-panel">
+            <!-- Matches tab -->
+            <div v-if="activeTab === 'matches'" class="aw-table-wrapper">
+              <div class="aw-table-header">
+                <h3>Matches</h3>
+                <p class="aw-table-subtitle">
+                  Recent matches matching your filters. Click a row to open the case study.
+                </p>
               </div>
-              <div class="query-row">
-                <label class="query-label">Group By:</label>
-                <select class="select-input">
-                  <option>Player</option>
-                  <option>Team</option>
-                  <option>Match</option>
-                  <option>Phase</option>
-                </select>
+
+              <!-- Loading state -->
+              <div v-if="matchesLoading" class="aw-matches-loading">
+                <p>Loading matches...</p>
               </div>
-              <div class="query-row">
-                <label class="query-label">Date Range:</label>
-                <input type="date" class="date-input" />
-                <span class="query-separator">to</span>
-                <input type="date" class="date-input" />
+
+              <!-- Error state -->
+              <div v-else-if="matchesError" class="aw-matches-error">
+                <p>{{ matchesError }}</p>
+                <BaseButton variant="ghost" size="sm" @click="loadMatches">
+                  Retry
+                </BaseButton>
               </div>
-              <div class="query-actions">
-                <button class="btn btn-primary">Run Query</button>
-                <button class="btn btn-secondary">Export CSV</button>
-                <button class="btn btn-secondary">Export PDF</button>
+
+              <!-- Empty state -->
+              <div v-else-if="filteredMatches.length === 0" class="aw-matches-empty">
+                <p>No matches found for the current filters.</p>
+                <p class="aw-matches-empty-hint">
+                  Try adjusting your search or filter criteria.
+                </p>
+              </div>
+
+              <!-- Enhanced match list -->
+              <div v-else class="aw-matches-list">
+                <div class="aw-matches-head">
+                  <div class="aw-matches-col aw-matches-col--main">Match</div>
+                  <div class="aw-matches-col aw-matches-col--impact">Impact</div>
+                  <div class="aw-matches-col aw-matches-col--trend">Trend</div>
+                  <div class="aw-matches-col aw-matches-col--tags">Tags</div>
+                </div>
+
+                <div
+                  v-for="match in filteredMatches"
+                  :key="match.id"
+                  :id="`aw-match-${match.id}`"
+                  class="aw-matches-row"
+                  @click="openMatchCaseStudy(match.id)"
+                >
+                  <!-- Main info column -->
+                  <div class="aw-matches-col aw-matches-col--main">
+                    <div class="aw-match-title">{{ match.teams }}</div>
+                    <div class="aw-match-meta">
+                      <span>{{ match.format }}</span>
+                      <span>• {{ match.date }}</span>
+                      <span>• {{ match.result }}</span>
+                    </div>
+                  </div>
+
+                  <!-- Impact column -->
+                  <div class="aw-matches-col aw-matches-col--impact">
+                    <ImpactBar
+                      :value="match.netImpact ?? 0"
+                      :min="-20"
+                      :max="20"
+                      size="sm"
+                      :label="formatImpactLabel(match)"
+                      :positive-label="'Favouring ' + (match.primaryTeam || match.teams.split(' vs ')[0])"
+                      :negative-label="'Pressure on ' + (match.primaryTeam || match.teams.split(' vs ')[0])"
+                    />
+                  </div>
+
+                  <!-- Trend column -->
+                  <div class="aw-matches-col aw-matches-col--trend">
+                    <div v-if="match.winProbSeries?.length" class="aw-trend-wrap">
+                      <MiniSparkline
+                        :points="match.winProbSeries"
+                        :highlight-last="true"
+                        :variant="getSparklineVariant(match)"
+                      />
+                      <span class="aw-trend-label">Win probability</span>
+                    </div>
+                    <div v-else-if="match.runRateSeries?.length" class="aw-trend-wrap">
+                      <MiniSparkline
+                        :points="match.runRateSeries"
+                        :highlight-last="true"
+                        variant="neutral"
+                      />
+                      <span class="aw-trend-label">Run rate trend</span>
+                    </div>
+                    <span v-else class="aw-trend-none">No trend data</span>
+                  </div>
+
+                  <!-- Tags column -->
+                  <div class="aw-matches-col aw-matches-col--tags">
+                    <div class="aw-tag-badges">
+                      <BaseBadge v-if="match.tagged" variant="primary" :uppercase="false">
+                        Tagged
+                      </BaseBadge>
+                      <BaseBadge v-if="match.caseStudyId" variant="success" :uppercase="false">
+                        Case Study
+                      </BaseBadge>
+                    </div>
+                  </div>
+
+                  <!-- Analytics row (ImpactBar + MiniSparkline) -->
+                  <div class="aw-match-analytics">
+                    <ImpactBar
+                      class="aw-impact"
+                      :class="[
+                        match.key_flag === 'dominant' && 'aw-impact--good',
+                        match.key_flag === 'under_pressure' && 'aw-impact--bad',
+                        match.key_flag === 'volatile' && 'aw-impact--warn',
+                      ]"
+                      :value="match.impact_score ?? 0"
+                      :label="match.key_flag ? match.key_flag : 'Impact'"
+                    />
+
+                    <MiniSparkline
+                      class="aw-trend"
+                      :points="match.phase_impact_trend?.length ? match.phase_impact_trend : [0]"
+                      :height="28"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div class="query-results placeholder">
-              <div class="results-header">
-                <span class="results-title">Query Results</span>
-                <span class="results-count">0 rows</span>
+            <!-- Players tab -->
+            <div v-else-if="activeTab === 'players'" class="aw-table-wrapper">
+              <div class="aw-table-header">
+                <h3>Players</h3>
+                <p class="aw-table-subtitle">
+                  Player-level aggregates for the current filters.
+                </p>
               </div>
-              <div class="results-table-placeholder">
-                <p class="no-results">Run a query to see results here</p>
+              <div class="aw-table-scroll">
+                <table class="aw-table">
+                  <thead>
+                    <tr>
+                      <th>Player</th>
+                      <th>Role</th>
+                      <th>Innings</th>
+                      <th>Runs</th>
+                      <th>SR</th>
+                      <th>Wkts</th>
+                      <th>Eco</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="player in filteredPlayers" :key="player.id">
+                      <td>{{ player.name }}</td>
+                      <td>{{ player.role }}</td>
+                      <td>{{ player.innings }}</td>
+                      <td>{{ player.runs }}</td>
+                      <td>{{ player.strikeRate }}</td>
+                      <td>{{ player.wickets }}</td>
+                      <td>{{ player.economy }}</td>
+                    </tr>
+                    <tr v-if="filteredPlayers.length === 0">
+                      <td colspan="7" class="aw-empty">
+                        No players found for the current filters.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
-            <p class="placeholder-note">
-              <!-- TODO: Wire real data in Week X -->
-              Placeholder UI – implement query builder and export functionality
-            </p>
-          </div>
+
+            <!-- Case studies / coming soon -->
+            <div v-else class="aw-table-wrapper">
+              <div class="aw-empty-large">
+                <h3>{{ currentTabLabel }}</h3>
+                <p>
+                  This area will show deeper breakdowns (case studies, AI pattern reports)
+                  in a future version.
+                </p>
+              </div>
+            </div>
+          </BaseCard>
         </section>
-      </main>
-    </div>
+      </div>
+    </section>
   </div>
 </template>
 
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+
+import { BaseCard, BaseButton, BaseBadge, BaseInput, ImpactBar, MiniSparkline, AiCalloutsPanel } from '@/components'
+import type { AiCallout } from '@/components'
+import {
+  getAnalystMatches,
+  type AnalystMatchListItem,
+} from '@/services/api'
+
+const router = useRouter()
+
+// Types
+type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies'
+
+// State
+const activeTab = ref<AnalystTab>('matches')
+
+const filters = reactive({
+  search: '',
+  format: 'all' as 'all' | 't20' | 'odi' | 'custom',
+  phase: 'all' as 'all' | 'powerplay' | 'middle' | 'death',
+  perspective: 'all' as 'all' | 'batting' | 'bowling'
+})
+
+const formatOptions = [
+  { label: 'All', value: 'all' },
+  { label: 'T20', value: 't20' },
+  { label: 'ODI', value: 'odi' },
+  { label: 'Custom', value: 'custom' }
+] as const
+
+const phaseOptions = [
+  { label: 'All', value: 'all' },
+  { label: 'Powerplay', value: 'powerplay' },
+  { label: 'Middle', value: 'middle' },
+  { label: 'Death', value: 'death' }
+] as const
+
+const perspectiveOptions = [
+  { label: 'All', value: 'all' },
+  { label: 'Batting', value: 'batting' },
+  { label: 'Bowling', value: 'bowling' }
+] as const
+
+const tabs: { value: AnalystTab; label: string }[] = [
+  { value: 'matches', label: 'Matches' },
+  { value: 'players', label: 'Players' },
+  { value: 'deliveries', label: 'Deliveries' },
+  { value: 'case-studies', label: 'Case studies' }
+]
+
+const lastSyncLabel = ref('Just now')
+
+const summary = reactive({
+  avgRunsPerOver: 7.8,
+  wicketsInPhase: 12,
+  topBowler: 'J. Smith'
+})
+
+// Match type with trend data for visualization (extends backend schema)
+interface AnalystMatch {
+  id: string
+  date: string
+  format: string
+  teams: string
+  result: string
+  runRate: number
+  phaseSwing: string
+  netImpact?: number | null
+  winProbSeries?: number[] | null
+  runRateSeries?: number[] | null
+  tagged?: boolean
+  caseStudyId?: string | null
+  primaryTeam?: string | null
+  // Analytics fields for ImpactBar + MiniSparkline
+  impact_score?: number | null
+  phase_impact_trend?: number[] | null
+  key_flag?: 'dominant' | 'under_pressure' | 'volatile' | null
+  // Tags for AI callouts
+  tags?: string[] | null
+}
+
+// Matches state - wired to backend
+const matches = ref<AnalystMatch[]>([])
+const matchesLoading = ref(false)
+const matchesError = ref<string | null>(null)
+
+const players = ref([
+  {
+    id: 'p1',
+    name: 'R. Singh',
+    role: 'Batter',
+    innings: 8,
+    runs: 312,
+    strikeRate: 134.2,
+    wickets: 0,
+    economy: '—'
+  },
+  {
+    id: 'p2',
+    name: 'K. Thomas',
+    role: 'All-rounder',
+    innings: 7,
+    runs: 198,
+    strikeRate: 128.5,
+    wickets: 9,
+    economy: 7.2
+  }
+])
+
+// Computed
+const filteredMatches = computed(() => {
+  const term = filters.search.toLowerCase()
+  return matches.value.filter((m) => {
+    const matchesTerm =
+      !term ||
+      m.teams.toLowerCase().includes(term) ||
+      m.result.toLowerCase().includes(term)
+    const matchesFormat =
+      filters.format === 'all' ||
+      (filters.format === 't20' && m.format === 'T20') ||
+      (filters.format === 'odi' && m.format === 'ODI')
+    return matchesTerm && matchesFormat
+  })
+})
+
+const filteredPlayers = computed(() => {
+  const term = filters.search.toLowerCase()
+  return players.value.filter((p) => {
+    const matchesTerm =
+      !term || p.name.toLowerCase().includes(term) || p.role.toLowerCase().includes(term)
+    return matchesTerm
+  })
+})
+
+const currentPhaseLabel = computed(() => {
+  const map: Record<string, string> = {
+    all: 'All phases',
+    powerplay: 'Powerplay overs',
+    middle: 'Middle overs',
+    death: 'Death overs'
+  }
+  return map[filters.phase] ?? 'All phases'
+})
+
+const currentTabLabel = computed(() => {
+  const tab = tabs.find((t) => t.value === activeTab.value)
+  return tab?.label ?? ''
+})
+
+// Workspace-level AI callouts derived from matches
+const workspaceCallouts = computed<AiCallout[]>(() => {
+  if (!matches.value.length) return []
+
+  const list: AiCallout[] = []
+  const recent = matches.value.slice(0, 6)
+
+  // Check for death overs collapses
+  const deathCollapses = recent.filter(m =>
+    m.tags?.includes('death overs collapse')
+  )
+  if (deathCollapses.length >= 2) {
+    list.push({
+      id: 'death-collapse',
+      title: 'Death overs collapses',
+      body: `Detected collapses in ${deathCollapses.length} of last ${recent.length} matches.`,
+      severity: 'warning',
+      targetDomId: `aw-match-${deathCollapses[0].id}`,
+      category: 'death overs',
+    })
+  }
+
+  // Check for powerplay dominance
+  const strongPowerplay = recent.filter(m =>
+    m.tags?.includes('powerplay dominance')
+  )
+  if (strongPowerplay.length >= 2) {
+    list.push({
+      id: 'powerplay-dominance',
+      title: 'Powerplay dominance',
+      body: `Strong starts in ${strongPowerplay.length} recent matches.`,
+      severity: 'positive',
+      targetDomId: `aw-match-${strongPowerplay[0].id}`,
+      category: 'powerplay',
+    })
+  }
+
+  // Check for volatile matches
+  const volatileMatches = recent.filter(m =>
+    m.key_flag === 'volatile'
+  )
+  if (volatileMatches.length >= 2) {
+    list.push({
+      id: 'volatility',
+      title: 'Inconsistent phases',
+      body: `Volatile phase patterns in ${volatileMatches.length} matches.`,
+      severity: 'warning',
+      targetDomId: `aw-match-${volatileMatches[0].id}`,
+      category: 'consistency',
+    })
+  }
+
+  // Check for dominant performances
+  const dominantMatches = recent.filter(m =>
+    m.key_flag === 'dominant'
+  )
+  if (dominantMatches.length >= 2) {
+    list.push({
+      id: 'dominant-form',
+      title: 'Dominant form',
+      body: `Strong performances in ${dominantMatches.length} recent matches.`,
+      severity: 'positive',
+      targetDomId: `aw-match-${dominantMatches[0].id}`,
+      category: 'form',
+    })
+  }
+
+  // Check for pressure situations
+  const pressureMatches = recent.filter(m =>
+    m.key_flag === 'under_pressure'
+  )
+  if (pressureMatches.length >= 2) {
+    list.push({
+      id: 'under-pressure',
+      title: 'Under pressure',
+      body: `Pressure situations in ${pressureMatches.length} matches require attention.`,
+      severity: 'critical',
+      targetDomId: `aw-match-${pressureMatches[0].id}`,
+      category: 'pressure',
+    })
+  }
+
+  return list
+})
+
+// Actions
+async function loadMatches() {
+  matchesLoading.value = true
+  matchesError.value = null
+  try {
+    const response = await getAnalystMatches()
+    // Map backend schema to frontend AnalystMatch interface
+    matches.value = response.items.map((item: AnalystMatchListItem): AnalystMatch => ({
+      id: item.id,
+      date: item.date,
+      format: item.format,
+      teams: item.teams,
+      result: item.result,
+      runRate: item.run_rate,
+      phaseSwing: item.phase_swing,
+      // These fields are not in the backend yet - derive or leave null
+      netImpact: null,
+      winProbSeries: null,
+      runRateSeries: null,
+      tagged: false,
+      caseStudyId: null,
+      primaryTeam: item.teams.split(' vs ')[0] || null,
+    }))
+  } catch (err) {
+    matchesError.value = err instanceof Error ? err.message : 'Failed to load matches'
+    console.error('[AnalystWorkspace] Failed to load matches:', err)
+  } finally {
+    matchesLoading.value = false
+    lastSyncLabel.value = 'Just now'
+  }
+}
+
+async function refreshData() {
+  await loadMatches()
+}
+
+function resetFilters() {
+  filters.search = ''
+  filters.format = 'all'
+  filters.phase = 'all'
+  filters.perspective = 'all'
+}
+
+function openMatchCaseStudy(matchId: string) {
+  router.push({
+    name: 'MatchCaseStudy',
+    params: { matchId }
+  })
+}
+
+function handleCalloutSelect(callout: AiCallout) {
+  if (!callout.targetDomId) return
+
+  const el = document.getElementById(callout.targetDomId)
+  if (!el) return
+
+  // Scroll to the element
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  // Add highlight effect
+  el.classList.add('aw-match--highlight')
+  window.setTimeout(() => {
+    el.classList.remove('aw-match--highlight')
+  }, 1400)
+}
+
+// Helper functions for display formatting
+function formatImpactLabel(match: AnalystMatch): string {
+  const v = match.netImpact ?? 0
+  if (v > 10) return 'Strong positive'
+  if (v > 3) return 'Slightly positive'
+  if (v < -10) return 'Strong negative'
+  if (v < -3) return 'Slightly negative'
+  return 'Around par'
+}
+
+function getSparklineVariant(match: AnalystMatch): 'positive' | 'negative' | 'neutral' | 'default' {
+  const impact = match.netImpact ?? 0
+  if (impact > 5) return 'positive'
+  if (impact < -5) return 'negative'
+  return 'default'
+}
+
+// Lifecycle - load data on mount
+onMounted(() => {
+  loadMatches()
+})
+</script>
+
 <style scoped>
+/* =====================================================
+   ANALYST WORKSPACE VIEW - Using Design System Tokens
+   ===================================================== */
+
 .analyst-workspace {
-  padding: var(--space-5) var(--space-4);
-  max-width: 1400px;
-  margin: 0 auto;
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-4);
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+/* HEADER */
+.aw-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.aw-header-text {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aw-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.aw-title-row h1 {
+  margin: 0;
+  font-size: var(--h2-size);
+  font-weight: var(--font-extrabold);
   color: var(--color-text);
 }
 
-/* Page Header */
-.page-header {
-  margin-bottom: var(--space-5);
-}
-
-.page-title {
-  font-family: var(--font-heading);
-  font-size: var(--text-3xl);
-  font-weight: var(--font-bold);
-  color: var(--color-primary);
-  margin: 0 0 var(--space-2);
-}
-
-.page-subtitle {
-  font-size: var(--text-base);
-  color: var(--color-text-secondary);
+.aw-subtitle {
   margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 600px;
 }
 
-/* Workspace Layout */
-.workspace-layout {
+.aw-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* MAIN LAYOUT */
+.aw-main {
   display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: var(--space-5);
+  grid-template-columns: 320px 1fr;
+  gap: var(--space-4);
+  align-items: start;
 }
 
-/* Matches Panel (Sidebar) */
-.matches-panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  height: fit-content;
+/* FILTER PANEL */
+.aw-filters {
   position: sticky;
   top: var(--space-4);
 }
 
-.panel-header {
-  padding: var(--space-4);
-  background: var(--color-bg);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.panel-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-heading);
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  margin: 0 0 var(--space-3);
-  color: var(--color-text);
-}
-
-.panel-icon {
-  font-size: 1.25rem;
-}
-
-.search-input {
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-soft);
-}
-
-.panel-content {
-  padding: var(--space-3);
-  max-height: 500px;
-  overflow-y: auto;
-}
-
-/* Match List */
-.match-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.match-item {
-  padding: var(--space-3);
-  margin-bottom: var(--space-2);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.match-item:hover {
-  border-color: var(--color-primary);
-}
-
-.match-item.active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-}
-
-.match-teams {
-  font-weight: var(--font-medium);
-  color: var(--color-text);
-  margin-bottom: var(--space-2);
-}
-
-.match-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: var(--text-xs);
-}
-
-.match-date {
-  color: var(--color-text-muted);
-}
-
-.match-status {
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  font-weight: var(--font-semibold);
-}
-
-.status-completed {
-  background: var(--color-success-soft);
-  color: var(--color-success);
-}
-
-.status-live {
-  background: var(--color-error-soft);
-  color: var(--color-error);
-}
-
-.status-upcoming {
-  background: var(--color-info-soft);
-  color: var(--color-info);
-}
-
-/* Main Content */
-.main-content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-
-/* Content Section */
-.content-section {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--color-bg);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-heading);
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  margin: 0;
-  color: var(--color-text);
-}
-
-.section-icon {
-  font-size: 1.25rem;
-}
-
-.section-actions {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.section-content {
-  padding: var(--space-4);
-}
-
-/* Select Input */
-.select-input {
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  cursor: pointer;
-}
-
-.select-input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
-
-/* Performance Grid */
-.performance-grid {
+.aw-filters-card {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--space-4);
 }
 
-.performance-card {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
+.aw-section-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.aw-filter-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aw-filter-label {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.aw-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.aw-chip {
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.aw-chip:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-strong);
+}
+
+.aw-chip--active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+.aw-chip--active:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.aw-filter-footer {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+/* CONTENT AREA */
+.aw-content {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* SUMMARY CARDS */
+.aw-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+.aw-summary-card {
+  display: grid;
+  gap: var(--space-1);
   text-align: center;
 }
 
-.perf-chart-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100px;
-  background: var(--color-surface);
-  border: 2px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-3);
+.aw-summary-label {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
-.chart-icon {
-  font-size: 2rem;
-  margin-bottom: var(--space-1);
+.aw-summary-value {
+  margin: 0;
+  font-size: var(--h2-size);
+  font-weight: var(--font-extrabold);
+  color: var(--color-text);
 }
 
-.chart-label {
+.aw-summary-footnote {
+  margin: 0;
   font-size: var(--text-xs);
   color: var(--color-text-muted);
 }
 
-.perf-summary {
+/* TABS */
+.aw-tabs {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.aw-tabs-nav {
+  display: flex;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-2);
+}
+
+.aw-tab-btn {
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  transition: all var(--transition-fast);
+}
+
+.aw-tab-btn:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.aw-tab-btn--active {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.aw-tab-btn--active:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.aw-tab-panel {
+  min-height: 300px;
+}
+
+/* TABLE WRAPPER */
+.aw-table-wrapper {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.aw-table-header h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.aw-table-subtitle {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.aw-table-scroll {
+  overflow-x: auto;
+}
+
+.aw-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.aw-table th,
+.aw-table td {
+  padding: var(--space-3) var(--space-2);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.aw-table th {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--color-surface-hover);
+}
+
+.aw-table tbody tr:hover {
+  background: var(--color-surface-hover);
+}
+
+.aw-table td {
+  color: var(--color-text);
+}
+
+.aw-row--clickable {
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.aw-row--clickable:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.aw-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.aw-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: var(--space-6) var(--space-4);
+}
+
+.aw-empty-large {
+  display: grid;
+  place-items: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+}
+
+.aw-empty-large h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.aw-empty-large p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 400px;
+}
+
+/* ENHANCED MATCHES LIST */
+.aw-matches-loading {
+  padding: var(--space-5) 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.aw-matches-error {
+  padding: var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+  background: var(--color-danger-subtle);
+  border-radius: var(--radius-md);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.aw-matches-empty {
+  padding: var(--space-5) 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.aw-matches-empty-hint {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  opacity: 0.8;
+}
+
+.aw-matches-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
 }
 
-.perf-value {
-  font-family: var(--font-heading);
-  font-size: var(--text-2xl);
-  font-weight: var(--font-bold);
-  color: var(--color-primary);
+.aw-matches-head,
+.aw-matches-row {
+  display: grid;
+  grid-template-columns: 2.4fr 1.6fr 1.6fr 1.2fr;
+  gap: var(--space-3);
+  align-items: center;
 }
 
-.perf-label {
+.aw-matches-head {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.aw-matches-row {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background-color 140ms ease-out;
+}
+
+.aw-matches-row:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.aw-matches-row.aw-match--highlight {
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+  background-color: var(--color-primary-subtle);
+  transition: box-shadow 160ms ease-out, transform 160ms ease-out, background-color 160ms ease-out;
+  transform: translateY(-1px);
+}
+
+.aw-matches-col {
+  min-width: 0;
+}
+
+.aw-match-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.aw-match-meta {
+  margin-top: var(--space-1);
   font-size: var(--text-xs);
   color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
-/* Query Builder */
-.query-builder {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
+.aw-matches-col--impact {
+  display: flex;
+  align-items: center;
 }
 
-.query-row {
+.aw-matches-col--trend {
+  display: flex;
+  align-items: center;
+}
+
+.aw-trend-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.aw-trend-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.aw-trend-none {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.aw-tag-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  justify-content: flex-start;
+}
+
+/* MATCH ANALYTICS ROW (ImpactBar + MiniSparkline) */
+.aw-match-analytics {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.query-label {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--color-text);
-  min-width: 80px;
-}
-
-.query-separator {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-}
-
-.date-input {
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-}
-
-.date-input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
-
-.query-actions {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
+  margin-top: var(--space-2);
+  grid-column: 1 / -1; /* Span full width of the row */
+  padding-top: var(--space-2);
   border-top: 1px solid var(--color-border-subtle);
 }
 
-/* Buttons */
-.btn {
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--transition-fast);
+.aw-impact {
+  flex: 1.1;
 }
 
-.btn-primary {
-  background: var(--color-primary);
-  color: #0f172a;
+.aw-trend {
+  flex: 0.9;
+  min-width: 80px;
 }
 
-.btn-primary:hover {
-  background: var(--color-primary-hover);
+.aw-impact--good {
+  --impact-color: var(--color-success);
 }
 
-.btn-secondary {
-  background: transparent;
-  color: var(--color-text);
-  border: 1px solid var(--color-border-strong);
+.aw-impact--bad {
+  --impact-color: var(--color-danger);
 }
 
-.btn-secondary:hover {
-  background: var(--color-surface-hover);
-  border-color: var(--color-primary);
+.aw-impact--warn {
+  --impact-color: var(--color-warning);
 }
 
-/* Query Results */
-.query-results {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.results-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
-.results-title {
-  font-weight: var(--font-medium);
-  color: var(--color-text);
-}
-
-.results-count {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-
-.results-table-placeholder {
-  padding: var(--space-8);
-  text-align: center;
-}
-
-.no-results {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  margin: 0;
-}
-
-/* Placeholder Note */
-.placeholder-note {
-  margin: var(--space-4) 0 0;
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  background: var(--color-bg);
-  border-radius: var(--radius-sm);
-  text-align: center;
-  font-style: italic;
-}
-
-/* Responsive */
+/* RESPONSIVE */
 @media (max-width: 900px) {
-  .workspace-layout {
+  .aw-main {
     grid-template-columns: 1fr;
   }
 
-  .matches-panel {
+  .aw-filters {
     position: static;
-    max-height: none;
   }
 
-  .panel-content {
-    max-height: 300px;
+  .aw-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .aw-matches-head {
+    display: none;
+  }
+
+  .aw-matches-row {
+    grid-template-columns: 1.8fr 1.2fr;
+    grid-template-rows: auto auto;
+    row-gap: var(--space-2);
+  }
+
+  .aw-matches-col--main {
+    grid-column: 1 / -1;
+  }
+
+  .aw-matches-col--impact {
+    grid-column: 1 / 2;
+  }
+
+  .aw-matches-col--trend {
+    grid-column: 2 / 3;
+  }
+
+  .aw-matches-col--tags {
+    grid-column: 1 / -1;
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 600px) {
   .analyst-workspace {
-    padding: var(--space-4) var(--space-3);
+    padding: var(--space-3);
   }
 
-  .page-title {
-    font-size: var(--text-2xl);
-  }
-
-  .performance-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .query-row {
+  .aw-header {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .query-label {
-    min-width: auto;
-  }
-
-  .query-actions {
-    flex-direction: column;
-  }
-
-  .btn {
-    width: 100%;
+  .aw-tabs-nav {
+    flex-wrap: wrap;
   }
 }
 </style>

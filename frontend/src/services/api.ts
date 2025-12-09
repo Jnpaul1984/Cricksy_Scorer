@@ -534,6 +534,221 @@ export async function patchReduceOvers(gameId: string, innings: 1 | 2, newOvers:
 }
 
 
+/* ----------------------------- Case Study Types ----------------------------- */
+
+export interface CaseStudyInningsSummary {
+  team: string;
+  runs: number;
+  wickets: number;
+  overs: number;
+  run_rate: number;
+}
+
+export type CaseStudyPhaseImpact = "positive" | "negative" | "neutral";
+
+export interface CaseStudyPhase {
+  id: "powerplay" | "middle" | "death" | "custom";
+  label: string;
+  start_over: number;
+  end_over: number;
+  runs: number;
+  wickets: number;
+  run_rate: number;
+  net_swing_vs_par: number;
+  impact: CaseStudyPhaseImpact;
+  impact_label: string;
+}
+
+export interface CaseStudyKeyPlayer {
+  id: string;
+  name: string;
+  team: string;
+  role: string;
+  batting?: {
+    innings: number;
+    runs: number;
+    balls: number;
+    strike_rate: number;
+    boundaries: {
+      fours: number;
+      sixes: number;
+    };
+  } | null;
+  bowling?: {
+    overs: number;
+    maidens: number;
+    runs: number;
+    wickets: number;
+    economy: number;
+  } | null;
+  fielding?: {
+    catches: number;
+    run_outs: number;
+    drops: number;
+  } | null;
+  impact: "high" | "medium" | "low";
+  impact_label: string;
+  impact_score?: number | null;
+}
+
+export interface CaseStudyMatch {
+  id: string;
+  date: string;
+  format: "T20" | "ODI" | "TEST" | "CUSTOM" | string;
+  home_team?: string | null;
+  away_team?: string | null;
+  teams_label: string;
+  venue?: string | null;
+  result: string;
+  overs_per_side?: number | null;
+  innings: CaseStudyInningsSummary[];
+}
+
+export interface CaseStudyMomentumSummary {
+  title: string;
+  subtitle: string;
+  winning_side?: string | null;
+  swing_metric?: {
+    runs_above_par?: number | null;
+    win_probability_shift?: number | null;
+  } | null;
+}
+
+export interface CaseStudyKeyPhase {
+  title: string;
+  detail: string;
+  overs_range?: {
+    start_over: number;
+    end_over: number;
+  } | null;
+  reason_codes?: string[];
+}
+
+export interface CaseStudyDismissalPatterns {
+  summary?: string | null;
+  by_bowler_type?: { type: string; wickets: number }[];
+  by_shot_type?: { shot: string; wickets: number }[];
+  by_zone?: { zone: string; wickets: number }[];
+}
+
+export interface CaseStudyAIBlock {
+  match_summary: string;
+  generated_at?: string | null;
+  model_version?: string | null;
+  tokens_used?: number | null;
+}
+
+export interface MatchCaseStudyResponse {
+  match: CaseStudyMatch;
+  momentum_summary: CaseStudyMomentumSummary;
+  key_phase: CaseStudyKeyPhase;
+  phases: CaseStudyPhase[];
+  key_players: CaseStudyKeyPlayer[];
+  dismissal_patterns?: CaseStudyDismissalPatterns | null;
+  ai?: CaseStudyAIBlock | null;
+}
+
+export async function getMatchCaseStudy(matchId: string): Promise<MatchCaseStudyResponse> {
+  return request<MatchCaseStudyResponse>(
+    `/analytics/matches/${encodeURIComponent(matchId)}/case-study`
+  );
+}
+
+/* ----------------------------- AI Match Summary ----------------------------- */
+
+export interface MatchAiSummary {
+  match_id: string;
+  headline: string;
+  narrative: string;
+  tactical_themes: string[];
+  player_highlights: string[];
+  tags: string[];
+  generated_at: string;
+}
+
+export async function getMatchAiSummary(matchId: string): Promise<MatchAiSummary> {
+  return request<MatchAiSummary>(
+    `/analytics/matches/${encodeURIComponent(matchId)}/ai-summary`
+  );
+}
+
+/* ----------------------------- Analyst Workspace Matches ----------------------------- */
+
+export interface AnalystMatchListItem {
+  id: string;
+  date: string; // ISO date string
+  format: string; // e.g. "T20", "ODI", "TEST", "CUSTOM"
+  teams: string; // e.g. "Lions vs Falcons"
+  result: string; // e.g. "Lions won by 18 runs"
+  run_rate: number; // overall match run rate
+  phase_swing: string; // e.g. "+18 in death", "-12 in powerplay"
+}
+
+export interface AnalystMatchListResponse {
+  items: AnalystMatchListItem[];
+  total: number;
+}
+
+export async function getAnalystMatches(): Promise<AnalystMatchListResponse> {
+  return request<AnalystMatchListResponse>('/analytics/matches');
+}
+
+/* ----------------------------- AI Commentary ----------------------------- */
+
+export interface AICommentaryRequest {
+  match_id: string;
+  over: number;
+  ball: number;
+  runs: number;
+  wicket: boolean;
+  batter: string;
+  bowler: string;
+  context?: Record<string, unknown>;
+}
+
+export interface AICommentaryResponse {
+  commentary: string;
+}
+
+export async function generateAICommentary(
+  payload: AICommentaryRequest
+): Promise<AICommentaryResponse> {
+  return request<AICommentaryResponse>('/ai/commentary', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/* ----------------------------- AI Player Insights ----------------------------- */
+
+export type PlayerAIFormTrend = "improving" | "declining" | "mixed" | "flat";
+
+export interface PlayerAIRecentForm {
+  matches_considered: number;
+  recent_runs: number[];
+  average: number;
+  trend: PlayerAIFormTrend;
+}
+
+export interface PlayerAIInsights {
+  player_id: string;
+  player_name: string;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  recent_form: PlayerAIRecentForm;
+  tags: string[];
+  generated_at: string;
+}
+
+export async function getPlayerAIInsights(
+  playerId: string
+): Promise<PlayerAIInsights> {
+  return request<PlayerAIInsights>(
+    `/api/players/${encodeURIComponent(playerId)}/ai-insights`
+  );
+}
+
 /* ----------------------------- Fan Mode types ----------------------------- */
 
 export interface FanMatchCreate {

@@ -2,6 +2,7 @@
 import { computed, withDefaults, defineProps } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import { BaseCard, BaseBadge } from '@/components'
 import { isValidUUID } from '@/utils'
 import { fmtSR } from '@/utils/cricket'
 
@@ -79,7 +80,7 @@ const rows = computed<Row[]>(() =>
 </script>
 
 <template>
-  <div class="card" role="region" aria-label="Batting card">
+  <BaseCard as="section" padding="md" class="batting-card" aria-label="Batting card">
     <h3>Batting</h3>
 
     <table v-if="rows.length">
@@ -106,10 +107,12 @@ const rows = computed<Row[]>(() =>
       </thead>
       <tbody>
         <tr
-v-for="r in rows" :key="r.id"
-            :class="[{ out: r.isOut, striker: r.isStriker, nonStriker: r.isNonStriker }]">
+          v-for="r in rows"
+          :key="r.id"
+          :class="[{ out: r.isOut, striker: r.isStriker, nonStriker: r.isNonStriker }]"
+        >
           <td class="name" :title="r.name">
-            <span v-if="r.isStriker" class="dot" aria-label="on strike" />
+            <BaseBadge v-if="r.isStriker" variant="primary" condensed class="strike-indicator">●</BaseBadge>
             <RouterLink v-if="isValidUUID(r.id)" :to="{ name: 'PlayerProfile', params: { playerId: r.id } }" class="player-link nameText">{{ r.name }}</RouterLink>
             <span v-else class="nameText">{{ r.name }}</span>
           </td>
@@ -124,33 +127,98 @@ v-for="r in rows" :key="r.id"
     </table>
 
     <div v-else class="empty">No batting entries yet.</div>
-  </div>
+  </BaseCard>
 </template>
 
 <style scoped>
-.card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 12px; }
-h3 { margin: 0 0 8px; font-size: 14px; font-weight: 800; }
-table { width: 100%; border-collapse: collapse; }
-caption.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-th, td { padding: 6px 8px; border-top: 1px dashed rgba(255,255,255,.08); }
-thead th { border-top: 0; text-align: left; font-size: 12px; color: #9ca3af; font-weight: 700; }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
-.name { font-weight: 700; max-width: 0; }
-.nameText { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
-.status { color: #9ca3af; font-size: 12px; }
-.empty { color: #9ca3af; font-size: 13px; padding: 8px 0; }
+/* BaseCard handles background/border/radius/padding */
+.batting-card h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--font-extrabold);
+}
 
-/* highlights */
-tr.striker .name { color: #e5ff7a; }
-tr.nonStriker .name { color: #a7f3d0; }
-tr.out .name { opacity: .7; }
-.dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#e5ff7a; margin-right:6px; vertical-align: middle; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
 
-/* Player profile link (inherits styling, no underline) */
+caption.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+th, td {
+  padding: var(--space-2);
+  border-top: 1px dashed var(--color-border-subtle);
+}
+
+thead th {
+  border-top: 0;
+  text-align: left;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-weight: var(--font-bold);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.name {
+  font-weight: var(--font-bold);
+  max-width: 0;
+}
+
+.nameText {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.status {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.empty {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  padding: var(--space-2) 0;
+}
+
+/* Strike indicator badge */
+.strike-indicator {
+  margin-right: var(--space-1);
+  vertical-align: middle;
+}
+
+/* Row highlights */
+tr.striker .name {
+  color: var(--color-primary);
+}
+
+tr.nonStriker .name {
+  color: var(--color-success);
+}
+
+tr.out .name {
+  opacity: 0.7;
+}
+
+/* Player profile link */
 .player-link {
   color: inherit;
   text-decoration: none;
 }
+
 .player-link:hover {
   text-decoration: underline;
   text-decoration-style: dotted;

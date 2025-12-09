@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue'
 
+import { BaseCard, BaseButton } from '@/components'
+
 type Props = {
   modelValue: string[]
   label?: string
@@ -106,7 +108,8 @@ const shortfall = computed(() => Math.max(0, props.min - count.value))
 </script>
 
 <template>
-<div
+<BaseCard
+  as="section"
   class="pe"
   :data-testid="`players-editor-${(teamName || 'team').replace(/\\s+/g, '-').toLowerCase()}`"
 >
@@ -135,9 +138,9 @@ const shortfall = computed(() => Math.max(0, props.min - count.value))
           @input="updateAt(i, ($event.target as HTMLInputElement).value)"
         />
         <div class="actions">
-          <button type="button" title="Move up" :disabled="i===0" @click="move(i, -1)">↑</button>
-          <button type="button" title="Move down" :disabled="i===names.length-1" @click="move(i, 1)">↓</button>
-          <button type="button" title="Remove" class="danger" @click="removeAt(i)">✕</button>
+          <BaseButton variant="secondary" size="sm" title="Move up" :disabled="i===0" @click="move(i, -1)">↑</BaseButton>
+          <BaseButton variant="secondary" size="sm" title="Move down" :disabled="i===names.length-1" @click="move(i, 1)">↓</BaseButton>
+          <BaseButton variant="danger" size="sm" title="Remove" @click="removeAt(i)">✕</BaseButton>
         </div>
       </div>
     </div>
@@ -151,52 +154,76 @@ const shortfall = computed(() => Math.max(0, props.min - count.value))
         @keydown.enter.prevent="handleQuickEnter"
         @paste="onQuickPaste"
       />
-      <button
-        type="button"
-        class="add-btn"
+      <BaseButton
+        variant="primary"
         :disabled="!quick.trim()"
         data-testid="players-add-btn"
         @click="handleQuickEnter"
       >
         Add
-      </button>
-      <button
-        type="button"
-        class="clear-btn"
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
         :disabled="!names.length"
         data-testid="players-clear-btn"
         @click="commit([])"
       >
         Clear
-      </button>
+      </BaseButton>
     </div>
 
     <p v-if="warn" class="warn">⚠ {{ warn }}</p>
     <p class="hint">
-      Tips: paste “<em>Alice, Bob, Charlie</em>” or a newline list; duplicates are removed automatically.
+      Tips: paste "<em>Alice, Bob, Charlie</em>" or a newline list; duplicates are removed automatically.
     </p>
-  </div>
+  </BaseCard>
 </template>
 
 <style scoped>
-.pe{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:12px;color:#fff}
-.pe-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.title{font-size:14px}
-.muted{opacity:.85}
-.count{opacity:.9}
-.need{margin-left:8px;color:#ffd54f}
-.list{display:grid;gap:8px;max-height:320px;overflow:auto;padding:4px}
-.row{display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px}
-.idx{width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.12);border-radius:8px}
-.input{width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff}
-.actions{display:flex;gap:6px}
-.actions button{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;padding:6px 8px;border-radius:8px;cursor:pointer}
-.actions button:disabled{opacity:.5;cursor:not-allowed}
-.actions .danger{border-color:rgba(244,67,54,.6);color:#ffb3b3}
-.add{display:flex;gap:8px;margin-top:10px}
-.quick{flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff}
-.add-btn{border:none;background:linear-gradient(135deg,#43a047,#2e7d32);color:#fff;padding:10px 14px;border-radius:10px;cursor:pointer}
-.clear-btn{border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;padding:10px 14px;border-radius:10px;cursor:pointer}
-.warn{margin:.5rem 0 0;color:#ffecb3}
-.hint{opacity:.8;margin:.35rem 0 0;font-size:.92rem}
+.pe { color: var(--color-on-surface) }
+.pe-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm) }
+.title { font-size: var(--text-sm) }
+.muted { opacity: 0.85 }
+.count { opacity: 0.9 }
+.need { margin-left: var(--space-sm); color: var(--color-accent) }
+.list { display: grid; gap: var(--space-sm); max-height: 320px; overflow: auto; padding: var(--space-xs) }
+.row {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  gap: var(--space-sm);
+  align-items: center;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs)
+}
+.idx {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-sm)
+}
+.input {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-on-surface)
+}
+.actions { display: flex; gap: var(--space-xs) }
+.add { display: flex; gap: var(--space-sm); margin-top: var(--space-md) }
+.quick {
+  flex: 1;
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-on-surface)
+}
+.warn { margin: var(--space-xs) 0 0; color: var(--color-accent) }
+.hint { opacity: 0.8; margin: var(--space-xs) 0 0; font-size: var(--text-sm) }
 </style>

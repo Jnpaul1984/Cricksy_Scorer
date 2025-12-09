@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { BaseButton } from '@/components'
 import { useGameStore } from '@/stores/gameStore'
+
 const props = defineProps<{
   gameId: string
   strikerId: string
@@ -47,31 +49,84 @@ async function wicket() {
 <template>
   <div class="pad">
     <div class="row runs">
-      <button
+      <BaseButton
         v-for="n in [0,1,2,3,4,5,6]"
         :key="n"
+        variant="primary"
+        size="sm"
         :disabled="!canScore"
         :title="!canScore ? proTooltip : undefined"
         @click="doRun(n)"
       >
         {{ n }}
-      </button>
+      </BaseButton>
     </div>
     <div class="row">
-      <button class="wd" :disabled="!canScore" :title="!canScore ? proTooltip : undefined" @click="extra('wd')">Wd</button>
-      <button class="nb" :disabled="!canScore" :title="!canScore ? proTooltip : undefined" @click="extra('nb')">Nb</button>
-      <button class="wkt" :disabled="!canScore" :title="!canScore ? proTooltip : undefined" @click="wicket">Wkt</button>
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        class="extra-wd"
+        :disabled="!canScore"
+        :title="!canScore ? proTooltip : undefined"
+        @click="extra('wd')"
+      >
+        Wd
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        class="extra-nb"
+        :disabled="!canScore"
+        :title="!canScore ? proTooltip : undefined"
+        @click="extra('nb')"
+      >
+        Nb
+      </BaseButton>
+      <BaseButton
+        variant="danger"
+        size="sm"
+        :disabled="!canScore"
+        :title="!canScore ? proTooltip : undefined"
+        @click="wicket"
+      >
+        Wkt
+      </BaseButton>
     </div>
   </div>
 </template>
 
 <style scoped>
-.pad{position:sticky;bottom:0;background:rgba(0,0,0,.25);backdrop-filter:blur(10px);padding:.75rem;border-radius:16px;margin:.5rem;border:1px solid rgba(255,255,255,.2)}
-.row{display:flex;gap:.5rem;justify-content:center;margin:.25rem 0}
-.runs button{flex:1}
-button{padding:.7rem 1rem;border:none;border-radius:10px;color:#fff;background:rgba(255,255,255,.12)}
-button:disabled{opacity:.5}
-.wd{background:linear-gradient(135deg,#17a2b8,#138496)}
-.nb{background:linear-gradient(135deg,#6f42c1,#5a32a3)}
-.wkt{background:linear-gradient(135deg,#dc3545,#c82333)}
+.pad {
+  position: sticky;
+  bottom: 0;
+  background: var(--color-surface);
+  backdrop-filter: blur(10px);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  margin: var(--space-2);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+.row {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  margin: var(--space-1) 0;
+}
+
+.runs :deep(.ds-btn) {
+  flex: 1;
+}
+
+/* Extra button accent colors */
+.extra-wd {
+  --color-secondary: var(--color-info);
+  --color-secondary-hover: var(--color-info-hover, #138496);
+}
+
+.extra-nb {
+  --color-secondary: #6f42c1;
+  --color-secondary-hover: #5a32a3;
+}
 </style>
