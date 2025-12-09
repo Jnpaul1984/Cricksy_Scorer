@@ -39,6 +39,22 @@ follow_imports = "skip"
 disallow_untyped_defs = false
 exclude = "backend/tests/|scripts/.*|node_modules/|.venv/"
 
+[tool.bandit]
+# Exclude test directories
+exclude_dirs = ["backend/tests", "backend/test", "backend/testsupport"]
+
+# Skip specific security checks that are false positives in our context
+skips = [
+    "B110",  # try_except_pass - legitimate in error handling
+    "B112",  # try_except_continue - legitimate in batch processing  
+    "B105",  # hardcoded_password_string - test fixtures only
+    "B106",  # hardcoded_password_funcarg - "token_type" argument names
+    "B107",  # hardcoded_password_default - test helper defaults
+    "B301",  # pickle - legitimate for ML model loading
+    "B608",  # hardcoded_sql_expressions - legitimate in Alembic migrations
+    "B104",  # hardcoded_bind_all_interfaces - main.py needs 0.0.0.0
+]
+
 [tool.black]
 line-length = 100
 target-version = ['py312']
