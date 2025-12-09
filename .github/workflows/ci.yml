@@ -29,7 +29,7 @@ jobs:
           extra_args: --all-files
 
   lint:
-    name: Lint (ruff + black --check + mypy)
+    name: Lint (ruff + ruff format + mypy)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -47,13 +47,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install ruff==0.6.5 black==24.10.0 mypy==1.11.2 types-requests
+          pip install ruff==0.6.5 mypy==1.11.2 types-requests
 
-      - name: Ruff
+      - name: Ruff (lint)
         run: ruff check .
 
-      - name: Black (check)
-        run: black --check .
+      - name: Ruff (format check)
+        run: ruff format --check .
 
       - name: mypy (strict-ish)
         working-directory: backend
