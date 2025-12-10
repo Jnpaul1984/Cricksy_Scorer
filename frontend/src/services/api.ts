@@ -747,24 +747,19 @@ export async function generateAICommentary(
 
 /* ----------------------------- AI Player Insights ----------------------------- */
 
-export type PlayerAIFormTrend = "improving" | "declining" | "mixed" | "flat";
-
 export interface PlayerAIRecentForm {
-  matches_considered: number;
-  recent_runs: number[];
-  average: number;
-  trend: PlayerAIFormTrend;
+  label: string;
+  trend: number[];
 }
 
 export interface PlayerAIInsights {
   player_id: string;
-  player_name: string;
   summary: string;
   strengths: string[];
   weaknesses: string[];
   recent_form: PlayerAIRecentForm;
-  tags: string[];
-  generated_at: string;
+  role_tags: string[];
+  recommendations: string[];
 }
 
 export async function getPlayerAIInsights(

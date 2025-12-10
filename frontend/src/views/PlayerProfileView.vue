@@ -233,14 +233,14 @@
         <section class="ai-insights-section">
           <BaseCard padding="lg" class="ai-insights-card">
             <header class="ai-insights-header">
-              <h2 class="ai-insights-title">AI Insights</h2>
+              <h2 class="ai-insights-title">🤖 AI Insights</h2>
               <div class="ai-insights-actions">
                 <BaseBadge
-                  v-if="aiRecentForm?.trend"
+                  v-if="aiRecentForm?.label"
                   variant="neutral"
                   class="trend-badge"
                 >
-                  Trend: {{ aiRecentForm.trend }}
+                  {{ aiRecentForm.label }}
                 </BaseBadge>
                 <BaseButton
                   size="sm"
@@ -249,7 +249,7 @@
                   @click="loadAIInsights"
                 >
                   <span v-if="aiInsightsLoading">Refreshing…</span>
-                  <span v-else>Refresh</span>
+                  <span v-else>↻ Refresh</span>
                 </BaseButton>
               </div>
             </header>
@@ -258,7 +258,7 @@
             <div v-if="aiInsightsLoading" class="ai-insights-loading">
               <div class="skeleton-line" />
               <div class="skeleton-line" />
-              <div class="skeleton-line" />
+              <div class="skeleton-line short" />
               <div class="skeleton-line" />
             </div>
 
@@ -275,9 +275,24 @@
                 <p>{{ aiSummary }}</p>
               </section>
 
+              <!-- Role Tags -->
+              <section v-if="aiRoleTags.length" class="ai-insights-role-tags">
+                <h3>Player Role</h3>
+                <div class="ai-insights-tag-list">
+                  <BaseBadge
+                    v-for="tag in aiRoleTags"
+                    :key="tag"
+                    variant="primary"
+                    class="ai-tag"
+                  >
+                    {{ tag.replace(/_/g, ' ') }}
+                  </BaseBadge>
+                </div>
+              </section>
+
               <!-- Strengths -->
               <section class="ai-insights-strengths">
-                <h3>Strengths</h3>
+                <h3>💪 Strengths</h3>
                 <ul v-if="aiStrengths.length">
                   <li v-for="(item, idx) in aiStrengths" :key="idx">
                     {{ item }}
@@ -288,7 +303,7 @@
 
               <!-- Weaknesses -->
               <section class="ai-insights-weaknesses">
-                <h3>Weaknesses</h3>
+                <h3>🎯 Areas to Improve</h3>
                 <ul v-if="aiWeaknesses.length">
                   <li v-for="(item, idx) in aiWeaknesses" :key="idx">
                     {{ item }}
@@ -297,32 +312,32 @@
                 <p v-else class="ai-insights-empty">No weaknesses identified yet.</p>
               </section>
 
-              <!-- Recent form -->
+              <!-- Recent form with MiniSparkline -->
               <section class="ai-insights-form">
-                <h3>Recent Form</h3>
-                <p v-if="aiRecentForm && aiRecentForm.matches_considered">
-                  Last {{ aiRecentForm.matches_considered }} innings:
-                  <strong>{{ aiRecentForm.recent_runs.join(', ') }}</strong><br />
-                  Average: <strong>{{ aiRecentForm.average.toFixed(1) }}</strong>
-                </p>
+                <h3>📈 Recent Form</h3>
+                <div v-if="aiRecentForm && aiRecentForm.trend.length > 0" class="form-chart">
+                  <MiniSparkline
+                    :points="aiRecentForm.trend"
+                    :width="160"
+                    :height="40"
+                    :highlight-last="true"
+                    variant="default"
+                  />
+                  <p class="form-label">{{ aiRecentForm.label }}</p>
+                </div>
                 <p v-else class="ai-insights-empty">
-                  Not enough recent innings to compute form.
+                  Not enough recent data to show form trend.
                 </p>
               </section>
 
-              <!-- Tags -->
-              <section v-if="aiTags.length" class="ai-insights-tags">
-                <h3>Tags</h3>
-                <div class="ai-insights-tag-list">
-                  <BaseBadge
-                    v-for="tag in aiTags"
-                    :key="tag"
-                    variant="neutral"
-                    class="ai-tag"
-                  >
-                    {{ tag.replace(/_/g, ' ') }}
-                  </BaseBadge>
-                </div>
+              <!-- Recommendations -->
+              <section v-if="aiRecommendations.length" class="ai-insights-recommendations">
+                <h3>💡 Recommendations</h3>
+                <ul>
+                  <li v-for="(rec, idx) in aiRecommendations" :key="idx">
+                    {{ rec }}
+                  </li>
+                </ul>
               </section>
             </div>
 
@@ -342,6 +357,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { BaseButton, BaseCard, BaseBadge } from '@/components'
+import MiniSparkline from '@/components/MiniSparkline.vue'
 import { apiService, getErrorMessage, getPlayerAIInsights } from '@/services/api'
 import type { FanFavoriteRead, PlayerAIInsights } from '@/services/api'
 import { getPlayerProfile } from '@/services/playerApi'
@@ -407,7 +423,8 @@ const aiSummary = computed(() => aiInsights.value?.summary ?? '')
 const aiRecentForm = computed(() => aiInsights.value?.recent_form ?? null)
 const aiStrengths = computed<string[]>(() => aiInsights.value?.strengths ?? [])
 const aiWeaknesses = computed<string[]>(() => aiInsights.value?.weaknesses ?? [])
-const aiTags = computed<string[]>(() => aiInsights.value?.tags ?? [])
+const aiRoleTags = computed<string[]>(() => aiInsights.value?.role_tags ?? [])
+const aiRecommendations = computed<string[]>(() => aiInsights.value?.recommendations ?? [])
 
 const loadProfile = async () => {
   loading.value = true
@@ -864,6 +881,7 @@ onMounted(async () => {
 .ai-insights-loading .skeleton-line:nth-child(2) { width: 75%; }
 .ai-insights-loading .skeleton-line:nth-child(3) { width: 60%; }
 .ai-insights-loading .skeleton-line:nth-child(4) { width: 45%; }
+.ai-insights-loading .skeleton-line.short { width: 40%; }
 
 .ai-insights-error {
   font-size: var(--text-xs);
@@ -919,6 +937,32 @@ onMounted(async () => {
 
 .ai-insights-form strong {
   color: var(--color-primary);
+}
+
+.form-chart {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.form-label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.ai-insights-role-tags {
+  grid-column: 1 / -1;
+}
+
+.ai-insights-recommendations {
+  grid-column: 1 / -1;
+}
+
+.ai-insights-recommendations ul li {
+  list-style-type: "💡 ";
 }
 
 .ai-insights-tags {
