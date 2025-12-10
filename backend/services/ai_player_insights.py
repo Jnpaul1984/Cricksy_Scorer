@@ -9,10 +9,9 @@ TODO: Replace rule-based logic with actual LLM integration for richer insights.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -28,25 +27,43 @@ TrendType = Literal["improving", "declining", "mixed", "flat"]
 
 
 class RecentForm(BaseModel):
-    """Recent form statistics for a player."""
+    """Recent form data for a player."""
 
-    matches_considered: int
-    recent_runs: list[int]
-    average: float
-    trend: TrendType
+    label: str = Field(
+        description="Form label (e.g., 'Excellent', 'Good', 'Average', 'Poor')"
+    )
+    trend: list[float] = Field(
+        default_factory=list,
+        description="Normalized performance trend for last N innings (0.0 to 1.0 scale)",
+    )
 
 
 class PlayerAiInsights(BaseModel):
     """AI-generated insights for a player."""
 
-    player_id: str
-    player_name: str
-    summary: str
-    strengths: list[str]
-    weaknesses: list[str]
-    recent_form: RecentForm
-    tags: list[str]
-    generated_at: datetime
+    player_id: str = Field(description="The player ID")
+    summary: str = Field(
+        description="AI-generated summary of the player's abilities and recent performance"
+    )
+    strengths: list[str] = Field(
+        default_factory=list,
+        description="List of player's key strengths",
+    )
+    weaknesses: list[str] = Field(
+        default_factory=list,
+        description="List of areas for improvement",
+    )
+    recent_form: RecentForm = Field(
+        description="Recent form assessment with trend data"
+    )
+    role_tags: list[str] = Field(
+        default_factory=list,
+        description="Tags describing player's role (e.g., 'top-order', 'death bowler')",
+    )
+    recommendations: list[str] = Field(
+        default_factory=list,
+        description="AI-generated recommendations for improvement or strategy",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -258,21 +275,120 @@ async def build_player_ai_insights(
             f"Career stats: {profile.total_runs_scored} runs in {profile.total_matches} matches."
         )
 
-    # 5) Build response
+    # 5) Build role tags from tags
+    role_tags = _convert_tags_to_role_tags(tags)
+
+    # 6) Build recommendations based on weaknesses
+    recommendations = _generate_recommendations(weaknesses, profile)
+
+    # 7) Build recent form with normalized trend
+    form_label = _derive_form_label(trend, avg, profile)
+    normalized_trend = _normalize_runs_to_trend(recent_runs, profile)
+
     recent_form = RecentForm(
-        matches_considered=matches_considered,
-        recent_runs=recent_runs,
-        average=round(avg, 1),
-        trend=trend,
+        label=form_label,
+        trend=normalized_trend,
     )
 
     return PlayerAiInsights(
         player_id=player_id,
-        player_name=profile.player_name,
         summary=summary,
         strengths=strengths,
         weaknesses=weaknesses,
         recent_form=recent_form,
-        tags=tags,
-        generated_at=datetime.now(UTC),
+        role_tags=role_tags,
+        recommendations=recommendations,
     )
+
+
+def _convert_tags_to_role_tags(tags: list[str]) -> list[str]:
+    """Convert internal tags to user-friendly role tags."""
+    tag_mapping = {
+        "reliable_batter": "consistent batsman",
+        "aggressive": "aggressive hitter",
+        "anchor": "anchor batsman",
+        "power_hitter": "power-hitter",
+        "match_winner": "match winner",
+        "inconsistent": "developing consistency",
+        "strike_bowler": "strike bowler",
+        "economical": "economical bowler",
+        "expensive": "attacking bowler",
+        "good_fielder": "reliable fielder",
+        "in_form": "in-form",
+        "out_of_form": "rebuilding",
+    }
+    role_tags = []
+    for tag in tags:
+        if tag in tag_mapping:
+            role_tags.append(tag_mapping[tag])
+        else:
+            role_tags.append(tag.replace("_", " "))
+    return role_tags[:5]  # Limit to 5 role tags
+
+
+def _generate_recommendations(weaknesses: list[str], profile: PlayerProfile) -> list[str]:
+    """Generate recommendations based on weaknesses and profile."""
+    recommendations: list[str] = []
+
+    for weakness in weaknesses:
+        weakness_lower = weakness.lower()
+        if "strike rate" in weakness_lower or "slow" in weakness_lower:
+            recommendations.append("Work on boundary-hitting drills to improve strike rate")
+        if "convert" in weakness_lower or "starts" in weakness_lower:
+            recommendations.append("Focus on building longer innings through shot selection")
+        if "economy" in weakness_lower or "expensive" in weakness_lower:
+            recommendations.append("Practice consistent length bowling under pressure")
+        if "form" in weakness_lower or "dipped" in weakness_lower:
+            recommendations.append("Spend extra time in nets focusing on fundamentals")
+        if "duck" in weakness_lower or "low score" in weakness_lower:
+            recommendations.append("Work on playing the first 10 balls defensively")
+
+    # Add general recommendations if none derived
+    if not recommendations:
+        if profile.total_innings_batted > profile.total_innings_bowled:
+            recommendations.append("Continue developing shot variety against spin")
+        else:
+            recommendations.append("Work on developing variation deliveries")
+
+    return recommendations[:3]  # Limit to 3 recommendations
+
+
+def _derive_form_label(trend: TrendType, avg: float, profile: PlayerProfile) -> str:
+    """Derive a form label from trend and average."""
+    if trend == "improving":
+        if avg >= 40 or profile.batting_average >= 40:
+            return "Excellent"
+        return "Good"
+    elif trend == "declining":
+        return "Poor"
+    elif trend == "flat":
+        if avg >= 30:
+            return "Good"
+        elif avg >= 15:
+            return "Average"
+        return "Developing"
+    else:  # mixed
+        return "Average"
+
+
+def _normalize_runs_to_trend(recent_runs: list[int], profile: PlayerProfile) -> list[float]:
+    """Normalize runs to 0.0-1.0 scale for trend visualization."""
+    if not recent_runs:
+        # Generate mock trend based on batting average
+        avg = profile.batting_average
+        if avg >= 40:
+            return [0.7, 0.75, 0.8, 0.72, 0.78]
+        elif avg >= 25:
+            return [0.5, 0.55, 0.6, 0.52, 0.58]
+        else:
+            return [0.3, 0.35, 0.4, 0.32, 0.38]
+
+    # Normalize runs: 0 = 0.0, 100+ = 1.0
+    max_scale = 100.0
+    normalized = [min(1.0, round(r / max_scale, 2)) for r in recent_runs]
+
+    # Ensure we have at least 5 data points for visualization
+    while len(normalized) < 5:
+        normalized.append(normalized[-1] if normalized else 0.5)
+
+    return normalized[:8]  # Max 8 data points
