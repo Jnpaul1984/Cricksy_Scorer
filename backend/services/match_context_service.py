@@ -366,11 +366,13 @@ def get_context_for_commentary(mcp: dict[str, Any]) -> CommentaryContext:
         for event in pb.get("notable_events", []):
             event_over = event.get("over", 0)
             if event_over >= min_over:
-                recent_events.append({
-                    "over": event_over,
-                    "type": event.get("event_type", "unknown"),
-                    "description": event.get("description", ""),
-                })
+                recent_events.append(
+                    {
+                        "over": event_over,
+                        "type": event.get("event_type", "unknown"),
+                        "description": event.get("description", ""),
+                    }
+                )
 
     # Sort by over (descending) and limit to 6 events
     recent_events.sort(key=lambda e: e.get("over", 0), reverse=True)
@@ -393,10 +395,15 @@ def get_context_for_commentary(mcp: dict[str, Any]) -> CommentaryContext:
 
         if batting and batting.get("runs", 0) > 0:
             sr = batting.get("strike_rate", 0)
-            summary_parts.append(f"{batting['runs']} off {batting.get('balls_faced', 0)} (SR {sr:.0f})")
+            summary_parts.append(
+                f"{batting['runs']} off {batting.get('balls_faced', 0)} (SR {sr:.0f})"
+            )
 
         if bowling and bowling.get("wickets", 0) > 0:
-            summary_parts.append(f"{bowling['wickets']}/{bowling.get('runs_conceded', 0)} in {bowling.get('overs', 0)} ov")
+            summary_parts.append(
+                f"{bowling['wickets']}/{bowling.get('runs_conceded', 0)} "
+                f"in {bowling.get('overs', 0)} ov"
+            )
 
         summary = " | ".join(summary_parts) if summary_parts else "Yet to make impact"
 
@@ -467,9 +474,14 @@ def _generate_situation_summary(
         # First innings - building/setting target
         if wickets <= 2:
             if runs >= (overs * 8):
-                parts.append(f"{batting_team} building a strong total with {wickets_in_hand} wickets in hand.")
+                parts.append(
+                    f"{batting_team} building a strong total "
+                    f"with {wickets_in_hand} wickets in hand."
+                )
             else:
-                parts.append(f"{batting_team} looking to accelerate with plenty of wickets in hand.")
+                parts.append(
+                    f"{batting_team} looking to accelerate with plenty of wickets in hand."
+                )
         elif wickets >= 5:
             parts.append(f"{batting_team} in a spot of bother at {runs}/{wickets}.")
         else:
@@ -480,17 +492,26 @@ def _generate_situation_summary(
             if runs_needed <= 0:
                 parts.append(f"{batting_team} have won the match!")
             elif wickets >= 8:
-                parts.append(f"{batting_team} hanging on, needing {runs_needed} with just {wickets_in_hand} wickets left.")
+                parts.append(
+                    f"{batting_team} hanging on, needing {runs_needed} "
+                    f"with just {wickets_in_hand} wickets left."
+                )
             elif required_rate and required_rate > 12:
-                parts.append(f"Tough ask for {batting_team} - need {runs_needed} at {required_rate:.1f} RPO.")
+                parts.append(
+                    f"Tough ask for {batting_team} - need {runs_needed} at {required_rate:.1f} RPO."
+                )
             elif required_rate and required_rate < 6:
-                parts.append(f"{batting_team} cruising, need just {runs_needed} at {required_rate:.1f} RPO.")
+                parts.append(
+                    f"{batting_team} cruising, need just {runs_needed} at {required_rate:.1f} RPO."
+                )
             else:
                 parts.append(f"{batting_team} need {runs_needed} to win from here.")
 
     # Add recent event context
     recent_wickets = sum(1 for e in recent_events if e.get("type") == "wicket")
-    recent_boundaries = sum(1 for e in recent_events if e.get("type") in ("boundary_4", "boundary_6"))
+    recent_boundaries = sum(
+        1 for e in recent_events if e.get("type") in ("boundary_4", "boundary_6")
+    )
 
     if recent_wickets >= 2:
         parts.append("Wickets tumbling in recent overs.")
@@ -645,35 +666,66 @@ def summarize_phase_for_case_study(phase_data: dict[str, Any]) -> str:
     # Opening statement
     if "powerplay" in label.lower():
         if run_rate >= 9:
-            parts.append(f"{team} dominated the powerplay, racing to {runs}/{wickets} at {run_rate:.1f} runs per over.")
+            parts.append(
+                f"{team} dominated the powerplay, racing to {runs}/{wickets} "
+                f"at {run_rate:.1f} runs per over."
+            )
         elif run_rate >= 7:
-            parts.append(f"{team} had a solid powerplay, scoring {runs}/{wickets} at {run_rate:.1f} RPO.")
+            parts.append(
+                f"{team} had a solid powerplay, scoring {runs}/{wickets} at {run_rate:.1f} RPO."
+            )
         elif wickets >= 3:
-            parts.append(f"{team} struggled in the powerplay, losing {wickets} early wickets while managing just {runs} runs.")
+            parts.append(
+                f"{team} struggled in the powerplay, losing {wickets} early wickets "
+                f"while managing just {runs} runs."
+            )
         else:
-            parts.append(f"{team} scored {runs}/{wickets} in the powerplay at a run rate of {run_rate:.1f}.")
+            parts.append(
+                f"{team} scored {runs}/{wickets} in the powerplay at a run rate of {run_rate:.1f}."
+            )
     elif "middle" in label.lower():
         if wickets >= 3:
-            parts.append(f"The middle overs saw {team} lose {wickets} wickets while accumulating {runs} runs.")
+            parts.append(
+                f"The middle overs saw {team} lose {wickets} wickets "
+                f"while accumulating {runs} runs."
+            )
         elif run_rate >= 7:
-            parts.append(f"{team} kept the momentum going through the middle overs with {runs} runs at {run_rate:.1f} RPO.")
+            parts.append(
+                f"{team} kept the momentum going through the middle overs "
+                f"with {runs} runs at {run_rate:.1f} RPO."
+            )
         else:
             parts.append(f"{team} consolidated during the middle overs, scoring {runs}/{wickets}.")
     elif "death" in label.lower():
         if run_rate >= 10:
-            parts.append(f"{team} finished strong at the death, blasting {runs} runs in the final overs at {run_rate:.1f} RPO.")
+            parts.append(
+                f"{team} finished strong at the death, blasting {runs} runs "
+                f"in the final overs at {run_rate:.1f} RPO."
+            )
         elif wickets >= 3:
-            parts.append(f"The death overs proved costly for {team}, who lost {wickets} wickets while adding {runs} runs.")
+            parts.append(
+                f"The death overs proved costly for {team}, who lost {wickets} wickets "
+                f"while adding {runs} runs."
+            )
         else:
-            parts.append(f"{team} scored {runs}/{wickets} in the death overs at {run_rate:.1f} runs per over.")
+            parts.append(
+                f"{team} scored {runs}/{wickets} in the death overs "
+                f"at {run_rate:.1f} runs per over."
+            )
     else:
-        parts.append(f"In overs {over_range[0]:.0f}-{over_range[1]:.0f}, {team} scored {runs}/{wickets} at {run_rate:.1f} RPO.")
+        parts.append(
+            f"In overs {over_range[0]:.0f}-{over_range[1]:.0f}, {team} scored "
+            f"{runs}/{wickets} at {run_rate:.1f} RPO."
+        )
 
     # Boundary context
     if boundaries_6 >= 3:
         parts.append(f"Power hitting was on display with {boundaries_6} sixes.")
     elif total_boundaries >= 6:
-        parts.append(f"The phase featured {total_boundaries} boundaries ({boundaries_4} fours, {boundaries_6} sixes).")
+        parts.append(
+            f"The phase featured {total_boundaries} boundaries "
+            f"({boundaries_4} fours, {boundaries_6} sixes)."
+        )
 
     # Dot ball pressure
     if dot_pct >= 40:
@@ -700,9 +752,15 @@ def _summarize_player_for_case_study(player: dict[str, Any]) -> str:
         sixes = batting.get("sixes", 0)
 
         if runs >= 50:
-            parts.append(f"{name} anchored the innings with a crucial {runs} off {balls} balls (SR {sr:.0f}).")
+            parts.append(
+                f"{name} anchored the innings with a crucial {runs} off {balls} balls "
+                f"(SR {sr:.0f})."
+            )
         elif runs >= 30 and sr >= 150:
-            parts.append(f"{name} played an impactful cameo of {runs} off {balls} at a strike rate of {sr:.0f}.")
+            parts.append(
+                f"{name} played an impactful cameo of {runs} off {balls} "
+                f"at a strike rate of {sr:.0f}."
+            )
         elif runs >= 20:
             parts.append(f"{name} contributed {runs} runs off {balls} balls.")
 
@@ -717,11 +775,19 @@ def _summarize_player_for_case_study(player: dict[str, Any]) -> str:
         economy = bowling.get("economy", 0)
 
         if wickets >= 3:
-            parts.append(f"{name} was the pick of the bowlers with figures of {wickets}/{runs_conceded} in {overs} overs.")
+            parts.append(
+                f"{name} was the pick of the bowlers with figures of "
+                f"{wickets}/{runs_conceded} in {overs} overs."
+            )
         elif wickets >= 2 and economy <= 6:
-            parts.append(f"{name} bowled economically, taking {wickets}/{runs_conceded} at {economy:.1f} RPO.")
+            parts.append(
+                f"{name} bowled economically, taking {wickets}/{runs_conceded} "
+                f"at {economy:.1f} RPO."
+            )
         elif wickets >= 1:
-            parts.append(f"{name} chipped in with {wickets} wicket(s), conceding {runs_conceded} runs.")
+            parts.append(
+                f"{name} chipped in with {wickets} wicket(s), conceding {runs_conceded} runs."
+            )
 
     # Tag-based insights
     if "collapse_trigger" in tags:
@@ -759,8 +825,16 @@ def _generate_match_narrative(
     players: list[CaseStudyPlayerSummary],
 ) -> str:
     """Generate an overall match narrative for case study."""
-    team_a = mcp.get("team_a", {}).get("name", "Team A") if isinstance(mcp.get("team_a"), dict) else mcp.get("team_a", "Team A")
-    team_b = mcp.get("team_b", {}).get("name", "Team B") if isinstance(mcp.get("team_b"), dict) else mcp.get("team_b", "Team B")
+    team_a = (
+        mcp.get("team_a", {}).get("name", "Team A")
+        if isinstance(mcp.get("team_a"), dict)
+        else mcp.get("team_a", "Team A")
+    )
+    team_b = (
+        mcp.get("team_b", {}).get("name", "Team B")
+        if isinstance(mcp.get("team_b"), dict)
+        else mcp.get("team_b", "Team B")
+    )
     result = mcp.get("result")
     match_format = mcp.get("format", "T20")
 
@@ -773,11 +847,17 @@ def _generate_match_narrative(
     # Innings summary
     if len(innings_list) >= 1:
         inn1 = innings_list[0]
-        parts.append(f"{inn1.get('team', team_a)} batted first and posted {inn1.get('runs', 0)}/{inn1.get('wickets', 0)} in {inn1.get('overs', 0)} overs.")
+        parts.append(
+            f"{inn1.get('team', team_a)} batted first and posted "
+            f"{inn1.get('runs', 0)}/{inn1.get('wickets', 0)} in {inn1.get('overs', 0)} overs."
+        )
 
     if len(innings_list) >= 2:
         inn2 = innings_list[1]
-        parts.append(f"{inn2.get('team', team_b)} responded with {inn2.get('runs', 0)}/{inn2.get('wickets', 0)}.")
+        parts.append(
+            f"{inn2.get('team', team_b)} responded with "
+            f"{inn2.get('runs', 0)}/{inn2.get('wickets', 0)}."
+        )
 
     # Key performers
     high_impact = [p for p in players if p.get("impact_rating") == "high"]
@@ -854,8 +934,12 @@ def get_context_for_case_study(mcp: dict[str, Any]) -> CaseStudyContext:
     # Teams (names only)
     team_a_data = mcp.get("team_a", {})
     team_b_data = mcp.get("team_b", {})
-    team_a = team_a_data.get("name", "Team A") if isinstance(team_a_data, dict) else str(team_a_data)
-    team_b = team_b_data.get("name", "Team B") if isinstance(team_b_data, dict) else str(team_b_data)
+    team_a = (
+        team_a_data.get("name", "Team A") if isinstance(team_a_data, dict) else str(team_a_data)
+    )
+    team_b = (
+        team_b_data.get("name", "Team B") if isinstance(team_b_data, dict) else str(team_b_data)
+    )
 
     # Toss
     toss_data = mcp.get("toss", {})
@@ -868,10 +952,9 @@ def get_context_for_case_study(mcp: dict[str, Any]) -> CaseStudyContext:
 
     # Derive margin from result string
     margin: str | None = None
-    if result:
+    if result and " by " in result.lower():
         # Extract margin like "by 5 wickets" or "by 20 runs"
-        if " by " in result.lower():
-            margin = result.split(" by ")[-1].strip()
+        margin = result.split(" by ")[-1].strip()
 
     # Innings summaries (keep all)
     innings_list = mcp.get("innings", [])
@@ -1233,14 +1316,13 @@ def _determine_result_for_team(result: str | None, team: str) -> str | None:
         return "tied"
 
     # Check if team name appears before "won"
-    if team.lower() in result_lower:
-        if "won" in result_lower:
-            # Check if team name is the winner
-            won_idx = result_lower.find("won")
-            team_idx = result_lower.find(team.lower())
-            if team_idx < won_idx:
-                return "won"
-    
+    if team.lower() in result_lower and "won" in result_lower:
+        # Check if team name is the winner
+        won_idx = result_lower.find("won")
+        team_idx = result_lower.find(team.lower())
+        if team_idx < won_idx:
+            return "won"
+
     # If another team won, this team lost
     if "won" in result_lower:
         return "lost"
@@ -1333,11 +1415,13 @@ def _generate_player_narrative(
         if runs >= 50:
             not_out = " not out" if not is_out else ""
             parts.append(
-                f"{player_name} played a standout innings of {runs}{not_out} off {balls} balls (SR {sr:.0f})."
+                f"{player_name} played a standout innings of {runs}{not_out} "
+                f"off {balls} balls (SR {sr:.0f})."
             )
         elif runs >= 30 and sr >= 150:
             parts.append(
-                f"{player_name} contributed a quick-fire {runs} off {balls} balls at a strike rate of {sr:.0f}."
+                f"{player_name} contributed a quick-fire {runs} off {balls} balls "
+                f"at a strike rate of {sr:.0f}."
             )
         elif runs >= 20:
             parts.append(f"{player_name} scored a useful {runs} runs off {balls} balls.")
@@ -1354,16 +1438,23 @@ def _generate_player_narrative(
 
         if wickets >= 3:
             parts.append(
-                f"{player_name} was devastating with the ball, taking {wickets}/{runs_conceded} in {overs} overs."
+                f"{player_name} was devastating with the ball, "
+                f"taking {wickets}/{runs_conceded} in {overs} overs."
             )
         elif wickets >= 2 and economy <= 7:
             parts.append(
-                f"{player_name} was economical, finishing with {wickets}/{runs_conceded} at {economy:.1f} RPO."
+                f"{player_name} was economical, finishing with {wickets}/{runs_conceded} "
+                f"at {economy:.1f} RPO."
             )
         elif wickets >= 1:
-            parts.append(f"{player_name} picked up {wickets} wicket(s), conceding {runs_conceded} runs.")
+            parts.append(
+                f"{player_name} picked up {wickets} wicket(s), conceding {runs_conceded} runs."
+            )
         elif overs >= 2 and economy <= 6:
-            parts.append(f"{player_name} bowled tightly, giving away just {runs_conceded} runs in {overs} overs.")
+            parts.append(
+                f"{player_name} bowled tightly, giving away just {runs_conceded} runs "
+                f"in {overs} overs."
+            )
 
     # Fielding narrative
     if fielding:
@@ -1374,7 +1465,9 @@ def _generate_player_narrative(
         if catches >= 2:
             parts.append(f"Took {catches} catches in the field.")
         elif catches == 1 and (run_outs > 0 or stumpings > 0):
-            parts.append("Contributed in the field with a catch and direct involvement in a dismissal.")
+            parts.append(
+                "Contributed in the field with a catch and direct involvement in a dismissal."
+            )
 
     # Tag-based additions
     if "match_winner" in tags:
@@ -1390,7 +1483,10 @@ def _generate_player_narrative(
 
     # Fallback
     if not parts:
-        return f"{player_name} played for {team} against {opponent} but had limited impact on the match."
+        return (
+            f"{player_name} played for {team} against {opponent} "
+            f"but had limited impact on the match."
+        )
 
     return " ".join(parts)
 
@@ -1539,7 +1635,6 @@ def get_phase_breakdowns(
         is_wicket = d.get("is_wicket", False)
         extra_type = d.get("extra_type") or d.get("extra")
         striker_id = d.get("striker_id")
-        bowler_id = d.get("bowler_id")
         dismissal_type = d.get("dismissal_type")
         dismissed_player_id = d.get("dismissed_player_id")
 
@@ -1704,7 +1799,9 @@ def summarize_player_performance(
     bowling: dict[str, Any] | None = None
     if bowling_scorecard:
         overs = bowling_scorecard.get("overs", 0) or bowling_scorecard.get("overs_bowled", 0)
-        runs_conceded = bowling_scorecard.get("runs", 0) or bowling_scorecard.get("runs_conceded", 0)
+        runs_conceded = bowling_scorecard.get("runs", 0) or bowling_scorecard.get(
+            "runs_conceded", 0
+        )
         wickets = bowling_scorecard.get("wickets", 0) or bowling_scorecard.get("wickets_taken", 0)
         maidens = bowling_scorecard.get("maidens", 0)
 
@@ -1719,10 +1816,7 @@ def summarize_player_performance(
         }
 
         # Determine role
-        if batting and batting.get("runs", 0) >= 20:
-            role = "all-rounder"
-        else:
-            role = "bowler"
+        role = "all-rounder" if batting and batting.get("runs", 0) >= 20 else "bowler"
 
         # Generate bowling tags
         if wickets >= 3:
@@ -1815,7 +1909,10 @@ def generate_callouts(
                     id=f"callout_{phase['phase_id']}_high_rr",
                     category="Batting",
                     title="Explosive Powerplay",
-                    body=f"{phase['team']} scored at {phase['run_rate']} RPO in the powerplay with {phase['boundaries_6']} sixes.",
+                    body=(
+                        f"{phase['team']} scored at {phase['run_rate']} RPO "
+                        f"in the powerplay with {phase['boundaries_6']} sixes."
+                    ),
                     severity="positive",
                     scope=phase["label"],
                 )
@@ -1828,7 +1925,10 @@ def generate_callouts(
                     id=f"callout_{phase['phase_id']}_wickets",
                     category="Bowling",
                     title=f"Wickets in {phase['label']}",
-                    body=f"{phase['wickets']} wickets fell in the {phase['label'].lower()}, creating pressure.",
+                    body=(
+                        f"{phase['wickets']} wickets fell in the {phase['label'].lower()}, "
+                        f"creating pressure."
+                    ),
                     severity="warning",
                     scope=phase["label"],
                 )
@@ -1841,7 +1941,10 @@ def generate_callouts(
                     id=f"callout_{phase['phase_id']}_surge",
                     category="Batting",
                     title="Death Overs Surge",
-                    body=f"Strong finish with {phase['runs']} runs at {phase['run_rate']} RPO in the death.",
+                    body=(
+                        f"Strong finish with {phase['runs']} runs "
+                        f"at {phase['run_rate']} RPO in the death."
+                    ),
                     severity="positive",
                     scope=phase["label"],
                 )
@@ -1858,7 +1961,10 @@ def generate_callouts(
                     id=f"callout_{phase['phase_id']}_struggle",
                     category="Batting",
                     title="Death Overs Struggle",
-                    body=f"Struggled at the death with {phase['wickets']} wickets and only {phase['run_rate']} RPO.",
+                    body=(
+                        f"Struggled at the death with {phase['wickets']} wickets "
+                        f"and only {phase['run_rate']} RPO."
+                    ),
                     severity="warning",
                     scope=phase["label"],
                 )
@@ -1872,7 +1978,10 @@ def generate_callouts(
                     id=f"callout_player_{player['player_id']}_fifty",
                     category="Players",
                     title="Key Innings",
-                    body=f"{player['player_name']} scored a crucial half-century for {player['team']}.",
+                    body=(
+                        f"{player['player_name']} scored a crucial half-century "
+                        f"for {player['team']}."
+                    ),
                     severity="positive",
                     scope=player["player_name"],
                 )
@@ -1982,9 +2091,7 @@ async def generate_match_context_package(
         player_performances.append(perf)
 
     # Sort by impact score
-    player_performances.sort(
-        key=lambda p: p.get("impact_score") or 0, reverse=True
-    )
+    player_performances.sort(key=lambda p: p.get("impact_score") or 0, reverse=True)
 
     # Generate callouts
     callouts = generate_callouts(
@@ -1995,7 +2102,7 @@ async def generate_match_context_package(
 
     # Build innings summary
     innings_summaries: list[InningsSummary] = []
-    total_balls = len([d for d in deliveries if not d.get("extra_type") in ["wide", "no_ball"]])
+    total_balls = len([d for d in deliveries if d.get("extra_type") not in ["wide", "no_ball"]])
     total_overs = total_balls / 6 if total_balls else 0
     total_runs = sum(
         (d.get("runs_scored", 0) or d.get("runs_off_bat", 0) or 0) + (d.get("extra_runs", 0) or 0)
@@ -2042,7 +2149,6 @@ async def generate_match_context_package(
         format=match_format,
         overs_per_side=overs_limit,
         venue=None,  # TODO: Add venue when available in model
-
         team_a={
             "id": team_a.get("id", "team_a"),
             "name": team_a_name,
@@ -2053,14 +2159,12 @@ async def generate_match_context_package(
             "name": team_b_name,
             "players": team_b.get("players", []),
         },
-
         toss={
             "winner": game.toss_winner_team,
             "decision": game.decision,
         },
         result=game.result,
         winner=winner,
-
         innings=innings_summaries,
         phase_breakdowns=phase_breakdowns,
         player_performances=player_performances,

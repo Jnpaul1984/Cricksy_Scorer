@@ -5,7 +5,6 @@ Tests for the match context package service.
 import os
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("APP_SECRET_KEY", "test-secret-key")
@@ -66,7 +65,13 @@ def test_get_phase_breakdowns_with_deliveries():
         {"over_number": 0, "ball_number": 2, "runs_scored": 0, "is_wicket": False},
         {"over_number": 0, "ball_number": 3, "runs_scored": 6, "is_wicket": False},
         {"over_number": 0, "ball_number": 4, "runs_scored": 1, "is_wicket": False},
-        {"over_number": 0, "ball_number": 5, "runs_scored": 0, "is_wicket": True, "dismissal_type": "caught"},
+        {
+            "over_number": 0,
+            "ball_number": 5,
+            "runs_scored": 0,
+            "is_wicket": True,
+            "dismissal_type": "caught",
+        },
         {"over_number": 0, "ball_number": 6, "runs_scored": 2, "is_wicket": False},
     ]
 
@@ -155,7 +160,11 @@ def test_summarize_player_performance_bowler():
 
 def test_generate_callouts():
     """Test callout generation from phase and player data."""
-    from backend.services.match_context_service import generate_callouts, PhaseBreakdown, PlayerPerformance
+    from backend.services.match_context_service import (
+        generate_callouts,
+        PhaseBreakdown,
+        PlayerPerformance,
+    )
 
     phases = [
         PhaseBreakdown(
@@ -205,7 +214,11 @@ def test_generate_callouts():
 
 def test_get_context_for_commentary_first_innings():
     """Test commentary context extraction for first innings."""
-    from backend.services.match_context_service import get_context_for_commentary, PhaseBreakdown, PlayerPerformance
+    from backend.services.match_context_service import (
+        get_context_for_commentary,
+        PhaseBreakdown,
+        PlayerPerformance,
+    )
 
     mcp = {
         "match_id": "test-match-1",
@@ -214,7 +227,14 @@ def test_get_context_for_commentary_first_innings():
         "team_a": {"name": "Lions", "players": []},
         "team_b": {"name": "Falcons", "players": []},
         "innings": [
-            {"innings_number": 1, "team": "Lions", "runs": 85, "wickets": 2, "overs": 10.3, "run_rate": 8.1}
+            {
+                "innings_number": 1,
+                "team": "Lions",
+                "runs": 85,
+                "wickets": 2,
+                "overs": 10.3,
+                "run_rate": 8.1,
+            }
         ],
         "phase_breakdowns": [
             PhaseBreakdown(
@@ -322,8 +342,22 @@ def test_get_context_for_commentary_chase():
         "team_a": {"name": "Lions", "players": []},
         "team_b": {"name": "Falcons", "players": []},
         "innings": [
-            {"innings_number": 1, "team": "Lions", "runs": 165, "wickets": 6, "overs": 20.0, "run_rate": 8.25},
-            {"innings_number": 2, "team": "Falcons", "runs": 120, "wickets": 4, "overs": 15.0, "run_rate": 8.0},
+            {
+                "innings_number": 1,
+                "team": "Lions",
+                "runs": 165,
+                "wickets": 6,
+                "overs": 20.0,
+                "run_rate": 8.25,
+            },
+            {
+                "innings_number": 2,
+                "team": "Falcons",
+                "runs": 120,
+                "wickets": 4,
+                "overs": 15.0,
+                "run_rate": 8.0,
+            },
         ],
         "phase_breakdowns": [],
         "player_performances": [],
@@ -372,18 +406,42 @@ def test_get_context_for_commentary_empty_mcp():
 def test_get_context_for_commentary_size():
     """Test that output is reasonably small for LLM use."""
     import json
-    from backend.services.match_context_service import get_context_for_commentary, PhaseBreakdown, PlayerPerformance
+    from backend.services.match_context_service import (
+        get_context_for_commentary,
+        PhaseBreakdown,
+        PlayerPerformance,
+    )
 
     # Create a somewhat populated MCP
     mcp = {
         "match_id": "size-test",
         "format": "T20",
         "overs_per_side": 20,
-        "team_a": {"name": "Lions", "players": [{"id": f"p{i}", "name": f"Player {i}"} for i in range(11)]},
-        "team_b": {"name": "Falcons", "players": [{"id": f"q{i}", "name": f"Player {i}"} for i in range(11)]},
+        "team_a": {
+            "name": "Lions",
+            "players": [{"id": f"p{i}", "name": f"Player {i}"} for i in range(11)],
+        },
+        "team_b": {
+            "name": "Falcons",
+            "players": [{"id": f"q{i}", "name": f"Player {i}"} for i in range(11)],
+        },
         "innings": [
-            {"innings_number": 1, "team": "Lions", "runs": 175, "wickets": 5, "overs": 20.0, "run_rate": 8.75},
-            {"innings_number": 2, "team": "Falcons", "runs": 140, "wickets": 6, "overs": 17.2, "run_rate": 8.08},
+            {
+                "innings_number": 1,
+                "team": "Lions",
+                "runs": 175,
+                "wickets": 5,
+                "overs": 20.0,
+                "run_rate": 8.75,
+            },
+            {
+                "innings_number": 2,
+                "team": "Falcons",
+                "runs": 140,
+                "wickets": 6,
+                "overs": 17.2,
+                "run_rate": 8.08,
+            },
         ],
         "phase_breakdowns": [
             PhaseBreakdown(
@@ -400,7 +458,10 @@ def test_get_context_for_commentary_size():
                 boundaries_6=2,
                 dot_balls=8,
                 extras=2,
-                notable_events=[{"over": i + 0.5, "event_type": "boundary_4", "description": "FOUR"} for i in range(10)],
+                notable_events=[
+                    {"over": i + 0.5, "event_type": "boundary_4", "description": "FOUR"}
+                    for i in range(10)
+                ],
             )
             for phase in ["powerplay", "middle", "death"]
             for inn in [1, 2]
@@ -411,14 +472,18 @@ def test_get_context_for_commentary_size():
                 player_name=f"Player {i}",
                 team="Lions" if i < 6 else "Falcons",
                 role="batter" if i % 2 == 0 else "bowler",
-                batting={"runs": 30 - i, "balls_faced": 20, "strike_rate": 150.0} if i % 2 == 0 else None,
+                batting={"runs": 30 - i, "balls_faced": 20, "strike_rate": 150.0}
+                if i % 2 == 0
+                else None,
                 bowling={"wickets": 2, "runs_conceded": 25, "overs": 4} if i % 2 == 1 else None,
                 impact_score=50.0 - i * 5,
                 tags=["test_tag"],
             )
             for i in range(10)
         ],
-        "callouts": [{"id": f"callout_{i}", "title": f"Callout {i}", "body": "Test body"} for i in range(5)],
+        "callouts": [
+            {"id": f"callout_{i}", "title": f"Callout {i}", "body": "Test body"} for i in range(5)
+        ],
     }
 
     result = get_context_for_commentary(mcp)
@@ -451,7 +516,6 @@ def test_context_package_endpoint_not_found(authed_client, _setup_db):
 @pytest.mark.asyncio
 async def test_context_package_endpoint_success(_setup_db):
     """Test successful context package generation."""
-    from backend.sql_app.database import SessionLocal
 
     async def override_get_db():
         async with SessionLocal() as session:
@@ -509,10 +573,24 @@ async def test_context_package_endpoint_success(_setup_db):
                 batting_team_name="Lions",
                 bowling_team_name="Falcons",
                 deliveries=[
-                    {"over_number": 0, "ball_number": 1, "runs_scored": 4, "striker_id": "p1", "is_wicket": False},
-                    {"over_number": 0, "ball_number": 2, "runs_scored": 6, "striker_id": "p1", "is_wicket": False},
+                    {
+                        "over_number": 0,
+                        "ball_number": 1,
+                        "runs_scored": 4,
+                        "striker_id": "p1",
+                        "is_wicket": False,
+                    },
+                    {
+                        "over_number": 0,
+                        "ball_number": 2,
+                        "runs_scored": 6,
+                        "striker_id": "p1",
+                        "is_wicket": False,
+                    },
                 ],
-                batting_scorecard={"p1": {"runs": 10, "balls": 2, "fours": 1, "sixes": 1, "is_out": False}},
+                batting_scorecard={
+                    "p1": {"runs": 10, "balls": 2, "fours": 1, "sixes": 1, "is_out": False}
+                },
                 bowling_scorecard={},
             )
             session.add(game)
@@ -550,7 +628,10 @@ def test_context_package_requires_auth(client, _setup_db):
 
 def test_summarize_phase_for_case_study_explosive_powerplay():
     """Test phase summarization for explosive powerplay."""
-    from backend.services.match_context_service import summarize_phase_for_case_study, PhaseBreakdown
+    from backend.services.match_context_service import (
+        summarize_phase_for_case_study,
+        PhaseBreakdown,
+    )
 
     phase = PhaseBreakdown(
         phase_id="powerplay_1",
@@ -587,7 +668,10 @@ def test_summarize_phase_for_case_study_explosive_powerplay():
 
 def test_summarize_phase_for_case_study_collapse():
     """Test phase summarization for a middle-overs collapse."""
-    from backend.services.match_context_service import summarize_phase_for_case_study, PhaseBreakdown
+    from backend.services.match_context_service import (
+        summarize_phase_for_case_study,
+        PhaseBreakdown,
+    )
 
     phase = PhaseBreakdown(
         phase_id="middle_2",
@@ -619,7 +703,10 @@ def test_summarize_phase_for_case_study_collapse():
 
 def test_summarize_phase_for_case_study_death_overs():
     """Test phase summarization for death overs acceleration."""
-    from backend.services.match_context_service import summarize_phase_for_case_study, PhaseBreakdown
+    from backend.services.match_context_service import (
+        summarize_phase_for_case_study,
+        PhaseBreakdown,
+    )
 
     phase = PhaseBreakdown(
         phase_id="death_1",
@@ -642,7 +729,9 @@ def test_summarize_phase_for_case_study_death_overs():
 
     # High run rate should be captured
     assert isinstance(result, str)
-    assert "72" in result or "14" in result or "death" in result.lower() or "strong" in result.lower()
+    assert (
+        "72" in result or "14" in result or "death" in result.lower() or "strong" in result.lower()
+    )
     # Should mention sixes
     assert "sixes" in result.lower() or "5" in result
 
@@ -659,14 +748,34 @@ def test_get_context_for_case_study_full_mcp():
         "match_id": "case-study-match",
         "format": "T20",
         "overs_per_side": 20,
-        "team_a": {"name": "Lions", "players": [{"id": f"p{i}", "name": f"Lion {i}"} for i in range(11)]},
-        "team_b": {"name": "Falcons", "players": [{"id": f"q{i}", "name": f"Falcon {i}"} for i in range(11)]},
+        "team_a": {
+            "name": "Lions",
+            "players": [{"id": f"p{i}", "name": f"Lion {i}"} for i in range(11)],
+        },
+        "team_b": {
+            "name": "Falcons",
+            "players": [{"id": f"q{i}", "name": f"Falcon {i}"} for i in range(11)],
+        },
         "toss": {"winner": "Lions", "decision": "bat"},
         "venue": "Test Stadium",
         "result": "Lions won by 25 runs",
         "innings": [
-            {"innings_number": 1, "team": "Lions", "runs": 185, "wickets": 6, "overs": 20.0, "run_rate": 9.25},
-            {"innings_number": 2, "team": "Falcons", "runs": 160, "wickets": 8, "overs": 20.0, "run_rate": 8.0},
+            {
+                "innings_number": 1,
+                "team": "Lions",
+                "runs": 185,
+                "wickets": 6,
+                "overs": 20.0,
+                "run_rate": 9.25,
+            },
+            {
+                "innings_number": 2,
+                "team": "Falcons",
+                "runs": 160,
+                "wickets": 8,
+                "overs": 20.0,
+                "run_rate": 8.0,
+            },
         ],
         "phase_breakdowns": [
             PhaseBreakdown(
@@ -724,7 +833,13 @@ def test_get_context_for_case_study_full_mcp():
                 player_name="Top Scorer",
                 team="Lions",
                 role="batter",
-                batting={"runs": 72, "balls_faced": 48, "strike_rate": 150.0, "fours": 6, "sixes": 3},
+                batting={
+                    "runs": 72,
+                    "balls_faced": 48,
+                    "strike_rate": 150.0,
+                    "fours": 6,
+                    "sixes": 3,
+                },
                 bowling=None,
                 impact_score=75.0,
                 tags=["fifty_plus", "impact_innings"],
@@ -792,7 +907,11 @@ def test_get_context_for_case_study_size():
     # Create a large MCP with many phases and players
     phases = []
     for inn in [1, 2]:
-        for phase, label in [("powerplay", "Powerplay"), ("middle", "Middle Overs"), ("death", "Death Overs")]:
+        for phase, label in [
+            ("powerplay", "Powerplay"),
+            ("middle", "Middle Overs"),
+            ("death", "Death Overs"),
+        ]:
             phases.append(
                 PhaseBreakdown(
                     phase_id=f"{phase}_{inn}",
@@ -821,8 +940,16 @@ def test_get_context_for_case_study_size():
             player_name=f"Player {i}",
             team="Lions" if i < 11 else "Falcons",
             role="batter" if i % 3 == 0 else ("bowler" if i % 3 == 1 else "all_rounder"),
-            batting={"runs": 40 - i, "balls_faced": 30, "strike_rate": 133.3, "fours": 3, "sixes": 1},
-            bowling={"wickets": 2, "runs_conceded": 28, "overs": 4, "economy": 7.0} if i % 2 == 1 else None,
+            batting={
+                "runs": 40 - i,
+                "balls_faced": 30,
+                "strike_rate": 133.3,
+                "fours": 3,
+                "sixes": 1,
+            },
+            bowling={"wickets": 2, "runs_conceded": 28, "overs": 4, "economy": 7.0}
+            if i % 2 == 1
+            else None,
             impact_score=60.0 - i * 2,
             tags=["impact_innings"] if i < 5 else [],
         )
@@ -833,18 +960,41 @@ def test_get_context_for_case_study_size():
         "match_id": "large-case-study",
         "format": "T20",
         "overs_per_side": 20,
-        "team_a": {"name": "Lions", "players": [{"id": f"p{i}", "name": f"Lion {i}"} for i in range(11)]},
-        "team_b": {"name": "Falcons", "players": [{"id": f"q{i}", "name": f"Falcon {i}"} for i in range(11)]},
+        "team_a": {
+            "name": "Lions",
+            "players": [{"id": f"p{i}", "name": f"Lion {i}"} for i in range(11)],
+        },
+        "team_b": {
+            "name": "Falcons",
+            "players": [{"id": f"q{i}", "name": f"Falcon {i}"} for i in range(11)],
+        },
         "toss": {"winner": "Lions", "decision": "bat"},
         "venue": "Test Stadium",
         "result": "Lions won by 15 runs",
         "innings": [
-            {"innings_number": 1, "team": "Lions", "runs": 185, "wickets": 6, "overs": 20.0, "run_rate": 9.25},
-            {"innings_number": 2, "team": "Falcons", "runs": 170, "wickets": 8, "overs": 20.0, "run_rate": 8.5},
+            {
+                "innings_number": 1,
+                "team": "Lions",
+                "runs": 185,
+                "wickets": 6,
+                "overs": 20.0,
+                "run_rate": 9.25,
+            },
+            {
+                "innings_number": 2,
+                "team": "Falcons",
+                "runs": 170,
+                "wickets": 8,
+                "overs": 20.0,
+                "run_rate": 8.5,
+            },
         ],
         "phase_breakdowns": phases,
         "player_performances": players,
-        "callouts": [{"id": f"c{i}", "title": f"Callout {i}", "body": "Description", "severity": "info"} for i in range(10)],
+        "callouts": [
+            {"id": f"c{i}", "title": f"Callout {i}", "body": "Description", "severity": "info"}
+            for i in range(10)
+        ],
     }
 
     result = get_context_for_case_study(mcp)
@@ -899,7 +1049,10 @@ def test_get_context_for_case_study_empty_mcp():
 
 def test_get_context_for_player_profile_batter():
     """Test player profile extraction for a batter."""
-    from backend.services.match_context_service import get_context_for_player_profile, PlayerPerformance
+    from backend.services.match_context_service import (
+        get_context_for_player_profile,
+        PlayerPerformance,
+    )
 
     mcp = {
         "match_id": "player-profile-test",
@@ -971,7 +1124,10 @@ def test_get_context_for_player_profile_batter():
 
 def test_get_context_for_player_profile_bowler():
     """Test player profile extraction for a bowler."""
-    from backend.services.match_context_service import get_context_for_player_profile, PlayerPerformance
+    from backend.services.match_context_service import (
+        get_context_for_player_profile,
+        PlayerPerformance,
+    )
 
     mcp = {
         "match_id": "bowler-test",
@@ -1028,12 +1184,18 @@ def test_get_context_for_player_profile_bowler():
     assert "4 ov" in result["headline_stat"]
 
     # Narrative mentions wickets
-    assert "3" in result["performance_narrative"] or "wicket" in result["performance_narrative"].lower()
+    assert (
+        "3" in result["performance_narrative"]
+        or "wicket" in result["performance_narrative"].lower()
+    )
 
 
 def test_get_context_for_player_profile_all_rounder():
     """Test player profile extraction for an all-rounder."""
-    from backend.services.match_context_service import get_context_for_player_profile, PlayerPerformance
+    from backend.services.match_context_service import (
+        get_context_for_player_profile,
+        PlayerPerformance,
+    )
 
     mcp = {
         "match_id": "allrounder-test",
@@ -1142,12 +1304,18 @@ def test_get_context_for_player_profile_fallback_to_roster():
     assert result["headline_stat"] == "Did not bat/bowl"
 
     # Narrative indicates limited impact
-    assert "limited impact" in result["performance_narrative"].lower() or "Reserve Player" in result["performance_narrative"]
+    assert (
+        "limited impact" in result["performance_narrative"].lower()
+        or "Reserve Player" in result["performance_narrative"]
+    )
 
 
 def test_get_context_for_player_profile_lost_match():
     """Test result determination when player's team lost."""
-    from backend.services.match_context_service import get_context_for_player_profile, PlayerPerformance
+    from backend.services.match_context_service import (
+        get_context_for_player_profile,
+        PlayerPerformance,
+    )
 
     mcp = {
         "match_id": "loss-test",

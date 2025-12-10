@@ -80,9 +80,7 @@ class DecisivePhaseSummary(BaseModel):
     innings: int = Field(description="Innings number (1 or 2)")
     label: str = Field(description="Phase label (Powerplay, Middle Overs, Death Overs)")
     over_range: tuple[float, float] = Field(description="Start and end over (decimal)")
-    impact_score: float = Field(
-        description="Impact score from -100 to 100 (normalized)"
-    )
+    impact_score: float = Field(description="Impact score from -100 to 100 (normalized)")
     narrative: str = Field(description="1-2 sentence narrative of what happened")
 
 
@@ -93,9 +91,7 @@ class MomentumShiftSummary(BaseModel):
     innings: int = Field(description="Innings number")
     over: float = Field(description="Over when shift occurred (decimal)")
     description: str = Field(description="Description of the momentum shift")
-    impact_delta: float = Field(
-        description="Change in win probability or impact (-100 to 100)"
-    )
+    impact_delta: float = Field(description="Change in win probability or impact (-100 to 100)")
     team_benefiting_id: str = Field(description="Team ID that benefited from the shift")
 
 
@@ -106,9 +102,7 @@ class PlayerHighlightSummary(BaseModel):
     player_name: str = Field(description="Player display name")
     team_id: str = Field(description="Team identifier")
     role: str = Field(description="Player role (batter, bowler, allrounder, keeper)")
-    highlight_type: str = Field(
-        description="Type of highlight (innings, spell, fielding, etc.)"
-    )
+    highlight_type: str = Field(description="Type of highlight (innings, spell, fielding, etc.)")
     summary: str = Field(description="Summary of the highlight")
 
 

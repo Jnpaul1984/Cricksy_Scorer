@@ -29,9 +29,7 @@ TrendType = Literal["improving", "declining", "mixed", "flat"]
 class RecentForm(BaseModel):
     """Recent form data for a player."""
 
-    label: str = Field(
-        description="Form label (e.g., 'Excellent', 'Good', 'Average', 'Poor')"
-    )
+    label: str = Field(description="Form label (e.g., 'Excellent', 'Good', 'Average', 'Poor')")
     trend: list[float] = Field(
         default_factory=list,
         description="Normalized performance trend for last N innings (0.0 to 1.0 scale)",
@@ -53,9 +51,7 @@ class PlayerAiInsights(BaseModel):
         default_factory=list,
         description="List of areas for improvement",
     )
-    recent_form: RecentForm = Field(
-        description="Recent form assessment with trend data"
-    )
+    recent_form: RecentForm = Field(description="Recent form assessment with trend data")
     role_tags: list[str] = Field(
         default_factory=list,
         description="Tags describing player's role (e.g., 'top-order', 'death bowler')",

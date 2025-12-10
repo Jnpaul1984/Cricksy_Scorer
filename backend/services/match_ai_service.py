@@ -47,9 +47,7 @@ class MatchAiService:
             ValueError: If the match is not found.
         """
         # Fetch the game
-        result = await self.db.execute(
-            select(models.Game).where(models.Game.id == match_id)
-        )
+        result = await self.db.execute(select(models.Game).where(models.Game.id == match_id))
         game = result.scalar_one_or_none()
 
         if game is None:
@@ -85,9 +83,8 @@ class MatchAiService:
         # Track state for commentary generation
         total_runs = 0
         total_wickets = 0
-        ball_index = 0
 
-        for delivery in deliveries:
+        for ball_index, delivery in enumerate(deliveries):
             over_number = delivery.get("over_number", 0)
             ball_number = delivery.get("ball_number", 0)
             runs = delivery.get("runs_scored", 0) or delivery.get("runs_off_bat", 0)
@@ -99,7 +96,9 @@ class MatchAiService:
                 total_wickets += 1
 
             # Calculate over as decimal (e.g., 5.3)
-            over_decimal = float(over_number) + (ball_number / 10) if ball_number else float(over_number)
+            over_decimal = (
+                float(over_number) + (ball_number / 10) if ball_number else float(over_number)
+            )
 
             # Generate commentary for significant events
             item = self._generate_event_commentary(
@@ -119,8 +118,6 @@ class MatchAiService:
             if item:
                 commentary.append(item)
 
-            ball_index += 1
-
         # Add match state commentary if no deliveries
         if not deliveries:
             commentary.append(
@@ -128,7 +125,10 @@ class MatchAiService:
                     over=None,
                     ball_index=None,
                     event_tags=["match_start"],
-                    text=f"Welcome to the match! {team_a_name} vs {team_b_name}. No deliveries recorded yet.",
+                    text=(
+                        f"Welcome to the match! {team_a_name} vs {team_b_name}. "
+                        "No deliveries recorded yet."
+                    ),
                     tone="neutral",
                     created_at=datetime.now(UTC).isoformat(),
                 )
@@ -163,9 +163,11 @@ class MatchAiService:
         # Wicket - always generate commentary
         if is_wicket:
             event_tags.append("wicket")
-            dismissal_type = delivery.get("dismissal_type", "out")
             tone = "critical"
-            text = f"WICKET! {batting_team} lose their {self._ordinal(total_wickets)} wicket. Score: {total_runs}/{total_wickets}"
+            text = (
+                f"WICKET! {batting_team} lose their {self._ordinal(total_wickets)} "
+                f"wicket. Score: {total_runs}/{total_wickets}"
+            )
 
         # Boundary - six
         elif runs == 6:
@@ -180,7 +182,11 @@ class MatchAiService:
             text = f"FOUR! Excellent shot. {batting_team} move to {total_runs}/{total_wickets}"
 
         # Powerplay end (over 6 in T20, over 10 in ODI)
-        elif phase == "powerplay" and over_number == (6 if overs_limit and overs_limit <= 20 else 10) and ball_index > 0:
+        elif (
+            phase == "powerplay"
+            and over_number == (6 if overs_limit and overs_limit <= 20 else 10)
+            and ball_index > 0
+        ):
             if ball_index % 6 == 5:  # Last ball of the over
                 event_tags.append("powerplay_end")
                 text = f"End of the powerplay! {batting_team}: {total_runs}/{total_wickets}"
@@ -230,10 +236,7 @@ class MatchAiService:
 
     def _ordinal(self, n: int) -> str:
         """Convert number to ordinal string (1st, 2nd, 3rd, etc.)."""
-        if 11 <= n % 100 <= 13:
-            suffix = "th"
-        else:
-            suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        suffix = "th" if 11 <= n % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
         return f"{n}{suffix}"
 
     # -------------------------------------------------------------------------
@@ -257,9 +260,7 @@ class MatchAiService:
             ValueError: If the match is not found.
         """
         # Fetch the game
-        result = await self.db.execute(
-            select(models.Game).where(models.Game.id == match_id)
-        )
+        result = await self.db.execute(select(models.Game).where(models.Game.id == match_id))
         game = result.scalar_one_or_none()
 
         if game is None:
@@ -487,7 +488,10 @@ class MatchAiService:
                     label="Powerplay",
                     over_range=(0.1, 6.0),
                     impact_score=round(pp_impact, 1),
-                    narrative=f"{team_name} scored {pp['runs']} runs for {pp['wickets']} wickets in the powerplay at {pp['run_rate']:.2f} RPO.",
+                    narrative=(
+                        f"{team_name} scored {pp['runs']} runs for {pp['wickets']} "
+                        f"wickets in the powerplay at {pp['run_rate']:.2f} RPO."
+                    ),
                 )
             )
 
@@ -502,14 +506,19 @@ class MatchAiService:
                     label="Middle Overs",
                     over_range=(6.1, 15.0),
                     impact_score=round(mid_impact, 1),
-                    narrative=f"Through the middle overs, {team_name} accumulated {mid['runs']} runs losing {mid['wickets']} wickets.",
+                    narrative=(
+                        f"Through the middle overs, {team_name} accumulated "
+                        f"{mid['runs']} runs losing {mid['wickets']} wickets."
+                    ),
                 )
             )
 
         # Death overs
         death = analysis["death"]
         if death["balls"] > 0:
-            death_impact = min(100, max(-100, (death["run_rate"] - 9.0) * 8 - death["wickets"] * 12))
+            death_impact = min(
+                100, max(-100, (death["run_rate"] - 9.0) * 8 - death["wickets"] * 12)
+            )
             phases.append(
                 DecisivePhaseSummary(
                     phase_id="death_1",
@@ -517,7 +526,10 @@ class MatchAiService:
                     label="Death Overs",
                     over_range=(15.1, 20.0),
                     impact_score=round(death_impact, 1),
-                    narrative=f"In the death overs, {team_name} scored {death['runs']} runs at {death['run_rate']:.2f} RPO.",
+                    narrative=(
+                        f"In the death overs, {team_name} scored {death['runs']} "
+                        f"runs at {death['run_rate']:.2f} RPO."
+                    ),
                 )
             )
 
@@ -541,7 +553,10 @@ class MatchAiService:
                         shift_id=f"shift_{i}",
                         innings=1,
                         over=over,
-                        description=f"Wicket cluster around over {over:.1f} shifted momentum to {bowling_team_name}.",
+                        description=(
+                            f"Wicket cluster around over {over:.1f} shifted "
+                            f"momentum to {bowling_team_name}."
+                        ),
                         impact_delta=round(-15.0 * len(nearby), 1),
                         team_benefiting_id=bowling_team_id,
                     )
@@ -594,7 +609,10 @@ class MatchAiService:
                     team_id=bowling_team_id,
                     role="bowler",
                     highlight_type="spell",
-                    summary=f"Effective spell helping restrict the opposition to {analysis['total_runs']} runs.",
+                    summary=(
+                        f"Effective spell helping restrict the opposition "
+                        f"to {analysis['total_runs']} runs."
+                    ),
                 )
             )
 
@@ -640,7 +658,6 @@ class MatchAiService:
     ) -> str:
         """Generate an overall match summary."""
         team_a = teams[0] if teams else None
-        team_b = teams[1] if len(teams) > 1 else None
 
         if not team_a:
             return "Match summary not available."
@@ -661,9 +678,7 @@ class MatchAiService:
         return " ".join(summary_parts)
 
 
-async def get_match_ai_commentary(
-    db: AsyncSession, match_id: str
-) -> MatchAiCommentaryResponse:
+async def get_match_ai_commentary(db: AsyncSession, match_id: str) -> MatchAiCommentaryResponse:
     """
     Convenience function to get AI commentary for a match.
 

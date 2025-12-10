@@ -151,13 +151,15 @@ async def test_game_with_deliveries(db_session):
         for ball in range(1, 7):
             runs = 4 if (over == 2 and ball == 3) else (6 if (over == 4 and ball == 5) else 1)
             is_wicket = over == 3 and ball == 2
-            deliveries.append({
-                "over_number": over,
-                "ball_number": ball,
-                "runs_scored": runs,
-                "is_wicket": is_wicket,
-                "dismissal_type": "caught" if is_wicket else None,
-            })
+            deliveries.append(
+                {
+                    "over_number": over,
+                    "ball_number": ball,
+                    "runs_scored": runs,
+                    "is_wicket": is_wicket,
+                    "dismissal_type": "caught" if is_wicket else None,
+                }
+            )
 
     game = Game(
         match_type="T20",
