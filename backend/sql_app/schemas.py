@@ -40,6 +40,7 @@ class UserRead(UserBase):
 
 class SubscriptionInfo(BaseModel):
     """User subscription details."""
+
     plan: str
     status: str = "active"
     renewal_date: str | None = None
@@ -49,6 +50,7 @@ class SubscriptionInfo(BaseModel):
 
 class UserProfile(UserBase):
     """Extended user profile returned by /api/me."""
+
     id: str
     name: str | None = None
     is_active: bool

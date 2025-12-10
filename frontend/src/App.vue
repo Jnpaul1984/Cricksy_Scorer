@@ -43,7 +43,7 @@ onMounted(() => {
   // hide the tiny fallback text from index.html once Vue is mounted
   const el = document.getElementById('app')
   if (el) el.classList.add('loaded')
-  
+
   // Add keyboard listener
   window.addEventListener('keydown', handleKeydown)
 })

@@ -81,7 +81,7 @@ const featureColors = [
 // Computed chart data
 const monthlyChartData = computed(() => {
   if (!stats.value) return { labels: [], datasets: [] }
-  
+
   return {
     labels: stats.value.by_month.map(m => m.month),
     datasets: [
@@ -99,7 +99,7 @@ const featurePieData = computed(() => {
   if (!stats.value || stats.value.by_feature.length === 0) {
     return { labels: [], datasets: [] }
   }
-  
+
   return {
     labels: stats.value.by_feature.map(f => formatFeatureName(f.feature)),
     datasets: [

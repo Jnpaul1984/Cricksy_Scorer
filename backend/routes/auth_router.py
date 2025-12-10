@@ -121,7 +121,7 @@ async def login_for_access_token(
 def _get_subscription_info(role: models.RoleEnum) -> schemas.SubscriptionInfo:
     """Build subscription info based on user role."""
     role_str = role.value if hasattr(role, "value") else str(role)
-    
+
     # Token limits by role
     limits = {
         "free": 10000,
@@ -131,15 +131,16 @@ def _get_subscription_info(role: models.RoleEnum) -> schemas.SubscriptionInfo:
         "org_pro": None,  # Unlimited
         "superuser": None,
     }
-    
+
     # Calculate renewal date (next month)
     import datetime
+
     next_month = datetime.date.today().replace(day=1)
     if next_month.month == 12:
         next_month = next_month.replace(year=next_month.year + 1, month=1)
     else:
         next_month = next_month.replace(month=next_month.month + 1)
-    
+
     return schemas.SubscriptionInfo(
         plan=role_str,
         status="active",
@@ -155,7 +156,7 @@ async def read_users_me(
 ) -> schemas.UserProfile:
     """
     Get current user profile with subscription info.
-    
+
     Returns extended user profile including:
     - Basic user info (id, email, role)
     - Display name

@@ -37,12 +37,7 @@ async def list_plans():
     Get all available subscription plans and their features.
     """
     plans = ["free", "player_pro", "coach_pro", "analyst_pro", "org_pro"]
-    return {
-        "plans": [
-            {"key": plan, **get_plan_features(plan)}
-            for plan in plans
-        ]
-    }
+    return {"plans": [{"key": plan, **get_plan_features(plan)} for plan in plans]}
 
 
 @router.get("/plans/{plan}")
@@ -82,5 +77,7 @@ async def check_limit(
     Resources: ai_reports, tokens
     """
     if resource not in ("ai_reports", "tokens"):
-        raise HTTPException(status_code=400, detail="Invalid resource. Use 'ai_reports' or 'tokens'")
+        raise HTTPException(
+            status_code=400, detail="Invalid resource. Use 'ai_reports' or 'tokens'"
+        )
     return await check_usage_limit(db, current_user.id, resource)

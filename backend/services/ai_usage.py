@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 async def log_ai_usage(
-    db: "AsyncSession",
+    db: AsyncSession,
     user_id: str,
     feature: str,
     tokens_used: int,
@@ -72,7 +72,7 @@ async def log_ai_usage(
 
 
 async def get_user_usage_summary(
-    db: "AsyncSession",
+    db: AsyncSession,
     user_id: str,
     feature: str | None = None,
 ) -> dict[str, int]:
@@ -102,7 +102,7 @@ async def get_user_usage_summary(
 
 
 async def get_org_usage_summary(
-    db: "AsyncSession",
+    db: AsyncSession,
     org_id: str,
     feature: str | None = None,
 ) -> dict[str, int]:

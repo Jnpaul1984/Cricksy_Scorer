@@ -331,7 +331,7 @@ watch(() => auth.user, () => {
 
           <div class="billing-note">
             <p>
-              Need help with billing? 
+              Need help with billing?
               <a href="mailto:support@cricksy.com" class="link">Contact Support</a>
             </p>
           </div>

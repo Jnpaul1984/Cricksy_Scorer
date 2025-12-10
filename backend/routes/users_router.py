@@ -19,7 +19,9 @@ async def list_users(
     current_user: Annotated[models.User, Depends(security.get_current_active_user)],
 ) -> list[schemas.UserRead]:
     """List all users. Requires org_pro or superuser role."""
-    user_role = str(current_user.role.value if hasattr(current_user.role, "value") else current_user.role)
+    user_role = str(
+        current_user.role.value if hasattr(current_user.role, "value") else current_user.role
+    )
     if not (current_user.is_superuser or user_role == "org_pro"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 
@@ -45,7 +47,9 @@ async def update_user_role_put(
     current_user: Annotated[models.User, Depends(security.get_current_active_user)],
 ) -> schemas.UserRead:
     """Update user role. Requires org_pro or superuser role."""
-    user_role = str(current_user.role.value if hasattr(current_user.role, "value") else current_user.role)
+    user_role = str(
+        current_user.role.value if hasattr(current_user.role, "value") else current_user.role
+    )
     if not (current_user.is_superuser or user_role == "org_pro"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 

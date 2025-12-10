@@ -1,6 +1,7 @@
 """
 Teams API routes for organization-level team management.
 """
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -41,9 +42,7 @@ async def list_teams(
     elif role in ("org_pro", "coach_pro"):
         # See teams they own or coach
         result = await db.execute(
-            select(Team).where(
-                (Team.owner_user_id == user.id) | (Team.coach_user_id == user.id)
-            )
+            select(Team).where((Team.owner_user_id == user.id) | (Team.coach_user_id == user.id))
         )
     else:
         # Regular users - no teams

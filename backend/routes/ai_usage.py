@@ -67,11 +67,13 @@ async def get_usage_stats(
 ) -> UsageStatsResponse:
     """
     Get AI usage statistics with optional filters.
-    
+
     Requires org_pro or superuser role for org-wide stats.
     Regular users can only see their own usage.
     """
-    user_role = str(current_user.role.value if hasattr(current_user.role, "value") else current_user.role)
+    user_role = str(
+        current_user.role.value if hasattr(current_user.role, "value") else current_user.role
+    )
     is_admin = current_user.is_superuser or user_role == "org_pro"
 
     # Non-admins can only see their own data
@@ -111,7 +113,9 @@ async def get_usage_stats(
     )
     feature_result = await db.execute(feature_query)
     by_feature = [
-        FeatureUsage(feature=row.feature, tokens=int(row.tokens or 0), request_count=int(row.request_count))
+        FeatureUsage(
+            feature=row.feature, tokens=int(row.tokens or 0), request_count=int(row.request_count)
+        )
         for row in feature_result.all()
     ]
 
@@ -121,12 +125,15 @@ async def get_usage_stats(
             func.to_char(models.AiUsageLog.timestamp, "YYYY-MM").label("month"),
             func.sum(models.AiUsageLog.tokens_used).label("tokens"),
             func.count(models.AiUsageLog.id).label("request_count"),
-        ).group_by(func.to_char(models.AiUsageLog.timestamp, "YYYY-MM"))
+        )
+        .group_by(func.to_char(models.AiUsageLog.timestamp, "YYYY-MM"))
         .order_by(func.to_char(models.AiUsageLog.timestamp, "YYYY-MM"))
     )
     month_result = await db.execute(month_query)
     by_month = [
-        MonthlyUsage(month=row.month, tokens=int(row.tokens or 0), request_count=int(row.request_count))
+        MonthlyUsage(
+            month=row.month, tokens=int(row.tokens or 0), request_count=int(row.request_count)
+        )
         for row in month_result.all()
     ]
 
