@@ -18,6 +18,8 @@ export interface AiCallout {
   targetPhaseId?: string
   /** Optional: explicit DOM id to scroll to */
   targetDomId?: string
+  /** Optional: group/innings ID to expand/select before scrolling (e.g. innings index) */
+  targetGroupId?: number
 }
 
 interface Props {

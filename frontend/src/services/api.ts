@@ -656,19 +656,64 @@ export async function getMatchCaseStudy(matchId: string): Promise<MatchCaseStudy
 
 /* ----------------------------- AI Match Summary ----------------------------- */
 
+export interface MatchAiSummaryTeam {
+  team_id: string;
+  team_name: string;
+  result: 'won' | 'lost' | 'tied' | 'no_result';
+  total_runs: number;
+  wickets_lost: number;
+  overs_faced: number;
+  key_stats: string[];
+}
+
+export interface DecisivePhaseSummary {
+  phase_id: string;
+  innings: number;
+  label: string;
+  over_range: [number, number];
+  impact_score: number;
+  narrative: string;
+}
+
+export interface MomentumShiftSummary {
+  shift_id: string;
+  innings: number;
+  over: number;
+  description: string;
+  impact_delta: number;
+  team_benefiting_id: string;
+}
+
+export interface PlayerHighlightSummary {
+  player_id: string;
+  player_name: string;
+  team_id: string;
+  role: string;
+  highlight_type: string;
+  summary: string;
+}
+
 export interface MatchAiSummary {
   match_id: string;
-  headline: string;
-  narrative: string;
-  tactical_themes: string[];
-  player_highlights: string[];
-  tags: string[];
-  generated_at: string;
+  format: string;
+  teams: MatchAiSummaryTeam[];
+  key_themes: string[];
+  decisive_phases: DecisivePhaseSummary[];
+  momentum_shifts: MomentumShiftSummary[];
+  player_highlights: PlayerHighlightSummary[];
+  overall_summary: string;
+  created_at: string;
+  // Legacy fields for backward compatibility
+  headline?: string;
+  narrative?: string;
+  tactical_themes?: string[];
+  tags?: string[];
+  generated_at?: string;
 }
 
 export async function getMatchAiSummary(matchId: string): Promise<MatchAiSummary> {
   return request<MatchAiSummary>(
-    `/analytics/matches/${encodeURIComponent(matchId)}/ai-summary`
+    `/analyst/matches/${encodeURIComponent(matchId)}/ai-summary`
   );
 }
 

@@ -407,12 +407,12 @@
               <p class="cs-panel-subtitle">
                 Cricksy AI's view of how this match was won and where the key turning points were.
               </p>
-              <small v-if="aiSummary?.generated_at" class="cs-ai-timestamp">
-                Updated {{ new Date(aiSummary.generated_at).toLocaleString() }}
+              <small v-if="aiSummary?.created_at" class="cs-ai-timestamp">
+                Updated {{ new Date(aiSummary.created_at).toLocaleString() }}
               </small>
             </div>
-            <BaseBadge variant="primary" :uppercase="true">
-              Beta
+            <BaseBadge variant="neutral" :uppercase="false" class="cs-ai-badge">
+              Experimental
             </BaseBadge>
           </header>
 
@@ -431,7 +431,7 @@
 
           <!-- When no AI summary yet -->
           <div v-else-if="!hasAISummary" class="cs-ai-empty">
-            <p>No AI summary is available for this match yet.</p>
+            <p>No AI summary available yet.</p>
             <p class="cs-ai-empty-hint">
               Once this match has full ball-by-ball data and processing is completed,
               Cricksy AI will generate a narrative summary here.
@@ -439,95 +439,157 @@
           </div>
 
           <!-- When AI summary exists -->
-          <div v-else class="cs-ai-layout">
-            <!-- Left column: Headline + Narrative + themes -->
-            <div class="cs-ai-main">
-              <!-- Headline -->
-              <section v-if="aiHeadline" class="cs-ai-section">
-                <p class="cs-ai-headline">{{ aiHeadline }}</p>
-              </section>
+          <div v-else class="cs-ai-body">
+            <!-- Overall Summary -->
+            <p v-if="aiOverallSummary || aiOverview" class="cs-ai-overall">
+              {{ aiOverallSummary || aiOverview }}
+            </p>
 
-              <!-- Narrative -->
-              <section v-if="aiNarrative" class="cs-ai-section">
-                <h3>Summary</h3>
-                <p class="cs-ai-narrative">{{ aiNarrative }}</p>
-              </section>
+            <!-- Key Themes -->
+            <section v-if="aiKeyThemes.length" class="cs-ai-section">
+              <h3 class="cs-ai-section-title">Key themes</h3>
+              <ul class="cs-ai-theme-list">
+                <li v-for="(theme, idx) in aiKeyThemes" :key="idx">
+                  • {{ theme }}
+                </li>
+              </ul>
+            </section>
 
-              <!-- Fallback overview if no headline/narrative -->
-              <section v-if="!aiHeadline && !aiNarrative && aiOverview" class="cs-ai-section">
-                <h3>Overview</h3>
-                <p class="cs-ai-overview">{{ aiOverview }}</p>
-                <p v-if="aiMomentumSummary" class="cs-ai-momentum">
-                  {{ aiMomentumSummary }}
-                </p>
-              </section>
-
-              <!-- Tactical themes -->
-              <section v-if="aiTacticalThemes.length" class="cs-ai-section">
-                <h3>Tactical Themes</h3>
-                <ul class="cs-ai-bullet-list">
-                  <li v-for="(theme, idx) in aiTacticalThemes" :key="idx">
-                    {{ theme }}
-                  </li>
-                </ul>
-              </section>
-
-              <!-- Key moments -->
-              <section v-if="aiKeyMoments.length" class="cs-ai-section">
-                <h3>Key Moments</h3>
-                <ul class="cs-ai-bullet-list cs-ai-key-moments">
-                  <li v-for="(moment, idx) in aiKeyMoments" :key="idx">
-                    {{ moment }}
-                  </li>
-                </ul>
-              </section>
-            </div>
-
-            <!-- Right column: Player highlights + Tags -->
-            <aside class="cs-ai-side">
-              <!-- Player highlights (now string[]) -->
-              <section v-if="aiPlayerHighlights.length" class="cs-ai-section cs-ai-highlights">
-                <h3>Player Highlights</h3>
-                <ul class="cs-ai-bullet-list">
-                  <li v-for="(highlight, idx) in aiPlayerHighlights" :key="idx">
-                    {{ highlight }}
-                  </li>
-                </ul>
-              </section>
-
-              <!-- Innings summaries (from derived data) -->
-              <section v-if="aiInningsSummaries.length" class="cs-ai-section cs-ai-innings">
-                <h3>Innings Breakdown</h3>
+            <!-- Decisive Phases -->
+            <section v-if="aiDecisivePhases.length" class="cs-ai-section">
+              <h3 class="cs-ai-section-title">Decisive phases</h3>
+              <div class="cs-ai-phases-list">
                 <div
-                  v-for="innings in aiInningsSummaries"
-                  :key="innings.innings"
-                  class="cs-ai-innings-card"
+                  v-for="phase in aiDecisivePhases"
+                  :id="`mc-phase-${phase.phase_id}`"
+                  :key="phase.phase_id"
+                  class="cs-ai-phase-item"
                 >
-                  <div class="cs-ai-innings-meta">
-                    <BaseBadge variant="neutral" :uppercase="false">
-                      Innings {{ innings.innings }}
+                  <div class="cs-ai-phase-header">
+                    <span class="cs-ai-phase-label">{{ phase.label }}</span>
+                    <BaseBadge
+                      :variant="phase.impact_score > 0 ? 'success' : phase.impact_score < 0 ? 'danger' : 'neutral'"
+                      :uppercase="false"
+                      class="cs-ai-phase-badge"
+                    >
+                      {{ phase.impact_score > 0 ? '+' : '' }}{{ phase.impact_score }}
                     </BaseBadge>
-                    <span class="cs-ai-innings-team">{{ innings.team_name }}</span>
                   </div>
-                  <p class="cs-ai-innings-summary">{{ innings.summary }}</p>
+                  <span class="cs-ai-phase-overs">
+                    Overs {{ phase.over_range[0] }}–{{ phase.over_range[1] }} · Innings {{ phase.innings }}
+                  </span>
+                  <p class="cs-ai-phase-narrative">{{ phase.narrative }}</p>
                 </div>
-              </section>
+              </div>
+            </section>
 
-              <!-- Tags -->
-              <section v-if="aiTags.length" class="cs-ai-section cs-ai-tags">
-                <h3>Tags</h3>
-                <div class="cs-ai-tag-list">
-                  <BaseBadge
-                    v-for="tag in aiTags"
-                    :key="tag"
-                    variant="neutral"
-                    class="cs-ai-tag"
-                  >
-                    {{ tag.replace(/_/g, ' ') }}
-                  </BaseBadge>
+            <!-- Player Highlights -->
+            <section v-if="aiPlayerHighlightsRich.length" class="cs-ai-section">
+              <h3 class="cs-ai-section-title">Player highlights</h3>
+              <ul class="cs-ai-player-list">
+                <li
+                  v-for="ph in aiPlayerHighlightsRich"
+                  :key="ph.player_id ?? ph.player_name"
+                  class="cs-ai-player-item"
+                >
+                  <span class="cs-ai-player-name">{{ ph.player_name }}</span>
+                  <span class="cs-ai-player-role">{{ ph.role }} · {{ ph.highlight_type }}</span>
+                  <span class="cs-ai-player-summary">{{ ph.summary }}</span>
+                </li>
+              </ul>
+            </section>
+
+            <!-- Momentum Shifts -->
+            <section v-if="aiMomentumShifts.length" class="cs-ai-section">
+              <h3 class="cs-ai-section-title">Momentum shifts</h3>
+              <ul class="cs-ai-momentum-list">
+                <li
+                  v-for="shift in aiMomentumShifts"
+                  :key="shift.shift_id"
+                  class="cs-ai-momentum-item"
+                >
+                  <span class="cs-ai-momentum-over">Over {{ shift.over }}</span>
+                  <span class="cs-ai-momentum-desc">{{ shift.description }}</span>
+                  <ImpactBar
+                    :value="shift.impact_delta"
+                    :min="-20"
+                    :max="20"
+                    size="sm"
+                    class="cs-ai-momentum-bar"
+                  />
+                </li>
+              </ul>
+            </section>
+
+            <!-- Team Summaries -->
+            <section v-if="aiTeams.length" class="cs-ai-section">
+              <h3 class="cs-ai-section-title">Team summaries</h3>
+              <div class="cs-ai-teams-grid">
+                <div
+                  v-for="team in aiTeams"
+                  :key="team.team_id"
+                  class="cs-ai-team-card"
+                >
+                  <div class="cs-ai-team-header">
+                    <span class="cs-ai-team-name">{{ team.team_name }}</span>
+                    <BaseBadge
+                      :variant="team.result === 'won' ? 'success' : team.result === 'lost' ? 'danger' : 'neutral'"
+                      :uppercase="false"
+                    >
+                      {{ team.result.replace('_', ' ') }}
+                    </BaseBadge>
+                  </div>
+                  <p class="cs-ai-team-score">
+                    {{ team.total_runs }}/{{ team.wickets_lost }} ({{ team.overs_faced }} ov)
+                  </p>
+                  <ul v-if="team.key_stats.length" class="cs-ai-team-stats">
+                    <li v-for="(stat, idx) in team.key_stats" :key="idx">{{ stat }}</li>
+                  </ul>
                 </div>
-              </section>
-            </aside>
+              </div>
+            </section>
+
+            <!-- Fallback: Tactical themes from derived data -->
+            <section v-if="!aiKeyThemes.length && aiTacticalThemes.length" class="cs-ai-section">
+              <h3 class="cs-ai-section-title">Tactical themes</h3>
+              <ul class="cs-ai-theme-list">
+                <li v-for="(theme, idx) in aiTacticalThemes" :key="idx">
+                  • {{ theme }}
+                </li>
+              </ul>
+            </section>
+
+            <!-- Fallback: Innings summaries from derived data -->
+            <section v-if="!aiTeams.length && aiInningsSummaries.length" class="cs-ai-section">
+              <h3 class="cs-ai-section-title">Innings breakdown</h3>
+              <div
+                v-for="innings in aiInningsSummaries"
+                :key="innings.innings"
+                class="cs-ai-innings-card"
+              >
+                <div class="cs-ai-innings-meta">
+                  <BaseBadge variant="neutral" :uppercase="false">
+                    Innings {{ innings.innings }}
+                  </BaseBadge>
+                  <span class="cs-ai-innings-team">{{ innings.team_name }}</span>
+                </div>
+                <p class="cs-ai-innings-summary">{{ innings.summary }}</p>
+              </div>
+            </section>
+
+            <!-- Tags -->
+            <section v-if="aiTags.length" class="cs-ai-section cs-ai-tags-section">
+              <div class="cs-ai-tag-list">
+                <BaseBadge
+                  v-for="tag in aiTags"
+                  :key="tag"
+                  variant="neutral"
+                  class="cs-ai-tag"
+                >
+                  {{ tag.replace(/_/g, ' ') }}
+                </BaseBadge>
+              </div>
+            </section>
           </div>
 
           <!-- Regenerate action -->
@@ -572,7 +634,7 @@
     </template>
   </div>
 </template><script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { BaseCard, BaseButton, BaseBadge, ImpactBar, MiniSparkline, AiCalloutsPanel } from '@/components'
@@ -750,23 +812,15 @@ const aiSummaryData = computed<MatchAISummary | null>(() => {
 
 // Computed helpers for AI summary template - prefer dedicated endpoint, fallback to derived
 const hasAISummary = computed(() => !!aiSummary.value || !!aiSummaryData.value)
-const aiHeadline = computed(() => aiSummary.value?.headline ?? '')
-const aiNarrative = computed(() => aiSummary.value?.narrative ?? '')
-const aiOverview = computed(() => aiSummary.value?.headline || aiSummaryData.value?.overview || '')
-const aiMomentumSummary = computed(() => aiSummaryData.value?.momentum_summary ?? '')
-const aiKeyMoments = computed(() => aiSummaryData.value?.key_moments ?? [])
-const aiTacticalThemes = computed(() => aiSummary.value?.tactical_themes ?? aiSummaryData.value?.tactical_themes ?? [])
+const aiOverallSummary = computed(() => aiSummary.value?.overall_summary ?? '')
+const aiOverview = computed(() => aiSummary.value?.overall_summary || aiSummary.value?.headline || aiSummaryData.value?.overview || '')
+const aiKeyThemes = computed(() => aiSummary.value?.key_themes ?? [])
+const aiTacticalThemes = computed(() => aiSummary.value?.tactical_themes ?? aiSummary.value?.key_themes ?? aiSummaryData.value?.tactical_themes ?? [])
 const aiInningsSummaries = computed(() => aiSummaryData.value?.innings_summaries ?? [])
-const aiPlayerHighlights = computed<string[]>(() => {
-  // Prefer dedicated endpoint's string[] format
-  if (aiSummary.value?.player_highlights?.length) {
-    return aiSummary.value.player_highlights
-  }
-  // Fallback to derived format (convert to strings)
-  return (aiSummaryData.value?.player_highlights ?? []).map(h =>
-    `${h.player_name}: ${h.summary}`
-  )
-})
+const aiDecisivePhases = computed(() => aiSummary.value?.decisive_phases ?? [])
+const aiMomentumShifts = computed(() => aiSummary.value?.momentum_shifts ?? [])
+const aiTeams = computed(() => aiSummary.value?.teams ?? [])
+const aiPlayerHighlightsRich = computed(() => aiSummary.value?.player_highlights ?? [])
 const aiTags = computed(() => aiSummary.value?.tags ?? [])
 
 // Per-match AI callouts derived from case study data
@@ -798,6 +852,7 @@ const matchAiCallouts = computed<AiCallout[]>(() => {
       severity: 'positive' as CalloutSeverity,
       scope: `Powerplay`,
       targetDomId: `phase-${inningsIdx}-powerplay`,
+      targetGroupId: inningsIdx,
     })
   }
 
@@ -814,6 +869,7 @@ const matchAiCallouts = computed<AiCallout[]>(() => {
       severity: 'warning' as CalloutSeverity,
       scope: `Powerplay`,
       targetDomId: `phase-${inningsIdx}-powerplay`,
+      targetGroupId: inningsIdx,
     })
   }
 
@@ -832,6 +888,7 @@ const matchAiCallouts = computed<AiCallout[]>(() => {
       severity: 'warning' as CalloutSeverity,
       scope: `Death overs`,
       targetDomId: `phase-${inningsIdx}-death`,
+      targetGroupId: inningsIdx,
     })
   }
 
@@ -848,6 +905,7 @@ const matchAiCallouts = computed<AiCallout[]>(() => {
       severity: 'positive' as CalloutSeverity,
       scope: `Death overs`,
       targetDomId: `phase-${inningsIdx}-death`,
+      targetGroupId: inningsIdx,
     })
   }
 
@@ -863,6 +921,7 @@ const matchAiCallouts = computed<AiCallout[]>(() => {
       severity: 'info' as CalloutSeverity,
       scope: `Middle overs`,
       targetDomId: `phase-${inningsIdx}-middle`,
+      targetGroupId: inningsIdx,
     })
   }
 
@@ -900,6 +959,89 @@ const matchAiCallouts = computed<AiCallout[]>(() => {
       severity: 'info' as CalloutSeverity,
       scope: 'Full match',
     })
+  }
+
+  // --- Callouts from AI Summary endpoint (decisive phases) ---
+  const aiSummaryVal = aiSummary.value
+  if (aiSummaryVal?.decisive_phases?.length) {
+    // Death overs collapse from AI summary
+    const deathCollapsePhase = aiSummaryVal.decisive_phases.find(
+      (p) => p.label.toLowerCase().includes('death') && p.impact_score < -20
+    )
+    if (deathCollapsePhase) {
+      callouts.push({
+        id: 'ai-death-collapse',
+        title: 'Death overs collapse',
+        body: deathCollapsePhase.narrative,
+        category: 'Batting',
+        severity: 'warning' as CalloutSeverity,
+        scope: deathCollapsePhase.label,
+        targetDomId: `mc-phase-${deathCollapsePhase.phase_id}`,
+      })
+    }
+
+    // Powerplay dominance from AI summary
+    const powerplayDominancePhase = aiSummaryVal.decisive_phases.find(
+      (p) => p.label.toLowerCase().includes('powerplay') && p.impact_score > 20
+    )
+    if (powerplayDominancePhase) {
+      callouts.push({
+        id: 'ai-powerplay-dominance',
+        title: 'Powerplay dominance',
+        body: powerplayDominancePhase.narrative,
+        category: 'Batting',
+        severity: 'positive' as CalloutSeverity,
+        scope: powerplayDominancePhase.label,
+        targetDomId: `mc-phase-${powerplayDominancePhase.phase_id}`,
+      })
+    }
+
+    // Middle overs control from AI summary
+    const middleControlPhase = aiSummaryVal.decisive_phases.find(
+      (p) => p.label.toLowerCase().includes('middle') && Math.abs(p.impact_score) > 15
+    )
+    if (middleControlPhase) {
+      const isPositive = middleControlPhase.impact_score > 0
+      callouts.push({
+        id: 'ai-middle-control',
+        title: isPositive ? 'Middle overs control' : 'Middle overs squeeze',
+        body: middleControlPhase.narrative,
+        category: isPositive ? 'Batting' : 'Bowling',
+        severity: isPositive ? 'positive' as CalloutSeverity : 'warning' as CalloutSeverity,
+        scope: middleControlPhase.label,
+        targetDomId: `mc-phase-${middleControlPhase.phase_id}`,
+      })
+    }
+  }
+
+  // --- Callouts from momentum shifts ---
+  if (aiSummaryVal?.momentum_shifts?.length) {
+    // Multiple momentum swings
+    if (aiSummaryVal.momentum_shifts.length >= 3) {
+      callouts.push({
+        id: 'ai-momentum-swings',
+        title: 'Multiple momentum swings',
+        body: `This match saw ${aiSummaryVal.momentum_shifts.length} key momentum shifts, making it a closely contested affair.`,
+        category: 'Match Flow',
+        severity: 'info' as CalloutSeverity,
+        scope: 'Full match',
+      })
+    }
+
+    // Biggest momentum shift
+    const biggestShift = aiSummaryVal.momentum_shifts.reduce((max, s) =>
+      Math.abs(s.impact_delta) > Math.abs(max.impact_delta) ? s : max
+    , aiSummaryVal.momentum_shifts[0])
+    if (biggestShift && Math.abs(biggestShift.impact_delta) >= 15) {
+      callouts.push({
+        id: 'ai-big-momentum-shift',
+        title: 'Critical turning point',
+        body: `Over ${biggestShift.over}: ${biggestShift.description}`,
+        category: 'Match Flow',
+        severity: biggestShift.impact_delta > 0 ? 'positive' as CalloutSeverity : 'warning' as CalloutSeverity,
+        scope: `Over ${biggestShift.over}`,
+      })
+    }
   }
 
   return callouts
@@ -1064,37 +1206,56 @@ function getPhaseCardDomId(phase: CaseStudyPhase): string {
 
 /**
  * Handle AI callout selection - scroll to the relevant phase card and flash the ImpactBar.
+ * 1) Switch to correct innings tab if targetGroupId is provided
+ * 2) Wait for DOM update with nextTick
+ * 3) Scroll to the phase card
+ * 4) Flash the ImpactBar or highlight the card
  */
 function handleCalloutSelect(callout: AiCallout) {
+  // Switch innings tab first if targetGroupId (innings index) is provided
+  if (typeof callout.targetGroupId === 'number') {
+    selectedInningsIndex.value = callout.targetGroupId
+  }
+
   const domId = callout.targetDomId
   if (!domId) return
 
-  // Small delay to ensure any DOM updates complete (e.g., if accordion was collapsed)
-  window.setTimeout(() => {
+  // Use nextTick to ensure DOM is updated after switching innings tab
+  nextTick(() => {
     const el = document.getElementById(domId)
     if (!el) return
 
     // Scroll smoothly into view
     el.scrollIntoView({
       behavior: 'smooth',
-      block: 'start',
+      block: 'center',
     })
 
-    // Try to flash the ImpactBar inside this phase card
+    // Highlight the whole phase card
+    el.classList.add('mc-phase--highlight')
+
+    // Also flash the ImpactBar inside, if present
     const impactBarWrapper = el.querySelector('.impact-bar-wrapper')
     if (impactBarWrapper) {
-      impactBarWrapper.classList.add('impact-bar-wrapper--flash')
+      impactBarWrapper.classList.add('mc-phase-impact--flash')
       window.setTimeout(() => {
-        impactBarWrapper.classList.remove('impact-bar-wrapper--flash')
-      }, 1800)
-    } else {
-      // Fallback: highlight the whole card
-      el.classList.add('cs-phase-card--highlight')
-      window.setTimeout(() => {
-        el.classList.remove('cs-phase-card--highlight')
-      }, 1800)
+        impactBarWrapper.classList.remove('mc-phase-impact--flash')
+      }, 1200)
     }
-  }, 80)
+
+    // Check if it's an AI summary phase item (different styling)
+    if (el.classList.contains('cs-ai-phase-item')) {
+      el.classList.add('cs-ai-phase-item--highlight')
+      window.setTimeout(() => {
+        el.classList.remove('cs-ai-phase-item--highlight')
+      }, 1400)
+    }
+
+    // Remove highlight after animation
+    window.setTimeout(() => {
+      el.classList.remove('mc-phase--highlight')
+    }, 1400)
+  })
 }
 </script>
 
@@ -1424,6 +1585,20 @@ function handleCalloutSelect(callout: AiCallout) {
   box-shadow: 0 0 0 2px var(--color-primary-soft),
               var(--shadow-card-strong, 0 4px 12px rgba(0, 0, 0, 0.15));
   transform: translateY(-2px);
+}
+
+/* Phase card highlight from callout selection */
+.mc-phase--highlight {
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+  transform: translateY(-1px);
+  transition: box-shadow 160ms ease-out, transform 160ms ease-out;
+}
+
+/* ImpactBar flash from callout selection */
+.mc-phase-impact--flash {
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+  transform: scale(1.02);
+  transition: transform 160ms ease-out, box-shadow 160ms ease-out;
 }
 
 .cs-phase-header {
@@ -1850,6 +2025,226 @@ function handleCalloutSelect(callout: AiCallout) {
 
 .cs-ai-refresh {
   justify-self: start;
+}
+
+/* AI SUMMARY BODY */
+.cs-ai-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cs-ai-overall {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: var(--leading-relaxed);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-primary);
+}
+
+.cs-ai-section-title {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-1);
+}
+
+.cs-ai-theme-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.cs-ai-player-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cs-ai-player-item {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) * 0.5);
+  padding: var(--space-2);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-sm);
+}
+
+.cs-ai-player-name {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.cs-ai-player-role {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-transform: capitalize;
+}
+
+.cs-ai-player-summary {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: var(--leading-relaxed);
+}
+
+/* AI Decisive Phases */
+.cs-ai-phases-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cs-ai-phase-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-sm);
+  transition: box-shadow 200ms ease, transform 200ms ease;
+}
+
+.cs-ai-phase-item--highlight {
+  box-shadow: 0 0 0 2px var(--color-primary-soft),
+              0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  animation: cs-ai-phase-pulse 1.8s ease-out;
+}
+
+@keyframes cs-ai-phase-pulse {
+  0% { box-shadow: 0 0 0 2px var(--color-primary-soft), 0 4px 12px rgba(0, 0, 0, 0.15); }
+  50% { box-shadow: 0 0 0 4px var(--color-primary-soft), 0 6px 16px rgba(0, 0, 0, 0.2); }
+  100% { box-shadow: none; }
+}
+
+.cs-ai-phase-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cs-ai-phase-label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.cs-ai-phase-badge {
+  font-size: var(--text-xs);
+}
+
+.cs-ai-phase-overs {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.cs-ai-phase-narrative {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: var(--leading-relaxed);
+}
+
+/* AI Momentum Shifts */
+.cs-ai-momentum-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cs-ai-momentum-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-sm);
+}
+
+.cs-ai-momentum-over {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.cs-ai-momentum-desc {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.cs-ai-momentum-bar {
+  margin-top: var(--space-1);
+}
+
+/* AI Team Summaries */
+.cs-ai-teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-2);
+}
+
+.cs-ai-team-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-md);
+}
+
+.cs-ai-team-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cs-ai-team-name {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.cs-ai-team-score {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+}
+
+.cs-ai-team-stats {
+  list-style: disc;
+  padding-left: var(--space-4);
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.cs-ai-tags-section {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.cs-ai-badge {
+  flex-shrink: 0;
 }
 
 /* DISMISSAL PLACEHOLDER */
