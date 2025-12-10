@@ -6,13 +6,24 @@ export type UserRole =
   | 'org_pro'
   | 'superuser';
 
+export interface SubscriptionInfo {
+  plan: string;
+  status: string;
+  renewal_date: string | null;
+  tokens_used: number;
+  tokens_limit: number | null;
+}
+
 export interface AuthUser {
   id: string;
   email: string;
+  name?: string | null;
   role: UserRole;
   is_superuser?: boolean;
-  full_name?: string | null;
   is_active?: boolean;
+  org_id?: string | null;
+  subscription?: SubscriptionInfo | null;
+  created_at?: string | null;
   [key: string]: unknown;
 }
 

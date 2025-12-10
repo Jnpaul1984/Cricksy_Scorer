@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 
 import { getStoredToken, setStoredToken } from '@/services/api';
 import { getCurrentUser, logout as authLogout } from '@/services/auth';
-import type { AuthUser, UserRole } from '@/types/auth';
+import type { AuthUser, UserRole, SubscriptionInfo } from '@/types/auth';
 
 export interface AuthState {
   user: AuthUser | null;
@@ -48,6 +48,12 @@ export const useAuthStore = defineStore('auth', {
     isAnalyst: (state) => state.user?.role === 'analyst_pro' || isSuperuser(state),
     isPlayer: (state) => state.user?.role === 'player_pro',
     isSuper: (state) => isSuperuser(state),
+    // New profile-related getters
+    userName: (state): string => state.user?.name || state.user?.email?.split('@')[0] || '',
+    userEmail: (state): string => state.user?.email || '',
+    orgId: (state): string | null => state.user?.org_id || null,
+    subscription: (state): SubscriptionInfo | null => state.user?.subscription || null,
+    planName: (state): string => state.user?.subscription?.plan || state.user?.role || 'free',
   },
   actions: {
     hasAnyRole(roles: UserRole[]): boolean {

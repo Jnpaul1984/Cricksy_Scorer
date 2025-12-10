@@ -22,14 +22,18 @@ from backend.middleware.observability import (  # NEW
     CorrelationIdMiddleware,
 )
 from backend.routes.ai import router as ai_router
+from backend.routes.ai_usage import router as ai_usage_router
 from backend.routes.analyst_pro import router as analyst_pro_router
 from backend.routes.analytics_case_study import router as analytics_case_study_router
 from backend.routes.auth_router import router as auth_router
+from backend.routes.billing import router as billing_router
 
 # Routers
 from backend.routes.coach_pro import router as coach_pro_router
 from backend.routes.dls import router as dls_router
 from backend.routes.fan_mode import router as fan_mode_router
+from backend.routes.feedback import router as feedback_router
+from backend.routes.teams import router as teams_router
 from backend.routes.game_admin import router as game_admin_router
 from backend.routes.gameplay import get_db as gameplay_get_db
 from backend.routes.gameplay import (
@@ -312,7 +316,11 @@ def create_app(
     fastapi_app.include_router(users_router)
     fastapi_app.include_router(testing_router)
     fastapi_app.include_router(ai_router)
+    fastapi_app.include_router(ai_usage_router)
     fastapi_app.include_router(matches_router)
+    fastapi_app.include_router(feedback_router)
+    fastapi_app.include_router(teams_router)
+    fastapi_app.include_router(billing_router)
 
     # Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
     use_in_memory = bool(getattr(settings, "IN_MEMORY_DB", False)) or (

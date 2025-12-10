@@ -14,7 +14,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from alembic import context
-from sql_app.models import Base
+from backend.sql_app.models import Base
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
