@@ -113,7 +113,12 @@ async def analyst_pro_token(db_session):
         role="analyst_pro",
         is_active=True,  # User must be active to pass auth checks
     )
-    # Add to in-memory user cache
+    # Add to database for Postgres tests
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    # Also add to in-memory user cache for in-memory DB tests
     security.add_in_memory_user(user)
 
     # Generate a token - sub should be user.id, email is separate field
