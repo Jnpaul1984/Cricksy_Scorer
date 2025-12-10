@@ -11,6 +11,7 @@ interface Props {
   smooth?: boolean
   highlightLast?: boolean
   variant?: Variant
+  showFill?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -20,6 +21,7 @@ const props = withDefaults(defineProps<Props>(), {
   smooth: false,
   highlightLast: false,
   variant: "default",
+  showFill: false,
 })
 
 // ViewBox constants
@@ -71,6 +73,17 @@ const polylinePoints = computed(() => {
   return normalizedPoints.value.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ")
 })
 
+// Area path for fill (closes polygon to bottom)
+const areaPath = computed(() => {
+  if (normalizedPoints.value.length === 0) return ""
+  const pts = normalizedPoints.value
+  const bottom = VIEW_HEIGHT - PADDING_Y + 2
+  const first = pts[0]
+  const last = pts[pts.length - 1]
+  const linePoints = pts.map((p) => `L${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ")
+  return `M${first.x.toFixed(2)},${bottom} ${linePoints} L${last.x.toFixed(2)},${bottom} Z`
+})
+
 const lastPoint = computed<Point | null>(() => {
   const pts = normalizedPoints.value
   return pts.length > 0 ? pts[pts.length - 1] : null
@@ -100,9 +113,17 @@ const lastPoint = computed<Point | null>(() => {
         class="mini-sparkline__nodata"
       />
 
+      <!-- area fill -->
+      <path
+        v-else-if="showFill"
+        :d="areaPath"
+        class="mini-sparkline__area"
+        :data-variant="variant"
+      />
+
       <!-- line -->
       <polyline
-        v-else
+        v-if="normalizedPoints.length > 0"
         :points="polylinePoints"
         class="mini-sparkline__line"
         :data-variant="variant"
@@ -140,6 +161,27 @@ const lastPoint = computed<Point | null>(() => {
 .mini-sparkline__line {
   fill: none;
   stroke-width: 1.4;
+}
+
+.mini-sparkline__area {
+  stroke: none;
+  opacity: 0.15;
+}
+
+.mini-sparkline__area[data-variant="default"] {
+  fill: var(--color-accent);
+}
+
+.mini-sparkline__area[data-variant="positive"] {
+  fill: var(--color-success);
+}
+
+.mini-sparkline__area[data-variant="negative"] {
+  fill: var(--color-danger);
+}
+
+.mini-sparkline__area[data-variant="neutral"] {
+  fill: var(--color-muted);
 }
 
 .mini-sparkline__line[data-variant="default"] {

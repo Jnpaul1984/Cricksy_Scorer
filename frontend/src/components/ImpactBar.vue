@@ -2,6 +2,7 @@
 import { computed } from "vue"
 
 type Size = "sm" | "md" | "lg"
+type VariantOverride = "neutral" | "good" | "bad" | "warn"
 
 interface Props {
   value: number
@@ -13,17 +14,19 @@ interface Props {
   invert?: boolean
   positiveLabel?: string | null
   negativeLabel?: string | null
+  variant?: VariantOverride | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  min: -10,
-  max: 10,
+  min: -100,
+  max: 100,
   size: "md",
   showLabel: true,
   label: null,
   invert: false,
   positiveLabel: null,
   negativeLabel: null,
+  variant: null,
 })
 
 const clamped = computed(() => Math.min(Math.max(props.value, props.min), props.max))
@@ -33,7 +36,12 @@ const effectiveValue = computed(() => (props.invert ? -clamped.value : clamped.v
 const isPositive = computed(() => effectiveValue.value > 0)
 const isNegative = computed(() => effectiveValue.value < 0)
 
-const variant = computed<"positive" | "negative" | "neutral">(() => {
+// Variant can be explicitly set or auto-detected from value
+const computedVariant = computed<"positive" | "negative" | "neutral" | "good" | "bad" | "warn">(() => {
+  // If explicit variant is provided, use it
+  if (props.variant) return props.variant
+
+  // Auto-detect from value
   if (effectiveValue.value > 0) return "positive"
   if (effectiveValue.value < 0) return "negative"
   return "neutral"
@@ -90,7 +98,7 @@ const sideLabel = computed(() => {
       <div class="impact-bar__zero-marker" />
       <div
         class="impact-bar__fill"
-        :class="['impact-bar__fill--' + variant]"
+        :class="['impact-bar__fill--' + computedVariant]"
         :style="fillStyle"
       />
     </div>
@@ -150,6 +158,19 @@ const sideLabel = computed(() => {
 
 .impact-bar__fill--neutral {
   background: var(--color-surface-alt);
+}
+
+/* Explicit variant overrides */
+.impact-bar__fill--good {
+  background: color-mix(in srgb, var(--color-success) 70%, transparent 30%);
+}
+
+.impact-bar__fill--bad {
+  background: color-mix(in srgb, var(--color-danger) 70%, transparent 30%);
+}
+
+.impact-bar__fill--warn {
+  background: color-mix(in srgb, var(--color-warning) 70%, transparent 30%);
 }
 
 .impact-bar__labels {

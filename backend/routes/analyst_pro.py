@@ -21,6 +21,12 @@ from backend.sql_app.models import (
     PlayerSummary,
 )
 from backend.sql_app.schemas import AnalyticsQuery, AnalyticsResult
+from backend.sql_app.match_ai import MatchAiSummaryResponse
+from backend.services.match_ai_service import MatchAiService
+from backend.services.match_context_service import (
+    generate_match_context_package,
+    MatchContextPackage,
+)
 
 router = APIRouter(prefix="/api/analyst", tags=["analyst_pro"])
 
@@ -321,3 +327,79 @@ async def run_analytics_query(
         raise HTTPException(status_code=400, detail="Unsupported entity")
 
     return AnalyticsResult(query=query, summary_stats=summary_stats, sample_rows=sample_rows)
+
+
+# ---------------------------------------------------------------------------
+# Match AI Summary Endpoint
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/matches/{match_id}/ai-summary",
+    response_model=MatchAiSummaryResponse,
+    summary="Get AI-style summary for a match case study",
+    tags=["analyst_pro", "ai"],
+)
+async def get_match_ai_summary(
+    match_id: str,
+    _current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    db: AsyncSession = Depends(get_db),
+) -> MatchAiSummaryResponse:
+    """
+    Generate an AI-style structured summary for a match.
+
+    This is a MOCK implementation that generates deterministic summaries
+    based on match data. No actual LLM calls are made.
+
+    Returns structured data including:
+    - Team summaries with results and key stats
+    - Decisive phases (powerplay, middle, death)
+    - Momentum shifts based on wicket clusters
+    - Player highlights
+    - Key themes identified in the match
+    - Overall natural language summary
+    """
+    service = MatchAiService(db)
+    try:
+        return await service.build_match_ai_summary(match_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+# ---------------------------------------------------------------------------
+# Match Context Package Endpoint
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/matches/{match_id}/context-package",
+    response_model=None,  # Returns dict (MatchContextPackage TypedDict)
+    summary="Get comprehensive match context package for AI/LLM consumption",
+    tags=["analyst_pro", "ai"],
+)
+async def get_match_context_package(
+    match_id: str,
+    _current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    db: AsyncSession = Depends(get_db),
+) -> MatchContextPackage:
+    """
+    Generate a comprehensive match context package for AI/LLM consumption.
+
+    This endpoint provides a structured JSON representation of a match including:
+    - Match metadata (format, venue, teams, toss, result)
+    - Per-innings phase breakdowns (powerplay, middle, death) with:
+      - Label, team, over range, score summary
+      - Notable events (boundaries, wickets)
+    - Player performances with:
+      - Name, team, role
+      - Batting/bowling stats
+      - Impact scores
+      - Tags (e.g., "death_overs_anchor", "early_wickets", "collapse_trigger")
+    - High-level match callouts for AI insights
+
+    This is ideal for feeding into LLM prompts for match analysis.
+    """
+    try:
+        return await generate_match_context_package(match_id, db)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e

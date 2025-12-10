@@ -74,3 +74,103 @@ async def reset_db(_setup_db):
 
     # Clear in-memory user cache (critical for tests using IN_MEMORY_DB)
     backend.security._in_memory_users.clear()
+
+
+@pytest_asyncio.fixture
+async def db_session(_setup_db):
+    """Provide a database session for tests."""
+    from backend.sql_app.database import get_session_local
+
+    async with get_session_local()() as session:
+        yield session
+
+
+@pytest_asyncio.fixture
+async def async_client(_setup_db):
+    """Provide an async HTTP client for testing endpoints."""
+    from httpx import ASGITransport, AsyncClient
+
+    from backend.app import create_app
+
+    # create_app returns (socketio.ASGIApp, FastAPI) - use the FastAPI app for testing
+    _, fastapi_app = create_app()
+    transport = ASGITransport(app=fastapi_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+
+@pytest_asyncio.fixture
+async def analyst_pro_token(db_session):
+    """Create an analyst_pro user and return their token."""
+    import backend.security as security
+    from backend.sql_app.models import User
+
+    # Create a User model instance with analyst_pro role
+    user = User(
+        id="analyst-test-user-id",
+        email="analyst@test.com",
+        hashed_password=security.get_password_hash("testpass"),
+        role="analyst_pro",
+        is_active=True,  # User must be active to pass auth checks
+    )
+    # Add to in-memory user cache
+    security.add_in_memory_user(user)
+
+    # Generate a token - sub should be user.id, email is separate field
+    token = security.create_access_token({"sub": user.id, "email": user.email, "role": user.role})
+    return token
+
+
+@pytest_asyncio.fixture
+async def test_game(db_session):
+    """Create a test game fixture."""
+    from backend.sql_app.models import Game, GameStatus
+
+    game = Game(
+        match_type="T20",
+        overs_limit=20,
+        team_a={"id": "team_a_id", "name": "Team Alpha", "players": []},
+        team_b={"id": "team_b_id", "name": "Team Beta", "players": []},
+        status=GameStatus.live,
+        deliveries=[],
+    )
+    db_session.add(game)
+    await db_session.commit()
+    await db_session.refresh(game)
+    return game
+
+
+@pytest_asyncio.fixture
+async def test_game_with_deliveries(db_session):
+    """Create a test game with sample deliveries."""
+    from backend.sql_app.models import Game, GameStatus
+
+    # Create sample deliveries for powerplay
+    deliveries = []
+    for over in range(6):
+        for ball in range(1, 7):
+            runs = 4 if (over == 2 and ball == 3) else (6 if (over == 4 and ball == 5) else 1)
+            is_wicket = over == 3 and ball == 2
+            deliveries.append(
+                {
+                    "over_number": over,
+                    "ball_number": ball,
+                    "runs_scored": runs,
+                    "is_wicket": is_wicket,
+                    "dismissal_type": "caught" if is_wicket else None,
+                }
+            )
+
+    game = Game(
+        match_type="T20",
+        overs_limit=20,
+        team_a={"id": "team_a_id", "name": "Team Alpha", "players": []},
+        team_b={"id": "team_b_id", "name": "Team Beta", "players": []},
+        status=GameStatus.live,
+        deliveries=deliveries,
+        result="Team Alpha won by 20 runs",
+    )
+    db_session.add(game)
+    await db_session.commit()
+    await db_session.refresh(game)
+    return game

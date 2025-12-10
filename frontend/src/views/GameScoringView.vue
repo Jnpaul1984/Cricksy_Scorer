@@ -16,7 +16,7 @@ import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
 import { useRoleBadge } from '@/composables/useRoleBadge'
 import { apiService } from '@/services/api'
-import { generateAICommentary, type AICommentaryRequest } from '@/services/api'
+import { generateAICommentary, type AICommentaryRequest, fetchMatchAiCommentary, type MatchCommentaryItem } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { isValidUUID } from '@/utils'
@@ -64,6 +64,33 @@ if (import.meta.env?.DEV) {
 const aiCommentary = ref<string | null>(null)
 const aiLoading = ref(false)
 const aiError = ref<string | null>(null)
+
+// ================== Match AI Commentary state (toggle & panel) ==================
+const matchAiEnabled = ref(false)
+const matchAiCommentary = ref<MatchCommentaryItem[]>([])
+const matchAiLoading = ref(false)
+const matchAiError = ref<string | null>(null)
+
+async function loadMatchAiCommentary() {
+  if (!gameId.value) return
+  matchAiLoading.value = true
+  matchAiError.value = null
+  try {
+    const resp = await fetchMatchAiCommentary(gameId.value)
+    matchAiCommentary.value = resp.commentary
+  } catch (err: unknown) {
+    matchAiError.value = err instanceof Error ? err.message : 'Failed to load match AI commentary'
+  } finally {
+    matchAiLoading.value = false
+  }
+}
+
+// Watch toggle – fetch when enabled
+watch(matchAiEnabled, (enabled) => {
+  if (enabled) {
+    loadMatchAiCommentary()
+  }
+})
 
 // --- Fielder (XI + subs) for wicket events ---
 const selectedFielderId = ref<UUID>('' as UUID)
@@ -280,6 +307,11 @@ async function submitSimple() {
 
     // Generate AI commentary (non-blocking)
     generateCommentary().catch(() => { /* ignore AI errors */ })
+
+    // Refresh match AI commentary if enabled (non-blocking)
+    if (matchAiEnabled.value) {
+      loadMatchAiCommentary().catch(() => { /* ignore match AI errors */ })
+    }
 
     await nextTick()
     maybeRotateFromLastDelivery()
@@ -1603,6 +1635,15 @@ async function confirmChangeBowler(): Promise<void> {
       </div>
 
       <div class="right">
+        <button
+          class="btn"
+          :class="matchAiEnabled ? 'btn-primary' : 'btn-ghost'"
+          title="Toggle Match AI Commentary"
+          @click="matchAiEnabled = !matchAiEnabled"
+        >
+          🤖 AI {{ matchAiEnabled ? 'On' : 'Off' }}
+        </button>
+
         <select v-model="theme" class="sel" aria-label="Theme" name="theme">
           <option value="auto">Theme: Auto</option>
           <option value="dark">Theme: Dark</option>
@@ -2005,6 +2046,59 @@ class="btn btn-ghost"
 
               <p v-else class="ai-placeholder">
                 Commentary will appear here as the match progresses.
+              </p>
+            </div>
+
+            <!-- Match AI Commentary Panel (toggle-driven) -->
+            <div v-if="matchAiEnabled" class="card match-ai-commentary-panel">
+              <div class="ai-header">
+                <h4>🤖 Match AI Commentary</h4>
+                <button
+                  class="btn btn-ghost ai-regen-btn"
+                  title="Refresh commentary"
+                  :disabled="matchAiLoading"
+                  @click="loadMatchAiCommentary"
+                >
+                  ↻
+                </button>
+              </div>
+
+              <div v-if="matchAiLoading" class="ai-skeleton">
+                <div class="ai-skeleton-line" />
+                <div class="ai-skeleton-line short" />
+                <div class="ai-skeleton-line" />
+              </div>
+
+              <div v-else-if="matchAiError" class="ai-error">
+                <p class="ai-error-text">{{ matchAiError }}</p>
+                <button class="btn btn-ghost" @click="loadMatchAiCommentary">
+                  Try Again
+                </button>
+              </div>
+
+              <div v-else-if="matchAiCommentary.length" class="match-ai-list">
+                <div
+                  v-for="(item, idx) in matchAiCommentary"
+                  :key="idx"
+                  class="match-ai-item"
+                  :class="'tone-' + item.tone"
+                >
+                  <div class="match-ai-item-header">
+                    <span v-if="item.over !== null" class="over-badge">
+                      Over {{ item.over }}<template v-if="item.ball_index !== null">.{{ item.ball_index }}</template>
+                    </span>
+                    <span
+                      v-for="tag in item.event_tags"
+                      :key="tag"
+                      class="event-tag"
+                    >{{ tag }}</span>
+                  </div>
+                  <p class="match-ai-item-text">{{ item.text }}</p>
+                </div>
+              </div>
+
+              <p v-else class="ai-placeholder">
+                No commentary available. Score some deliveries!
               </p>
             </div>
 
@@ -2657,6 +2751,77 @@ class="btn btn-ghost"
   font-size: var(--text-sm);
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+/* Match AI Commentary Panel */
+.match-ai-commentary-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.match-ai-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.match-ai-item {
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-border);
+  background: var(--color-surface-subtle);
+}
+
+.match-ai-item.tone-hype {
+  border-left-color: var(--color-success);
+  background: var(--color-success-soft, rgba(34, 197, 94, 0.1));
+}
+
+.match-ai-item.tone-critical {
+  border-left-color: var(--color-warning);
+  background: var(--color-warning-soft, rgba(245, 158, 11, 0.1));
+}
+
+.match-ai-item.tone-neutral {
+  border-left-color: var(--color-primary);
+}
+
+.match-ai-item-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+}
+
+.over-badge {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  background: var(--color-primary);
+  color: var(--color-on-primary, #fff);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+.event-tag {
+  font-size: var(--text-xs);
+  background: var(--color-border-subtle);
+  color: var(--color-text-muted);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+.match-ai-item-text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text);
 }
 
 /* Subs card */
