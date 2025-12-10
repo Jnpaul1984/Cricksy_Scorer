@@ -695,6 +695,32 @@ export async function getAnalystMatches(): Promise<AnalystMatchListResponse> {
 
 /* ----------------------------- AI Commentary ----------------------------- */
 
+/* Match AI Commentary (GET /matches/{match_id}/ai-commentary) */
+
+export interface MatchCommentaryItem {
+  over: number | null;
+  ball_index: number | null;
+  event_tags: string[];
+  text: string;
+  tone: 'neutral' | 'hype' | 'critical';
+  created_at: string;
+}
+
+export interface MatchAiCommentaryResponse {
+  match_id: string;
+  commentary: MatchCommentaryItem[];
+}
+
+export async function fetchMatchAiCommentary(
+  matchId: string
+): Promise<MatchAiCommentaryResponse> {
+  return request<MatchAiCommentaryResponse>(
+    `/matches/${encodeURIComponent(matchId)}/ai-commentary`
+  );
+}
+
+/* Single Delivery AI Commentary (POST /ai/commentary) */
+
 export interface AICommentaryRequest {
   match_id: string;
   over: number;
