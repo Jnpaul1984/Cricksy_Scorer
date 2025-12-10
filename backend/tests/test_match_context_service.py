@@ -4,6 +4,7 @@ Tests for the match context package service.
 
 import os
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
@@ -30,8 +31,8 @@ def client() -> TestClient:
     return TestClient(fastapi_app)
 
 
-@pytest.fixture
-def authed_client(client, analyst_pro_token) -> TestClient:
+@pytest_asyncio.fixture
+async def authed_client(client, analyst_pro_token) -> TestClient:
     """Create a TestClient with analyst auth header."""
     client.headers["Authorization"] = f"Bearer {analyst_pro_token}"
     return client
@@ -506,7 +507,8 @@ def test_get_context_for_commentary_size():
 # ---------------------------------------------------------------------------
 
 
-def test_context_package_endpoint_not_found(authed_client, _setup_db):
+@pytest.mark.asyncio
+async def test_context_package_endpoint_not_found(authed_client, _setup_db):
     """Test 404 for non-existent match."""
     response = authed_client.get("/api/analyst/matches/nonexistent/context-package")
     assert response.status_code == 404
