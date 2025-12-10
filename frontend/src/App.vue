@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
-
 
 import logoAvif1024 from '@/assets/optimized/logo-w1024.avif'
 import logoWebp1024 from '@/assets/optimized/logo-w1024.webp'
@@ -11,14 +10,46 @@ import logoAvif480 from '@/assets/optimized/logo-w480.avif'
 import logoWebp480 from '@/assets/optimized/logo-w480.webp'
 import logoAvif768 from '@/assets/optimized/logo-w768.avif'
 import logoWebp768 from '@/assets/optimized/logo-w768.webp'
+import FeedbackModal from '@/components/FeedbackModal.vue'
+import QuotaWarningBanner from '@/components/QuotaWarningBanner.vue'
 import { useAuthStore } from '@/stores/authStore'
 
 const isDev = computed(() => import.meta.env.DEV)
+
+// Feedback modal state
+const showFeedbackModal = ref(false)
+
+function handleFeedbackSubmit(payload: { text: string; email?: string }) {
+  // TODO: Send feedback to backend API
+  console.log('Feedback submitted:', payload)
+  // For now, just log it - will integrate with backend later
+}
+
+// Keyboard shortcut: "F" to open feedback modal
+function handleKeydown(e: KeyboardEvent) {
+  // Don't trigger if user is typing in an input/textarea
+  const target = e.target as HTMLElement
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+    return
+  }
+  // "F" key opens feedback modal
+  if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault()
+    showFeedbackModal.value = true
+  }
+}
 
 onMounted(() => {
   // hide the tiny fallback text from index.html once Vue is mounted
   const el = document.getElementById('app')
   if (el) el.classList.add('loaded')
+
+  // Add keyboard listener
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
 })
 const logoSources = [
   { width: 480, avif: logoAvif480, webp: logoWebp480 },
@@ -67,8 +98,14 @@ const showAnalystNav = computed(() => auth.isAnalyst || auth.isOrg || auth.isSup
         <RouterLink v-if="showAnalystNav" to="/analyst/workspace">Analyst</RouterLink>
         <RouterLink to="/pricing">Pricing</RouterLink>
         <RouterLink v-if="isDev" to="/design-system" class="nav-dev">Design System</RouterLink>
+        <button class="feedback-btn" title="Send Feedback (F)" @click="showFeedbackModal = true">
+          💬 Feedback
+        </button>
       </nav>
     </header>
+
+    <!-- AI Quota Warning Banner -->
+    <QuotaWarningBanner />
 
     <main class="app-main">
       <RouterView />
@@ -77,6 +114,12 @@ const showAnalystNav = computed(() => auth.isAnalyst || auth.isOrg || auth.isSup
     <footer class="app-footer">
       © {{ new Date().getFullYear() }} Cricksy Scorer. All rights reserved.
     </footer>
+
+    <!-- Feedback Modal -->
+    <FeedbackModal
+      v-model:visible="showFeedbackModal"
+      @submitted="handleFeedbackSubmit"
+    />
   </div>
 </template>
 
@@ -135,6 +178,27 @@ const showAnalystNav = computed(() => auth.isAnalyst || auth.isOrg || auth.isSup
 .nav-dev {
   opacity: 0.6;
   font-size: 0.85em;
+}
+
+/* Feedback button */
+.feedback-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 6px;
+  color: #93c5fd;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.feedback-btn:hover {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #bfdbfe;
 }
 
 /* Main */

@@ -134,6 +134,38 @@ const router = createRouter({
       component: () => import('@/views/TournamentDetailView.vue'),
     },
 
+    // --- Team Management routes ---
+    {
+      path: '/teams',
+      name: 'team-management',
+      component: () => import('@/views/TeamManagementView.vue'),
+      meta: { requiresAuth: true, title: 'Team Management — Cricksy' },
+    },
+
+    // --- Organization Management route ---
+    {
+      path: '/org-management',
+      name: 'org-management',
+      component: () => import('@/views/OrgManagementView.vue'),
+      meta: { requiresAuth: true, title: 'Organization Management — Cricksy' },
+    },
+
+    // --- AI Usage Dashboard route ---
+    {
+      path: '/usage',
+      name: 'usage-dashboard',
+      component: () => import('@/views/UsageDashboardView.vue'),
+      meta: { requiresAuth: true, title: 'AI Usage Dashboard — Cricksy' },
+    },
+
+    // --- Settings route ---
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('@/views/SettingsView.vue'),
+      meta: { requiresAuth: true, title: 'Settings — Cricksy' },
+    },
+
     // --- Coach routes ---
     {
       path: '/coach/dashboard',

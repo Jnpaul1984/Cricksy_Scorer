@@ -188,6 +188,40 @@ async def get_current_active_user(
     return current_user
 
 
+# Optional OAuth2 scheme that doesn't require token
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
+
+
+async def get_current_user_optional(
+    token: Annotated[str | None, Depends(oauth2_scheme_optional)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> models.User | None:
+    """Get current user if authenticated, otherwise return None."""
+    if token is None:
+        return None
+    try:
+        payload = _jwt_decode(token, settings.app_secret_key)
+        user_id: str | None = payload.get("sub")
+        email: str | None = payload.get("email")
+        if user_id is None:
+            return None
+        token_data = schemas.TokenData(user_id=user_id, email=email)
+    except JWTError:
+        return None
+
+    stmt = select(models.User).where(models.User.id == token_data.user_id)
+    res = await db.execute(stmt)
+    user = res.scalar_one_or_none()
+    if user is None:
+        # If running in in-memory mode allow fallback to the in-memory cache by email
+        in_memory_enabled = False
+        with contextlib.suppress(Exception):
+            in_memory_enabled = bool(getattr(settings, "IN_MEMORY_DB", False))
+        if in_memory_enabled and token_data.email:
+            user = find_in_memory_user_by_email(token_data.email)
+    return user
+
+
 def require_roles(allowed_roles: Sequence[str]):
     allowed = {getattr(role, "value", role) for role in allowed_roles}
 

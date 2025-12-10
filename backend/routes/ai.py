@@ -8,15 +8,19 @@ This module provides API endpoints for:
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend import security
 from backend.services.ai_commentary import (
     AiCommentaryResponse,
     DeliveryContextRequest,
     build_delivery_commentary,
 )
-from backend.sql_app import crud
+from backend.services.ai_usage import log_ai_usage
+from backend.sql_app import crud, models
 from backend.sql_app.database import get_db
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -25,7 +29,8 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 @router.post("/commentary", response_model=AiCommentaryResponse)
 async def generate_ai_commentary(
     payload: DeliveryContextRequest,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(security.get_current_user_optional)] = None,
 ) -> AiCommentaryResponse:
     """
     Generate AI-style commentary for a specific delivery.
@@ -57,7 +62,20 @@ async def generate_ai_commentary(
         )
 
     try:
-        return build_delivery_commentary(game, payload)
+        result = build_delivery_commentary(game, payload)
+
+        # Log AI usage if user is authenticated
+        if current_user:
+            await log_ai_usage(
+                db=db,
+                user_id=str(current_user.id),
+                feature="delivery_commentary",
+                tokens_used=50,  # Approximate token count for rule-based generation
+                context_id=payload.game_id,
+                model_name="rule-based",
+            )
+
+        return result
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

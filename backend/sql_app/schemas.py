@@ -38,6 +38,31 @@ class UserRead(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SubscriptionInfo(BaseModel):
+    """User subscription details."""
+
+    plan: str
+    status: str = "active"
+    renewal_date: str | None = None
+    tokens_used: int = 0
+    tokens_limit: int | None = None
+
+
+class UserProfile(UserBase):
+    """Extended user profile returned by /api/me."""
+
+    id: str
+    name: str | None = None
+    is_active: bool
+    is_superuser: bool
+    role: RoleEnum
+    org_id: str | None = None
+    subscription: SubscriptionInfo | None = None
+    created_at: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -918,6 +943,93 @@ class LeaderboardResponse(BaseModel):
 
     metric: str
     entries: list[LeaderboardEntry]
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ===== Feedback Schemas =====
+
+
+class FeedbackCreate(BaseModel):
+    """Request schema for submitting user feedback."""
+
+    text: str = Field(..., min_length=1, max_length=5000)
+    email: str | None = Field(default=None, max_length=255)
+    userId: str | None = Field(default=None, alias="userId")
+    pageRoute: str | None = Field(default=None, alias="pageRoute")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class FeedbackRead(BaseModel):
+    """Response schema for feedback submission."""
+
+    id: str
+    text: str
+    email: str | None = None
+    user_id: str | None = None
+    user_role: str | None = None
+    page_route: str | None = None
+    created_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ===== Team Management Schemas =====
+
+
+class TeamPlayer(BaseModel):
+    """A player in a team."""
+
+    id: str
+    name: str
+
+
+class TeamCompetition(BaseModel):
+    """A competition the team is enrolled in."""
+
+    id: str
+    name: str
+
+
+class TeamCreate(BaseModel):
+    """Request schema for creating a team."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    home_ground: str | None = Field(default=None, max_length=255)
+    season: str | None = Field(default=None, max_length=50)
+    coach_name: str | None = Field(default=None, max_length=255)
+    coach_id: str | None = None
+    players: list[TeamPlayer] = Field(default_factory=list)
+    competitions: list[TeamCompetition] = Field(default_factory=list)
+
+
+class TeamUpdate(BaseModel):
+    """Request schema for updating a team."""
+
+    name: str | None = Field(default=None, max_length=255)
+    home_ground: str | None = None
+    season: str | None = None
+    coach_name: str | None = None
+    coach_id: str | None = None
+    players: list[TeamPlayer] | None = None
+    competitions: list[TeamCompetition] | None = None
+
+
+class TeamRead(BaseModel):
+    """Response schema for a team."""
+
+    id: str
+    name: str
+    home_ground: str | None = None
+    season: str | None = None
+    owner_user_id: str
+    coach_user_id: str | None = None
+    coach_name: str | None = None
+    players: list[TeamPlayer] = Field(default_factory=list)
+    competitions: list[TeamCompetition] = Field(default_factory=list)
+    created_at: dt.datetime
     updated_at: dt.datetime
 
     model_config = ConfigDict(from_attributes=True)

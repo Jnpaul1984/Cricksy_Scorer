@@ -118,10 +118,51 @@ async def login_for_access_token(
     return schemas.Token(access_token=access_token, token_type="bearer")  # nosec B106
 
 
-@router.get("/me", response_model=schemas.UserRead)
+def _get_subscription_info(role: models.RoleEnum) -> schemas.SubscriptionInfo:
+    """Build subscription info based on user role."""
+    role_str = role.value if hasattr(role, "value") else str(role)
+
+    # Token limits by role
+    limits = {
+        "free": 10000,
+        "player_pro": 100000,
+        "coach_pro": 100000,
+        "analyst_pro": 100000,
+        "org_pro": None,  # Unlimited
+        "superuser": None,
+    }
+
+    # Calculate renewal date (next month)
+    import datetime
+
+    next_month = datetime.date.today().replace(day=1)
+    if next_month.month == 12:
+        next_month = next_month.replace(year=next_month.year + 1, month=1)
+    else:
+        next_month = next_month.replace(month=next_month.month + 1)
+
+    return schemas.SubscriptionInfo(
+        plan=role_str,
+        status="active",
+        renewal_date=next_month.isoformat() if role_str != "free" else None,
+        tokens_used=0,  # Would be fetched from usage logs in production
+        tokens_limit=limits.get(role_str),
+    )
+
+
+@router.get("/me", response_model=schemas.UserProfile)
 async def read_users_me(
     current_user: Annotated[models.User, Depends(security.get_current_active_user)],
-) -> schemas.UserRead:
+) -> schemas.UserProfile:
+    """
+    Get current user profile with subscription info.
+
+    Returns extended user profile including:
+    - Basic user info (id, email, role)
+    - Display name
+    - Organization ID (if applicable)
+    - Subscription details with token limits
+    """
     # Serialize explicitly to avoid ResponseValidationError when some ORM attributes
     # are None (can happen for in-memory/dev users). Coerce types to match
     # pydantic schema expectations (bools/strings).
@@ -138,12 +179,29 @@ async def read_users_me(
     except Exception:
         role_param = models.RoleEnum.free
 
-    return schemas.UserRead(
+    # Get name (use email prefix as fallback)
+    email = getattr(current_user, "email", "")
+    name = getattr(current_user, "name", None) or getattr(current_user, "full_name", None)
+    if not name and email:
+        name = email.split("@")[0]
+
+    # Get org_id if available
+    org_id = getattr(current_user, "org_id", None)
+
+    # Get created_at
+    created_at = getattr(current_user, "created_at", None)
+    created_at_str = created_at.isoformat() if created_at else None
+
+    return schemas.UserProfile(
         id=str(getattr(current_user, "id", "")),
-        email=getattr(current_user, "email", ""),
+        email=email,
+        name=name,
         is_active=bool(getattr(current_user, "is_active", False)),
         is_superuser=bool(getattr(current_user, "is_superuser", False)),
         role=role_param,
+        org_id=str(org_id) if org_id else None,
+        subscription=_get_subscription_info(role_param),
+        created_at=created_at_str,
     )
 
 

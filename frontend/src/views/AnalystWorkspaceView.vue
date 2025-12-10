@@ -189,8 +189,8 @@
 
                 <div
                   v-for="match in filteredMatches"
-                  :key="match.id"
                   :id="`aw-match-${match.id}`"
+                  :key="match.id"
                   class="aw-matches-row"
                   @click="openMatchCaseStudy(match.id)"
                 >

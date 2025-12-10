@@ -949,3 +949,115 @@ class Fixture(Base):
         Index("ix_fixtures_status", "status"),
         Index("ix_fixtures_scheduled_date", "scheduled_date"),
     )
+
+
+# ===== Feedback Submissions =====
+
+
+class FeedbackSubmission(Base):
+    __tablename__ = "feedback_submissions"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str | None] = mapped_column(String, nullable=True)
+    user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    user_role: Mapped[str | None] = mapped_column(String, nullable=True)
+    page_route: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (Index("ix_feedback_submissions_created_at", "created_at"),)
+
+
+# ===== Team Management =====
+
+
+class Team(Base):
+    """Standalone team entity for organization-level team management."""
+
+    __tablename__ = "teams"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    home_ground: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    season: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    owner_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    coach_user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    coach_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    players: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )  # [{id, name}, ...]
+    competitions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )  # [{id, name}, ...]
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index("ix_teams_name", "name"),
+        Index("ix_teams_owner", "owner_user_id"),
+    )
+
+
+class AiUsageLog(Base):
+    """Tracks AI/LLM feature usage for billing and analytics."""
+
+    __tablename__ = "ai_usage_logs"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    org_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, index=True
+    )  # Optional org association for billing
+    feature: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True
+    )  # e.g. "match_summary", "player_insights", "tactical_advice"
+    tokens_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    context_id: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # Optional reference (game_id, player_id, etc.)
+    model_name: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # e.g. "gpt-4", "claude-3"
+    timestamp: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    __table_args__ = (
+        Index("ix_ai_usage_user_feature", "user_id", "feature"),
+        Index("ix_ai_usage_org_timestamp", "org_id", "timestamp"),
+    )
