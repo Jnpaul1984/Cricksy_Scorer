@@ -16,7 +16,7 @@ import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
 import { useRoleBadge } from '@/composables/useRoleBadge'
 import { apiService } from '@/services/api'
-import { generateAICommentary, type AICommentaryRequest, fetchMatchAiCommentary, type MatchAiCommentaryItem } from '@/services/api'
+import { generateAICommentary, type AICommentaryRequest, fetchMatchAiCommentary, type MatchCommentaryItem } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { isValidUUID } from '@/utils'
@@ -67,7 +67,7 @@ const aiError = ref<string | null>(null)
 
 // ================== Match AI Commentary state (toggle & panel) ==================
 const matchAiEnabled = ref(false)
-const matchAiCommentary = ref<MatchAiCommentaryItem[]>([])
+const matchAiCommentary = ref<MatchCommentaryItem[]>([])
 const matchAiLoading = ref(false)
 const matchAiError = ref<string | null>(null)
 
