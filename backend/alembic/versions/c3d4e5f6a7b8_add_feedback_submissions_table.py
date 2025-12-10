@@ -22,21 +22,29 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.create_table(
         "feedback_submissions",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.String(), nullable=False),
         sa.Column("text", sa.Text(), nullable=False),
         sa.Column("email", sa.String(length=255), nullable=True),
-        sa.Column("user_id", sa.Integer(), nullable=True),
+        sa.Column("user_id", sa.String(), nullable=True),
         sa.Column("user_role", sa.String(length=50), nullable=True),
-        sa.Column("page_context", sa.String(length=255), nullable=True),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("page_route", sa.String(length=255), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        op.f("ix_feedback_submissions_id"), "feedback_submissions", ["id"], unique=False
+        "ix_feedback_submissions_created_at",
+        "feedback_submissions",
+        ["created_at"],
+        unique=False,
     )
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_feedback_submissions_id"), table_name="feedback_submissions")
+    op.drop_index("ix_feedback_submissions_created_at", table_name="feedback_submissions")
     op.drop_table("feedback_submissions")
