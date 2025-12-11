@@ -32,5 +32,9 @@ RUN pip install --default-timeout=600 --no-cache-dir -r requirements.txt
 # Preserve the backend package structure inside the container
 COPY backend/ ./backend
 
-# Start the FastAPI app from the backend package
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Copy and set entrypoint script
+COPY backend/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
+# Start the FastAPI app via entrypoint (runs migrations first)
+ENTRYPOINT ["./entrypoint.sh"]
