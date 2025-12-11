@@ -74,6 +74,12 @@ async def health_admin(
             text("SELECT email, LEFT(hashed_password, 20) as hash_prefix FROM users LIMIT 1")
         )
         row = result.fetchone()
+
+        # Get alembic version
+        version_result = await db.execute(text("SELECT version_num FROM alembic_version"))
+        version_row = version_result.fetchone()
+        alembic_version = version_row[0] if version_row else "unknown"
+
         if row:
             return {
                 "status": "ok",
@@ -84,7 +90,8 @@ async def health_admin(
                 else "bcrypt"
                 if row[1].startswith("$")
                 else "unknown",
+                "alembic_version": alembic_version,
             }
-        return {"status": "no_users"}
+        return {"status": "no_users", "alembic_version": alembic_version}
     except Exception as e:
         return {"status": "error", "error": str(e)}
