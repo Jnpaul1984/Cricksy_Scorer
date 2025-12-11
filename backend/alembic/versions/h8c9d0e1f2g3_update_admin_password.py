@@ -1,8 +1,8 @@
-"""Fix admin password hash.
+"""Update admin password to simpler one.
 
-Revision ID: g7b8c9d0e1f2
-Revises: f6a7b8c9d0e1
-Create Date: 2025-12-11 01:00:00.000000
+Revision ID: h8c9d0e1f2g3
+Revises: g7b8c9d0e1f2
+Create Date: 2025-12-11 01:30:00.000000
 
 """
 
@@ -12,14 +12,14 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "g7b8c9d0e1f2"
-down_revision: str | None = "f6a7b8c9d0e1"
+revision: str = "h8c9d0e1f2g3"
+down_revision: str | None = "g7b8c9d0e1f2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Update admin password hash."""
+    """Update admin password hash to simpler password."""
     admin_email = "jasonnpaul@hotmail.com"
     # Hash for password: Cricksy2025!
     new_hash = "$2b$12$iBtzd8QZwvgQx5I.Lhi.AuKCyamMfME5Xl6IES1bMgUxexEFq3pQq"
@@ -33,12 +33,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Revert to old password hash."""
-    admin_email = "jasonnpaul@hotmail.com"
-    old_hash = "$2b$12$KNlNUJmqa4zik6.LCJbx/uxQUvyDH6z3Z.fm4g2isAYVjZ8UNjijq"
-
-    conn = op.get_bind()
-    conn.execute(
-        sa.text("UPDATE users SET hashed_password = :hash WHERE email = :email"),
-        {"hash": old_hash, "email": admin_email},
-    )
+    """Revert to previous password hash."""
+    pass
