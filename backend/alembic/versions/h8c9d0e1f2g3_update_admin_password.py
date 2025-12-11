@@ -21,8 +21,10 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Update admin password hash to simpler password."""
     admin_email = "jasonnpaul@hotmail.com"
-    # Hash for password: Cricksy2025!
-    new_hash = "$2b$12$iBtzd8QZwvgQx5I.Lhi.AuKCyamMfME5Xl6IES1bMgUxexEFq3pQq"
+    # PBKDF2-SHA256 hash for password: Cricksy2025!
+    # Format: base64url(salt):base64url(hash)
+    # Generated with: backend.security.get_password_hash('Cricksy2025!')
+    new_hash = "929K1lfoqJAoReuzNqIanA:mb4Sgb6tG88hgnpv-uxzHmNwb3PApHXzTlgBhR-mcik"
 
     conn = op.get_bind()
     conn.execute(
