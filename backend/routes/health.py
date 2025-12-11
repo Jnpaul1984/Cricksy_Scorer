@@ -62,3 +62,29 @@ async def health_db(
             "table_count": 0,
             "users_count": 0,
         }
+
+
+@router.get("/health/admin")
+async def health_admin(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, str]:
+    """Check admin user configuration (debug endpoint)."""
+    try:
+        result = await db.execute(
+            text("SELECT email, LEFT(hashed_password, 20) as hash_prefix FROM users LIMIT 1")
+        )
+        row = result.fetchone()
+        if row:
+            return {
+                "status": "ok",
+                "email": row[0],
+                "hash_prefix": row[1],
+                "hash_format": "pbkdf2"
+                if ":" in row[1]
+                else "bcrypt"
+                if row[1].startswith("$")
+                else "unknown",
+            }
+        return {"status": "no_users"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
