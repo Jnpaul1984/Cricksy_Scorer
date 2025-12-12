@@ -10,10 +10,9 @@ import logoAvif480 from '@/assets/optimized/logo-w480.avif'
 import logoWebp480 from '@/assets/optimized/logo-w480.webp'
 import logoAvif768 from '@/assets/optimized/logo-w768.avif'
 import logoWebp768 from '@/assets/optimized/logo-w768.webp'
-
+import BetaChecklistModal from '@/components/BetaChecklistModal.vue'
 import FeedbackModal from '@/components/FeedbackModal.vue'
 import QuotaWarningBanner from '@/components/QuotaWarningBanner.vue'
-import BetaChecklistModal from '@/components/BetaChecklistModal.vue'
 import { useAuthStore } from '@/stores/authStore'
 
 const isDev = computed(() => import.meta.env.DEV)
@@ -67,9 +66,6 @@ const logoFallbackSrc = logoSources.find((src) => src.width === 768)?.webp ?? lo
 const logoSizes = '32px'
 
 // Auth store for role-based navigation
-const auth = useAuthStore()
-
-// Computed properties for showing role-based nav items
 const showCoachNav = computed(() => auth.isCoach || auth.isOrg || auth.isSuper)
 const showAnalystNav = computed(() => auth.isAnalyst || auth.isOrg || auth.isSuper)
 const showAdminNav = computed(() => auth.isSuper)

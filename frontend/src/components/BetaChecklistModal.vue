@@ -11,7 +11,7 @@
           <div class="checklist-section">
             <h3><BaseBadge variant="primary">Match Setup & Scoring</BaseBadge></h3>
             <div v-for="(item, i) in matchChecklist" :key="'match-' + i" class="checklist-item">
-              <input type="checkbox" v-model="checked.match[i]" :id="'match-' + i" />
+              <input :id="'match-' + i" v-model="checked.match[i]" type="checkbox" />
               <label :for="'match-' + i">{{ item }}</label>
             </div>
           </div>
@@ -19,7 +19,7 @@
           <div class="checklist-section">
             <h3><BaseBadge variant="success">Viewer & Sharing</BaseBadge></h3>
             <div v-for="(item, i) in viewerChecklist" :key="'viewer-' + i" class="checklist-item">
-              <input type="checkbox" v-model="checked.viewer[i]" :id="'viewer-' + i" />
+              <input :id="'viewer-' + i" v-model="checked.viewer[i]" type="checkbox" />
               <label :for="'viewer-' + i">{{ item }}</label>
             </div>
           </div>
@@ -27,7 +27,7 @@
           <div class="checklist-section">
             <h3><BaseBadge variant="warning">Player Profiles & AI Insights</BaseBadge></h3>
             <div v-for="(item, i) in profileChecklist" :key="'profile-' + i" class="checklist-item">
-              <input type="checkbox" v-model="checked.profile[i]" :id="'profile-' + i" />
+              <input :id="'profile-' + i" v-model="checked.profile[i]" type="checkbox" />
               <label :for="'profile-' + i">{{ item }}</label>
             </div>
           </div>
@@ -35,7 +35,7 @@
           <div v-if="showDashboards" class="checklist-section">
             <h3><BaseBadge variant="neutral">Analyst / Org Dashboards</BaseBadge></h3>
             <div v-for="(item, i) in dashboardChecklist" :key="'dash-' + i" class="checklist-item">
-              <input type="checkbox" v-model="checked.dash[i]" :id="'dash-' + i" />
+              <input :id="'dash-' + i" v-model="checked.dash[i]" type="checkbox" />
               <label :for="'dash-' + i">{{ item }}</label>
             </div>
           </div>
@@ -52,6 +52,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+
 import { BaseCard, BaseButton, BaseBadge } from '@/components'
 
 const props = defineProps<{ visible: boolean }>()
