@@ -69,6 +69,7 @@ const auth = useAuthStore()
 // Computed properties for showing role-based nav items
 const showCoachNav = computed(() => auth.isCoach || auth.isOrg || auth.isSuper)
 const showAnalystNav = computed(() => auth.isAnalyst || auth.isOrg || auth.isSuper)
+const showAdminNav = computed(() => auth.isSuper)
 </script>
 
 <template>
@@ -96,6 +97,7 @@ const showAnalystNav = computed(() => auth.isAnalyst || auth.isOrg || auth.isSup
         <RouterLink to="/setup">Setup</RouterLink>
         <RouterLink v-if="showCoachNav" to="/coach/dashboard">Coach</RouterLink>
         <RouterLink v-if="showAnalystNav" to="/analyst/workspace">Analyst</RouterLink>
+        <RouterLink v-if="showAdminNav" to="/admin/beta-users" class="nav-admin">Admin</RouterLink>
         <RouterLink to="/pricing">Pricing</RouterLink>
         <RouterLink v-if="isDev" to="/design-system" class="nav-dev">Design System</RouterLink>
         <button class="feedback-btn" title="Send Feedback (F)" @click="showFeedbackModal = true">
@@ -178,6 +180,13 @@ const showAnalystNav = computed(() => auth.isAnalyst || auth.isOrg || auth.isSup
 .nav-dev {
   opacity: 0.6;
   font-size: 0.85em;
+}
+.nav-admin {
+  color: #f59e0b !important;
+  font-weight: 600;
+}
+.nav-admin:hover {
+  color: #fbbf24 !important;
 }
 
 /* Feedback button */

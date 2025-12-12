@@ -1077,6 +1077,28 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
   /* Health */
   healthz: () => request<{ status: 'ok' }>('/healthz'),
 
+  /* Admin - Beta User Management */
+  createBetaUser: (payload: {
+    email: string;
+    role: string;
+    plan: string;
+    org_id?: string | null;
+    beta_tag?: string | null;
+    password?: string | null;
+  }) =>
+    request<{
+      id: string;
+      email: string;
+      role: string;
+      plan: string;
+      org_id: string | null;
+      beta_tag: string | null;
+      temp_password: string;
+    }>('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   /* Optional placeholder (backend route not present yet) */
   // This will 404 until you add a backend route; the store calls it only if you wire a UI button.
   startNextInnings: (gameId: string, body: StartNextInningsBody) =>

@@ -166,6 +166,14 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'Settings — Cricksy' },
     },
 
+    // --- Admin routes ---
+    {
+      path: '/admin/beta-users',
+      name: 'AdminUserManagement',
+      component: () => import('@/views/AdminUserManagementView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true, title: 'Beta User Management — Cricksy' },
+    },
+
     // --- Coach routes ---
     {
       path: '/coach/dashboard',
@@ -275,6 +283,16 @@ router.beforeEach(async (to, _from, next) => {
       return next({ path: '/login', query: { redirect: to.fullPath } })
     }
     if (!auth.isAnalyst && !auth.isOrg && !auth.isSuper) {
+      return next('/')
+    }
+  }
+
+  // Admin-protected routes (super admin only)
+  if (to.meta.requiresAdmin) {
+    if (!auth.isLoggedIn) {
+      return next({ path: '/login', query: { redirect: to.fullPath } })
+    }
+    if (!auth.isSuper) {
       return next('/')
     }
   }
