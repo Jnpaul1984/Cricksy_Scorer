@@ -10,14 +10,17 @@ import logoAvif480 from '@/assets/optimized/logo-w480.avif'
 import logoWebp480 from '@/assets/optimized/logo-w480.webp'
 import logoAvif768 from '@/assets/optimized/logo-w768.avif'
 import logoWebp768 from '@/assets/optimized/logo-w768.webp'
+
 import FeedbackModal from '@/components/FeedbackModal.vue'
 import QuotaWarningBanner from '@/components/QuotaWarningBanner.vue'
+import BetaChecklistModal from '@/components/BetaChecklistModal.vue'
 import { useAuthStore } from '@/stores/authStore'
 
 const isDev = computed(() => import.meta.env.DEV)
-
-// Feedback modal state
 const showFeedbackModal = ref(false)
+const showBetaChecklist = ref(false)
+const auth = useAuthStore()
+const showBetaGuide = computed(() => Boolean(auth.user && auth.user.beta_tag))
 
 function handleFeedbackSubmit(payload: { text: string; email?: string }) {
   // TODO: Send feedback to backend API
@@ -100,6 +103,15 @@ const showAdminNav = computed(() => auth.isSuper)
         <RouterLink v-if="showAdminNav" to="/admin/beta-users" class="nav-admin">Admin</RouterLink>
         <RouterLink to="/pricing">Pricing</RouterLink>
         <RouterLink v-if="isDev" to="/design-system" class="nav-dev">Design System</RouterLink>
+        <button
+          v-if="showBetaGuide"
+          class="beta-guide-btn"
+          style="font-size: 0.95em; margin-right: 0.5em; color: #fbbf24; background: none; border: none; cursor: pointer;"
+          title="Open Beta Checklist"
+          @click="showBetaChecklist = true"
+        >
+          📝 Beta Guide
+        </button>
         <button class="feedback-btn" title="Send Feedback (F)" @click="showFeedbackModal = true">
           💬 Feedback
         </button>
@@ -122,6 +134,7 @@ const showAdminNav = computed(() => auth.isSuper)
       v-model:visible="showFeedbackModal"
       @submitted="handleFeedbackSubmit"
     />
+    <BetaChecklistModal v-model:visible="showBetaChecklist" />
   </div>
 </template>
 
@@ -208,6 +221,18 @@ const showAdminNav = computed(() => auth.isSuper)
   background: rgba(59, 130, 246, 0.25);
   border-color: rgba(59, 130, 246, 0.5);
   color: #bfdbfe;
+}
+
+/* Beta Guide button */
+.beta-guide-btn {
+  padding: 0 0.5em;
+  background: none;
+  border: none;
+  color: #fbbf24;
+  cursor: pointer;
+  font-weight: 500;
+  text-decoration: underline;
+  margin-right: 0.5em;
 }
 
 /* Main */
