@@ -21,6 +21,7 @@ from backend.middleware.observability import (  # NEW
     AccessLogMiddleware,
     CorrelationIdMiddleware,
 )
+from backend.routes.admin import router as admin_router
 from backend.routes.ai import router as ai_router
 from backend.routes.ai_usage import router as ai_usage_router
 from backend.routes.analyst_pro import router as analyst_pro_router
@@ -318,6 +319,7 @@ def create_app(
     fastapi_app.include_router(ai_router)
     fastapi_app.include_router(ai_usage_router)
     fastapi_app.include_router(matches_router)
+    fastapi_app.include_router(admin_router)
     fastapi_app.include_router(feedback_router)
     fastapi_app.include_router(teams_router)
     fastapi_app.include_router(billing_router)

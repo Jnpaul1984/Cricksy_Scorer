@@ -85,6 +85,12 @@ class User(Base):
         server_default=RoleEnum.free.value,
         nullable=False,
     )
+    subscription_plan: Mapped[RoleEnum | None] = mapped_column(
+        SAEnum(RoleEnum, name="user_role", create_type=False),
+        nullable=True,
+    )
+    org_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    beta_tag: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

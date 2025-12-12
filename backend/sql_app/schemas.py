@@ -78,6 +78,36 @@ class UserRoleUpdate(BaseModel):
 
 
 # ===================================================================
+# Beta User Management (Admin)
+# ===================================================================
+
+
+class BetaUserCreate(BaseModel):
+    """Schema for creating a beta user (admin-only)."""
+
+    email: str = Field(..., description="User email address")
+    role: RoleEnum = Field(..., description="User role")
+    plan: RoleEnum = Field(..., description="Subscription plan")
+    org_id: str | None = Field(None, description="Organization ID")
+    beta_tag: str | None = Field("beta_phase1", description="Beta program tag")
+    password: str | None = Field(None, description="Optional password; auto-generated if None")
+
+
+class BetaUserCreated(BaseModel):
+    """Response schema for created beta user."""
+
+    id: str
+    email: str
+    role: RoleEnum
+    plan: RoleEnum
+    org_id: str | None
+    beta_tag: str | None
+    temp_password: str = Field(..., description="Temporary password (shown only once)")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ===================================================================
 # Base & Re-usable Models
 # ===================================================================
 
