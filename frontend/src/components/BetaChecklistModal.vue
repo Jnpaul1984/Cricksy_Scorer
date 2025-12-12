@@ -2,7 +2,7 @@
   <Teleport to="body">
     <transition name="fade">
       <div v-if="visible" class="modal-overlay" @click.self="close">
-        <BaseCard class="beta-modal" padding="xl">
+        <BaseCard class="beta-modal" padding="lg">
           <h2 class="modal-title">Cricksy Beta Checklist</h2>
           <p class="modal-intro">
             Welcome to the Cricksy beta! Use this checklist to track your testing progress. For full details, see the Beta Tester Guide.
@@ -41,7 +41,7 @@
           </div>
 
           <div class="modal-footer">
-            <BaseButton @click="close" variant="neutral">Close</BaseButton>
+            <BaseButton variant="secondary" @click="close">Close</BaseButton>
             <BaseButton as="a" :href="guideUrl" target="_blank" variant="primary">Open Full Guide</BaseButton>
           </div>
         </BaseCard>
