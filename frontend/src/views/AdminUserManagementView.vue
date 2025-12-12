@@ -128,7 +128,7 @@ async function copyPassword() {
       <!-- Info banner -->
       <BaseCard padding="md" class="info-banner">
         <div class="banner-content">
-          <BaseBadge variant="info">ℹ️ Info</BaseBadge>
+          <BaseBadge variant="primary">ℹ️ Info</BaseBadge>
           <p>
             Create beta user accounts here. Temporary passwords are shown only once —
             make sure to send the credentials to the tester securely.
@@ -152,7 +152,7 @@ async function copyPassword() {
             </div>
             <div class="detail-row">
               <span class="label">Plan:</span>
-              <BaseBadge variant="secondary">{{ createdUser.plan }}</BaseBadge>
+              <BaseBadge variant="neutral">{{ createdUser.plan }}</BaseBadge>
             </div>
             <div v-if="createdUser.org_id" class="detail-row">
               <span class="label">Org ID:</span>
@@ -160,7 +160,7 @@ async function copyPassword() {
             </div>
             <div v-if="createdUser.beta_tag" class="detail-row">
               <span class="label">Beta Tag:</span>
-              <BaseBadge variant="info">{{ createdUser.beta_tag }}</BaseBadge>
+              <BaseBadge variant="primary">{{ createdUser.beta_tag }}</BaseBadge>
             </div>
           </div>
 
