@@ -5,6 +5,12 @@ Add security logging tables: request_logs, auth_events, rate_limit_events
 from alembic import op
 import sqlalchemy as sa
 
+# revision identifiers, used by Alembic.
+revision = "k1f2g3h4i5j6_add_security_logging_tables"
+down_revision = "j0e1f2g3h4i5_add_beta_user_fields"
+branch_labels = None
+depends_on = None
+
 
 def upgrade():
     op.create_table(
