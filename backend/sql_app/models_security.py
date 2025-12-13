@@ -1,9 +1,10 @@
 """
 SQLAlchemy models for security logging (request_logs, auth_events, rate_limit_events)
 """
-import datetime as dt
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+
+from sqlalchemy import Column, Integer, String, Boolean
 from backend.sql_app.database import Base
+
 
 class RequestLog(Base):
     __tablename__ = "request_logs"
@@ -17,6 +18,7 @@ class RequestLog(Base):
     userId = Column(String(64), nullable=True, index=True)
     latencyMs = Column(Integer, nullable=True)
 
+
 class AuthEvent(Base):
     __tablename__ = "auth_events"
     id = Column(Integer, primary_key=True)
@@ -27,6 +29,7 @@ class AuthEvent(Base):
     userAgent = Column(String(200), nullable=True)
     eventType = Column(String(32), nullable=False)
     success = Column(Boolean, nullable=False)
+
 
 class RateLimitEvent(Base):
     __tablename__ = "rate_limit_events"

@@ -55,6 +55,7 @@ from backend.routes.testing import router as testing_router
 from backend.routes.tournaments import router as tournaments_router
 from backend.routes.users_router import router as users_router
 from backend.services.live_bus import set_socketio_server as _set_bus_sio
+from backend.routes import admin_agents
 
 # Socket handlers and live bus
 from backend.socket_handlers import register_sio

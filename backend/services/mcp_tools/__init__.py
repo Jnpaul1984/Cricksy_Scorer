@@ -1,2 +1,11 @@
 # MCP tool modules package
-from . import db_tools, usage_tools, error_tools, analytics_tools, system_tools, security_tools
+# Export available tool submodules; modules can be imported as
+# `backend.services.mcp_tools.db_tools`, etc. Keep __all__ for clarity.
+__all__ = [
+    "db_tools",
+    "usage_tools",
+    "error_tools",
+    "analytics_tools",
+    "system_tools",
+    "security_tools",
+]

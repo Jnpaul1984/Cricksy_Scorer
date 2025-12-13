@@ -1,6 +1,7 @@
-# Import security logging models for DB discovery
-from backend.sql_app.models_security import *
 from __future__ import annotations
+
+# Import security logging models for DB discovery (import module to register models)
+from backend.sql_app import models_security  # noqa: F401
 
 import datetime as dt
 import enum

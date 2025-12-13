@@ -1,12 +1,15 @@
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
-from backend.security import require_admin
-import os
+
+from backend.security import get_current_active_user as require_admin
 import pathlib
 import time
-from backend.services.agent_budget import check_agent_limits, record_agent_run, get_recent_runs, get_today_token_total
+from backend.services.agent_budget import (
+    check_agent_limits,
+    record_agent_run,
+    get_recent_runs,
+    get_today_token_total,
+)
 from backend.sql_app.database import get_db
 
 router = APIRouter(prefix="/admin/agents", tags=["admin_agents"])
@@ -31,7 +34,7 @@ AGENT_TOOL_ALLOWLIST = {
         "security.admin_route_attempts",
         "security.http_4xx_5xx_summary",
         "health.check",
-        "config.runtime"
+        "config.runtime",
     ],
 }
 
@@ -43,11 +46,13 @@ class RunAgentIn(BaseModel):
     since: str
     until: str
 
+
 class RunAgentOut(BaseModel):
     markdownReport: str
-    jsonSummary: Optional[dict]
+    jsonSummary: dict | None
     tokenUsage: int
     modelUsed: str
+
 
 class AgentRunSummary(BaseModel):
     id: int
@@ -62,17 +67,14 @@ class AgentRunSummary(BaseModel):
     createdAt: str
     status: str
 
+
 class UsagePanelOut(BaseModel):
-    recent: List[AgentRunSummary]
+    recent: list[AgentRunSummary]
     todayTokens: int
 
 
 @router.post("/run", response_model=RunAgentOut)
-async def run_agent(
-    body: RunAgentIn,
-    user=Depends(require_admin),
-    db=Depends(get_db)
-):
+async def run_agent(body: RunAgentIn, user=Depends(require_admin), db=Depends(get_db)):
     if body.agentKey not in AGENT_SKILLS:
         raise HTTPException(400, "Unknown agentKey")
     # Budget enforcement
@@ -84,21 +86,31 @@ async def run_agent(
     skill_file = SKILLS_PATH / AGENT_SKILLS[body.agentKey]
     if not skill_file.exists():
         raise HTTPException(404, f"Skill page not found: {skill_file.name}")
-    with open(skill_file, "r", encoding="utf-8") as f:
-        skills_md = f.read()
-    # Compose LLM prompt
-    system = skills_md
-    user_prompt = f"Run report for {body.since} to {body.until}."
-    tools = AGENT_TOOL_ALLOWLIST[body.agentKey]
     # Call LLM (Gemini Pro, fallback Anthropic)
     try:
         model = "gemini-pro"
-        markdownReport = f"## {body.agentKey} Report\n\n(Report for {body.since} to {body.until})\n\n...mock output..."
+        markdownReport = (
+            "## "
+            + body.agentKey
+            + " Report\n\n(Report for "
+            + body.since
+            + " to "
+            + body.until
+            + ")\n\n...mock output..."
+        )
         tokenUsage = tokensRequested
         status = "ok"
     except Exception:
         model = "anthropic"
-        markdownReport = f"## {body.agentKey} Report\n\n(Anthropic fallback for {body.since} to {body.until})\n\n...mock output..."
+        markdownReport = (
+            "## "
+            + body.agentKey
+            + " Report\n\n(Anthropic fallback for "
+            + body.since
+            + " to "
+            + body.until
+            + ")\n\n...mock output..."
+        )
         tokenUsage = tokensRequested
         status = "fallback"
     # Estimate cost
@@ -119,28 +131,29 @@ async def run_agent(
         markdownReport=markdownReport,
     )
     return RunAgentOut(
-        markdownReport=markdownReport,
-        jsonSummary=None,
-        tokenUsage=tokenUsage,
-        modelUsed=model
+        markdownReport=markdownReport, jsonSummary=None, tokenUsage=tokenUsage, modelUsed=model
     )
+
 
 @router.get("/usage", response_model=UsagePanelOut)
 async def get_usage_panel(db=Depends(get_db)):
     recents = await get_recent_runs(db, limit=10)
     today_tokens = await get_today_token_total(db)
     # Convert recents to pydantic
-    items = [AgentRunSummary(
-        id=row.id,
-        agentKey=row.agentKey,
-        userId=row.userId,
-        since=row.since,
-        until=row.until,
-        model=row.model,
-        tokensIn=row.tokensIn,
-        tokensOut=row.tokensOut,
-        costUsdEstimate=row.costUsdEstimate,
-        createdAt=str(row.createdAt),
-        status=row.status
-    ) for row in recents]
+    items = [
+        AgentRunSummary(
+            id=row.id,
+            agentKey=row.agentKey,
+            userId=row.userId,
+            since=row.since,
+            until=row.until,
+            model=row.model,
+            tokensIn=row.tokensIn,
+            tokensOut=row.tokensOut,
+            costUsdEstimate=row.costUsdEstimate,
+            createdAt=str(row.createdAt),
+            status=row.status,
+        )
+        for row in recents
+    ]
     return UsagePanelOut(recent=items, todayTokens=today_tokens)

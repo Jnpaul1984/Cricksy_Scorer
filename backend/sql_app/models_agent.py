@@ -1,8 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Float, Text
-from sqlalchemy.ext.declarative import declarative_base
+from backend.sql_app.database import Base
 import datetime
 
-Base = declarative_base()
 
 class AgentRun(Base):
     __tablename__ = "agent_runs"

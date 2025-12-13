@@ -6,7 +6,14 @@ Modules: db_tools, usage_tools, error_tools, analytics_tools
 """
 
 from fastapi import FastAPI
-from backend.services.mcp_tools import db_tools, usage_tools, error_tools, analytics_tools, system_tools, security_tools
+from backend.services.mcp_tools import (
+    db_tools,
+    usage_tools,
+    error_tools,
+    analytics_tools,
+    system_tools,
+    security_tools,
+)
 
 app = FastAPI(title="Cricksy MCP Tool Server")
 
