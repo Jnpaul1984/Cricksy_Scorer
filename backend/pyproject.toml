@@ -40,8 +40,8 @@ disallow_untyped_defs = false
 exclude = "backend/tests/|scripts/.*|node_modules/|.venv/"
 
 [tool.bandit]
-# Exclude test directories
-exclude_dirs = ["backend/tests", "backend/test", "backend/testsupport"]
+# Exclude test directories and virtual environment
+exclude_dirs = ["backend/tests", "backend/test", "backend/testsupport", "backend/venv", ".venv", "venv"]
 
 # Skip specific security checks that are false positives in our context
 skips = [

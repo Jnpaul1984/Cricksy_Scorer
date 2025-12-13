@@ -89,7 +89,7 @@ jobs:
 
       - name: Bandit (backend code)
         run: |
-          bandit -r backend -c backend/pyproject.toml -q
+          bandit -r backend -c backend/pyproject.toml -ll
 
   backend-tests:
     name: Backend (fast tests)
