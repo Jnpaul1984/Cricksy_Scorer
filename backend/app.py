@@ -14,7 +14,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import settings as default_settings
+
 from backend.error_handlers import install_exception_handlers  # NEW
+from backend.middleware.request_logging import RequestLoggingMiddleware
 
 # Observability and error handling (install on FastAPI app, not ASGI wrapper)
 from backend.middleware.observability import (  # NEW
@@ -266,6 +268,7 @@ def create_app(
     fastapi_app.state.sio = sio
 
     # Install middlewares and exception handlers on FastAPI app (not ASGI wrapper)
+    fastapi_app.add_middleware(RequestLoggingMiddleware)
     fastapi_app.add_middleware(CorrelationIdMiddleware)  # ensures request_id for error payloads
     fastapi_app.add_middleware(AccessLogMiddleware)
     install_exception_handlers(fastapi_app)
@@ -323,6 +326,7 @@ def create_app(
     fastapi_app.include_router(feedback_router)
     fastapi_app.include_router(teams_router)
     fastapi_app.include_router(billing_router)
+    fastapi_app.include_router(admin_agents.router)  # Added admin_agents router
 
     # Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
     use_in_memory = bool(getattr(settings, "IN_MEMORY_DB", False)) or (

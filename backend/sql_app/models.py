@@ -1,3 +1,5 @@
+# Import security logging models for DB discovery
+from backend.sql_app.models_security import *
 from __future__ import annotations
 
 import datetime as dt
