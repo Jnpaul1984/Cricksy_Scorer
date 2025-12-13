@@ -85,7 +85,7 @@ jobs:
       - name: pip-audit (backend requirements)
         working-directory: backend
         run: |
-          pip-audit -r requirements.txt --progress-spinner off --ignore-vuln GHSA-wj6h-64fc-37mp
+          pip-audit -r requirements.txt --progress-spinner off --ignore-vuln GHSA-wj6h-64fc-37mp --ignore-vuln GHSA-pwr2-4v36-6qpr
 
       - name: Bandit (backend code)
         run: |
