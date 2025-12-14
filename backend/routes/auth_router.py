@@ -199,6 +199,9 @@ async def read_users_me(
     created_at = getattr(current_user, "created_at", None)
     created_at_str = created_at.isoformat() if created_at else None
 
+    # Get requires_password_change flag
+    requires_password_change = bool(getattr(current_user, "requires_password_change", False))
+
     return schemas.UserProfile(
         id=str(getattr(current_user, "id", "")),
         email=email,
@@ -209,6 +212,7 @@ async def read_users_me(
         org_id=str(org_id) if org_id else None,
         subscription=_get_subscription_info(role_param),
         created_at=created_at_str,
+        requires_password_change=requires_password_change,
     )
 
 
@@ -226,7 +230,10 @@ async def change_password(
     - New password to set
 
     Returns the user info with confirmation message.
+    Clears the 'requires_password_change' flag after successful change.
     """
+    import datetime as dt
+
     # Verify current password
     password_ok = security.verify_password(
         payload.current_password, current_user.hashed_password
@@ -240,6 +247,8 @@ async def change_password(
 
     # Hash and set new password
     current_user.hashed_password = security.get_password_hash(payload.new_password)  # nosec
+    current_user.requires_password_change = False
+    current_user.password_changed_at = dt.datetime.now(dt.UTC)
     db.add(current_user)
     await db.commit()
     await db.refresh(current_user)

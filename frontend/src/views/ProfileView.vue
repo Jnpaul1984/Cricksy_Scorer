@@ -113,6 +113,20 @@ onMounted(() => {
     <div class="profile-wrapper">
       <h1>Profile</h1>
 
+      <!-- Password Change Required Banner -->
+      <transition name="message">
+        <div v-if="auth.requiresPasswordChange" class="banner warning">
+          <div class="banner-icon">⚠️</div>
+          <div class="banner-content">
+            <h3>Action Required</h3>
+            <p>
+              You're currently using a temporary password. Please change it to a secure password of
+              your choice to protect your account.
+            </p>
+          </div>
+        </div>
+      </transition>
+
       <!-- User Info Section -->
       <div class="info-section">
         <h2>Account Information</h2>
@@ -352,6 +366,44 @@ h3 {
   background: #f8d7da;
   color: #721c24;
   border: 1px solid #f5c6cb;
+}
+
+/* Banner Alerts */
+.banner {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+  border-left: 4px solid;
+}
+
+.banner.warning {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.banner-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.banner-content {
+  flex: 1;
+}
+
+.banner-content h3 {
+  margin: 0 0 8px 0;
+  color: #92400e;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.banner-content p {
+  margin: 0;
+  color: #b45309;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 /* Form */

@@ -56,6 +56,7 @@ export const useAuthStore = defineStore('auth', {
     orgId: (state): string | null => state.user?.org_id || null,
     subscription: (state): SubscriptionInfo | null => state.user?.subscription || null,
     planName: (state): string => state.user?.subscription?.plan || state.user?.role || 'free',
+    requiresPasswordChange: (state): boolean => state.user?.requires_password_change || false,
   },
   actions: {
     hasAnyRole(roles: UserRole[]): boolean {

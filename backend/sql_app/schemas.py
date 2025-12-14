@@ -59,6 +59,9 @@ class UserProfile(UserBase):
     org_id: str | None = None
     subscription: SubscriptionInfo | None = None
     created_at: str | None = None
+    requires_password_change: bool = Field(
+        False, description="True if user must change their temporary password"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -134,6 +137,12 @@ class BetaUserList(BaseModel):
     created_at: str | None = None
     beta_tag: str | None = None
     org_id: str | None = None
+    requires_password_change: bool = Field(
+        ..., description="True if user still needs to change their temporary password"
+    )
+    password_changed_at: str | None = Field(
+        None, description="Timestamp when user last changed their password"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
