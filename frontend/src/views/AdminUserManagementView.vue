@@ -154,14 +154,14 @@ async function handleResetPassword(userId: string) {
       userId,
       resetPasswordCustom.value.trim() || null
     )
-    
+
     // Show the new password
     alert(
       `Password reset for ${result.email}\n\n` +
       `New temporary password:\n${result.temp_password}\n\n` +
       'Make sure to send this to the user securely.'
     )
-    
+
     resetPasswordCustom.value = ''
     selectedUser.value = null
     await loadUsers()
@@ -487,7 +487,7 @@ onMounted(() => {
                       <BaseButton
                         v-else
                         size="sm"
-                        variant="success"
+                        variant="primary"
                         :disabled="deactivatingUser === user.id"
                         @click="handleReactivateUser(user.id)"
                       >
