@@ -77,6 +77,23 @@ class UserRoleUpdate(BaseModel):
     role: RoleEnum
 
 
+class PasswordChangeRequest(BaseModel):
+    """Request schema for changing password."""
+
+    current_password: str = Field(..., description="Current password for verification")
+    new_password: str = Field(..., description="New password")
+
+
+class PasswordChangeResponse(BaseModel):
+    """Response schema for password change."""
+
+    id: str
+    email: str
+    message: str = "Password changed successfully"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ===================================================================
 # Beta User Management (Admin)
 # ===================================================================

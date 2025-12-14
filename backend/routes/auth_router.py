@@ -212,4 +212,43 @@ async def read_users_me(
     )
 
 
+@router.post("/change-password", response_model=schemas.PasswordChangeResponse)
+async def change_password(
+    payload: schemas.PasswordChangeRequest,
+    current_user: Annotated[models.User, Depends(security.get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> schemas.PasswordChangeResponse:
+    """
+    Change password for the authenticated user.
+
+    Requires:
+    - Current password verification
+    - New password to set
+
+    Returns the user info with confirmation message.
+    """
+    # Verify current password
+    password_ok = security.verify_password(
+        payload.current_password, current_user.hashed_password
+    )  # nosec
+
+    if not password_ok:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+
+    # Hash and set new password
+    current_user.hashed_password = security.get_password_hash(payload.new_password)  # nosec
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+
+    return schemas.PasswordChangeResponse(
+        id=str(current_user.id),
+        email=current_user.email,
+        message="Password changed successfully",
+    )
+
+
 # Trigger CI

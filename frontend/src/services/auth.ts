@@ -59,3 +59,19 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 export function logout() {
   setStoredToken(null);
 }
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ id: string; email: string; message: string }> {
+  return apiRequest('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+}

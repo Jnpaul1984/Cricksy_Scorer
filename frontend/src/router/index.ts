@@ -166,6 +166,14 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'Settings — Cricksy' },
     },
 
+    // --- Profile route ---
+    {
+      path: '/profile',
+      name: 'profile',
+      component: () => import('@/views/ProfileView.vue'),
+      meta: { requiresAuth: true, title: 'Profile — Cricksy' },
+    },
+
     // --- Admin routes ---
     {
       path: '/admin/beta-users',

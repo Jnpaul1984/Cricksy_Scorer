@@ -111,6 +111,13 @@ const showAdminNav = computed(() => auth.isSuper)
         <button class="feedback-btn" title="Send Feedback (F)" @click="showFeedbackModal = true">
           💬 Feedback
         </button>
+        <div v-if="auth.isLoggedIn" class="user-menu">
+          <RouterLink to="/profile" class="user-menu-item" title="Profile">👤 Profile</RouterLink>
+          <RouterLink to="/settings" class="user-menu-item" title="Settings">⚙️ Settings</RouterLink>
+          <button class="user-menu-item logout-btn" @click="auth.logout(); $router.push('/login')" title="Log out">
+            🚪 Logout
+          </button>
+        </div>
       </nav>
     </header>
 
@@ -176,6 +183,7 @@ const showAdminNav = computed(() => auth.isSuper)
 .nav {
   display: inline-flex;
   gap: 0.75rem;
+  align-items: center;
 }
 .nav a {
   color: #c9d1e6;
@@ -196,6 +204,47 @@ const showAdminNav = computed(() => auth.isSuper)
 }
 .nav-admin:hover {
   color: #fbbf24 !important;
+}
+
+/* User Menu */
+.user-menu {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  padding-left: 0.75rem;
+}
+
+.user-menu-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  color: #c9d1e6;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.user-menu-item:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.logout-btn {
+  margin-left: 0.25rem;
+}
+
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
 }
 
 /* Feedback button */

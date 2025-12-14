@@ -51,6 +51,8 @@ export const useAuthStore = defineStore('auth', {
     // New profile-related getters
     userName: (state): string => state.user?.name || state.user?.email?.split('@')[0] || '',
     userEmail: (state): string => state.user?.email || '',
+    userId: (state): string => state.user?.id || '',
+    createdAt: (state): string | null => state.user?.created_at || null,
     orgId: (state): string | null => state.user?.org_id || null,
     subscription: (state): SubscriptionInfo | null => state.user?.subscription || null,
     planName: (state): string => state.user?.subscription?.plan || state.user?.role || 'free',
