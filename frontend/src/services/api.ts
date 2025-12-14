@@ -1099,6 +1099,45 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
       body: JSON.stringify(payload),
     }),
 
+  listBetaUsers: () =>
+    request<Array<{
+      id: string;
+      email: string;
+      role: string;
+      is_active: boolean;
+      created_at: string | null;
+      beta_tag: string | null;
+      org_id: string | null;
+    }>>('/api/admin/users'),
+
+  resetUserPassword: (userId: string, password?: string | null) =>
+    request<{
+      id: string;
+      email: string;
+      temp_password: string;
+    }>(`/api/admin/users/${encodeURIComponent(userId)}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify(password ? { password } : {}),
+    }),
+
+  deactivateUser: (userId: string) =>
+    request<{
+      id: string;
+      email: string;
+      is_active: boolean;
+    }>(`/api/admin/users/${encodeURIComponent(userId)}/deactivate`, {
+      method: 'POST',
+    }),
+
+  reactivateUser: (userId: string) =>
+    request<{
+      id: string;
+      email: string;
+      is_active: boolean;
+    }>(`/api/admin/users/${encodeURIComponent(userId)}/reactivate`, {
+      method: 'POST',
+    }),
+
   /* Optional placeholder (backend route not present yet) */
   // This will 404 until you add a backend route; the store calls it only if you wire a UI button.
   startNextInnings: (gameId: string, body: StartNextInningsBody) =>

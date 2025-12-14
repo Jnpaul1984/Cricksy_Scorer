@@ -83,6 +83,14 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # If user is deactivated: reject
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account has been deactivated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     # Verify password against stored hash
     password_ok = security.verify_password(form_data.password, user.hashed_password)  # nosec
 

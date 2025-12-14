@@ -10,6 +10,7 @@ from backend import security
 from backend.sql_app import models, schemas
 from backend.sql_app.database import get_db
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -83,4 +84,131 @@ async def create_beta_user(
         org_id=user.org_id,
         beta_tag=user.beta_tag,
         temp_password=temp_password,
+    )
+
+
+@router.get("/users", response_model=list[schemas.BetaUserList], name="list_beta_users")
+async def list_beta_users(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _admin: Annotated[models.User, Depends(get_current_superadmin)],
+) -> list[schemas.BetaUserList]:
+    """
+    List all beta users (super admin only).
+
+    Returns a list of all beta user accounts with their details.
+    """
+    result = await db.execute(select(models.User).order_by(models.User.created_at.desc()))
+    users = result.scalars().all()
+
+    return [
+        schemas.BetaUserList(
+            id=str(user.id),
+            email=user.email,
+            role=user.role,
+            is_active=user.is_active,
+            created_at=user.created_at.isoformat() if user.created_at else None,
+            beta_tag=user.beta_tag,
+            org_id=user.org_id,
+        )
+        for user in users
+    ]
+
+
+@router.post("/users/{user_id}/reset-password", response_model=schemas.PasswordResetResponse, name="reset_user_password")
+async def reset_user_password(
+    user_id: str,
+    payload: schemas.PasswordResetRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _admin: Annotated[models.User, Depends(get_current_superadmin)],
+) -> schemas.PasswordResetResponse:
+    """
+    Reset a user's password (super admin only).
+
+    - If password is not provided, generates a new temporary password.
+    - Returns the new temporary password in the response (shown only once).
+    """
+    result = await db.execute(select(models.User).where(models.User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID '{user_id}' not found",
+        )
+
+    # Generate or use provided password
+    new_password = payload.password or _generate_temp_password()
+
+    # Hash and update password
+    user.hashed_password = security.get_password_hash(new_password)
+
+    await db.commit()
+    await db.refresh(user)
+
+    return schemas.PasswordResetResponse(
+        id=str(user.id),
+        email=user.email,
+        temp_password=new_password,
+    )
+
+
+@router.post("/users/{user_id}/deactivate", response_model=schemas.UserDeactivateResponse, name="deactivate_user")
+async def deactivate_user(
+    user_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _admin: Annotated[models.User, Depends(get_current_superadmin)],
+) -> schemas.UserDeactivateResponse:
+    """
+    Deactivate a user account (super admin only).
+
+    Deactivates the user, preventing them from logging in.
+    """
+    result = await db.execute(select(models.User).where(models.User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID '{user_id}' not found",
+        )
+
+    user.is_active = False
+    await db.commit()
+    await db.refresh(user)
+
+    return schemas.UserDeactivateResponse(
+        id=str(user.id),
+        email=user.email,
+        is_active=user.is_active,
+    )
+
+
+@router.post("/users/{user_id}/reactivate", response_model=schemas.UserDeactivateResponse, name="reactivate_user")
+async def reactivate_user(
+    user_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _admin: Annotated[models.User, Depends(get_current_superadmin)],
+) -> schemas.UserDeactivateResponse:
+    """
+    Reactivate a user account (super admin only).
+
+    Reactivates a deactivated user account, allowing them to log in.
+    """
+    result = await db.execute(select(models.User).where(models.User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID '{user_id}' not found",
+        )
+
+    user.is_active = True
+    await db.commit()
+    await db.refresh(user)
+
+    return schemas.UserDeactivateResponse(
+        id=str(user.id),
+        email=user.email,
+        is_active=user.is_active,
     )

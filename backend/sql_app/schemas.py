@@ -107,6 +107,46 @@ class BetaUserCreated(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class BetaUserList(BaseModel):
+    """Response schema for listing beta users."""
+
+    id: str
+    email: str
+    role: RoleEnum
+    is_active: bool
+    created_at: str | None = None
+    beta_tag: str | None = None
+    org_id: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PasswordResetRequest(BaseModel):
+    """Request schema for password reset."""
+
+    password: str | None = Field(None, description="New password; auto-generated if None")
+
+
+class PasswordResetResponse(BaseModel):
+    """Response schema for password reset."""
+
+    id: str
+    email: str
+    temp_password: str = Field(..., description="New temporary password (shown only once)")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserDeactivateResponse(BaseModel):
+    """Response schema for user deactivation."""
+
+    id: str
+    email: str
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ===================================================================
 # Base & Re-usable Models
 # ===================================================================
