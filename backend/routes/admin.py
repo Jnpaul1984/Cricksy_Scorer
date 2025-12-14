@@ -114,7 +114,11 @@ async def list_beta_users(
     ]
 
 
-@router.post("/users/{user_id}/reset-password", response_model=schemas.PasswordResetResponse, name="reset_user_password")
+@router.post(
+    "/users/{user_id}/reset-password",
+    response_model=schemas.PasswordResetResponse,
+    name="reset_user_password",
+)
 async def reset_user_password(
     user_id: str,
     payload: schemas.PasswordResetRequest,
@@ -152,7 +156,11 @@ async def reset_user_password(
     )
 
 
-@router.post("/users/{user_id}/deactivate", response_model=schemas.UserDeactivateResponse, name="deactivate_user")
+@router.post(
+    "/users/{user_id}/deactivate",
+    response_model=schemas.UserDeactivateResponse,
+    name="deactivate_user",
+)
 async def deactivate_user(
     user_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -183,7 +191,11 @@ async def deactivate_user(
     )
 
 
-@router.post("/users/{user_id}/reactivate", response_model=schemas.UserDeactivateResponse, name="reactivate_user")
+@router.post(
+    "/users/{user_id}/reactivate",
+    response_model=schemas.UserDeactivateResponse,
+    name="reactivate_user",
+)
 async def reactivate_user(
     user_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
