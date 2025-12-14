@@ -85,7 +85,7 @@ async def run_migrations_online() -> None:
     """
     # Prefer DATABASE_URL env if provided, else fall back to alembic.ini
     url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
-    
+
     # Create an async engine from the resolved URL
     connectable = create_async_engine(
         url,
@@ -109,14 +109,14 @@ else:
     # Check if URL is async before deciding how to run migrations
     url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
     is_async = "+async" in url or "+asyncpg" in url or "+aiosqlite" in url
-    
+
     if is_async:
         asyncio.run(run_migrations_online())
     else:
         # For synchronous databases, run the sync version
         # Create a modified async function that works with sync
         from sqlalchemy import create_engine
-        
+
         connectable = create_engine(url, poolclass=pool.NullPool)
         with connectable.connect() as connection:
             do_run_migrations(connection)
