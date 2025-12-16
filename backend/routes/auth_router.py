@@ -199,6 +199,9 @@ async def read_users_me(
     created_at = getattr(current_user, "created_at", None)
     created_at_str = created_at.isoformat() if created_at else None
 
+    # Get requires_password_change flag
+    requires_password_change = bool(getattr(current_user, "requires_password_change", False))
+
     return schemas.UserProfile(
         id=str(getattr(current_user, "id", "")),
         email=email,
@@ -209,6 +212,49 @@ async def read_users_me(
         org_id=str(org_id) if org_id else None,
         subscription=_get_subscription_info(role_param),
         created_at=created_at_str,
+        requires_password_change=requires_password_change,
+    )
+
+
+@router.post("/change-password", response_model=schemas.PasswordChangeResponse)
+async def change_password(
+    payload: schemas.PasswordChangeRequest,
+    current_user: Annotated[models.User, Depends(security.get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> schemas.PasswordChangeResponse:
+    """
+    Change password for the authenticated user.
+
+    Requires:
+    - Current password verification
+    - New password to set
+
+    Returns the user info with confirmation message.
+    Clears the 'requires_password_change' flag after successful change.
+    """
+    import datetime as dt
+
+    # Verify current password
+    password_ok = security.verify_password(payload.current_password, current_user.hashed_password)  # nosec
+
+    if not password_ok:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+
+    # Hash and set new password
+    current_user.hashed_password = security.get_password_hash(payload.new_password)  # nosec
+    current_user.requires_password_change = False
+    current_user.password_changed_at = dt.datetime.now(dt.UTC)
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+
+    return schemas.PasswordChangeResponse(
+        id=str(current_user.id),
+        email=current_user.email,
+        message="Password changed successfully",
     )
 
 

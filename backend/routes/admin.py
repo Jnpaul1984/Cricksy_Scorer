@@ -70,6 +70,7 @@ async def create_beta_user(
         beta_tag=payload.beta_tag,
         is_active=True,
         is_superuser=False,
+        requires_password_change=True,  # Flag user to change password on first login
     )
 
     db.add(user)

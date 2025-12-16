@@ -59,6 +59,9 @@ class UserProfile(UserBase):
     org_id: str | None = None
     subscription: SubscriptionInfo | None = None
     created_at: str | None = None
+    requires_password_change: bool = Field(
+        False, description="True if user must change their temporary password"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,6 +78,23 @@ class TokenData(BaseModel):
 
 class UserRoleUpdate(BaseModel):
     role: RoleEnum
+
+
+class PasswordChangeRequest(BaseModel):
+    """Request schema for changing password."""
+
+    current_password: str = Field(..., description="Current password for verification")
+    new_password: str = Field(..., description="New password")
+
+
+class PasswordChangeResponse(BaseModel):
+    """Response schema for password change."""
+
+    id: str
+    email: str
+    message: str = "Password changed successfully"
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ===================================================================
@@ -117,6 +137,12 @@ class BetaUserList(BaseModel):
     created_at: str | None = None
     beta_tag: str | None = None
     org_id: str | None = None
+    requires_password_change: bool = Field(
+        ..., description="True if user still needs to change their temporary password"
+    )
+    password_changed_at: str | None = Field(
+        None, description="Timestamp when user last changed their password"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 

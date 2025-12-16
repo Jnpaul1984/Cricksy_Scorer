@@ -56,6 +56,12 @@ const isWicket = ref<boolean>(false)
 const dismissal = ref<string | null>(null)
 const dismissedName = ref<string | null>(null)
 const shotMap = ref<string | null>(null)
+const recordedZone = ref<number | null>(null)
+
+const recordZone = (zone: number) => {
+  recordedZone.value = zone
+}
+
 if (import.meta.env?.DEV) {
   console.info('GameScoringView setup refs', { isWicket, extra })
 }
@@ -198,6 +204,38 @@ function forceStartInnings(): void {
 // Current gameId (param or ?id=)
 const gameId = computed<string>(() => (route.params.gameId as string) || (route.query.id as string) || '')
 
+// --- UI State for UX Improvements ---
+const isSubmitting = ref(false)
+const tapMarker = ref<{ x: number; y: number; visible: boolean }>({ x: 0, y: 0, visible: false })
+
+function handleMapClick(e: MouseEvent) {
+  const target = e.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  tapMarker.value = {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top,
+    visible: true
+  }
+}
+
+function getBallClass(b: DeliveryRowForTable) {
+  if (b.is_wicket) return 'is-wicket'
+  if (b.runs_scored === 6) return 'is-6'
+  if (b.runs_scored === 4) return 'is-4'
+  if (b.extra) return 'is-extra'
+  if (b.runs_scored === 0) return 'is-dot'
+  return 'is-run'
+}
+
+function getBallLabel(b: DeliveryRowForTable) {
+  if (b.is_wicket) return 'W'
+  if (b.extra === 'wd') return 'WD'
+  if (b.extra === 'nb') return 'NB'
+  if (b.extra === 'b') return 'B'
+  if (b.extra === 'lb') return 'LB'
+  return b.runs_scored
+}
+
 const canSubmitSimple = computed(() => {
   const firstBall = Number(currentOverBalls.value || 0) === 0
   if (!gameId.value || needsNewBatterLive.value) return false
@@ -217,12 +255,14 @@ const canSubmitSimple = computed(() => {
 
 
 async function submitSimple() {
+  if (isSubmitting.value) return
   const firstBall = Number(currentOverBalls.value || 0) === 0
   if (needsNewOverLive.value && !(firstBall && !!selectedBowler.value)) {
     openStartOver(); onError('Start the next over first'); return
   }
   if (needsNewBatterLive.value) { openSelectBatter(); onError('Select the next batter first'); return }
 
+  isSubmitting.value = true
   try {
     const anyStore: any = gameStore as any
     const unifiedPossible = typeof anyStore.scoreDelivery === 'function'
@@ -303,6 +343,7 @@ async function submitSimple() {
     dismissedName.value = null
     selectedFielderId.value = '' as UUID
     shotMap.value = null
+    tapMarker.value = { x: 0, y: 0, visible: false }
     onScored()
 
     // Generate AI commentary (non-blocking)
@@ -317,6 +358,8 @@ async function submitSimple() {
     maybeRotateFromLastDelivery()
   } catch (e: any) {
     onError(e?.message || 'Scoring failed')
+  } finally {
+    setTimeout(() => { isSubmitting.value = false }, 400)
   }
 }
 
@@ -614,6 +657,20 @@ const selectedBowler = computed<string>({
   set: (v) => gameStore.setSelectedBowler(normId(v) || null),
 })
 
+// Last 6 balls for the center strip
+const last6Balls = computed(() => {
+  // deliveriesThisInnings is sorted by over/ball ascending (oldest -> newest)
+  // We want the last 6, but displayed left-to-right as oldest-of-the-6 -> newest
+  const all = deliveriesThisInnings.value || []
+  return all.slice(-6)
+})
+
+const recentBallSlots = computed(() => {
+  const filled = last6Balls.value
+  const emptyCount = 6 - filled.length
+  const empty = new Array(Math.max(0, emptyCount)).fill(null)
+  return [...filled, ...empty]
+})
 
 // ================== CONNECTION / OFFLINE QUEUE ==================
 const liveReady = computed<boolean>(() => gameStore.connectionStatus === 'connected')
@@ -1162,6 +1219,32 @@ const replacementOptions = computed<Player[]>(() => bowlingPlayers.value.filter(
 const canUseMidOverChange = computed(() => currentOverBalls.value < 6 && !midOverChangeUsed.value)
 const overInProgress = computed<boolean>(() => Number((stateAny.value?.balls_this_over ?? 0)) > 0)
 
+// NEW: Derive legal balls in current over to allow correction even if wides were bowled
+const legalBallsInCurrentOver = computed(() => {
+  // Use deliveries as the source of truth to avoid store sync delays
+  const currentOverIndex = Math.floor(Number(stateAny.value?.overs_completed ?? 0))
+  const arr = deliveriesThisInnings.value
+  const ballsInThisOver = arr.filter(d =>
+    d.over_number === currentOverIndex &&
+    (d.extra !== 'wd' && d.extra !== 'nb')
+  )
+  return ballsInThisOver.length
+})
+
+const canCorrectBowler = computed(() => {
+  // Similar to Replace button, but for the START of an over
+  // Enabled if we're at the start (0 legal balls) and haven't finished the over yet
+  const balls = legalBallsInCurrentOver.value
+  const atOverStart = balls === 0
+
+  if (import.meta.env.DEV) {
+    console.log('[canCorrectBowler] balls:', balls, 'atOverStart:', atOverStart, 'currentBowlerId:', currentBowlerId.value)
+  }
+
+  // Only available at the very start of an over when a bowler has been selected
+  return atOverStart && !!currentBowlerId.value
+})
+
 const inningsScore = computed<{ runs: number; wickets: number }>(() => ({
   runs: Number((gameStore as any).score?.runs ?? 0),
   wickets: Number((gameStore as any).score?.wickets ?? 0),
@@ -1516,10 +1599,12 @@ function flushNow(): void {
 // ================== Start Over & Mid-over Change ==================
 const startOverDlgOpen = ref(false)
 const changeBowlerDlgOpen = ref(false)
+const isBowlerCorrection = ref(false)
 const selectedNextOverBowlerId = ref<UUID>('' as UUID)
 const selectedReplacementBowlerId = ref<UUID>('' as UUID)
 const selectBatterDlgOpen = ref(false)
 const selectedNextBatterId = ref<UUID>('' as UUID)
+const activeTab = ref<'recent' | 'batting' | 'bowling' | 'ai' | 'extras'>('recent')
 const canStartOverNow = computed(() => needsNewOverLive.value || !currentBowlerId.value)
 const candidateBatters = computed<Player[]>(() => {
   const anyStore = gameStore as any
@@ -1599,8 +1684,20 @@ async function confirmStartOver(): Promise<void> {
   }
 }
 
+function openCorrectionBowler(): void {
+  if (!roleCanScore.value) return
+  if (!canCorrectBowler.value) {
+    showToast('Cannot correct bowler after legal balls bowled', 'error')
+    return
+  }
+  isBowlerCorrection.value = true
+  selectedReplacementBowlerId.value = '' as UUID
+  changeBowlerDlgOpen.value = true
+}
+
 function openChangeBowler(): void {
   if (!roleCanScore.value) return
+  isBowlerCorrection.value = false
   selectedReplacementBowlerId.value = '' as UUID
   changeBowlerDlgOpen.value = true
 }
@@ -1610,6 +1707,21 @@ async function confirmChangeBowler(): Promise<void> {
   const id = gameId.value
   const repl = selectedReplacementBowlerId.value
   if (!id || !repl) return
+
+  if (isBowlerCorrection.value) {
+    try {
+      await gameStore.startNewOver(repl)
+      selectedBowler.value = repl
+      showToast('Bowler corrected', 'success')
+    } catch (e: any) {
+      onError(e?.message || 'Failed to correct bowler')
+    } finally {
+      selectedReplacementBowlerId.value = '' as UUID
+      closeChangeBowler()
+    }
+    return
+  }
+
   try {
     await gameStore.changeBowlerMidOver(id, repl, 'injury')
     if (currentBowlerId.value) selectedBowler.value = currentBowlerId.value as UUID
@@ -1626,604 +1738,278 @@ async function confirmChangeBowler(): Promise<void> {
 </script>
 
 <template>
-  <div class="game-scoring">
+  <div class="broadcast-layout">
     <!-- Top toolbar -->
-    <header class="toolbar">
-      <div class="left">
-        <h2 class="title">Scoring Console</h2>
-        <span v-if="gameId" class="meta">Game: {{ gameId }}</span>
+    <header class="broadcast-header">
+      <div class="header-left">
+        <div class="brand">CRICKSY</div>
+        <div v-if="gameId" class="game-meta">#{{ gameId.slice(0,6) }}</div>
       </div>
 
-      <div class="right">
-        <button
-          class="btn"
-          :class="matchAiEnabled ? 'btn-primary' : 'btn-ghost'"
-          title="Toggle Match AI Commentary"
-          @click="matchAiEnabled = !matchAiEnabled"
-        >
-          🤖 AI {{ matchAiEnabled ? 'On' : 'Off' }}
+      <!-- Dense Match State -->
+      <div class="header-center dense-stats">
+        <div class="stat-group main-score">
+          <span class="team-name">{{ battingTeamName || 'Team' }}</span>
+          <span class="score-display">
+            {{ (liveSnapshot as any)?.batting_team_score ?? 0 }}/{{ (liveSnapshot as any)?.batting_team_wickets ?? 0 }}
+          </span>
+          <span class="overs-display">
+            ({{ (liveSnapshot as any)?.batting_team_overs ?? 0 }})
+          </span>
+        </div>
+
+        <div class="stat-divider"></div>
+
+        <div class="stat-group rates">
+          <span class="rate-item">CRR: <strong>{{ ((liveSnapshot as any)?.crr ?? 0).toFixed(2) }}</strong></span>
+          <span v-if="targetSafe" class="rate-item">Target: <strong>{{ targetSafe }}</strong></span>
+          <span v-if="targetSafe" class="rate-item">RRR: <strong>{{ (requiredRunRate ?? 0).toFixed(2) }}</strong></span>
+          <span v-if="targetSafe" class="rate-item need-txt">Need <strong>{{ runsRequired }}</strong></span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <button class="btn-icon" @click="matchAiEnabled = !matchAiEnabled" :class="{active: matchAiEnabled}" title="AI Commentary">
+          🤖
         </button>
-
-        <select v-model="theme" class="sel" aria-label="Theme" name="theme">
-          <option value="auto">Theme: Auto</option>
-          <option value="dark">Theme: Dark</option>
-          <option value="light">Theme: Light</option>
-        </select>
-
-        <input v-model="title" class="inp" type="text" name="embedTitle" placeholder="Embed title (optional)" aria-label="Embed title" />
-        <input v-model="logo" class="inp" type="url" name="logoUrl" placeholder="Logo URL (optional)" aria-label="Logo URL" />
-        <button class="btn btn-primary" @click="shareOpen = true">Share</button>
+        <button class="btn-ghost-sm" @click="shareOpen = true">
+          Share
+        </button>
       </div>
     </header>
 
-    <main class="content">
-      <!-- Live scoreboard preview â€” widget reads from store; interruptions polling disabled -->
-      <ScoreboardWidget
-        :game-id="gameId"
-        :theme="theme"
-        :title="title"
-        :logo="logo"
-        :api-base="apiBase"
-        :sponsors-url="sponsorsUrl"
-        :can-control="false"
-        interruptions-mode="off"
-      />
-
-      <PresenceBar class="mb-3" :game-id="gameId" :status="gameStore.connectionStatus" :pending="pendingCount" />
-      <div v-if="showScoringUpsell" class="rbac-banner warn" role="alert">
-        <strong>Scoring is a Pro feature.</strong>
-        <span>
-          Please log in with a Coach Pro or Organization Pro account to enter deliveries.
-          <RouterLink to="/login">Sign in</RouterLink>
-        </span>
-      </div>
-      <div v-else-if="showAnalystReadOnly" class="rbac-banner info" role="status">
-        <strong>Read-only mode.</strong>
-        <span>Analyst Pro accounts can monitor scoring but cannot submit deliveries.</span>
+    <!-- PLAYER BAR (Split Panels) -->
+    <section class="player-bar">
+      <!-- Striker Panel -->
+      <div class="player-box striker-box">
+        <div class="pb-label">STRIKER</div>
+        <select v-model="selectedStriker" class="pb-select-full">
+          <option disabled value="">Select...</option>
+          <option v-for="p in battingPlayers" :key="p.id" :value="p.id" :disabled="p.id === selectedNonStriker">
+            {{ p.name }} {{ roleBadge(p.id) }}
+          </option>
+        </select>
       </div>
 
-      <section
-        v-if="Number((gameStore.currentGame as any)?.current_inning) === 2 && (firstInnings || targetSafe != null)"
-        class="selectors card alt small-metrics"
-      >
-        <div class="row compact">
-          <div v-if="firstInnings" class="col">
-            <strong>Innings 1:</strong>
-            {{ firstInnings.runs }}/{{ firstInnings.wickets }} ({{ firstInnings.overs }})
-          </div>
+      <!-- Non-Striker Panel -->
+      <div class="player-box non-striker-box">
+        <div class="pb-label">NON-STRIKER</div>
+        <select v-model="selectedNonStriker" class="pb-select-full">
+          <option disabled value="">Select...</option>
+          <option v-for="p in battingPlayers" :key="p.id" :value="p.id" :disabled="p.id === selectedStriker">
+            {{ p.name }} {{ roleBadge(p.id) }}
+          </option>
+        </select>
+      </div>
 
-          <div v-if="targetSafe != null" class="col">
-            <strong>Target:</strong> {{ targetSafe }}
-          </div>
-
-          <div v-if="requiredRunRate != null" class="col">
-            <strong>Req RPO:</strong> {{ requiredRunRate.toFixed(2) }}
-            <small v-if="runsRequired != null && ballsRemaining >= 0" class="hint">
-              Â· Need {{ runsRequired }} off {{ ballsRemaining }} balls ({{ oversRemainingDisplay }} overs)
-            </small>
-          </div>
-        </div>
-      </section>
-
-
-      <!-- Player selectors -->
-      <section class="selectors card" style="border:1px solid rgba(0,0,0,.08); border-radius:12px; padding:12px; margin-bottom:12px;">
-        <h3 style="margin:0 0 8px; font-size:14px;">Players</h3>
-        <div class="row">
-          <div class="col">
-            <label class="lbl">Striker</label>
-            <select v-model="selectedStriker" class="sel" aria-label="Select striker">
-              <option disabled value="">Choose striker…</option>
-              <option
-                v-for="p in battingPlayers"
-                :key="p.id"
-                :value="p.id"
-                :disabled="p.id === selectedNonStriker"
-              >
-                {{ p.name }}{{ roleBadge(p.id) }}
-              </option>
-            </select>
-          </div>
-
-          <div class="col">
-            <label class="lbl">Non-striker</label>
-            <select v-model="selectedNonStriker" class="sel" aria-label="Select non-striker">
-              <option disabled value="">Choose non-striker…</option>
-              <option
-                v-for="p in battingPlayers"
-                :key="p.id"
-                :value="p.id"
-                :disabled="p.id === selectedStriker"
-              >
-                {{ p.name }}{{ roleBadge(p.id) }}
-              </option>
-            </select>
-          </div>
-
-          <div class="col">
-            <label class="lbl">Bowler</label>
-            <select v-model="selectedBowler" class="sel" aria-label="Select bowler">
-              <option disabled value="">Choose bowler…</option>
-              <option v-for="p in bowlingPlayers" :key="p.id" :value="p.id">
-                {{ p.name }}{{ bowlerRoleBadge(p.id) }}
-              </option>
-            </select>
-          </div>
-        </div>
-
-        <small v-if="selectedStrikerName && selectedBowlerName" class="hint">
-          <RouterLink v-if="isValidUUID(selectedStriker)" :to="{ name: 'PlayerProfile', params: { playerId: selectedStriker } }" class="player-link">{{ selectedStrikerName }}</RouterLink><span v-else>{{ selectedStrikerName }}</span> facing <RouterLink v-if="isValidUUID(selectedBowler)" :to="{ name: 'PlayerProfile', params: { playerId: selectedBowler } }" class="player-link">{{ selectedBowlerName }}</RouterLink><span v-else>{{ selectedBowlerName }}</span>.
-        </small>
-      </section>
-
-      <!-- Bowling controls -->
-      <section class="selectors card alt">
-        <div class="row tight">
-          <div class="col">
-            <button class="btn" :disabled="needsNewInningsLive || !canStartOverNow" @click="openStartOver">
-              Start Next Over
+      <!-- Bowler Panel -->
+      <div class="player-box bowler-box">
+        <div class="pb-label">
+          <span>BOWLER</span>
+          <div class="bowler-actions" v-if="roleCanScore">
+            <button class="btn-action-xs" @click="openStartOver" :disabled="!canStartOverNow" title="Start new over / Change bowler">
+              New Over
             </button>
-            <small class="hint">
-              {{ !currentBowlerId ? 'No active bowler yet â€” start the over.' : 'Disables previous overâ€™s last bowler.' }}
-            </small>
-          </div>
-          <div class="col">
-            <button class="btn" :disabled="!canUseMidOverChange" @click="openChangeBowler">Mid-over Change</button>
-            <small class="hint">Allowed once per over (injury).</small>
-          </div>
-          <div v-if="currentBowler" class="col bowler-now">
-            <strong>Current:</strong> <RouterLink v-if="isValidUUID(currentBowler.id)" :to="{ name: 'PlayerProfile', params: { playerId: currentBowler.id } }" class="player-link">{{ currentBowler.name }}</RouterLink><span v-else>{{ currentBowler.name }}</span> ·
-            <span>{{ currentBowlerDerived?.wkts ?? 0 }}-{{ currentBowlerDerived?.runs ?? 0 }}
-              ({{ currentBowlerDerived?.oversText ?? '0.0' }})
-            </span>
-            <span> Â· Econ {{ currentBowlerDerived?.econText ?? 'â€”' }}</span>
+            <button class="btn-action-xs" @click="openChangeBowler" :disabled="!canUseMidOverChange" title="Mid-over replacement (injury/suspension)">
+              Replace
+            </button>
+            <button class="btn-action-xs"
+              @click="openCorrectionBowler"
+              :disabled="!canCorrectBowler"
+              :title="!canCorrectBowler ? 'Correction only available at the start of an over' : 'Correct wrong bowler selection'">
+              Correction
+            </button>
           </div>
         </div>
-      </section>
+        <select v-model="selectedBowler" class="pb-select-full">
+          <option disabled value="">Select...</option>
+          <option v-for="p in bowlingPlayers" :key="p.id" :value="p.id">
+            {{ p.name }} {{ bowlerRoleBadge(p.id) }}
+          </option>
+        </select>
+      </div>
+    </section>
 
-      <!-- Match controls -->
-      <section class="selectors card alt">
-        <div class="row tight">
-          <div class="col">
-            <button class="btn" data-testid="btn-open-weather" @click="openWeather">Weather interruption</button>
-            <small class="hint">Pause/resume play; logs delay.</small>
+    <main class="broadcast-main">
+
+
+      <!-- LEFT: SCORING INPUTS -->
+      <div class="panel scoring-panel">
+        <!-- Gate Banners -->
+        <div v-if="needsNewBatterLive || needsNewOverLive || needsNewInningsLive" class="gate-overlay">
+           <div v-if="needsNewInningsLive">
+             <h3>Innings Break</h3>
+             <button v-if="roleCanScore" class="btn-gate" @click="openStartInnings">Start Next Innings</button>
+           </div>
+           <div v-else-if="needsNewBatterLive">
+             <h3>Wicket Fall</h3>
+             <button v-if="roleCanScore" class="btn-gate" @click="openSelectBatter">Select New Batter</button>
+           </div>
+           <div v-else-if="needsNewOverLive">
+             <h3>End of Over</h3>
+             <button v-if="roleCanScore" class="btn-gate" @click="openStartOver">Start Next Over</button>
+           </div>
+        </div>
+
+        <div class="scoring-grid-inputs" :class="{disabled: !canScore}">
+          <!-- Extras Row -->
+          <div class="input-row extras-row">
+            <button class="btn-input btn-extra-legal" :class="{active: extra==='none'}" @click="extra='none'">LEGAL</button>
+            <button class="btn-input btn-extra-wd" :class="{active: extra==='wd'}" @click="extra='wd'">WD</button>
+            <button class="btn-input btn-extra-nb" :class="{active: extra==='nb'}" @click="extra='nb'">NB</button>
+            <button class="btn-input btn-extra-b" :class="{active: extra==='b'}" @click="extra='b'">B</button>
+            <button class="btn-input btn-extra-lb" :class="{active: extra==='lb'}" @click="extra='lb'">LB</button>
           </div>
-          <div class="col">
-            <button class="btn" @click="jumpToReduceOvers">Reduce oversâ€¦</button>
-            <small class="hint">Adjust match or innings limit.</small>
-          </div>
-          <div class="col">
-            <button class="btn btn-ghost" :disabled="!canForceStartInnings" @click="forceStartInnings">
-              Start next innings (fallback)
+
+          <!-- Runs Matrix -->
+          <div class="input-matrix">
+            <button v-for="r in [0,1,2,3,4,6,5]" :key="r"
+              class="btn-score"
+              :class="[
+                `btn-score-${r}`,
+                { active: (extra==='none'||extra==='nb' ? offBat : extraRuns) === r }
+              ]"
+              @click="extra==='none'||extra==='nb' ? offBat=r : extraRuns=r">
+              {{ r }}
             </button>
-            <small class="hint">Use if the innings gate doesnâ€™t appear.</small>
           </div>
-          <!-- NEW: toggle for subs card -->
-          <div class="col">
-            <label class="lbl" style="display:flex; align-items:center; gap:6px;">
-              <input v-model="showSubsCard" type="checkbox" />
-              Fielding subs card
+
+          <!-- Wicket & Submit -->
+          <div class="input-row action-row">
+            <label class="wicket-toggle" :class="{checked: isWicket}">
+              <input type="checkbox" v-model="isWicket"> WICKET
             </label>
-            <small class="hint">Lists eligible substitute fielders.</small>
+            <button class="btn-submit" :disabled="!canSubmitSimple || isSubmitting" @click="submitSimple">
+              {{ isSubmitting ? '...' : 'SUBMIT' }}
+            </button>
           </div>
-        </div>
-      </section>
 
+          <!-- Wicket Details (Conditional) - Teleported to avoid clipping -->
+          <Teleport to="body">
+            <div v-if="isWicket" class="wicket-details-floating">
+               <div class="wd-label">WICKET DETAILS</div>
+               <div class="wd-row">
+                 <select v-model="dismissal" class="sel-sm"><option value="bowled">Bowled</option><option value="caught">Caught</option><option value="lbw">LBW</option><option value="run_out">Run Out</option><option value="stumped">Stumped</option></select>
+                 <select v-if="needsFielder" v-model="selectedFielderId" class="sel-sm"><option v-for="p in fielderOptions" :key="p.id" :value="p.id">{{p.name}}</option></select>
+               </div>
+            </div>
+          </Teleport>
 
-      <!-- Gate banners -->
-      <div
-        v-if="needsNewBatterLive || needsNewOverLive || needsNewInningsLive"
-        class="placeholder mb-3"
-        role="status"
-        aria-live="polite"
-        data-testid="gate-banner"
-      >
-        <div v-if="needsNewInningsLive" data-testid="gate-innings">
-          New innings required.
-          <button
-            v-if="roleCanScore"
-            class="btn btn-ghost"
-            :title="!roleCanScore ? proTooltip : undefined"
-            data-testid="btn-open-start-innings"
-            @click="openStartInnings"
-          >
-            Start next innings
-          </button>
-          <small v-else class="hint">Waiting for an authorized scorer.</small>
-        </div>
-        <div v-else-if="needsNewBatterLive" data-testid="gate-new-batter">
-          New batter required.
-          <button
-            v-if="roleCanScore"
-            class="btn btn-ghost"
-            :title="!roleCanScore ? proTooltip : undefined"
-            data-testid="btn-open-select-batter"
-            @click="openSelectBatter"
-          >
-            Select next batter
-          </button>
-          <small v-else class="hint">Waiting for an authorized scorer.</small>
-        </div>
-        <div v-else-if="needsNewOverLive" data-testid="gate-new-over">
-          New over required.
-          <button
-            v-if="roleCanScore"
-            class="btn btn-ghost"
-            :title="!roleCanScore ? proTooltip : undefined"
-            data-testid="btn-open-start-over"
-            @click="openStartOver"
-          >
-            Choose bowler
-          </button>
-          <small v-else class="hint">Waiting for an authorized scorer.</small>
+          <!-- Undo -->
+          <div class="undo-row">
+             <button class="btn-undo" :disabled="!canDeleteLast" @click="deleteLastDelivery">UNDO LAST</button>
+          </div>
         </div>
       </div>
-      <small v-if="(!canScore || !canSubmitSimple) && cantScoreReasons.length" class="hint">
-        {{ cantScoreReasons[0] }}
-      </small>
 
-      <pre v-if="isDev" class="dev-debug">
-      canScore: {{ canScore }}
-      striker: {{ selectedStriker }} ({{ selectedStrikerName }})
-      nonStriker: {{ selectedNonStriker }}
-      bowler: {{ selectedBowler }} ({{ selectedBowlerName }})
-      battingPlayers: {{ battingPlayers.length }} | bowlingPlayers: {{ bowlingPlayers.length }}
-      currentBowlerId: {{ currentBowlerId }} | needsNewOverLive: {{ needsNewOverLive }} (store: {{ needsNewOver }})
-      needsNewInningsLive: {{ needsNewInningsLive }}
-      allOut: {{ allOut }} | wicketsFromDeliveries: {{ wicketsFromDeliveries }}
-      oversExhausted: {{ oversExhausted }} | legalBallsBowled: {{ legalBallsBowled }} / {{ oversLimit*6 || 'âˆž' }} | current_over_balls: {{ stateAny?.current_over_balls }}
-      inningsStartIso: {{ inningsStartIso }}
-      ballsThisInnings(legal): {{ legalBallsBowled }}
-      </pre>
-
-      <!-- Delivery (single panel) -->
-      <section class="selectors card" style="border:1px solid rgba(0,0,0,.08); border-radius:12px; padding:12px; margin-bottom:12px;">
-        <h3 style="margin:0 0 8px; font-size:14px;">Delivery</h3>
-
-        <div class="row" style="grid-template-columns:1fr;">
-          <!-- Extra type -->
-          <div class="col" style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn" :class="extra==='none' && 'btn-primary'" @click="extra='none'">Legal</button>
-            <button class="btn" :class="extra==='nb' && 'btn-primary'" @click="extra='nb'">No-ball</button>
-            <button class="btn" :class="extra==='wd' && 'btn-primary'" @click="extra='wd'">Wide</button>
-            <button class="btn" :class="extra==='b' && 'btn-primary'" @click="extra='b'">Bye</button>
-            <button class="btn" :class="extra==='lb' && 'btn-primary'" @click="extra='lb'">Leg-bye</button>
+      <!-- RIGHT: SHOT MAP -->
+      <div class="panel map-panel">
+        <!-- Recent Balls Strip (Compact) -->
+        <div class="recent-strip">
+          <div class="recent-label">
+             LAST 6
+             <span class="active-ball-text" v-if="overInProgress">
+               (Over {{ oversDisplay }})
+             </span>
           </div>
-
-          <!-- Amount selector -->
-          <div v-if="extra==='none' || extra==='nb'" class="col">
-            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <span>Off the bat:</span>
-              <button
-                v-for="r in [0,1,2,3,4,5,6]"
-                :key="r"
-                class="btn"
-                :class="offBat===r && 'btn-primary'"
-                :data-testid="`delivery-run-${r}`"
-                @click="offBat=r"
-              >
-                {{ r }}
-              </button>
-            </div>
-          </div>
-
-          <div v-else class="col">
-            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <span v-if="extra==='wd'">Total wides:</span>
-              <span v-else>Extras:</span>
-              <button
-                v-for="r in (extra==='wd' ? [1,2,3,4,5] : [0,1,2,3,4])"
-                :key="r"
-                class="btn"
-                :class="extraRuns===r && 'btn-primary'"
-                @click="extraRuns=r"
-              >{{ r }}</button>
-            </div>
-            <small v-if="extra==='wd'" class="hint">
-              1 = just wide; 2 = wide + 1 run; 5 = wide to boundary.
-            </small>
-          </div>
-
-
-          <!-- Optional wicket -->
-          <div class="col" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <label><input v-model="isWicket" type="checkbox" data-testid="toggle-wicket" /> Wicket</label>
-            <select v-if="isWicket" v-model="dismissal" class="sel" data-testid="select-dismissal">
-              <option disabled value="">Select dismissal</option>
-              <option value="bowled">Bowled</option>
-              <option value="caught">Caught</option>
-              <option value="lbw">LBW</option>
-              <option value="run_out">Run-out</option>
-              <option value="stumped">Stumped</option>
-              <option value="hit_wicket">Hit wicket</option>
-            </select>
-           <!-- NEW: Fielder (XI + subs) when needed -->
-          <select
-            v-if="isWicket && needsFielder"
-            v-model="selectedFielderId"
-            class="sel"
-            data-testid="select-fielder"
-            aria-label="Select fielder"
-          >
-            <option disabled value="">Select fielderâ€¦</option>
-            <option v-for="p in fielderOptions" :key="p.id" :value="p.id">
-              {{ p.name }}{{ bowlerRoleBadge(p.id) }}{{ bowlingXIIds.has(p.id) ? '' : ' (sub)' }}
-            </option>
-          </select>
-          <small
-            v-if="isWicket && needsFielder && selectedFielderId && !bowlingXIIds.has(selectedFielderId)"
-            class="hint"
-          >
-            Sub fielder will be credited.
-          </small>
-          <!-- /NEW -->
-
-          <select v-if="isWicket" v-model="dismissedName" class="sel" aria-label="Select dismissed batter" data-testid="select-dismissed-batter">
-            <option disabled value="">Select dismissed batter…</option>
-            <option v-for="p in dismissedOptions" :key="p.id" :value="p.name">{{ p.name }}</option>
-          </select>
-        </div>
-
-        <div v-if="extra==='none' || extra==='nb'" class="col shot-map-column">
-          <label class="shot-map-label">Shot map</label>
-          <ShotMapCanvas v-model="shotMap" :width="240" :height="200" />
-          <small class="hint">Optional: sketch the shot path for analytics.</small>
-        </div>
-
-          <!-- Submit -->
-          <div class="col" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <button
-              class="btn btn-primary"
-              :disabled="!canSubmitSimple || !canScore"
-              @click="submitSimple"
-              data-testid="submit-delivery"
-            >
-              Submit delivery
-            </button>
-
-            <button
-class="btn btn-ghost"
-                    :disabled="!canDeleteLast || deletingLast"
-                    @click="deleteLastDelivery">
-              {{ deletingLast ? 'Deletingâ€¦' : 'Delete last delivery' }}
-            </button>
-            <small v-if="pendingCount > 0" class="hint">
-              Wait for queued actions to finish before deleting.
-            </small>
-
-            <small v-if="!canScore" class="hint">
-              Select striker/non-striker/bowler and clear any â€œNew over / New batterâ€ prompts.
-            </small>
-          </div>
-        </div>
-      </section>
-
-      <!-- Score pad + deliveries on the left; 3 cards side-by-side on the right -->
-      <section class="mt-3 layout-2col">
-        <div class="left">
-          <DeliveryTable
-            :deliveries="deliveriesThisInnings"
-            :player-name-by-id="playerNameById"
-            class="mt-3"
-          />
-        </div>
-
-        <div class="right">
-          <div class="scorecards-grid">
-            <BattingCard :entries="battingEntries" />
-
-            <BowlingCard :entries="bowlingEntries" />
-
-            <!-- AI Commentary Panel -->
-            <div class="card ai-commentary-panel">
-              <div class="ai-header">
-                <h4>AI Commentary</h4>
-                <button
-                  v-if="!aiLoading && aiCommentary"
-                  class="btn btn-ghost ai-regen-btn"
-                  title="Regenerate commentary"
-                  @click="generateCommentary"
-                >
-                  ↻
-                </button>
-              </div>
-
-              <div v-if="aiLoading" class="ai-skeleton">
-                <div class="ai-skeleton-line" />
-                <div class="ai-skeleton-line short" />
-              </div>
-
-              <div v-else-if="aiError" class="ai-error">
-                <p class="ai-error-text">{{ aiError }}</p>
-                <button class="btn btn-ghost" @click="generateCommentary">
-                  Try Again
-                </button>
-              </div>
-
-              <p v-else-if="aiCommentary" class="ai-output">
-                {{ aiCommentary }}
-              </p>
-
-              <p v-else class="ai-placeholder">
-                Commentary will appear here as the match progresses.
-              </p>
-            </div>
-
-            <!-- Match AI Commentary Panel (toggle-driven) -->
-            <div v-if="matchAiEnabled" class="card match-ai-commentary-panel">
-              <div class="ai-header">
-                <h4>🤖 Match AI Commentary</h4>
-                <button
-                  class="btn btn-ghost ai-regen-btn"
-                  title="Refresh commentary"
-                  :disabled="matchAiLoading"
-                  @click="loadMatchAiCommentary"
-                >
-                  ↻
-                </button>
-              </div>
-
-              <div v-if="matchAiLoading" class="ai-skeleton">
-                <div class="ai-skeleton-line" />
-                <div class="ai-skeleton-line short" />
-                <div class="ai-skeleton-line" />
-              </div>
-
-              <div v-else-if="matchAiError" class="ai-error">
-                <p class="ai-error-text">{{ matchAiError }}</p>
-                <button class="btn btn-ghost" @click="loadMatchAiCommentary">
-                  Try Again
-                </button>
-              </div>
-
-              <div v-else-if="matchAiCommentary.length" class="match-ai-list">
-                <div
-                  v-for="(item, idx) in matchAiCommentary"
-                  :key="idx"
-                  class="match-ai-item"
-                  :class="'tone-' + item.tone"
-                >
-                  <div class="match-ai-item-header">
-                    <span v-if="item.over !== null" class="over-badge">
-                      Over {{ item.over }}<template v-if="item.ball_index !== null">.{{ item.ball_index }}</template>
-                    </span>
-                    <span
-                      v-for="tag in item.event_tags"
-                      :key="tag"
-                      class="event-tag"
-                    >{{ tag }}</span>
-                  </div>
-                  <p class="match-ai-item-text">{{ item.text }}</p>
-                </div>
-              </div>
-
-              <p v-else class="ai-placeholder">
-                No commentary available. Score some deliveries!
-              </p>
-            </div>
-
-            <!-- NEW: compact fielding subs card -->
-            <div v-if="showSubsCard" class="card subs-card">
-              <div class="subs-hdr">
-                <h4>Fielding subs</h4>
-                <span v-if="fieldingSubs?.length" class="count">{{ fieldingSubs.length }}</span>
-              </div>
-
-              <ul v-if="fieldingSubs && fieldingSubs.length" class="subs-list">
-                <li v-for="p in fieldingSubs" :key="p.id" class="subs-row">
-                  <span class="name">{{ p.name }}</span>
-                  <span class="chip">SUB</span>
-                </li>
-              </ul>
-              <div v-else class="empty">
-                <small class="hint">No subs on the bench.</small>
-              </div>
-            </div>
-
-            <!-- Extras / DLS / Reduce Overs -->
-            <div class="card extras-card">
-              <h4>Extras</h4>
-              <div class="extras-grid">
-                <span>Wides</span><strong>{{ extrasBreakdown.wides }}</strong>
-                <span>No-balls</span><strong>{{ extrasBreakdown.no_balls }}</strong>
-                <span>Byes</span><strong>{{ extrasBreakdown.byes }}</strong>
-                <span>Leg-byes</span><strong>{{ extrasBreakdown.leg_byes }}</strong>
-                <span>Penalty</span><strong>{{ extrasBreakdown.penalty }}</strong>
-
-                <span class="sep">Total</span>
-                <strong class="sep">{{ extrasBreakdown.total }}</strong>
-              </div>
-
-              <!-- DLS panel -->
-              <div v-if="canShowDls" class="card dls-card">
-                <h4>DLS</h4>
-                <div class="dls-grid">
-                  <div class="row-inline">
-                    <label class="lbl">G50</label>
-                    <input
-                      v-model.number="G50"
-                      class="inp"
-                      type="number"
-                      min="150"
-                      max="300"
-                      step="1"
-                      style="width:90px;"
-                    />
-                    <button class="btn" :disabled="loadingDls" @click="refreshDls">
-                      {{ loadingDls ? 'Loadingâ€¦' : 'Preview' }}
-                    </button>
-                  </div>
-
-                  <template v-if="dls">
-                    <div class="dls-stats">
-                      <span>Team 1</span>
-                      <strong>{{ dls.team1_score }} ({{ dls.team1_resources.toFixed(1) }}%)</strong>
-
-                      <span>Team 2 resources</span>
-                      <strong>{{ dls.team2_resources.toFixed(1) }}%</strong>
-
-                      <span>Revised target</span>
-                      <strong>{{ dls.target }}</strong>
-                    </div>
-
-                    <button class="btn btn-primary" :disabled="applyingDls" @click="applyDls">
-                      {{ applyingDls ? 'Applyingâ€¦' : 'Apply DLS Target' }}
-                    </button>
-
-                    <small v-if="gameStore.dlsApplied" class="hint">DLS target applied.</small>
-                  </template>
-                  <small v-else class="hint">Preview to compute a DLS target based on current resources.</small>
-                </div>
-              </div>
-
-              <!-- Reduce Overs -->
-              <div ref="reduceOversCardRef" class="card dls-card" style="margin-top:12px;">
-                <h4>Reduce Overs</h4>
-                <div class="dls-grid">
-                  <div class="row-inline" style="flex-wrap:wrap;">
-                    <label class="lbl">Scope</label>
-                    <label><input v-model="reduceScope" type="radio" value="match"> Match</label>
-                    <label><input v-model="reduceScope" type="radio" value="innings"> Specific innings</label>
-
-                    <select v-if="reduceScope==='innings'" v-model.number="reduceInnings" class="sel">
-                      <option :value="1">Innings 1</option>
-                      <option :value="2">Innings 2</option>
-                    </select>
-                  </div>
-
-                  <div class="row-inline" style="flex-wrap:wrap;">
-                    <label class="lbl">New limit</label>
-                    <input v-model.number="oversNew" class="inp" type="number" min="1" step="1" style="width:90px;">
-                    <small class="hint">Current limit: {{ oversLimit || 'â€”' }} overs</small>
-                  </div>
-
-                  <button class="btn btn-primary" :disabled="!canReduce || reducingOvers" @click="doReduceOvers">
-                    {{ reducingOvers ? 'Updatingâ€¦' : 'Apply Overs Limit' }}
-                  </button>
-                </div>
-              </div>
-
-              <!-- Live Par helper -->
-              <div class="card dls-card" style="margin-top:12px;">
-                <h4>DLS â€” Par Now</h4>
-                <div class="dls-grid">
-                  <button class="btn" :disabled="computingPar" @click="updateParNow">
-                    {{ computingPar ? 'Computingâ€¦' : 'Update Live Par' }}
-                  </button>
-                  <small v-if="(gameStore.dlsPanel as any)?.par != null" class="hint">
-                    Par: {{ (gameStore.dlsPanel as any).par }}
-                  </small>
-                  <small v-else class="hint">Par will appear here once computed.</small>
-                </div>
-              </div>
+          <div class="recent-balls">
+            <div v-for="(b, i) in recentBallSlots" :key="i" class="ball-badge" :class="b ? getBallClass(b) : 'empty'">
+              {{ b ? getBallLabel(b) : '•' }}
             </div>
           </div>
         </div>
-      </section>
+
+        <div class="map-container" @click="handleMapClick">
+           <!-- Tap Feedback Marker -->
+           <div
+             v-if="tapMarker.visible"
+             class="tap-marker"
+             :style="{ left: tapMarker.x + 'px', top: tapMarker.y + 'px' }"
+             @animationend="tapMarker.visible = false"
+           ></div>
+           <!-- Placeholder for Shot Map - In real app this would be canvas/SVG -->
+           <div class="wagon-wheel-placeholder">
+              <div class="field-oval">
+                 <div class="pitch-rect"></div>
+                 <!-- Simple 8-zone click overlay -->
+                 <div class="zone-overlay">
+                    <div class="zone z1" @click.stop="recordZone(1); handleMapClick($event)"></div>
+                    <div class="zone z2" @click.stop="recordZone(2); handleMapClick($event)"></div>
+                    <div class="zone z3" @click.stop="recordZone(3); handleMapClick($event)"></div>
+                    <div class="zone z4" @click.stop="recordZone(4); handleMapClick($event)"></div>
+                    <div class="zone z5" @click.stop="recordZone(5); handleMapClick($event)"></div>
+                    <div class="zone z6" @click.stop="recordZone(6); handleMapClick($event)"></div>
+                    <div class="zone z7" @click.stop="recordZone(7); handleMapClick($event)"></div>
+                    <div class="zone z8" @click.stop="recordZone(8); handleMapClick($event)"></div>
+                 </div>
+                 <!-- Tap Marker -->
+                 <div v-if="tapMarker.visible" class="tap-marker" :style="{ top: tapMarker.y + 'px', left: tapMarker.x + 'px' }"></div>
+              </div>
+              <div class="map-label" v-if="!tapMarker.visible">TAP ZONE TO RECORD SHOT</div>
+           </div>
+        </div>
+      </div>
+
+
     </main>
 
+    <!-- FOOTER TABS -->
+    <footer class="broadcast-footer">
+      <div class="tabs-nav">
+        <button :class="{active: activeTab==='recent'}" @click="activeTab='recent'">RECENT</button>
+        <button :class="{active: activeTab==='batting'}" @click="activeTab='batting'">BATTING</button>
+        <button :class="{active: activeTab==='bowling'}" @click="activeTab='bowling'">BOWLING</button>
+        <button :class="{active: activeTab==='ai'}" @click="activeTab='ai'">AI COMM</button>
+        <button :class="{active: activeTab==='extras'}" @click="activeTab='extras'">EXTRAS</button>
+      </div>
+
+      <div class="tab-content">
+        <!-- RECENT: Delivery Table -->
+        <div v-show="activeTab==='recent'" class="tab-pane">
+           <DeliveryTable :deliveries="deliveriesThisInnings" :player-name-by-id="playerNameById" />
+        </div>
+
+        <!-- BATTING CARD -->
+        <div v-show="activeTab==='batting'" class="tab-pane">
+           <BattingCard :entries="battingEntries" />
+        </div>
+
+        <!-- BOWLING CARD -->
+        <div v-show="activeTab==='bowling'" class="tab-pane">
+           <BowlingCard :entries="bowlingEntries" />
+        </div>
+
+        <!-- AI COMMENTARY -->
+        <div v-show="activeTab==='ai'" class="tab-pane">
+            <div class="ai-header">
+                <h4>AI Commentary</h4>
+                <button v-if="!aiLoading && aiCommentary" class="btn-icon" @click="generateCommentary">↻</button>
+            </div>
+            <div v-if="aiLoading">Loading...</div>
+            <p v-else-if="aiCommentary">{{ aiCommentary }}</p>
+            <p v-else>No commentary yet.</p>
+        </div>
+
+        <!-- EXTRAS & DLS -->
+        <div v-show="activeTab==='extras'" class="tab-pane">
+            <div class="extras-grid">
+                <span>Wides: {{ extrasBreakdown.wides }}</span>
+                <span>No-balls: {{ extrasBreakdown.no_balls }}</span>
+                <span>Byes: {{ extrasBreakdown.byes }}</span>
+                <span>Leg-byes: {{ extrasBreakdown.leg_byes }}</span>
+                <span>Total: {{ extrasBreakdown.total }}</span>
+            </div>
+            <div v-if="canShowDls" class="dls-mini">
+               <h4>DLS Target</h4>
+               <div v-if="dls">Target: {{ dls.target }} ({{ dls.team2_resources.toFixed(1) }}%)</div>
+               <button class="btn-sm" @click="refreshDls">Update</button>
+            </div>
+        </div>
+      </div>
+    </footer>
+
     <!-- Share & Monetize Modal -->
-    <div v-if="shareOpen" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="share-title" @click.self="closeShare">
+    <div v-if="shareOpen" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="share-title" @click.self="closeShare" @keydown.esc="closeShare" tabindex="0">
       <BaseCard padding="lg" class="modal-card modal-card--wide">
         <header class="modal-header">
           <h3 id="share-title" class="modal-title">Share & Monetize</h3>
@@ -2365,15 +2151,15 @@ class="btn btn-ghost"
     <!-- Mid-over Change Modal -->
     <div v-if="changeBowlerDlgOpen" class="modal-backdrop" role="dialog" aria-modal="true">
       <BaseCard padding="lg" class="modal-card">
-        <h3 class="modal-title">Mid-over change (injury)</h3>
-        <p class="modal-body-text">Pick a replacement to finish this over. You can do this only once per over.</p>
+        <h3 class="modal-title">{{ isBowlerCorrection ? 'Correct Bowler' : 'Mid-over change (injury)' }}</h3>
+        <p class="modal-body-text">{{ isBowlerCorrection ? 'Select the correct bowler for this over.' : 'Pick a replacement to finish this over. You can do this only once per over.' }}</p>
         <select v-model="selectedReplacementBowlerId" class="sel">
-          <option disabled value="">Choose replacement…</option>
-          <option v-for="p in replacementOptions" :key="p.id" :value="p.id">{{ p.name }}{{ bowlerRoleBadge(p.id) }}</option>
+          <option disabled value="">{{ isBowlerCorrection ? 'Choose correct bowler…' : 'Choose replacement…' }}</option>
+          <option v-for="p in (isBowlerCorrection ? eligibleNextOverBowlers : replacementOptions)" :key="p.id" :value="p.id">{{ p.name }}{{ bowlerRoleBadge(p.id) }}</option>
         </select>
         <div class="modal-actions">
           <BaseButton variant="ghost" @click="closeChangeBowler">Cancel</BaseButton>
-          <BaseButton variant="primary" :disabled="!selectedReplacementBowlerId" @click="confirmChangeBowler">Change</BaseButton>
+          <BaseButton variant="primary" :disabled="!selectedReplacementBowlerId" @click="confirmChangeBowler">{{ isBowlerCorrection ? 'Correct' : 'Change' }}</BaseButton>
         </div>
       </BaseCard>
     </div>
@@ -2382,852 +2168,594 @@ class="btn btn-ghost"
 
 <style scoped>
 /* =====================================================
-   GAME SCORING VIEW - Using Design System Tokens
+   BROADCAST LAYOUT (ONE SCREEN, NO SCROLL)
    ===================================================== */
+.broadcast-layout {
+  display: grid;
+  grid-template-rows: 48px auto 1fr 240px; /* Header, PlayerBar, Main, Footer */
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: #f0f2f5;
+  font-family: 'Inter', sans-serif;
+}
 
-.shot-map-column {
+/* HEADER */
+.broadcast-header {
+  background: #1a237e;
+  color: white;
+  padding: 0 16px;
+  height: 48px;
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  max-width: 260px;
-}
-
-.shot-map-label {
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-}
-
-/* Layout */
-.game-scoring {
-  padding: var(--space-3);
-  display: grid;
-  gap: var(--space-3);
-}
-
-.toolbar {
-  display: grid;
-  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.left {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-}
-
-.title {
-  margin: 0;
-  font-size: var(--h3-size);
-  font-weight: var(--font-extrabold);
-  letter-spacing: 0.01em;
-}
-
-.meta {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-
-.right {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
-
-.content {
-  padding: var(--space-2) 0;
-}
-
-.mb-3 {
-  margin-bottom: var(--space-3);
-}
-
-.mt-3 {
-  margin-top: var(--space-3);
-}
-
-.placeholder {
-  padding: var(--space-4);
-  border: 1px dashed var(--color-border-strong);
-  border-radius: var(--radius-lg);
-  color: var(--color-text-muted);
-  background: var(--color-surface-hover);
-}
-
-.dev-debug {
-  background: var(--color-bg);
-  color: var(--color-text);
-  padding: var(--space-2);
-  border-radius: var(--radius-md);
-  font-size: var(--text-xs);
-  font-family: var(--font-mono);
-  white-space: pre-wrap;
-  margin: var(--space-2) 0;
-}
-
-/* Controls */
-.inp, .sel {
-  height: 34px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  padding: 0 var(--space-3);
-  font-size: var(--text-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.inp.wide {
-  width: 100%;
-}
-
-.btn {
-  appearance: none;
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
-  font-weight: var(--font-bold);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--color-surface-hover);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  border: 0;
-  background: var(--color-primary);
-  color: var(--color-text-inverse);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn-ghost {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  text-decoration: none;
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--color-surface-hover);
-}
-
-/* Bowling controls block */
-.card.alt {
-  background: var(--color-surface-hover);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3);
-}
-
-.row.tight {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-2);
-  align-items: center;
-}
-
-.bowler-now {
-  font-size: var(--text-sm);
-  color: var(--color-text);
-}
-
-/* Selectors */
-.selectors.card {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3);
-  background: var(--color-surface);
-}
-
-.row {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.col {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.align-end {
-  display: grid;
-  align-items: end;
-}
-
-.lbl {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  font-weight: var(--font-medium);
-}
-
-.hint {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-
-.debug {
-  margin-top: var(--space-2);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-
-/* Two-column shell with a wider right column */
-.layout-2col {
-  display: grid;
-  grid-template-columns: minmax(620px, 1.65fr) minmax(440px, 1fr);
-  gap: var(--space-3);
-}
-
-.layout-2col .left,
-.layout-2col .right {
-  display: block;
-}
-
-.layout-2col .right {
+  justify-content: space-between;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  z-index: 10;
   position: sticky;
-  top: var(--space-3);
-  align-self: start;
+  top: 0;
 }
+.header-left { display: flex; align-items: baseline; gap: 8px; min-width: 120px; }
+.header-left .brand { font-weight: 900; letter-spacing: 1px; font-size: 18px; }
+.header-left .game-meta { font-size: 12px; opacity: 0.8; font-family: monospace; }
 
-/* Scorecards grid */
-.scorecards-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-  align-items: start;
-}
+.header-center { flex: 1; display: flex; justify-content: center; }
 
-.scorecards-grid .extras-card {
-  grid-column: 1 / -1;
-}
-
-.scorecards-grid :deep(table) {
-  font-size: var(--text-sm);
-}
-
-.scorecards-grid :deep(th),
-.scorecards-grid :deep(td) {
-  padding: var(--space-2) var(--space-2);
-}
-
-.scorecards-grid :deep(.card),
-.scorecards-grid :deep(.pane) {
-  padding: var(--space-4);
-}
-
-/* Extras & DLS polish */
-.extras-card {
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-}
-
-.extras-card h4 {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-}
-
-.extras-grid {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-}
-
-.extras-grid .sep {
-  border-top: 1px solid var(--color-border);
-  margin-top: var(--space-1);
-  padding-top: var(--space-1);
-}
-
-.scorecards-grid > * {
-  align-self: start;
-}
-
-.scorecards-grid .card,
-.scorecards-grid .extras-card {
-  height: 100%;
-}
-
-/* AI Commentary Panel */
-.ai-commentary-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-}
-
-.ai-header {
+/* Dense Stats Layout */
+.dense-stats {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 16px;
+  font-family: 'Inter', sans-serif;
+  white-space: nowrap;
 }
 
-.ai-header h4 {
-  margin: 0;
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-}
+.stat-group { display: flex; align-items: baseline; gap: 6px; }
+.main-score { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+.team-name { font-weight: 400; opacity: 0.9; margin-right: 4px; font-size: 16px; }
+.score-display { color: #fff; }
+.overs-display { font-size: 14px; opacity: 0.8; font-weight: 400; }
 
-.ai-regen-btn {
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-sm);
-  min-width: auto;
-}
+.stat-divider { width: 1px; height: 24px; background: rgba(255,255,255,0.2); }
 
-.ai-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
+.rates { font-size: 13px; gap: 12px; opacity: 0.9; }
+.rate-item strong { font-weight: 700; color: #fff; }
+.need-txt { color: #ffeb3b; font-weight: 600; }
 
-.ai-skeleton-line {
-  background: var(--color-border-subtle);
-  height: 0.9rem;
-  border-radius: var(--radius-sm);
-  animation: ai-pulse 1.3s ease-in-out infinite;
-}
+.header-right { display: flex; gap: 8px; min-width: 120px; justify-content: flex-end; }
+.btn-icon { background: rgba(255,255,255,0.1); border: none; color: white; width: 32px; height: 32px; border-radius: 4px; cursor: pointer; }
+.btn-icon:hover { background: rgba(255,255,255,0.2); }
+.btn-icon.active { background: #4caf50; }
 
-.ai-skeleton-line.short {
-  width: 60%;
-}
-
-@keyframes ai-pulse {
-  0%, 100% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 0.8;
-  }
-}
-
-.ai-error {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border: 1px solid var(--color-error);
-  border-radius: var(--radius-md);
-  background: var(--color-error-soft);
-}
-
-.ai-error-text {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--color-error);
-}
-
-.ai-output {
-  margin: 0;
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-  color: var(--color-text);
-}
-
-.ai-placeholder {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-  font-style: italic;
-}
-
-/* Match AI Commentary Panel */
-.match-ai-commentary-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  max-height: 320px;
-  overflow-y: auto;
-}
-
-.match-ai-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.match-ai-item {
-  padding: var(--space-2);
-  border-radius: var(--radius-md);
-  border-left: 3px solid var(--color-border);
-  background: var(--color-surface-subtle);
-}
-
-.match-ai-item.tone-hype {
-  border-left-color: var(--color-success);
-  background: var(--color-success-soft, rgba(34, 197, 94, 0.1));
-}
-
-.match-ai-item.tone-critical {
-  border-left-color: var(--color-warning);
-  background: var(--color-warning-soft, rgba(245, 158, 11, 0.1));
-}
-
-.match-ai-item.tone-neutral {
-  border-left-color: var(--color-primary);
-}
-
-.match-ai-item-header {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin-bottom: var(--space-1);
-}
-
-.over-badge {
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  background: var(--color-primary);
-  color: var(--color-on-primary, #fff);
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-sm);
-}
-
-.event-tag {
-  font-size: var(--text-xs);
-  background: var(--color-border-subtle);
-  color: var(--color-text-muted);
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-sm);
-}
-
-.match-ai-item-text {
-  margin: 0;
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-  color: var(--color-text);
-}
-
-/* Subs card */
-.subs-card {
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-}
-
-.subs-card h4 {
-  margin: 0;
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-}
-
-.subs-hdr {
+.btn-share {
+  background: #4caf50;
+  color: white;
+  border: none;
+  padding: 0 12px;
+  height: 32px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
   display: flex;
   align-items: center;
+  gap: 6px;
+  transition: background 0.2s;
+}
+.btn-share:hover { background: #43a047; }
+
+/* PLAYER BAR (Split Panels) */
+.player-bar {
+  background: #283593;
+  padding: 8px 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr; /* 3 Equal Columns */
+  gap: 12px;
+  align-items: stretch;
+}
+
+.player-box {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pb-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 700;
+  display: flex;
   justify-content: space-between;
-  margin-bottom: var(--space-2);
+  align-items: center;
 }
 
-.subs-hdr .count {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
+.bowler-actions {
+  display: flex;
+  gap: 6px;
 }
 
-.subs-list {
-  list-style: none;
+.btn-action-xs {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: #fff;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: background 0.2s;
+}
+.btn-action-xs:hover { background: rgba(255,255,255,0.3); }
+.btn-action-xs:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.pb-select-full {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  width: 100%;
+  cursor: pointer;
+  outline: none;
   padding: 0;
   margin: 0;
+}
+.pb-select-full option {
+  background: #333;
+  color: white;
+}
+
+/* MAIN CONTENT GRID */
+.broadcast-main {
   display: grid;
-  gap: var(--space-2);
-}
-
-.subs-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: var(--text-sm);
-  padding: var(--space-1) 0;
-  border-bottom: 1px dashed var(--color-border-subtle);
-}
-
-.subs-row:last-child {
-  border-bottom: 0;
-}
-
-.subs-row .name {
-  white-space: nowrap;
+  grid-template-columns: 320px 1fr; /* Fixed Scoring Panel, Flexible Shot Map */
+  gap: 1px;
+  background: #ddd; /* Grid line color */
   overflow: hidden;
-  text-overflow: ellipsis;
+  min-height: 0;
 }
 
-.chip {
-  font-size: var(--text-xs);
-  font-weight: var(--font-bold);
-  letter-spacing: 0.02em;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-hover);
-  color: var(--color-text-secondary);
-}
+/* PANELS */
+.panel { background: white; position: relative; overflow: hidden; }
 
-.subs-card .empty {
-  padding: var(--space-2) 0;
-}
-
-/* DLS card */
-.dls-card {
-  margin-top: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-}
-
-.dls-card h4 {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-}
-
-.dls-grid {
-  display: grid;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-}
-
-.row-inline {
+/* SCORING PANEL (Left) */
+.scoring-panel {
   display: flex;
-  gap: var(--space-2);
-  align-items: center;
+  flex-direction: column;
+  padding: 8px;
+  background: #fff;
 }
-
-.dls-stats {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-2);
+.gate-overlay {
+  position: absolute; inset: 0; background: rgba(255,255,255,0.95); z-index: 20;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
 }
+.btn-gate { background: #1a237e; color: white; padding: 12px 24px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer; margin-top: 12px; }
 
-/* Compact metrics row */
-.small-metrics .row.compact {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-3);
-}
+.scoring-grid-inputs { display: flex; flex-direction: column; gap: 8px; height: 100%; }
+.scoring-grid-inputs.disabled { opacity: 0.3; pointer-events: none; }
 
-.small-metrics .col {
-  align-items: center;
-  grid-auto-flow: column;
-  grid-auto-columns: max-content;
-  gap: var(--space-2);
-}
-
-/* Responsive */
-@media (max-width: 1200px) {
-  .layout-2col {
-    grid-template-columns: 1.4fr 1fr;
-  }
-}
-
-@media (max-width: 1100px) {
-  .scorecards-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 900px) {
-  .layout-2col {
-    grid-template-columns: 1fr;
-  }
-  .layout-2col .right {
-    position: static;
-  }
-}
-
-/* Modal overlay (Share) */
-.backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: grid;
-  place-items: center;
-  padding: var(--space-4);
-  z-index: var(--z-modal-backdrop);
-}
-
-.modal {
-  width: min(760px, 96vw);
-  background: var(--color-surface);
-  color: var(--color-text);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-modal);
-  overflow: hidden;
-}
-
-.modal-hdr, .modal-ftr {
+.input-row { display: flex; gap: 6px; }
+.extras-row { height: 36px; }
+.btn-input {
+  flex: 1;
+  padding: 0;
+  border: 1px solid #ddd;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 11px;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+  justify-content: center;
+  transition: all 0.1s;
+}
+.btn-input:hover { background: #eee; }
+.btn-input.active { background: #1a237e; color: white; border-color: #1a237e; }
+
+.input-matrix {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 1fr 1fr 0.6fr; /* 3rd row smaller for '5' */
+  gap: 6px;
+  flex: 1;
+}
+.btn-score {
+  font-size: 32px;
+  font-weight: 800;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.1s;
+  font-family: 'Inter', sans-serif;
+  color: #333;
+}
+.btn-score:hover { background: #f5f5f5; transform: translateY(-1px); }
+.btn-score:active { transform: translateY(0); }
+.btn-score.active { background: #1a237e; color: white; border-color: #1a237e; }
+
+/* Boundaries */
+.btn-score.val-4 { color: #2e7d32; background: #f1f8e9; border-color: #c5e1a5; }
+.btn-score.val-4.active { background: #2e7d32; color: white; border-color: #2e7d32; }
+.btn-score.val-6 { color: #1565c0; background: #e3f2fd; border-color: #90caf9; }
+.btn-score.val-6.active { background: #1565c0; color: white; border-color: #1565c0; }
+
+/* Make '5' span full width */
+.btn-score:nth-child(7) {
+  grid-column: 1 / -1;
+  font-size: 18px;
+  color: #666;
 }
 
-.modal-hdr {
-  padding: var(--space-4) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+.action-row { display: flex; gap: 8px; align-items: stretch; height: 52px; }
+.wicket-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 2px solid #d32f2f;
+  color: #d32f2f;
+  border-radius: 8px;
+  font-weight: 800;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.1s;
 }
+.wicket-toggle:hover { background: #ffebee; }
+.wicket-toggle.checked { background: #d32f2f; color: white; }
 
-.modal-ftr {
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--color-border);
+.btn-submit {
+  flex: 2;
+  background: #2e7d32;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 900;
+  font-size: 18px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  transition: all 0.1s;
 }
+.btn-submit:hover { background: #1b5e20; transform: translateY(-1px); }
+.btn-submit:active { transform: translateY(0); }
+.btn-submit:disabled { background: #ccc; cursor: not-allowed; box-shadow: none; transform: none; }
 
-.modal-hdr h3 {
-  margin: 0;
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  letter-spacing: 0.01em;
-}
+.wicket-details { background: #ffebee; padding: 8px; border-radius: 6px; display: flex; gap: 8px; }
+.sel-sm { flex: 1; padding: 6px; border-radius: 4px; border: 1px solid #ef9a9a; }
 
-.x {
+.undo-row { margin-top: auto; text-align: center; padding-top: 4px; }
+.btn-undo { background: none; border: none; color: #999; text-decoration: underline; cursor: pointer; font-size: 11px; }
+.btn-undo:hover { color: #d32f2f; }
+
+.btn-ghost-sm {
   background: transparent;
-  border: 0;
-  color: var(--color-text-muted);
-  font-size: var(--h3-size);
+  border: 1px solid #ddd;
+  color: #666;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-ghost-sm:hover {
+  background: #f5f5f5;
+  color: #333;
+  border-color: #ccc;
 }
 
-.modal-body {
-  padding: var(--space-4);
-  display: grid;
-  gap: var(--space-3);
+/* MAP PANEL (Right) */
+.map-panel {
+  background: #e8f5e9;
+  display: flex;
+  flex-direction: column; /* Stack strip and map */
+  overflow: hidden;
 }
 
-.code-wrap {
+.recent-strip {
+  height: 40px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.recent-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #666;
+  letter-spacing: 0.5px;
+}
+
+.recent-balls {
+  display: flex;
+  gap: 6px;
+}
+
+.ball-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #eee;
+  color: #333;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ddd;
+}
+.ball-badge.wicket { background: #d32f2f; color: white; border-color: #b71c1c; }
+.ball-badge.boundary { background: #4caf50; color: white; border-color: #388e3c; }
+.ball-badge.empty { background: transparent; border: 1px dashed #ccc; color: #ccc; }
+
+.map-container {
+  flex: 1;
   position: relative;
-}
-
-.code {
   width: 100%;
-  min-height: 120px;
-  resize: vertical;
-  background: var(--color-bg);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  line-height: var(--leading-relaxed);
+  overflow: hidden;
 }
+.wagon-wheel-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+.field-oval { width: 80%; height: 80%; border: 2px solid #4caf50; border-radius: 50%; position: relative; background: rgba(76, 175, 80, 0.1); }
+.pitch-rect { width: 40px; height: 120px; background: #d7ccc8; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.zone-overlay { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; }
+.zone { position: absolute; width: 50%; height: 50%; cursor: pointer; }
+.zone:hover { background: rgba(0,0,0,0.05); }
+.z1 { top: 0; right: 0; border-left: 1px dashed #ccc; border-bottom: 1px dashed #ccc; }
+.z2 { top: 0; left: 0; border-right: 1px dashed #ccc; border-bottom: 1px dashed #ccc; }
+.z3 { bottom: 0; left: 0; border-right: 1px dashed #ccc; border-top: 1px dashed #ccc; }
+.z4 { bottom: 0; right: 0; border-left: 1px dashed #ccc; border-top: 1px dashed #ccc; }
+/* (Simplified zones for demo) */
+.map-label { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); font-weight: bold; color: #2e7d32; opacity: 0.6; pointer-events: none; }
 
-.copy {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-xs);
-  cursor: pointer;
+/* FOOTER TABS */
+.broadcast-footer {
+  background: white;
+  border-top: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  height: 240px; /* Fixed height for footer */
 }
+.tabs-nav { display: flex; background: #f5f5f5; border-bottom: 1px solid #ddd; }
+.tabs-nav button { flex: 1; padding: 12px; border: none; background: none; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; }
+.tabs-nav button.active { color: #1a237e; border-bottom-color: #1a237e; background: white; }
 
-/* Standard Modal Pattern */
+.tab-content { flex: 1; overflow-y: auto; padding: 0; position: relative; }
+.tab-pane { height: 100%; padding: 12px; }
+
+/* Utility overrides for components inside tabs */
+:deep(.card) { border: none; box-shadow: none; padding: 0; margin: 0; }
+:deep(table) { width: 100%; font-size: 13px; }
+:deep(th) { background: #f5f5f5; position: sticky; top: 0; }
+
+/* Extras Grid */
+.extras-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; text-align: center; font-weight: bold; padding: 16px; background: #fafafa; border-radius: 8px; }
+.dls-mini { margin-top: 16px; padding: 12px; background: #e3f2fd; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; }
+
+.extras-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; text-align: center; font-weight: bold; padding: 16px; background: #fafafa; border-radius: 8px; }
+.dls-mini { margin-top: 16px; padding: 12px; background: #e3f2fd; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; }
+
+/* Modal overrides */
 .modal-backdrop {
+  z-index: 1000;
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, #000 65%, transparent);
-  z-index: var(--z-modal-backdrop);
-  padding: var(--space-4);
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 20px;
 }
 
 .modal-card {
+  position: relative;
   width: 100%;
-  max-width: 420px;
+  max-width: 500px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-card--wide {
-  max-width: 760px;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-3);
+  max-width: 600px;
 }
 
 .modal-title {
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  margin: 0 0 var(--space-2);
-}
-
-.modal-content {
-  display: grid;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
 }
 
 .modal-body-text {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-  margin-bottom: var(--space-4);
+  font-size: 14px;
+  color: #666;
+  margin: 0 0 16px 0;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.lbl {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sel {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  color: #333;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 32px;
+  position: relative;
+  z-index: 2;
+}
+
+.sel:hover {
+  border-color: #999;
+}
+
+.sel:focus {
+  outline: none;
+  border-color: #1a237e;
+  box-shadow: 0 0 0 3px rgba(26, 35, 126, 0.1);
+}
+
+.sel option {
+  background: white;
+  color: #333;
+  padding: 8px;
 }
 
 .modal-actions {
   display: flex;
+  gap: 12px;
   justify-content: flex-end;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
+  margin-top: 20px;
+  flex-shrink: 0;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
 }
 
-.modal-actions--wrap {
-  flex-wrap: wrap;
+.modal-form-content {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 0;
 }
 
-.form-group {
-  margin-bottom: var(--space-3);
+/* =====================================================
+   UX REFINEMENTS (COLORS & ANIMATIONS)
+   ===================================================== */
+
+/* 1. Run Button Colors */
+.btn-score-0, .btn-score-1, .btn-score-2, .btn-score-3, .btn-score-5 { color: #333; background: #fff; }
+.btn-score-4 { color: #1b5e20; background: #e8f5e9; border-color: #a5d6a7; }
+.btn-score-6 { color: #0d47a1; background: #e3f2fd; border-color: #90caf9; }
+
+.btn-score.active { background: #333; color: white; border-color: #333; }
+.btn-score-4.active { background: #2e7d32; color: white; border-color: #2e7d32; }
+.btn-score-6.active { background: #1565c0; color: white; border-color: #1565c0; }
+
+/* Extras Colors */
+.btn-extra-wd { color: #e65100; }
+.btn-extra-nb { color: #e65100; }
+.btn-extra-b  { color: #f57f17; }
+.btn-extra-lb { color: #f57f17; }
+
+.btn-extra-wd.active, .btn-extra-nb.active { background: #ff9800; color: white; border-color: #ff9800; }
+.btn-extra-b.active, .btn-extra-lb.active  { background: #fbc02d; color: white; border-color: #fbc02d; }
+
+/* 2. Shot Map Tap Marker */
+.tap-marker {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 87, 34, 0.8);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 0 0 4px rgba(255, 87, 34, 0.3);
+  animation: pulse-ring 1.5s infinite;
+  z-index: 10;
 }
 
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-3);
-  align-items: end;
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 87, 34, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0); }
 }
 
-.note {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-  background: var(--color-surface-hover);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
+/* 3. Last 6 Balls Strip */
+.active-ball-text {
+  margin-left: 8px;
+  font-weight: 400;
+  color: #1a237e;
+  font-size: 11px;
 }
 
-/* Dialog (native) - can be removed once all modals converted */
-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.2);
+.ball-badge.is-dot { background: #f5f5f5; color: #999; border-color: #ddd; }
+.ball-badge.is-run { background: #fff; color: #333; border-color: #ccc; font-weight: 600; }
+.ball-badge.is-4   { background: #2e7d32; color: white; border-color: #1b5e20; }
+.ball-badge.is-6   { background: #1565c0; color: white; border-color: #0d47a1; }
+.ball-badge.is-wicket { background: #d32f2f; color: white; border-color: #b71c1c; }
+.ball-badge.is-extra  { background: #ff9800; color: white; border-color: #e65100; font-size: 10px; }
+
+/* 4. Submit Micro-lock */
+.btn-submit:disabled {
+  opacity: 0.7;
+  cursor: wait;
 }
 
-dialog .dlg {
+/* 5. Floating Wicket Details (Teleported) */
+.wicket-details-floating {
+  position: fixed;
+  bottom: 260px; /* Above footer (240px) + gap */
+  left: 16px;
+  width: 288px; /* 320px col - 32px margins approx */
+  z-index: 9999;
+  background: #ffebee;
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  border: 2px solid #d32f2f;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  min-width: 320px;
+  gap: 8px;
+  animation: slide-up 0.2s ease-out;
 }
 
-dialog footer {
+.wd-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #d32f2f;
+  letter-spacing: 1px;
+}
+
+.wd-row {
   display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
-/* RBAC banners */
-.rbac-banner {
-  border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
-  margin-bottom: var(--space-3);
-  border: 1px solid var(--color-error);
-  background: var(--color-error-soft);
-  color: var(--color-error);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.rbac-banner.warn {
-  border-color: var(--color-error);
-  background: var(--color-error-soft);
-  color: var(--color-error);
-}
-
-.rbac-banner.info {
-  border-color: var(--color-info);
-  background: var(--color-info-soft);
-  color: var(--color-info);
-}
-
-/* Player profile link */
-.player-link {
-  color: inherit;
-  text-decoration: none;
-}
-
-.player-link:hover {
-  text-decoration: underline;
-  text-decoration-style: dotted;
-}
-
-/* Dark mode polish */
-@media (prefers-color-scheme: dark) {
-  .chip {
-    border-color: var(--color-border);
-    background: var(--color-surface-hover);
-    color: var(--color-text-secondary);
-  }
-
-  .toolbar {
-    border-bottom-color: var(--color-border);
-  }
-
-  .placeholder {
-    border-color: var(--color-border);
-    background: var(--color-surface);
-  }
-
-  .inp, .sel {
-    background: var(--color-surface);
-    color: var(--color-text);
-    border-color: var(--color-border);
-  }
-
-  .btn-ghost {
-    background: var(--color-surface);
-    color: var(--color-text);
-    border-color: var(--color-border);
-  }
-
-  .modal {
-    background: var(--color-surface);
-    color: var(--color-text);
-  }
-
-  .modal-hdr {
-    border-bottom-color: var(--color-border);
-  }
-
-  .modal-ftr {
-    border-top-color: var(--color-border);
-  }
-
-  .x {
-    color: var(--color-text-muted);
-  }
-
-  .code {
-    background: var(--color-bg);
-    color: var(--color-text);
-    border-color: var(--color-border);
-  }
+@keyframes slide-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 </style>

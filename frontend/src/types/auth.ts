@@ -24,6 +24,7 @@ export interface AuthUser {
   org_id?: string | null;
   subscription?: SubscriptionInfo | null;
   created_at?: string | null;
+  requires_password_change?: boolean;
   [key: string]: unknown;
 }
 
