@@ -114,7 +114,7 @@ const showAdminNav = computed(() => auth.isSuper)
         <div v-if="auth.isLoggedIn" class="user-menu">
           <RouterLink to="/profile" class="user-menu-item" title="Profile">👤 Profile</RouterLink>
           <RouterLink to="/settings" class="user-menu-item" title="Settings">⚙️ Settings</RouterLink>
-          <button class="user-menu-item logout-btn" @click="auth.logout(); $router.push('/login')" title="Log out">
+          <button class="user-menu-item logout-btn" title="Log out" @click="auth.logout(); $router.push('/login')">
             🚪 Logout
           </button>
         </div>

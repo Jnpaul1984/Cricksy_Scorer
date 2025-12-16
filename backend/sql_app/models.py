@@ -94,9 +94,7 @@ class User(Base):
     )
     org_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     beta_tag: Mapped[str | None] = mapped_column(String, nullable=True)
-    requires_password_change: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
+    requires_password_change: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     password_changed_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

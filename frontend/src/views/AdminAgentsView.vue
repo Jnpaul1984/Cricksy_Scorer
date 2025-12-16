@@ -50,8 +50,10 @@ import { highlightMitigations } from './highlightMitigations'
 <script setup lang="ts">
 
 import { marked } from 'marked'
-import { highlightMitigations } from './highlightMitigations'
 import { ref, computed, onMounted } from 'vue'
+
+import { highlightMitigations } from './highlightMitigations'
+
 import { apiRequest } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 const usage = ref<any>(null)

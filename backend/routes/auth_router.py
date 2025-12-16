@@ -235,9 +235,7 @@ async def change_password(
     import datetime as dt
 
     # Verify current password
-    password_ok = security.verify_password(
-        payload.current_password, current_user.hashed_password
-    )  # nosec
+    password_ok = security.verify_password(payload.current_password, current_user.hashed_password)  # nosec
 
     if not password_ok:
         raise HTTPException(

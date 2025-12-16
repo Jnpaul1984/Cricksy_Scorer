@@ -33,9 +33,9 @@
             </div>
 
             <div v-if="hasActiveMatch" class="scoreboard-container">
-              <ScoreboardWidget
+              <LiveMatchCardCoach
                 :game-id="currentGameId"
-                :can-control="false"
+                :can-action="true"
               />
             </div>
             <div v-else class="empty-state">
@@ -161,7 +161,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseCard, BaseButton, BaseBadge, BaseInput } from '@/components'
-import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
+import LiveMatchCardCoach from '@/components/LiveMatchCardCoach.vue'
 import { useGameStore } from '@/stores/gameStore'
 
 const router = useRouter()

@@ -49,8 +49,7 @@ async def set_playing_xi(
     payload: schemas.PlayingXIRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> schemas.PlayingXIResponse:
-    result = await db.execute(select(models.Game).where(models.Game.id == str(game_id)))
-    game = result.scalar_one_or_none()
+    game = await crud.get_game(db, game_id=str(game_id))
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
