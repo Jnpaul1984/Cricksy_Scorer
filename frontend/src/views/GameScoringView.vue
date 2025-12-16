@@ -56,6 +56,12 @@ const isWicket = ref<boolean>(false)
 const dismissal = ref<string | null>(null)
 const dismissedName = ref<string | null>(null)
 const shotMap = ref<string | null>(null)
+const recordedZone = ref<number | null>(null)
+
+const recordZone = (zone: number) => {
+  recordedZone.value = zone
+}
+
 if (import.meta.env?.DEV) {
   console.info('GameScoringView setup refs', { isWicket, extra })
 }
@@ -216,7 +222,7 @@ function getBallClass(b: DeliveryRowForTable) {
   if (b.is_wicket) return 'is-wicket'
   if (b.runs_scored === 6) return 'is-6'
   if (b.runs_scored === 4) return 'is-4'
-  if (b.extra && b.extra !== 'none') return 'is-extra'
+  if (b.extra) return 'is-extra'
   if (b.runs_scored === 0) return 'is-dot'
   return 'is-run'
 }
