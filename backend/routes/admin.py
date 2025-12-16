@@ -110,6 +110,8 @@ async def list_beta_users(
             created_at=user.created_at.isoformat() if user.created_at else None,
             beta_tag=user.beta_tag,
             org_id=user.org_id,
+            requires_password_change=user.requires_password_change,
+            password_changed_at=user.password_changed_at.isoformat() if user.password_changed_at else None,
         )
         for user in users
     ]
