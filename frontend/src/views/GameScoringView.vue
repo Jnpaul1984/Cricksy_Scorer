@@ -1218,7 +1218,7 @@ const oversDisplay = computed<string>(() => {
 const eligibleNextOverBowlers = computed<Player[]>(() => {
   const lastBowler = lastBallBowlerId.value
   // Only filter if we have a valid lastBallBowlerId
-  return lastBowler 
+  return lastBowler
     ? bowlingPlayers.value.filter(p => p.id !== lastBowler)
     : bowlingPlayers.value
 })
