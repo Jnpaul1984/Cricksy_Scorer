@@ -1,5 +1,6 @@
 line-length = 100
 target-version = "py312"
+exclude = ["frontend", "node_modules", ".venv", "venv"]
 
 [lint]
 select = ["E", "F", "W", "B", "C4", "SIM", "RUF", "UP", "S"]
