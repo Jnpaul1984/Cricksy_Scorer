@@ -2188,7 +2188,7 @@ async function confirmChangeBowler(): Promise<void> {
    ===================================================== */
 .broadcast-layout {
   display: grid;
-  grid-template-rows: 48px auto 1fr 240px; /* Header, PlayerBar, Main, Footer */
+  grid-template-rows: 48px auto 1fr 160px; /* Header, PlayerBar, Main, Footer - reduced footer to 160px */
   height: 100vh;
   width: 100vw;
   overflow: hidden;
