@@ -1702,8 +1702,13 @@ function openCorrectionBowler(): void {
     return
   }
   isBowlerCorrection.value = true
-  selectedReplacementBowlerId.value = '' as UUID
+  // Auto-select first available bowler for correction
+  const firstBowler = eligibleCorrectionBowlers.value[0]?.id ?? ('' as UUID)
+  selectedReplacementBowlerId.value = firstBowler
   changeBowlerDlgOpen.value = true
+  if (import.meta.env.DEV) {
+    console.log('[openCorrectionBowler] Eligible bowlers:', eligibleCorrectionBowlers.value.length, 'Selected:', firstBowler)
+  }
 }
 
 function openChangeBowler(): void {
@@ -2407,7 +2412,7 @@ async function confirmChangeBowler(): Promise<void> {
   color: #666;
 }
 
-.action-row { display: flex; gap: 8px; align-items: stretch; height: 52px; }
+.action-row { display: flex; gap: 8px; align-items: stretch; height: 52px; position: relative; z-index: 10; }
 .wicket-toggle {
   flex: 1;
   display: flex;
@@ -2421,6 +2426,8 @@ async function confirmChangeBowler(): Promise<void> {
   cursor: pointer;
   font-size: 14px;
   transition: all 0.1s;
+  position: relative;
+  z-index: 10;
 }
 .wicket-toggle:hover { background: #ffebee; }
 .wicket-toggle.checked { background: #d32f2f; color: white; }
@@ -2437,6 +2444,8 @@ async function confirmChangeBowler(): Promise<void> {
   cursor: pointer;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   transition: all 0.1s;
+  position: relative;
+  z-index: 10;
 }
 .btn-submit:hover { background: #1b5e20; transform: translateY(-1px); }
 .btn-submit:active { transform: translateY(0); }
