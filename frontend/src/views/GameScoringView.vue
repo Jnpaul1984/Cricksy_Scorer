@@ -1243,17 +1243,17 @@ const legalBallsInCurrentOver = computed(() => {
 })
 
 const canCorrectBowler = computed(() => {
-  // Similar to Replace button, but for the START of an over
-  // Enabled if we're at the start (0 legal balls) and haven't finished the over yet
+  // Allow correction at ANY point during the over (not just at start)
+  // As long as there's a bowler selected and the over isn't finished (< 6 legal balls)
   const balls = legalBallsInCurrentOver.value
-  const atOverStart = balls === 0
+  const overNotFinished = balls < 6
 
   if (import.meta.env.DEV) {
-    console.log('[canCorrectBowler] balls:', balls, 'atOverStart:', atOverStart, 'currentBowlerId:', currentBowlerId.value)
+    console.log('[canCorrectBowler] balls:', balls, 'overNotFinished:', overNotFinished, 'currentBowlerId:', currentBowlerId.value)
   }
 
-  // Only available at the very start of an over when a bowler has been selected
-  return atOverStart && !!currentBowlerId.value
+  // Available during the over when a bowler has been selected
+  return overNotFinished && !!currentBowlerId.value
 })
 
 const inningsScore = computed<{ runs: number; wickets: number }>(() => ({
@@ -2412,19 +2412,19 @@ async function confirmChangeBowler(): Promise<void> {
   color: #666;
 }
 
-.action-row { display: flex; gap: 8px; align-items: stretch; height: 52px; position: relative; z-index: 10; }
+.action-row { display: flex; gap: 6px; align-items: stretch; height: 38px; position: relative; z-index: 10; }
 .wicket-toggle {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 4px;
   border: 2px solid #d32f2f;
   color: #d32f2f;
-  border-radius: 8px;
-  font-weight: 800;
+  border-radius: 6px;
+  font-weight: 700;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   transition: all 0.1s;
   position: relative;
   z-index: 10;
@@ -2437,15 +2437,16 @@ async function confirmChangeBowler(): Promise<void> {
   background: #2e7d32;
   color: white;
   border: none;
-  border-radius: 8px;
-  font-weight: 900;
-  font-size: 18px;
-  letter-spacing: 1px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
   cursor: pointer;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   transition: all 0.1s;
   position: relative;
   z-index: 10;
+  padding: 0;
 }
 .btn-submit:hover { background: #1b5e20; transform: translateY(-1px); }
 .btn-submit:active { transform: translateY(0); }
@@ -2454,8 +2455,8 @@ async function confirmChangeBowler(): Promise<void> {
 .wicket-details { background: #ffebee; padding: 8px; border-radius: 6px; display: flex; gap: 8px; }
 .sel-sm { flex: 1; padding: 6px; border-radius: 4px; border: 1px solid #ef9a9a; }
 
-.undo-row { margin-top: auto; text-align: center; padding-top: 4px; }
-.btn-undo { background: none; border: none; color: #999; text-decoration: underline; cursor: pointer; font-size: 11px; }
+.undo-row { margin-top: auto; text-align: center; padding-top: 2px; padding-bottom: 2px; }
+.btn-undo { background: none; border: none; color: #999; text-decoration: underline; cursor: pointer; font-size: 10px; }
 .btn-undo:hover { color: #d32f2f; }
 
 .btn-ghost-sm {
@@ -2548,10 +2549,10 @@ async function confirmChangeBowler(): Promise<void> {
   border-top: 1px solid #ddd;
   display: flex;
   flex-direction: column;
-  height: 240px; /* Fixed height for footer */
+  height: 160px; /* Reduced from 240px to show action buttons */
 }
 .tabs-nav { display: flex; background: #f5f5f5; border-bottom: 1px solid #ddd; }
-.tabs-nav button { flex: 1; padding: 12px; border: none; background: none; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; }
+.tabs-nav button { flex: 1; padding: 8px 6px; border: none; background: none; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; font-size: 12px; }
 .tabs-nav button.active { color: #1a237e; border-bottom-color: #1a237e; background: white; }
 
 .tab-content { flex: 1; overflow-y: auto; padding: 0; position: relative; }
