@@ -1214,7 +1214,18 @@ const oversDisplay = computed<string>(() => {
 })
 
 
-const eligibleNextOverBowlers = computed<Player[]>(() => bowlingPlayers.value.filter(p => p.id !== lastBallBowlerId.value))
+// For next over: exclude the bowler from the last delivery (cannot bowl consecutive overs)
+const eligibleNextOverBowlers = computed<Player[]>(() => {
+  const lastBowler = lastBallBowlerId.value
+  // Only filter if we have a valid lastBallBowlerId
+  return lastBowler 
+    ? bowlingPlayers.value.filter(p => p.id !== lastBowler)
+    : bowlingPlayers.value
+})
+
+// For correction at START of over: allow ALL available bowlers (no restrictions at over start)
+const eligibleCorrectionBowlers = computed<Player[]>(() => bowlingPlayers.value)
+
 const replacementOptions = computed<Player[]>(() => bowlingPlayers.value.filter(p => p.id !== currentBowlerId.value))
 const canUseMidOverChange = computed(() => currentOverBalls.value < 6 && !midOverChangeUsed.value)
 const overInProgress = computed<boolean>(() => Number((stateAny.value?.balls_this_over ?? 0)) > 0)
@@ -2155,7 +2166,7 @@ async function confirmChangeBowler(): Promise<void> {
         <p class="modal-body-text">{{ isBowlerCorrection ? 'Select the correct bowler for this over.' : 'Pick a replacement to finish this over. You can do this only once per over.' }}</p>
         <select v-model="selectedReplacementBowlerId" class="sel">
           <option disabled value="">{{ isBowlerCorrection ? 'Choose correct bowler…' : 'Choose replacement…' }}</option>
-          <option v-for="p in (isBowlerCorrection ? eligibleNextOverBowlers : replacementOptions)" :key="p.id" :value="p.id">{{ p.name }}{{ bowlerRoleBadge(p.id) }}</option>
+          <option v-for="p in (isBowlerCorrection ? eligibleCorrectionBowlers : replacementOptions)" :key="p.id" :value="p.id">{{ p.name }}{{ bowlerRoleBadge(p.id) }}</option>
         </select>
         <div class="modal-actions">
           <BaseButton variant="ghost" @click="closeChangeBowler">Cancel</BaseButton>
