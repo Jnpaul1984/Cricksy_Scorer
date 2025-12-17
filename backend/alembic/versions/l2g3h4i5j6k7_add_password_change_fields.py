@@ -1,7 +1,7 @@
 """Add password change tracking fields to users table.
 
-Revision ID: k1f2g3h4i5j6
-Revises: j0e1f2g3h4i5
+Revision ID: l2g3h4i5j6k7
+Revises: k1f2g3h4i5j6
 Create Date: 2025-12-16 01:00:00.000000
 
 """
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "k1f2g3h4i5j6"
-down_revision: str | None = "j0e1f2g3h4i5"
+revision: str = "l2g3h4i5j6k7"
+down_revision: str | None = "k1f2g3h4i5j6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
