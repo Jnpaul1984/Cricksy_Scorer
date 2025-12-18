@@ -18,9 +18,9 @@ import { computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
+import { useProjectorMode } from '@/composables/useProjectorMode'
 import { useGameStore } from '@/stores/gameStore'
 import { API_BASE } from '@/utils/api'
-import { useProjectorMode } from '@/composables/useProjectorMode'
 
 const route = useRoute()
 const gameId = computed(() => String(route.params.gameId))

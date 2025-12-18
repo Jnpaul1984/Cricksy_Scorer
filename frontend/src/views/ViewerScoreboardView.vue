@@ -1,6 +1,6 @@
 <template>
   <main class="view-wrap" :style="rootStyle">
-    <BaseCard as="header" padding="sm" class="bar" v-show="!projectorMode.isProjectorMode.value">
+    <BaseCard v-show="!projectorMode.isProjectorMode.value" as="header" padding="sm" class="bar">
       <div class="left">
         <h2 class="title">Scoreboard Viewer</h2>
         <BaseBadge v-if="gameId" variant="neutral" :uppercase="false">
@@ -45,9 +45,9 @@ import { useRoute } from 'vue-router'
 
 import { BaseButton, BaseCard, BaseBadge } from '@/components'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
+import { useProjectorMode } from '@/composables/useProjectorMode'
 import { useGameStore } from '@/stores/gameStore'
 import { API_BASE } from '@/utils/api'
-import { useProjectorMode } from '@/composables/useProjectorMode'
 
 /**
  * Route & params

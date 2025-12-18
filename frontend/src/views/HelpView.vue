@@ -13,8 +13,8 @@
           v-for="tab in tabs"
           :key="tab"
           :class="{ active: activeTab === tab }"
-          @click="activeTab = tab"
           class="nav-btn"
+          @click="activeTab = tab"
         >
           {{ formatTabName(tab) }}
         </button>
