@@ -3,6 +3,10 @@ import { reactive, computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { apiService, getErrorMessage } from '@/services/api'
+import FanFeedWidget from '@/components/FanFeedWidget.vue'
+import FanStatsWidget from '@/components/FanStatsWidget.vue'
+
+type TabName = 'feed' | 'stats' | 'create'
 
 type MatchFormat = 'T20' | 'T10' | 'custom'
 
@@ -17,6 +21,7 @@ interface FanMatchForm {
 const router = useRouter()
 const creating = ref(false)
 const errorMsg = ref<string | null>(null)
+const activeTab = ref<TabName>('feed')
 
 const form = reactive<FanMatchForm>({
   match_name: '',
@@ -69,14 +74,51 @@ async function onSubmit() {
 </script>
 
 <template>
-  <div class="fan-mode">
-    <div class="card">
-      <div class="header">
-        <h1>🏏 Fan Mode</h1>
-        <p class="subtitle">Score your own backyard cricket match</p>
-      </div>
+  <div class="fan-mode-view">
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'feed' }"
+        @click="activeTab = 'feed'"
+      >
+        🔥 Feed
+      </button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'stats' }"
+        @click="activeTab = 'stats'"
+      >
+        📊 Stats
+      </button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'create' }"
+        @click="activeTab = 'create'"
+      >
+        ➕ Start Match
+      </button>
+    </div>
 
-      <form class="form" @submit.prevent="onSubmit">
+    <!-- Feed Tab -->
+    <div v-if="activeTab === 'feed'" class="tab-panel">
+      <FanFeedWidget />
+    </div>
+
+    <!-- Stats Tab -->
+    <div v-else-if="activeTab === 'stats'" class="tab-panel">
+      <FanStatsWidget />
+    </div>
+
+    <!-- Create Match Tab -->
+    <div v-else-if="activeTab === 'create'" class="tab-panel">
+      <div class="card">
+        <div class="header">
+          <h1>🏏 Start a Match</h1>
+          <p class="subtitle">Score your own backyard cricket match</p>
+        </div>
+
+        <form class="form" @submit.prevent="onSubmit">
         <!-- Match Name (optional) -->
         <div class="field">
           <label for="match-name">Match Name <span class="optional">(optional)</span></label>
@@ -181,25 +223,62 @@ async function onSubmit() {
             {{ creating ? 'Starting...' : '🏏 Start Match' }}
           </button>
         </div>
-      </form>
+        </form>
 
-      <div class="footer">
-        <router-link to="/setup" class="back-link">
-          ← Back to full match setup
-        </router-link>
+        <div class="footer">
+          <router-link to="/setup" class="back-link">
+            ← Back to full match setup
+          </router-link>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.fan-mode {
+.fan-mode-view {
   min-height: 100vh;
   padding: 1.5rem;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+}
+
+/* Tab Navigation */
+.tab-nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 0 1rem;
+}
+
+.tab-btn {
+  padding: 0.75rem 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.tab-btn.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* Tab Panel */
+.tab-panel {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: calc(100vh - 200px);
 }
 
 .card {

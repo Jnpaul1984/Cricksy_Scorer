@@ -1,0 +1,77 @@
+{
+  "_comment": "Verification log - auto-updated by CLI after running verification commands",
+  "_schema": {
+    "item_id": {
+      "last_verified": "ISO timestamp",
+      "verified_by": "agent name or cli",
+      "commands_run": ["command 1", "command 2"],
+      "passed": true
+    }
+  },
+  "week3-form-tracker-ui": {
+    "last_verified": "2025-12-18T04:50:00Z",
+    "verified_by": "copilot-v1",
+    "commands_run": ["npm run type-check", "npm run build"],
+    "passed": true
+  },
+  "week3-season-graphs": {
+    "last_verified": "2025-12-18T05:00:00Z",
+    "verified_by": "copilot-v1",
+    "commands_run": ["npm run type-check", "npm run build"],
+    "passed": true
+  },
+  "week3-strength-weakness-ui": {
+    "last_verified": "2025-12-18T05:10:00Z",
+    "verified_by": "copilot-v1",
+    "commands_run": ["npm run type-check", "npm run build"],
+    "passed": true
+  },
+  "week3-coach-notebook": {
+    "last_verified": "2025-12-18T05:15:00Z",
+    "verified_by": "copilot",
+    "commands_run": ["npm run type-check", "npm run build"],
+    "passed": true
+  },
+  "week3-analytics-tables": {
+    "last_verified": "2025-12-18T05:20:00Z",
+    "verified_by": "copilot",
+    "commands_run": ["npm run type-check", "npm run build"],
+    "passed": true
+  },
+  "week3-export-ui": {
+    "last_verified": "2025-12-18T05:25:00Z",
+    "verified_by": "copilot",
+    "commands_run": ["npm run type-check", "npm run build"],
+    "passed": true
+  },
+  "week3-fan-feed-v1": {
+    "last_verified": "2025-12-18T05:35:00Z",
+    "verified_by": "copilot",
+    "commands_run": ["npm run type-check", "npm run build"],
+    "passed": true
+  },
+  "week3-fan-stats-page": {
+    "last_verified": "2025-12-18T05:42:00Z",
+    "verified_by": "copilot",
+    "commands_run": ["npm run type-check", "npm run build"],
+    "passed": true
+  },
+  "week3-follow-system-e2e": {
+    "last_verified": "2025-12-18T05:48:00Z",
+    "verified_by": "copilot",
+    "commands_run": ["npm run type-check", "npm run build"],
+    "passed": true
+  },
+  "week3-multi-player-comparison": {
+    "last_verified": "2025-12-18T05:54:00Z",
+    "verified_by": "copilot",
+    "commands_run": ["npm run type-check", "npm run build"],
+    "passed": true
+  },
+  "week3-phase-analysis": {
+    "last_verified": "2025-12-18T06:00:00Z",
+    "verified_by": "copilot",
+    "commands_run": ["npm run type-check", "npm run build"],
+    "passed": true
+  }
+}

@@ -73,6 +73,38 @@
           >
             Bowling
           </BaseButton>
+          <BaseButton
+            :variant="activeTab === 'form' ? 'primary' : 'ghost'"
+            class="tab-btn"
+            data-tab="form"
+            @click="activeTab = 'form'"
+          >
+            Form
+          </BaseButton>
+          <BaseButton
+            :variant="activeTab === 'season' ? 'primary' : 'ghost'"
+            class="tab-btn"
+            data-tab="season"
+            @click="activeTab = 'season'"
+          >
+            Season
+          </BaseButton>
+          <BaseButton
+            :variant="activeTab === 'profile' ? 'primary' : 'ghost'"
+            class="tab-btn"
+            data-tab="profile"
+            @click="activeTab = 'profile'"
+          >
+            Profile
+          </BaseButton>
+          <BaseButton
+            :variant="activeTab === 'notebook' ? 'primary' : 'ghost'"
+            class="tab-btn"
+            data-tab="notebook"
+            @click="activeTab = 'notebook'"
+          >
+            Notebook
+          </BaseButton>
         </BaseCard>
 
         <!-- Tab Content -->
@@ -227,6 +259,30 @@
               </div>
             </dl>
           </div>
+
+          <!-- Form Tab -->
+          <div v-else-if="activeTab === 'form'" class="tab-panel">
+            <FormTrackerWidget :profile="profile" />
+          </div>
+
+          <!-- Season Tab -->
+          <div v-else-if="activeTab === 'season'" class="tab-panel">
+            <SeasonGraphsWidget :profile="profile" />
+          </div>
+
+          <!-- Profile Strengths/Weaknesses Tab -->
+          <div v-else-if="activeTab === 'profile'" class="tab-panel">
+            <StrengthWeaknessWidget
+              :profile="profile"
+              :strengths="aiStrengths"
+              :weaknesses="aiWeaknesses"
+            />
+          </div>
+
+          <!-- Notebook Tab -->
+          <div v-else-if="activeTab === 'notebook'" class="tab-panel">
+            <CoachNotebookWidget :profile="profile" />
+          </div>
         </BaseCard>
 
         <!-- AI Insights Section -->
@@ -357,13 +413,17 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { BaseButton, BaseCard, BaseBadge } from '@/components'
+import FormTrackerWidget from '@/components/FormTrackerWidget.vue'
+import SeasonGraphsWidget from '@/components/SeasonGraphsWidget.vue'
+import StrengthWeaknessWidget from '@/components/StrengthWeaknessWidget.vue'
+import CoachNotebookWidget from '@/components/CoachNotebookWidget.vue'
 import MiniSparkline from '@/components/MiniSparkline.vue'
 import { apiService, getErrorMessage, getPlayerAIInsights } from '@/services/api'
 import type { FanFavoriteRead, PlayerAIInsights } from '@/services/api'
 import { getPlayerProfile } from '@/services/playerApi'
 import type { PlayerProfile } from '@/types/player'
 
-type TabName = 'overview' | 'batting' | 'bowling'
+type TabName = 'overview' | 'batting' | 'bowling' | 'form' | 'season' | 'profile' | 'notebook'
 
 const route = useRoute()
 const loading = ref(true)

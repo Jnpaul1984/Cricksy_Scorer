@@ -18,7 +18,13 @@
     "test:e2e": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\run-e2e.ps1",
     "test:e2e:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\run-e2e-dev.ps1",
     "cy:open": "cypress open",
-    "cy:run": "cypress run"
+    "cy:run": "cypress run",
+    "checklist:status": "python ../scripts/checklist.py status",
+    "checklist:status:week5": "python ../scripts/checklist.py status --week 5",
+    "checklist:next": "python ../scripts/checklist.py next",
+    "checklist:start": "python ../scripts/checklist.py start",
+    "checklist:verify": "python ../scripts/checklist.py verify",
+    "checklist:done": "python ../scripts/checklist.py done"
   },
   "dependencies": {
     "@picocss/pico": "^2.0.6",
