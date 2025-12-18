@@ -1663,4 +1663,39 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
   padding: var(--space-4);
   text-align: center;
 }
-</style>
+
+/* =====================================================
+   PROJECTOR MODE CSS VARIABLES
+   
+   Applied at root level via :style binding in parents
+   - --sb-scale: Scale factor (1, 1.1, 1.25, 1.5)
+   - --sb-density-padding: Padding for density (12px/16px/24px)
+   - --sb-density-font: Font scale (0.9em/1em/1.1em)
+   - --sb-density-gap: Gap/spacing (8px/12px/16px)
+   - --sb-safe-pad: Safe area padding for TV edge (0px or 20px)
+   ===================================================== */
+
+:root {
+  --sb-scale: 1;
+  --sb-density-padding: 16px;
+  --sb-density-font: 1em;
+  --sb-density-gap: 12px;
+  --sb-safe-pad: 0px;
+}
+
+/* Apply scale and density to card */
+.card {
+  transform: scale(var(--sb-scale));
+  transform-origin: top center;
+  font-size: var(--sb-density-font);
+  padding: calc(var(--sb-density-padding) + var(--sb-safe-pad));
+}
+
+/* Responsive grid adjustments for density */
+.grid {
+  gap: var(--sb-density-gap);
+}
+
+.pane {
+  padding: var(--sb-density-padding);
+}

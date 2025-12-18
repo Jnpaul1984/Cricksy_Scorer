@@ -1,6 +1,6 @@
 <template>
-  <main class="view-wrap">
-    <BaseCard as="header" padding="sm" class="bar">
+  <main class="view-wrap" :style="rootStyle">
+    <BaseCard as="header" padding="sm" class="bar" v-show="!projectorMode.isProjectorMode.value">
       <div class="left">
         <h2 class="title">Scoreboard Viewer</h2>
         <BaseBadge v-if="gameId" variant="neutral" :uppercase="false">
@@ -24,7 +24,7 @@
     </BaseCard>
 
     <!-- Decorative stage that keeps rails visible and looks nice in OBS/embeds -->
-    <BaseCard as="section" padding="lg" class="stage">
+    <BaseCard as="section" :padding="projectorMode.isProjectorMode.value ? 'md' : 'lg'" class="stage">
       <ScoreboardWidget
         :game-id="gameId"
         :title="resolvedTitle"
@@ -47,6 +47,7 @@ import { BaseButton, BaseCard, BaseBadge } from '@/components'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import { useGameStore } from '@/stores/gameStore'
 import { API_BASE } from '@/utils/api'
+import { useProjectorMode } from '@/composables/useProjectorMode'
 
 /**
  * Route & params
@@ -87,6 +88,14 @@ const resolvedTheme = ref<ThemeOpt>(
 )
 
 /**
+ * Projector mode config
+ */
+const projectorMode = useProjectorMode(q)
+const rootStyle = computed(() => 
+  projectorMode.cssVariables.value as Record<string, string>
+)
+
+/**
  * If theme=auto, pick one based on prefers-color-scheme
  */
 onMounted(() => {
@@ -111,6 +120,11 @@ const viewerUrl = computed(() => {
   if (q.title)        params.set('title', String(q.title))
   if (q.logo)         params.set('logo', String(q.logo))
   if (q.theme)        params.set('theme', String(q.theme))
+  if (q.preset)       params.set('preset', String(q.preset))
+  if (q.layout)       params.set('layout', String(q.layout))
+  if (q.scale)        params.set('scale', String(q.scale))
+  if (q.density)      params.set('density', String(q.density))
+  if (q.safeArea)     params.set('safeArea', String(q.safeArea))
   const qs = params.toString()
   return `${origin}/#/viewer/${encodeURIComponent(gameId.value)}${qs ? `?${qs}` : ''}`
 })
