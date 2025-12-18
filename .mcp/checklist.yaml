@@ -618,7 +618,7 @@ generated_by: "copilot-checklist-generator"
   category: "Analyst Pro"
   title: "Implement Export UI in Analyst Workspace"
   description: "UI to select data and export as CSV/JSON"
-  status: todo
+  status: done
   confidence: low
   risk_level: low
   acceptance_criteria:
