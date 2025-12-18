@@ -1,0 +1,1543 @@
+# Cricksy Scorer V1 Roadmap - MCP Checklist
+# Generated: 2025-12-18
+# Source: docs/Cricksy V1 checklist.txt
+# Status: LIVING DOCUMENT - Updated by agents after verification
+#
+# Rules:
+# - Only unfinished items included
+# - Status must be: todo | in_progress | blocked | done
+# - Confidence: high | medium | low (for inferred completion)
+# - Never mark done without verification_commands passing
+# - Always commit both checklist.yaml + checklist.md together
+
+checklist_version: "1.0"
+last_updated: "2025-12-18T00:00:00Z"
+generated_by: "copilot-checklist-generator"
+
+# ============================================================================
+# WEEK 5 - AI Integration Phase 1 (CURRENT FOCUS)
+# ============================================================================
+
+- id: week5-ai-win-probability
+  week: 5
+  category: "AI Basics"
+  title: "Add Win Probability API Integration"
+  description: "Implement real-time win probability calculations based on match state"
+  status: todo
+  confidence: low
+  risk_level: high
+  acceptance_criteria:
+    - "Win probability API endpoint exists and returns normalized 0-1 value"
+    - "Calculation updates after each delivery without stale data"
+    - "Handles edge cases: first ball, final overs, rain (if applicable)"
+    - "Prediction accuracy > 80% on historical matches"
+  verification_commands:
+    - "pytest backend/tests/ -k win_probability -v"
+    - "npm run typecheck"
+    - "npm run build"
+    - "npx cypress run --spec 'cypress/e2e/**/*win*' 2>/dev/null || echo 'No e2e tests yet'"
+  manual_checks:
+    - "Test win prob updates in real match UI"
+    - "Verify no stale predictions after undo"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check ML models in backend/ml_models/"
+
+- id: week5-ai-innings-grade
+  week: 5
+  category: "AI Basics"
+  title: "Add Innings Grade (Performance Rating)"
+  description: "Implement AI-based innings performance grading (A+ to D)"
+  status: todo
+  confidence: low
+  risk_level: medium
+  acceptance_criteria:
+    - "Grade appears in viewer after innings end"
+    - "Grades are consistent (same innnings = same grade)"
+    - "Considers: strike rate, boundaries, wickets lost, phase"
+    - "Calibrated against cricket domain logic"
+  verification_commands:
+    - "pytest backend/tests/ -k innings_grade -v"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: ""
+
+- id: week5-ai-pressure-mapping
+  week: 5
+  category: "AI Basics"
+  title: "Add Pressure Mapping Visualization"
+  description: "Map delivery-by-delivery pressure metrics on scoreboard"
+  status: todo
+  confidence: low
+  risk_level: medium
+  acceptance_criteria:
+    - "Pressure index (0-100) computed per delivery"
+    - "Visual indicator in scoreboard (color/size)"
+    - "Aggregated by phase (powerplay, middle, death)"
+  verification_commands:
+    - "npm run build"
+    - "npm run typecheck"
+    - "npx cypress run --spec 'cypress/e2e/viewer*.cy.ts' 2>/dev/null || true"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Visual design pending"
+
+- id: week5-ai-phase-predictions
+  week: 5
+  category: "AI Basics"
+  title: "Add Phase-Based Predictions"
+  description: "Predict likely phase outcomes (runs, wickets, overs pacing)"
+  status: todo
+  confidence: low
+  risk_level: high
+  acceptance_criteria:
+    - "Phase predictor endpoint returns next-over range estimate"
+    - "Accuracy ± 5 runs over 10-over windows"
+    - "Updates every delivery"
+  verification_commands:
+    - "pytest backend/tests/ -k phase_predict -v"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Depends on historical match dataset"
+
+- id: week5-player-pro-ai-career-summary
+  week: 5
+  category: "Player Pro"
+  title: "Add AI Career Summary to Player Profile"
+  description: "AI-generated career highlights and insights on player profile"
+  status: todo
+  confidence: low
+  risk_level: medium
+  acceptance_criteria:
+    - "Career summary section renders without errors"
+    - "Summarizes: best performance, avg stats, trending"
+    - "Respects player role (batter/bowler/all-rounder)"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+    - "npm run lint"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check frontend/src/views/PlayerProfileView.vue"
+
+- id: week5-player-pro-monthly-improvement
+  week: 5
+  category: "Player Pro"
+  title: "Add Monthly Improvement Algorithm"
+  description: "Track and display player improvement trends month-by-month"
+  status: todo
+  confidence: low
+  risk_level: medium
+  acceptance_criteria:
+    - "Monthly stats chart renders correctly"
+    - "Trend detection (improving/declining/stable)"
+    - "Annotations on peak/trough months"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Requires historical match data aggregation"
+
+- id: week5-coach-pro-tactical-suggestions
+  week: 5
+  category: "Coach Pro"
+  title: "Add Tactical Suggestion Engine v1"
+  description: "AI recommends bowler, fielding setup based on match state"
+  status: todo
+  confidence: low
+  risk_level: high
+  acceptance_criteria:
+    - "Best bowler recommendation (current form + history vs batter)"
+    - "Weakness vs bowler type suggestions"
+    - "Fielding setup recommendations (basic rules engine)"
+    - "Appears in Coach Dashboard without breaking existing flow"
+  verification_commands:
+    - "pytest backend/tests/ -k tactical -v"
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "High risk: impacts game strategy decisions"
+
+- id: week5-coach-pro-training-drills
+  week: 5
+  category: "Coach Pro"
+  title: "Add Training Drill Suggestions"
+  description: "Rules-based training drill suggestions based on player weakness"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Drill suggestions appear in player dev section"
+    - "Mapped to player weakness profile"
+    - "Drills include: description, duration, equipment"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Basic rules engine, can be hardcoded initially"
+
+- id: week5-analyst-pro-dismissal-patterns
+  week: 5
+  category: "Analyst Pro"
+  title: "Add AI Dismissal Pattern Detection"
+  description: "Detect common dismissal patterns (caught at mid-wicket, etc.)"
+  status: todo
+  confidence: low
+  risk_level: medium
+  acceptance_criteria:
+    - "Pattern detection endpoint returns top 5 patterns"
+    - "Filters by batter/bowler/phase"
+    - "Heatmap visualization in Analyst Workspace"
+  verification_commands:
+    - "pytest backend/tests/ -k dismissal_pattern -v"
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check frontend/src/views/AnalystWorkspaceView.vue"
+
+- id: week5-analyst-pro-ai-heatmaps
+  week: 5
+  category: "Analyst Pro"
+  title: "Add AI Heatmap Overlays"
+  description: "Heatmap of runs scored, wickets taken, field positioning"
+  status: todo
+  confidence: low
+  risk_level: medium
+  acceptance_criteria:
+    - "Field heatmap renders correctly"
+    - "Runs/wickets heatmaps color-coded"
+    - "Interactive (hover for details)"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Requires canvas/SVG visualizations"
+
+- id: week5-analyst-pro-ball-clustering
+  week: 5
+  category: "Analyst Pro"
+  title: "Add AI Ball Type Clustering"
+  description: "Cluster deliveries by type (fast/spin/short/full) and effectiveness"
+  status: todo
+  confidence: low
+  risk_level: medium
+  acceptance_criteria:
+    - "Clustering endpoint returns ball type distribution"
+    - "Effectiveness score (runs conceded vs runs saved)"
+    - "Visualized as grouped chart"
+  verification_commands:
+    - "pytest backend/tests/ -k ball_cluster -v"
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: ""
+
+- id: week5-org-pro-sponsor-rotation
+  week: 5
+  category: "Org Pro"
+  title: "Add Basic Sponsor Rotation Logic"
+  description: "Rotate sponsor logos/branding on scoreboard during match"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Sponsor rotation endpoint returns active sponsor per time slice"
+    - "Branded scoreboard viewer shows correct sponsor"
+    - "Org admin can set sponsor schedule"
+  verification_commands:
+    - "pytest backend/tests/ -k sponsor -v"
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check backend/routes/sponsors.py"
+
+- id: week5-org-pro-branding
+  week: 5
+  category: "Org Pro"
+  title: "Add Branding (Logo + Theme)"
+  description: "Allow org to customize logo, colors, fonts on scoreboard"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Org can upload logo in settings"
+    - "Theme colors apply to scoreboard/viewer"
+    - "Watermark appears on broadcast embed"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check frontend/src/views/OrgManagementView.vue"
+
+# ============================================================================
+# WEEK 4 - Beta Testing + Fixing + Polishing (PRE-WEEK5)
+# ============================================================================
+
+- id: week4-fix-scoring-ui-friction
+  week: 4
+  category: "Core"
+  title: "Fix Scoring UI Friction Points"
+  description: "Address usability issues identified during beta testing"
+  status: in_progress
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "No console errors during 30-ball scoring"
+    - "Delivery input < 3 clicks per ball"
+    - "Undo works correctly in all states"
+    - "Strike rotation correct on all wicket types"
+  verification_commands:
+    - "npm run lint"
+    - "npm run typecheck"
+    - "npm run build"
+    - "npx cypress run --spec 'cypress/e2e/scoring*.cy.ts' 2>/dev/null || true"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Ongoing from beta feedback"
+
+- id: week4-fix-strike-rotation
+  week: 4
+  category: "Core"
+  title: "Fix Incorrect Strike Rotation Cases"
+  description: "Handle edge cases in strike rotation after wickets/runs"
+  status: in_progress
+  confidence: high
+  risk_level: high
+  acceptance_criteria:
+    - "Dot ball: same striker"
+    - "Run ball: rotation works"
+    - "Wicket: correct next striker selected"
+    - "6 balls: correct over transition"
+  verification_commands:
+    - "pytest backend/tests/ -k strike_rotation -v"
+    - "npx cypress run --spec 'cypress/e2e/scoring*.cy.ts'"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check backend/services/scoring_service.py"
+
+- id: week4-fix-wicket-selection-ux
+  week: 4
+  category: "Frontend"
+  title: "Fix Wicket Selection Workflow"
+  description: "Streamline wicket selection UI to reduce friction"
+  status: in_progress
+  confidence: medium
+  risk_level: medium
+  acceptance_criteria:
+    - "Dismissal type selection < 2 clicks"
+    - "Player selection modal responsive on mobile"
+    - "Clear error messages if invalid selection"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+    - "npx cypress run --spec 'cypress/e2e/scoring*.cy.ts'"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check frontend/src/components/GameScoringView.vue"
+
+- id: week4-improve-extras-input
+  week: 4
+  category: "Frontend"
+  title: "Improve UX for Extras Input"
+  description: "Make wide/no-ball/bye selection more intuitive"
+  status: todo
+  confidence: medium
+  risk_level: low
+  acceptance_criteria:
+    - "Extras buttons clearly labeled"
+    - "Visual feedback on button press"
+    - "No accidental extra selections"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: ""
+
+- id: week4-fix-scoreboard-sync-delay
+  week: 4
+  category: "Backend"
+  title: "Fix Scoreboard Sync Delays"
+  description: "Reduce latency between scorer input and viewer update"
+  status: in_progress
+  confidence: medium
+  risk_level: high
+  acceptance_criteria:
+    - "Viewer updates within 500ms of delivery submission"
+    - "No duplicate updates or race conditions"
+    - "Works at 10+ concurrent viewers"
+  verification_commands:
+    - "pytest backend/tests/ -k socket -v"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check backend/socket_handlers.py and backend/services/live_bus.py"
+
+- id: week4-fix-upload-issues
+  week: 4
+  category: "Frontend"
+  title: "Fix Sponsor Upload Issues"
+  description: "Resolve file upload errors for sponsor logos"
+  status: todo
+  confidence: medium
+  risk_level: low
+  acceptance_criteria:
+    - "Upload works for JPG/PNG up to 5MB"
+    - "Error messages clear if file too large"
+    - "Upload progress visible"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check frontend/src/views/OrgManagementView.vue"
+
+- id: week4-polish-analyst-export
+  week: 4
+  category: "Frontend"
+  title: "Polish Analyst Export Consistency"
+  description: "Ensure CSV/JSON exports match spec and are deterministic"
+  status: todo
+  confidence: medium
+  risk_level: low
+  acceptance_criteria:
+    - "Export columns match spec in docs"
+    - "Same data = same export (deterministic)"
+    - "No missing values or encoding issues"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check backend/routes/analyst_pro.py"
+
+- id: week4-improve-player-profile-perf
+  week: 4
+  category: "Frontend"
+  title: "Improve Player Profile Performance"
+  description: "Optimize rendering for large match histories"
+  status: todo
+  confidence: medium
+  risk_level: low
+  acceptance_criteria:
+    - "Profile loads in < 2s with 100 matches"
+    - "Scrolling smooth (60 FPS)"
+    - "Pagination or virtualization implemented"
+  verification_commands:
+    - "npm run build"
+    - "npm run typecheck"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "May need React.lazy or Vuetify virtualization"
+
+- id: week4-improve-loading-states
+  week: 4
+  category: "Frontend"
+  title: "Improve Loading States for All Views"
+  description: "Add skeleton screens and progress indicators"
+  status: todo
+  confidence: medium
+  risk_level: low
+  acceptance_criteria:
+    - "All async views have loading skeleton"
+    - "Error states display user-friendly messages"
+    - "Empty states have helpful copy"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: ""
+
+# ============================================================================
+# WEEK 3 - Beta 1 Prep
+# ============================================================================
+
+- id: week3-form-tracker-ui
+  week: 3
+  category: "Player Pro"
+  title: "Implement Form Tracker UI"
+  description: "Display player form trends over recent matches"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Form chart renders (last 10 matches)"
+    - "Color-coded: red (poor), yellow (avg), green (good)"
+    - "Shows trend arrow (up/down/stable)"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: ""
+
+- id: week3-season-graphs
+  week: 3
+  category: "Player Pro"
+  title: "Implement Season Graphs"
+  description: "Cumulative runs/wickets/avg over season"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Line chart: cumulative runs per match"
+    - "Bar chart: runs per innings"
+    - "Annotated: milestones, peak performance"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Uses chart library (Chart.js or similar)"
+
+- id: week3-strength-weakness-ui
+  week: 3
+  category: "Player Pro"
+  title: "Implement Strength/Weakness UI"
+  description: "Show player strength/weakness indicators"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Weakness section renders in profile"
+    - "Shows top 3 weaknesses + tips to improve"
+    - "Strength section shows top 3 strengths"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: ""
+
+- id: week3-dev-dashboard-v1
+  week: 3
+  category: "Coach Pro"
+  title: "Implement Development Dashboard v1"
+  description: "Coach view of all assigned players' progress"
+  status: todo
+  confidence: low
+  risk_level: medium
+  acceptance_criteria:
+    - "Dashboard shows list of assigned players"
+    - "Each player card: recent form, next match, dev focus"
+    - "Filter by role (batter/bowler/all-rounder)"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check frontend/src/views/CoachesDashboardView.vue"
+
+- id: week3-multi-player-comparison
+  week: 3
+  category: "Coach Pro"
+  title: "Implement Multi-Player Comparison v1"
+  description: "Compare stats across multiple players side-by-side"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Comparison view shows 2-4 players"
+    - "Stats: SR, avg, boundary %, economy (if bowler)"
+    - "Sortable by stat"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: ""
+
+- id: week3-coach-notebook
+  week: 3
+  category: "Coach Pro"
+  title: "Implement Coach Notebook (Text Only)"
+  description: "Coach can write freeform notes per player/session"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Notebook section in player profile"
+    - "Text editor (no rich text yet)"
+    - "Autosave every 30s"
+    - "Timestamp on each note"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: ""
+
+- id: week3-export-ui
+  week: 3
+  category: "Analyst Pro"
+  title: "Implement Export UI in Analyst Workspace"
+  description: "UI to select data and export as CSV/JSON"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Export modal with format (CSV/JSON) selection"
+    - "Filters: date range, player, dismissal type, phase"
+    - "Download button triggers file download"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check frontend/src/views/AnalystWorkspaceView.vue"
+
+- id: week3-analytics-tables
+  week: 3
+  category: "Analyst Pro"
+  title: "Implement Analytics Tables (Manhattan/Worm)"
+  description: "Add specialized cricket analytics charts"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Manhattan plot: runs per delivery"
+    - "Worm chart: cumulative runs"
+    - "Interactive legend and hover info"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Requires cricket domain knowledge"
+
+- id: week3-phase-analysis
+  week: 3
+  category: "Analyst Pro"
+  title: "Add Phase Analysis"
+  description: "Break down match into phases (powerplay/middle/death)"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Phase selector in analytics"
+    - "Runs/wickets/SR by phase"
+    - "Phase comparison table"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Backend logic may exist; need frontend integration"
+
+- id: week3-fan-feed-v1
+  week: 3
+  category: "Fan Features"
+  title: "Implement Fan Feed v1"
+  description: "Social feed showing followed teams/players/matches"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Feed shows recent matches from followed entities"
+    - "Infinite scroll or pagination"
+    - "Each match card: score, highlights, fan reactions"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check frontend/src/views/FanModeView.vue"
+
+- id: week3-follow-system-e2e
+  week: 3
+  category: "Fan Features"
+  title: "Complete Follow System E2E"
+  description: "End-to-end: follow team/player → see in feed"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Follow button works on team/player cards"
+    - "Unfollow removes from feed"
+    - "Feed updates on follow/unfollow"
+  verification_commands:
+    - "pytest backend/tests/ -k follow -v"
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Check backend/routes/fan_mode.py"
+
+- id: week3-fan-stats-page
+  week: 3
+  category: "Fan Features"
+  title: "Implement Fan Stats Page v1"
+  description: "Personalized stats page showing followed players/teams"
+  status: todo
+  confidence: low
+  risk_level: low
+  acceptance_criteria:
+    - "Page shows summary of followed entities"
+    - "Top player by SR, top team by wins, etc."
+    - "Filters by sport/format"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: ""
+
+# ============================================================================
+# WEEK 2 - Core UI Wiring + Alpha
+# ============================================================================
+
+- id: week2-scoring-ui-redesign
+  week: 2
+  category: "Frontend"
+  title: "Implement Redesigned Scoring UI"
+  description: "New scoring interface with improved UX"
+  status: done
+  confidence: high
+  risk_level: high
+  acceptance_criteria:
+    - "Scoring view renders without errors"
+    - "All ball types selectable"
+    - "Undo works"
+    - "No console errors"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+    - "npx cypress run --spec 'cypress/e2e/scoring*.cy.ts' 2>/dev/null || true"
+  files_touched:
+    - "frontend/src/views/GameScoringView.vue"
+    - "frontend/src/components/ScoreboardWidget.vue"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: "Deployed in production, ongoing refinements in Week 4"
+
+- id: week2-viewer-v2
+  week: 2
+  category: "Frontend"
+  title: "Implement Viewer v2"
+  description: "Updated scoreboard viewer with improved layout"
+  status: done
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "Viewer renders live scoreboard"
+    - "Updates in real-time with Socket.IO"
+    - "Responsive on mobile"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched:
+    - "frontend/src/views/ViewerScoreboardView.vue"
+    - "frontend/src/views/EmbedScoreboardView.vue"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: "Enhanced with projector mode in Week 5"
+
+- id: week2-player-profile-v2
+  week: 2
+  category: "Frontend"
+  title: "Implement Player Profile v2"
+  description: "Redesigned player profile with career stats"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Profile page loads without errors"
+    - "Shows basic stats (runs, avg, SR)"
+    - "Responsive on mobile"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched:
+    - "frontend/src/views/PlayerProfileView.vue"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: ""
+
+- id: week2-tournament-edit-delete-ui
+  week: 2
+  category: "Frontend"
+  title: "Implement Tournament Edit/Delete UI"
+  description: "Admin UI to modify and delete tournaments"
+  status: done
+  confidence: medium
+  risk_level: low
+  acceptance_criteria:
+    - "Edit tournament form renders"
+    - "Delete button with confirmation modal"
+    - "Changes persist on reload"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched:
+    - "frontend/src/views/TournamentDetailView.vue"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: ""
+
+- id: week2-sponsor-upload-ui
+  week: 2
+  category: "Frontend"
+  title: "Implement Sponsor Upload UI (Basic)"
+  description: "Basic file upload for sponsor logos"
+  status: done
+  confidence: medium
+  risk_level: low
+  acceptance_criteria:
+    - "Upload button in org settings"
+    - "File size validation (< 5MB)"
+    - "Success/error messages"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched:
+    - "frontend/src/views/OrgManagementView.vue"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: "Enhanced with upload fixes in Week 4"
+
+- id: week2-captain-keeper-assignment
+  week: 2
+  category: "Frontend"
+  title: "Implement Captain/Keeper Assignment"
+  description: "UI to assign captain and keeper roles"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Player cards show role badges"
+    - "Dropdown to change roles"
+    - "Changes save to backend"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched:
+    - "frontend/src/views/TeamSelectionView.vue"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: ""
+
+- id: week2-fan-mode-custom-match-ui
+  week: 2
+  category: "Frontend"
+  title: "Implement Fan Mode UI (Custom Match)"
+  description: "UI for fans to create and score custom matches"
+  status: done
+  confidence: medium
+  risk_level: low
+  acceptance_criteria:
+    - "Custom match form renders"
+    - "Team selection works"
+    - "Fan can start scoring"
+  verification_commands:
+    - "npm run typecheck"
+    - "npm run build"
+  files_touched:
+    - "frontend/src/views/FanModeView.vue"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: ""
+
+- id: week2-team-roles-endpoints
+  week: 2
+  category: "Backend"
+  title: "Implement Team Roles Endpoints"
+  description: "API to manage team member roles (player/coach/admin)"
+  status: done
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "POST /teams/{id}/members - add member"
+    - "PUT /teams/{id}/members/{member_id} - update role"
+    - "DELETE /teams/{id}/members/{member_id} - remove member"
+    - "RBAC enforced (only admin can manage)"
+  verification_commands:
+    - "pytest backend/tests/ -k team_roles -v"
+    - "python -m ruff check backend/"
+    - "python -m mypy backend/"
+  files_touched:
+    - "backend/routes/teams.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: "Check backend/routes/teams.py"
+
+- id: week2-sponsor-upload-api
+  week: 2
+  category: "Backend"
+  title: "Implement Sponsor Upload API"
+  description: "API endpoint to upload sponsor logos"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "POST /orgs/{id}/sponsors/upload - upload file"
+    - "File validation (type, size)"
+    - "File stored securely"
+    - "Returns URL to uploaded file"
+  verification_commands:
+    - "pytest backend/tests/ -k sponsor_upload -v"
+  files_touched:
+    - "backend/routes/sponsors.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: ""
+
+- id: week2-follow-api-basic
+  week: 2
+  category: "Backend"
+  title: "Implement Basic Follow API"
+  description: "API to follow/unfollow teams and players"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "POST /users/follow - follow entity"
+    - "DELETE /users/follow/{entity_id} - unfollow"
+    - "GET /users/following - list followed"
+  verification_commands:
+    - "pytest backend/tests/ -k follow -v"
+  files_touched:
+    - "backend/routes/fan_mode.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: ""
+
+- id: week2-30-ball-scoring-test
+  week: 2
+  category: "Testing"
+  title: "30-Ball Scoring Test"
+  description: "E2E test: score a full 5-over inning"
+  status: done
+  confidence: high
+  risk_level: high
+  acceptance_criteria:
+    - "30 deliveries scored correctly"
+    - "Final score matches expected total"
+    - "No console errors or warnings"
+  verification_commands:
+    - "npx cypress run --spec 'cypress/e2e/scoring*.cy.ts' 2>/dev/null || true"
+  files_touched:
+    - "cypress/e2e/scoring_flow.cy.ts"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: "Part of CI/CD pipeline"
+
+- id: week2-viewer-sync-test
+  week: 2
+  category: "Testing"
+  title: "Viewer Sync Test"
+  description: "E2E test: verify viewer updates sync with scorer"
+  status: done
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "Delivery in scorer → viewer updates within 500ms"
+    - "No race conditions with multiple viewers"
+  verification_commands:
+    - "npx cypress run --spec 'cypress/e2e/viewer*.cy.ts' 2>/dev/null || true"
+  files_touched:
+    - "cypress/e2e/viewer_sync.cy.ts"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: ""
+
+- id: week2-snapshot-correctness-test
+  week: 2
+  category: "Testing"
+  title: "Snapshot Correctness Test"
+  description: "Test: game snapshots match expected state after delivery"
+  status: done
+  confidence: high
+  risk_level: high
+  acceptance_criteria:
+    - "Snapshot JSON matches schema"
+    - "Runs/wickets/overs correct"
+    - "Player stats aggregated correctly"
+  verification_commands:
+    - "pytest backend/tests/ -k snapshot -v"
+  files_touched:
+    - "backend/tests/test_scoring.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-10T15:30:00Z"
+  notes: "Critical for data integrity"
+
+# ============================================================================
+# WEEK 1 - Stabilization + 5-Tier Foundations
+# ============================================================================
+
+- id: week1-clean-cors-env
+  week: 1
+  category: "Backend"
+  title: "Clean CORS + Env Configs"
+  description: "Finalize CORS settings and environment configuration"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "CORS origins set correctly in production"
+    - "All env vars documented in .env.example"
+    - "No secrets in version control"
+  verification_commands:
+    - "grep -r 'SECRET_KEY' backend/ --include='*.py' 2>/dev/null | wc -l"
+  files_touched:
+    - "backend/config.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-scoring-engine-finalize
+  week: 1
+  category: "Backend"
+  title: "Finalize Scoring Engine"
+  description: "Runs, extras, wickets logic complete and tested"
+  status: done
+  confidence: high
+  risk_level: high
+  acceptance_criteria:
+    - "Dot ball: runs=0, legal_balls+=1"
+    - "Run ball: runs correct, legal_balls+=1"
+    - "Extra (wide/NB): runs correct, legal_balls+=0"
+    - "Wicket: player out, next batter selected"
+  verification_commands:
+    - "pytest backend/tests/ -k scoring -v"
+  files_touched:
+    - "backend/services/scoring_service.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: "Deployed in Week 1"
+
+- id: week1-mid-over-bowler-change
+  week: 1
+  category: "Backend"
+  title: "Finalize Mid-Over Bowler Change"
+  description: "Allow bowler change mid-over and revert correctly"
+  status: done
+  confidence: high
+  risk_level: high
+  acceptance_criteria:
+    - "Bowler can be changed at any point"
+    - "Stats attributed to correct bowler"
+    - "Undo restores previous bowler"
+  verification_commands:
+    - "pytest backend/tests/ -k bowler_change -v"
+  files_touched:
+    - "backend/services/scoring_service.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-innings-transitions
+  week: 1
+  category: "Backend"
+  title: "Finalize Innings Transitions"
+  description: "Correct innings end logic and transition to next inning"
+  status: done
+  confidence: high
+  risk_level: high
+  acceptance_criteria:
+    - "Innings ends after 10 wickets or run out of overs"
+    - "Stats aggregated correctly"
+    - "Teams swap roles correctly"
+  verification_commands:
+    - "pytest backend/tests/ -k innings_transition -v"
+  files_touched:
+    - "backend/services/scoring_service.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-post-results-endpoint
+  week: 1
+  category: "Backend"
+  title: "Implement POST /games/{id}/results"
+  description: "Endpoint to record final match result"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Endpoint accepts result (win/loss/tie)"
+    - "Validates game is finished"
+    - "Updates game.result field"
+  verification_commands:
+    - "pytest backend/tests/ -k post_results -v"
+  files_touched:
+    - "backend/routes/games_router.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: "Check backend/routes/games_router.py"
+
+- id: week1-post-finalize-endpoint
+  week: 1
+  category: "Backend"
+  title: "Implement POST /games/{id}/finalize"
+  description: "Endpoint to finalize match (lock for edits)"
+  status: done
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "Only admin/scorer can finalize"
+    - "Match locked after finalization"
+    - "Returns updated game object"
+  verification_commands:
+    - "pytest backend/tests/ -k finalize -v"
+  files_touched:
+    - "backend/routes/games_router.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-rbac-model
+  week: 1
+  category: "Backend"
+  title: "Create RBAC Model for 5 Tiers"
+  description: "Database schema and logic for role-based access control"
+  status: done
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "User.tier field exists (free/player_pro/coach_pro/analyst_pro/org_pro)"
+    - "Middleware enforces tier requirements"
+    - "Tests verify access control"
+  verification_commands:
+    - "pytest backend/tests/ -k rbac -v"
+  files_touched:
+    - "backend/sql_app/models.py"
+    - "backend/middleware/entitlements.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: "Check backend/sql_app/models.py"
+
+- id: week1-role-assignment-logic
+  week: 1
+  category: "Backend"
+  title: "Add Role Assignment Logic"
+  description: "API to assign users to teams with roles"
+  status: done
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "Team admin can assign roles"
+    - "Role changes propagate to permissions"
+    - "Audit log of role changes"
+  verification_commands:
+    - "pytest backend/tests/ -k role_assignment -v"
+  files_touched:
+    - "backend/routes/teams.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-form-tracker-db
+  week: 1
+  category: "Backend"
+  title: "Create Form Tracker DB Structure"
+  description: "Schema for player form tracking"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "PlayerForm table with: player_id, match_id, form_score, date"
+    - "Indexes on player_id and match_id"
+    - "Aggregation query for recent form"
+  verification_commands:
+    - "pytest backend/tests/ -k form_tracker -v"
+  files_touched:
+    - "backend/sql_app/models.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-strength-weakness-hooks
+  week: 1
+  category: "Backend"
+  title: "Add Strength/Weakness Hooks"
+  description: "Compute player strengths/weaknesses after each match"
+  status: done
+  confidence: medium
+  risk_level: low
+  acceptance_criteria:
+    - "After match: analyze performance"
+    - "Identify weakness patterns (e.g., vs spin)"
+    - "Store in PlayerWeakness table"
+  verification_commands:
+    - "pytest backend/tests/ -k weakness -v"
+  files_touched:
+    - "backend/services/player_analysis_service.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-player-summary-table
+  week: 1
+  category: "Backend"
+  title: "Add Player Summary Table Skeleton"
+  description: "Materialized view of player career stats"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "PlayerSummary table with: career_runs, career_avg, sr, matches"
+    - "Updated after each match"
+    - "Query < 50ms"
+  verification_commands:
+    - "pytest backend/tests/ -k player_summary -v"
+  files_touched:
+    - "backend/sql_app/models.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-player-dev-table
+  week: 1
+  category: "Backend"
+  title: "Create Player Development Table"
+  description: "Schema for coach to track player development"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "PlayerDevelopment table with: player_id, coach_id, focus_area, progress"
+    - "Coach can CRUD development plans"
+    - "Linked to player profile"
+  verification_commands:
+    - "pytest backend/tests/ -k player_dev -v"
+  files_touched:
+    - "backend/sql_app/models.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-coach-player-assignment
+  week: 1
+  category: "Backend"
+  title: "Create Coach → Player Assignment"
+  description: "Link coaches to players they mentor"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "CoachPlayerAssignment table created"
+    - "Coach can assign/unassign"
+    - "Bidirectional queries work"
+  verification_commands:
+    - "pytest backend/tests/ -k coach_assignment -v"
+  files_touched:
+    - "backend/sql_app/models.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-notes-session-table
+  week: 1
+  category: "Backend"
+  title: "Create Notes/Session Table"
+  description: "Schema for coach session notes"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "CoachSession table with: coach_id, players, date, notes"
+    - "Indexed by coach and date"
+    - "Free-text search support"
+  verification_commands:
+    - "pytest backend/tests/ -k session -v"
+  files_touched:
+    - "backend/sql_app/models.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-export-endpoints-basic
+  week: 1
+  category: "Backend"
+  title: "Create Basic Export Endpoints"
+  description: "API to export match data as CSV/JSON"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "GET /games/{id}/export?format=csv|json"
+    - "Returns deliveries, players, stats"
+    - "File download works"
+  verification_commands:
+    - "pytest backend/tests/ -k export -v"
+  files_touched:
+    - "backend/routes/analyst_pro.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-analytics-query-placeholder
+  week: 1
+  category: "Backend"
+  title: "Create Analytics Query Placeholder"
+  description: "Skeleton endpoint for analytics queries"
+  status: done
+  confidence: medium
+  risk_level: low
+  acceptance_criteria:
+    - "POST /analytics/query endpoint exists"
+    - "Accepts filter params: player, date_range, phase"
+    - "Returns stub data for now"
+  verification_commands:
+    - "pytest backend/tests/ -k analytics -v"
+  files_touched:
+    - "backend/routes/analyst_pro.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-custom-match-scoring
+  week: 1
+  category: "Backend"
+  title: "Enable Custom Match Scoring"
+  description: "Allow fans to create and score matches"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "POST /games - create custom match"
+    - "Fan can score match without coach/org"
+    - "Match visible in fan profile"
+  verification_commands:
+    - "pytest backend/tests/ -k custom_match -v"
+  files_touched:
+    - "backend/routes/games_router.py"
+    - "backend/routes/fan_mode.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-simple-follow-system
+  week: 1
+  category: "Backend"
+  title: "Add Simple Follow System"
+  description: "Follow teams and players for fan mode"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "POST /users/follow - follow entity"
+    - "User.following list aggregates"
+    - "Counted in user profile"
+  verification_commands:
+    - "pytest backend/tests/ -k follow -v"
+  files_touched:
+    - "backend/routes/fan_mode.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-favourite-matches-table
+  week: 1
+  category: "Backend"
+  title: "Add Favourite Matches Table"
+  description: "Let fans bookmark favorite matches"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "FavouriteMatch table: user_id, game_id, created_at"
+    - "GET /users/favourite-matches returns list"
+    - "Unique constraint (user, game)"
+  verification_commands:
+    - "pytest backend/tests/ -k favourite -v"
+  files_touched:
+    - "backend/sql_app/models.py"
+    - "backend/routes/fan_mode.py"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-01T10:00:00Z"
+  notes: ""
+
+- id: week1-design-scoring-ui
+  week: 1
+  category: "Design"
+  title: "Complete V1 Redesigned Scoring UI"
+  description: "Visual design for new scoring interface"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Figma/Sketch mockups completed"
+    - "Component library documented"
+    - "Responsive breakpoints defined"
+  verification_commands: []
+  files_touched: []
+  completed_by: "design-team"
+  completed_at: "2025-11-20T10:00:00Z"
+  notes: "Handed off to frontend for implementation"
+
+- id: week1-design-viewer-v2
+  week: 1
+  category: "Design"
+  title: "Complete Viewer v2 Designs"
+  description: "Visual design for new scoreboard viewer"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Desktop + mobile mockups"
+    - "OBS embed variant"
+    - "Responsive layouts"
+  verification_commands: []
+  files_touched: []
+  completed_by: "design-team"
+  completed_at: "2025-11-20T10:00:00Z"
+  notes: ""
+
+- id: week1-design-player-profile-v2
+  week: 1
+  category: "Design"
+  title: "Complete Player Profile v2"
+  description: "Redesigned player profile layout"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Stats layout optimized"
+    - "Career section prominent"
+    - "Mobile-first approach"
+  verification_commands: []
+  files_touched: []
+  completed_by: "design-team"
+  completed_at: "2025-11-20T10:00:00Z"
+  notes: ""
+
+- id: week1-design-coaches-dashboard
+  week: 1
+  category: "Design"
+  title: "Complete Coaches Dashboard"
+  description: "Visual design for coach dashboard"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Player cards layout"
+    - "Dev tracking sections"
+    - "Navigation clear"
+  verification_commands: []
+  files_touched: []
+  completed_by: "design-team"
+  completed_at: "2025-11-20T10:00:00Z"
+  notes: ""
+
+- id: week1-design-analyst-workspace
+  week: 1
+  category: "Design"
+  title: "Complete Analyst Workspace"
+  description: "Visual design for analyst dashboard"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Chart layouts and spacing"
+    - "Export UI mockups"
+    - "Filter controls placement"
+  verification_commands: []
+  files_touched: []
+  completed_by: "design-team"
+  completed_at: "2025-11-20T10:00:00Z"
+  notes: ""
+
+- id: week1-design-pricing-page
+  week: 1
+  category: "Design"
+  title: "Complete Pricing Page"
+  description: "Visual design for tier pricing display"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Tier comparison table"
+    - "Feature highlights"
+    - "CTA buttons prominent"
+  verification_commands: []
+  files_touched: []
+  completed_by: "design-team"
+  completed_at: "2025-11-20T10:00:00Z"
+  notes: ""
+
+- id: week1-design-landing-page
+  week: 1
+  category: "Design"
+  title: "Complete Landing Page"
+  description: "Visual design for marketing landing page"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Hero section"
+    - "Feature cards"
+    - "Social proof section"
+    - "CTA flow"
+  verification_commands: []
+  files_touched: []
+  completed_by: "design-team"
+  completed_at: "2025-11-20T10:00:00Z"
+  notes: ""
+
+- id: week1-design-system-finalize
+  week: 1
+  category: "Design"
+  title: "Finalize Full Design System"
+  description: "Complete design tokens and component library"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Color palette defined"
+    - "Typography specs"
+    - "Spacing/grid system"
+    - "Icon library"
+    - "Component specs documented"
+  verification_commands:
+    - "npm run build"
+  files_touched:
+    - "frontend/src/styles/design-tokens.css"
+  completed_by: "design-team"
+  completed_at: "2025-11-20T10:00:00Z"
+  notes: "See frontend/src/styles/design-tokens.css"

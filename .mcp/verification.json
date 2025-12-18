@@ -1,0 +1,11 @@
+{
+  "_comment": "Verification log - auto-updated by CLI after running verification commands",
+  "_schema": {
+    "item_id": {
+      "last_verified": "ISO timestamp",
+      "verified_by": "agent name or cli",
+      "commands_run": ["command 1", "command 2"],
+      "passed": true
+    }
+  }
+}
