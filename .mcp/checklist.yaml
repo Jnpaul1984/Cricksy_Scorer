@@ -638,7 +638,7 @@ generated_by: "copilot-checklist-generator"
   category: "Analyst Pro"
   title: "Implement Analytics Tables (Manhattan/Worm)"
   description: "Add specialized cricket analytics charts"
-  status: todo
+  status: done
   confidence: low
   risk_level: low
   acceptance_criteria:
