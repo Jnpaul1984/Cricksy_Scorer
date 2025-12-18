@@ -44,7 +44,7 @@ const apiBase = ((q.apiBase as string) || API_BASE || fallbackOrigin).replace(/\
  * Projector mode config
  */
 const projectorMode = useProjectorMode(q)
-const rootStyle = computed(() => 
+const rootStyle = computed(() =>
   projectorMode.cssVariables.value as Record<string, string>
 )
 

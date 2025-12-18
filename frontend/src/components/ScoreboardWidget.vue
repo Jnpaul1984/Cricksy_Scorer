@@ -1666,7 +1666,7 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
 
 /* =====================================================
    PROJECTOR MODE CSS VARIABLES
-   
+
    Applied at root level via :style binding in parents
    - --sb-scale: Scale factor (1, 1.1, 1.25, 1.5)
    - --sb-density-padding: Padding for density (12px/16px/24px)
@@ -1698,4 +1698,5 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
 
 .pane {
   padding: var(--sb-density-padding);
-}</style>
+}
+</style>

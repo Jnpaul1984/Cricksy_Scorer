@@ -1,6 +1,6 @@
 /**
  * useProjectorMode.ts - Projector mode configuration
- * 
+ *
  * Handles query parameter parsing and CSS variable management for
  * projectable/resizable viewer modes (TV, projector, OBS overlay)
  */
@@ -211,7 +211,7 @@ export function buildProjectorUrl(
 ): string {
   const params = new URLSearchParams()
   params.set('preset', preset)
-  
+
   if (additionalParams) {
     Object.entries(additionalParams).forEach(([k, v]) => {
       params.set(k, v)

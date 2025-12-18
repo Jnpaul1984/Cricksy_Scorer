@@ -24,7 +24,7 @@ This PR enhances the projectable/resizable viewer and scoreboard modes for TVs, 
 # Preset for 1920x1080 TV
 /#/view/game-id?preset=tv1080
 
-# Preset for 1280x720 projector  
+# Preset for 1280x720 projector
 /#/embed/game-id?preset=proj720
 
 # Custom configuration
@@ -235,4 +235,3 @@ git branch -D week5/projector-tightening
 - [ ] All frontend checks pass (lint, typecheck, build)
 - [ ] No new console errors/warnings
 - [ ] Mobile responsiveness verified
-

@@ -28,7 +28,7 @@
           <div class="section-content">
             <h3>Basic Runs</h3>
             <p>Click the run buttons (0–6) to record runs off each delivery. Runs accumulate immediately.</p>
-            
+
             <h3>Extras</h3>
             <p><strong>Wides & No-balls:</strong> Click the "W" or "NB" button. These add 1 run automatically and don't count as a legal ball.</p>
             <p><strong>Byes & Leg-byes:</strong> Click "By" or "LB". These are extras but do count as legal balls.</p>
@@ -75,7 +75,7 @@
 
             <h3>Using Presets</h3>
             <p>Add a <code>preset</code> parameter to apply pre-tuned settings:</p>
-            
+
             <div class="preset-group">
               <h4>preset=tv1080</h4>
               <p>For 1920×1080 TVs. Scale: 1.15, spacious padding, all sections visible.</p>

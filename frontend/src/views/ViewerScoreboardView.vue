@@ -91,7 +91,7 @@ const resolvedTheme = ref<ThemeOpt>(
  * Projector mode config
  */
 const projectorMode = useProjectorMode(q)
-const rootStyle = computed(() => 
+const rootStyle = computed(() =>
   projectorMode.cssVariables.value as Record<string, string>
 )
 
