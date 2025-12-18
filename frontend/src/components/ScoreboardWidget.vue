@@ -1698,4 +1698,4 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
 
 .pane {
   padding: var(--sb-density-padding);
-}
+}</style>

@@ -5,7 +5,7 @@
  * projectable/resizable viewer modes (TV, projector, OBS overlay)
  */
 
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 import type { LocationQueryValue } from 'vue-router'
 
 export type Layout = 'default' | 'projector'
