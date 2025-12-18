@@ -597,7 +597,7 @@ generated_by: "copilot-checklist-generator"
   category: "Coach Pro"
   title: "Implement Coach Notebook (Text Only)"
   description: "Coach can write freeform notes per player/session"
-  status: todo
+  status: done
   confidence: low
   risk_level: low
   acceptance_criteria:
