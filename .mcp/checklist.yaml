@@ -557,7 +557,7 @@ generated_by: "copilot-checklist-generator"
   category: "Coach Pro"
   title: "Implement Development Dashboard v1"
   description: "Coach view of all assigned players' progress"
-  status: todo
+  status: done
   confidence: low
   risk_level: medium
   acceptance_criteria:
