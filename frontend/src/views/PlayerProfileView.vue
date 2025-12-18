@@ -89,6 +89,14 @@
           >
             Season
           </BaseButton>
+          <BaseButton
+            :variant="activeTab === 'profile' ? 'primary' : 'ghost'"
+            class="tab-btn"
+            data-tab="profile"
+            @click="activeTab = 'profile'"
+          >
+            Profile
+          </BaseButton>
         </BaseCard>
 
         <!-- Tab Content -->
@@ -253,6 +261,15 @@
           <div v-else-if="activeTab === 'season'" class="tab-panel">
             <SeasonGraphsWidget :profile="profile" />
           </div>
+
+          <!-- Profile Strengths/Weaknesses Tab -->
+          <div v-else-if="activeTab === 'profile'" class="tab-panel">
+            <StrengthWeaknessWidget 
+              :profile="profile" 
+              :strengths="aiStrengths" 
+              :weaknesses="aiWeaknesses" 
+            />
+          </div>
         </BaseCard>
 
         <!-- AI Insights Section -->
@@ -385,13 +402,14 @@ import { useRoute } from 'vue-router'
 import { BaseButton, BaseCard, BaseBadge } from '@/components'
 import FormTrackerWidget from '@/components/FormTrackerWidget.vue'
 import SeasonGraphsWidget from '@/components/SeasonGraphsWidget.vue'
+import StrengthWeaknessWidget from '@/components/StrengthWeaknessWidget.vue'
 import MiniSparkline from '@/components/MiniSparkline.vue'
 import { apiService, getErrorMessage, getPlayerAIInsights } from '@/services/api'
 import type { FanFavoriteRead, PlayerAIInsights } from '@/services/api'
 import { getPlayerProfile } from '@/services/playerApi'
 import type { PlayerProfile } from '@/types/player'
 
-type TabName = 'overview' | 'batting' | 'bowling' | 'form' | 'season'
+type TabName = 'overview' | 'batting' | 'bowling' | 'form' | 'season' | 'profile'
 
 const route = useRoute()
 const loading = ref(true)
