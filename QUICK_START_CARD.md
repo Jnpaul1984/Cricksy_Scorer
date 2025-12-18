@@ -6,7 +6,7 @@
 python -m pre_commit run --all-files
 ```
 
-**If it fails:** Check `WORKFLOW_PRECHECK.md` → "Common Failures & Fixes"  
+**If it fails:** Check `WORKFLOW_PRECHECK.md` → "Common Failures & Fixes"
 **If it passes:** Go to next step ✅
 
 ---
@@ -239,6 +239,6 @@ If ALL else fails:
 
 ---
 
-**Last Updated:** 2025-12-18  
-**Week 3 Status:** ✅ COMPLETE (70.3% overall)  
+**Last Updated:** 2025-12-18
+**Week 3 Status:** ✅ COMPLETE (70.3% overall)
 **All Fixes:** ✅ DEPLOYED
