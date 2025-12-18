@@ -577,8 +577,8 @@ generated_by: "copilot-checklist-generator"
   category: "Coach Pro"
   title: "Implement Multi-Player Comparison v1"
   description: "Compare stats across multiple players side-by-side"
-  status: todo
-  confidence: low
+  status: done
+  confidence: high
   risk_level: low
   acceptance_criteria:
     - "Comparison view shows 2-4 players"
@@ -587,10 +587,12 @@ generated_by: "copilot-checklist-generator"
   verification_commands:
     - "npm run typecheck"
     - "npm run build"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: ""
+  files_touched:
+    - "frontend/src/components/MultiPlayerComparisonWidget.vue"
+    - "frontend/src/views/MultiPlayerComparisonView.vue"
+  completed_by: "GitHub Copilot"
+  completed_at: "2025-12-18T00:00:00Z"
+  notes: "5 comparison tabs: Batting, Bowling, Form, Radar, H2H"
 
 - id: week3-coach-notebook
   week: 3
