@@ -14,6 +14,7 @@
 
       <!-- View / context controls -->
       <div class="aw-header-actions">
+        <ExportUI :data="filteredMatches" />
         <BaseButton variant="ghost" size="sm" @click="refreshData">
           Refresh data
         </BaseButton>
@@ -352,6 +353,7 @@ import { useRouter } from 'vue-router'
 
 import { BaseCard, BaseButton, BaseBadge, BaseInput, ImpactBar, MiniSparkline, AiCalloutsPanel } from '@/components'
 import AnalyticsTablesWidget from '@/components/AnalyticsTablesWidget.vue'
+import ExportUI from '@/components/ExportUI.vue'
 import type { AiCallout } from '@/components'
 import {
   getAnalystMatches,
