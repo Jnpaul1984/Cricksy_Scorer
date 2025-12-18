@@ -513,8 +513,8 @@ generated_by: "copilot-checklist-generator"
   category: "Player Pro"
   title: "Implement Season Graphs"
   description: "Cumulative runs/wickets/avg over season"
-  status: todo
-  confidence: low
+  status: done
+  confidence: high
   risk_level: low
   acceptance_criteria:
     - "Line chart: cumulative runs per match"
@@ -523,10 +523,12 @@ generated_by: "copilot-checklist-generator"
   verification_commands:
     - "npm run typecheck"
     - "npm run build"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "Uses chart library (Chart.js or similar)"
+  files_touched:
+    - "frontend/src/components/SeasonGraphsWidget.vue"
+    - "frontend/src/views/PlayerProfileView.vue"
+  completed_by: "copilot-v1"
+  completed_at: "2025-12-18T04:52:15Z"
+  notes: "Multi-tab visualization with chart.js. Shows cumulative progression, per-innings bars, and rolling averages with peak performance annotations."
 
 - id: week3-strength-weakness-ui
   week: 3
