@@ -73,6 +73,14 @@
           >
             Bowling
           </BaseButton>
+          <BaseButton
+            :variant="activeTab === 'form' ? 'primary' : 'ghost'"
+            class="tab-btn"
+            data-tab="form"
+            @click="activeTab = 'form'"
+          >
+            Form
+          </BaseButton>
         </BaseCard>
 
         <!-- Tab Content -->
@@ -227,6 +235,11 @@
               </div>
             </dl>
           </div>
+
+          <!-- Form Tab -->
+          <div v-else-if="activeTab === 'form'" class="tab-panel">
+            <FormTrackerWidget :profile="profile" />
+          </div>
         </BaseCard>
 
         <!-- AI Insights Section -->
@@ -357,13 +370,14 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { BaseButton, BaseCard, BaseBadge } from '@/components'
+import FormTrackerWidget from '@/components/FormTrackerWidget.vue'
 import MiniSparkline from '@/components/MiniSparkline.vue'
 import { apiService, getErrorMessage, getPlayerAIInsights } from '@/services/api'
 import type { FanFavoriteRead, PlayerAIInsights } from '@/services/api'
 import { getPlayerProfile } from '@/services/playerApi'
 import type { PlayerProfile } from '@/types/player'
 
-type TabName = 'overview' | 'batting' | 'bowling'
+type TabName = 'overview' | 'batting' | 'bowling' | 'form'
 
 const route = useRoute()
 const loading = ref(true)
