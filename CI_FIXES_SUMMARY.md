@@ -1,14 +1,45 @@
-# CI/Workflow Fixes Summary - Week 3 Beta 1 Prep
+# CI/Workflow Fixes Summary - Week 3 Beta 1 Prep (Updated Post-Merge)
 
 ## Status: ✅ ALL FIXED & PUSHED
 
-**Date:** 2025-12-18
-**Branch:** `week3/beta-1-prep`
-**Commits:** 4 (fixes + documentation)
+**Date:** 2025-12-18 (Updated 2025-12-18 after merge)
+**Branch:** Merged to `main` ✅
+**Commits:** 8 (fixes + documentation + post-merge CI fix)
 
 ---
 
 ## Issues Found & Fixed
+
+### 0. **Pre-Commit CI Timeout** (Post-Merge Fix) ⭐ NEW
+**Problem:** After merging PR to main, CI pre-commit job timed out
+```
+Error: Action 'https://api.github.com/repos/pre-commit/action/tarball/...' 
+download has timed out. Error: The request was canceled due to the 
+configured HttpClient.Timeout of 100 seconds elapsing.
+```
+**Root Cause:** `pre-commit/action@v3.0.1` was unreliable, timing out when downloading from GitHub API
+
+**Fix:** Replaced external action with direct pre-commit installation
+```yaml
+# BEFORE (unreliable):
+- name: Run pre-commit
+  uses: pre-commit/action@v3.0.1
+  with:
+    extra_args: --all-files
+
+# AFTER (reliable):
+- name: Install pre-commit
+  run: |
+    python -m pip install --upgrade pip
+    pip install pre-commit
+
+- name: Run pre-commit
+  run: |
+    pre-commit run --all-files
+```
+
+**Status:** FIXED ✅ (Commit: c49e3c1)
+**Why This Works:** Direct installation avoids GitHub API timeout issues
 
 ### 1. **YAML Syntax Error** (`.mcp/checklist.yaml`)
 **Problem:** Invalid YAML structure mixing root-level key-values with list items
@@ -27,6 +58,7 @@ last_updated: "2025-12-18"
 - id: week5-ai-win-probability
   ...
 ```
+
 
 **Verification:** `python -c "import yaml; yaml.safe_load(open('.mcp/checklist.yaml'))"` ✅
 

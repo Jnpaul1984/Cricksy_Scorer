@@ -33,14 +33,16 @@ python -m pre_commit run --all-files && cd backend && pytest -q tests/ && cd ../
 
 ## GitHub Actions Workflows (What CI Runs)
 
-### 1. **Pre-Commit** (`pre-commit/action@v3.0.1`)
-**Runs:** All files
+### 1. **Pre-Commit** (Direct Installation)
+**Runs:** All files with pre-commit hooks
 **Checks:**
 - ✅ YAML syntax validation
 - ✅ File ending fixes
 - ✅ Trailing whitespace removal
 - ✅ Private key detection
 - ✅ Ruff linting & formatting
+
+**Implementation:** Direct pip install + execution (replaced `pre-commit/action@v3.0.1` which was timing out)
 
 **Local Test:**
 ```bash
@@ -55,6 +57,8 @@ python -m pre_commit run --all-files
 | `Trailing whitespace` | Pre-commit auto-fixes; just stage & commit |
 | `End of file issues` | Pre-commit auto-fixes; just stage & commit |
 | `ruff format mismatch` | Run `python -m ruff format .` to auto-fix |
+
+**Note:** Previously used `pre-commit/action@v3.0.1` but it was timing out during GitHub API download. Now using direct installation which is more reliable.
 
 ---
 
