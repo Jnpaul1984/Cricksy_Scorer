@@ -122,6 +122,14 @@ const router = createRouter({
       props: route => ({ gameId: String(route.params.gameId), ...route.query }),
     },
 
+    // --- Help route ---
+    {
+      path: '/help',
+      name: 'help',
+      component: () => import('@/views/HelpView.vue'),
+      meta: { title: 'Help — Cricksy Scorer' },
+    },
+
     // --- Tournament routes ---
     {
       path: '/tournaments',
