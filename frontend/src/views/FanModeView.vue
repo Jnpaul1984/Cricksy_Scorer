@@ -4,8 +4,9 @@ import { useRouter } from 'vue-router'
 
 import { apiService, getErrorMessage } from '@/services/api'
 import FanFeedWidget from '@/components/FanFeedWidget.vue'
+import FanStatsWidget from '@/components/FanStatsWidget.vue'
 
-type TabName = 'feed' | 'create'
+type TabName = 'feed' | 'stats' | 'create'
 
 type MatchFormat = 'T20' | 'T10' | 'custom'
 
@@ -85,6 +86,13 @@ async function onSubmit() {
       </button>
       <button
         class="tab-btn"
+        :class="{ active: activeTab === 'stats' }"
+        @click="activeTab = 'stats'"
+      >
+        📊 Stats
+      </button>
+      <button
+        class="tab-btn"
         :class="{ active: activeTab === 'create' }"
         @click="activeTab = 'create'"
       >
@@ -95,6 +103,11 @@ async function onSubmit() {
     <!-- Feed Tab -->
     <div v-if="activeTab === 'feed'" class="tab-panel">
       <FanFeedWidget />
+    </div>
+
+    <!-- Stats Tab -->
+    <div v-else-if="activeTab === 'stats'" class="tab-panel">
+      <FanStatsWidget />
     </div>
 
     <!-- Create Match Tab -->
