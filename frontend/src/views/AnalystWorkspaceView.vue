@@ -315,12 +315,27 @@
             </div>
 
             <!-- Case studies / coming soon -->
-            <div v-else class="aw-table-wrapper">
+            <div v-else-if="activeTab === 'case-studies'" class="aw-table-wrapper">
               <div class="aw-empty-large">
                 <h3>{{ currentTabLabel }}</h3>
                 <p>
                   This area will show deeper breakdowns (case studies, AI pattern reports)
                   in a future version.
+                </p>
+              </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div v-else-if="activeTab === 'analytics'" class="aw-table-wrapper">
+              <AnalyticsTablesWidget :profile="null" />
+            </div>
+
+            <!-- Default fallback -->
+            <div v-else class="aw-table-wrapper">
+              <div class="aw-empty-large">
+                <h3>{{ currentTabLabel }}</h3>
+                <p>
+                  Coming soon...
                 </p>
               </div>
             </div>
@@ -336,6 +351,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseCard, BaseButton, BaseBadge, BaseInput, ImpactBar, MiniSparkline, AiCalloutsPanel } from '@/components'
+import AnalyticsTablesWidget from '@/components/AnalyticsTablesWidget.vue'
 import type { AiCallout } from '@/components'
 import {
   getAnalystMatches,
@@ -345,7 +361,7 @@ import {
 const router = useRouter()
 
 // Types
-type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies'
+type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics'
 
 // State
 const activeTab = ref<AnalystTab>('matches')
@@ -381,7 +397,8 @@ const tabs: { value: AnalystTab; label: string }[] = [
   { value: 'matches', label: 'Matches' },
   { value: 'players', label: 'Players' },
   { value: 'deliveries', label: 'Deliveries' },
-  { value: 'case-studies', label: 'Case studies' }
+  { value: 'case-studies', label: 'Case studies' },
+  { value: 'analytics', label: 'Analytics' }
 ]
 
 const lastSyncLabel = ref('Just now')
