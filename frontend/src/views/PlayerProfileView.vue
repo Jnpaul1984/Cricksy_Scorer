@@ -97,6 +97,14 @@
           >
             Profile
           </BaseButton>
+          <BaseButton
+            :variant="activeTab === 'notebook' ? 'primary' : 'ghost'"
+            class="tab-btn"
+            data-tab="notebook"
+            @click="activeTab = 'notebook'"
+          >
+            Notebook
+          </BaseButton>
         </BaseCard>
 
         <!-- Tab Content -->
@@ -270,6 +278,11 @@
               :weaknesses="aiWeaknesses" 
             />
           </div>
+
+          <!-- Notebook Tab -->
+          <div v-else-if="activeTab === 'notebook'" class="tab-panel">
+            <CoachNotebookWidget :profile="profile" />
+          </div>
         </BaseCard>
 
         <!-- AI Insights Section -->
@@ -403,13 +416,14 @@ import { BaseButton, BaseCard, BaseBadge } from '@/components'
 import FormTrackerWidget from '@/components/FormTrackerWidget.vue'
 import SeasonGraphsWidget from '@/components/SeasonGraphsWidget.vue'
 import StrengthWeaknessWidget from '@/components/StrengthWeaknessWidget.vue'
+import CoachNotebookWidget from '@/components/CoachNotebookWidget.vue'
 import MiniSparkline from '@/components/MiniSparkline.vue'
 import { apiService, getErrorMessage, getPlayerAIInsights } from '@/services/api'
 import type { FanFavoriteRead, PlayerAIInsights } from '@/services/api'
 import { getPlayerProfile } from '@/services/playerApi'
 import type { PlayerProfile } from '@/types/player'
 
-type TabName = 'overview' | 'batting' | 'bowling' | 'form' | 'season' | 'profile'
+type TabName = 'overview' | 'batting' | 'bowling' | 'form' | 'season' | 'profile' | 'notebook'
 
 const route = useRoute()
 const loading = ref(true)
