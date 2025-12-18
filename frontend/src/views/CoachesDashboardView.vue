@@ -152,6 +152,11 @@
           </BaseCard>
         </aside>
       </div>
+
+      <!-- Development Dashboard -->
+      <div class="dev-dashboard-section" style="margin-top: 2rem">
+        <DevDashboardWidget />
+      </div>
     </BaseCard>
   </div>
 </template>
@@ -161,6 +166,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseCard, BaseButton, BaseBadge, BaseInput } from '@/components'
+import DevDashboardWidget from '@/components/DevDashboardWidget.vue'
 import LiveMatchCardCoach from '@/components/LiveMatchCardCoach.vue'
 import { useGameStore } from '@/stores/gameStore'
 
