@@ -10,14 +10,6 @@
 # - Never mark done without verification_commands passing
 # - Always commit both checklist.yaml + checklist.md together
 
-checklist_version: "1.0"
-last_updated: "2025-12-18T00:00:00Z"
-generated_by: "copilot-checklist-generator"
-
-# ============================================================================
-# WEEK 5 - AI Integration Phase 1 (CURRENT FOCUS)
-# ============================================================================
-
 - id: week5-ai-win-probability
   week: 5
   category: "AI Basics"

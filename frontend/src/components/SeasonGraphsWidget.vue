@@ -3,8 +3,8 @@
     <div class="season-graphs-header">
       <h3 class="season-graphs-title">📊 Season Statistics</h3>
       <div class="season-controls">
-        <button 
-          v-for="stat in ['runs', 'wickets', 'average']" 
+        <button
+          v-for="stat in ['runs', 'wickets', 'average']"
           :key="stat"
           class="stat-tab-btn"
           :class="{ active: activeStat === stat }"

@@ -1,6 +1,6 @@
 # MCP Checklist System - Operating Rules & Definition of Done
 
-**Last Updated:** 2025-12-18  
+**Last Updated:** 2025-12-18
 **Maintainer:** Copilot + Cricksy team
 
 ---
@@ -36,11 +36,11 @@ todo → in_progress → done
 
 **You CANNOT mark an item done unless:**
 
-✅ **Acceptance criteria are explicitly met** (all bullets in `acceptance_criteria`)  
-✅ **Verification commands have been RUN** (and logged in `verification.json`)  
-✅ **Changes are scoped** (one feature area per commit, not a mega-commit)  
-✅ **No new lint/type/test failures** (only pre-existing failures acceptable)  
-✅ **UI changes include proof:** Cypress test + manual test or screenshot  
+✅ **Acceptance criteria are explicitly met** (all bullets in `acceptance_criteria`)
+✅ **Verification commands have been RUN** (and logged in `verification.json`)
+✅ **Changes are scoped** (one feature area per commit, not a mega-commit)
+✅ **No new lint/type/test failures** (only pre-existing failures acceptable)
+✅ **UI changes include proof:** Cypress test + manual test or screenshot
 
 **Examples of acceptable "done":**
 ```
@@ -102,7 +102,7 @@ $ npm run checklist:done week5-ai-win-probability
 ❌ Error: Verification commands must be run after last code change
    Last code change: 2025-12-20T14:25:00Z
    Last verification: 2025-12-20T14:20:00Z
-   
+
    Run: pytest backend/tests/ -k win_probability -v && npm run typecheck && npm run build
 ```
 
@@ -528,5 +528,5 @@ Every item marked done must pass:
 
 ---
 
-**Last reviewed:** 2025-12-18  
+**Last reviewed:** 2025-12-18
 **Next review:** End of Week 5

@@ -1,0 +1,430 @@
+﻿✅ WEEK-BY-WEEK CHECKLIST (10-Week V1 Plan)
+(Covers ALL 5 TIERS: Free, Player Pro, Coach Pro, Analyst Pro, Org Pro)
+________________
+
+
+🟩 WEEK 1 – Stabilization + 5-Tier Foundations
+Backend / Core
+* Clean CORS + Env configs
+
+* Remove fallback fetch scoring calls
+
+* Finalize scoring engine (runs/extras/wickets)
+
+* Finalize mid-over bowler change
+
+* Finalize innings transitions
+
+* Implement POST /games/{id}/results
+
+* Implement POST /games/{id}/finalize
+
+* Create RBAC model for 5 tiers
+
+* Add role assignment logic
+
+Player Pro Foundations
+   * Create “Form Tracker” DB structure
+
+   * Add “Strength/Weakness” hooks
+
+   * Add Player Summary table skeleton
+
+Coach Pro Foundations
+      * Create Player Development table
+
+      * Create Coach → Player assignment
+
+      * Create Notes/Session table
+
+Analyst Pro Foundations
+         * Create basic Export endpoints (CSV/JSON)
+
+         * Create Analytics Query placeholder endpoint
+
+Fan Mode Foundations
+            * Enable custom match scoring
+
+            * Add simple Follow system (Team/Player)
+
+            * Add “Favourite Matches” table
+
+Design
+               * Complete V1 redesigned Scoring UI
+
+               * Complete Viewer v2 designs
+
+               * Complete Player Profile v2
+
+               * Complete Coaches Dashboard
+
+               * Complete Analyst Workspace
+
+               * Complete Pricing Page
+
+               * Complete Landing page
+
+               * Finalize full Design System (colors, fonts, icons)
+
+________________
+
+
+🟩 WEEK 2 – Core UI Wiring + Alpha
+Frontend
+                  * Implement redesigned Scoring UI
+
+                  * Implement Viewer v2
+
+                  * Implement Player Profile v2
+
+                  * Start Tournament Edit/Delete UI
+
+                  * Start Sponsor Upload UI (basic)
+
+                  * Implement Captain/Keeper assignment
+
+                  * Implement Fan Mode UI (custom match)
+
+Backend
+                     * Implement Team Roles endpoints
+
+                     * Implement Sponsor Upload API
+
+                     * Implement basic Follow API
+
+Testing
+                        * 30-ball scoring test
+
+                        * Viewer sync test
+
+                        * Snapshot correctness test
+
+Deliverable
+                           * Internal Alpha build (not shared externally)
+
+________________
+
+
+🟧 WEEK 3 – Beta 1 Prep + First Two Users Setup
+Core
+                              * Clean scoring bugs from Alpha
+
+                              * Improve state refresh after undo
+
+                              * Improve mid-over bowler change logic
+
+                              * Improve innings start UI flows
+
+                              * Connect finalized match override in UI
+
+Player Pro
+                                 * Implement Form Tracker UI
+
+                                 * Implement Season Graphs
+
+                                 * Implement Strength/Weakness UI
+
+Coach Pro
+                                    * Implement Development Dashboard v1
+
+                                    * Implement Multi-player Comparison v1
+
+                                    * Implement Coach Notebook (text only)
+
+Analyst Pro
+                                       * Implement Export UI in Analyst Workspace
+
+                                       * Implement Analytics Tables (Manhattan/Worm etc)
+
+                                       * Add Phase Analysis
+
+Fan Features
+                                          * Complete Fan Feed v1
+
+                                          * Follow system functional end-to-end
+
+                                          * Fan stats page v1
+
+Deliverable
+                                             * Beta 1 build for 2 testers
+
+________________
+
+
+🟧 WEEK 4 – Beta Testing + Fixing + Polishing
+Collect Feedback
+                                                * Get detailed feedback from Scorer user
+
+                                                * Get detailed feedback from Coach user
+
+                                                * Watch full scoring session (video/screenshare)
+
+Fix/Improve
+                                                   * Fix scoring UI friction
+
+                                                   * Fix incorrect strike rotation cases
+
+                                                   * Fix wicket selection workflow
+
+                                                   * Improve UX for Extras input
+
+                                                   * Fix scoreboard sync delays
+
+                                                   * Fix upload issues for sponsors
+
+                                                   * Polish Analyst export consistency
+
+                                                   * Improve Player Profile performance
+
+                                                   * Improve loading states for all views
+
+Deliverable
+                                                      * Beta 1.1 (polished)
+
+________________
+
+
+🟨 WEEK 5 – AI Integration Phase 1
+AI Basics
+                                                         * Add Win Probability (API connected)
+
+                                                         * Add Innings Grade
+
+                                                         * Add Pressure Mapping
+
+                                                         * Add Phase-Based Predictions
+
+Player Pro
+                                                            * Add AI Career Summary
+
+                                                            * Add Monthly Improvement Algo
+
+Coach Pro
+                                                               * Add Tactical Suggestion Engine v1
+
+                                                                  * Best bowler now
+
+                                                                  * Weakness vs bowler type
+
+                                                                  * Recommended fielding setup
+
+                                                                     * Add Training Drill Suggestions (basic rules engine)
+
+Analyst Pro
+                                                                        * Add AI Dismissal Pattern Detection
+
+                                                                        * Add AI Heatmap overlays
+
+                                                                        * Add AI Ball Type Clustering
+
+Org Pro
+                                                                           * Add basic Sponsor Rotation Logic
+
+                                                                           * Add Branding (logo + theme)
+
+Deliverable
+                                                                              * AI-powered Cricksy v1 (internal)
+
+________________
+
+
+🟨 WEEK 6 – AI Heavy + Deep Feature Finishing
+AI Enhancements
+                                                                                 * Improve Win Prob smoothing
+
+                                                                                 * Tune predictive model behaviour
+
+                                                                                 * Add match context (venue, conditions) to AI
+
+                                                                                 * Improve analytics charts with dynamic AI callouts
+
+Player Pro
+                                                                                    * Enhance Strength/Weakness classification
+
+                                                                                    * Add Career Highlights (auto-generated)
+
+Coach Pro
+                                                                                       * Add Session Summary Generator (AI text)
+
+                                                                                       * Add Player Development Projection
+
+                                                                                       * Add Coaching “Session Plan Template”
+
+Analyst Pro
+                                                                                          * Add Query Engine:
+
+                                                                                             * Filter by bowler type
+
+                                                                                             * Filter by over range
+
+                                                                                             * Filter by dismissal type
+
+                                                                                             * Filter by match phase
+
+                                                                                                * Add Notebook for Analysts
+
+Org Pro
+                                                                                                   * League Portal v1
+
+                                                                                                   * Multi-team management v1
+
+Deliverable
+                                                                                                      * Coach Pro v1 + Analyst Pro v1 complete
+
+________________
+
+
+🟩 WEEK 7 – Monetization + Subscription Engine
+Payments
+                                                                                                         * Integrate Stripe
+
+                                                                                                         * Create subscription plans
+
+                                                                                                         * Create entitlements middleware
+
+                                                                                                         * Add Upgrade/Downgrade flows
+
+                                                                                                         * Add Trials
+
+                                                                                                         * Add Coupon Codes
+
+                                                                                                         * Add Charter Member discounts
+
+Org Pro
+                                                                                                            * Add Subscription management page
+
+                                                                                                            * Add Sponsor Panel v1
+
+                                                                                                            * Add Branded Viewer Templates
+
+Fan/Player/Coach/Analyst
+                                                                                                               * Add Paywall screens
+
+                                                                                                               * Add “Why Upgrade?” pages
+
+                                                                                                               * Add Pro badges
+
+Deliverable
+                                                                                                                  * Billing ready
+
+                                                                                                                  * Tier-locking implemented
+
+________________
+
+
+🟥 WEEK 8 – Streaming + Org Tools + Networked Platform
+Streaming
+                                                                                                                     * Integrate basic streaming ingest endpoint
+
+                                                                                                                     * Add Match ID → Stream link
+
+                                                                                                                     * Add Score Overlay on viewer
+
+                                                                                                                     * Add Sponsor Strip
+
+                                                                                                                     * Add Watermarking
+
+Org Tools
+                                                                                                                        * Tournament management v2
+
+                                                                                                                        * Team assignment panels
+
+                                                                                                                        * Coach → Analyst → Player linking
+
+Networked Platform
+                                                                                                                           * Player follows Coach
+
+                                                                                                                           * Coach assigns players
+
+                                                                                                                           * Analyst writes reports for coaches
+
+                                                                                                                           * Team admins manage roles
+
+Deliverable
+                                                                                                                              * Organization Pro complete
+
+________________
+
+
+🟥 WEEK 9 – Pre-Launch Polish
+Device Testing
+                                                                                                                                 * iPhone
+
+                                                                                                                                 * Android
+
+                                                                                                                                 * Tablets
+
+                                                                                                                                 * Laptops
+
+                                                                                                                                 * Multiple browsers
+
+Performance
+                                                                                                                                    * Optimize snapshot calls
+
+                                                                                                                                    * Optimize Viewer rendering
+
+                                                                                                                                    * Compress images
+
+                                                                                                                                    * Reduce bundle size
+
+                                                                                                                                    * Optimize charts
+
+Load Testing
+                                                                                                                                       * Simulate 200 concurrent viewer connections
+
+                                                                                                                                       * Simulate 2 scorers
+
+                                                                                                                                       * Simulate 3 tournaments running
+
+AI QA
+                                                                                                                                          * Validate predictions against 10 real matches
+
+                                                                                                                                          * Validate player insights
+
+                                                                                                                                          * Validate coach suggestions
+
+Marketing Prep
+                                                                                                                                             * Write full landing page copy
+
+                                                                                                                                             * Write tier comparison page
+
+                                                                                                                                             * Produce Coaches Pro promo
+
+                                                                                                                                             * Produce Analyst Pro promo
+
+                                                                                                                                             * Produce Social Launch Pack
+
+________________
+
+
+🟦 WEEK 10 – LAUNCH WEEK
+Finalize
+                                                                                                                                                * Fix final bugs from Week 9
+
+                                                                                                                                                * Harden server scaling rules
+
+                                                                                                                                                * Update pricing
+
+                                                                                                                                                * Configure domain + CDN
+
+                                                                                                                                                * Push V1 to Firebase + AWS
+
+Marketing
+                                                                                                                                                   * Launch video
+
+                                                                                                                                                   * Social media drop
+
+                                                                                                                                                   * Email blast
+
+                                                                                                                                                   * DMs to coaches & analysts
+
+                                                                                                                                                   * Launch to schools, leagues, academies
+
+Go Live
+                                                                                                                                                      * V1 is public
+
+                                                                                                                                                      * Stripe billing turned on
+
+                                                                                                                                                      * Subscription funnels open
+
+                                                                                                                                                      * Ads (if included)

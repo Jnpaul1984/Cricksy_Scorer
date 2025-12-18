@@ -41,12 +41,12 @@ Output:
 ```
 ✅ Started: week3-analytics-tables
    Title: Implement Analytics Tables (Manhattan/Worm)
-   
+
    Acceptance criteria:
      ☐ Manhattan plot: runs per delivery
      ☐ Worm chart: cumulative runs
      ☐ Interactive legend and hover info
-   
+
    Verification commands:
      npm run typecheck
      npm run build
@@ -120,11 +120,11 @@ npm run checklist:next --count 10
 
 **An item is DONE only if:**
 
-✅ Acceptance criteria are met (all bullets checked)  
-✅ Verification commands passed (logged in `verification.json`)  
-✅ Changes are scoped (one feature area)  
-✅ No new lint/type/test failures  
-✅ UI changes include tests or screenshots  
+✅ Acceptance criteria are met (all bullets checked)
+✅ Verification commands passed (logged in `verification.json`)
+✅ Changes are scoped (one feature area)
+✅ No new lint/type/test failures
+✅ UI changes include tests or screenshots
 
 **Examples of DONE:**
 - Backend endpoint with pytest coverage
@@ -329,12 +329,12 @@ Track:
 
 ## 🚫 What NOT To Do
 
-❌ Mark items done without running verification  
-❌ Commit checklist changes without code changes  
-❌ Add multiple unrelated features in one commit  
-❌ Ignore acceptance criteria  
-❌ Skip UI tests for UI features  
-❌ Leave items in `in_progress` forever  
+❌ Mark items done without running verification
+❌ Commit checklist changes without code changes
+❌ Add multiple unrelated features in one commit
+❌ Ignore acceptance criteria
+❌ Skip UI tests for UI features
+❌ Leave items in `in_progress` forever
 
 ---
 

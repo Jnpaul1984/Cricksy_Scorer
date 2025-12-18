@@ -1,7 +1,7 @@
 # 🏏 Cricksy Scorer V1 - Living Checklist
 
-**Generated:** 2025-12-18  
-**Last Updated:** See `.mcp/checklist.yaml`  
+**Generated:** 2025-12-18
+**Last Updated:** See `.mcp/checklist.yaml`
 **Status:** In active use - Week 5 (AI Integration Phase 1)
 
 ---
@@ -331,5 +331,5 @@ See [`.mcp/README.md`](.mcp/README.md) for detailed DoD templates.
 
 ---
 
-**Last verified:** 2025-12-18  
+**Last verified:** 2025-12-18
 **Next review:** After Week 5 checkpoint

@@ -1,7 +1,7 @@
 # MCP Checklist System - Implementation Summary
 
-**Created:** 2025-12-18  
-**Status:** ✅ Ready for use  
+**Created:** 2025-12-18
+**Status:** ✅ Ready for use
 **Location:** `.mcp/` directory
 
 ---
@@ -221,7 +221,7 @@ if git diff --cached .mcp/checklist.yaml | grep -q '^+.*status: done'; then
     last_change=$(stat -c %Y .mcp/verification.json 2>/dev/null || stat -f %m .mcp/verification.json 2>/dev/null || echo 0)
     now=$(date +%s)
     diff=$((now - last_change))
-    
+
     if [ $diff -gt 300 ]; then  # 5 minutes
         echo "❌ Error: Checklist marked done but verification.json is stale"
         echo "   Run: npm run checklist:verify <item_id>"

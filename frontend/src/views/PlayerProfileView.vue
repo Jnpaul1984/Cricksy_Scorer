@@ -272,10 +272,10 @@
 
           <!-- Profile Strengths/Weaknesses Tab -->
           <div v-else-if="activeTab === 'profile'" class="tab-panel">
-            <StrengthWeaknessWidget 
-              :profile="profile" 
-              :strengths="aiStrengths" 
-              :weaknesses="aiWeaknesses" 
+            <StrengthWeaknessWidget
+              :profile="profile"
+              :strengths="aiStrengths"
+              :weaknesses="aiWeaknesses"
             />
           </div>
 
