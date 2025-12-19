@@ -17,9 +17,11 @@ import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
 import WinProbabilityWidget from '@/components/WinProbabilityWidget.vue'
 import InningsGradeWidget from '@/components/InningsGradeWidget.vue'
 import PressureMapWidget from '@/components/PressureMapWidget.vue'
+import PhaseTimelineWidget from '@/components/PhaseTimelineWidget.vue'
 import { useRoleBadge } from '@/composables/useRoleBadge'
 import { useInningsGrade } from '@/composables/useInningsGrade'
 import { usePressureAnalytics } from '@/composables/usePressureAnalytics'
+import { usePhaseAnalytics } from '@/composables/usePhaseAnalytics'
 import { apiService } from '@/services/api'
 import { generateAICommentary, type AICommentaryRequest, fetchMatchAiCommentary, type MatchCommentaryItem } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
@@ -138,6 +140,7 @@ const gameStore = useGameStore()
 const authStore = useAuthStore()
 const { grade: currentInningsGrade, fetchCurrentGrade: fetchCurrentInningsGrade } = useInningsGrade()
 const { pressureData, fetchPressureMap, loading: pressureLoading } = usePressureAnalytics()
+const { phaseData, predictions, fetchPhaseMap, fetchPredictions, loading: phaseLoading } = usePhaseAnalytics()
 
 // Captain/Keeper badge composable
 const currentGame = computed(() => gameStore.currentGame as any)
@@ -211,12 +214,14 @@ function forceStartInnings(): void {
 // Current gameId (param or ?id=)
 const gameId = computed<string>(() => (route.params.gameId as string) || (route.query.id as string) || '')
 
-// Watch for gameId changes and fetch innings grade & pressure map
+// Watch for gameId changes and fetch innings grade, pressure map, & phase data
 watch(gameId, async (id) => {
   if (id) {
     try {
       await fetchCurrentInningsGrade(id)
       await fetchPressureMap(id)
+      await fetchPhaseMap(id)
+      await fetchPredictions(id)
     } catch (err) {
       console.warn('Failed to fetch analytics:', err)
     }
@@ -2026,9 +2031,18 @@ async function confirmChangeBowler(): Promise<void> {
             <p v-else>No commentary yet.</p>
         </div>
 
-        <!-- ANALYTICS: Win Probability, Innings Grade & Pressure Map -->
+        <!-- ANALYTICS: Win Probability, Innings Grade, Pressure Map & Phase Timeline -->
         <div v-show="activeTab==='analytics'" class="tab-pane analytics-container">
             <div class="analytics-widgets">
+                <div class="analytics-widget-section">
+                    <PhaseTimelineWidget 
+                      :phase-data="phaseData" 
+                      :predictions="predictions"
+                      :loading="phaseLoading"
+                      :on-refresh="() => fetchPhaseMap(gameId)"
+                    />
+                </div>
+
                 <div class="analytics-widget-section">
                     <PressureMapWidget 
                       :pressure-data="pressureData" 
