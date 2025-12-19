@@ -15,7 +15,9 @@ import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
 import WinProbabilityWidget from '@/components/WinProbabilityWidget.vue'
+import InningsGradeWidget from '@/components/InningsGradeWidget.vue'
 import { useRoleBadge } from '@/composables/useRoleBadge'
+import { useInningsGrade } from '@/composables/useInningsGrade'
 import { apiService } from '@/services/api'
 import { generateAICommentary, type AICommentaryRequest, fetchMatchAiCommentary, type MatchCommentaryItem } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
@@ -132,6 +134,7 @@ const route = useRoute()
 const router = useRouter()
 const gameStore = useGameStore()
 const authStore = useAuthStore()
+const { grade: currentInningsGrade, fetchCurrentGrade: fetchCurrentInningsGrade } = useInningsGrade()
 
 // Captain/Keeper badge composable
 const currentGame = computed(() => gameStore.currentGame as any)
@@ -204,6 +207,17 @@ function forceStartInnings(): void {
 
 // Current gameId (param or ?id=)
 const gameId = computed<string>(() => (route.params.gameId as string) || (route.query.id as string) || '')
+
+// Watch for gameId changes and fetch innings grade
+watch(gameId, async (id) => {
+  if (id) {
+    try {
+      await fetchCurrentInningsGrade(id)
+    } catch (err) {
+      console.warn('Failed to fetch innings grade:', err)
+    }
+  }
+}, { immediate: true })
 
 // --- UI State for UX Improvements ---
 const isSubmitting = ref(false)
@@ -2008,15 +2022,30 @@ async function confirmChangeBowler(): Promise<void> {
             <p v-else>No commentary yet.</p>
         </div>
 
-        <!-- ANALYTICS: Win Probability -->
-        <div v-show="activeTab==='analytics'" class="tab-pane">
-            <WinProbabilityWidget 
-              :prediction="gameStore.currentPrediction" 
-              :batting-team="battingTeamName"
-              :bowling-team="(currentGame?.bowling_team_name ?? '')"
-              theme="dark"
-              :show-chart="true"
-            />
+        <!-- ANALYTICS: Win Probability & Innings Grade -->
+        <div v-show="activeTab==='analytics'" class="tab-pane analytics-container">
+            <div class="analytics-widgets">
+                <div class="analytics-widget-section">
+                    <h3>Innings Grade</h3>
+                    <InningsGradeWidget 
+                      :grade-data="currentInningsGrade" 
+                      :batting-team="battingTeamName"
+                      :bowling-team="(currentGame?.bowling_team_name ?? '')"
+                      theme="dark"
+                    />
+                </div>
+                
+                <div class="analytics-widget-section">
+                    <h3>Win Probability</h3>
+                    <WinProbabilityWidget 
+                      :prediction="gameStore.currentPrediction" 
+                      :batting-team="battingTeamName"
+                      :bowling-team="(currentGame?.bowling_team_name ?? '')"
+                      theme="dark"
+                      :show-chart="true"
+                    />
+                </div>
+            </div>
         </div>
 
         <!-- EXTRAS & DLS -->
@@ -2791,5 +2820,40 @@ async function confirmChangeBowler(): Promise<void> {
 @keyframes slide-up {
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* Analytics Container */
+.analytics-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.analytics-widgets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  padding: 1rem 0;
+}
+
+.analytics-widget-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.analytics-widget-section h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--pico-color);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 768px) {
+  .analytics-widgets {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

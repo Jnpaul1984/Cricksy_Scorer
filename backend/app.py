@@ -26,6 +26,7 @@ from backend.middleware.observability import (  # NEW
 from backend.routes.admin import router as admin_router
 from backend.routes.ai import router as ai_router
 from backend.routes.ai_usage import router as ai_usage_router
+from backend.routes.analytics import router as analytics_router
 from backend.routes.analyst_pro import router as analyst_pro_router
 from backend.routes.analytics_case_study import router as analytics_case_study_router
 from backend.routes.auth_router import router as auth_router
@@ -312,6 +313,7 @@ def create_app(
     fastapi_app.include_router(sponsors_router)
     fastapi_app.include_router(games_core_router)
     fastapi_app.include_router(prediction_router)
+    fastapi_app.include_router(analytics_router)
     fastapi_app.include_router(players_router)
     fastapi_app.include_router(fan_mode_router)
     fastapi_app.include_router(analyst_pro_router)
