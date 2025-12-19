@@ -16,8 +16,10 @@ import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
 import WinProbabilityWidget from '@/components/WinProbabilityWidget.vue'
 import InningsGradeWidget from '@/components/InningsGradeWidget.vue'
+import PressureMapWidget from '@/components/PressureMapWidget.vue'
 import { useRoleBadge } from '@/composables/useRoleBadge'
 import { useInningsGrade } from '@/composables/useInningsGrade'
+import { usePressureAnalytics } from '@/composables/usePressureAnalytics'
 import { apiService } from '@/services/api'
 import { generateAICommentary, type AICommentaryRequest, fetchMatchAiCommentary, type MatchCommentaryItem } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
@@ -135,6 +137,7 @@ const router = useRouter()
 const gameStore = useGameStore()
 const authStore = useAuthStore()
 const { grade: currentInningsGrade, fetchCurrentGrade: fetchCurrentInningsGrade } = useInningsGrade()
+const { pressureData, fetchPressureMap, loading: pressureLoading } = usePressureAnalytics()
 
 // Captain/Keeper badge composable
 const currentGame = computed(() => gameStore.currentGame as any)
@@ -208,13 +211,14 @@ function forceStartInnings(): void {
 // Current gameId (param or ?id=)
 const gameId = computed<string>(() => (route.params.gameId as string) || (route.query.id as string) || '')
 
-// Watch for gameId changes and fetch innings grade
+// Watch for gameId changes and fetch innings grade & pressure map
 watch(gameId, async (id) => {
   if (id) {
     try {
       await fetchCurrentInningsGrade(id)
+      await fetchPressureMap(id)
     } catch (err) {
-      console.warn('Failed to fetch innings grade:', err)
+      console.warn('Failed to fetch analytics:', err)
     }
   }
 }, { immediate: true })
@@ -2022,9 +2026,16 @@ async function confirmChangeBowler(): Promise<void> {
             <p v-else>No commentary yet.</p>
         </div>
 
-        <!-- ANALYTICS: Win Probability & Innings Grade -->
+        <!-- ANALYTICS: Win Probability, Innings Grade & Pressure Map -->
         <div v-show="activeTab==='analytics'" class="tab-pane analytics-container">
             <div class="analytics-widgets">
+                <div class="analytics-widget-section">
+                    <PressureMapWidget 
+                      :pressure-data="pressureData" 
+                      :loading="pressureLoading"
+                    />
+                </div>
+                
                 <div class="analytics-widget-section">
                     <h3>Innings Grade</h3>
                     <InningsGradeWidget 
