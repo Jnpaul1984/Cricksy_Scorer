@@ -96,12 +96,12 @@ export function usePlayerCareerAnalytics() {
       loading.value = true
       error.value = null
       
-      const response = await apiService.get(
+      const response = await apiService.get<PlayerCareerSummary>(
         `/analytics/players/players/${playerId}/career-summary`
       )
       
       if (response && response.data) {
-        summary.value = response.data
+        summary.value = response.data as PlayerCareerSummary
       }
     } catch (err: any) {
       error.value = err.message || 'Failed to fetch career summary'
@@ -117,12 +117,12 @@ export function usePlayerCareerAnalytics() {
    */
   async function fetchYearlyStats(playerId: string) {
     try {
-      const response = await apiService.get(
+      const response = await apiService.get<YearlyStats>(
         `/analytics/players/players/${playerId}/year-stats`
       )
       
       if (response && response.data) {
-        yearlyStats.value = response.data
+        yearlyStats.value = response.data as YearlyStats
       }
     } catch (err: any) {
       console.warn('Failed to fetch yearly stats:', err)

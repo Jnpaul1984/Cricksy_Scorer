@@ -64,12 +64,12 @@ export function useInningsGrade() {
       loading.value = true
       error.value = null
       
-      const response = await apiService.get(
+      const response = await apiService.get<InningsGradeData>(
         `/analytics/games/${gameId}/innings/current/grade`
       )
       
       if (response && response.data) {
-        grade.value = response.data
+        grade.value = response.data as InningsGradeData
       }
     } catch (err: any) {
       // Don't treat 400 as error - just means inning not yet started
@@ -96,7 +96,7 @@ export function useInningsGrade() {
       )
       
       if (response && response.data) {
-        grade.value = response.data
+        grade.value = response.data as InningsGradeData
       }
     } catch (err: any) {
       error.value = err.message || 'Failed to fetch innings grade'
