@@ -34,6 +34,7 @@ from backend.routes.phase_analysis import router as phase_analysis_router
 from backend.routes.analyst_pro import router as analyst_pro_router
 from backend.routes.analytics_case_study import router as analytics_case_study_router
 from backend.routes.tactical_suggestions import router as tactical_suggestions_router
+from backend.routes.training_drills import router as training_drills_router
 from backend.routes.auth_router import router as auth_router
 from backend.routes.billing import router as billing_router
 
@@ -324,6 +325,7 @@ def create_app(
     fastapi_app.include_router(pressure_analysis_router)
     fastapi_app.include_router(phase_analysis_router)
     fastapi_app.include_router(tactical_suggestions_router)
+    fastapi_app.include_router(training_drills_router)
     fastapi_app.include_router(players_router)
     fastapi_app.include_router(fan_mode_router)
     fastapi_app.include_router(analyst_pro_router)
