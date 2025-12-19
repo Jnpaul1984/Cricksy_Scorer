@@ -14,6 +14,7 @@ import DeliveryTable from '@/components/DeliveryTable.vue'
 import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
+import WinProbabilityWidget from '@/components/WinProbabilityWidget.vue'
 import { useRoleBadge } from '@/composables/useRoleBadge'
 import { apiService } from '@/services/api'
 import { generateAICommentary, type AICommentaryRequest, fetchMatchAiCommentary, type MatchCommentaryItem } from '@/services/api'
@@ -1615,7 +1616,7 @@ const selectedNextOverBowlerId = ref<UUID>('' as UUID)
 const selectedReplacementBowlerId = ref<UUID>('' as UUID)
 const selectBatterDlgOpen = ref(false)
 const selectedNextBatterId = ref<UUID>('' as UUID)
-const activeTab = ref<'recent' | 'batting' | 'bowling' | 'ai' | 'extras'>('recent')
+const activeTab = ref<'recent' | 'batting' | 'bowling' | 'ai' | 'analytics' | 'extras'>('recent')
 const canStartOverNow = computed(() => needsNewOverLive.value || !currentBowlerId.value)
 const candidateBatters = computed<Player[]>(() => {
   const anyStore = gameStore as any
@@ -1976,6 +1977,7 @@ async function confirmChangeBowler(): Promise<void> {
         <button :class="{active: activeTab==='batting'}" @click="activeTab='batting'">BATTING</button>
         <button :class="{active: activeTab==='bowling'}" @click="activeTab='bowling'">BOWLING</button>
         <button :class="{active: activeTab==='ai'}" @click="activeTab='ai'">AI COMM</button>
+        <button :class="{active: activeTab==='analytics'}" @click="activeTab='analytics'">ANALYTICS</button>
         <button :class="{active: activeTab==='extras'}" @click="activeTab='extras'">EXTRAS</button>
       </div>
 
@@ -2004,6 +2006,17 @@ async function confirmChangeBowler(): Promise<void> {
             <div v-if="aiLoading">Loading...</div>
             <p v-else-if="aiCommentary">{{ aiCommentary }}</p>
             <p v-else>No commentary yet.</p>
+        </div>
+
+        <!-- ANALYTICS: Win Probability -->
+        <div v-show="activeTab==='analytics'" class="tab-pane">
+            <WinProbabilityWidget 
+              :prediction="gameStore.currentPrediction" 
+              :batting-team="battingTeamName"
+              :bowling-team="(currentGame?.bowling_team_name ?? '')"
+              theme="dark"
+              :show-chart="true"
+            />
         </div>
 
         <!-- EXTRAS & DLS -->
