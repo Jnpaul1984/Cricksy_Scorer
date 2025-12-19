@@ -37,6 +37,7 @@ from backend.routes.tactical_suggestions import router as tactical_suggestions_r
 from backend.routes.training_drills import router as training_drills_router
 from backend.routes.dismissal_patterns import router as dismissal_patterns_router
 from backend.routes.pitch_heatmaps import router as pitch_heatmaps_router
+from backend.routes.ball_clustering import router as ball_clustering_router
 from backend.routes.auth_router import router as auth_router
 from backend.routes.billing import router as billing_router
 
@@ -330,6 +331,7 @@ def create_app(
     fastapi_app.include_router(training_drills_router)
     fastapi_app.include_router(dismissal_patterns_router)
     fastapi_app.include_router(pitch_heatmaps_router)
+    fastapi_app.include_router(ball_clustering_router)
     fastapi_app.include_router(players_router)
     fastapi_app.include_router(fan_mode_router)
     fastapi_app.include_router(analyst_pro_router)
