@@ -1,29 +1,49 @@
 # How to Re-Enable Disabled Routes
 
+## Status: Models ✅ ADDED | Routes ⏸️ DISABLED
+
+### Current Progress
+**COMPLETED:**
+- ✅ Added all 4 required models (Player, BattingScorecard, BowlingScorecard, Delivery)
+- ✅ Updated Game model with relationships
+- ✅ Models ready for production database migration
+- ✅ App initializes successfully with models
+
+**IN PROGRESS:**
+- ⏳ Route endpoints need type annotation fixes (AsyncSession dependency, return types)
+- ⏳ Database migration generation pending
+
+**PENDING:**
+- Routes enabled after endpoint fixes
+
+---
+
 ## Overview
-9 route modules were disabled due to undefined model dependencies. This guide explains what needs to be done to re-enable them.
+9 route modules are currently disabled due to incomplete endpoint implementations. This guide explains what needs to be done to re-enable them.
+
+**Current Status:** Models created, routes awaiting endpoint implementation fixes.
 
 ---
 
 ## Disabled Routes & Required Models
 
-| Route File | Required Models | Service File |
-|---|---|---|
-| `pitch_heatmaps.py` | `Player`, `BattingScorecard` | `pitch_heatmap_generator.py` |
-| `ball_clustering.py` | `Player`, `BowlingScorecard`, `BattingScorecard` | `ball_type_clusterer.py` |
-| `player_improvement.py` | `Player`, `BattingScorecard` | `player_improvement_tracker.py` |
-| `pressure_analysis.py` | `Game`, `Delivery` | `pressure_analyzer.py` |
-| `tactical_suggestions.py` | `Game`, `BowlingScorecard`, `BattingScorecard`, `Player` | `tactical_suggestion_engine.py` |
-| `training_drills.py` | `Player`, `BattingScorecard`, `Game` | `training_drill_generator.py` |
-| `dismissal_patterns.py` | `Player`, `BattingScorecard`, `Game` | `dismissal_pattern_analyzer.py` |
-| `phase_analysis.py` | (Multiple) | `phase_analyzer.py` |
-| `sponsor_rotation.py` | (AsyncSession) | (N/A) |
+| Route File | Status | Required Models | Service File |
+|---|---|---|---|
+| `pitch_heatmaps.py` | ⏸️ Disabled | `Player`, `BattingScorecard` | `pitch_heatmap_generator.py` |
+| `ball_clustering.py` | ⏸️ Disabled | `Player`, `BowlingScorecard`, `BattingScorecard` | `ball_type_clusterer.py` |
+| `player_improvement.py` | ⏸️ Disabled | `Player`, `BattingScorecard` | `player_improvement_tracker.py` |
+| `pressure_analysis.py` | ⏸️ Disabled | `Game`, `Delivery` | `pressure_analyzer.py` |
+| `tactical_suggestions.py` | ⏸️ Disabled | `Game`, `BowlingScorecard`, `BattingScorecard`, `Player` | `tactical_suggestion_engine.py` |
+| `training_drills.py` | ⏸️ Disabled | `Player`, `BattingScorecard`, `Game` | `training_drill_generator.py` |
+| `dismissal_patterns.py` | ⏸️ Disabled | `Player`, `BattingScorecard`, `Game` | `dismissal_pattern_analyzer.py` |
+| `phase_analysis.py` | ⏸️ Disabled | (Multiple) | `phase_analyzer.py` |
+| `sponsor_rotation.py` | ⏸️ Disabled | (AsyncSession) | (N/A) |
 
 ---
 
 ## Step 1: Define Missing Models in `backend/sql_app/models.py`
 
-### Player Model
+### ✅ COMPLETED - Player Model
 ```python
 class Player(Base):
     """Cricket player profile."""
@@ -34,13 +54,12 @@ class Player(Base):
     country = Column(String(100), nullable=True)
     role = Column(String(50), nullable=True)  # Batsman, Bowler, All-rounder
     jersey_number = Column(Integer, nullable=True)
-    # Add other player attributes as needed
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 ```
 
-### BattingScorecard Model
+### ✅ COMPLETED - BattingScorecard Model
 ```python
 class BattingScorecard(Base):
     """Batting statistics for a player in a game."""
@@ -64,7 +83,7 @@ class BattingScorecard(Base):
     player = relationship("Player")
 ```
 
-### BowlingScorecard Model
+### ✅ COMPLETED - BowlingScorecard Model
 ```python
 class BowlingScorecard(Base):
     """Bowling statistics for a player in a game."""
@@ -87,7 +106,7 @@ class BowlingScorecard(Base):
     bowler = relationship("Player")
 ```
 
-### Delivery Model
+### ✅ COMPLETED - Delivery Model
 ```python
 class Delivery(Base):
     """Individual ball delivery record."""
@@ -123,21 +142,64 @@ class Delivery(Base):
 
 ## Step 2: Update `Game` Model Relationships
 
-Add these relationships to the existing `Game` model if not already present:
+### ✅ COMPLETED
+Added these relationships to the existing `Game` model:
 
 ```python
 class Game(Base):
     # ... existing fields ...
     
-    # Add new relationships
+    # New relationships for analytics routes
     batting_scorecards = relationship("BattingScorecard", back_populates="game", cascade="all, delete-orphan")
     bowling_scorecards = relationship("BowlingScorecard", back_populates="game", cascade="all, delete-orphan")
-    deliveries = relationship("Delivery", cascade="all, delete-orphan")
 ```
 
 ---
 
-## Step 3: Create Database Migration
+## Step 3: ⏳ NEXT - Fix Route Endpoint Signatures
+
+The disabled routes have endpoint implementations that need fixes:
+
+### Required Changes for Each Route
+
+1. **Import Statements** - Add these imports:
+   ```python
+   from fastapi import Depends
+   from backend.sql_app.database import get_db
+   from backend.sql_app.models import Player, BattingScorecard, BowlingScorecard, Delivery, Game
+   ```
+
+2. **Fix AsyncSession Parameters** - Change from:
+   ```python
+   async def get_monthly_stats(player_id: str, db: AsyncSession | None = None)
+   ```
+   To:
+   ```python
+   async def get_monthly_stats(player_id: str, db: AsyncSession = Depends(get_db))
+   ```
+
+3. **Add Return Type Hints** - All endpoints should have explicit return types:
+   ```python
+   async def get_monthly_stats(...) -> dict[str, Any]:
+   ```
+
+### Routes Needing Fixes
+
+- **player_improvement.py** - Needs AsyncSession dependency fixes + type hints
+- **pressure_analysis.py** - Needs AsyncSession dependency fixes + type hints
+- **phase_analysis.py** - Needs AsyncSession dependency fixes + type hints
+- **tactical_suggestions.py** - Needs AsyncSession dependency fixes + type hints
+- **training_drills.py** - Needs AsyncSession dependency fixes + type hints
+- **dismissal_patterns.py** - Needs AsyncSession dependency fixes + type hints
+- **pitch_heatmaps.py** - Needs AsyncSession dependency fixes + type hints
+- **ball_clustering.py** - Needs AsyncSession dependency fixes + type hints
+- **sponsor_rotation.py** - Needs AsyncSession dependency fixes + type hints
+
+---
+
+## Step 4: Create Database Migration
+
+Once endpoint fixes are complete:
 
 ```bash
 cd backend
@@ -147,7 +209,7 @@ alembic upgrade head
 
 ---
 
-## Step 4: Remove MyPy Ignores
+## Step 5: Remove MyPy Ignores
 
 Update `backend/pyproject.toml` to remove the disabled routes from the mypy ignore list:
 
@@ -183,7 +245,7 @@ ignore_errors = true
 
 ---
 
-## Step 5: Remove Ruff Ignores
+## Step 6: Remove Ruff Ignores
 
 Update `ruff.toml` to remove F821 from route files:
 
@@ -199,7 +261,7 @@ Update `ruff.toml` to remove F821 from route files:
 
 ---
 
-## Step 6: Re-Enable Routes in `backend/app.py`
+## Step 7: Re-Enable Routes in `backend/app.py`
 
 Uncomment the imports and registrations:
 
@@ -228,30 +290,6 @@ fastapi_app.include_router(training_drills_router)
 fastapi_app.include_router(dismissal_patterns_router)
 fastapi_app.include_router(sponsor_rotation_router)
 ```
-
----
-
-## Step 7: Fix Route Type Annotations
-
-Review each route file for type annotation issues. Common issues:
-
-1. **AsyncSession dependencies** - Ensure using `Depends(get_db)`:
-   ```python
-   async def endpoint(db: AsyncSession = Depends(get_db)):
-       # Correct usage
-   ```
-
-2. **Missing model imports** - Ensure importing models:
-   ```python
-   from backend.sql_app.models import Player, BattingScorecard, BowlingScorecard, Delivery, Game
-   ```
-
-3. **Type hints** - Add return type hints to endpoint functions:
-   ```python
-   @router.get("/path/{id}", response_model=SomeSchema)
-   async def endpoint(id: int, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
-       ...
-   ```
 
 ---
 
@@ -306,8 +344,18 @@ git push origin main
   - Security (bandit, pip-audit): ✓
   - Tests: ✓
 
-### ⏸️ Deploy Backend Workflow
-- **Status**: Will pass once above workflows pass
+### ✅ Models Status
+- **Status**: READY FOR MIGRATION
+- **Created**:
+  - Player model ✓
+  - BattingScorecard model ✓
+  - BowlingScorecard model ✓
+  - Delivery model ✓
+- **Game model relationships**: ✓ Added
+
+### ⏸️ Routes Status
+- **Awaiting**: Endpoint type annotation fixes
+- **Blocked by**: AsyncSession dependency injection cleanup
 
 ---
 
@@ -331,9 +379,9 @@ git push origin main
 ---
 
 ## Related Files
-- [Models Definition](../backend/sql_app/models.py)
-- [Ruff Configuration](../ruff.toml)
-- [MyPy Configuration](../backend/pyproject.toml)
-- [App Factory](../backend/app.py)
+- [Models Definition](backend/sql_app/models.py) - ✅ Updated
+- [Ruff Configuration](ruff.toml) - Ready for cleanup
+- [MyPy Configuration](backend/pyproject.toml) - Ready for cleanup
+- [App Factory](backend/app.py) - Routes disabled, awaiting fixes
 - [Workflow Definitions](.github/workflows/)
 

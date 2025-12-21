@@ -288,6 +288,14 @@ class Game(Base):
         back_populates="game", cascade="all, delete-orphan"
     )
 
+    # New relationships for analytics routes
+    batting_scorecards: Mapped[list[BattingScorecard]] = relationship(
+        back_populates="game", cascade="all, delete-orphan"
+    )
+    bowling_scorecards: Mapped[list[BowlingScorecard]] = relationship(
+        back_populates="game", cascade="all, delete-orphan"
+    )
+
     __table_args__ = (Index("ix_games_is_fan_match", "is_fan_match"),)
 
     def get_winner(self):
@@ -1073,4 +1081,129 @@ class AiUsageLog(Base):
     __table_args__ = (
         Index("ix_ai_usage_user_feature", "user_id", "feature"),
         Index("ix_ai_usage_org_timestamp", "org_id", "timestamp"),
+    )
+
+
+# -------- Cricket Player & Statistics Models --------
+
+
+class Player(Base):
+    """Cricket player profile."""
+
+    __tablename__ = "players"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    country: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    role: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # Batsman, Bowler, All-rounder
+    jersey_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (Index("ix_players_name", "name"),)
+
+
+class BattingScorecard(Base):
+    """Batting statistics for a player in a game."""
+
+    __tablename__ = "batting_scorecards"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    game_id: Mapped[str] = mapped_column(String, ForeignKey("games.id"), nullable=False)
+    player_id: Mapped[int] = mapped_column(Integer, ForeignKey("players.id"), nullable=False)
+
+    runs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    balls_faced: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    fours: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    sixes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_wicket: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    dismissal_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    game: Mapped[Game] = relationship(back_populates="batting_scorecards")
+    player: Mapped[Player] = relationship()
+
+    __table_args__ = (Index("ix_batting_scorecard_game_player", "game_id", "player_id"),)
+
+
+class BowlingScorecard(Base):
+    """Bowling statistics for a player in a game."""
+
+    __tablename__ = "bowling_scorecards"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    game_id: Mapped[str] = mapped_column(String, ForeignKey("games.id"), nullable=False)
+    bowler_id: Mapped[int] = mapped_column(Integer, ForeignKey("players.id"), nullable=False)
+
+    overs_bowled: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    runs_conceded: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    wickets_taken: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    maiden_overs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    extras_bowled: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    game: Mapped[Game] = relationship(back_populates="bowling_scorecards")
+    bowler: Mapped[Player] = relationship()
+
+    __table_args__ = (Index("ix_bowling_scorecard_game_bowler", "game_id", "bowler_id"),)
+
+
+class Delivery(Base):
+    """Individual ball delivery record."""
+
+    __tablename__ = "deliveries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    game_id: Mapped[str] = mapped_column(String, ForeignKey("games.id"), nullable=False)
+    inning_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    over: Mapped[int] = mapped_column(Integer, nullable=False)
+    ball: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    bowler_id: Mapped[int] = mapped_column(Integer, ForeignKey("players.id"), nullable=False)
+    batter_id: Mapped[int] = mapped_column(Integer, ForeignKey("players.id"), nullable=False)
+
+    runs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    extras: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # 'wd', 'nb', 'b', 'lb'
+    is_wicket: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    wicket_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    pitch_coordinate_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pitch_coordinate_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    delivery_type: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # 'fast', 'spin', etc.
+
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    game: Mapped[Game] = relationship()
+    bowler: Mapped[Player] = relationship(foreign_keys=[bowler_id])
+    batter: Mapped[Player] = relationship(foreign_keys=[batter_id])
+
+    __table_args__ = (
+        Index("ix_delivery_game_inning", "game_id", "inning_number"),
+        Index("ix_delivery_bowler", "bowler_id"),
+        Index("ix_delivery_batter", "batter_id"),
     )

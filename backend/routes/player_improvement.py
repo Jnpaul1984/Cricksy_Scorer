@@ -8,11 +8,13 @@ REST API endpoints for player improvement tracking:
 """
 
 from typing import Any
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from datetime import datetime, timedelta
 
+from backend.sql_app.database import get_db
+from backend.sql_app.models import Player, BattingScorecard
 from backend.services.player_improvement_tracker import (
     PlayerImprovementTracker,
 )
@@ -24,7 +26,7 @@ router = APIRouter(prefix="/player-analytics", tags=["player_improvement"])
 async def get_monthly_stats(
     player_id: str,
     limit_months: int = 6,
-    db: AsyncSession | None = None,
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
     Get aggregated monthly statistics for a player.
@@ -51,9 +53,6 @@ async def get_monthly_stats(
         ],
     }
     """
-    if not db:
-        raise HTTPException(status_code=500, detail="Database session not available")
-
     try:
         # Fetch player
         stmt = select(Player).where(Player.id == player_id)
