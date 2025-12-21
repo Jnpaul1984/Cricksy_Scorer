@@ -241,7 +241,7 @@ def test_coach_pro_plus_plan_available() -> None:
 
     # Verify pricing and feature set
     plus_plan = get_plan_features("coach_pro_plus")
-    assert plus_plan["price_monthly"] == 19.99
+    assert plus_plan["price_monthly"] == 24.99
     assert plus_plan["name"] == "Coach Pro Plus"
     assert plus_plan["base_plan"] == "coach_pro"
 
