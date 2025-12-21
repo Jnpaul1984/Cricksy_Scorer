@@ -120,12 +120,8 @@ async def get_innings_grade_endpoint(
     # Add metadata
     grade_data["inning_num"] = inning_num
     grade_data["game_id"] = game_id
-    grade_data["batting_team"] = (
-        game.batting_team_name if game.current_inning == inning_num else ""
-    )
-    grade_data["bowling_team"] = (
-        game.bowling_team_name if game.current_inning == inning_num else ""
-    )
+    grade_data["batting_team"] = game.batting_team_name if game.current_inning == inning_num else ""
+    grade_data["bowling_team"] = game.bowling_team_name if game.current_inning == inning_num else ""
 
     return grade_data
 
@@ -165,8 +161,7 @@ async def get_current_innings_grade(
         deliveries_data = [
             d
             for d in game.deliveries
-            if d.get("inning_no") == current_inning
-            or d.get("innings_no") == current_inning
+            if d.get("inning_no") == current_inning or d.get("innings_no") == current_inning
         ]
 
     game_state = {

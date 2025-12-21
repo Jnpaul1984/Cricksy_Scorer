@@ -7,11 +7,11 @@ providing insights into delivery patterns and effectiveness.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class DeliveryType(str, Enum):
     """Types of cricket deliveries."""
+
     FAST = "fast"
     SHORT_PITCH = "short_pitch"
     YORKER = "yorker"
@@ -28,6 +28,7 @@ class DeliveryType(str, Enum):
 
 class ClusterVariation(str, Enum):
     """Delivery variation within cluster."""
+
     STANDARD = "standard"
     VARIATION = "variation"
     SLOWER = "slower"
@@ -38,6 +39,7 @@ class ClusterVariation(str, Enum):
 @dataclass
 class DeliveryCharacteristic:
     """Characteristics defining a ball type."""
+
     line: str  # off, leg, middle, wide
     length: str  # short, good, full, yorker
     pace: float  # 0-160+ km/h (relative scale 0-100)
@@ -49,6 +51,7 @@ class DeliveryCharacteristic:
 @dataclass
 class DeliveryCluster:
     """Grouping of similar delivery types."""
+
     cluster_id: str
     delivery_type: str  # DeliveryType
     cluster_name: str
@@ -64,6 +67,7 @@ class DeliveryCluster:
 @dataclass
 class DeliveryAnalysis:
     """Single delivery analysis."""
+
     delivery_id: str
     bowler_id: str
     bowler_name: str
@@ -81,6 +85,7 @@ class DeliveryAnalysis:
 @dataclass
 class BowlerDeliveryProfile:
     """Bowler's delivery composition and patterns."""
+
     bowler_id: str
     bowler_name: str
     total_deliveries: int
@@ -88,13 +93,14 @@ class BowlerDeliveryProfile:
     primary_clusters: list[str] = field(default_factory=list)  # Top 3
     variation_score: float = 0.0  # 0-100, delivery diversity
     clustering_accuracy: float = 0.0  # 0-100, cluster consistency
-    most_effective_cluster: Optional[str] = None
-    least_effective_cluster: Optional[str] = None
+    most_effective_cluster: str | None = None
+    least_effective_cluster: str | None = None
 
 
 @dataclass
 class BatterDeliveryVulnerability:
     """Batter's vulnerability to delivery types."""
+
     batter_id: str
     batter_name: str
     vulnerable_clusters: list[str] = field(default_factory=list)
@@ -107,6 +113,7 @@ class BatterDeliveryVulnerability:
 @dataclass
 class ClusterMatrix:
     """Matrix of delivery type effectiveness against all batters."""
+
     cluster_type: str
     total_samples: int
     wicket_count: int
@@ -195,9 +202,7 @@ class BallTypeClusterer:
         movement = delivery_data.get("movement", "none")
 
         # Determine delivery type based on characteristics
-        delivery_type = BallTypeClusterer._determine_delivery_type(
-            pace, spin, length, movement
-        )
+        delivery_type = BallTypeClusterer._determine_delivery_type(pace, spin, length, movement)
 
         # Determine variation
         variation = BallTypeClusterer._determine_variation(pace, spin, length)
@@ -377,17 +382,15 @@ class BallTypeClusterer:
         for delivery_type, group in type_groups.items():
             wicket_count = sum(1 for d in group if d.is_wicket)
             avg_runs = sum(d.runs_conceded for d in group) / len(group)
-            effectiveness = (wicket_count / len(group)) * 50 + (
-                (1 - avg_runs / 10) * 50
-            )
+            effectiveness = (wicket_count / len(group)) * 50 + ((1 - avg_runs / 10) * 50)
 
             cluster = DeliveryCluster(
                 cluster_id=f"{bowler_id}_{delivery_type}",
                 delivery_type=delivery_type,
                 cluster_name=delivery_type.replace("_", " ").title(),
-                description=BallTypeClusterer.CLUSTER_DEFINITIONS.get(
-                    delivery_type, {}
-                ).get("description", ""),
+                description=BallTypeClusterer.CLUSTER_DEFINITIONS.get(delivery_type, {}).get(
+                    "description", ""
+                ),
                 sample_count=len(group),
                 effectiveness_percentage=min(max(effectiveness, 0), 100),
                 success_rate=(wicket_count / len(group)) * 100,
@@ -396,9 +399,7 @@ class BallTypeClusterer:
             clusters.append(cluster)
 
         # Identify primary clusters (top 3)
-        primary_clusters = sorted(
-            clusters, key=lambda c: c.sample_count, reverse=True
-        )[:3]
+        primary_clusters = sorted(clusters, key=lambda c: c.sample_count, reverse=True)[:3]
         primary_names = [c.delivery_type for c in primary_clusters]
 
         # Calculate variation score
@@ -418,15 +419,9 @@ class BallTypeClusterer:
             delivery_clusters=clusters,
             primary_clusters=primary_names,
             variation_score=min(variation_score, 100.0),
-            clustering_accuracy=sum(d.confidence_score for d in classified) / len(
-                classified
-            ),
-            most_effective_cluster=most_effective.delivery_type
-            if most_effective
-            else None,
-            least_effective_cluster=least_effective.delivery_type
-            if least_effective
-            else None,
+            clustering_accuracy=sum(d.confidence_score for d in classified) / len(classified),
+            most_effective_cluster=most_effective.delivery_type if most_effective else None,
+            least_effective_cluster=least_effective.delivery_type if least_effective else None,
         )
 
     @staticmethod
@@ -474,9 +469,7 @@ class BallTypeClusterer:
         )[:2]
         strong_against = [t[0] for t in strong_types]
 
-        dismissal_types = [
-            d.delivery_type for d in classified if d.is_wicket
-        ]
+        dismissal_types = [d.delivery_type for d in classified if d.is_wicket]
 
         # Generate strategy
         if vulnerable_types:
@@ -531,9 +524,7 @@ class BallTypeClusterer:
             total = stats["total"]
             avg_runs = stats["runs"] / total if total > 0 else 0
             effectiveness = (
-                (stats["wickets"] / total) * 50 + ((stats["dots"] / total) * 50)
-                if total > 0
-                else 0
+                (stats["wickets"] / total) * 50 + ((stats["dots"] / total) * 50) if total > 0 else 0
             )
 
             result[dtype] = ClusterMatrix(

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 @dataclass
 class PhaseStats:
     """Statistics for a single phase"""
+
     phase_name: str
     phase_number: int
     start_over: int
@@ -38,7 +39,7 @@ class PhaseStats:
 class MatchPhaseAnalyzer:
     """
     Analyzes cricket matches by dividing them into phases.
-    
+
     Each phase has different scoring patterns and strategies:
     - Powerplay: Attacking batting, high-risk shots
     - Middle: Consolidation and rotation
@@ -69,13 +70,13 @@ class MatchPhaseAnalyzer:
     ) -> dict[str, Any]:
         """
         Analyze match phases and generate predictions.
-        
+
         Args:
             deliveries: List of delivery dictionaries
             target: Target runs (if chasing)
             overs_limit: Total overs in innings (20 for T20, 50 for ODI)
             is_second_innings: Whether analyzing the chasing innings
-        
+
         Returns:
             {
                 "phases": [PhaseStats, ...],
@@ -118,16 +119,16 @@ class MatchPhaseAnalyzer:
 
         # Parse deliveries into phases
         phases_dict: dict[str, list[dict[str, Any]]] = {}
-        
+
         for delivery in deliveries:
             over_num = int(delivery.get("over_number", 0))
             phase = MatchPhaseAnalyzer._get_phase(over_num, overs_limit, is_second_innings)
-            
+
             if phase:
                 if phase not in phases_dict:
                     phases_dict[phase] = []
                 phases_dict[phase].append(delivery)
-        
+
         # Convert to ordered list
         phase_order = ["powerplay", "middle", "death", "mini_death"]
         phases = []
@@ -224,9 +225,7 @@ class MatchPhaseAnalyzer:
             }
 
     @staticmethod
-    def _get_phase(
-        over_num: int, overs_limit: int, is_second_innings: bool
-    ) -> str | None:
+    def _get_phase(over_num: int, overs_limit: int, is_second_innings: bool) -> str | None:
         """Determine which phase an over belongs to."""
         if over_num < MatchPhaseAnalyzer.POWERPLAY_END:
             return "powerplay"
@@ -289,7 +288,11 @@ class MatchPhaseAnalyzer:
         aggressive_index = (boundary_count / total_runs) if total_runs else 0
 
         # Acceleration rate (relative to powerplay)
-        acceleration_rate = run_rate / MatchPhaseAnalyzer.EXPECTED_RR_POWERPLAY if phase_name != "powerplay" else 1.0
+        acceleration_rate = (
+            run_rate / MatchPhaseAnalyzer.EXPECTED_RR_POWERPLAY
+            if phase_name != "powerplay"
+            else 1.0
+        )
 
         # Determine phase boundaries
         if phase_name == "powerplay":

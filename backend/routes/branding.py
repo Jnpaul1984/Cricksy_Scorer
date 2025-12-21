@@ -5,7 +5,6 @@ Endpoints for managing organization branding and themes
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -15,11 +14,12 @@ from backend.services.branding_service import (
     FontFamily,
     OrgBrandTheme,
 )
+import contextlib
 
 router = APIRouter(prefix="/branding", tags=["branding"])
 
 # In-memory storage for demo (in production, use database)
-_org_themes: Dict[str, OrgBrandTheme] = {}
+_org_themes: dict[str, OrgBrandTheme] = {}
 
 
 @router.post("/themes")
@@ -73,7 +73,7 @@ async def create_brand_theme(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create theme: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create theme: {e!s}")
 
 
 @router.get("/themes/{org_id}")
@@ -96,18 +96,18 @@ async def get_brand_theme(org_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch theme: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch theme: {e!s}")
 
 
 @router.put("/themes/{org_id}/colors")
 async def update_brand_colors(
     org_id: str,
-    primary: Optional[str] = Query(None),
-    secondary: Optional[str] = Query(None),
-    accent: Optional[str] = Query(None),
-    success: Optional[str] = Query(None),
-    warning: Optional[str] = Query(None),
-    error: Optional[str] = Query(None),
+    primary: str | None = Query(None),
+    secondary: str | None = Query(None),
+    accent: str | None = Query(None),
+    success: str | None = Query(None),
+    warning: str | None = Query(None),
+    error: str | None = Query(None),
 ):
     """
     Update brand colors
@@ -157,14 +157,14 @@ async def update_brand_colors(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update colors: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update colors: {e!s}")
 
 
 @router.put("/themes/{org_id}/typography")
 async def update_typography(
     org_id: str,
     primary_font: str = "Inter",
-    secondary_font: Optional[str] = None,
+    secondary_font: str | None = None,
     heading_size: int = 32,
     body_size: int = 14,
     line_height: float = 1.5,
@@ -200,10 +200,8 @@ async def update_typography(
 
         secondary = None
         if secondary_font:
-            try:
+            with contextlib.suppress(KeyError):
                 secondary = FontFamily[secondary_font.upper().replace(" ", "_")]
-            except KeyError:
-                pass
 
         theme = BrandingService.set_typography(
             theme=theme,
@@ -219,7 +217,9 @@ async def update_typography(
             "message": "Typography updated",
             "typography": {
                 "primary_font": theme.typography.primary_font.value,
-                "secondary_font": theme.typography.secondary_font.value if theme.typography.secondary_font else None,
+                "secondary_font": theme.typography.secondary_font.value
+                if theme.typography.secondary_font
+                else None,
                 "heading_size": theme.typography.heading_size_px,
                 "body_size": theme.typography.body_size_px,
                 "line_height": theme.typography.line_height,
@@ -229,7 +229,7 @@ async def update_typography(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update typography: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update typography: {e!s}")
 
 
 @router.post("/themes/{org_id}/assets")
@@ -239,8 +239,8 @@ async def add_brand_asset(
     name: str,
     url: str,
     alt_text: str,
-    width: Optional[int] = None,
-    height: Optional[int] = None,
+    width: int | None = None,
+    height: int | None = None,
 ):
     """
     Add brand asset (logo, icon, favicon, etc.)
@@ -281,7 +281,7 @@ async def add_brand_asset(
             "updated_at": theme.updated_at.isoformat(),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to add asset: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to add asset: {e!s}")
 
 
 @router.get("/themes/{org_id}/css")
@@ -310,7 +310,7 @@ async def get_theme_css(org_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate CSS: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate CSS: {e!s}")
 
 
 @router.post("/themes/{org_id}/validate")
@@ -342,15 +342,15 @@ async def validate_branding(org_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to validate branding: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to validate branding: {e!s}")
 
 
 @router.put("/themes/{org_id}/scope")
 async def update_application_scope(
     org_id: str,
-    apply_to_viewer: Optional[bool] = None,
-    apply_to_scoreboard: Optional[bool] = None,
-    apply_to_admin: Optional[bool] = None,
+    apply_to_viewer: bool | None = None,
+    apply_to_scoreboard: bool | None = None,
+    apply_to_admin: bool | None = None,
 ):
     """
     Update where brand theme is applied
@@ -391,7 +391,7 @@ async def update_application_scope(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update scope: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update scope: {e!s}")
 
 
 @router.get("/fonts")

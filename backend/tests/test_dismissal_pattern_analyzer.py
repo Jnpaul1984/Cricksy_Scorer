@@ -4,7 +4,6 @@ Tests for Dismissal Pattern Analyzer
 Tests dismissal pattern identification, vulnerability scoring, and analysis.
 """
 
-import pytest
 from backend.services.dismissal_pattern_analyzer import (
     DismissalPatternAnalyzer,
     DismissalRecord,
@@ -400,7 +399,10 @@ class TestImprovementAreas:
         )
 
         assert len(profile.improvement_areas) > 0
-        assert any("technique" in area.lower() or "death" in area.lower() for area in profile.improvement_areas)
+        assert any(
+            "technique" in area.lower() or "death" in area.lower()
+            for area in profile.improvement_areas
+        )
 
 
 class TestDismissalTrend:

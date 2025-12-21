@@ -28,7 +28,7 @@ async def get_phase_map(
 ) -> dict[str, Any]:
     """
     Get complete phase map for a game with analysis and predictions.
-    
+
     Returns:
     {
         "game_id": str,
@@ -70,8 +70,10 @@ async def get_phase_map(
 
     try:
         # Fetch game
-        stmt = select(Game).where(Game.id == game_id).options(
-            selectinload(Game.batting_order).selectinload(User.teams)
+        stmt = (
+            select(Game)
+            .where(Game.id == game_id)
+            .options(selectinload(Game.batting_order).selectinload(User.teams))
         )
         result = await db.execute(stmt)
         game = result.scalars().first()
@@ -83,7 +85,7 @@ async def get_phase_map(
         if inning_num is None:
             # Use the most recent completed/current inning
             inning_num = 2 if game.second_inning_json else 1
-        
+
         # Get deliveries
         if inning_num == 2 and game.second_inning_json:
             inning_data = game.second_inning_json
@@ -118,7 +120,7 @@ async def get_phase_map(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Phase analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Phase analysis error: {e!s}")
 
 
 @router.get("/games/{game_id}/phase-predictions")
@@ -129,7 +131,7 @@ async def get_phase_predictions(
 ) -> dict[str, Any]:
     """
     Get phase-specific predictions for a game.
-    
+
     Returns:
     {
         "game_id": str,
@@ -225,7 +227,7 @@ async def get_phase_predictions(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Phase prediction error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Phase prediction error: {e!s}")
 
 
 @router.get("/games/{game_id}/phase-trends")
@@ -236,7 +238,7 @@ async def get_phase_trends(
 ) -> dict[str, Any]:
     """
     Get phase-by-phase performance trends.
-    
+
     Returns:
     {
         "game_id": str,
@@ -299,9 +301,7 @@ async def get_phase_trends(
 
         # Phase comparison (vs powerplay)
         powerplay_rr = run_rate_trend[0] if run_rate_trend else 1.0
-        vs_powerplay = [
-            p["run_rate"] / powerplay_rr if powerplay_rr > 0 else 1.0 for p in phases
-        ]
+        vs_powerplay = [p["run_rate"] / powerplay_rr if powerplay_rr > 0 else 1.0 for p in phases]
 
         # Phase comparison (vs benchmark)
         vs_benchmark = [p["actual_vs_expected_pct"] / 100 for p in phases]
@@ -323,4 +323,4 @@ async def get_phase_trends(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Phase trends error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Phase trends error: {e!s}")

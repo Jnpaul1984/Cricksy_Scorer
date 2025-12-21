@@ -2,12 +2,10 @@
 Tests for pitch heatmap generator service.
 """
 
-import pytest
 from backend.services.pitch_heatmap_generator import (
     PitchHeatmapGenerator,
     HeatmapType,
     PitchZone,
-    HeatmapDataPoint,
 )
 
 
@@ -215,13 +213,19 @@ class TestBowlerReleaseZones:
 
     def test_primary_zone_identification(self):
         """Test identification of primary zone."""
-        deliveries = [
-            {"zone": PitchZone.MIDDLE_FULL},
-        ] * 6 + [
-            {"zone": PitchZone.OFF_SIDE_FULL},
-        ] * 3 + [
-            {"zone": PitchZone.LEG_SIDE_FULL},
-        ]
+        deliveries = (
+            [
+                {"zone": PitchZone.MIDDLE_FULL},
+            ]
+            * 6
+            + [
+                {"zone": PitchZone.OFF_SIDE_FULL},
+            ]
+            * 3
+            + [
+                {"zone": PitchZone.LEG_SIDE_FULL},
+            ]
+        )
 
         heatmap = PitchHeatmapGenerator.generate_bowler_release_heatmap(
             bowler_id="b1",
@@ -264,8 +268,8 @@ class TestBatterProfile:
         """Test identification of strong scoring zones."""
         deliveries = [
             {"zone": PitchZone.OFF_SIDE_FULL, "runs_scored": 20},  # Strong
-            {"zone": PitchZone.LEG_SIDE_FULL, "runs_scored": 3},   # Weak
-            {"zone": PitchZone.MIDDLE_FULL, "runs_scored": 0},     # Weak
+            {"zone": PitchZone.LEG_SIDE_FULL, "runs_scored": 3},  # Weak
+            {"zone": PitchZone.MIDDLE_FULL, "runs_scored": 0},  # Weak
         ]
 
         profile = PitchHeatmapGenerator.analyze_batter_profile(
@@ -345,13 +349,19 @@ class TestBowlerProfile:
 
     def test_identifies_primary_zones(self):
         """Test identification of primary zones (>15% of deliveries)."""
-        deliveries = [
-            {"zone": PitchZone.MIDDLE_FULL},
-        ] * 6 + [
-            {"zone": PitchZone.OFF_SIDE_FULL},
-        ] * 2 + [
-            {"zone": PitchZone.LEG_SIDE_FULL},
-        ]
+        deliveries = (
+            [
+                {"zone": PitchZone.MIDDLE_FULL},
+            ]
+            * 6
+            + [
+                {"zone": PitchZone.OFF_SIDE_FULL},
+            ]
+            * 2
+            + [
+                {"zone": PitchZone.LEG_SIDE_FULL},
+            ]
+        )
 
         profile = PitchHeatmapGenerator.analyze_bowler_profile(
             bowler_id="b1",
@@ -390,7 +400,7 @@ class TestBowlerProfile:
         off_effectiveness = profile.zone_effectiveness[PitchZone.OFF_SIDE_FULL]
 
         assert middle_effectiveness == 50.0  # 1/2 = 50%
-        assert off_effectiveness == 0.0   # 0/2 = 0%
+        assert off_effectiveness == 0.0  # 0/2 = 0%
 
 
 class TestMatchupAnalysis:

@@ -12,11 +12,11 @@ Features:
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
 
 
 class EngagementEvent(str, Enum):
     """High-engagement moments in cricket match"""
+
     WICKET = "wicket"
     BOUNDARY = "boundary"
     SIX = "six"
@@ -27,6 +27,7 @@ class EngagementEvent(str, Enum):
 
 class RotationStrategy(str, Enum):
     """Sponsor rotation strategies"""
+
     EQUAL_TIME = "equal_time"  # Each sponsor gets equal overs
     PRIORITY_WEIGHTED = "priority_weighted"  # High-priority sponsors get more overs
     DYNAMIC = "dynamic"  # Adjust based on engagement
@@ -35,6 +36,7 @@ class RotationStrategy(str, Enum):
 @dataclass
 class Sponsor:
     """Sponsor configuration"""
+
     sponsor_id: str
     name: str
     logo_url: str
@@ -46,19 +48,21 @@ class Sponsor:
 @dataclass
 class SponsorSlot:
     """Individual sponsor slot in rotation"""
+
     slot_id: str
     over_num: int  # 1-indexed
     ball_num: int  # 1-6 per over
     sponsor_id: str
     sponsor_name: str
     priority: int
-    event_type: Optional[str] = None  # Type of engagement triggering this slot
+    event_type: str | None = None  # Type of engagement triggering this slot
     exposure_value: float = 1.0  # 1.0 = standard, 1.5 = premium (wicket/boundary)
 
 
 @dataclass
 class SponsorExposureMetrics:
     """Metrics for sponsor exposure during match"""
+
     sponsor_id: str
     sponsor_name: str
     total_exposures: int
@@ -66,23 +70,26 @@ class SponsorExposureMetrics:
     exposure_rate: float  # % of total slots
     first_exposure_over: int
     last_exposure_over: int
-    peak_engagement_over: Optional[int]  # Over with most events
+    peak_engagement_over: int | None  # Over with most events
 
 
 @dataclass
 class RotationSchedule:
     """Complete sponsor rotation schedule for a match"""
+
     schedule_id: str
     game_id: str
     organization_id: str
     created_at: datetime
     updated_at: datetime
     strategy: RotationStrategy
-    sponsors: List[Sponsor]
-    slots: List[SponsorSlot] = field(default_factory=list)
+    sponsors: list[Sponsor]
+    slots: list[SponsorSlot] = field(default_factory=list)
     max_overs: int = 20  # T20 = 20, ODI = 50
-    exposures_per_sponsor: Dict[str, int] = field(default_factory=dict)
-    engagement_events: List[Tuple[int, EngagementEvent]] = field(default_factory=list)  # (over, event)
+    exposures_per_sponsor: dict[str, int] = field(default_factory=dict)
+    engagement_events: list[tuple[int, EngagementEvent]] = field(
+        default_factory=list
+    )  # (over, event)
 
 
 class SponsorRotationEngine:
@@ -92,7 +99,7 @@ class SponsorRotationEngine:
     def build_rotation_schedule(
         game_id: str,
         organization_id: str,
-        sponsors: List[Sponsor],
+        sponsors: list[Sponsor],
         max_overs: int = 20,
         strategy: RotationStrategy = RotationStrategy.EQUAL_TIME,
     ) -> RotationSchedule:
@@ -136,7 +143,9 @@ class SponsorRotationEngine:
         if strategy == RotationStrategy.EQUAL_TIME:
             slots = SponsorRotationEngine._build_equal_time_slots(sponsors, max_overs, game_id)
         elif strategy == RotationStrategy.PRIORITY_WEIGHTED:
-            slots = SponsorRotationEngine._build_priority_weighted_slots(sponsors, max_overs, game_id)
+            slots = SponsorRotationEngine._build_priority_weighted_slots(
+                sponsors, max_overs, game_id
+            )
         else:  # DYNAMIC
             slots = SponsorRotationEngine._build_dynamic_slots(sponsors, max_overs, game_id)
 
@@ -149,7 +158,9 @@ class SponsorRotationEngine:
         return schedule
 
     @staticmethod
-    def _build_equal_time_slots(sponsors: List[Sponsor], max_overs: int, game_id: str) -> List[SponsorSlot]:
+    def _build_equal_time_slots(
+        sponsors: list[Sponsor], max_overs: int, game_id: str
+    ) -> list[SponsorSlot]:
         """
         Build rotation slots with equal time distribution
 
@@ -161,7 +172,6 @@ class SponsorRotationEngine:
         overs_per_sponsor = total_overs // total_sponsors
         remainder = total_overs % total_sponsors
 
-        slot_counter = 0
         current_sponsor_idx = 0
         overs_for_current = overs_per_sponsor + (1 if current_sponsor_idx < remainder else 0)
 
@@ -182,12 +192,16 @@ class SponsorRotationEngine:
             overs_for_current -= 1
             if overs_for_current == 0:
                 current_sponsor_idx = (current_sponsor_idx + 1) % total_sponsors
-                overs_for_current = overs_per_sponsor + (1 if current_sponsor_idx < remainder else 0)
+                overs_for_current = overs_per_sponsor + (
+                    1 if current_sponsor_idx < remainder else 0
+                )
 
         return slots
 
     @staticmethod
-    def _build_priority_weighted_slots(sponsors: List[Sponsor], max_overs: int, game_id: str) -> List[SponsorSlot]:
+    def _build_priority_weighted_slots(
+        sponsors: list[Sponsor], max_overs: int, game_id: str
+    ) -> list[SponsorSlot]:
         """
         Build rotation slots with priority weighting
 
@@ -198,7 +212,7 @@ class SponsorRotationEngine:
         total_overs = max_overs
 
         # Calculate overs per sponsor based on priority weight
-        sponsor_overs: Dict[str, int] = {}
+        sponsor_overs: dict[str, int] = {}
         overs_assigned = 0
 
         for i, sponsor in enumerate(sponsors):
@@ -236,7 +250,9 @@ class SponsorRotationEngine:
         return slots
 
     @staticmethod
-    def _build_dynamic_slots(sponsors: List[Sponsor], max_overs: int, game_id: str) -> List[SponsorSlot]:
+    def _build_dynamic_slots(
+        sponsors: list[Sponsor], max_overs: int, game_id: str
+    ) -> list[SponsorSlot]:
         """
         Build rotation slots with dynamic adjustment
 
@@ -246,7 +262,9 @@ class SponsorRotationEngine:
         return SponsorRotationEngine._build_equal_time_slots(sponsors, max_overs, game_id)
 
     @staticmethod
-    def get_sponsor_for_over(schedule: RotationSchedule, over_num: int, ball_num: int = 1) -> Optional[SponsorSlot]:
+    def get_sponsor_for_over(
+        schedule: RotationSchedule, over_num: int, ball_num: int = 1
+    ) -> SponsorSlot | None:
         """
         Get sponsor display for specific over and ball
 
@@ -284,7 +302,11 @@ class SponsorRotationEngine:
             current_slot = SponsorRotationEngine.get_sponsor_for_over(schedule, over_num)
             if current_slot:
                 # Increase exposure value during high-engagement moments
-                if event_type in [EngagementEvent.WICKET, EngagementEvent.SIX, EngagementEvent.BOUNDARY]:
+                if event_type in [
+                    EngagementEvent.WICKET,
+                    EngagementEvent.SIX,
+                    EngagementEvent.BOUNDARY,
+                ]:
                     current_slot.event_type = event_type.value
                     current_slot.exposure_value = 1.5  # Premium exposure
 
@@ -306,7 +328,7 @@ class SponsorRotationEngine:
         schedule.updated_at = datetime.utcnow()
 
     @staticmethod
-    def get_exposure_metrics(schedule: RotationSchedule) -> Dict[str, SponsorExposureMetrics]:
+    def get_exposure_metrics(schedule: RotationSchedule) -> dict[str, SponsorExposureMetrics]:
         """
         Calculate exposure metrics for all sponsors
 
@@ -316,11 +338,11 @@ class SponsorRotationEngine:
         Returns:
             Dict mapping sponsor_id to SponsorExposureMetrics
         """
-        metrics: Dict[str, SponsorExposureMetrics] = {}
+        metrics: dict[str, SponsorExposureMetrics] = {}
         total_slots = len(schedule.slots)
 
         # Find first and last exposure for each sponsor
-        sponsor_over_ranges: Dict[str, Tuple[int, int]] = {}
+        sponsor_over_ranges: dict[str, tuple[int, int]] = {}
 
         for slot in schedule.slots:
             sponsor_id = slot.sponsor_id
@@ -334,8 +356,8 @@ class SponsorRotationEngine:
                 )
 
         # Find peak engagement overs
-        engagement_by_over: Dict[int, int] = {}
-        for over_num, event in schedule.engagement_events:
+        engagement_by_over: dict[int, int] = {}
+        for over_num, _event in schedule.engagement_events:
             if over_num not in engagement_by_over:
                 engagement_by_over[over_num] = 0
             engagement_by_over[over_num] += 1
@@ -361,7 +383,11 @@ class SponsorRotationEngine:
                 sponsor_id=sponsor_id,
                 sponsor_name=sponsor.name,
                 total_exposures=exposure_count,
-                premium_exposures=sum(1 for slot in schedule.slots if slot.sponsor_id == sponsor_id and slot.exposure_value > 1.0),
+                premium_exposures=sum(
+                    1
+                    for slot in schedule.slots
+                    if slot.sponsor_id == sponsor_id and slot.exposure_value > 1.0
+                ),
                 exposure_rate=exposure_count / max(total_slots, 1) * 100,
                 first_exposure_over=first_over if first_over > 0 else 0,
                 last_exposure_over=last_over if last_over > 0 else 0,
@@ -374,7 +400,7 @@ class SponsorRotationEngine:
     def adjust_rotation_for_phase(
         schedule: RotationSchedule,
         phase: str,  # "powerplay", "middle", "death"
-        boost_priority_sponsor_id: Optional[str] = None,
+        boost_priority_sponsor_id: str | None = None,
     ) -> None:
         """
         Adjust rotation based on match phase

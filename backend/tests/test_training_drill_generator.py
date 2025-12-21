@@ -4,7 +4,6 @@ Tests for Training Drill Generator
 Tests personalized drill recommendations and drill tracking.
 """
 
-import pytest
 from backend.services.training_drill_generator import (
     TrainingDrillGenerator,
     DrillCategory,
@@ -324,9 +323,7 @@ class TestWeaknessDrillMapping:
             player_profile=player_profile,
         )
 
-        pace_drills = [
-            d for d in plan.drills if d.category == DrillCategory.PACE_HANDLING
-        ]
+        pace_drills = [d for d in plan.drills if d.category == DrillCategory.PACE_HANDLING]
         assert len(pace_drills) >= 1
 
     def test_dot_ball_weakness_maps_to_dot_ball_drills(self):
@@ -346,9 +343,7 @@ class TestWeaknessDrillMapping:
             player_profile=player_profile,
         )
 
-        dot_drills = [
-            d for d in plan.drills if d.category == DrillCategory.DOT_BALL
-        ]
+        dot_drills = [d for d in plan.drills if d.category == DrillCategory.DOT_BALL]
         assert len(dot_drills) >= 1
 
 
@@ -395,4 +390,4 @@ class TestTrainingPlanSummary:
         if plan.drills:
             assert len(plan.focus_areas) > 0
             unique_focus_areas = set(d.focus_area for d in plan.drills)
-            assert plan.focus_areas == sorted(list(unique_focus_areas))
+            assert plan.focus_areas == sorted(unique_focus_areas)

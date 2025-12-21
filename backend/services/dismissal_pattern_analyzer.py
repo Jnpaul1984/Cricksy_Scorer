@@ -5,13 +5,13 @@ Analyzes player dismissal patterns to identify recurring vulnerabilities
 and recommend targeted interventions.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class DismissalType(str, Enum):
     """Cricket dismissal types."""
+
     BOWLED = "bowled"
     LBW = "lbw"
     CAUGHT = "caught"
@@ -26,6 +26,7 @@ class DismissalType(str, Enum):
 
 class MatchPhase(str, Enum):
     """Match phases for pattern analysis."""
+
     POWERPLAY = "powerplay"
     MIDDLE_OVERS = "middle_overs"
     DEATH_OVERS = "death_overs"
@@ -35,24 +36,26 @@ class MatchPhase(str, Enum):
 @dataclass
 class DismissalRecord:
     """Single dismissal event."""
+
     dismissal_id: str
     dismissal_type: str  # From DismissalType
-    bowler_name: Optional[str] = None
-    bowler_id: Optional[str] = None
-    delivery_type: Optional[str] = None  # pace, spin, etc.
-    line: Optional[str] = None  # off, leg, middle, wide, yorker
-    length: Optional[str] = None  # full, good, short, bounce
+    bowler_name: str | None = None
+    bowler_id: str | None = None
+    delivery_type: str | None = None  # pace, spin, etc.
+    line: str | None = None  # off, leg, middle, wide, yorker
+    length: str | None = None  # full, good, short, bounce
     match_phase: str = MatchPhase.FULL_MATCH
     runs_at_dismissal: int = 0
     deliveries_faced: int = 0
     boundary_attempt: bool = False
     aggressive: bool = False
-    context: Optional[str] = None  # Description of context
+    context: str | None = None  # Description of context
 
 
 @dataclass
 class DismissalPattern:
     """Pattern group of related dismissals."""
+
     pattern_id: str
     pattern_name: str  # e.g., "LBW on legside yorkers"
     pattern_type: str  # dismissal_type, bowler_type, delivery_type, phase, etc.
@@ -68,6 +71,7 @@ class DismissalPattern:
 @dataclass
 class DismissalSituation:
     """High-risk dismissal situation."""
+
     situation_id: str
     situation_type: str  # e.g., "pace_yorker_legside"
     trigger_factors: list[str]
@@ -80,6 +84,7 @@ class DismissalSituation:
 @dataclass
 class PlayerDismissalProfile:
     """Complete dismissal vulnerability profile for a player."""
+
     player_id: str
     player_name: str
     total_dismissals: int
@@ -91,7 +96,7 @@ class PlayerDismissalProfile:
     top_patterns: list[DismissalPattern]  # Sorted by severity/frequency
     critical_situations: list[DismissalSituation]
     overall_vulnerability_score: float  # 0-100, higher = more vulnerable
-    primary_vulnerability: Optional[str]  # Main weakness
+    primary_vulnerability: str | None  # Main weakness
     secondary_vulnerabilities: list[str]  # Other weaknesses
     improvement_areas: list[str]  # Ranked by impact
 
@@ -99,6 +104,7 @@ class PlayerDismissalProfile:
 @dataclass
 class DismissalTrend:
     """Dismissal trend over time."""
+
     period: str  # "last_5", "last_10", "last_20", etc.
     dismissal_count: int
     average_runs_at_dismissal: float
@@ -110,6 +116,7 @@ class DismissalTrend:
 @dataclass
 class TeamDismissalContext:
     """Team-level dismissal patterns."""
+
     team_id: str
     team_name: str
     total_team_dismissals: int
@@ -163,12 +170,12 @@ class DismissalPatternAnalyzer:
     ) -> PlayerDismissalProfile:
         """
         Analyze all dismissals for a player and generate vulnerability profile.
-        
+
         Args:
             player_id: Player identifier
             player_name: Player name
             dismissals: List of dismissal records
-            
+
         Returns:
             Complete dismissal profile with patterns and vulnerabilities
         """
@@ -209,7 +216,9 @@ class DismissalPatternAnalyzer:
 
             # Delivery/line/length aggregation
             if d.delivery_type:
-                dismissals_by_delivery[d.delivery_type] = dismissals_by_delivery.get(d.delivery_type, 0) + 1
+                dismissals_by_delivery[d.delivery_type] = (
+                    dismissals_by_delivery.get(d.delivery_type, 0) + 1
+                )
             if d.line:
                 dismissals_by_line[d.line] = dismissals_by_line.get(d.line, 0) + 1
             if d.length:
@@ -312,7 +321,9 @@ class DismissalPatternAnalyzer:
                         confidence=round(confidence, 2),
                         severity=severity,
                         context=f"{player_name} dismissed {dismissal_type} {count} times ({percentage:.1f}% of dismissals)",
-                        recommendation=DismissalPatternAnalyzer._get_type_recommendation(dismissal_type),
+                        recommendation=DismissalPatternAnalyzer._get_type_recommendation(
+                            dismissal_type
+                        ),
                     )
                 )
 
@@ -338,7 +349,9 @@ class DismissalPatternAnalyzer:
                         confidence=round(confidence, 2),
                         severity=severity,
                         context=f"Dismissed {count} times to {delivery_type} bowling",
-                        recommendation=DismissalPatternAnalyzer._get_delivery_recommendation(delivery_type),
+                        recommendation=DismissalPatternAnalyzer._get_delivery_recommendation(
+                            delivery_type
+                        ),
                     )
                 )
 
@@ -362,7 +375,9 @@ class DismissalPatternAnalyzer:
                             confidence=round(min(percentage / 100, 1.0), 2),
                             severity="high" if phase == MatchPhase.DEATH_OVERS else "medium",
                             context=f"{count} dismissals during {phase}",
-                            recommendation=DismissalPatternAnalyzer._get_phase_recommendation(phase),
+                            recommendation=DismissalPatternAnalyzer._get_phase_recommendation(
+                                phase
+                            ),
                         )
                     )
 
@@ -481,7 +496,9 @@ class DismissalPatternAnalyzer:
             "run_out": "Communication with partner and quick running execution",
             "hit_wicket": "Improve footwork and bat control during shots",
         }
-        return recommendations.get(dismissal_type, "Review technique against this mode of dismissal")
+        return recommendations.get(
+            dismissal_type, "Review technique against this mode of dismissal"
+        )
 
     @staticmethod
     def _get_delivery_recommendation(delivery_type: str) -> str:
@@ -493,7 +510,9 @@ class DismissalPatternAnalyzer:
             "short": "Perfect short ball techniques (duck, sway, pull shot)",
             "full": "Reduce aggressive drives outside off stump",
         }
-        return recommendations.get(delivery_type, "Practice and conditioning against this delivery type")
+        return recommendations.get(
+            delivery_type, "Practice and conditioning against this delivery type"
+        )
 
     @staticmethod
     def _get_phase_recommendation(phase: str) -> str:
@@ -539,10 +558,7 @@ class DismissalPatternAnalyzer:
         # Phase vulnerability aggregation
         phase_vulnerability = {}
         for phase in MatchPhase:
-            total_phase = sum(
-                p.dismissals_by_phase.get(phase, 0)
-                for p in player_profiles
-            )
+            total_phase = sum(p.dismissals_by_phase.get(phase, 0) for p in player_profiles)
             if total_phase > 0:
                 phase_vulnerability[phase] = round((total_phase / total_dismissals) * 100, 1)
 
@@ -557,7 +573,9 @@ class DismissalPatternAnalyzer:
         if phase_vulnerability.get(MatchPhase.DEATH_OVERS, 0) > 30:
             team_recommendations.append("Team-wide death overs training required")
 
-        team_recommendations.append("Regular technical coaching sessions based on individual patterns")
+        team_recommendations.append(
+            "Regular technical coaching sessions based on individual patterns"
+        )
 
         return TeamDismissalContext(
             team_id=team_id,
@@ -595,8 +613,12 @@ class DismissalPatternAnalyzer:
         avg_deliveries = sum(d.deliveries_faced for d in recent_dismissals) / len(recent_dismissals)
 
         # Trend direction (simplified: compare early vs recent)
-        early_avg_runs = sum(d.runs_at_dismissal for d in recent_dismissals[:len(recent_dismissals)//2]) / max(1, len(recent_dismissals)//2)
-        late_avg_runs = sum(d.runs_at_dismissal for d in recent_dismissals[len(recent_dismissals)//2:]) / max(1, len(recent_dismissals) - len(recent_dismissals)//2)
+        early_avg_runs = sum(
+            d.runs_at_dismissal for d in recent_dismissals[: len(recent_dismissals) // 2]
+        ) / max(1, len(recent_dismissals) // 2)
+        late_avg_runs = sum(
+            d.runs_at_dismissal for d in recent_dismissals[len(recent_dismissals) // 2 :]
+        ) / max(1, len(recent_dismissals) - len(recent_dismissals) // 2)
 
         if late_avg_runs > early_avg_runs * 1.2:
             trend_direction = "improving"

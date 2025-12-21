@@ -294,7 +294,7 @@ async def get_game_sponsors(
         or_(Sponsor.end_at.is_(None), Sponsor.end_at >= now),
     ]
     if hasattr(Sponsor, "is_active"):
-        conditions.append(Sponsor.is_active == True)  # noqa: E712
+        conditions.append(Sponsor.is_active == True)
 
     stmt = (
         select(Sponsor)

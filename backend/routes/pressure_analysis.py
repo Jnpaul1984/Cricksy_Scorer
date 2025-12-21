@@ -23,14 +23,14 @@ async def get_game_pressure_map(
 ) -> dict:
     """
     Get pressure map for a game or specific inning.
-    
+
     Shows pressure score for each delivery with factors:
     - Dot ball streaks
     - Required run rate vs actual
     - Wicket timings
     - Overs remaining
     - Match situation
-    
+
     Returns:
         {
             "game_id": str,
@@ -76,45 +76,48 @@ async def get_game_pressure_map(
         stmt = select(Game).where(Game.id == game_id)
         result = await db.execute(stmt)
         game = result.scalars().first()
-        
+
         if not game:
             raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
-        
+
         # Fetch deliveries for the specified inning or current
         if inning_num is not None:
-            stmt = select(Delivery).where(
-                (Delivery.game_id == game_id) & 
-                (Delivery.inning_num == inning_num)
-            ).order_by(Delivery.delivery_num)
+            stmt = (
+                select(Delivery)
+                .where((Delivery.game_id == game_id) & (Delivery.inning_num == inning_num))
+                .order_by(Delivery.delivery_num)
+            )
         else:
             # Get current inning
-            stmt = select(Delivery).where(Delivery.game_id == game_id).order_by(Delivery.delivery_num)
+            stmt = (
+                select(Delivery).where(Delivery.game_id == game_id).order_by(Delivery.delivery_num)
+            )
             result = await db.execute(stmt)
             all_deliveries = result.scalars().all()
-            
+
             # Group by inning and get latest
             if all_deliveries:
                 inning_num = max(d.inning_num for d in all_deliveries)
-                stmt = select(Delivery).where(
-                    (Delivery.game_id == game_id) & 
-                    (Delivery.inning_num == inning_num)
-                ).order_by(Delivery.delivery_num)
-        
+                stmt = (
+                    select(Delivery)
+                    .where((Delivery.game_id == game_id) & (Delivery.inning_num == inning_num))
+                    .order_by(Delivery.delivery_num)
+                )
+
         result = await db.execute(stmt)
         deliveries_db = result.scalars().all()
-        
+
         if not deliveries_db:
-            raise HTTPException(
-                status_code=400,
-                detail="No deliveries found for this game"
-            )
-        
+            raise HTTPException(status_code=400, detail="No deliveries found for this game")
+
         # Convert deliveries to analysis format
         deliveries = [
             {
                 "runs_scored": int(d.runs_scored or 0),
                 "extra": d.extra_type,
-                "extra_runs": int(d.extra_runs or 0) if d.extra_type and d.extra_type in ['wd', 'nb'] else 0,
+                "extra_runs": int(d.extra_runs or 0)
+                if d.extra_type and d.extra_type in ["wd", "nb"]
+                else 0,
                 "is_wicket": bool(d.is_wicket),
                 "how_out": d.dismissal_type,
                 "ball_in_over": d.ball_in_over,
@@ -122,13 +125,12 @@ async def get_game_pressure_map(
             }
             for d in deliveries_db
         ]
-        
+
         # Determine target (runs scored in first inning if chasing)
         if inning_num == 2:
             # Get first inning runs
             stmt = select(Delivery).where(
-                (Delivery.game_id == game_id) & 
-                (Delivery.inning_num == 1)
+                (Delivery.game_id == game_id) & (Delivery.inning_num == 1)
             )
             result = await db.execute(stmt)
             first_inning_deliveries = result.scalars().all()
@@ -136,17 +138,17 @@ async def get_game_pressure_map(
         else:
             # Default target based on format
             target = int(game.overs_limit or 20) * 8  # ~8 runs per over
-        
+
         # Get overs limit
         overs_limit = int(game.overs_limit or 20)
-        
+
         # Generate pressure map
         pressure_data = get_pressure_map(
             deliveries=deliveries,
             target=target,
             overs_limit=overs_limit,
         )
-        
+
         return {
             "game_id": str(game.id),
             "inning_num": inning_num,
@@ -156,14 +158,11 @@ async def get_game_pressure_map(
             "overs_limit": overs_limit,
             **pressure_data,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to calculate pressure map: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to calculate pressure map: {e!s}")
 
 
 @router.get("/games/{game_id}/critical-moments")
@@ -175,7 +174,7 @@ async def get_critical_moments(
 ) -> dict:
     """
     Get critical pressure moments (high-pressure deliveries).
-    
+
     Useful for highlighting key moments in match highlights.
     """
     try:
@@ -183,19 +182,18 @@ async def get_critical_moments(
         stmt = select(Game).where(Game.id == game_id)
         result = await db.execute(stmt)
         game = result.scalars().first()
-        
+
         if not game:
             raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
-        
+
         # Get pressure map
         pressure_response = await get_game_pressure_map(game_id, db, inning_num)
-        
+
         # Filter for critical moments
         critical = [
-            p for p in pressure_response["pressure_points"]
-            if p["pressure_score"] >= threshold
+            p for p in pressure_response["pressure_points"] if p["pressure_score"] >= threshold
         ]
-        
+
         return {
             "game_id": str(game.id),
             "threshold": threshold,
@@ -205,16 +203,13 @@ async def get_critical_moments(
                 "total_high_pressure": len(critical),
                 "highest_pressure": max([p["pressure_score"] for p in critical]) if critical else 0,
                 "most_critical_delivery": critical[0]["delivery_num"] if critical else None,
-            }
+            },
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get critical moments: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get critical moments: {e!s}")
 
 
 @router.get("/games/{game_id}/pressure-phases")
@@ -225,7 +220,7 @@ async def get_pressure_phases(
 ) -> dict:
     """
     Get pressure analysis by match phase.
-    
+
     Breaks down pressure by phases:
     - Powerplay (0-6 overs)
     - Middle (7-15 overs)
@@ -234,9 +229,9 @@ async def get_pressure_phases(
     try:
         # Get pressure map
         pressure_response = await get_game_pressure_map(game_id, db, inning_num)
-        
+
         phases = pressure_response.get("phases", {})
-        
+
         # Add analysis for each phase
         phase_analysis = {}
         for phase_name in ["powerplay", "middle", "death"]:
@@ -246,14 +241,11 @@ async def get_pressure_phases(
                     "statistics": phases[f"{phase_name}_stats"],
                     "deliveries": phases[phase_name],
                 }
-        
+
         return {
             "game_id": str(pressure_response["game_id"]),
             "phases": phase_analysis,
         }
-        
+
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to analyze pressure phases: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to analyze pressure phases: {e!s}")

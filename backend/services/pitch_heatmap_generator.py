@@ -7,11 +7,11 @@ from ball-by-ball delivery data.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class HeatmapType(str, Enum):
     """Types of heatmaps to generate."""
+
     RUNS = "runs"
     DISMISSALS = "dismissals"
     BOWLER_RELEASE = "bowler_release"
@@ -20,6 +20,7 @@ class HeatmapType(str, Enum):
 
 class PitchZone(str, Enum):
     """Cricket pitch zones for heatmap."""
+
     OFF_SIDE_SHORT = "off_short"
     OFF_SIDE_FULL = "off_full"
     OFF_SIDE_YORKER = "off_yorker"
@@ -36,25 +37,27 @@ class PitchZone(str, Enum):
 @dataclass
 class HeatmapDataPoint:
     """Single data point in a heatmap."""
+
     zone: str  # PitchZone
     x_coordinate: float  # 0-100 (pitch width)
     y_coordinate: float  # 0-100 (pitch length)
     value: float  # 0-100, intensity of heatmap
     count: int  # Number of deliveries in this zone
-    detail: Optional[str] = None  # e.g., "4 runs", "2 wickets"
+    detail: str | None = None  # e.g., "4 runs", "2 wickets"
 
 
 @dataclass
 class PitchHeatmap:
     """Complete pitch heatmap visualization data."""
+
     heatmap_id: str
     heatmap_type: str  # HeatmapType
-    player_id: Optional[str] = None
-    player_name: Optional[str] = None
-    bowler_id: Optional[str] = None
-    bowler_name: Optional[str] = None
-    game_id: Optional[str] = None
-    match_phase: Optional[str] = None
+    player_id: str | None = None
+    player_name: str | None = None
+    bowler_id: str | None = None
+    bowler_name: str | None = None
+    game_id: str | None = None
+    match_phase: str | None = None
     data_points: list[HeatmapDataPoint] = field(default_factory=list)
     min_value: float = 0.0
     max_value: float = 100.0
@@ -66,6 +69,7 @@ class PitchHeatmap:
 @dataclass
 class BatterProfile:
     """Batter's spatial scoring/dismissal profile."""
+
     player_id: str
     player_name: str
     profile_type: str  # "scoring" or "dismissals"
@@ -82,6 +86,7 @@ class BatterProfile:
 @dataclass
 class BowlerProfile:
     """Bowler's spatial delivery profile."""
+
     player_id: str
     player_name: str
     total_deliveries: int
@@ -95,6 +100,7 @@ class BowlerProfile:
 @dataclass
 class MatchupAnalysis:
     """Analysis of batter vs bowler spatial matchup."""
+
     batter_id: str
     batter_name: str
     bowler_id: str
@@ -211,7 +217,9 @@ class PitchHeatmapGenerator:
             total_events=total_events,
             metadata={
                 "total_runs": total_runs,
-                "average_runs_per_delivery": round(total_runs / total_events, 2) if total_events > 0 else 0,
+                "average_runs_per_delivery": round(total_runs / total_events, 2)
+                if total_events > 0
+                else 0,
             },
         )
 
@@ -258,9 +266,7 @@ class PitchHeatmapGenerator:
             x_center = (x_min + x_max) / 2
             y_center = (y_min + y_max) / 2
 
-            dismissal_types = ", ".join(
-                f"{t}({c})" for t, c in data["types"].items()
-            )
+            dismissal_types = ", ".join(f"{t}({c})" for t, c in data["types"].items())
 
             data_points.append(
                 HeatmapDataPoint(
@@ -330,11 +336,7 @@ class PitchHeatmapGenerator:
             )
 
         # Calculate accuracy (concentration in zones)
-        accuracy = (
-            (max_zone_count / total_deliveries * 100)
-            if total_deliveries > 0
-            else 0
-        )
+        accuracy = (max_zone_count / total_deliveries * 100) if total_deliveries > 0 else 0
 
         average_value = sum(p.value for p in data_points) / len(data_points) if data_points else 0
 
@@ -447,8 +449,7 @@ class PitchHeatmapGenerator:
 
         # Primary zones (>15% of deliveries)
         primary_zones = [
-            zone for zone, count in zone_counts.items()
-            if (count / total_deliveries) > 0.15
+            zone for zone, count in zone_counts.items() if (count / total_deliveries) > 0.15
         ]
 
         # Zone effectiveness (wicket rate)
@@ -462,8 +463,7 @@ class PitchHeatmapGenerator:
 
         # Release distribution
         release_distribution = {
-            zone: round((count / total_deliveries) * 100, 1)
-            for zone, count in zone_counts.items()
+            zone: round((count / total_deliveries) * 100, 1) for zone, count in zone_counts.items()
         }
 
         # Accuracy score (concentration)
@@ -472,9 +472,9 @@ class PitchHeatmapGenerator:
 
         # Variation zones (zones with <5% deliveries but effective)
         variation_zones = [
-            zone for zone, count in zone_counts.items()
-            if (count / total_deliveries) < 0.05
-            and zone_effectiveness.get(zone, 0) >= 10
+            zone
+            for zone, count in zone_counts.items()
+            if (count / total_deliveries) < 0.05 and zone_effectiveness.get(zone, 0) >= 10
         ]
 
         return BowlerProfile(
@@ -509,14 +509,12 @@ class PitchHeatmapGenerator:
 
         # Find dangerous areas (batter strong + bowler delivers)
         dangerous_areas = [
-            zone for zone in batter_profile.strong_zones
-            if zone in bowler_profile.primary_zones
+            zone for zone in batter_profile.strong_zones if zone in bowler_profile.primary_zones
         ]
 
         # Find weak overlaps (batter weak + bowler delivers there)
         weak_overlap_areas = [
-            zone for zone in batter_profile.weak_zones
-            if zone in bowler_profile.primary_zones
+            zone for zone in batter_profile.weak_zones if zone in bowler_profile.primary_zones
         ]
 
         # Find dismissal zones

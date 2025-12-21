@@ -9,7 +9,7 @@ Tests phase segmentation, predictions, and trend analysis across match phases:
 """
 
 import pytest
-from backend.services.phase_analyzer import MatchPhaseAnalyzer, get_phase_analysis
+from backend.services.phase_analyzer import get_phase_analysis
 
 
 def create_delivery(
@@ -116,9 +116,7 @@ class TestPhaseStatistics:
         for over in range(3):
             if over < 2:
                 deliveries.append(create_delivery(over, 1, runs_scored=0, is_wicket=True))
-            deliveries.extend(
-                [create_delivery(over, ball, runs_scored=1) for ball in range(2, 7)]
-            )
+            deliveries.extend([create_delivery(over, ball, runs_scored=1) for ball in range(2, 7)])
 
         result = get_phase_analysis(
             deliveries=deliveries,
@@ -156,7 +154,9 @@ class TestPhaseStatistics:
         )
 
         phases = result.get("phases", [])
-        assert phases[0]["boundary_count"] == 3, f"Expected 3 boundaries, got {phases[0]['boundary_count']}"
+        assert (
+            phases[0]["boundary_count"] == 3
+        ), f"Expected 3 boundaries, got {phases[0]['boundary_count']}"
 
     def test_phase_counts_dot_balls(self):
         """Verify dot ball counting."""
@@ -178,7 +178,9 @@ class TestPhaseStatistics:
         )
 
         phases = result.get("phases", [])
-        assert phases[0]["dot_ball_count"] == 3, f"Expected 3 dots, got {phases[0]['dot_ball_count']}"
+        assert (
+            phases[0]["dot_ball_count"] == 3
+        ), f"Expected 3 dots, got {phases[0]['dot_ball_count']}"
 
 
 class TestPhaseComparisons:
@@ -191,7 +193,9 @@ class TestPhaseComparisons:
         runs_to_distribute = 50
         for over in range(6):
             for ball in range(1, 7):
-                runs = (runs_to_distribute // 36) + (1 if (over * 6 + ball) <= (runs_to_distribute % 36) else 0)
+                runs = (runs_to_distribute // 36) + (
+                    1 if (over * 6 + ball) <= (runs_to_distribute % 36) else 0
+                )
                 runs_to_distribute -= runs
                 deliveries.append(create_delivery(over, ball, runs_scored=runs))
 
@@ -325,13 +329,17 @@ class TestPredictions:
         deliveries_1 = []
         for over in range(10):
             for ball in range(1, 7):
-                deliveries_1.append(create_delivery(over, ball, runs_scored=1 if ball <= 1.5 else 0))
+                deliveries_1.append(
+                    create_delivery(over, ball, runs_scored=1 if ball <= 1.5 else 0)
+                )
 
         # Create 8 overs of 2nd inning scoring 70 runs (chasing 91)
         deliveries_2 = []
         for over in range(8):
             for ball in range(1, 7):
-                deliveries_2.append(create_delivery(over, ball, runs_scored=1 if ball <= 1.4 else 0))
+                deliveries_2.append(
+                    create_delivery(over, ball, runs_scored=1 if ball <= 1.4 else 0)
+                )
 
         result = get_phase_analysis(
             deliveries=deliveries_2,

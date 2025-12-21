@@ -4,9 +4,6 @@ Tests for Sponsor Rotation Engine - Feature 12
 Comprehensive tests for sponsor rotation scheduling, tracking, and metrics
 """
 
-import pytest
-from datetime import datetime
-
 from backend.services.sponsor_rotation_engine import (
     EngagementEvent,
     RotationStrategy,
@@ -340,7 +337,9 @@ class TestPhaseAdjustments:
 
         # Get slots before death adjustment
         death_slots_before = [
-            slot for slot in schedule.slots if slot.over_num >= 18  # Last 3 overs
+            slot
+            for slot in schedule.slots
+            if slot.over_num >= 18  # Last 3 overs
         ]
 
         # Adjust for death
@@ -348,9 +347,7 @@ class TestPhaseAdjustments:
             schedule, phase="death", boost_priority_sponsor_id="s1"
         )
 
-        death_slots_after = [
-            slot for slot in schedule.slots if slot.over_num >= 18
-        ]
+        death_slots_after = [slot for slot in schedule.slots if slot.over_num >= 18]
 
         # Death overs should have adjusted exposure values
         for slot in death_slots_after:

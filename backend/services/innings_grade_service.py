@@ -38,17 +38,17 @@ class InningsGradeCalculator:
 
     # Par scores for different overs (reference standards)
     PAR_SCORES = {
-        6: 45,      # Powerplay: ~7.5 RR
-        20: 160,    # T20 full innings
-        50: 270,    # ODI full innings
+        6: 45,  # Powerplay: ~7.5 RR
+        20: 160,  # T20 full innings
+        50: 270,  # ODI full innings
     }
 
     GRADE_THRESHOLDS = {
-        "A+": 1.50,   # >150% of par
-        "A": 1.30,    # 130-150% of par
-        "B": 1.00,    # 100-130% of par
-        "C": 0.70,    # 70-100% of par
-        "D": 0.00,    # <70% of par
+        "A+": 1.50,  # >150% of par
+        "A": 1.30,  # 130-150% of par
+        "B": 1.00,  # 100-130% of par
+        "C": 0.70,  # 70-100% of par
+        "D": 0.00,  # <70% of par
     }
 
     @staticmethod
@@ -124,12 +124,8 @@ class InningsGradeCalculator:
                     if delivery.get("runs_scored", 0) == 0 and not is_extra:
                         dot_balls += 1
 
-        boundary_percentage = (
-            (boundary_runs / total_runs * 100) if total_runs > 0 else 0
-        )
-        dot_ball_ratio = (
-            (dot_balls / total_legal_balls) if total_legal_balls > 0 else 0
-        )
+        boundary_percentage = (boundary_runs / total_runs * 100) if total_runs > 0 else 0
+        dot_ball_ratio = (dot_balls / total_legal_balls) if total_legal_balls > 0 else 0
 
         # Calculate wicket efficiency (preserve more = better)
         wickets_preserved = max(0, batting_team_size - total_wickets)
@@ -202,7 +198,7 @@ class InningsGradeCalculator:
         # If not completed, scale down proportionally
         if not is_completed and overs_completed > 0:
             # Par for overs played
-            return int((overs_completed * 7.5))
+            return int(overs_completed * 7.5)
 
         return int(par_for_limit)
 

@@ -2,7 +2,6 @@
 Tests for ball type clustering service.
 """
 
-import pytest
 from backend.services.ball_type_clusterer import (
     BallTypeClusterer,
     DeliveryType,

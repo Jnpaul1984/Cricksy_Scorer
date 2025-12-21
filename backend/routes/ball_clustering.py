@@ -39,9 +39,7 @@ async def get_bowler_delivery_clusters(
             raise HTTPException(status_code=404, detail="Bowler not found")
 
         # Fetch all bowling scorecards
-        stmt = select(BowlingScorecard).where(
-            BowlingScorecard.bowler_id == bowler_id
-        )
+        stmt = select(BowlingScorecard).where(BowlingScorecard.bowler_id == bowler_id)
         result = await db.execute(stmt)
         scorecards = result.scalars().all()
 
@@ -110,9 +108,7 @@ async def get_bowler_delivery_clusters(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Cluster analysis failed: {e!s}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Cluster analysis failed: {e!s}") from e
 
 
 @router.get("/batters/{batter_id}/delivery-vulnerabilities")
@@ -133,9 +129,7 @@ async def get_batter_delivery_vulnerabilities(
             raise HTTPException(status_code=404, detail="Batter not found")
 
         # Fetch all batting scorecards
-        stmt = select(BattingScorecard).where(
-            BattingScorecard.player_id == batter_id
-        )
+        stmt = select(BattingScorecard).where(BattingScorecard.player_id == batter_id)
         result = await db.execute(stmt)
         scorecards = result.scalars().all()
 
@@ -179,8 +173,7 @@ async def get_batter_delivery_vulnerabilities(
             "vulnerability": {
                 "vulnerable_clusters": vulnerability.vulnerable_clusters,
                 "vulnerable_delivery_types": {
-                    k: round(v, 2)
-                    for k, v in vulnerability.vulnerable_delivery_types.items()
+                    k: round(v, 2) for k, v in vulnerability.vulnerable_delivery_types.items()
                 },
                 "strong_against": vulnerability.strong_against,
                 "dismissal_delivery_types": vulnerability.dismissal_delivery_types,
@@ -222,16 +215,12 @@ async def get_matchup_cluster_analysis(
             raise HTTPException(status_code=404, detail="Batter not found")
 
         # Get bowler scorecards
-        bowler_stmt = select(BowlingScorecard).where(
-            BowlingScorecard.bowler_id == bowler_id
-        )
+        bowler_stmt = select(BowlingScorecard).where(BowlingScorecard.bowler_id == bowler_id)
         bowler_result = await db.execute(bowler_stmt)
         bowler_scorecards = bowler_result.scalars().all()
 
         # Get batter scorecards
-        batter_stmt = select(BattingScorecard).where(
-            BattingScorecard.player_id == batter_id
-        )
+        batter_stmt = select(BattingScorecard).where(BattingScorecard.player_id == batter_id)
         batter_result = await db.execute(batter_stmt)
         batter_scorecards = batter_result.scalars().all()
 
@@ -292,8 +281,7 @@ async def get_matchup_cluster_analysis(
 
         # Find overlap (bowler's strong deliveries vs batter's vulnerabilities)
         overlap_clusters = list(
-            set(bowler_profile.primary_clusters)
-            & set(batter_vulnerability.vulnerable_clusters)
+            set(bowler_profile.primary_clusters) & set(batter_vulnerability.vulnerable_clusters)
         )
 
         recommendation = ""
@@ -319,9 +307,7 @@ async def get_matchup_cluster_analysis(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Matchup analysis failed: {e!s}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Matchup analysis failed: {e!s}") from e
 
 
 @router.get("/cluster-types")

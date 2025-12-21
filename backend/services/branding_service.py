@@ -13,12 +13,12 @@ Features:
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
 import re
 
 
 class ColorScheme(str, Enum):
     """Predefined color schemes"""
+
     LIGHT = "light"
     DARK = "dark"
     CUSTOM = "custom"
@@ -26,6 +26,7 @@ class ColorScheme(str, Enum):
 
 class FontFamily(str, Enum):
     """Available font families"""
+
     INTER = "Inter"
     ROBOTO = "Roboto"
     LATO = "Lato"
@@ -37,16 +38,17 @@ class FontFamily(str, Enum):
 @dataclass
 class BrandColor:
     """Brand color definition with validation"""
+
     name: str  # primary, secondary, accent, background, text
     hex_code: str  # Validate hex format
-    rgb_value: Optional[str] = None  # Computed RGB
+    rgb_value: str | None = None  # Computed RGB
     contrast_safe: bool = True  # Whether color meets WCAG contrast requirements
 
     def __post_init__(self):
         """Validate hex code on creation"""
         if not self._is_valid_hex(self.hex_code):
             raise ValueError(f"Invalid hex color: {self.hex_code}")
-        
+
         # Compute RGB value
         self.rgb_value = self._hex_to_rgb(self.hex_code)
 
@@ -69,12 +71,13 @@ class BrandColor:
 @dataclass
 class BrandAsset:
     """Brand asset (logo, icon, etc.)"""
+
     asset_id: str
     asset_type: str  # logo, icon, favicon, background
     name: str
     url: str
     alt_text: str
-    dimensions: Optional[Tuple[int, int]] = None  # width, height in pixels
+    dimensions: tuple[int, int] | None = None  # width, height in pixels
     file_size_bytes: int = 0
     format: str = "png"  # png, svg, jpg, webp
     upload_date: datetime = field(default_factory=datetime.utcnow)
@@ -83,8 +86,9 @@ class BrandAsset:
 @dataclass
 class BrandTypography:
     """Typography settings"""
+
     primary_font: FontFamily
-    secondary_font: Optional[FontFamily] = None
+    secondary_font: FontFamily | None = None
     heading_size_px: int = 32
     body_size_px: int = 14
     line_height: float = 1.5
@@ -96,44 +100,45 @@ class BrandTypography:
 @dataclass
 class OrgBrandTheme:
     """Complete brand theme for organization"""
+
     theme_id: str
     org_id: str
     org_name: str
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
-    
+
     # Branding
     logo_url: str = ""
-    favicon_url: Optional[str] = None
-    banner_image_url: Optional[str] = None
-    
+    favicon_url: str | None = None
+    banner_image_url: str | None = None
+
     # Colors
     primary_color: str = "#1F2937"  # Default: dark gray
     secondary_color: str = "#3B82F6"  # Default: blue
     accent_color: str = "#F59E0B"  # Default: amber
     background_color: str = "#FFFFFF"  # Default: white
     text_color: str = "#1F2937"  # Default: dark gray
-    
+
     # Additional colors
     success_color: str = "#10B981"
     warning_color: str = "#F59E0B"
     error_color: str = "#EF4444"
     info_color: str = "#3B82F6"
-    
+
     # Typography
-    typography: Optional[BrandTypography] = None
-    
+    typography: BrandTypography | None = None
+
     # Color scheme
     color_scheme: ColorScheme = ColorScheme.LIGHT
-    
+
     # Brand assets
-    assets: Dict[str, BrandAsset] = field(default_factory=dict)
-    
+    assets: dict[str, BrandAsset] = field(default_factory=dict)
+
     # Branding flags
     apply_to_viewer: bool = True
     apply_to_scoreboard: bool = True
     apply_to_admin: bool = True
-    
+
     # Metadata
     is_active: bool = True
     description: str = ""
@@ -142,9 +147,10 @@ class OrgBrandTheme:
 @dataclass
 class BrandingValidationResult:
     """Result of branding validation"""
+
     is_valid: bool
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     score: float = 0.0  # 0-100 branding completeness score
 
 
@@ -153,7 +159,7 @@ class BrandingService:
 
     # CSS class names for theme application
     CSS_CLASS_PREFIX = "org-brand"
-    
+
     # Color contrast ratio requirements (WCAG)
     MIN_CONTRAST_RATIO = 4.5  # For normal text
 
@@ -201,12 +207,12 @@ class BrandingService:
     @staticmethod
     def update_brand_colors(
         theme: OrgBrandTheme,
-        primary: Optional[str] = None,
-        secondary: Optional[str] = None,
-        accent: Optional[str] = None,
-        success: Optional[str] = None,
-        warning: Optional[str] = None,
-        error: Optional[str] = None,
+        primary: str | None = None,
+        secondary: str | None = None,
+        accent: str | None = None,
+        success: str | None = None,
+        warning: str | None = None,
+        error: str | None = None,
     ) -> OrgBrandTheme:
         """
         Update brand colors in theme
@@ -243,7 +249,7 @@ class BrandingService:
     def set_typography(
         theme: OrgBrandTheme,
         primary_font: FontFamily = FontFamily.INTER,
-        secondary_font: Optional[FontFamily] = None,
+        secondary_font: FontFamily | None = None,
         heading_size: int = 32,
         body_size: int = 14,
         line_height: float = 1.5,
@@ -280,7 +286,7 @@ class BrandingService:
         name: str,
         url: str,
         alt_text: str,
-        dimensions: Optional[Tuple[int, int]] = None,
+        dimensions: tuple[int, int] | None = None,
     ) -> OrgBrandTheme:
         """
         Add brand asset (logo, icon, etc.)
@@ -331,7 +337,7 @@ class BrandingService:
         Returns:
             CSS string with theme variables
         """
-        css = f":root {{\n"
+        css = ":root {\n"
         css += f"  --{BrandingService.CSS_CLASS_PREFIX}-primary: {theme.primary_color};\n"
         css += f"  --{BrandingService.CSS_CLASS_PREFIX}-secondary: {theme.secondary_color};\n"
         css += f"  --{BrandingService.CSS_CLASS_PREFIX}-accent: {theme.accent_color};\n"
@@ -429,7 +435,7 @@ class BrandingService:
             BrandColor("accent", theme.accent_color)
             score += 20
         except ValueError as e:
-            result.errors.append(f"Invalid color format: {str(e)}")
+            result.errors.append(f"Invalid color format: {e!s}")
             result.is_valid = False
 
         # Check typography
@@ -460,7 +466,7 @@ class BrandingService:
         return result
 
     @staticmethod
-    def get_branding_json(theme: OrgBrandTheme) -> Dict:
+    def get_branding_json(theme: OrgBrandTheme) -> dict:
         """
         Export branding as JSON for frontend/API
 
@@ -499,7 +505,9 @@ class BrandingService:
                 "primary_font": theme.typography.primary_font.value if theme.typography else None,
                 "heading_size": theme.typography.heading_size_px if theme.typography else None,
                 "body_size": theme.typography.body_size_px if theme.typography else None,
-            } if theme.typography else None,
+            }
+            if theme.typography
+            else None,
             "apply_to": {
                 "viewer": theme.apply_to_viewer,
                 "scoreboard": theme.apply_to_scoreboard,

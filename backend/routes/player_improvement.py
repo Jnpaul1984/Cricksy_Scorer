@@ -13,10 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from datetime import datetime, timedelta
 
-from backend.sql_app.models import Game, BattingScorecard, Player
+from backend.sql_app.models import BattingScorecard, Player
 from backend.services.player_improvement_tracker import (
     PlayerImprovementTracker,
-    MonthlyStats,
 )
 
 router = APIRouter(prefix="/player-analytics", tags=["player_improvement"])
@@ -30,7 +29,7 @@ async def get_monthly_stats(
 ) -> dict[str, Any]:
     """
     Get aggregated monthly statistics for a player.
-    
+
     Returns:
     {
         "player_id": str,
@@ -131,7 +130,7 @@ async def get_monthly_stats(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Monthly stats error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Monthly stats error: {e!s}")
 
 
 @router.get("/players/{player_id}/improvement-trend")
@@ -142,7 +141,7 @@ async def get_improvement_trend(
 ) -> dict[str, Any]:
     """
     Get improvement trend (month-over-month changes).
-    
+
     Returns:
     {
         "player_id": str,
@@ -214,7 +213,7 @@ async def get_improvement_trend(
 
         # Calculate monthly stats
         monthly_stats = []
-        for month in sorted(monthly_data.keys(), reverse=True)[:months + 1]:
+        for month in sorted(monthly_data.keys(), reverse=True)[: months + 1]:
             stats = PlayerImprovementTracker.calculate_monthly_stats(
                 monthly_data[month],
                 month=month,
@@ -272,7 +271,7 @@ async def get_improvement_trend(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Improvement trend error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Improvement trend error: {e!s}")
 
 
 @router.get("/players/{player_id}/improvement-summary")
@@ -283,7 +282,7 @@ async def get_improvement_summary(
 ) -> dict[str, Any]:
     """
     Get comprehensive improvement summary with highlights and recommendations.
-    
+
     Returns:
     {
         "player_id": str,
@@ -397,4 +396,4 @@ async def get_improvement_summary(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Improvement summary error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Improvement summary error: {e!s}")

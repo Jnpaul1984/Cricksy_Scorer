@@ -23,6 +23,7 @@ from dataclasses import dataclass
 @dataclass
 class DeliveryContext:
     """Context for a single delivery"""
+
     delivery_num: int
     over_num: int
     ball_in_over: int
@@ -40,7 +41,7 @@ class DeliveryContext:
 class PressureAnalyzer:
     """
     Analyzes match pressure at delivery level.
-    
+
     Calculates pressure score for each delivery based on:
     1. Dot ball streaks (multiple dots = higher pressure)
     2. Required run rate vs actual rate (gap = pressure)
@@ -62,7 +63,7 @@ class PressureAnalyzer:
     ) -> list[dict[str, Any]]:
         """
         Analyze pressure for each delivery in an innings.
-        
+
         Args:
             deliveries: List of delivery dictionaries with keys:
                 - runs_scored: int (0-6)
@@ -73,7 +74,7 @@ class PressureAnalyzer:
                 - over_num: int (0-based)
             target: Target runs to chase/defend
             overs_limit: Total overs in innings (20 for T20, 50 for ODI)
-        
+
         Returns:
             List of pressure points:
             [
@@ -101,59 +102,55 @@ class PressureAnalyzer:
         """
         if not deliveries:
             return []
-        
+
         pressure_points = []
         cumulative_runs = 0
         cumulative_wickets = 0
         consecutive_dots = 0
         dot_count = 0
-        
+
         for delivery_idx, delivery in enumerate(deliveries):
             delivery_num = delivery_idx + 1
-            
+
             # Calculate overs position
             over_num = delivery_idx // 6
             ball_in_over = delivery_idx % 6
             over_position = over_num + (ball_in_over / 6.0)
-            
+
             # Extract delivery details
             runs_scored = int(delivery.get("runs_scored", 0))
             extra = delivery.get("extra")
             is_wicket = bool(delivery.get("is_wicket", False))
-            is_dot = (runs_scored == 0 and extra is None and not is_wicket)
-            
+            is_dot = runs_scored == 0 and extra is None and not is_wicket
+
             # Update cumulative stats
             cumulative_runs += runs_scored
-            if extra and extra not in ['b', 'lb']:  # extras that don't count as legal
-                cumulative_runs += int(delivery.get("extra_runs", 0)) if extra in ['wd', 'nb'] else 0
-            
+            if extra and extra not in ["b", "lb"]:  # extras that don't count as legal
+                cumulative_runs += (
+                    int(delivery.get("extra_runs", 0)) if extra in ["wd", "nb"] else 0
+                )
+
             if is_wicket:
                 cumulative_wickets += 1
-            
+
             # Track dot balls
             if is_dot:
                 consecutive_dots += 1
                 dot_count += 1
             else:
                 consecutive_dots = 0
-            
+
             # Calculate overs remaining and required rate
             balls_remaining = (overs_limit * 6) - delivery_idx
             overs_remaining = balls_remaining / 6.0
-            
+
             # Calculate required run rate
             runs_remaining = target - cumulative_runs
-            if overs_remaining > 0:
-                required_run_rate = runs_remaining / overs_remaining
-            else:
-                required_run_rate = 0
-            
+            required_run_rate = runs_remaining / overs_remaining if overs_remaining > 0 else 0
+
             # Calculate actual run rate
-            if over_position > 0:
-                actual_run_rate = cumulative_runs / over_position
-            else:
-                actual_run_rate = 0
-            
+            actual_run_rate = cumulative_runs / over_position if over_position > 0 else 0
+
             # Calculate pressure score
             pressure_score = PressureAnalyzer._calculate_pressure_score(
                 delivery_num=delivery_num,
@@ -169,17 +166,17 @@ class PressureAnalyzer:
                 target=target,
                 cumulative_runs=cumulative_runs,
             )
-            
+
             # Get pressure level
             pressure_level = PressureAnalyzer._get_pressure_level(pressure_score)
-            
+
             # Calculate individual factors
             dot_streak_factor = min(consecutive_dots * 5, 30)  # Max 30 from dots
             rrr_gap = max(0, required_run_rate - actual_run_rate)
             rrr_factor = min(rrr_gap * PressureAnalyzer.RRR_MULTIPLIER, 40)  # Max 40
             wicket_factor = PressureAnalyzer.WICKET_PRESSURE_BOOST if is_wicket else 0
             overs_factor = (1 - (overs_remaining / overs_limit)) * 20  # Up to 20 from overs
-            
+
             # Situation factor (winning vs losing)
             if runs_remaining <= 0:
                 situation_factor = 0  # Already won
@@ -187,7 +184,7 @@ class PressureAnalyzer:
                 situation_factor = 20  # Getting away from target
             else:
                 situation_factor = 10  # On target
-            
+
             point = {
                 "delivery_num": delivery_num,
                 "over_num": round(over_position, 1),
@@ -210,14 +207,16 @@ class PressureAnalyzer:
                     "runs": cumulative_runs,
                     "wickets": cumulative_wickets,
                     "dot_count": dot_count,
-                    "strike_rate": round((cumulative_runs / delivery_idx * 100), 1) if delivery_idx > 0 else 0,
+                    "strike_rate": round((cumulative_runs / delivery_idx * 100), 1)
+                    if delivery_idx > 0
+                    else 0,
                     "balls_remaining": balls_remaining,
                     "overs_remaining": round(overs_remaining, 1),
                 },
             }
-            
+
             pressure_points.append(point)
-        
+
         return pressure_points
 
     @staticmethod
@@ -237,7 +236,7 @@ class PressureAnalyzer:
     ) -> float:
         """
         Calculate pressure score (0-100) based on multiple factors.
-        
+
         Formula combines:
         1. Dot ball factor (0-30)
         2. RRR gap factor (0-40)
@@ -245,20 +244,20 @@ class PressureAnalyzer:
         4. Overs remaining factor (0-20)
         5. Match situation (0-10)
         """
-        
+
         # 1. Dot ball factor
         dot_factor = min(consecutive_dots * 8, 30)
-        
+
         # 2. RRR gap factor
         rrr_gap = max(0, required_run_rate - actual_run_rate)
         rrr_factor = min(rrr_gap * PressureAnalyzer.RRR_MULTIPLIER, 40)
-        
+
         # 3. Wicket pressure
         wicket_factor = PressureAnalyzer.WICKET_PRESSURE_BOOST if is_wicket else 0
-        
+
         # 4. Overs remaining (less overs = more pressure)
         overs_pressure = (1 - (overs_remaining / overs_limit)) * 20
-        
+
         # 5. Match situation
         if runs_remaining <= 0:
             situation_factor = 0  # Already won
@@ -268,16 +267,16 @@ class PressureAnalyzer:
             situation_factor = 10  # On target
         else:
             situation_factor = -15  # Ahead of target - relief
-        
+
         # Combine with weights
         total_pressure = (
-            dot_factor * 0.25 +       # Dots: 25%
-            rrr_factor * 0.35 +       # RRR: 35%
-            wicket_factor * 0.15 +    # Wickets: 15%
-            overs_pressure * 0.15 +   # Overs: 15%
-            situation_factor * 0.10   # Situation: 10%
+            dot_factor * 0.25  # Dots: 25%
+            + rrr_factor * 0.35  # RRR: 35%
+            + wicket_factor * 0.15  # Wickets: 15%
+            + overs_pressure * 0.15  # Overs: 15%
+            + situation_factor * 0.10  # Situation: 10%
         )
-        
+
         # Clamp to 0-100
         return max(0, min(100, total_pressure))
 
@@ -302,7 +301,7 @@ class PressureAnalyzer:
     ) -> list[dict[str, Any]]:
         """
         Extract peak pressure moments (above threshold).
-        
+
         Useful for highlighting critical moments in a match.
         """
         return [p for p in pressure_points if p["pressure_score"] >= threshold]
@@ -313,7 +312,7 @@ class PressureAnalyzer:
     ) -> dict[str, Any]:
         """
         Identify match phases based on pressure patterns.
-        
+
         Returns:
         {
             "powerplay": {...},      # Overs 0-6
@@ -324,23 +323,23 @@ class PressureAnalyzer:
         """
         if not pressure_points:
             return {}
-        
+
         phases = {
             "powerplay": [],
             "middle": [],
             "death": [],
         }
-        
+
         for point in pressure_points:
             over_num = int(point["over_num"])
-            
+
             if over_num < 6:
                 phases["powerplay"].append(point)
             elif over_num < 16:  # Assuming T20, adjust for ODI
                 phases["middle"].append(point)
             else:
                 phases["death"].append(point)
-        
+
         # Calculate phase statistics
         phase_names = list(phases.keys())
         for phase_name in phase_names:
@@ -351,7 +350,7 @@ class PressureAnalyzer:
                     "peak_pressure": round(max(scores), 1),
                     "deliveries": len(scores),
                 }
-        
+
         return phases
 
 
@@ -362,7 +361,7 @@ def get_pressure_map(
 ) -> dict[str, Any]:
     """
     Convenience function to generate pressure map for an innings.
-    
+
     This is the main entry point for API usage.
     """
     pressure_points = PressureAnalyzer.analyze_pressure_map(
@@ -370,20 +369,22 @@ def get_pressure_map(
         target=target,
         overs_limit=overs_limit,
     )
-    
+
     # Calculate summary statistics
     if pressure_points:
         scores = [p["pressure_score"] for p in pressure_points]
         peak_moments = PressureAnalyzer.get_peak_pressure_moments(pressure_points)
         phases = PressureAnalyzer.get_pressure_phases(pressure_points)
-        
+
         return {
             "pressure_points": pressure_points,
             "summary": {
                 "total_deliveries": len(pressure_points),
                 "average_pressure": round(sum(scores) / len(scores), 1),
                 "peak_pressure": round(max(scores), 1),
-                "peak_pressure_at_delivery": pressure_points[scores.index(max(scores))]["delivery_num"],
+                "peak_pressure_at_delivery": pressure_points[scores.index(max(scores))][
+                    "delivery_num"
+                ],
                 "critical_moments": len(peak_moments),
                 "high_pressure_count": sum(1 for s in scores if s >= 60),
             },

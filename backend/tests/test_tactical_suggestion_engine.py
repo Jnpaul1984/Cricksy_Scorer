@@ -13,7 +13,6 @@ from backend.services.tactical_suggestion_engine import (
     BowlerProfile,
     BatterProfile,
     ScoringZone,
-    DeliveryType,
 )
 
 
@@ -256,9 +255,7 @@ class TestFieldingRecommendations:
             },
         ]
 
-        setup = TacticalSuggestionEngine.recommend_fielding(
-            bowler, batter, scoring_zones
-        )
+        setup = TacticalSuggestionEngine.recommend_fielding(bowler, batter, scoring_zones)
 
         # Primary zone should be off-good (highest scoring)
         assert "off" in setup.primary_zone
@@ -301,9 +298,7 @@ class TestFieldingRecommendations:
             },
         ]
 
-        setup = TacticalSuggestionEngine.recommend_fielding(
-            bowler, batter, scoring_zones
-        )
+        setup = TacticalSuggestionEngine.recommend_fielding(bowler, batter, scoring_zones)
 
         assert len(setup.recommended_positions) == 3
 

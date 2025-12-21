@@ -7,12 +7,11 @@ Provides real-time coaching recommendations during match play:
 - Fielding setup suggestions
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.services.tactical_suggestion_engine import (
     TacticalSuggestionEngine,
-    get_tactical_suggestions,
 )
 from backend.sql_app.models import Game, Player, BattingScorecard, BowlingScorecard
 
@@ -26,12 +25,12 @@ async def get_best_bowler_suggestion(
 ) -> dict:
     """
     Get recommendation for best bowler to bowl next delivery.
-    
+
     Considers:
     - Bowler effectiveness (economy, wicket-taking)
     - Batter weaknesses
     - Recent bowler usage (avoid fatigue)
-    
+
     Returns:
         {
             "bowler_id": str,
@@ -47,47 +46,61 @@ async def get_best_bowler_suggestion(
         game = await db.query(Game).filter(Game.id == game_id).first()
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
-        
+
         # Get current innings and batter
         current_inning = game.current_inning_number
         current_batter_id = game.striker_id
-        
+
         if not current_batter_id:
             raise HTTPException(status_code=400, detail="No current batter")
-        
+
         # Fetch bowler statistics
         bowlers_data = []
-        bowling_stats = await db.query(BowlingScorecard).filter(
-            BowlingScorecard.game_id == game_id,
-            BowlingScorecard.inning_number == current_inning,
-        ).all()
-        
+        bowling_stats = (
+            await db.query(BowlingScorecard)
+            .filter(
+                BowlingScorecard.game_id == game_id,
+                BowlingScorecard.inning_number == current_inning,
+            )
+            .all()
+        )
+
         for stat in bowling_stats:
             bowler = await db.query(Player).filter(Player.id == stat.bowler_id).first()
             if bowler:
-                bowlers_data.append({
-                    "bowler_id": stat.bowler_id,
-                    "bowler_name": bowler.name,
-                    "total_deliveries": stat.deliveries,
-                    "runs_conceded": stat.runs_conceded,
-                    "wickets_taken": stat.wickets_taken,
-                    "economy_rate": stat.economy_rate or 0.0,
-                    "strike_rate_against": ((stat.runs_conceded / max(1, stat.deliveries)) * 100) if stat.deliveries > 0 else 0,
-                })
-        
+                bowlers_data.append(
+                    {
+                        "bowler_id": stat.bowler_id,
+                        "bowler_name": bowler.name,
+                        "total_deliveries": stat.deliveries,
+                        "runs_conceded": stat.runs_conceded,
+                        "wickets_taken": stat.wickets_taken,
+                        "economy_rate": stat.economy_rate or 0.0,
+                        "strike_rate_against": (
+                            (stat.runs_conceded / max(1, stat.deliveries)) * 100
+                        )
+                        if stat.deliveries > 0
+                        else 0,
+                    }
+                )
+
         # Fetch batter profile
         batter = await db.query(Player).filter(Player.id == current_batter_id).first()
         if not batter:
             raise HTTPException(status_code=404, detail="Batter not found")
-        
-        batting_stats = await db.query(BattingScorecard).filter(
-            BattingScorecard.player_id == current_batter_id,
-        ).all()
-        
+
+        batting_stats = (
+            await db.query(BattingScorecard)
+            .filter(
+                BattingScorecard.player_id == current_batter_id,
+            )
+            .all()
+        )
+
         total_runs = sum(s.runs_scored for s in batting_stats)
         total_deliveries = sum(s.deliveries_faced for s in batting_stats)
         dismissals = sum(1 for s in batting_stats if s.is_dismissed)
-        
+
         batter_data = {
             "batter_id": batter.id,
             "batter_name": batter.name,
@@ -95,25 +108,27 @@ async def get_best_bowler_suggestion(
             "total_deliveries": total_deliveries,
             "dismissals": dismissals,
             "batting_average": (total_runs / max(1, dismissals)) if dismissals > 0 else 0,
-            "strike_rate": ((total_runs / max(1, total_deliveries)) * 100) if total_deliveries > 0 else 0,
+            "strike_rate": ((total_runs / max(1, total_deliveries)) * 100)
+            if total_deliveries > 0
+            else 0,
         }
-        
+
         # Get recent bowlers to avoid repeats
         recent_bowlers = []  # Could track last 2-3 bowlers if needed
-        
+
         # Get suggestion
         suggestion = TacticalSuggestionEngine.get_best_bowler(
             bowlers_data,
             batter_data,
             recent_bowlers,
         )
-        
+
         if not suggestion:
             return {
                 "status": "no_suggestion",
                 "message": "Could not determine best bowler recommendation",
             }
-        
+
         return {
             "status": "success",
             "game_id": game_id,
@@ -127,7 +142,7 @@ async def get_best_bowler_suggestion(
                 "confidence": suggestion.confidence,
             },
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -141,7 +156,7 @@ async def get_weakness_analysis(
 ) -> dict:
     """
     Analyze current batter's weaknesses and recommend delivery type.
-    
+
     Returns:
         {
             "primary_weakness": str (pace/spin/yorker/dot_strategy),
@@ -158,24 +173,28 @@ async def get_weakness_analysis(
         game = await db.query(Game).filter(Game.id == game_id).first()
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
-        
+
         current_batter_id = game.striker_id
         if not current_batter_id:
             raise HTTPException(status_code=400, detail="No current batter")
-        
+
         # Fetch batter profile
         batter = await db.query(Player).filter(Player.id == current_batter_id).first()
         if not batter:
             raise HTTPException(status_code=404, detail="Batter not found")
-        
-        batting_stats = await db.query(BattingScorecard).filter(
-            BattingScorecard.player_id == current_batter_id,
-        ).all()
-        
+
+        batting_stats = (
+            await db.query(BattingScorecard)
+            .filter(
+                BattingScorecard.player_id == current_batter_id,
+            )
+            .all()
+        )
+
         total_runs = sum(s.runs_scored for s in batting_stats)
         total_deliveries = sum(s.deliveries_faced for s in batting_stats)
         dismissals = sum(1 for s in batting_stats if s.is_dismissed)
-        
+
         batter_data = {
             "batter_id": batter.id,
             "batter_name": batter.name,
@@ -183,16 +202,18 @@ async def get_weakness_analysis(
             "total_deliveries": total_deliveries,
             "dismissals": dismissals,
             "batting_average": (total_runs / max(1, dismissals)) if dismissals > 0 else 0,
-            "strike_rate": ((total_runs / max(1, total_deliveries)) * 100) if total_deliveries > 0 else 0,
+            "strike_rate": ((total_runs / max(1, total_deliveries)) * 100)
+            if total_deliveries > 0
+            else 0,
             "pace_weakness": 35.0,  # Default, can be enhanced with ML
             "spin_weakness": 25.0,
             "yorker_weakness": 60.0,
             "dot_ball_weakness": 40.0,
         }
-        
+
         # Get weakness analysis
         analysis = TacticalSuggestionEngine.analyze_weakness(batter_data)
-        
+
         return {
             "status": "success",
             "game_id": game_id,
@@ -207,7 +228,7 @@ async def get_weakness_analysis(
                 "confidence": analysis.confidence,
             },
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -221,7 +242,7 @@ async def get_fielding_setup(
 ) -> dict:
     """
     Get recommended fielding positions based on batter's scoring zones.
-    
+
     Returns:
         {
             "bowler_id": str,
@@ -243,27 +264,35 @@ async def get_fielding_setup(
         game = await db.query(Game).filter(Game.id == game_id).first()
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
-        
+
         current_bowler_id = game.bowler_id
         current_batter_id = game.striker_id
-        
+
         if not current_bowler_id or not current_batter_id:
             raise HTTPException(status_code=400, detail="No current bowler or batter")
-        
+
         # Fetch bowler and batter info
         bowler = await db.query(Player).filter(Player.id == current_bowler_id).first()
         batter = await db.query(Player).filter(Player.id == current_batter_id).first()
-        
-        bowler_data = {
-            "bowler_id": bowler.id,
-            "bowler_name": bowler.name,
-        } if bowler else {}
-        
-        batter_data = {
-            "batter_id": batter.id,
-            "batter_name": batter.name,
-        } if batter else {}
-        
+
+        bowler_data = (
+            {
+                "bowler_id": bowler.id,
+                "bowler_name": bowler.name,
+            }
+            if bowler
+            else {}
+        )
+
+        batter_data = (
+            {
+                "batter_id": batter.id,
+                "batter_name": batter.name,
+            }
+            if batter
+            else {}
+        )
+
         # Mock scoring zones - in production would fetch from analytics
         scoring_zones = [
             {
@@ -288,14 +317,14 @@ async def get_fielding_setup(
                 "deliveries": 15,
             },
         ]
-        
+
         # Get fielding recommendation
         fielding = TacticalSuggestionEngine.recommend_fielding(
             bowler_data,
             batter_data,
             scoring_zones,
         )
-        
+
         return {
             "status": "success",
             "game_id": game_id,
@@ -315,7 +344,7 @@ async def get_fielding_setup(
                 "reasoning": fielding.reasoning,
             },
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -329,20 +358,20 @@ async def get_all_suggestions(
 ) -> dict:
     """
     Get all tactical suggestions at once.
-    
+
     Combines best bowler, weakness analysis, and fielding setup
     into a single comprehensive suggestion for the coach.
     """
     try:
         # Fetch best bowler
         best_bowler_response = await get_best_bowler_suggestion(game_id, db)
-        
+
         # Fetch weakness analysis
         weakness_response = await get_weakness_analysis(game_id, db)
-        
+
         # Fetch fielding setup
         fielding_response = await get_fielding_setup(game_id, db)
-        
+
         return {
             "status": "success",
             "game_id": game_id,
@@ -353,7 +382,7 @@ async def get_all_suggestions(
                 "fielding_setup": fielding_response.get("fielding_setup"),
             },
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:

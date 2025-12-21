@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from backend.sql_app.models import Player, Game, BattingScorecard, BowlingScorecard
+from backend.sql_app.models import Player, Game, BattingScorecard
 from backend.services.dismissal_pattern_analyzer import (
     DismissalPatternAnalyzer,
     DismissalRecord,
@@ -25,15 +25,13 @@ async def get_player_dismissal_analysis(
 ):
     """
     Get comprehensive dismissal pattern analysis for a player.
-    
+
     Analyzes all dismissals from batting scorecards to identify
     recurring vulnerabilities and patterns.
     """
     try:
         # Fetch player
-        result = await db.execute(
-            select(Player).where(Player.id == player_id)
-        )
+        result = await db.execute(select(Player).where(Player.id == player_id))
         player = result.scalars().first()
         if not result:
             raise HTTPException(
@@ -65,7 +63,7 @@ async def get_player_dismissal_analysis(
             dismissal = DismissalRecord(
                 dismissal_id=sc.id,
                 dismissal_type=sc.dismissal_type or "unknown",
-                bowler_name=sc.bowler_name if hasattr(sc, 'bowler_name') else None,
+                bowler_name=sc.bowler_name if hasattr(sc, "bowler_name") else None,
                 bowler_id=None,
                 delivery_type=None,  # Would need additional data
                 line=None,  # Would need additional data
@@ -127,7 +125,7 @@ async def get_player_dismissal_analysis(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error analyzing dismissal patterns: {str(e)}",
+            detail=f"Error analyzing dismissal patterns: {e!s}",
         )
 
 
@@ -139,7 +137,7 @@ async def get_team_dismissal_analysis(
 ):
     """
     Get team-level dismissal pattern analysis post-match.
-    
+
     Analyzes all team members' dismissal patterns from a specific match.
     Identifies vulnerable players and common team weaknesses.
     """
@@ -152,9 +150,7 @@ async def get_team_dismissal_analysis(
             )
 
         # Fetch game
-        result = await db.execute(
-            select(Game).where(Game.id == game_id)
-        )
+        result = await db.execute(select(Game).where(Game.id == game_id))
         game = result.scalars().first()
         if not game:
             raise HTTPException(
@@ -258,7 +254,7 @@ async def get_team_dismissal_analysis(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error analyzing team dismissal patterns: {str(e)}",
+            detail=f"Error analyzing team dismissal patterns: {e!s}",
         )
 
 
@@ -269,14 +265,12 @@ async def get_player_vulnerability_score(
 ):
     """
     Get quick vulnerability score for a player.
-    
+
     Returns a 0-100 score indicating overall dismissal vulnerability.
     """
     try:
         # Fetch player
-        result = await db.execute(
-            select(Player).where(Player.id == player_id)
-        )
+        result = await db.execute(select(Player).where(Player.id == player_id))
         player = result.scalars().first()
         if not player:
             raise HTTPException(
@@ -354,7 +348,7 @@ async def get_player_vulnerability_score(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error calculating vulnerability score: {str(e)}",
+            detail=f"Error calculating vulnerability score: {e!s}",
         )
 
 
@@ -366,7 +360,7 @@ async def get_player_dismissal_trend(
 ):
     """
     Get dismissal trend for a player over recent matches.
-    
+
     Helps identify if dismissal patterns are improving or declining.
     """
     try:
@@ -377,9 +371,7 @@ async def get_player_dismissal_trend(
             )
 
         # Fetch player
-        result = await db.execute(
-            select(Player).where(Player.id == player_id)
-        )
+        result = await db.execute(select(Player).where(Player.id == player_id))
         player = result.scalars().first()
         if not player:
             raise HTTPException(
@@ -427,5 +419,5 @@ async def get_player_dismissal_trend(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error calculating dismissal trend: {str(e)}",
+            detail=f"Error calculating dismissal trend: {e!s}",
         )

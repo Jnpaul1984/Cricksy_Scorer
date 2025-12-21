@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.db import get_async_db
 from backend.services.pitch_heatmap_generator import (
     PitchHeatmapGenerator,
-    HeatmapType,
     PitchZone,
 )
 from backend.sql_app.models import (
@@ -101,7 +100,7 @@ async def get_player_batting_heatmap(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Heatmap generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Heatmap generation failed: {e!s}")
 
 
 @router.get("/players/{player_id}/dismissal-heatmap")
@@ -124,8 +123,7 @@ async def get_player_dismissal_heatmap(
 
         # Fetch dismissed scorecards
         stmt = select(BattingScorecard).where(
-            (BattingScorecard.player_id == player_id)
-            & (BattingScorecard.is_dismissed == True)
+            (BattingScorecard.player_id == player_id) & (BattingScorecard.is_dismissed == True)
         )
         result = await db.execute(stmt)
         dismissed_scorecards = result.scalars().all()
@@ -182,7 +180,7 @@ async def get_player_dismissal_heatmap(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Dismissal heatmap failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Dismissal heatmap failed: {e!s}")
 
 
 @router.get("/bowlers/{bowler_id}/release-zones")
@@ -260,7 +258,7 @@ async def get_bowler_release_zones(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Release zone analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Release zone analysis failed: {e!s}")
 
 
 @router.get("/matchups/{batter_id}/vs/{bowler_id}")
@@ -288,9 +286,7 @@ async def get_matchup_analysis(
             raise HTTPException(status_code=404, detail="Bowler not found")
 
         # Fetch batter's scorecards and dismissals
-        batter_stmt = select(BattingScorecard).where(
-            BattingScorecard.player_id == batter_id
-        )
+        batter_stmt = select(BattingScorecard).where(BattingScorecard.player_id == batter_id)
         batter_result = await db.execute(batter_stmt)
         batter_scorecards = batter_result.scalars().all()
 
@@ -300,11 +296,7 @@ async def get_matchup_analysis(
             for _ in range(sum(s.deliveries_faced for s in batter_scorecards))
         ]
 
-        dismissals = [
-            {"zone": PitchZone.MIDDLE_FULL}
-            for s in batter_scorecards
-            if s.is_dismissed
-        ]
+        dismissals = [{"zone": PitchZone.MIDDLE_FULL} for s in batter_scorecards if s.is_dismissed]
 
         # Analyze matchup
         matchup = PitchHeatmapGenerator.analyze_matchup(
@@ -334,7 +326,7 @@ async def get_matchup_analysis(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Matchup analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Matchup analysis failed: {e!s}")
 
 
 @router.get("/games/{game_id}/team-{team_side}/heatmap-summary")
@@ -397,4 +389,4 @@ async def get_game_heatmap_summary(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Team heatmap failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Team heatmap failed: {e!s}")

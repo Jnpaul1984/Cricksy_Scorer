@@ -10,7 +10,6 @@ from datetime import datetime
 from backend.services.branding_service import (
     BrandColor,
     BrandingService,
-    ColorScheme,
     FontFamily,
     OrgBrandTheme,
 )
@@ -22,7 +21,7 @@ class TestBrandColorValidation:
     def test_valid_hex_color(self):
         """Test creating color with valid hex code"""
         color = BrandColor("primary", "#FF5733")
-        
+
         assert color.hex_code == "#FF5733"
         assert color.rgb_value == "rgb(255, 87, 51)"
 
@@ -148,6 +147,7 @@ class TestBrandColorUpdates:
 
         # Small delay to ensure timestamp difference
         import time
+
         time.sleep(0.01)
 
         theme = BrandingService.update_brand_colors(theme, primary="#FF0000")
@@ -181,9 +181,7 @@ class TestTypographyConfiguration:
         """Test setting only primary font"""
         theme = BrandingService.create_brand_theme("org1", "Test Org")
 
-        theme = BrandingService.set_typography(
-            theme, primary_font=FontFamily.POPPINS
-        )
+        theme = BrandingService.set_typography(theme, primary_font=FontFamily.POPPINS)
 
         assert theme.typography.primary_font == FontFamily.POPPINS
 
@@ -193,6 +191,7 @@ class TestTypographyConfiguration:
         original_time = theme.updated_at
 
         import time
+
         time.sleep(0.01)
 
         theme = BrandingService.set_typography(theme, primary_font=FontFamily.ROBOTO)
@@ -265,7 +264,7 @@ class TestBrandAssets:
             dimensions=(300, 150),
         )
 
-        asset = list(theme.assets.values())[0]
+        asset = next(iter(theme.assets.values()))
         assert asset.name == "Logo"
         assert asset.dimensions == (300, 150)
         assert asset.alt_text == "Company logo"
@@ -327,9 +326,7 @@ class TestBrandingValidation:
             primary_color="#FF5733",
         )
 
-        theme = BrandingService.set_typography(
-            theme, primary_font=FontFamily.INTER
-        )
+        theme = BrandingService.set_typography(theme, primary_font=FontFamily.INTER)
 
         theme = BrandingService.add_brand_asset(
             theme,
@@ -464,7 +461,7 @@ class TestColorValidation:
     def test_validates_hex_color(self):
         """Test hex color validation"""
         valid_colors = ["#FF5733", "#000000", "#FFFFFF", "#3498DB"]
-        
+
         for color in valid_colors:
             BrandingService._validate_hex_color(color)  # Should not raise
 
@@ -505,7 +502,7 @@ class TestEdgeCases:
             alt_text="Logo with cricket emoji 🏏",
         )
 
-        asset = list(theme.assets.values())[0]
+        asset = next(iter(theme.assets.values()))
         assert "🏏" in asset.name
         assert "🏏" in asset.alt_text
 
@@ -522,7 +519,7 @@ class TestEdgeCases:
             dimensions=(16, 16),
         )
 
-        asset = list(theme.assets.values())[0]
+        asset = next(iter(theme.assets.values()))
         assert asset.dimensions == (16, 16)
 
     def test_handles_very_large_dimensions(self):
@@ -538,5 +535,5 @@ class TestEdgeCases:
             dimensions=(4000, 2000),
         )
 
-        asset = list(theme.assets.values())[0]
+        asset = next(iter(theme.assets.values()))
         assert asset.dimensions == (4000, 2000)

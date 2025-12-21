@@ -5,20 +5,16 @@ Endpoints for managing sponsor rotation schedules and tracking exposure
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.services.sponsor_rotation_engine import (
     EngagementEvent,
-    RotationSchedule,
     RotationStrategy,
     Sponsor,
     SponsorRotationEngine,
 )
-from backend.sql_app.database import get_db
 
 router = APIRouter(prefix="/sponsor-rotation", tags=["sponsor-rotation"])
 
@@ -27,7 +23,7 @@ router = APIRouter(prefix="/sponsor-rotation", tags=["sponsor-rotation"])
 async def create_rotation_schedule(
     game_id: str,
     organization_id: str,
-    sponsors: List[Dict],  # List of {sponsor_id, name, logo_url, priority, target_exposures}
+    sponsors: list[dict],  # List of {sponsor_id, name, logo_url, priority, target_exposures}
     max_overs: int = 20,
     strategy: str = "equal_time",
     db: AsyncSession = None,
@@ -95,7 +91,7 @@ async def create_rotation_schedule(
             detail=f"Invalid strategy. Must be one of: {', '.join([s.value for s in RotationStrategy])}",
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create rotation schedule: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create rotation schedule: {e!s}")
 
 
 @router.get("/schedules/{game_id}")
@@ -112,14 +108,14 @@ async def get_rotation_schedule(game_id: str, organization_id: str):
             "game_id": game_id,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch schedule: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch schedule: {e!s}")
 
 
 @router.get("/schedules/{game_id}/slots")
 async def get_schedule_slots(
     game_id: str,
     organization_id: str,
-    over_num: Optional[int] = Query(None, description="Filter by specific over"),
+    over_num: int | None = Query(None, description="Filter by specific over"),
 ):
     """
     Get sponsor slots for a game schedule
@@ -140,7 +136,7 @@ async def get_schedule_slots(
             "note": "Create a schedule first via POST /sponsor-rotation/schedules",
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch slots: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch slots: {e!s}")
 
 
 @router.post("/schedules/{game_id}/engagement")
@@ -167,7 +163,7 @@ async def record_engagement_event(
     try:
         # Validate event type
         try:
-            event_enum = EngagementEvent[event_type.upper()]
+            EngagementEvent[event_type.upper()]
         except KeyError:
             raise HTTPException(
                 status_code=400,
@@ -184,7 +180,7 @@ async def record_engagement_event(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to record engagement: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to record engagement: {e!s}")
 
 
 @router.post("/schedules/{game_id}/record-exposure")
@@ -218,7 +214,7 @@ async def record_sponsor_exposure(
             "premium": premium,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to record exposure: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to record exposure: {e!s}")
 
 
 @router.get("/schedules/{game_id}/metrics")
@@ -244,7 +240,7 @@ async def get_exposure_metrics(game_id: str, organization_id: str):
             "generated_at": datetime.utcnow().isoformat(),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch metrics: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch metrics: {e!s}")
 
 
 @router.post("/schedules/{game_id}/adjust-phase")
@@ -252,7 +248,7 @@ async def adjust_for_phase(
     game_id: str,
     organization_id: str,
     phase: str,  # powerplay, middle, death
-    boost_sponsor_id: Optional[str] = Query(None, description="Sponsor to boost in this phase"),
+    boost_sponsor_id: str | None = Query(None, description="Sponsor to boost in this phase"),
 ):
     """
     Adjust sponsor rotation based on match phase
@@ -286,7 +282,7 @@ async def adjust_for_phase(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to adjust phase: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to adjust phase: {e!s}")
 
 
 @router.get("/strategies")
