@@ -159,16 +159,16 @@ if not await _check_feature_access(current_user, "video_upload_enabled"):
 ```
 ✅ backend/routes/coach_pro_plus.py (NEW)
    └─ 190 lines: 3 endpoints, feature gating, schemas
-   
+
 ✅ backend/app.py
    └─ Import + register coach_pro_plus_router
-   
+
 ✅ frontend/src/views/CoachProPlusVideoSessionsView.vue (NEW)
    └─ 500+ lines: Full CRUD UI, responsive design
-   
+
 ✅ frontend/src/router/index.ts
    └─ Add route: /coaches/video-sessions
-   
+
 ✅ frontend/src/views/CoachesDashboardView.vue
    └─ Add button: Video Sessions (Plus)
    └─ Add handler: goToVideoSessions()

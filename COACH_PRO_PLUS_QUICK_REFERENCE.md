@@ -166,6 +166,6 @@ isCoachProPlus: (state) => state.user?.role === 'coach_pro_plus' || ...
 
 ---
 
-**Status**: ✅ IMPLEMENTATION COMPLETE AND TESTED  
-**Date**: December 21, 2025  
+**Status**: ✅ IMPLEMENTATION COMPLETE AND TESTED
+**Date**: December 21, 2025
 **Branch**: feat/coach-pro-plus-tier

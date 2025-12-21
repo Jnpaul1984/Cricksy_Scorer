@@ -1,8 +1,8 @@
 # Coach Pro Plus Tier Implementation - Summary
 
-**Status**: ✅ IMPLEMENTATION COMPLETE  
-**Date**: December 21, 2025  
-**Branch**: feat/coach-pro-plus-tier  
+**Status**: ✅ IMPLEMENTATION COMPLETE
+**Date**: December 21, 2025
+**Branch**: feat/coach-pro-plus-tier
 
 ## Overview
 
@@ -69,7 +69,7 @@ class RoleEnum(str, enum.Enum):
 },
 ```
 
-**Impact**: 
+**Impact**:
 - Defines pricing, features, and limits for Coach Pro Plus
 - Enables feature gating for video sessions, uploads, AI reports
 - Inherits all Coach Pro capabilities via `"base_plan": "coach_pro"`
@@ -106,7 +106,7 @@ coach_or_org_required = Depends(require_roles(["coach_pro", "org_pro"]))
 coach_or_org_required = Depends(require_roles(["coach_pro", "coach_pro_plus", "org_pro"]))
 ```
 
-**Impact**: 
+**Impact**:
 - All endpoints using `@router.post(..., dependencies=[security.coach_or_org_required])` now permit coach_pro_plus users
 - Currently gates: player achievements, coaching features
 - No need to update individual routes; single change propagates to all using this dependency
@@ -147,27 +147,27 @@ async def test_coach_pro_plus_user_can_award_achievement(client: TestClient) -> 
 def test_coach_pro_plus_plan_available() -> None:
     """Test that Coach Pro Plus tier is available in billing plans."""
     from backend.services.billing_service import PLAN_FEATURES, get_plan_features
-    
+
     # Verify coach_pro_plus exists in plan features
     assert "coach_pro_plus" in PLAN_FEATURES
-    
+
     # Verify pricing and feature set
     plus_plan = get_plan_features("coach_pro_plus")
     assert plus_plan["price_monthly"] == 19.99
     assert plus_plan["name"] == "Coach Pro Plus"
     assert plus_plan["base_plan"] == "coach_pro"
-    
+
     # Verify video features enabled
     assert plus_plan["video_sessions_enabled"] is True
     assert plus_plan["video_upload_enabled"] is True
     assert plus_plan["ai_session_reports_enabled"] is True
     assert plus_plan["video_storage_gb"] == 25
-    
+
     # Verify AI limits
     assert plus_plan["ai_reports_per_month"] == 20
 ```
 
-**Impact**: 
+**Impact**:
 - Tests confirm coach_pro_plus role has correct RBAC permissions
 - Tests verify plan features and pricing are correctly configured
 - ✅ Both tests pass
@@ -193,7 +193,7 @@ documents the introduction of the new tier for data integrity tracking.
 """
 ```
 
-**Impact**: 
+**Impact**:
 - Documents the tier addition for audit trail
 - Ready for future PostgreSQL enum extension if needed
 - Works with SQLite (in-memory) without schema changes

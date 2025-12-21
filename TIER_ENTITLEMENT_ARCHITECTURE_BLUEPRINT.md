@@ -1,8 +1,8 @@
 # Cricksy Tier & Entitlement Architecture Blueprint
 
-**Version**: 1.0  
-**Date**: December 21, 2025  
-**Author**: Technical Program Manager + Architect  
+**Version**: 1.0
+**Date**: December 21, 2025
+**Author**: Technical Program Manager + Architect
 **Status**: APPROVED FOR IMPLEMENTATION
 
 ---
@@ -242,7 +242,7 @@ SUPERUSER (admin)
 
 ### PLAYER PRO PLUS
 
-**Current Player Pro**: Career dashboard, form tracking, AI career summary  
+**Current Player Pro**: Career dashboard, form tracking, AI career summary
 **Target User**: Serious players who want AI coaching feedback and peer benchmarking
 
 #### Value Proposition
@@ -271,7 +271,7 @@ SUPERUSER (admin)
 
 ### SCORERS PRO PLUS
 
-**Current Scorers Pro**: Offline mode, error correction, pro overlays, multi-match  
+**Current Scorers Pro**: Offline mode, error correction, pro overlays, multi-match
 **Target User**: State/national level tournament directors who need broadcast-grade scoring
 
 #### Value Proposition
@@ -310,7 +310,7 @@ SUPERUSER (admin)
 
 ### COACH PRO PLUS
 
-**Current Coach Pro**: Player assignment, session notebook, multi-player comparison, AI text summaries  
+**Current Coach Pro**: Player assignment, session notebook, multi-player comparison, AI text summaries
 **Target User**: School coaches, academy coaches who want multimedia coaching tools
 
 #### Value Proposition
@@ -348,7 +348,7 @@ SUPERUSER (admin)
 
 ### ANALYST PRO PLUS
 
-**Current Analyst Pro**: Heatmaps, ball clustering, phase analysis, exports  
+**Current Analyst Pro**: Heatmaps, ball clustering, phase analysis, exports
 **Target User**: Analysts at high-performance programs who need automated insights
 
 #### Value Proposition
@@ -399,7 +399,7 @@ SUPERUSER (admin)
 class CoachingSessionVideo(Base):
     """Video artifact for coaching session (v1: single upload, future: multi-clip)"""
     __tablename__ = "coaching_session_videos"
-    
+
     id: str = PK
     coaching_session_id: str = FK(CoachingSession)
     video_url: str                          # S3 path
@@ -413,7 +413,7 @@ class CoachingSessionVideo(Base):
 class VideoClip(Base):
     """Extracted clip from session video (v2)"""
     __tablename__ = "video_clips"
-    
+
     id: str = PK
     coaching_session_video_id: str = FK(CoachingSessionVideo)
     start_seconds: int
@@ -633,8 +633,8 @@ VIDEO_ANALYSIS_MODEL = "gpt-4-vision"  # Future: video_understanding
 <template>
   <div class="video-uploader">
     <div v-if="!videoUploaded" class="upload-zone">
-      <input 
-        type="file" 
+      <input
+        type="file"
         @change="handleFileSelect"
         accept="video/*"
       />
@@ -669,7 +669,7 @@ async function handleFileSelect(event: Event) {
   const files = (event.target as HTMLInputElement).files
   if (!files) return
   videoFile.value = files[0]
-  
+
   uploading.value = true
   try {
     const result = await uploadCoachingSessionVideo(
@@ -734,8 +734,8 @@ async function handleFileSelect(event: Event) {
 getters: {
   // ... existing ...
   isCoachProPlus: (state) => state.user?.role === 'coach_pro_plus' || isSuperuser(state),
-  canUploadVideos: (state) => 
-    state.user?.role === 'coach_pro_plus' || 
+  canUploadVideos: (state) =>
+    state.user?.role === 'coach_pro_plus' ||
     state.user?.role === 'org_pro' ||
     isSuperuser(state),
 }
@@ -929,7 +929,7 @@ commit: "feat(ui): add video uploader and integration
 - Add CoachingSessionVideoUploader.vue component
 - Update CoachesDashboardView to render uploader (conditional on Plus tier)
 - Update authStore with isCoachProPlus getter
-- Files: components/CoachingSessionVideoUploader.vue, 
+- Files: components/CoachingSessionVideoUploader.vue,
          views/CoachesDashboardView.vue, stores/authStore.ts"
 ```
 
@@ -1240,6 +1240,6 @@ Week 6+:   Monitor + iterate
 
 ---
 
-**Document Approved By**: [CTO/Product Lead]  
-**Date**: December 21, 2025  
+**Document Approved By**: [CTO/Product Lead]
+**Date**: December 21, 2025
 **Version**: 1.0 (FINAL)

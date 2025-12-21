@@ -1,8 +1,8 @@
 # Cricksy Scorer - Repository Structure Reference
 
-**Purpose**: Living document tracking complete repository structure, file purposes, and ownership  
-**Last Updated**: December 21, 2025  
-**Maintainers**: Development Team  
+**Purpose**: Living document tracking complete repository structure, file purposes, and ownership
+**Last Updated**: December 21, 2025
+**Maintainers**: Development Team
 **Update Frequency**: When new files/directories are added
 
 ---
@@ -493,7 +493,7 @@ When adding new files/directories:
 - Add corresponding endpoints documentation
 
 **Adding a new service?**
-- Add to `backend/services/` 
+- Add to `backend/services/`
 - Document its purpose and dependencies
 - Add corresponding tests in `backend/tests/`
 
@@ -520,6 +520,6 @@ When adding new files/directories:
 
 ---
 
-**Document Status**: ✅ ACTIVE  
-**Next Review**: When new major features are added  
+**Document Status**: ✅ ACTIVE
+**Next Review**: When new major features are added
 **Questions?** Check the architecture blueprint or reach out to team lead.

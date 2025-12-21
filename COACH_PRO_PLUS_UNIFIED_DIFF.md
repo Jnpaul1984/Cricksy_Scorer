@@ -17,7 +17,7 @@ index 1234567..abcdefg 100644
 +    coach_pro_plus = "coach_pro_plus"
      analyst_pro = "analyst_pro"
      org_pro = "org_pro"
- 
+
 diff --git a/backend/services/billing_service.py b/backend/services/billing_service.py
 index 2345678..bcdefgh 100644
 --- a/backend/services/billing_service.py
@@ -50,7 +50,7 @@ index 2345678..bcdefgh 100644
      "analyst_pro": {
          "name": "Analyst Pro",
          "price_monthly": 29.99,
- 
+
 diff --git a/backend/routes/billing.py b/backend/routes/billing.py
 index 3456789..cdefghi 100644
 --- a/backend/routes/billing.py
@@ -64,8 +64,8 @@ index 3456789..cdefghi 100644
 -    plans = ["free", "player_pro", "coach_pro", "analyst_pro", "org_pro"]
 +    plans = ["free", "player_pro", "coach_pro", "coach_pro_plus", "analyst_pro", "org_pro"]
      return {"plans": [{"key": plan, **get_plan_features(plan)} for plan in plans]}
- 
- 
+
+
 diff --git a/backend/security.py b/backend/security.py
 index 4567890..defghij 100644
 --- a/backend/security.py
@@ -73,15 +73,15 @@ index 4567890..defghij 100644
 @@ -240,7 +240,7 @@ def require_roles(allowed_roles: Sequence[str]):
              raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
          return current_user
- 
+
      return _checker
- 
- 
+
+
 -coach_or_org_required = Depends(require_roles(["coach_pro", "org_pro"]))
 +coach_or_org_required = Depends(require_roles(["coach_pro", "coach_pro_plus", "org_pro"]))
  analyst_or_org_required = Depends(require_roles(["analyst_pro", "org_pro"]))
  org_only_required = Depends(require_roles(["org_pro"]))
- 
+
 diff --git a/backend/tests/test_rbac_roles.py b/backend/tests/test_rbac_roles.py
 index 5678901..efghijk 100644
 --- a/backend/tests/test_rbac_roles.py
@@ -111,11 +111,11 @@ index 5678901..efghijk 100644
 +    assert resp.status_code == 200, resp.text
 +    body = resp.json()
 +    assert body["player_id"] == "player-coach-plus"
- 
- 
+
+
  async def test_org_user_can_access_coach_and_analyst_endpoints(
 @@ -232,3 +265,22 @@ async def test_org_user_can_access_coach_and_analyst_endpoints(
- 
+
      resp_analyst = client.get("/api/players/leaderboard", headers=_auth_headers(token))
      assert resp_analyst.status_code == 200, resp_analyst.text
 +
@@ -123,22 +123,22 @@ index 5678901..efghijk 100644
 +def test_coach_pro_plus_plan_available() -> None:
 +    """Test that Coach Pro Plus tier is available in billing plans."""
 +    from backend.services.billing_service import PLAN_FEATURES, get_plan_features
-+    
++
 +    # Verify coach_pro_plus exists in plan features
 +    assert "coach_pro_plus" in PLAN_FEATURES
-+    
++
 +    # Verify pricing and feature set
 +    plus_plan = get_plan_features("coach_pro_plus")
 +    assert plus_plan["price_monthly"] == 19.99
 +    assert plus_plan["name"] == "Coach Pro Plus"
 +    assert plus_plan["base_plan"] == "coach_pro"
-+    
++
 +    # Verify video features enabled
 +    assert plus_plan["video_sessions_enabled"] is True
 +    assert plus_plan["video_upload_enabled"] is True
 +    assert plus_plan["ai_session_reports_enabled"] is True
 +    assert plus_plan["video_storage_gb"] == 25
-+    
++
 +    # Verify AI limits
 +    assert plus_plan["ai_reports_per_month"] == 20
 ```
@@ -178,7 +178,7 @@ index 0000000..1111111
 +def upgrade() -> None:
 +    """
 +    Upgrade: Add coach_pro_plus tier support.
-+    
++
 +    Changes:
 +    - Updates the role column constraint to allow 'coach_pro_plus'
 +    - Documentation of new plan feature: video_sessions_enabled, video_upload_enabled, etc.

@@ -8,7 +8,7 @@ Feature-gated by role (coach_pro_plus, org_pro).
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
@@ -34,9 +34,7 @@ async def _check_feature_access(user: User, feature: str) -> bool:
     if user.role in (RoleEnum.coach_pro_plus, RoleEnum.org_pro):
         return True
     # Superuser always has access
-    if user.is_superuser:
-        return True
-    return False
+    return bool(user.is_superuser)
 
 
 # ============================================================================
@@ -105,7 +103,7 @@ async def create_video_session(
         )
 
     session_id = str(uuid4())
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     session = {
         "id": session_id,
@@ -151,9 +149,7 @@ async def list_video_sessions(
 
     # Filter sessions by coach_id
     user_sessions = [
-        session
-        for session in _video_sessions.values()
-        if session["coach_id"] == current_user.id
+        session for session in _video_sessions.values() if session["coach_id"] == current_user.id
     ]
 
     # Apply pagination

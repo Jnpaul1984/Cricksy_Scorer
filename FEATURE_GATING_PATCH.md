@@ -1,8 +1,8 @@
 # Feature Gating Helpers Implementation - Code Patch
 
-**Status**: ✅ COMPLETE  
-**Tests**: 10/10 passing (includes 1 new test)  
-**Changes**: Minimal additions to billing_service.py and test_rbac_roles.py  
+**Status**: ✅ COMPLETE
+**Tests**: 10/10 passing (includes 1 new test)
+**Changes**: Minimal additions to billing_service.py and test_rbac_roles.py
 
 ---
 
@@ -100,15 +100,15 @@ def require_feature(feature_name: str):
 def test_feature_gating_video_upload() -> None:
     """Test that video_upload_enabled feature is gated by tier."""
     from backend.services.billing_service import get_plan_features, user_has_feature
-    
+
     # Coach Pro should NOT have video upload enabled
     coach_pro_features = get_plan_features("coach_pro")
     assert coach_pro_features.get("video_upload_enabled", False) is False
-    
+
     # Coach Pro Plus should have video upload enabled
     plus_features = get_plan_features("coach_pro_plus")
     assert plus_features.get("video_upload_enabled") is True
-    
+
     # Free tier should NOT have video upload
     free_features = get_plan_features("free")
     assert free_features.get("video_upload_enabled", False) is False
@@ -242,7 +242,7 @@ async def upload_video(file: UploadFile):
 ```python
 def check_advanced_features(user: User) -> bool:
     from backend.services.billing_service import user_has_feature
-    
+
     required = [
         "video_upload_enabled",
         "ai_session_reports_enabled",

@@ -2,16 +2,16 @@
 
 ## ✅ IMPLEMENTATION COMPLETE
 
-**Branch**: feat/coach-pro-plus-tier  
-**Status**: All 9 tests passing, ready for deployment  
+**Branch**: feat/coach-pro-plus-tier
+**Status**: All 9 tests passing, ready for deployment
 **Date**: December 21, 2025
 
 ---
 
 ## 📝 PATCH 1/6: backend/sql_app/models.py
 
-**Location**: Line 60  
-**Type**: Enum extension  
+**Location**: Line 60
+**Type**: Enum extension
 **Lines Changed**: +1
 
 ```diff
@@ -28,8 +28,8 @@
 
 ## 📝 PATCH 2/6: backend/services/billing_service.py
 
-**Location**: After line 62 (after coach_pro entry)  
-**Type**: Feature definition  
+**Location**: After line 62 (after coach_pro entry)
+**Type**: Feature definition
 **Lines Changed**: +23
 
 ```diff
@@ -69,8 +69,8 @@
 
 ## 📝 PATCH 3/6: backend/routes/billing.py
 
-**Location**: Line 40 (in list_plans function)  
-**Type**: API route update  
+**Location**: Line 40 (in list_plans function)
+**Type**: API route update
 **Lines Changed**: +1 (in list)
 
 ```diff
@@ -88,14 +88,14 @@
 
 ## 📝 PATCH 4/6: backend/security.py
 
-**Location**: Line 242  
-**Type**: Permission update  
+**Location**: Line 242
+**Type**: Permission update
 **Lines Changed**: +1 role in decorator
 
 ```diff
   def require_roles(allowed_roles: Sequence[str]):
       ...
-  
+
   coach_or_org_required = Depends(require_roles(["coach_pro", "coach_pro_plus", "org_pro"]))
 -                                              ^^^^^^^^^^^^^^^^
 -                                              Added role here
@@ -115,8 +115,8 @@ coach_or_org_required = Depends(require_roles(["coach_pro", "coach_pro_plus", "o
 
 ## 📝 PATCH 5/6: backend/tests/test_rbac_roles.py
 
-**Location**: After line 186 and at end of file  
-**Type**: Test addition  
+**Location**: After line 186 and at end of file
+**Type**: Test addition
 **Lines Changed**: +40
 
 ### Test 1: Permission Verification
@@ -124,14 +124,14 @@ coach_or_org_required = Depends(require_roles(["coach_pro", "coach_pro_plus", "o
 ```diff
   async def test_coach_user_can_award_achievement(client: TestClient) -> None:
       ...
-  
+
 + async def test_coach_pro_plus_user_can_award_achievement(client: TestClient) -> None:
 +     """Test that Coach Pro Plus users have same access as Coach Pro users."""
 +     register_user(client, "coach_plus@example.com")
 +     await set_role(client, "coach_plus@example.com", models.RoleEnum.coach_pro_plus)
 +     token = login_user(client, "coach_plus@example.com")
 +     await ensure_profile(client, "player-coach-plus")
-+ 
++
 +     resp = client.post(
 +         "/api/players/player-coach-plus/achievements",
 +         headers=_auth_headers(token),
@@ -159,22 +159,22 @@ coach_or_org_required = Depends(require_roles(["coach_pro", "coach_pro_plus", "o
 + def test_coach_pro_plus_plan_available() -> None:
 +     """Test that Coach Pro Plus tier is available in billing plans."""
 +     from backend.services.billing_service import PLAN_FEATURES, get_plan_features
-+     
++
 +     # Verify coach_pro_plus exists in plan features
 +     assert "coach_pro_plus" in PLAN_FEATURES
-+     
++
 +     # Verify pricing and feature set
 +     plus_plan = get_plan_features("coach_pro_plus")
 +     assert plus_plan["price_monthly"] == 19.99
 +     assert plus_plan["name"] == "Coach Pro Plus"
 +     assert plus_plan["base_plan"] == "coach_pro"
-+     
++
 +     # Verify video features enabled
 +     assert plus_plan["video_sessions_enabled"] is True
 +     assert plus_plan["video_upload_enabled"] is True
 +     assert plus_plan["ai_session_reports_enabled"] is True
 +     assert plus_plan["video_storage_gb"] == 25
-+     
++
 +     # Verify AI limits
 +     assert plus_plan["ai_reports_per_month"] == 20
 ```
@@ -183,7 +183,7 @@ coach_or_org_required = Depends(require_roles(["coach_pro", "coach_pro_plus", "o
 
 ## 📝 PATCH 6/6: backend/alembic/versions/add_coach_pro_plus_tier.py (NEW FILE)
 
-**Type**: New migration file  
+**Type**: New migration file
 **Lines**: 41 (complete new file)
 
 ```python
@@ -213,7 +213,7 @@ depends_on = None
 def upgrade() -> None:
     """
     Upgrade: Add coach_pro_plus tier support.
-    
+
     Changes:
     - Updates the role column constraint to allow 'coach_pro_plus'
     - Documentation of new plan feature: video_sessions_enabled, video_upload_enabled, etc.
@@ -228,7 +228,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     """
     Downgrade: Remove coach_pro_plus tier support.
-    
+
     Any users with coach_pro_plus role would need to be migrated back to coach_pro.
     """
     pass
@@ -323,5 +323,5 @@ pytest backend/tests/test_rbac_roles.py -v
 
 ---
 
-**Status**: ✅ COMPLETE AND TESTED  
+**Status**: ✅ COMPLETE AND TESTED
 **Ready for**: Code review, merge, and deployment

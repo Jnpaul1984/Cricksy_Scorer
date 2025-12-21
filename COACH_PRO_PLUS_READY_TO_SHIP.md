@@ -79,7 +79,7 @@ Frontend: coach-pro-plus = $19.99/month with video features ✅
 ```
 Implicit (Role-based):
   - coach_pro_plus role → passes isCoachProPlus check ✅
-  
+
 Explicit (Backend-enforced):
   - @require_feature('video_upload_enabled') → Only coaches_pro_plus, analyst_pro, org_pro ✅
 ```
@@ -219,7 +219,7 @@ Explicit (Backend-enforced):
 
 ## Summary
 
-**Coach Pro Plus frontend integration is production-ready.** 
+**Coach Pro Plus frontend integration is production-ready.**
 
 The implementation is:
 - ✅ **Complete:** All required components added and verified

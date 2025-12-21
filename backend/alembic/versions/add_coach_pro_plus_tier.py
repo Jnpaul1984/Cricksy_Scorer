@@ -11,9 +11,6 @@ Note: The role enum itself is managed in code (Python enum), but this migration
 documents the introduction of the new tier for data integrity tracking.
 """
 
-import sqlalchemy as sa
-from alembic import op
-
 # revision identifiers, used by Alembic.
 revision = "a7e5f6b9c0d1"
 down_revision = "a6d4c2f1b7e8"
@@ -24,7 +21,7 @@ depends_on = None
 def upgrade() -> None:
     """
     Upgrade: Add coach_pro_plus tier support.
-    
+
     Changes:
     - Updates the role column constraint to allow 'coach_pro_plus'
     - Documentation of new plan feature: video_sessions_enabled, video_upload_enabled, etc.
@@ -39,7 +36,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     """
     Downgrade: Remove coach_pro_plus tier support.
-    
+
     Any users with coach_pro_plus role would need to be migrated back to coach_pro.
     """
     pass

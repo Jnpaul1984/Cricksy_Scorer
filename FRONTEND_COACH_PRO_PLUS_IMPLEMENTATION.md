@@ -18,7 +18,7 @@ Successfully integrated Coach Pro Plus ($19.99/month) tier into the Cricksy Scor
 export type UserRole = 'free' | 'player_pro' | 'coach_pro' | 'analyst_pro' | 'org_pro' | 'superuser'
 
 // AFTER:
-export type UserRole = 
+export type UserRole =
   | 'free'
   | 'player_pro'
   | 'coach_pro'
@@ -73,7 +73,7 @@ isCoach: (state) => state.user?.role === 'coach_pro' || isSuperuser(state),
 isCoach: (state) => state.user?.role === 'coach_pro' || state.user?.role === 'coach_pro_plus' || isSuperuser(state),
 ```
 
-**Impact:** 
+**Impact:**
 - coach_pro_plus users are treated as >= coach_pro tier
 - Existing coach_pro checks automatically include coach_pro_plus users
 - Router guards (requiresCoach) automatically allow coach_pro_plus users
@@ -200,7 +200,7 @@ The implementation uses **implicit feature gating** based on role hierarchy:
 |----------|---------|--------|
 | coach_pro_plus (TypeScript) | coach_pro_plus (Python enum) | ✅ Matched |
 
-### Plan ID Mapping  
+### Plan ID Mapping
 | Frontend ID | Backend ID | Plan Price | Trial |
 |-------------|-----------|-----------|-------|
 | coach-pro-plus (kebab-case) | coach_pro_plus (snake_case) | $19.99/month | 14 days |

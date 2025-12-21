@@ -88,10 +88,10 @@
 @@ -240,7 +240,7 @@ def require_roles(allowed_roles: Sequence[str]):
              raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
          return current_user
- 
+
      return _checker
- 
- 
+
+
 -coach_or_org_required = Depends(require_roles(["coach_pro", "org_pro"]))
 +coach_or_org_required = Depends(require_roles(["coach_pro", "coach_pro_plus", "org_pro"]))
  analyst_or_org_required = Depends(require_roles(["analyst_pro", "org_pro"]))
@@ -140,7 +140,7 @@
 --- a/backend/tests/test_rbac_roles.py
 +++ b/backend/tests/test_rbac_roles.py
 @@ -232,3 +232,22 @@ async def test_org_user_can_access_coach_and_analyst_endpoints(
- 
+
      resp_analyst = client.get("/api/players/leaderboard", headers=_auth_headers(token))
      assert resp_analyst.status_code == 200, resp_analyst.text
 +
@@ -148,22 +148,22 @@
 +def test_coach_pro_plus_plan_available() -> None:
 +    """Test that Coach Pro Plus tier is available in billing plans."""
 +    from backend.services.billing_service import PLAN_FEATURES, get_plan_features
-+    
++
 +    # Verify coach_pro_plus exists in plan features
 +    assert "coach_pro_plus" in PLAN_FEATURES
-+    
++
 +    # Verify pricing and feature set
 +    plus_plan = get_plan_features("coach_pro_plus")
 +    assert plus_plan["price_monthly"] == 19.99
 +    assert plus_plan["name"] == "Coach Pro Plus"
 +    assert plus_plan["base_plan"] == "coach_pro"
-+    
++
 +    # Verify video features enabled
 +    assert plus_plan["video_sessions_enabled"] is True
 +    assert plus_plan["video_upload_enabled"] is True
 +    assert plus_plan["ai_session_reports_enabled"] is True
 +    assert plus_plan["video_storage_gb"] == 25
-+    
++
 +    # Verify AI limits
 +    assert plus_plan["ai_reports_per_month"] == 20
 ```
@@ -201,7 +201,7 @@ depends_on = None
 def upgrade() -> None:
     """
     Upgrade: Add coach_pro_plus tier support.
-    
+
     Changes:
     - Updates the role column constraint to allow 'coach_pro_plus'
     - Documentation of new plan feature: video_sessions_enabled, video_upload_enabled, etc.
@@ -216,7 +216,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     """
     Downgrade: Remove coach_pro_plus tier support.
-    
+
     Any users with coach_pro_plus role would need to be migrated back to coach_pro.
     """
     pass
@@ -226,10 +226,10 @@ def downgrade() -> None:
 
 ## Summary
 
-**Total Changes**: 6 files modified/created  
-**Total Lines Added**: ~104  
-**Total Lines Changed**: ~5  
-**Test Coverage**: ✅ 2 new tests, both passing  
+**Total Changes**: 6 files modified/created
+**Total Lines Added**: ~104
+**Total Lines Changed**: ~5
+**Test Coverage**: ✅ 2 new tests, both passing
 
 ### Change Statistics
 
@@ -257,4 +257,3 @@ def downgrade() -> None:
 - ✅ coach_or_org_required includes coach_pro_plus
 - ✅ Tests pass (RBAC + plan availability)
 - ✅ No breaking changes
-

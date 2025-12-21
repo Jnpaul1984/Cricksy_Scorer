@@ -201,6 +201,6 @@ Breaking changes: none
 
 ---
 
-**Implementation Date**: December 21, 2025  
-**Branch**: feat/coach-pro-plus-tier  
+**Implementation Date**: December 21, 2025
+**Branch**: feat/coach-pro-plus-tier
 **Status**: ✅ Complete

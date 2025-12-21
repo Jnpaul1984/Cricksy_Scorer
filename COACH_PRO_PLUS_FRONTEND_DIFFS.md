@@ -201,7 +201,7 @@ if (to.meta.requiresCoach) {
 4. **Build:** Run `npm run build` to ensure no errors
 5. **Deploy:** Deploy frontend to production
 6. **Backend Check:** Ensure backend Role.coach_pro_plus exists (already implemented)
-7. **Live Test:** 
+7. **Live Test:**
    - Visit /pricing → See Coach Pro Plus card ✅
    - Signup with coach-pro-plus → User created with correct role ✅
    - Frontend recognizes isCoachProPlus → true ✅
