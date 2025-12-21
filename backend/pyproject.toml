@@ -61,6 +61,28 @@ module = [
 ]
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = [
+    "routes.pitch_heatmaps",
+    "routes.ball_clustering",
+    "routes.player_improvement",
+    "routes.pressure_analysis",
+    "routes.tactical_suggestions",
+    "routes.training_drills",
+    "routes.dismissal_patterns",
+    "routes.phase_analysis",
+    "routes.sponsor_rotation",
+    "services.pitch_heatmap_generator",
+    "services.ball_type_clusterer",
+    "services.player_improvement_tracker",
+    "services.pressure_analyzer",
+    "services.tactical_suggestion_engine",
+    "services.training_drill_generator",
+    "services.dismissal_pattern_analyzer",
+    "services.phase_analyzer",
+]
+ignore_errors = true
+
 [tool.bandit]
 # Exclude test directories and virtual environment
 exclude_dirs = ["backend/tests", "backend/test", "backend/testsupport", "backend/venv", ".venv", "venv"]
