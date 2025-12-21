@@ -36,8 +36,8 @@ from backend.routes.analytics_case_study import router as analytics_case_study_r
 # from backend.routes.tactical_suggestions import router as tactical_suggestions_router
 # from backend.routes.training_drills import router as training_drills_router
 # from backend.routes.dismissal_patterns import router as dismissal_patterns_router
-from backend.routes.pitch_heatmaps import router as pitch_heatmaps_router
-from backend.routes.ball_clustering import router as ball_clustering_router
+# from backend.routes.pitch_heatmaps import router as pitch_heatmaps_router  # TODO: Fix model imports (Player, BattingScorecard)
+# from backend.routes.ball_clustering import router as ball_clustering_router  # TODO: Fix model imports (Player, BowlingScorecard, BattingScorecard)
 # from backend.routes.sponsor_rotation import router as sponsor_rotation_router
 from backend.routes.branding import router as branding_router
 from backend.routes.auth_router import router as auth_router
@@ -332,8 +332,8 @@ def create_app(
     # fastapi_app.include_router(tactical_suggestions_router)  # TODO: Fix model imports
     # fastapi_app.include_router(training_drills_router)  # TODO: Fix model imports
     # fastapi_app.include_router(dismissal_patterns_router)  # TODO: Fix model imports
-    fastapi_app.include_router(pitch_heatmaps_router)
-    fastapi_app.include_router(ball_clustering_router)
+    # fastapi_app.include_router(pitch_heatmaps_router)  # TODO: Fix model imports
+    # fastapi_app.include_router(ball_clustering_router)  # TODO: Fix model imports
     # fastapi_app.include_router(sponsor_rotation_router)  # TODO: Fix endpoint signatures
     fastapi_app.include_router(branding_router)
     fastapi_app.include_router(players_router)
