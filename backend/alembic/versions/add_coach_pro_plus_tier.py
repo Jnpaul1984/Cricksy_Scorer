@@ -1,10 +1,10 @@
 """add_coach_pro_plus_tier
 
 Revision ID: a7e5f6b9c0d1
-Revises: a6d4c2f1b7e8
+Revises: m3h4i5j6k7l8
 Create Date: 2025-12-21 00:00:00.000000
 
-This migration adds support for the Coach Pro Plus tier ($19.99/month).
+This migration adds support for the Coach Pro Plus tier ($24.99/month).
 It adds the coach_pro_plus role enum value and extends plan feature definitions.
 
 Note: The role enum itself is managed in code (Python enum), but this migration
@@ -13,7 +13,7 @@ documents the introduction of the new tier for data integrity tracking.
 
 # revision identifiers, used by Alembic.
 revision = "a7e5f6b9c0d1"
-down_revision = "a6d4c2f1b7e8"
+down_revision = "m3h4i5j6k7l8"
 branch_labels = None
 depends_on = None
 
