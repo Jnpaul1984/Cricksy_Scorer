@@ -8,11 +8,11 @@ import asyncio
 import sys
 from pathlib import Path
 
+from backend.services.innings_grade_service import InningsGradeCalculator
+
 # Add backend to path
 backend_path = Path(__file__).parent / "backend"
 sys.path.insert(0, str(backend_path.parent))
-
-from backend.services.innings_grade_service import InningsGradeCalculator, get_innings_grade
 
 
 async def test_innings_grade_calculator():

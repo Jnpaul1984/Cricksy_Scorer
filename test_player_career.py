@@ -8,11 +8,11 @@ Run after backend is running: python test_player_career.py
 import sys
 from pathlib import Path
 
+from backend.services.player_career_analyzer import get_player_career_summary
+
 # Add backend to path
 backend_path = Path(__file__).parent / "backend"
 sys.path.insert(0, str(backend_path.parent))
-
-from backend.services.player_career_analyzer import get_player_career_summary
 
 
 def test_player_career_analyzer():
@@ -59,14 +59,14 @@ def test_player_career_analyzer():
         f"Specialization: {summary_1['specialization']} ({summary_1['specialization_confidence']:.0%})"
     )
     print(f"Career Summary: {summary_1['career_summary']}")
-    print(f"\nBatting Stats:")
+    print("\\nBatting Stats:")
     print(f"  Matches: {summary_1['batting_stats']['matches']}")
     print(f"  Average: {summary_1['batting_stats']['average']}")
     print(f"  Strike Rate: {summary_1['batting_stats']['strike_rate']}")
     print(f"  Consistency: {summary_1['batting_stats']['consistency_score']:.1f}%")
     print(f"  Boundary %: {summary_1['batting_stats']['boundary_percentage']:.1f}%")
-    print(f"\nRecent Form: {summary_1['recent_form']['trend']}")
-    print(f"Highlights:")
+    print(f"\\nRecent Form: {summary_1['recent_form']['trend']}")
+    print("Highlights:")
     for highlight in summary_1["career_highlights"]:
         print(f"  {highlight}")
     assert summary_1["specialization"] in [
@@ -115,7 +115,7 @@ def test_player_career_analyzer():
     print(f"Average: {summary_2['batting_stats']['average']}")
     print(f"Strike Rate: {summary_2['batting_stats']['strike_rate']}")
     print(f"Consistency: {summary_2['batting_stats']['consistency_score']:.1f}%")
-    print(f"\nHighlights:")
+    print("\nHighlights:")
     for highlight in summary_2["career_highlights"]:
         print(f"  {highlight}")
     assert summary_2["specialization"] in [
@@ -189,15 +189,15 @@ def test_player_career_analyzer():
     print(
         f"Specialization: {summary_3['specialization']} ({summary_3['specialization_confidence']:.0%})"
     )
-    print(f"\nBatting Stats:")
+    print("\nBatting Stats:")
     print(f"  Matches: {summary_3['batting_stats']['matches']}")
     print(f"  Total Runs: {summary_3['batting_stats']['total_runs']}")
     print(f"  Average: {summary_3['batting_stats']['average']}")
-    print(f"\nBowling Stats:")
+    print("\nBowling Stats:")
     print(f"  Matches: {summary_3['bowling_stats']['matches']}")
     print(f"  Wickets: {summary_3['bowling_stats']['total_wickets']}")
     print(f"  Economy: {summary_3['bowling_stats']['economy_rate']}")
-    print(f"\nHighlights:")
+    print("\nHighlights:")
     for highlight in summary_3["career_highlights"]:
         print(f"  {highlight}")
     assert (
@@ -228,12 +228,12 @@ def test_player_career_analyzer():
     print(
         f"Specialization: {summary_4['specialization']} ({summary_4['specialization_confidence']:.0%})"
     )
-    print(f"\nBowling Stats:")
+    print("\nBowling Stats:")
     print(f"  Matches: {summary_4['bowling_stats']['matches']}")
     print(f"  Wickets: {summary_4['bowling_stats']['total_wickets']}")
     print(f"  Economy: {summary_4['bowling_stats']['economy_rate']}")
     print(f"  Maiden %: {summary_4['bowling_stats']['maiden_percentage']:.1f}%")
-    print(f"\nHighlights:")
+    print("\nHighlights:")
     for highlight in summary_4["career_highlights"]:
         print(f"  {highlight}")
     assert (
