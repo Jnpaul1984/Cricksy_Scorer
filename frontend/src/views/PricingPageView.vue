@@ -219,6 +219,21 @@ const plans: PlanConfig[] = [
     ],
   },
   {
+    id: 'coach-pro-plus',
+    name: 'Coach Pro Plus',
+    shortName: 'Coach+',
+    tagline: 'Coach Pro with video session management and AI insights.',
+    monthly: 24.99,
+    ctaLabel: 'Choose Coach Pro Plus',
+    features: [
+      'Everything in Coach Pro',
+      'Video session upload & streaming',
+      'AI video session reports',
+      '25 GB video storage',
+      'Video playlist organization',
+    ],
+  },
+  {
     id: 'analyst-pro',
     name: 'Analyst Pro',
     shortName: 'Analyst',
@@ -334,6 +349,7 @@ function trialInfoFor(planId: string): { trialLabel: string; cardRequired?: bool
       return null // Free plan has no trial
     case 'player-pro':
     case 'coach-pro':
+    case 'coach-pro-plus':
     case 'analyst-pro':
       return { trialLabel: '14-day free trial' }
     case 'org-starter':
@@ -370,6 +386,7 @@ function rowIncluded(rowKey: string, planId: string): boolean {
     'free',
     'player-pro',
     'coach-pro',
+    'coach-pro-plus',
     'analyst-pro',
     'org-starter',
     'org-growth',

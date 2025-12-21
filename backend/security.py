@@ -239,6 +239,6 @@ def require_roles(allowed_roles: Sequence[str]):
     return _checker
 
 
-coach_or_org_required = Depends(require_roles(["coach_pro", "org_pro"]))
+coach_or_org_required = Depends(require_roles(["coach_pro", "coach_pro_plus", "org_pro"]))
 analyst_or_org_required = Depends(require_roles(["analyst_pro", "org_pro"]))
 org_only_required = Depends(require_roles(["org_pro"]))

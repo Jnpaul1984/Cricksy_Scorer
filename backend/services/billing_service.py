@@ -6,6 +6,7 @@ Provides subscription status and plan feature lookups with mocked limits.
 
 from datetime import datetime, timedelta
 
+from fastapi import Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +56,28 @@ PLAN_FEATURES: dict[str, dict] = {
         "priority_support": True,
         "team_management": True,
         "advanced_analytics": True,
+    },
+    "coach_pro_plus": {
+        "name": "Coach Pro Plus",
+        "price_monthly": 24.99,
+        "base_plan": "coach_pro",
+        "tokens_limit": 100_000,
+        "ai_reports_per_month": 20,
+        "max_games": None,
+        "max_tournaments": 50,
+        "live_scoring": True,
+        "ai_predictions": True,
+        "export_pdf": True,
+        "priority_support": True,
+        "team_management": True,
+        "advanced_analytics": True,
+        "coach_dashboard": True,
+        "coaching_sessions": True,
+        "player_assignments": True,
+        "video_sessions_enabled": True,
+        "video_upload_enabled": True,
+        "ai_session_reports_enabled": True,
+        "video_storage_gb": 25,
     },
     "analyst_pro": {
         "name": "Analyst Pro",
@@ -112,6 +135,48 @@ def get_plan_features(plan: str) -> dict:
         Dictionary of plan features and limits
     """
     return PLAN_FEATURES.get(plan, PLAN_FEATURES["free"]).copy()
+
+
+def get_user_plan_id(user: User) -> str:
+    """
+    Get the plan ID (role) for a user.
+
+    Args:
+        user: User object
+
+    Returns:
+        Plan identifier string (free, player_pro, coach_pro, etc.)
+    """
+    return user.role.value if isinstance(user.role, RoleEnum) else str(user.role)
+
+
+def get_user_features(user: User) -> dict:
+    """
+    Get the feature set for a user based on their role/plan.
+
+    Args:
+        user: User object
+
+    Returns:
+        Dictionary of plan features and limits
+    """
+    plan_id = get_user_plan_id(user)
+    return get_plan_features(plan_id)
+
+
+def user_has_feature(user: User, feature_name: str) -> bool:
+    """
+    Check if a user has access to a specific feature.
+
+    Args:
+        user: User object
+        feature_name: Feature key to check (e.g., 'video_upload_enabled')
+
+    Returns:
+        True if user's plan includes the feature and it is enabled, False otherwise
+    """
+    features = get_user_features(user)
+    return features.get(feature_name, False)
 
 
 async def get_subscription_status(
@@ -283,3 +348,34 @@ async def check_usage_limit(
         return {"allowed": True, "remaining": remaining, "limit": usage["tokens_limit"]}
 
     return {"allowed": False, "reason": f"Unknown resource: {resource}"}
+
+
+def require_feature(feature_name: str):
+    """
+    FastAPI dependency that checks if the current user has access to a feature.
+
+    Args:
+        feature_name: Feature key to check (e.g., 'video_upload_enabled')
+
+    Returns:
+        Dependency function that validates feature access
+
+    Raises:
+        HTTPException: 403 Forbidden if user lacks the feature
+    """
+
+    async def _check_feature(
+        current_user: User = Depends(
+            __import__("backend.security", fromlist=["get_current_user"]).get_current_user
+        ),
+    ) -> User:
+        if not user_has_feature(current_user, feature_name):
+            plan = get_user_plan_id(current_user)
+            plan_info = get_plan_features(plan)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Feature '{feature_name}' requires a higher tier plan. Current: {plan_info['name']}",
+            )
+        return current_user
+
+    return Depends(_check_feature)

@@ -188,6 +188,27 @@ async def test_coach_user_can_award_achievement(client: TestClient) -> None:
     assert body["player_id"] == "player-coach"
 
 
+async def test_coach_pro_plus_user_can_award_achievement(client: TestClient) -> None:
+    """Test that Coach Pro Plus users have same access as Coach Pro users."""
+    register_user(client, "coach_plus@example.com")
+    await set_role(client, "coach_plus@example.com", models.RoleEnum.coach_pro_plus)
+    token = login_user(client, "coach_plus@example.com")
+    await ensure_profile(client, "player-coach-plus")
+
+    resp = client.post(
+        "/api/players/player-coach-plus/achievements",
+        headers=_auth_headers(token),
+        json={
+            "achievement_type": "century",
+            "title": "Century",
+            "description": "Coach Plus added",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["player_id"] == "player-coach-plus"
+
+
 async def test_org_user_can_access_coach_and_analyst_endpoints(
     client: TestClient,
 ) -> None:
@@ -209,3 +230,43 @@ async def test_org_user_can_access_coach_and_analyst_endpoints(
 
     resp_analyst = client.get("/api/players/leaderboard", headers=_auth_headers(token))
     assert resp_analyst.status_code == 200, resp_analyst.text
+
+
+def test_coach_pro_plus_plan_available() -> None:
+    """Test that Coach Pro Plus tier is available in billing plans."""
+    from backend.services.billing_service import PLAN_FEATURES, get_plan_features
+
+    # Verify coach_pro_plus exists in plan features
+    assert "coach_pro_plus" in PLAN_FEATURES
+
+    # Verify pricing and feature set
+    plus_plan = get_plan_features("coach_pro_plus")
+    assert plus_plan["price_monthly"] == 19.99
+    assert plus_plan["name"] == "Coach Pro Plus"
+    assert plus_plan["base_plan"] == "coach_pro"
+
+    # Verify video features enabled
+    assert plus_plan["video_sessions_enabled"] is True
+    assert plus_plan["video_upload_enabled"] is True
+    assert plus_plan["ai_session_reports_enabled"] is True
+    assert plus_plan["video_storage_gb"] == 25
+
+    # Verify AI limits
+    assert plus_plan["ai_reports_per_month"] == 20
+
+
+def test_feature_gating_video_upload() -> None:
+    """Test that video_upload_enabled feature is gated by tier."""
+    from backend.services.billing_service import get_plan_features
+
+    # Coach Pro should NOT have video upload enabled
+    coach_pro_features = get_plan_features("coach_pro")
+    assert coach_pro_features.get("video_upload_enabled", False) is False
+
+    # Coach Pro Plus should have video upload enabled
+    plus_features = get_plan_features("coach_pro_plus")
+    assert plus_features.get("video_upload_enabled") is True
+
+    # Free tier should NOT have video upload
+    free_features = get_plan_features("free")
+    assert free_features.get("video_upload_enabled", False) is False

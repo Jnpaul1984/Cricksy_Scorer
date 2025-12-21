@@ -45,6 +45,7 @@ from backend.routes.billing import router as billing_router
 
 # Routers
 from backend.routes.coach_pro import router as coach_pro_router
+from backend.routes.coach_pro_plus import router as coach_pro_plus_router
 from backend.routes.dls import router as dls_router
 from backend.routes.fan_mode import router as fan_mode_router
 from backend.routes.feedback import router as feedback_router
@@ -341,6 +342,7 @@ def create_app(
     fastapi_app.include_router(analyst_pro_router)
     fastapi_app.include_router(analytics_case_study_router)
     fastapi_app.include_router(coach_pro_router)
+    fastapi_app.include_router(coach_pro_plus_router)
     fastapi_app.include_router(tournaments_router)
     fastapi_app.include_router(users_router)
     fastapi_app.include_router(testing_router)
