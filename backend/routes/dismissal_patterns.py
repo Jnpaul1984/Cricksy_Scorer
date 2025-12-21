@@ -8,7 +8,6 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from backend.sql_app.models import Player, Game, BattingScorecard
 from backend.services.dismissal_pattern_analyzer import (
     DismissalPatternAnalyzer,
     DismissalRecord,

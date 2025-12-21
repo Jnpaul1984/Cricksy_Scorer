@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.services.tactical_suggestion_engine import (
     TacticalSuggestionEngine,
 )
-from backend.sql_app.models import Game, Player, BattingScorecard, BowlingScorecard
 
 router = APIRouter(prefix="/tactical", tags=["tactical_suggestions"])
 

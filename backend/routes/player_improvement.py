@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from datetime import datetime, timedelta
 
-from backend.sql_app.models import BattingScorecard, Player
 from backend.services.player_improvement_tracker import (
     PlayerImprovementTracker,
 )
