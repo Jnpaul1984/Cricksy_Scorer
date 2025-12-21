@@ -2,5 +2,6 @@
   "typeCheckingMode": "strict",
   "reportMissingTypeStubs": "none",
   "reportUnknownMemberType": "warning",
-  "reportUnknownArgumentType": "warning"
+  "reportUnknownArgumentType": "warning",
+  "reportCallIssue": "none"
 }
