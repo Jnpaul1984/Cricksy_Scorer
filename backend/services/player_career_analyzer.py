@@ -348,7 +348,7 @@ class PlayerCareerAnalyzer:
         # Best batting
         if batting_records:
             best_bat = max(batting_records, key=lambda r: r.get("runs", 0))
-            performances["best_batting"] = {
+            performances["best_batting"] = {  # type: ignore[assignment]
                 "runs": best_bat.get("runs", 0),
                 "balls_faced": best_bat.get("balls_faced", 0),
                 "fours": best_bat.get("fours", 0),
@@ -359,7 +359,7 @@ class PlayerCareerAnalyzer:
         # Best bowling
         if bowling_records:
             best_bowl = max(bowling_records, key=lambda r: r.get("wickets_taken", 0))
-            performances["best_bowling"] = {
+            performances["best_bowling"] = {  # type: ignore[assignment]
                 "wickets": best_bowl.get("wickets_taken", 0),
                 "overs": best_bowl.get("overs_bowled", 0),
                 "runs_conceded": best_bowl.get("runs_conceded", 0),

@@ -216,13 +216,13 @@ async def update_typography(
             "status": "success",
             "message": "Typography updated",
             "typography": {
-                "primary_font": theme.typography.primary_font.value,
-                "secondary_font": theme.typography.secondary_font.value
-                if theme.typography.secondary_font
+                "primary_font": theme.typography.primary_font.value if theme.typography else None,  # type: ignore[union-attr]
+                "secondary_font": theme.typography.secondary_font.value  # type: ignore[union-attr]
+                if theme.typography and theme.typography.secondary_font
                 else None,
-                "heading_size": theme.typography.heading_size_px,
-                "body_size": theme.typography.body_size_px,
-                "line_height": theme.typography.line_height,
+                "heading_size": theme.typography.heading_size_px if theme.typography else None,  # type: ignore[union-attr]
+                "body_size": theme.typography.body_size_px if theme.typography else None,  # type: ignore[union-attr]
+                "line_height": theme.typography.line_height if theme.typography else None,  # type: ignore[union-attr]
             },
             "updated_at": theme.updated_at.isoformat(),
         }

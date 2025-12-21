@@ -28,16 +28,18 @@ from backend.routes.ai import router as ai_router
 from backend.routes.ai_usage import router as ai_usage_router
 from backend.routes.analytics import router as analytics_router
 from backend.routes.player_analytics import router as player_analytics_router
+
 # from backend.routes.player_improvement import router as player_improvement_router
 # from backend.routes.pressure_analysis import router as pressure_analysis_router
 # from backend.routes.phase_analysis import router as phase_analysis_router
 from backend.routes.analyst_pro import router as analyst_pro_router
 from backend.routes.analytics_case_study import router as analytics_case_study_router
+
 # from backend.routes.tactical_suggestions import router as tactical_suggestions_router
 # from backend.routes.training_drills import router as training_drills_router
 # from backend.routes.dismissal_patterns import router as dismissal_patterns_router
-# from backend.routes.pitch_heatmaps import router as pitch_heatmaps_router  # TODO: Fix model imports (Player, BattingScorecard)
-# from backend.routes.ball_clustering import router as ball_clustering_router  # TODO: Fix model imports (Player, BowlingScorecard, BattingScorecard)
+# from backend.routes.pitch_heatmaps import router as pitch_heatmaps_router
+# from backend.routes.ball_clustering import router as ball_clustering_router
 # from backend.routes.sponsor_rotation import router as sponsor_rotation_router
 from backend.routes.branding import router as branding_router
 from backend.routes.auth_router import router as auth_router
