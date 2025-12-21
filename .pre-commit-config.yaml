@@ -11,8 +11,8 @@ repos:
     hooks:
       - id: mypy
         pass_filenames: false
-        additional_dependencies: []
-        args: ["--config-file", "pyproject.toml", "--explicit-package-bases", "backend"]
+        additional_dependencies: ["types-requests"]
+        args: ["--config-file=backend/pyproject.toml", "--explicit-package-bases", "--show-error-context", "backend"]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
