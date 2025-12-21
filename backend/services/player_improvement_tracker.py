@@ -382,7 +382,7 @@ class PlayerImprovementTracker:
         latest_metrics: dict[str, ImprovementMetrics],
     ) -> list[str]:
         """Generate human-readable highlights from data."""
-        highlights = []
+        highlights: list[str] = []
 
         if not monthly_stats_list:
             return highlights

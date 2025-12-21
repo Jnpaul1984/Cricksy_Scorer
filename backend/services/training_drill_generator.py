@@ -371,7 +371,7 @@ class TrainingDrillGenerator:
         Returns:
             Dict mapping pattern names to occurrence counts
         """
-        patterns = {}
+        patterns: dict[str, int] = {}
 
         for dismissal in dismissals[-5:]:  # Check last 5 dismissals
             dismissal_type = dismissal.get("dismissal_type", "unknown")

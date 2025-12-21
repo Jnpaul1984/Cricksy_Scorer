@@ -324,7 +324,7 @@ class PressureAnalyzer:
         if not pressure_points:
             return {}
 
-        phases = {
+        phases: dict[str, list] = {
             "powerplay": [],
             "middle": [],
             "death": [],
@@ -345,7 +345,7 @@ class PressureAnalyzer:
         for phase_name in phase_names:
             if phases[phase_name]:
                 scores = [p["pressure_score"] for p in phases[phase_name]]
-                phases[phase_name + "_stats"] = {
+                phases[phase_name + "_stats"] = {  # type: ignore[assignment]
                     "avg_pressure": round(sum(scores) / len(scores), 1),
                     "peak_pressure": round(max(scores), 1),
                     "deliveries": len(scores),

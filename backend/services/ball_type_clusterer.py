@@ -388,7 +388,7 @@ class BallTypeClusterer:
                 cluster_id=f"{bowler_id}_{delivery_type}",
                 delivery_type=delivery_type,
                 cluster_name=delivery_type.replace("_", " ").title(),
-                description=BallTypeClusterer.CLUSTER_DEFINITIONS.get(delivery_type, {}).get(
+                description=BallTypeClusterer.CLUSTER_DEFINITIONS.get(delivery_type, {}).get(  # type: ignore[index]
                     "description", ""
                 ),
                 sample_count=len(group),
@@ -410,7 +410,8 @@ class BallTypeClusterer:
             most_effective = max(clusters, key=lambda c: c.effectiveness_percentage)
             least_effective = min(clusters, key=lambda c: c.effectiveness_percentage)
         else:
-            most_effective = least_effective = None
+            most_effective: DeliveryCluster | None = None  # type: ignore[assignment]
+            least_effective: DeliveryCluster | None = None  # type: ignore[assignment]
 
         return BowlerDeliveryProfile(
             bowler_id=bowler_id,
@@ -501,7 +502,7 @@ class BallTypeClusterer:
         for delivery in classified:
             dtype = delivery.delivery_type
             if dtype not in matrices:
-                matrices[dtype] = {
+                matrices[dtype] = {  # type: ignore[assignment]
                     "total": 0,
                     "wickets": 0,
                     "dots": 0,
@@ -509,14 +510,14 @@ class BallTypeClusterer:
                     "runs": 0,
                 }
 
-            matrices[dtype]["total"] += 1
+            matrices[dtype]["total"] += 1  # type: ignore[index]
             if delivery.is_wicket:
-                matrices[dtype]["wickets"] += 1
+                matrices[dtype]["wickets"] += 1  # type: ignore[index]
             elif delivery.outcome == "dot":
-                matrices[dtype]["dots"] += 1
+                matrices[dtype]["dots"] += 1  # type: ignore[index]
             elif delivery.outcome == "boundary":
-                matrices[dtype]["boundaries"] += 1
-            matrices[dtype]["runs"] += delivery.runs_conceded
+                matrices[dtype]["boundaries"] += 1  # type: ignore[index]
+            matrices[dtype]["runs"] += delivery.runs_conceded  # type: ignore[index]
 
         # Create ClusterMatrix objects
         result = {}

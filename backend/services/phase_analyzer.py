@@ -365,9 +365,9 @@ class MatchPhaseAnalyzer:
             avg_rr = current_runs / current_overs
             remaining_overs = overs_limit - current_overs
             projected_runs = current_runs + (avg_rr * remaining_overs)
-            predictions["total_expected_runs"] = round(projected_runs, 0)
+            predictions["total_expected_runs"] = int(round(projected_runs, 0))
         else:
-            predictions["total_expected_runs"] = current_runs
+            predictions["total_expected_runs"] = int(current_runs)
 
         # Win probability (if chasing)
         if is_second_innings and target:

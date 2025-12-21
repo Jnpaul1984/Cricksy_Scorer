@@ -217,7 +217,7 @@ class TacticalSuggestionEngine:
             return None
 
         recent_bowlers = recent_bowlers or []
-        best_score = 0
+        best_score: float = 0
         best_bowler = None
 
         for bowler_data in bowlers:
@@ -288,7 +288,7 @@ class TacticalSuggestionEngine:
         if len(dismissal_history) >= TacticalSuggestionEngine.MIN_SAMPLE_SIZE:
             # Recent dismissals indicate pattern
             recent_types = [d.get("dismissal_type") for d in dismissal_history[-5:]]
-            type_counts = {}
+            type_counts: dict[str, int] = {}
             for dt in recent_types:
                 if dt:
                     type_counts[dt] = type_counts.get(dt, 0) + 1

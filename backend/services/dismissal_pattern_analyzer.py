@@ -517,10 +517,10 @@ class DismissalPatternAnalyzer:
     @staticmethod
     def _get_phase_recommendation(phase: str) -> str:
         """Get recommendation for phase vulnerability."""
-        recommendations = {
-            MatchPhase.POWERPLAY: "Build strong foundation in powerplay, practice aggressive yet safe strokes",
-            MatchPhase.MIDDLE_OVERS: "Maintain momentum and composure during middle overs",
-            MatchPhase.DEATH_OVERS: "Death overs training: composure, explosive shots, risk management",
+        recommendations: dict[str, str] = {
+            MatchPhase.POWERPLAY.value: "Build strong foundation in powerplay, practice aggressive yet safe strokes",
+            MatchPhase.MIDDLE_OVERS.value: "Maintain momentum and composure during middle overs",
+            MatchPhase.DEATH_OVERS.value: "Death overs training: composure, explosive shots, risk management",
         }
         return recommendations.get(phase, "Analyze match situation and adapt strategy accordingly")
 
@@ -556,11 +556,11 @@ class DismissalPatternAnalyzer:
         vulnerable_players.sort(key=lambda x: x[1], reverse=True)
 
         # Phase vulnerability aggregation
-        phase_vulnerability = {}
+        phase_vulnerability: dict[str, float] = {}
         for phase in MatchPhase:
             total_phase = sum(p.dismissals_by_phase.get(phase, 0) for p in player_profiles)
             if total_phase > 0:
-                phase_vulnerability[phase] = round((total_phase / total_dismissals) * 100, 1)
+                phase_vulnerability[phase.value] = round((total_phase / total_dismissals) * 100, 1)
 
         # Team recommendations
         team_recommendations = []
