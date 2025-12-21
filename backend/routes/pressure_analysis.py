@@ -168,7 +168,7 @@ async def get_game_pressure_map(
 @router.get("/games/{game_id}/critical-moments")
 async def get_critical_moments(
     game_id: str,
-    db: AsyncSession,
+    db: AsyncSession = Depends(get_db),
     threshold: float = 70,
     inning_num: int | None = None,
 ) -> dict:
@@ -215,7 +215,7 @@ async def get_critical_moments(
 @router.get("/games/{game_id}/pressure-phases")
 async def get_pressure_phases(
     game_id: str,
-    db: AsyncSession,
+    db: AsyncSession = Depends(get_db),
     inning_num: int | None = None,
 ) -> dict:
     """
