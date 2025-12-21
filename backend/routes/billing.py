@@ -36,7 +36,7 @@ async def list_plans():
     """
     Get all available subscription plans and their features.
     """
-    plans = ["free", "player_pro", "coach_pro", "analyst_pro", "org_pro"]
+    plans = ["free", "player_pro", "coach_pro", "coach_pro_plus", "analyst_pro", "org_pro"]
     return {"plans": [{"key": plan, **get_plan_features(plan)} for plan in plans]}
 
 

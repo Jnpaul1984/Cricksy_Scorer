@@ -58,6 +58,7 @@ class RoleEnum(str, enum.Enum):
     free = "free"
     player_pro = "player_pro"
     coach_pro = "coach_pro"
+    coach_pro_plus = "coach_pro_plus"
     analyst_pro = "analyst_pro"
     org_pro = "org_pro"
 

@@ -84,6 +84,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'Coaches Dashboard' },
     },
     {
+      path: '/coaches/video-sessions',
+      name: 'CoachProPlusVideoSessions',
+      component: () => import('@/views/CoachProPlusVideoSessionsView.vue'),
+      meta: { requiresAuth: true, title: 'Video Sessions — Cricksy' },
+    },
+    {
       path: '/analyst',
       name: 'AnalystWorkspace',
       component: () => import('@/views/AnalystWorkspaceView.vue'),

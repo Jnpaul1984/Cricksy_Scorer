@@ -2,6 +2,7 @@ export type UserRole =
   | 'free'
   | 'player_pro'
   | 'coach_pro'
+  | 'coach_pro_plus'
   | 'analyst_pro'
   | 'org_pro'
   | 'superuser';

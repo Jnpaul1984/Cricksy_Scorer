@@ -148,6 +148,9 @@
               <BaseButton variant="ghost" size="sm" full-width @click="goToAnalytics">
                 Team Analytics
               </BaseButton>
+              <BaseButton variant="ghost" size="sm" full-width @click="goToVideoSessions">
+                Video Sessions (Plus)
+              </BaseButton>
             </div>
           </BaseCard>
         </aside>
@@ -254,6 +257,10 @@ function goToLeaderboard() {
 
 function goToAnalytics() {
   router.push({ name: 'AnalyticsView' })
+}
+
+function goToVideoSessions() {
+  router.push({ name: 'CoachProPlusVideoSessions' })
 }
 </script>
 

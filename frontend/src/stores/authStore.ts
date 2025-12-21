@@ -32,19 +32,20 @@ export const useAuthStore = defineStore('auth', {
     is: (state) => (role: UserRole) => (state.user?.role ?? null) === role,
     isFreeUser: (state) => !state.user || state.user.role === 'free',
     isPlayerPro: (state) => state.user?.role === 'player_pro',
-    isCoachPro: (state) => state.user?.role === 'coach_pro' || isSuperuser(state),
+    isCoachPro: (state) => state.user?.role === 'coach_pro' || state.user?.role === 'coach_pro_plus' || isSuperuser(state),
+    isCoachProPlus: (state) => state.user?.role === 'coach_pro_plus' || isSuperuser(state),
     isAnalystPro: (state) => state.user?.role === 'analyst_pro' || isSuperuser(state),
     isOrgPro: (state) => state.user?.role === 'org_pro' || isSuperuser(state),
     isSuperuser,
     canScore: (state) =>
-      isSuperuser(state) || state.user?.role === 'coach_pro' || state.user?.role === 'org_pro',
+      isSuperuser(state) || state.user?.role === 'coach_pro' || state.user?.role === 'coach_pro_plus' || state.user?.role === 'org_pro',
     canAnalyze: (state) =>
       isSuperuser(state) || state.user?.role === 'analyst_pro' || state.user?.role === 'org_pro',
     canManageTournaments: (state) =>
       isSuperuser(state) || state.user?.role === 'org_pro',
     // Legacy helpers used across the app
     isOrg: (state) => state.user?.role === 'org_pro' || isSuperuser(state),
-    isCoach: (state) => state.user?.role === 'coach_pro' || isSuperuser(state),
+    isCoach: (state) => state.user?.role === 'coach_pro' || state.user?.role === 'coach_pro_plus' || isSuperuser(state),
     isAnalyst: (state) => state.user?.role === 'analyst_pro' || isSuperuser(state),
     isPlayer: (state) => state.user?.role === 'player_pro',
     isSuper: (state) => isSuperuser(state),
