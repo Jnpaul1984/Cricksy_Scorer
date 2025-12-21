@@ -6,15 +6,10 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db import get_async_db
+from backend.sql_app.database import get_db
 from backend.services.ball_type_clusterer import (
     BallTypeClusterer,
     DeliveryType,
-)
-from backend.sql_app.models import (
-    Player,
-    BowlingScorecard,
-    BattingScorecard,
 )
 
 router = APIRouter(prefix="/ball-clustering", tags=["ball_clustering"])
@@ -23,7 +18,7 @@ router = APIRouter(prefix="/ball-clustering", tags=["ball_clustering"])
 @router.get("/bowlers/{bowler_id}/delivery-clusters")
 async def get_bowler_delivery_clusters(
     bowler_id: str,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get delivery type clusters for a bowler.
@@ -114,7 +109,7 @@ async def get_bowler_delivery_clusters(
 @router.get("/batters/{batter_id}/delivery-vulnerabilities")
 async def get_batter_delivery_vulnerabilities(
     batter_id: str,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Analyze batter's vulnerability to different ball types.
@@ -194,7 +189,7 @@ async def get_batter_delivery_vulnerabilities(
 async def get_matchup_cluster_analysis(
     bowler_id: str,
     batter_id: str,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Analyze bowler's delivery clusters vs batter's vulnerabilities.

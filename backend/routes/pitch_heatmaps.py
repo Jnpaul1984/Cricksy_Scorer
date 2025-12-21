@@ -2,22 +2,15 @@
 API routes for pitch heatmap overlays.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db import get_async_db
+from backend.sql_app.database import get_db
 from backend.services.pitch_heatmap_generator import (
     PitchHeatmapGenerator,
     PitchZone,
 )
-from backend.sql_app.models import (
-    Game,
-    Player,
-    BattingScorecard,
-    BowlingScorecard,
-)
-from fastapi import Depends
 
 router = APIRouter(prefix="/heatmaps", tags=["heatmaps"])
 
@@ -25,7 +18,7 @@ router = APIRouter(prefix="/heatmaps", tags=["heatmaps"])
 @router.get("/players/{player_id}/batting-heatmap")
 async def get_player_batting_heatmap(
     player_id: str,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get batting scoring heatmap for a player across all games.
@@ -106,7 +99,7 @@ async def get_player_batting_heatmap(
 @router.get("/players/{player_id}/dismissal-heatmap")
 async def get_player_dismissal_heatmap(
     player_id: str,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get dismissal heatmap for a player.
@@ -186,7 +179,7 @@ async def get_player_dismissal_heatmap(
 @router.get("/bowlers/{bowler_id}/release-zones")
 async def get_bowler_release_zones(
     bowler_id: str,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get bowler's release point heatmap.
@@ -265,7 +258,7 @@ async def get_bowler_release_zones(
 async def get_matchup_analysis(
     batter_id: str,
     bowler_id: str,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Analyze specific batter vs bowler spatial matchup.
@@ -333,7 +326,7 @@ async def get_matchup_analysis(
 async def get_game_heatmap_summary(
     game_id: str,
     team_side: str,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get aggregate heatmap for entire team in a game.
