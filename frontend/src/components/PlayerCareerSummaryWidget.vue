@@ -114,7 +114,7 @@ const trendArrow = computed(() => {
 
 const trendText = computed(() => {
   if (!props.summary) return 'No data'
-  return props.summary.recent_form.trend.charAt(0).toUpperCase() + 
+  return props.summary.recent_form.trend.charAt(0).toUpperCase() +
          props.summary.recent_form.trend.slice(1)
 })
 </script>

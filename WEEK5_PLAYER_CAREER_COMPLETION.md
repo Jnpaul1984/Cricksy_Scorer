@@ -302,11 +302,11 @@ import { usePlayerCareerAnalytics } from '@/composables/usePlayerCareerAnalytics
 export default {
   setup() {
     const { summary, loading, error, fetchCareerSummary } = usePlayerCareerAnalytics()
-    
+
     onMounted(async () => {
       await fetchCareerSummary(playerId)
     })
-    
+
     return { summary, loading, error }
   }
 }
@@ -422,8 +422,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <PlayerCareerSummaryWidget 
-    :summary="summary" 
+  <PlayerCareerSummaryWidget
+    :summary="summary"
     :loading="loading"
     :error="error"
   />

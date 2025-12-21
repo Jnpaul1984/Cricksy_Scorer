@@ -291,7 +291,7 @@ GitHub Actions runs workflows in this order (from `.github/workflows/`):
    - If fails → All dependent jobs blocked
    - Fix: `mypy` errors
 
-2. **ci.yml** - Runs unit tests  
+2. **ci.yml** - Runs unit tests
    - Depends on: Pre-commit hook passing
    - Fix: Test failures, missing migrations
 
@@ -380,6 +380,6 @@ git push
 
 ---
 
-**Last Updated:** 2025-12-21  
-**Maintained By:** Copilot + Dev Team  
+**Last Updated:** 2025-12-21
+**Maintained By:** Copilot + Dev Team
 **Next Review:** After next workflow failure or major change

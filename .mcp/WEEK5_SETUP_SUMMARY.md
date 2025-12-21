@@ -10,20 +10,20 @@
   - First innings: ML score prediction → win probability conversion
   - Second innings: ML win prediction directly (with target context)
   - Fallback to rule-based if ML unavailable
-  
+
 - ✅ API Route: `backend/routes/prediction.py`
   - `GET /games/{game_id}/predictions/win-probability`
   - Returns structured prediction with factors
-  
+
 - ✅ Socket.IO Real-time: `backend/routes/gameplay.py` (Line 1197-1220)
   - Emits `prediction:update` event after every delivery
   - Includes full prediction object + team names
   - Error handling (doesn't break scoring if prediction fails)
-  
+
 - ✅ Live Bus: `backend/services/live_bus.py`
   - `emit_prediction_update()` function ready to use
   - Generic `emit()` wrapper handles all Socket.IO communication
-  
+
 - ✅ ML Integration: `backend/services/ml_model_service.py`
   - XGBoost models loaded automatically
   - Handles T20 and ODI formats
@@ -108,7 +108,7 @@
 
 **Pressure Mapping:** Identify high-pressure moments in match
 - Dot ball streaks
-- Wicket timings  
+- Wicket timings
 - Target gap widening
 - RRR spikes
 
@@ -253,11 +253,10 @@ If you're new to the codebase, read in this order:
 
 ## 🚀 You're Ready!
 
-**Current state:** Win Probability backend is fully working and tested.  
-**Next action:** Build the frontend widget to display it.  
+**Current state:** Win Probability backend is fully working and tested.
+**Next action:** Build the frontend widget to display it.
 **Time to completion:** ~2-3 hours for Win Probability widget, then move to Innings Grade Calculator.
 
 The infrastructure is solid, tests are passing, and the API is production-ready. All you need to do is wire up the frontend and add the remaining 11 features!
 
 Good luck! 🏏⚡
-

@@ -2,10 +2,10 @@
 
 ## ✅ Completed Steps
 
-### 1. **Database Models Created** 
+### 1. **Database Models Created**
    - [Player](backend/sql_app/models.py#L1) - Represents a cricket player
    - [BattingScorecard](backend/sql_app/models.py#L1) - Tracks batting statistics
-   - [BowlingScorecard](backend/sql_app/models.py#L1) - Tracks bowling statistics  
+   - [BowlingScorecard](backend/sql_app/models.py#L1) - Tracks bowling statistics
    - [Delivery](backend/sql_app/models.py#L1) - Individual ball-by-ball records
 
 ### 2. **Alembic Migration Created**

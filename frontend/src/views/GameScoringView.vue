@@ -2035,8 +2035,8 @@ async function confirmChangeBowler(): Promise<void> {
         <div v-show="activeTab==='analytics'" class="tab-pane analytics-container">
             <div class="analytics-widgets">
                 <div class="analytics-widget-section">
-                    <PhaseTimelineWidget 
-                      :phase-data="phaseData" 
+                    <PhaseTimelineWidget
+                      :phase-data="phaseData"
                       :predictions="predictions"
                       :loading="phaseLoading"
                       :on-refresh="() => fetchPhaseMap(gameId)"
@@ -2044,26 +2044,26 @@ async function confirmChangeBowler(): Promise<void> {
                 </div>
 
                 <div class="analytics-widget-section">
-                    <PressureMapWidget 
-                      :pressure-data="pressureData" 
+                    <PressureMapWidget
+                      :pressure-data="pressureData"
                       :loading="pressureLoading"
                     />
                 </div>
-                
+
                 <div class="analytics-widget-section">
                     <h3>Innings Grade</h3>
-                    <InningsGradeWidget 
-                      :grade-data="currentInningsGrade" 
+                    <InningsGradeWidget
+                      :grade-data="currentInningsGrade"
                       :batting-team="battingTeamName"
                       :bowling-team="(currentGame?.bowling_team_name ?? '')"
                       theme="dark"
                     />
                 </div>
-                
+
                 <div class="analytics-widget-section">
                     <h3>Win Probability</h3>
-                    <WinProbabilityWidget 
-                      :prediction="gameStore.currentPrediction" 
+                    <WinProbabilityWidget
+                      :prediction="gameStore.currentPrediction"
                       :batting-team="battingTeamName"
                       :bowling-team="(currentGame?.bowling_team_name ?? '')"
                       theme="dark"

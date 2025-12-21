@@ -13,8 +13,8 @@
 ### 0. **Pre-Commit CI Timeout** (Post-Merge Fix) ⭐ NEW
 **Problem:** After merging PR to main, CI pre-commit job timed out
 ```
-Error: Action 'https://api.github.com/repos/pre-commit/action/tarball/...' 
-download has timed out. Error: The request was canceled due to the 
+Error: Action 'https://api.github.com/repos/pre-commit/action/tarball/...'
+download has timed out. Error: The request was canceled due to the
 configured HttpClient.Timeout of 100 seconds elapsing.
 ```
 **Root Cause:** `pre-commit/action@v3.0.1` was unreliable, timing out when downloading from GitHub API

@@ -299,13 +299,13 @@ export const useGameStore = defineStore('game', () => {
 
   socket?.on('prediction:update', (data: any) => {
     const prediction = data.prediction
-    
+
     // Add to history (keep last 50)
     predictions.value.push(prediction)
     if (predictions.value.length > 50) {
       predictions.value.shift()
     }
-    
+
     // Update chart
     updateProbabilityChart(predictions.value)
   })
@@ -367,4 +367,3 @@ console.log(prediction)
 - **Socket.IO emission:** Non-blocking, sent immediately after delivery scoring
 - **Chart update:** Depends on frontend rendering (Chart.js auto-debounces)
 - **Historical data:** Stores last 50 predictions per game for trend analysis
-

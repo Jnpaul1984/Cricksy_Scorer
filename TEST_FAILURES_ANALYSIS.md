@@ -17,7 +17,7 @@ from backend.db import get_async_db  # ❌ Module doesn't exist
 
 **Resolution:** Fixed import path in affected routes:
 - `backend/routes/pitch_heatmaps.py`
-- `backend/routes/ball_clustering.py`  
+- `backend/routes/ball_clustering.py`
 - `backend/routes/training_drills.py`
 
 **Change:**
@@ -175,4 +175,3 @@ async def some_endpoint(db: AsyncSession):  # ❌ Should use Depends(get_db)
 2. **Import paths matter** - use absolute imports from correct modules
 3. **AsyncSession parameters** must use `Depends(get_db)` for FastAPI dependency injection
 4. **Model-driven development** - define models before creating routes that depend on them
-

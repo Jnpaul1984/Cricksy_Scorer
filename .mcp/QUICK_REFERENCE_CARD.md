@@ -12,9 +12,9 @@
 
 A Chart.js component that displays live win probability as the match progresses.
 
-**Inputs:** Socket.IO `prediction:update` events  
-**Output:** Line chart showing batting/bowling team win probability  
-**Updates:** Real-time with each delivery  
+**Inputs:** Socket.IO `prediction:update` events
+**Output:** Line chart showing batting/bowling team win probability
+**Updates:** Real-time with each delivery
 
 ---
 
@@ -56,9 +56,9 @@ frontend/src/views/Scorer.vue
 }
 ```
 
-**Event name:** `prediction:update`  
-**Frequency:** Once per delivery scored  
-**Source:** Backend Socket.IO emission  
+**Event name:** `prediction:update`
+**Frequency:** Once per delivery scored
+**Source:** Backend Socket.IO emission
 
 ---
 
@@ -94,22 +94,22 @@ let predictions = []  // Keep last 50
 
 function handlePredictionUpdate(data) {
   const pred = data.prediction
-  
+
   battingProb.value = pred.batting_team_win_prob
   bowlingProb.value = pred.bowling_team_win_prob
   battingTeam.value = pred.batting_team
   bowlingTeam.value = pred.bowling_team
   currentFactors.value = pred.factors
-  
+
   predictions.push(pred)
   if (predictions.length > 50) predictions.shift()
-  
+
   updateChart()
 }
 
 function updateChart() {
   if (!chart) createChart()
-  
+
   chart.data.labels = predictions.map((_, i) => i + 1)
   chart.data.datasets[0].data = predictions.map(p => p.batting_team_win_prob)
   chart.data.datasets[1].data = predictions.map(p => p.bowling_team_win_prob)
@@ -218,12 +218,12 @@ canvas {
 
 ## Success Criteria
 
-✅ Component displays in Scorer UI  
-✅ Real-time updates on Socket.IO event  
-✅ Chart shows probability history  
-✅ Factors visible to user  
-✅ No errors in console  
-✅ Scoring speed unaffected (<1s per delivery)  
+✅ Component displays in Scorer UI
+✅ Real-time updates on Socket.IO event
+✅ Chart shows probability history
+✅ Factors visible to user
+✅ No errors in console
+✅ Scoring speed unaffected (<1s per delivery)
 
 ---
 
@@ -258,4 +258,3 @@ Existing Chart Examples:
 ---
 
 **You've got this! 🎯 Let's build an AI-powered cricket platform!** 🏏⚡
-

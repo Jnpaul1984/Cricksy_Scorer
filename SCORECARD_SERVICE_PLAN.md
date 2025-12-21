@@ -15,7 +15,7 @@ We have 9 scorecard routes that need service layer logic. The good news: **`scor
   - Batting/bowling scorecard updates
   - Over completion detection
   - Dismissal type validation
-  
+
 - **Game State Updates** - Already updates `total_runs`, `overs_completed`, etc.
 
 - **Live Bus** - `live_bus.emit_state_update()` broadcasts to all clients
@@ -102,7 +102,7 @@ class ScorecardService:
     async def get_batting_scorecards(db, game_id: int) -> List[BattingScorecard]
     async def get_bowling_scorecards(db, game_id: int) -> List[BowlingScorecard]
     async def get_deliveries(db, game_id: int, inning: int = None) -> List[Delivery]
-    
+
     # Optional: Calculated fields
     async def get_batting_summary(db, game_id: int) -> dict  # Strike rate, avg, etc.
     async def get_bowling_summary(db, game_id: int) -> dict  # Economy, avg wickets, etc.
@@ -124,7 +124,7 @@ class ScorecardService:
     async def create_batting_scorecard(
         db, game_id, player_id, runs, balls_faced, fours, sixes, dismissal_type
     ) -> BattingScorecard
-    
+
     async def create_bowling_scorecard(
         db, game_id, player_id, overs, runs_conceded, wickets
     ) -> BowlingScorecard
@@ -158,7 +158,7 @@ class PlayerService:
         await db.commit()
         await db.refresh(player)
         return player
-    
+
     # ... more methods
 
 class DeliveryService:
@@ -218,13 +218,13 @@ async def record_delivery(db: AsyncSession, game_id: int, delivery_data: dict):
     # 1. Load game and validate
     game = await db.get(Game, game_id)
     assert game, "Game not found"
-    
+
     # 2. Get player objects
     batter = await db.get(Player, delivery_data["batter_id"])
     bowler = await db.get(Player, delivery_data["bowler_id"])
     non_striker = await db.get(Player, delivery_data["non_striker_id"])
     assert all([batter, bowler, non_striker]), "Player not found"
-    
+
     # 3. Call scoring_service.score_one() to mutate game state
     score_result = scoring_service.score_one(
         g=game,  # This mutates the game object!
@@ -237,7 +237,7 @@ async def record_delivery(db: AsyncSession, game_id: int, delivery_data: dict):
         dismissal_type=delivery_data.get("dismissal_type"),
         dismissed_player_id=delivery_data.get("dismissed_player_id"),
     )
-    
+
     # 4. Create Delivery record
     delivery = Delivery(
         game_id=game_id,
@@ -256,7 +256,7 @@ async def record_delivery(db: AsyncSession, game_id: int, delivery_data: dict):
         is_legal=not score_result["is_extra"],
     )
     db.add(delivery)
-    
+
     # 5. Update or create BattingScorecard
     batting_card = await db.query(BattingScorecard).filter_by(
         game_id=game_id,
@@ -284,7 +284,7 @@ async def record_delivery(db: AsyncSession, game_id: int, delivery_data: dict):
             # ... etc
         )
         db.add(batting_card)
-    
+
     # 6. Update or create BowlingScorecard
     bowling_card = await db.query(BowlingScorecard).filter_by(
         game_id=game_id,
@@ -302,16 +302,16 @@ async def record_delivery(db: AsyncSession, game_id: int, delivery_data: dict):
             wickets_taken=1 if score_result["is_wicket"] else 0,
         )
         db.add(bowling_card)
-    
+
     # 7. Update game object
     game.total_runs = getattr(game, "total_runs", 0) + score_result["runs_scored"]
-    
+
     # 8. Commit all changes atomically
     await db.commit()
-    
+
     # 9. Emit real-time update
     await emit_state_update(game_id, game)
-    
+
     return delivery
 ```
 
@@ -366,13 +366,13 @@ async def record_delivery(db: AsyncSession, game_id: int, delivery_data: dict):
 ### ⚠️ Need to Handle
 1. **Dismissal Types** - Must match cricket rules (LBW, caught, etc.)
    - Reference: `backend/domain/constants.py`
-   
+
 2. **Strike Rotation** - `score_one()` handles this, but we need to persist `current_striker_id`, `current_non_striker_id`
-   
+
 3. **Over Completion** - When 6 legal balls complete, swap ends
-   
+
 4. **Inning Transitions** - When all-out (10 wickets), switch innings
-   
+
 5. **Atomic Updates** - All scorecard updates must happen together (use transaction)
 
 ---

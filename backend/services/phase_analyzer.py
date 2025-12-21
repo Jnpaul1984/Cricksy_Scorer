@@ -385,7 +385,9 @@ class MatchPhaseAnalyzer:
                     win_prob = 0.45
                 else:
                     win_prob = 0.20
-                predictions["win_probability"] = float(round(win_prob, 2))
+                predictions["win_probability"] = float(  # type: ignore[assignment]
+                    round(win_prob, 2)
+                )
 
         return predictions
 

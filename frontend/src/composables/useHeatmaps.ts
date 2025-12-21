@@ -48,7 +48,7 @@ export const useHeatmaps = () => {
 
   const fetchScoresHeatmap = async (playerId: string): Promise<HeatmapResponse | null> => {
     if (!playerId) return null;
-    
+
     try {
       isLoading.value = true;
       const response = await fetch(

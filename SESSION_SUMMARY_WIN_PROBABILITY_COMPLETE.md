@@ -95,7 +95,7 @@ Message: "feat: Complete Win Probability frontend widget integration"
 
 ### Phase 2-4: Not Started (10 features)
 - [ ] Player Performance Predictors
-- [ ] DLS Method Enhancements  
+- [ ] DLS Method Enhancements
 - [ ] Tournament AI Features
 - [ ] And 7 more...
 
@@ -172,7 +172,7 @@ Start **Week 5 Phase 2** with one of:
 ```
 Commit: 28f704e
 Message: feat: Complete Win Probability frontend widget integration
-Files: 
+Files:
   - frontend/src/views/GameScoringView.vue (+5 lines)
   - WEEK5_WIN_PROBABILITY_COMPLETION.md (new file)
 ```

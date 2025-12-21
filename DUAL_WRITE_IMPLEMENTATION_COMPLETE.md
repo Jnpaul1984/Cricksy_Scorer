@@ -138,7 +138,7 @@ feat: implement dual-write scorecard service with player management
 
 - Add scorecard_service.py with PlayerService, DeliveryService, ScorecardService
 - Implement dual-write pattern: updates both Game JSON (existing) and normalized tables (new)
-- Add scorecards.py routes for player, delivery, batting/bowling scorecard endpoints  
+- Add scorecards.py routes for player, delivery, batting/bowling scorecard endpoints
 - Add Player, BattingScorecard, BowlingScorecard, Delivery schemas to schemas.py
 - Add alembic migration m3h4i5j6k7l8 for new normalized tables
 - Fix missing Depends(get_db) in pressure_analysis.py routes

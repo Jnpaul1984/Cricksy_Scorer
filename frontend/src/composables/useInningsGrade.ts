@@ -27,7 +27,7 @@ export interface InningsGradeData {
 
 export function useInningsGrade() {
   const apiService = useApi()
-  
+
   const grade = ref<InningsGradeData | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -63,11 +63,11 @@ export function useInningsGrade() {
     try {
       loading.value = true
       error.value = null
-      
+
       const response = await apiService.get<InningsGradeData>(
         `/analytics/games/${gameId}/innings/current/grade`
       )
-      
+
       if (response && response.data) {
         grade.value = response.data as InningsGradeData
       }
@@ -90,11 +90,11 @@ export function useInningsGrade() {
     try {
       loading.value = true
       error.value = null
-      
+
       const response = await apiService.get(
         `/analytics/games/${gameId}/innings/${inningNum}/grade`
       )
-      
+
       if (response && response.data) {
         grade.value = response.data as InningsGradeData
       }

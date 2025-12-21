@@ -54,7 +54,7 @@ class Player(Base):
     country = Column(String(100), nullable=True)
     role = Column(String(50), nullable=True)  # Batsman, Bowler, All-rounder
     jersey_number = Column(Integer, nullable=True)
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 ```
@@ -68,16 +68,16 @@ class BattingScorecard(Base):
     id = Column(Integer, primary_key=True, index=True)
     game_id = Column(Integer, ForeignKey("games.id"), nullable=False)
     player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
-    
+
     runs = Column(Integer, default=0)
     balls_faced = Column(Integer, default=0)
     fours = Column(Integer, default=0)
     sixes = Column(Integer, default=0)
     is_wicket = Column(Boolean, default=False)
     dismissal_type = Column(String(50), nullable=True)
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
     # Relationships
     game = relationship("Game", back_populates="batting_scorecards")
     player = relationship("Player")
@@ -92,15 +92,15 @@ class BowlingScorecard(Base):
     id = Column(Integer, primary_key=True, index=True)
     game_id = Column(Integer, ForeignKey("games.id"), nullable=False)
     bowler_id = Column(Integer, ForeignKey("players.id"), nullable=False)
-    
+
     overs_bowled = Column(Float, default=0.0)
     runs_conceded = Column(Integer, default=0)
     wickets_taken = Column(Integer, default=0)
     maiden_overs = Column(Integer, default=0)
     extras_bowled = Column(Integer, default=0)
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
     # Relationships
     game = relationship("Game", back_populates="bowling_scorecards")
     bowler = relationship("Player")
@@ -117,21 +117,21 @@ class Delivery(Base):
     inning_number = Column(Integer, nullable=False)
     over = Column(Integer, nullable=False)
     ball = Column(Integer, nullable=False)
-    
+
     bowler_id = Column(Integer, ForeignKey("players.id"), nullable=False)
     batter_id = Column(Integer, ForeignKey("players.id"), nullable=False)
-    
+
     runs = Column(Integer, default=0)
     extras = Column(String(20), nullable=True)  # 'wd', 'nb', 'b', 'lb'
     is_wicket = Column(Boolean, default=False)
     wicket_type = Column(String(50), nullable=True)
-    
+
     pitch_coordinate_x = Column(Float, nullable=True)
     pitch_coordinate_y = Column(Float, nullable=True)
     delivery_type = Column(String(50), nullable=True)  # 'fast', 'spin', etc.
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
     # Relationships
     game = relationship("Game")
     bowler = relationship("Player", foreign_keys=[bowler_id])
@@ -148,7 +148,7 @@ Added these relationships to the existing `Game` model:
 ```python
 class Game(Base):
     # ... existing fields ...
-    
+
     # New relationships for analytics routes
     batting_scorecards = relationship("BattingScorecard", back_populates="game", cascade="all, delete-orphan")
     bowling_scorecards = relationship("BowlingScorecard", back_populates="game", cascade="all, delete-orphan")
@@ -331,7 +331,7 @@ git push origin main
 
 ### ✅ Lint Workflow
 - **Status**: PASSING
-- **Checks**: 
+- **Checks**:
   - Ruff lint: ✓
   - Ruff format: ✓
   - MyPy: ✓
@@ -384,4 +384,3 @@ git push origin main
 - [MyPy Configuration](backend/pyproject.toml) - Ready for cleanup
 - [App Factory](backend/app.py) - Routes disabled, awaiting fixes
 - [Workflow Definitions](.github/workflows/)
-

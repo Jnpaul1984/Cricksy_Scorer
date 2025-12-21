@@ -60,7 +60,7 @@ class InningsGradeCalculator:
     ) -> dict[str, Any]:
         """
         Calculate innings grade (A+, A, B, C, D)
-        
+
         Based on:
         - Run rate vs par score
         - Wickets lost (penalty)
@@ -209,4 +209,3 @@ class InningsGradeCalculator:
 - **Tests passing:** Core functionality validated
 
 You're in good shape to finish Win Probability today and move to next features tomorrow! 🚀
-

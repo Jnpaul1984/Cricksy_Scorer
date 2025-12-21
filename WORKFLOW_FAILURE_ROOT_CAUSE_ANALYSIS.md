@@ -58,12 +58,12 @@ routes\tactical_suggestions.py:46: error: Name "Game" is not defined [name-defin
 ### Error 3: Missing FastAPI Dependency Injection (8+ endpoints)
 **Files Affected:**
 - `phase_analysis.py` - Lines 123, 231 (2 endpoints)
-- `tactical_suggestions.py` - Lines 153, 239, 355 (3 endpoints)  
+- `tactical_suggestions.py` - Lines 153, 239, 355 (3 endpoints)
 - `dismissal_patterns.py` - Lines 137, 265, 360 (3 endpoints)
 
 **Symptom:** FastAPI initialization fails
 ```
-fastapi.exceptions.FastAPIError: Invalid args for response field! 
+fastapi.exceptions.FastAPIError: Invalid args for response field!
 Hint: check that sqlalchemy.ext.asyncio.session.AsyncSession is a valid Pydantic field type
 ```
 
@@ -98,11 +98,11 @@ routes\phase_analysis.py:180: error: Name "get_current_target" is not defined [n
 routes\phase_analysis.py:278: error: Name "get_current_target" is not defined [name-defined]
 ```
 
-**Root Cause:** 
+**Root Cause:**
 1. Line 19: Imported non-existent function `get_current_target`
 2. Lines 100, 180, 278: Called that non-existent function in 3 endpoints
 
-**Fix:** 
+**Fix:**
 - Removed import line 19
 - Replaced `target = get_current_target(game)` with `target = game.target` (3 endpoints)
 
@@ -307,7 +307,7 @@ ruff check . || exit 1
 - **WORKFLOW_TROUBLESHOOTING_GUIDE.md** - Added specific fixes with dates and file references
 - **Commit Message** - Clear explanation of all changes with validation proof
 
-### For Copilot  
+### For Copilot
 When fixing future workflow failures:
 
 1. **Check Error Pattern:**

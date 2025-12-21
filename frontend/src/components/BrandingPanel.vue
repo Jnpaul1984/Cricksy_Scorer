@@ -3,8 +3,8 @@
     <!-- Header -->
     <div class="panel-header">
       <h2>Organization Branding</h2>
-      <button 
-        @click="refreshBranding" 
+      <button
+        @click="refreshBranding"
         :disabled="loading"
         class="btn-refresh"
       >
@@ -30,7 +30,7 @@
       <section class="section-preview">
         <h3>Logo Preview</h3>
         <div class="logo-container">
-          <img 
+          <img
             v-if="brandingData.assets.logo_url"
             :src="brandingData.assets.logo_url"
             alt="Organization logo"
@@ -47,8 +47,8 @@
         <h3>Color Palette</h3>
         <div class="color-grid">
           <div class="color-item">
-            <div 
-              class="color-swatch" 
+            <div
+              class="color-swatch"
               :style="{ backgroundColor: brandingData.colors.primary }"
             ></div>
             <span class="color-label">Primary</span>
@@ -56,8 +56,8 @@
           </div>
 
           <div class="color-item">
-            <div 
-              class="color-swatch" 
+            <div
+              class="color-swatch"
               :style="{ backgroundColor: brandingData.colors.secondary }"
             ></div>
             <span class="color-label">Secondary</span>
@@ -65,8 +65,8 @@
           </div>
 
           <div class="color-item">
-            <div 
-              class="color-swatch" 
+            <div
+              class="color-swatch"
               :style="{ backgroundColor: brandingData.colors.accent }"
             ></div>
             <span class="color-label">Accent</span>
@@ -74,8 +74,8 @@
           </div>
 
           <div class="color-item">
-            <div 
-              class="color-swatch" 
+            <div
+              class="color-swatch"
               :style="{ backgroundColor: brandingData.colors.success }"
             ></div>
             <span class="color-label">Success</span>
@@ -83,8 +83,8 @@
           </div>
 
           <div class="color-item">
-            <div 
-              class="color-swatch" 
+            <div
+              class="color-swatch"
               :style="{ backgroundColor: brandingData.colors.warning }"
             ></div>
             <span class="color-label">Warning</span>
@@ -92,8 +92,8 @@
           </div>
 
           <div class="color-item">
-            <div 
-              class="color-swatch" 
+            <div
+              class="color-swatch"
               :style="{ backgroundColor: brandingData.colors.error }"
             ></div>
             <span class="color-label">Error</span>
@@ -148,7 +148,7 @@
       <section v-if="Object.keys(brandingData.assets).length > 0" class="section-assets">
         <h3>Brand Assets</h3>
         <div class="assets-list">
-          <div 
+          <div
             v-for="(asset, idx) in Object.values(brandingData.assets)"
             :key="idx"
             class="asset-item"

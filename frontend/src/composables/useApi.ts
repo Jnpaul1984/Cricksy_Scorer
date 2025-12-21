@@ -20,12 +20,12 @@ export interface UseApi {
 function buildApiUrl(path: string): string {
   const basePath = `${API_BASE || ''}`
   let fullUrl = `${basePath}${path}`.replace(/\/+/g, '/').replace('https:/', 'https://').replace('http:/', 'http://')
-  
+
   // Handle the case where basePath is empty
   if (!basePath && !path.startsWith('http')) {
     fullUrl = path
   }
-  
+
   return fullUrl
 }
 

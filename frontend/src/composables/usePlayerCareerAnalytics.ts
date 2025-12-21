@@ -77,7 +77,7 @@ export interface YearlyStats {
 
 export function usePlayerCareerAnalytics() {
   const apiService = useApi()
-  
+
   const summary = ref<PlayerCareerSummary | null>(null)
   const yearlyStats = ref<YearlyStats | null>(null)
   const loading = ref(false)
@@ -95,11 +95,11 @@ export function usePlayerCareerAnalytics() {
     try {
       loading.value = true
       error.value = null
-      
+
       const response = await apiService.get<PlayerCareerSummary>(
         `/analytics/players/players/${playerId}/career-summary`
       )
-      
+
       if (response && response.data) {
         summary.value = response.data as PlayerCareerSummary
       }
@@ -120,7 +120,7 @@ export function usePlayerCareerAnalytics() {
       const response = await apiService.get<YearlyStats>(
         `/analytics/players/players/${playerId}/year-stats`
       )
-      
+
       if (response && response.data) {
         yearlyStats.value = response.data as YearlyStats
       }
@@ -147,11 +147,11 @@ export function usePlayerCareerAnalytics() {
     try {
       loading.value = true
       error.value = null
-      
+
       const response = await apiService.get(
         `/analytics/players/players/${playerId1}/comparison?comparison_player_id=${playerId2}`
       )
-      
+
       return response?.data || null
     } catch (err: any) {
       error.value = err.message || 'Failed to compare players'
@@ -177,13 +177,13 @@ export function usePlayerCareerAnalytics() {
     yearlyStats,
     loading,
     error,
-    
+
     // Computed
     specialization,
     totalMatches,
     totalRuns,
     careerAverage,
-    
+
     // Methods
     fetchCareerSummary,
     fetchYearlyStats,

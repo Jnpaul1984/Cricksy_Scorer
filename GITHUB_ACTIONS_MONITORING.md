@@ -131,7 +131,7 @@ When the Deploy Backend workflow runs successfully, it will:
 ```
 Check: ruff lint + format issues
 Fix: git reset, fix issues locally, commit again
-Example: 
+Example:
   $ ruff check --fix .
   $ ruff format .
   $ git add .
@@ -248,7 +248,7 @@ Total: ~1 hour
 
 **What changed:**
 - ✅ Added scorecard_service.py (500+ lines)
-- ✅ Added scorecards.py routes (250+ lines)  
+- ✅ Added scorecards.py routes (250+ lines)
 - ✅ Added alembic migration
 - ✅ Updated schemas.py with Pydantic schemas
 - ✅ Fixed pressure_analysis.py bugs
