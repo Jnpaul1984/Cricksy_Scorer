@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from backend.sql_app.database import get_db
+from backend.sql_app.models import Game, Delivery
 from backend.services.pressure_analyzer import get_pressure_map
 
 router = APIRouter(prefix="/analytics", tags=["pressure_analysis"])

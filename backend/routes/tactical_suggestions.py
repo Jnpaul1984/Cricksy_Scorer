@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.sql_app.database import get_db
+from backend.sql_app.models import Game, Player, BattingScorecard, BowlingScorecard
 from backend.services.tactical_suggestion_engine import (
     TacticalSuggestionEngine,
 )
@@ -152,7 +153,7 @@ async def get_best_bowler_suggestion(
 @router.get("/games/{game_id}/suggestions/weakness-analysis")
 async def get_weakness_analysis(
     game_id: str,
-    db: AsyncSession,
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
     Analyze current batter's weaknesses and recommend delivery type.
@@ -238,7 +239,7 @@ async def get_weakness_analysis(
 @router.get("/games/{game_id}/suggestions/fielding-setup")
 async def get_fielding_setup(
     game_id: str,
-    db: AsyncSession,
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
     Get recommended fielding positions based on batter's scoring zones.
@@ -354,7 +355,7 @@ async def get_fielding_setup(
 @router.get("/games/{game_id}/suggestions/all")
 async def get_all_suggestions(
     game_id: str,
-    db: AsyncSession,
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
     Get all tactical suggestions at once.

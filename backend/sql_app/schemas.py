@@ -1134,67 +1134,14 @@ class TeamRead(BaseModel):
 # ===== Scorecard Schemas =====
 
 
-class PlayerCreate(BaseModel):
-    """Request schema for creating a player."""
-
-    name: str = Field(..., min_length=1, max_length=255)
-    jersey_number: int | None = Field(default=None, ge=1, le=99)
-    role: str | None = Field(default=None, max_length=50)
+# Note: Player class already defined earlier (line ~181)
+# Removed duplicate PlayerCreate to avoid conflicts
+# The scorecard service uses the existing Player schema
 
 
-class Player(BaseModel):
-    """Response schema for a player."""
-
-    id: int
-    name: str
-    jersey_number: int | None = None
-    role: str | None = None
-    created_at: dt.datetime
-    updated_at: dt.datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class DeliveryCreate(BaseModel):
-    """Request schema for recording a delivery."""
-
-    batter_id: int = Field(..., description="ID of batting player")
-    bowler_id: int = Field(..., description="ID of bowling player")
-    non_striker_id: int = Field(..., description="ID of non-striking batter")
-    runs: int = Field(default=0, ge=0, le=6, description="Runs off bat (0-6)")
-    extra_type: str | None = Field(default=None, description="wd, nb, b, lb, or None")
-    is_wicket: bool = Field(default=False, description="Wicket fell on this ball")
-    dismissal_type: str | None = Field(
-        default=None,
-        description="bowled, caught, lbw, run_out, stumped, etc.",
-    )
-    dismissed_player_id: int | None = Field(default=None, description="ID of dismissed player")
-    fielder_id: int | None = Field(default=None, description="ID of fielder involved")
-
-
-class Delivery(BaseModel):
-    """Response schema for a delivery."""
-
-    id: int
-    game_id: int
-    inning_number: int
-    over_number: int
-    ball_number: int
-    bowler_id: int
-    batter_id: int
-    non_striker_id: int
-    runs: int
-    runs_off_bat: int
-    extra_type: str | None = None
-    extra_runs: int
-    is_wicket: bool
-    wicket_type: str | None = None
-    wicket_fielder_id: int | None = None
-    is_legal: bool
-    created_at: dt.datetime
-    updated_at: dt.datetime
-
-    model_config = ConfigDict(from_attributes=True)
+# Note: Delivery class already defined earlier (line ~240)
+# Removed duplicate DeliveryCreate to avoid conflicts
+# The scorecard service uses the existing Delivery schema
 
 
 class BattingScorecardCreate(BaseModel):

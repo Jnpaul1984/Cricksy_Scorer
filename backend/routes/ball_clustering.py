@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.sql_app.database import get_db
+from backend.sql_app.models import Player, BowlingScorecard, BattingScorecard
 from backend.services.ball_type_clusterer import (
     BallTypeClusterer,
     DeliveryType,

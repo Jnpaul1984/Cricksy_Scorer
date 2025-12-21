@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from backend.sql_app.database import get_db
+from backend.sql_app.models import Player, BattingScorecard, Game
 from backend.services.dismissal_pattern_analyzer import (
     DismissalPatternAnalyzer,
     DismissalRecord,
@@ -133,7 +134,7 @@ async def get_player_dismissal_analysis(
 async def get_team_dismissal_analysis(
     game_id: str,
     team_side: str,
-    db: AsyncSession,
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get team-level dismissal pattern analysis post-match.
@@ -261,7 +262,7 @@ async def get_team_dismissal_analysis(
 @router.get("/players/{player_id}/vulnerability-score")
 async def get_player_vulnerability_score(
     player_id: str,
-    db: AsyncSession,
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get quick vulnerability score for a player.
@@ -356,7 +357,7 @@ async def get_player_vulnerability_score(
 async def get_player_dismissal_trend(
     player_id: str,
     period: str = "last_10",
-    db: AsyncSession = None,
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get dismissal trend for a player over recent matches.

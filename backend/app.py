@@ -42,7 +42,6 @@ from backend.routes.sponsor_rotation import router as sponsor_rotation_router
 from backend.routes.branding import router as branding_router
 from backend.routes.auth_router import router as auth_router
 from backend.routes.billing import router as billing_router
-from backend.routes.scorecards import router as scorecards_router
 
 # Routers
 from backend.routes.coach_pro import router as coach_pro_router
@@ -348,7 +347,6 @@ def create_app(
     fastapi_app.include_router(ai_router)
     fastapi_app.include_router(ai_usage_router)
     fastapi_app.include_router(matches_router)
-    fastapi_app.include_router(scorecards_router)
     fastapi_app.include_router(admin_router)
     fastapi_app.include_router(feedback_router)
     fastapi_app.include_router(teams_router)

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.sql_app.database import get_db
+from backend.sql_app.models import Player, BattingScorecard, Game, BowlingScorecard
 from backend.services.pitch_heatmap_generator import (
     PitchHeatmapGenerator,
     PitchZone,

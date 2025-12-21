@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.sql_app.database import get_db
+from backend.sql_app.models import Player, BattingScorecard, Game
 from backend.services.training_drill_generator import TrainingDrillGenerator
 
 router = APIRouter(prefix="/training", tags=["training_drills"])
