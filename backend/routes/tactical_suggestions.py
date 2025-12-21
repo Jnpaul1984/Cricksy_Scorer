@@ -115,7 +115,7 @@ async def get_best_bowler_suggestion(
         }
 
         # Get recent bowlers to avoid repeats
-        recent_bowlers: list[int] = []  # Could track last 2-3 bowlers if needed
+        recent_bowlers: list[str] = []  # Could track last 2-3 bowlers if needed
 
         # Get suggestion
         suggestion = TacticalSuggestionEngine.get_best_bowler(

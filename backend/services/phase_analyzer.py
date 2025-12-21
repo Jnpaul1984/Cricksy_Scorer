@@ -354,8 +354,8 @@ class MatchPhaseAnalyzer:
         # Expected powerplay runs
         pp_phase = next((p for p in phases if p.phase_name == "powerplay"), None)
         if pp_phase:
-            predictions["powerplay_actual"] = pp_phase.total_runs
-            predictions["powerplay_efficiency"] = round(pp_phase.actual_vs_expected_pct, 1)
+            predictions["powerplay_actual"] = int(pp_phase.total_runs)
+            predictions["powerplay_efficiency"] = int(round(pp_phase.actual_vs_expected_pct, 1))
 
         # Total expected runs projection
         current_runs = sum(p.total_runs for p in phases)
@@ -385,7 +385,7 @@ class MatchPhaseAnalyzer:
                     win_prob = 0.45
                 else:
                     win_prob = 0.20
-                predictions["win_probability"] = round(win_prob, 2)
+                predictions["win_probability"] = float(round(win_prob, 2))
 
         return predictions
 

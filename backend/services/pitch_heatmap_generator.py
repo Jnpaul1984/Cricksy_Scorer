@@ -352,7 +352,7 @@ class PitchHeatmapGenerator:
             total_events=total_deliveries,
             metadata={
                 "accuracy_score": round(accuracy, 1),
-                "primary_zone": max(zone_data, key=zone_data.get) if zone_data else "unknown",  # type: ignore[call-overload]
+                "primary_zone": max(zone_data, key=zone_data.get) if zone_data else "unknown",  # type: ignore[arg-type]
             },
         )
 

@@ -388,7 +388,7 @@ class BallTypeClusterer:
                 cluster_id=f"{bowler_id}_{delivery_type}",
                 delivery_type=delivery_type,
                 cluster_name=delivery_type.replace("_", " ").title(),
-                description=BallTypeClusterer.CLUSTER_DEFINITIONS.get(delivery_type, {}).get(  # type: ignore[index]
+                description=BallTypeClusterer.CLUSTER_DEFINITIONS.get(delivery_type, {}).get(  # type: ignore[arg-type, call-overload]
                     "description", ""
                 ),
                 sample_count=len(group),
@@ -406,12 +406,14 @@ class BallTypeClusterer:
         variation_score = (len(clusters) / 8) * 100  # 8 possible types
 
         # Find most/least effective
+        most_effective: DeliveryCluster | None
+        least_effective: DeliveryCluster | None
         if clusters:
             most_effective = max(clusters, key=lambda c: c.effectiveness_percentage)
             least_effective = min(clusters, key=lambda c: c.effectiveness_percentage)
         else:
-            most_effective: DeliveryCluster | None = None  # type: ignore[assignment]
-            least_effective: DeliveryCluster | None = None  # type: ignore[assignment]
+            most_effective = None  # type: ignore[assignment]
+            least_effective = None  # type: ignore[assignment]
 
         return BowlerDeliveryProfile(
             bowler_id=bowler_id,
@@ -522,18 +524,18 @@ class BallTypeClusterer:
         # Create ClusterMatrix objects
         result = {}
         for dtype, stats in matrices.items():
-            total = stats["total"]
-            avg_runs = stats["runs"] / total if total > 0 else 0
+            total = stats["total"]  # type: ignore[index]
+            avg_runs = stats["runs"] / total if total > 0 else 0  # type: ignore[index]
             effectiveness = (
-                (stats["wickets"] / total) * 50 + ((stats["dots"] / total) * 50) if total > 0 else 0
+                (stats["wickets"] / total) * 50 + ((stats["dots"] / total) * 50) if total > 0 else 0  # type: ignore[index]
             )
 
             result[dtype] = ClusterMatrix(
                 cluster_type=dtype,
                 total_samples=total,
-                wicket_count=stats["wickets"],
-                dot_count=stats["dots"],
-                boundary_count=stats["boundaries"],
+                wicket_count=stats["wickets"],  # type: ignore[index]
+                dot_count=stats["dots"],  # type: ignore[index]
+                boundary_count=stats["boundaries"],  # type: ignore[index]
                 average_runs=round(avg_runs, 2),
                 effectiveness_rating=min(max(effectiveness, 0), 100),
             )
