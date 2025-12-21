@@ -97,7 +97,7 @@ async def get_phase_map(
             raise HTTPException(status_code=400, detail=f"No deliveries in inning {inning_num}")
 
         # Get target
-        target = get_current_target(game)
+        target = game.target
 
         # Analyze phases
         phase_data = get_phase_analysis(
@@ -177,7 +177,7 @@ async def get_phase_predictions(
             raise HTTPException(status_code=400, detail=f"No deliveries in inning {inning_num}")
 
         # Get target
-        target = get_current_target(game)
+        target = game.target
 
         # Analyze phases
         phase_data = get_phase_analysis(
@@ -275,7 +275,7 @@ async def get_phase_trends(
             raise HTTPException(status_code=400, detail=f"No deliveries in inning {inning_num}")
 
         # Get target
-        target = get_current_target(game)
+        target = game.target
 
         # Analyze phases
         phase_data = get_phase_analysis(
