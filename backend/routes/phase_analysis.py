@@ -8,11 +8,12 @@ REST API endpoints for match phase analysis:
 """
 
 from typing import Any
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
 
+from backend.sql_app.database import get_db
 from backend.sql_app.models import Game, User
 from backend.services.phase_analyzer import get_phase_analysis
 from backend.services.scoring_service import get_current_target
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/analytics", tags=["phase_analysis"])
 async def get_phase_map(
     game_id: str,
     inning_num: int | None = None,
-    db: AsyncSession | None = None,
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
     Get complete phase map for a game with analysis and predictions.
@@ -65,9 +66,6 @@ async def get_phase_map(
         },
     }
     """
-    if not db:
-        raise HTTPException(status_code=500, detail="Database session not available")
-
     try:
         # Fetch game
         stmt = (
@@ -153,9 +151,6 @@ async def get_phase_predictions(
         },
     }
     """
-    if not db:
-        raise HTTPException(status_code=500, detail="Database session not available")
-
     try:
         # Fetch game
         stmt = select(Game).where(Game.id == game_id)
@@ -254,9 +249,6 @@ async def get_phase_trends(
         },
     }
     """
-    if not db:
-        raise HTTPException(status_code=500, detail="Database session not available")
-
     try:
         # Fetch game
         stmt = select(Game).where(Game.id == game_id)

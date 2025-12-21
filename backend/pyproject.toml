@@ -39,50 +39,6 @@ follow_imports = "skip"
 disallow_untyped_defs = false
 exclude = "backend/tests/|scripts/.*|node_modules/|.venv/"
 
-[[tool.mypy.overrides]]
-module = [
-    "backend.routes.pitch_heatmaps",
-    "backend.routes.ball_clustering",
-    "backend.routes.player_improvement",
-    "backend.routes.pressure_analysis",
-    "backend.routes.tactical_suggestions",
-    "backend.routes.training_drills",
-    "backend.routes.dismissal_patterns",
-    "backend.routes.phase_analysis",
-    "backend.routes.sponsor_rotation",
-    "backend.services.pitch_heatmap_generator",
-    "backend.services.ball_type_clusterer",
-    "backend.services.player_improvement_tracker",
-    "backend.services.pressure_analyzer",
-    "backend.services.tactical_suggestion_engine",
-    "backend.services.training_drill_generator",
-    "backend.services.dismissal_pattern_analyzer",
-    "backend.services.phase_analyzer",
-]
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = [
-    "routes.pitch_heatmaps",
-    "routes.ball_clustering",
-    "routes.player_improvement",
-    "routes.pressure_analysis",
-    "routes.tactical_suggestions",
-    "routes.training_drills",
-    "routes.dismissal_patterns",
-    "routes.phase_analysis",
-    "routes.sponsor_rotation",
-    "services.pitch_heatmap_generator",
-    "services.ball_type_clusterer",
-    "services.player_improvement_tracker",
-    "services.pressure_analyzer",
-    "services.tactical_suggestion_engine",
-    "services.training_drill_generator",
-    "services.dismissal_pattern_analyzer",
-    "services.phase_analyzer",
-]
-ignore_errors = true
-
 [tool.bandit]
 # Exclude test directories and virtual environment
 exclude_dirs = ["backend/tests", "backend/test", "backend/testsupport", "backend/venv", ".venv", "venv"]

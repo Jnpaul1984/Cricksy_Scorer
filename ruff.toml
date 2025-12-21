@@ -7,7 +7,7 @@ select = ["E", "F", "W", "B", "C4", "SIM", "RUF", "UP", "S"]
 ignore = ["UP038", "B008"]
 
 [lint.per-file-ignores]
-"backend/routes/*.py" = ["B008", "S110", "S112", "S106", "B904", "E712", "W293", "E501", "SIM102", "F821"]
+"backend/routes/*.py" = ["B008", "S110", "S112", "S106", "B904", "E712", "W293", "E501", "SIM102"]
 "backend/alembic/**/*.py" = ["E402", "S608"]
 "backend/tests/**/*.py" = ["E501", "E701", "E702", "B007", "F841", "SIM108", "C401", "S101", "S105", "S106", "S107", "S110"]
 "backend/test/**/*.py" = ["S101", "S110"]

@@ -135,7 +135,7 @@ async def get_monthly_stats(
 async def get_improvement_trend(
     player_id: str,
     months: int = 3,
-    db: AsyncSession | None = None,
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
     Get improvement trend (month-over-month changes).
@@ -165,9 +165,6 @@ async def get_improvement_trend(
         "overall_improvement_score": 75.0,  # 0-100
     }
     """
-    if not db:
-        raise HTTPException(status_code=500, detail="Database session not available")
-
     try:
         # Fetch player
         stmt = select(Player).where(Player.id == player_id)
@@ -276,7 +273,7 @@ async def get_improvement_trend(
 async def get_improvement_summary(
     player_id: str,
     months: int = 6,
-    db: AsyncSession | None = None,
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
     Get comprehensive improvement summary with highlights and recommendations.
@@ -306,9 +303,6 @@ async def get_improvement_summary(
         "historical_improvements": [ ... ],
     }
     """
-    if not db:
-        raise HTTPException(status_code=500, detail="Database session not available")
-
     try:
         # Fetch player
         stmt = select(Player).where(Player.id == player_id)

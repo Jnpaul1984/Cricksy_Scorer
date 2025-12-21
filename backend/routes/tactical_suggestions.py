@@ -7,9 +7,10 @@ Provides real-time coaching recommendations during match play:
 - Fielding setup suggestions
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.sql_app.database import get_db
 from backend.services.tactical_suggestion_engine import (
     TacticalSuggestionEngine,
 )
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/tactical", tags=["tactical_suggestions"])
 @router.get("/games/{game_id}/suggestions/best-bowler")
 async def get_best_bowler_suggestion(
     game_id: str,
-    db: AsyncSession,
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
     Get recommendation for best bowler to bowl next delivery.

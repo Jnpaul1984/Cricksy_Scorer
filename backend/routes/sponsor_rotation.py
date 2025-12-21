@@ -6,9 +6,10 @@ Endpoints for managing sponsor rotation schedules and tracking exposure
 
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.sql_app.database import get_db
 from backend.services.sponsor_rotation_engine import (
     EngagementEvent,
     RotationStrategy,
@@ -26,7 +27,7 @@ async def create_rotation_schedule(
     sponsors: list[dict],  # List of {sponsor_id, name, logo_url, priority, target_exposures}
     max_overs: int = 20,
     strategy: str = "equal_time",
-    db: AsyncSession = None,
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Create a new sponsor rotation schedule for a match

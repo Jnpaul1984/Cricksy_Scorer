@@ -4,10 +4,11 @@ Dismissal Patterns API Routes
 REST endpoints for dismissal pattern analysis and insights.
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from backend.sql_app.database import get_db
 from backend.services.dismissal_pattern_analyzer import (
     DismissalPatternAnalyzer,
     DismissalRecord,
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/dismissal-patterns", tags=["dismissal_patterns"])
 @router.get("/players/{player_id}/analysis")
 async def get_player_dismissal_analysis(
     player_id: str,
-    db: AsyncSession,
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get comprehensive dismissal pattern analysis for a player.

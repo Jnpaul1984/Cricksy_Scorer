@@ -1181,9 +1181,7 @@ class Delivery(Base):
     batter_id: Mapped[int] = mapped_column(Integer, ForeignKey("players.id"), nullable=False)
 
     runs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    extras: Mapped[str | None] = mapped_column(
-        String(20), nullable=True
-    )  # 'wd', 'nb', 'b', 'lb'
+    extras: Mapped[str | None] = mapped_column(String(20), nullable=True)  # 'wd', 'nb', 'b', 'lb'
     is_wicket: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     wicket_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
 

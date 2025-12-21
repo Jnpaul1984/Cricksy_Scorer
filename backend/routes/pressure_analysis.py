@@ -5,10 +5,11 @@ Exposes real-time pressure mapping and analysis via REST API.
 Endpoints for pressure map visualization, critical moments, and phase analysis.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from backend.sql_app.database import get_db
 from backend.services.pressure_analyzer import get_pressure_map
 
 router = APIRouter(prefix="/analytics", tags=["pressure_analysis"])
@@ -17,8 +18,8 @@ router = APIRouter(prefix="/analytics", tags=["pressure_analysis"])
 @router.get("/games/{game_id}/pressure-map")
 async def get_game_pressure_map(
     game_id: str,
-    db: AsyncSession,
     inning_num: int | None = None,
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
     Get pressure map for a game or specific inning.
