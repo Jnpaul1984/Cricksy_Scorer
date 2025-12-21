@@ -4,16 +4,17 @@
 
 **Problem:** All 3 GitHub Actions workflows (lint, CI, deploy-backend) were failing after scorecard service implementation, despite local tests passing.
 
-**Root Cause:** 5 distinct import and dependency injection errors that only surface in fresh CI environments.
+**Root Cause:** 6 distinct import and dependency injection errors that only surface in fresh CI environments.
 
-**Solution:** Fixed 86 individual errors across 8 files by:
+**Solution:** Fixed 89 individual errors across 8 files by:
 1. Removing duplicate schema definitions
 2. Adding missing model imports to route files
 3. Fixing FastAPI dependency injection
-4. Removing invalid imports
+4. Removing invalid imports (2 instances - import statement + function calls)
 5. Deleting conflicting files
+6. Replacing non-existent function calls with correct model fields
 
-**Status:** ✅ All local validations passing. Workflows re-triggered for green status.
+**Status:** ✅ All local validations passing (commit c0b9cc5). Workflows re-triggered for green status.
 
 ---
 
@@ -87,17 +88,25 @@ async def handler(
     pass
 ```
 
-### Error 4: Invalid Import Reference
-**File:** `backend/routes/phase_analysis.py` line 19
+### Error 4: Invalid Import Reference (2 instances)
+**File:** `backend/routes/phase_analysis.py` lines 19, 100, 180, 278
 
-**Symptom:** Runtime import error
+**Symptom:** MyPy `name-defined` error
 ```
-ImportError: cannot import name 'get_current_target' from 'backend.services.scoring_service'
+routes\phase_analysis.py:100: error: Name "get_current_target" is not defined [name-defined]
+routes\phase_analysis.py:180: error: Name "get_current_target" is not defined [name-defined]
+routes\phase_analysis.py:278: error: Name "get_current_target" is not defined [name-defined]
 ```
 
-**Root Cause:** Tried to import non-existent function.
+**Root Cause:** 
+1. Line 19: Imported non-existent function `get_current_target`
+2. Lines 100, 180, 278: Called that non-existent function in 3 endpoints
 
-**Fix:** Removed the import line.
+**Fix:** 
+- Removed import line 19
+- Replaced `target = get_current_target(game)` with `target = game.target` (3 endpoints)
+
+**Impact:** Eliminated all "is not defined" errors in phase_analysis.py. MyPy errors: 35 → 32.
 
 ### Error 5: Conflicting Route Registration
 **File:** `backend/routes/scorecards.py` (deleted)
@@ -336,6 +345,9 @@ When fixing future workflow failures:
 - **2025-12-21 15:00:** Validated locally (all checks passing)
 - **2025-12-21 15:05:** Committed and pushed (commit: af1429b)
 - **2025-12-21 15:10:** Workflows re-triggered for green status
+- **2025-12-21 15:15:** Additional mypy errors found: get_current_target calls
+- **2025-12-21 15:20:** Replaced function calls with model field (commit: c0b9cc5)
+- **2025-12-21 15:25:** All local validations passing, workflows re-triggered again
 
 ---
 
