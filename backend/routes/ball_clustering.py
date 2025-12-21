@@ -15,7 +15,6 @@ from backend.sql_app.models import (
     Player,
     BowlingScorecard,
     BattingScorecard,
-    Game,
 )
 
 router = APIRouter(prefix="/ball-clustering", tags=["ball_clustering"])
@@ -111,7 +110,9 @@ async def get_bowler_delivery_clusters(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cluster analysis failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Cluster analysis failed: {e!s}"
+        ) from e
 
 
 @router.get("/batters/{batter_id}/delivery-vulnerabilities")
@@ -190,7 +191,10 @@ async def get_batter_delivery_vulnerabilities(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Vulnerability analysis failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Vulnerability analysis failed: {e!s}",
+        ) from e
 
 
 @router.get("/matchups/{bowler_id}/vs/{batter_id}/cluster-analysis")
@@ -315,7 +319,9 @@ async def get_matchup_cluster_analysis(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Matchup analysis failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Matchup analysis failed: {e!s}"
+        ) from e
 
 
 @router.get("/cluster-types")
