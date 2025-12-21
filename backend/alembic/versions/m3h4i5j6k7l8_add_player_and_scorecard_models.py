@@ -39,7 +39,7 @@ def upgrade() -> None:
     op.create_table(
         "batting_scorecards",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("game_id", sa.Integer(), nullable=False),
+        sa.Column("game_id", sa.String(), nullable=False),
         sa.Column("player_id", sa.Integer(), nullable=False),
         sa.Column("runs", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("balls_faced", sa.Integer(), nullable=False, server_default="0"),
@@ -75,7 +75,7 @@ def upgrade() -> None:
     op.create_table(
         "bowling_scorecards",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("game_id", sa.Integer(), nullable=False),
+        sa.Column("game_id", sa.String(), nullable=False),
         sa.Column("player_id", sa.Integer(), nullable=False),
         sa.Column("overs_bowled", sa.Float(), nullable=False, server_default="0"),
         sa.Column("balls_bowled", sa.Integer(), nullable=False, server_default="0"),
@@ -107,7 +107,7 @@ def upgrade() -> None:
     op.create_table(
         "deliveries",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("game_id", sa.Integer(), nullable=False),
+        sa.Column("game_id", sa.String(), nullable=False),
         sa.Column("inning_number", sa.Integer(), nullable=False),
         sa.Column("over_number", sa.Integer(), nullable=False),
         sa.Column("ball_number", sa.Integer(), nullable=False),
@@ -126,15 +126,9 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["batter_id"], ["players.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["bowler_id"], ["players.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["game_id"], ["games.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["non_striker_id"], ["players.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["wicket_fielder_id"], ["players.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["game_id"], ["games.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["non_striker_id"], ["players.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["wicket_fielder_id"], ["players.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

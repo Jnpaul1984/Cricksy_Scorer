@@ -84,7 +84,7 @@ class DeliveryService:
     @staticmethod
     async def record_delivery(
         db: AsyncSession,
-        game_id: int,
+        game_id: str,
         batter_id: int,
         bowler_id: int,
         non_striker_id: int,
