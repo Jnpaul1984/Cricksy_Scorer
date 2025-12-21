@@ -6,22 +6,36 @@
 
 When local tests pass but GitHub Actions workflows fail, it's usually one of:
 
-1. **Missing Type Imports** (MOST COMMON)
+1. **Missing Type Imports** (MOST COMMON - Fixed 2025-12-21)
    - Python type hints reference classes but don't import them
    - Works locally if you've imported in REPL/have stale caches
    - CI runs fresh, finds errors
+   - **Example Error:** `error: Name "Game" is not defined [name-defined]`
+   - **Fix:** Add `from backend.sql_app.models import Game, Player, BattingScorecard, BowlingScorecard, Delivery` to route files
 
-2. **Environment Variables Missing**
+2. **Missing FastAPI Dependency Injection** (Fixed 2025-12-21)
+   - FastAPI routes have `db: AsyncSession` parameter but no `Depends(get_db)`
+   - FastAPI validation fails during app initialization
+   - **Example Error:** `FastAPIError: Invalid args for response field! Hint: check that sqlalchemy.ext.asyncio.session.AsyncSession is a valid Pydantic field type`
+   - **Fix:** Change `db: AsyncSession` to `db: AsyncSession = Depends(get_db)`
+
+3. **Duplicate Schema Definitions** (Fixed 2025-12-21)
+   - Multiple class definitions with same name in schemas.py
+   - MyPy reports `no-redef` errors
+   - **Example Error:** `error: Name "Player" already defined on line N [no-redef]`
+   - **Fix:** Remove duplicate class definitions; keep first definition only
+
+4. **Environment Variables Missing**
    - `PYTHONPATH` not set in CI
    - Database URL misconfigured
    - Secret keys not injected
 
-3. **File Path Issues**
+5. **File Path Issues**
    - Absolute vs relative imports
    - Different working directories
    - Case sensitivity on Linux CI vs Windows local
 
-4. **Dependency Version Mismatches**
+6. **Dependency Version Mismatches**
    - `requirements.txt` pins old versions
    - CI installs different transitive deps
    - Local has development packages not in CI
@@ -150,7 +164,91 @@ mypy --config-file backend/pyproject.toml --explicit-package-bases backend
 
 **Symptom:** `error: Name "Game" is not defined [name-defined]`
 
-**File:** `backend/routes/training_drills.py` (and others)
+**Files Affected (2025-12-21):**
+- `backend/routes/training_drills.py`
+- `backend/routes/tactical_suggestions.py`
+- `backend/routes/pressure_analysis.py`
+- `backend/routes/pitch_heatmaps.py`
+- `backend/routes/dismissal_patterns.py`
+- `backend/routes/ball_clustering.py`
+
+**Fix Pattern:**
+```python
+# At top of route file, add:
+from backend.sql_app.models import Game, Player, BattingScorecard, BowlingScorecard, Delivery
+
+# Now safe to use in type hints and queries
+@router.get("/endpoint/{id}")
+async def handler(id: str, db: AsyncSession = Depends(get_db)) -> Game:
+    result = await db.execute(select(Game).where(Game.id == id))
+    return result.scalars().first()
+```
+
+#### Fix 2: Add Missing FastAPI Dependency Injection
+
+**Symptom:** `FastAPIError: Invalid args for response field! Hint: check that sqlalchemy.ext.asyncio.session.AsyncSession is a valid Pydantic field type`
+
+**Patterns to Fix:**
+```python
+# ❌ WRONG - Missing Depends(get_db)
+@router.get("/endpoint/{id}")
+async def handler(
+    id: str,
+    db: AsyncSession,  # <-- WRONG
+) -> dict:
+    ...
+
+# ✅ CORRECT - Has Depends(get_db)
+@router.get("/endpoint/{id}")
+async def handler(
+    id: str,
+    db: AsyncSession = Depends(get_db),  # <-- CORRECT
+) -> dict:
+    ...
+```
+
+**Files Fixed (2025-12-21):**
+- `phase_analysis.py` - Lines 123, 231 (2 endpoints)
+- `tactical_suggestions.py` - Lines 153, 239, 355 (3 endpoints)
+- `dismissal_patterns.py` - Lines 137, 265, 360 (3 endpoints)
+
+#### Fix 3: Remove Duplicate Schema Definitions
+
+**Symptom:** `error: Name "Player" already defined on line N [no-redef]`
+
+**File:** `backend/sql_app/schemas.py`
+
+**Issue:** Lines 1145 and 1175 had duplicate `Player` and `Delivery` classes
+
+**Solution:** Removed duplicates. Original definitions at lines 181 and 240 are the source of truth.
+
+#### Fix 4: Invalid Imports
+
+**Symptom:** `ImportError: cannot import name 'get_current_target' from 'backend.services.scoring_service'`
+
+**File:** `backend/routes/phase_analysis.py` line 19
+
+**Fix:** Removed import line:
+```python
+# REMOVED - function doesn't exist in scoring_service
+from backend.services.scoring_service import get_current_target
+```
+
+#### Fix 5: Delete Conflicting Route Files
+
+**Issue:** `backend/routes/scorecards.py` was created but had import conflicts
+
+**Solution:** Deleted the file and removed registrations from `app.py`:
+- Removed import
+- Removed `fastapi_app.include_router(scorecards_router)`
+
+### Common Fixes Applied
+
+#### Fix 1: Add Missing Imports to Route Files
+
+**Symptom:** `error: Name "X" is not defined [name-defined]` | Route file uses `Game`, `Player`, etc. in queries but doesn't import
+
+**File:** `backend/routes/file.py` (any analytics/analytics routes)
 
 **Fix:**
 ```python
