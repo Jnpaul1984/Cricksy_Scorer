@@ -68,8 +68,7 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
-          # If you have a mypy.ini/pyproject config, mypy will pick it up.
-          mypy .
+          mypy --config-file pyproject.toml --explicit-package-bases .
 
   security:
     name: Security (bandit + pip-audit)
