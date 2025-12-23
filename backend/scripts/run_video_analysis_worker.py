@@ -31,20 +31,19 @@ from pathlib import Path
 from typing import Any
 
 import boto3
+from backend.config import settings
+from backend.services.coach_findings import generate_findings
+from backend.services.coach_report_service import generate_report_text
+from backend.services.pose_metrics import compute_pose_metrics
+from backend.services.pose_service import extract_pose_keypoints_from_video
+from backend.sql_app.models import VideoAnalysisJob, VideoAnalysisJobStatus
 from botocore.exceptions import ClientError
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from backend.config import settings
-from backend.services.pose_service import extract_pose_keypoints_from_video
-from backend.services.pose_metrics import compute_pose_metrics
-from backend.services.coach_findings import generate_findings
-from backend.services.coach_report_service import generate_report_text
-from backend.sql_app.models import VideoAnalysisJob, VideoAnalysisJobStatus
 
 # Configure logging
 logging.basicConfig(
