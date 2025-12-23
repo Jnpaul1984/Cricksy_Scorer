@@ -143,7 +143,7 @@ def extract_pose_keypoints_from_video(
     scale = target_width / width if width > 0 else 1.0
     target_height = int(height * scale)
 
-    frames_data = []
+    frames_data: list[dict[str, Any]] = []
     detected_count = 0
     visibility_scores = []
 
@@ -257,7 +257,7 @@ def extract_pose_keypoints_from_video(
     sampled_count = len(frames_data)
     detection_rate = (detected_count / sampled_count * 100) if sampled_count > 0 else 0
 
-    metrics = {
+    metrics: dict[str, Any] = {
         "frame_count": total_frames,
         "sampled_frame_count": sampled_count,
         "detection_rate": round(detection_rate, 1),

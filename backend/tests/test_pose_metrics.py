@@ -11,6 +11,7 @@ Tests verify:
 from __future__ import annotations
 
 import pytest
+from typing import Any
 
 from backend.services.pose_metrics import (
     angle,
@@ -142,7 +143,7 @@ class TestHelperFunctions:
 
     def test_get_keypoint_value_missing(self) -> None:
         """Test get keypoint returns None for missing."""
-        keypoints = {}
+        keypoints: dict[str, Any] = {}
 
         result = get_keypoint_value(keypoints, "nose")
         assert result is None

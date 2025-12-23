@@ -11,6 +11,7 @@ Tests verify:
 from __future__ import annotations
 
 import pytest
+from typing import Any
 
 from backend.services.coach_findings import (
     DRILL_SUGGESTIONS,
@@ -144,7 +145,7 @@ class TestHeadMovementFinding:
 
     def test_head_missing_data(self) -> None:
         """Missing head stability data should return None."""
-        metrics = {}
+        metrics: dict[str, Any] = {}
 
         finding = _check_head_movement(metrics)
         assert finding is None
