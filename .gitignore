@@ -98,6 +98,13 @@ create_*.py
 generate_*.py
 reset_*.py
 setup_*.py
+
+# But DO track proper test files in test directories
+!backend/tests/
+!backend/tests/*.py
+!frontend/tests/
+!frontend/tests/**/*.ts
+!frontend/tests/**/*.vue
 add_*.py
 final_*.py
 debug_*.py
