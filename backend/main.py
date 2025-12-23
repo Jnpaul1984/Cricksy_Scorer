@@ -33,6 +33,19 @@ __all__ = [
 
 configure_logging(json=True, level=logging.INFO)
 
+# Verify MediaPipe setup before app starts
+try:
+    from backend.mediapipe_init import verify_mediapipe_setup
+
+    media_pipe_status = verify_mediapipe_setup()
+    logging.info(f"MediaPipe verification: {media_pipe_status}")
+except Exception as e:
+    # Log but don't fail startup - video analysis will fail at request time
+    logging.warning(
+        f"MediaPipe verification failed: {e}. "
+        "Coach Pro Plus video analysis will not be available."
+    )
+
 # Build the ASGI app and expose a FastAPI instance for tests
 app, _fastapi = create_app()
 fastapi_app = _fastapi  # compatibility for tests
