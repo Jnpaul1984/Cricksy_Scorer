@@ -104,7 +104,11 @@ WEEKLY_PLAN_TEMPLATE = [
         "day": "Thursday",
         "focus": "Integration & Game Practice",
         "duration": "75 min",
-        "activities": ["Drills (20min)", "Net practice focusing on issues (45min)", "Review (10min)"],
+        "activities": [
+            "Drills (20min)",
+            "Net practice focusing on issues (45min)",
+            "Review (10min)",
+        ],
     },
     {
         "day": "Friday",
@@ -173,7 +177,7 @@ def _get_top_issues(findings: list[dict], top_n: int = 3) -> list[dict]:
 
 def _get_recommended_drills(findings: list[dict], max_drills: int = 8) -> list[str]:
     """Extract unique drills from findings, limited to max_drills."""
-    all_drills = []
+    all_drills: list[str] = []
 
     # Sort by severity to prioritize high-severity drills
     sorted_findings = sorted(
@@ -193,8 +197,8 @@ def _get_recommended_drills(findings: list[dict], max_drills: int = 8) -> list[s
 
 def _build_weekly_plan(findings: list[dict], player_context: dict | None = None) -> list[dict]:
     """Build personalized weekly plan based on findings."""
-    # Start with template
-    plan = [day.copy() for day in WEEKLY_PLAN_TEMPLATE]
+    # Start with template - convert to mutable dicts
+    plan: list[dict] = [day.copy() for day in WEEKLY_PLAN_TEMPLATE]
 
     # Inject specific drills into the plan
     top_drills = _get_recommended_drills(findings, max_drills=3)

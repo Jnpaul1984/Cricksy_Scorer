@@ -141,9 +141,7 @@ def _analyze_key_joints(detected_frames: list[dict[str, Any]]) -> dict[str, Any]
         for frame in detected_frames:
             keypoints = frame.get("keypoints", {})
             # Check if both joints in pair are detected with good confidence
-            if all(
-                kp in keypoints and keypoints[kp][2] > 0.5 for kp in keypoint_names
-            ):
+            if all(kp in keypoints and keypoints[kp][2] > 0.5 for kp in keypoint_names):
                 count += 1
 
         result[joint_name] = (count / len(detected_frames) * 100) if detected_frames else 0.0

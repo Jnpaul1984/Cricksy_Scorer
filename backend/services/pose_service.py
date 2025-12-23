@@ -92,13 +92,12 @@ def extract_pose_keypoints_from_video(
         ValueError: If video cannot be read or has no frames
         RuntimeError: If MediaPipe model is not initialized or available
     """
-    if isinstance(video_path, str):
-        video_path = Path(video_path)
+    video_path_obj = Path(video_path) if isinstance(video_path, str) else video_path
 
-    if not video_path.exists():
-        raise FileNotFoundError(f"Video file not found: {video_path}")
+    if not video_path_obj.exists():
+        raise FileNotFoundError(f"Video file not found: {video_path_obj}")
 
-    logger.info(f"Extracting pose from video: {video_path}")
+    logger.info(f"Extracting pose from video: {video_path_obj}")
 
     # Get MediaPipe detector - fails loudly if model is missing
     try:
@@ -106,14 +105,13 @@ def extract_pose_keypoints_from_video(
     except Exception as e:
         logger.error(f"Failed to get MediaPipe detector: {e}")
         raise RuntimeError(
-            f"MediaPipe model not initialized. Model path: {get_model_path()}. "
-            f"Error: {e}"
+            f"MediaPipe model not initialized. Model path: {get_model_path()}. " f"Error: {e}"
         ) from e
 
     # Open video
-    cap = cv2.VideoCapture(str(video_path))
+    cap = cv2.VideoCapture(str(video_path_obj))
     if not cap.isOpened():
-        raise ValueError(f"Cannot open video file: {video_path}")
+        raise ValueError(f"Cannot open video file: {video_path_obj}")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -129,7 +127,7 @@ def extract_pose_keypoints_from_video(
     # Determine detection method based on running mode
     detection_method = get_detection_method_name()
     logger.info(f"Using MediaPipe detection method: {detection_method}")
-    
+
     # Check for unsupported modes
     if detection_method == "detect_async":
         cap.release()
@@ -177,7 +175,7 @@ def extract_pose_keypoints_from_video(
                 try:
                     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
                     timestamp_ms = int((frame_num / fps) * 1000)  # Monotonic timestamp
-                    
+
                     # Call appropriate detection method based on running mode
                     if detection_method == "detect_for_video":
                         detection_result = detector.detect_for_video(mp_image, timestamp_ms)
@@ -188,13 +186,15 @@ def extract_pose_keypoints_from_video(
                         raise RuntimeError(f"Unsupported detection method: {detection_method}")
                 except Exception as e:
                     logger.warning(f"Detection failed for frame {frame_num}: {e}")
-                    frames_data.append({
-                        "frame_num": frame_num,
-                        "timestamp": round(timestamp, 3),
-                        "detected": False,
-                        "landmarks": None,
-                        "keypoints": None
-                    })
+                    frames_data.append(
+                        {
+                            "frame_num": frame_num,
+                            "timestamp": round(timestamp, 3),
+                            "detected": False,
+                            "landmarks": None,
+                            "keypoints": None,
+                        }
+                    )
                     frame_num += 1
                     continue
 
@@ -203,15 +203,16 @@ def extract_pose_keypoints_from_video(
                 frame_keypoints: dict | None = None
 
                 # Extract landmarks from first detected pose
-                if (detection_result and 
-                    hasattr(detection_result, 'pose_landmarks') and
-                    detection_result.pose_landmarks):
-                    
+                if (
+                    detection_result
+                    and hasattr(detection_result, "pose_landmarks")
+                    and detection_result.pose_landmarks
+                ):
                     landmarks_list = detection_result.pose_landmarks
                     if landmarks_list and len(landmarks_list) > 0:
                         frame_detected = True
                         landmarks = landmarks_list[0]  # First person
-                        
+
                         frame_landmarks = []
                         frame_keypoints = {}  # Dictionary mapping keypoint names to landmarks
                         for i, landmark in enumerate(landmarks):
@@ -219,16 +220,16 @@ def extract_pose_keypoints_from_video(
                                 "x": float(landmark.x),
                                 "y": float(landmark.y),
                                 "z": float(landmark.z),
-                                "visibility": float(landmark.visibility)
+                                "visibility": float(landmark.visibility),
                             }
                             frame_landmarks.append(landmark_dict)
-                            
+
                             # Add to keypoints dictionary if we have a name for this index
                             if i < len(KEYPOINT_NAMES):
                                 frame_keypoints[KEYPOINT_NAMES[i]] = landmark_dict
-                            
+
                             visibility_scores.append(landmark.visibility)
-                        
+
                         detected_count += 1
 
                 # Normalize nulls to safe defaults
@@ -259,22 +260,23 @@ def extract_pose_keypoints_from_video(
     metrics = {
         "frame_count": total_frames,
         "sampled_frame_count": sampled_count,
-        "detection_rate": round(detection_rate, 1)
+        "detection_rate": round(detection_rate, 1),
     }
 
     if visibility_scores:
-        metrics.update({
-            "mean_visibility": round(np.mean(visibility_scores), 3),
-            "max_visibility": round(np.max(visibility_scores), 3),
-            "min_visibility": round(np.min(visibility_scores), 3)
-        })
+        metrics.update(
+            {
+                "mean_visibility": round(np.mean(visibility_scores), 3),
+                "max_visibility": round(np.max(visibility_scores), 3),
+                "min_visibility": round(np.min(visibility_scores), 3),
+            }
+        )
 
     # Generate findings
     findings = []
     if detection_rate < 50:
         findings.append(
-            f"Low detection rate ({detection_rate:.1f}%) - ensure good lighting "
-            "and camera angle"
+            f"Low detection rate ({detection_rate:.1f}%) - ensure good lighting " "and camera angle"
         )
     if visibility_scores and np.mean(visibility_scores) < 0.7:
         avg_vis = np.mean(visibility_scores)
@@ -284,13 +286,12 @@ def extract_pose_keypoints_from_video(
         )
     if sampled_count < 10:
         findings.append(
-            f"Very few frames sampled ({sampled_count}) - use higher sample_fps "
-            "for more detail"
+            f"Very few frames sampled ({sampled_count}) - use higher sample_fps " "for more detail"
         )
 
     report = (
         f"Analyzed {total_frames} frames ({sampled_count} sampled) from "
-        f"{video_path.name}. Detected pose in {detected_count} frames "
+        f"{video_path_obj.name}. Detected pose in {detected_count} frames "
         f"({detection_rate:.1f}% detection rate)."
     )
     if findings:

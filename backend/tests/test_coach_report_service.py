@@ -327,9 +327,10 @@ class TestGenerateReportText:
         """Excellent summary when no findings."""
         findings_payload = {"overall_level": "high", "findings": []}
         result = generate_report_text(findings_payload)
-        assert "fundamentals" in result["summary"].lower() or "consistency" in result[
-            "summary"
-        ].lower()
+        assert (
+            "fundamentals" in result["summary"].lower()
+            or "consistency" in result["summary"].lower()
+        )
 
     def test_top_issues_sorted_and_limited(self) -> None:
         """Top issues properly sorted and limited."""
@@ -415,8 +416,7 @@ class TestGenerateReportText:
         assert len(notes) > 50
         # Should be actionable
         assert any(
-            word in notes.lower()
-            for word in ["focus", "drills", "practice", "work", "implement"]
+            word in notes.lower() for word in ["focus", "drills", "practice", "work", "implement"]
         )
 
     def test_context_preserved_in_output(self) -> None:

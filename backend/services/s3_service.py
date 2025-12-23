@@ -48,7 +48,7 @@ class S3Service:
             )
             return url
         except ClientError as e:
-            raise RuntimeError(f"Failed to generate presigned URL: {str(e)}") from e
+            raise RuntimeError(f"Failed to generate presigned URL: {e!s}") from e
 
     def get_object_metadata(self, bucket: str, key: str) -> dict:
         """
@@ -74,7 +74,7 @@ class S3Service:
         except ClientError as e:
             if e.response["Error"]["Code"] == "404":
                 raise RuntimeError(f"Object not found: {key}") from e
-            raise RuntimeError(f"Failed to get object metadata: {str(e)}") from e
+            raise RuntimeError(f"Failed to get object metadata: {e!s}") from e
 
 
 # Global instance

@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import status
@@ -81,21 +81,37 @@ class TestVideoAnalysisAuthentication:
 
     def test_requires_authentication(self, client: TestClient) -> None:
         """Endpoint requires valid JWT token."""
-        response = client.post(
-            "/api/coaches/plus/videos/analyze",
-            json={"video_path": "/tmp/test.mp4"},
-        )
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            response = client.post(
+                "/api/coaches/plus/videos/analyze",
+                json={"video_path": tmp_path},
+            )
+            assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     def test_invalid_token(self, client: TestClient) -> None:
         """Rejects invalid tokens."""
-        response = client.post(
-            "/api/coaches/plus/videos/analyze",
-            json={"video_path": "/tmp/test.mp4"},
-            headers={"Authorization": "Bearer invalid_token_xyz"},
-        )
-        # Should be 401 or 403 depending on token validation
-        assert response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            response = client.post(
+                "/api/coaches/plus/videos/analyze",
+                json={"video_path": tmp_path},
+                headers={"Authorization": "Bearer invalid_token_xyz"},
+            )
+            # Should be 401 or 403 depending on token validation
+            assert response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
 
 class TestVideoAnalysisInputValidation:
@@ -145,52 +161,73 @@ class TestVideoAnalysisPipelineLogic:
         """Sample FPS parameter within valid range."""
         # Just verify the parameter is accepted (validation happens at endpoint)
         # We verify this by checking the request schema accepts these values
+        import tempfile
         from backend.routes.coach_pro_plus import VideoAnalysisRequest
 
-        req = VideoAnalysisRequest(
-            video_path="/tmp/test.mp4",
-            sample_fps=sample_fps,
-        )
-        assert req.sample_fps == sample_fps
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            req = VideoAnalysisRequest(
+                video_path=tmp_path,
+                sample_fps=sample_fps,
+            )
+            assert req.sample_fps == sample_fps
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     def test_sample_fps_validation_boundaries(self) -> None:
         """Sample FPS outside boundaries should be rejected."""
+        import tempfile
         from pydantic import ValidationError
 
         from backend.routes.coach_pro_plus import VideoAnalysisRequest
 
-        # Too low
-        with pytest.raises(ValidationError):
-            VideoAnalysisRequest(
-                video_path="/tmp/test.mp4",
-                sample_fps=0,
-            )
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            tmp_path = tmp.name
 
-        # Too high
-        with pytest.raises(ValidationError):
-            VideoAnalysisRequest(
-                video_path="/tmp/test.mp4",
-                sample_fps=31,
-            )
+        try:
+            # Too low
+            with pytest.raises(ValidationError):
+                VideoAnalysisRequest(
+                    video_path=tmp_path,
+                    sample_fps=0,
+                )
+
+            # Too high
+            with pytest.raises(ValidationError):
+                VideoAnalysisRequest(
+                    video_path=tmp_path,
+                    sample_fps=31,
+                )
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     def test_optional_parameters(self) -> None:
         """Player ID and session ID are optional."""
+        import tempfile
         from backend.routes.coach_pro_plus import VideoAnalysisRequest
 
-        # Minimal request
-        req = VideoAnalysisRequest(video_path="/tmp/test.mp4")
-        assert req.player_id is None
-        assert req.session_id is None
-        assert req.sample_fps == 10  # Default
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            tmp_path = tmp.name
 
-        # With optional parameters
-        req2 = VideoAnalysisRequest(
-            video_path="/tmp/test.mp4",
-            player_id="player_123",
-            session_id="session_456",
-        )
-        assert req2.player_id == "player_123"
-        assert req2.session_id == "session_456"
+        try:
+            # Minimal request
+            req = VideoAnalysisRequest(video_path=tmp_path)
+            assert req.player_id is None
+            assert req.session_id is None
+            assert req.sample_fps == 10  # Default
+
+            # With optional parameters
+            req2 = VideoAnalysisRequest(
+                video_path=tmp_path,
+                player_id="player_123",
+                session_id="session_456",
+            )
+            assert req2.player_id == "player_123"
+            assert req2.session_id == "session_456"
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
 
 class TestVideoAnalysisResponseStructure:

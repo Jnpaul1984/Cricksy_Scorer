@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -152,9 +152,16 @@ def normalize_by_shoulder_width(keypoints: dict[str, list[float]]) -> float:
         return 0.1  # Default fallback
 
     # Handle both dict and list formats
-    left_coords = left_shoulder[:2] if isinstance(left_shoulder, (list, tuple)) else [left_shoulder.get("x"), left_shoulder.get("y")]
-    right_coords = right_shoulder[:2] if isinstance(right_shoulder, (list, tuple)) else [right_shoulder.get("x"), right_shoulder.get("y")]
-    
+    if isinstance(left_shoulder, (list, tuple)):
+        left_coords = left_shoulder[:2]
+    else:
+        left_coords = [left_shoulder.get("x"), left_shoulder.get("y")]
+
+    if isinstance(right_shoulder, (list, tuple)):
+        right_coords = right_shoulder[:2]
+    else:
+        right_coords = [right_shoulder.get("x"), right_shoulder.get("y")]
+
     # Filter out None values
     if any(c is None for c in left_coords) or any(c is None for c in right_coords):
         return 0.1
@@ -185,25 +192,25 @@ def get_keypoint_value(keypoints: dict[str, Any], name: str) -> list[float] | No
         x = kp.get("x")
         y = kp.get("y")
         visibility = kp.get("visibility")
-        
+
         if x is None or y is None:
             return None
-        
+
         if visibility is not None and visibility < 0.5:
             return None
-        
+
         return [float(x), float(y)]
-    
+
     # Handle list format: [x, y, confidence, ...]
     if isinstance(kp, (list, tuple)):
         if len(kp) < 2:
             return None
-        
+
         # Confidence is at index 2, visibility might be at index 3
         confidence = kp[2] if len(kp) > 2 else None
         if confidence is not None and confidence < 0.5:
             return None
-        
+
         return [float(kp[0]), float(kp[1])]
 
     return None
@@ -238,14 +245,39 @@ def ensure_keypoints_dict(frame: dict[str, Any]) -> dict[str, Any]:
         except ImportError:
             # Fallback if import not available
             KEYPOINT_NAMES = [
-                "nose", "left_eye", "right_eye", "left_ear", "right_ear",
-                "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
-                "left_wrist", "right_wrist", "left_hip", "right_hip",
-                "left_knee", "right_knee", "left_ankle", "right_ankle",
-                "left_heel", "right_heel", "left_foot_index", "right_foot_index",
-                "left_eye_inner", "right_eye_inner", "left_eye_outer", "right_eye_outer",
-                "left_mouth_corner", "right_mouth_corner", "left_mouth_center", "right_mouth_center",
-                "left_pinky", "right_pinky", "left_index", "right_index"
+                "nose",
+                "left_eye",
+                "right_eye",
+                "left_ear",
+                "right_ear",
+                "left_shoulder",
+                "right_shoulder",
+                "left_elbow",
+                "right_elbow",
+                "left_wrist",
+                "right_wrist",
+                "left_hip",
+                "right_hip",
+                "left_knee",
+                "right_knee",
+                "left_ankle",
+                "right_ankle",
+                "left_heel",
+                "right_heel",
+                "left_foot_index",
+                "right_foot_index",
+                "left_eye_inner",
+                "right_eye_inner",
+                "left_eye_outer",
+                "right_eye_outer",
+                "left_mouth_corner",
+                "right_mouth_corner",
+                "left_mouth_center",
+                "right_mouth_center",
+                "left_pinky",
+                "right_pinky",
+                "left_index",
+                "right_index",
             ]
 
         # Convert landmarks list to keypoints dict
@@ -282,10 +314,10 @@ def compute_head_stability_score(frames: list[dict[str, Any]]) -> dict[str, Any]
             "debug": {...}
         }
     """
-    nose_movements = []
+    nose_movements: list[float] = []
     prev_nose = None
 
-    for i, frame in enumerate(frames):
+    for _i, frame in enumerate(frames):
         # Handle both 'pose_detected' and 'detected' field names
         if not (frame.get("pose_detected") or frame.get("detected")):
             continue
@@ -489,9 +521,9 @@ def compute_hip_shoulder_separation_timing(frames: list[dict[str, Any]]) -> dict
             "debug": {...}
         }
     """
-    hip_angles = []
-    shoulder_angles = []
-    times = []
+    hip_angles: list[float | None] = []
+    shoulder_angles: list[float | None] = []
+    times: list[float] = []
 
     for frame in frames:
         # Handle both 'pose_detected' and 'detected' field names
@@ -535,22 +567,26 @@ def compute_hip_shoulder_separation_timing(frames: list[dict[str, Any]]) -> dict
         }
 
     # Compute velocities (simple derivative)
-    hip_velocities = []
+    hip_velocities: list[tuple[float, float]] = []
     for i in range(1, len(hip_angles)):
         if hip_angles[i] is not None and hip_angles[i - 1] is not None:
             dt = times[i] - times[i - 1]
             if dt > 0:
-                vel = (hip_angles[i] - hip_angles[i - 1]) / dt
+                hip_a = cast(float, hip_angles[i])
+                hip_b = cast(float, hip_angles[i - 1])
+                vel = (hip_a - hip_b) / dt
                 hip_velocities.append((times[i], abs(vel)))
             else:
                 hip_velocities.append((times[i], 0.0))
 
-    shoulder_velocities = []
+    shoulder_velocities: list[tuple[float, float]] = []
     for i in range(1, len(shoulder_angles)):
         if shoulder_angles[i] is not None and shoulder_angles[i - 1] is not None:
             dt = times[i] - times[i - 1]
             if dt > 0:
-                vel = (shoulder_angles[i] - shoulder_angles[i - 1]) / dt
+                shoulder_a = cast(float, shoulder_angles[i])
+                shoulder_b = cast(float, shoulder_angles[i - 1])
+                vel = (shoulder_a - shoulder_b) / dt
                 shoulder_velocities.append((times[i], abs(vel)))
             else:
                 shoulder_velocities.append((times[i], 0.0))

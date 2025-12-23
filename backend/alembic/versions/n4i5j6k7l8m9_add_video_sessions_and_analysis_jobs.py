@@ -48,7 +48,9 @@ def upgrade() -> None:
         sa.Column("s3_key", sa.String(length=500), nullable=True),
         sa.Column(
             "status",
-            sa.Enum("pending", "uploaded", "processing", "ready", "failed", name="video_session_status"),
+            sa.Enum(
+                "pending", "uploaded", "processing", "ready", "failed", name="video_session_status"
+            ),
             nullable=False,
         ),
         sa.Column(
@@ -78,7 +80,9 @@ def upgrade() -> None:
         sa.Column("include_frames", sa.Boolean(), nullable=False),
         sa.Column(
             "status",
-            sa.Enum("queued", "processing", "completed", "failed", name="video_analysis_job_status"),
+            sa.Enum(
+                "queued", "processing", "completed", "failed", name="video_analysis_job_status"
+            ),
             nullable=False,
         ),
         sa.Column("error_message", sa.Text(), nullable=True),
@@ -127,4 +131,3 @@ def downgrade() -> None:
     sa.Enum(name="video_analysis_job_status").drop(op.get_bind(), checkfirst=True)
     sa.Enum(name="video_session_status").drop(op.get_bind(), checkfirst=True)
     sa.Enum(name="owner_type").drop(op.get_bind(), checkfirst=True)
-

@@ -20,6 +20,44 @@ DEFAULT_MODEL_PATH = "/app/mediapipe_models/pose_landmarker_full.task"
 DEFAULT_RUNNING_MODE = "VIDEO"
 SUPPORTED_RUNNING_MODES = ("VIDEO", "IMAGE", "LIVE_STREAM")
 
+# MediaPipe Pose keypoint names (33 landmarks)
+KEYPOINT_NAMES = [
+    "nose",
+    "left_eye",
+    "right_eye",
+    "left_ear",
+    "right_ear",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hip",
+    "right_hip",
+    "left_knee",
+    "right_knee",
+    "left_ankle",
+    "right_ankle",
+    "head",
+    "left_pinky",
+    "right_pinky",
+    "left_index",
+    "right_index",
+    "left_thumb",
+    "right_thumb",
+    "left_foot_index",
+    "right_foot_index",
+    "left_elbow_crease",
+    "right_elbow_crease",
+    "left_knee_crease",
+    "right_knee_crease",
+    "left_foot_external",
+    "right_foot_external",
+    "left_foot_internal",
+    "right_foot_internal",
+]
+
 # Module-level state
 _pose_landmarker = None
 _model_path_verified = False
@@ -27,33 +65,32 @@ _model_path_verified = False
 
 def get_model_path() -> str:
     """Get and validate MediaPipe pose model path.
-    
+
     Reads MEDIAPIPE_POSE_MODEL_PATH environment variable on each call (not cached).
-    
+
     Validates that:
     - File exists
     - File is readable
     - File is at least 1MB (practical minimum for model)
-    
+
     Note: .task files are bundle packages (ZIP format internally) and may start
     with ZIP/PK bytes rather than TFL3 header, so we skip format validation here.
     Actual validation happens during PoseLandmarker.create_from_options().
-    
+
     Raises:
         FileNotFoundError: If model file is not found
         RuntimeError: If path is misconfigured or file is invalid
     """
     # Read from environment on each call (not cached)
     model_path = os.getenv("MEDIAPIPE_POSE_MODEL_PATH", DEFAULT_MODEL_PATH)
-    
+
     if not model_path:
         raise RuntimeError(
-            "MEDIAPIPE_POSE_MODEL_PATH is empty. "
-            f"Set it or mount model to {DEFAULT_MODEL_PATH}"
+            "MEDIAPIPE_POSE_MODEL_PATH is empty. " f"Set it or mount model to {DEFAULT_MODEL_PATH}"
         )
-    
+
     path_obj = Path(model_path)
-    
+
     if not path_obj.exists():
         raise FileNotFoundError(
             f"MediaPipe pose model not found at: {model_path}\n"
@@ -61,12 +98,10 @@ def get_model_path() -> str:
             f"Docker volume mount: -v /host/path/pose_landmarker_full.task:"
             f"/app/mediapipe_models/pose_landmarker_full.task"
         )
-    
+
     if not path_obj.is_file():
-        raise RuntimeError(
-            f"MediaPipe pose model path is not a file: {model_path}"
-        )
-    
+        raise RuntimeError(f"MediaPipe pose model path is not a file: {model_path}")
+
     # Verify file is readable and has reasonable size
     try:
         file_size = path_obj.stat().st_size
@@ -75,54 +110,52 @@ def get_model_path() -> str:
                 f"Model file is suspiciously small ({file_size} bytes). "
                 f"Expected at least 1MB. File may be corrupted: {model_path}"
             )
-        
+
         # Attempt to open and read first byte to verify readability
         with open(path_obj, "rb") as f:
             _ = f.read(1)
     except OSError as e:
-        raise RuntimeError(
-            f"Cannot read MediaPipe model file: {model_path}\n{e}"
-        ) from e
-    
+        raise RuntimeError(f"Cannot read MediaPipe model file: {model_path}\n{e}") from e
+
     logger.info(f"✅ MediaPipe pose model path validated: {model_path} ({file_size} bytes)")
     return str(model_path)
 
 
 def get_running_mode() -> str:
     """Get and validate MediaPipe running mode.
-    
+
     Reads MEDIAPIPE_RUNNING_MODE environment variable on each call.
     Supported modes: VIDEO, IMAGE, LIVE_STREAM (default: VIDEO)
-    
+
     Returns:
         str: One of "VIDEO", "IMAGE", "LIVE_STREAM"
-        
+
     Raises:
         ValueError: If running mode is not supported
     """
     running_mode = os.getenv("MEDIAPIPE_RUNNING_MODE", DEFAULT_RUNNING_MODE).upper()
-    
+
     if running_mode not in SUPPORTED_RUNNING_MODES:
         raise ValueError(
             f"Unsupported MEDIAPIPE_RUNNING_MODE: {running_mode}. "
             f"Supported modes: {', '.join(SUPPORTED_RUNNING_MODES)}"
         )
-    
+
     logger.info(f"✅ MediaPipe running mode: {running_mode}")
     return running_mode
 
 
 def initialize_pose_landmarker():
     """Initialize MediaPipe PoseLandmarker with loaded model.
-    
+
     Validates model file exists and attempts to create PoseLandmarker.
     Running mode is determined by MEDIAPIPE_RUNNING_MODE environment variable.
     This is where real format validation happens - if model is corrupted or
     incompatible, MediaPipe will raise an error here.
-    
+
     Returns:
         mediapipe.tasks.python.vision.PoseLandmarker: Initialized detector
-        
+
     Raises:
         ImportError: If MediaPipe is not installed
         FileNotFoundError: If model file is missing
@@ -130,13 +163,13 @@ def initialize_pose_landmarker():
         RuntimeError: If initialization fails
     """
     global _pose_landmarker, _model_path_verified
-    
+
     if _pose_landmarker is not None:
         logger.debug("Reusing existing PoseLandmarker instance")
         return _pose_landmarker
-    
+
     logger.info("Initializing MediaPipe PoseLandmarker...")
-    
+
     # Import and verify MediaPipe
     try:
         from mediapipe.tasks.python import vision
@@ -148,16 +181,16 @@ def initialize_pose_landmarker():
     # Verify model path exists and is readable
     model_path = get_model_path()
     _model_path_verified = True
-    
+
     # Get and validate running mode
     running_mode_str = get_running_mode()
-    
+
     # Create detector options
     try:
         BaseOptions = mp.tasks.BaseOptions
         PoseLandmarkerOptions = vision.PoseLandmarkerOptions
         VisionRunningMode = vision.RunningMode
-        
+
         # Map string to RunningMode enum
         running_mode_map = {
             "IMAGE": VisionRunningMode.IMAGE,
@@ -165,19 +198,21 @@ def initialize_pose_landmarker():
             "LIVE_STREAM": VisionRunningMode.LIVE_STREAM,
         }
         running_mode = running_mode_map[running_mode_str]
-        
+
         options = PoseLandmarkerOptions(
             base_options=BaseOptions(model_asset_path=model_path),
             running_mode=running_mode,
             num_poses=1,  # Single person detection
         )
-        
+
         logger.info(f"Creating PoseLandmarker with running_mode={running_mode_str}...")
         _pose_landmarker = vision.PoseLandmarker.create_from_options(options)
-        logger.info(f"✅ MediaPipe PoseLandmarker initialized successfully (mode={running_mode_str})")
-        
+        logger.info(
+            f"✅ MediaPipe PoseLandmarker initialized successfully (mode={running_mode_str})"
+        )
+
         return _pose_landmarker
-        
+
     except FileNotFoundError as e:
         raise FileNotFoundError(
             f"Model file not found during initialization: {model_path}\n{e}"
@@ -203,7 +238,7 @@ def initialize_pose_landmarker():
 
 def verify_mediapipe_setup() -> dict:
     """Verify MediaPipe setup and return status info.
-    
+
     Returns:
         dict with keys:
             - mediapipe_available: bool
@@ -212,7 +247,7 @@ def verify_mediapipe_setup() -> dict:
             - running_mode: str
             - landmarker_initialized: bool
             - error: Optional[str]
-            
+
     Raises:
         Exception: If verification fails (intentional - no hiding errors)
     """
@@ -224,15 +259,16 @@ def verify_mediapipe_setup() -> dict:
         "landmarker_initialized": False,
         "error": None,
     }
-    
+
     # Check MediaPipe import
     try:
         import mediapipe  # noqa: F401
+
         status["mediapipe_available"] = True
     except ImportError as e:
         status["error"] = f"MediaPipe not installed: {e}"
         raise RuntimeError(status["error"]) from e
-    
+
     # Check model file
     try:
         model_path = get_model_path()
@@ -244,7 +280,7 @@ def verify_mediapipe_setup() -> dict:
     except RuntimeError as e:
         status["error"] = str(e)
         raise
-    
+
     # Check running mode
     try:
         running_mode = get_running_mode()
@@ -252,7 +288,7 @@ def verify_mediapipe_setup() -> dict:
     except ValueError as e:
         status["error"] = str(e)
         raise
-    
+
     # Check landmarker
     try:
         landmarker = initialize_pose_landmarker()
@@ -260,25 +296,25 @@ def verify_mediapipe_setup() -> dict:
     except Exception as e:
         status["error"] = f"Landmarker init failed: {e}"
         raise
-    
+
     logger.info(f"MediaPipe verification passed: {status}")
     return status
 
 
 def get_pose_landmarker():
     """Get initialized PoseLandmarker instance.
-    
+
     Returns:
         mediapipe.tasks.python.vision.PoseLandmarker
-        
+
     Raises:
         RuntimeError: If not initialized or initialization failed
     """
     global _pose_landmarker
-    
+
     if _pose_landmarker is None:
         initialize_pose_landmarker()
-    
+
     return _pose_landmarker
 
 
@@ -304,16 +340,14 @@ def get_detection_method_name() -> str:
         }
         return mode_map.get(running_mode, "detect_for_video")
     except Exception as e:
-        logger.warning(
-            f"Error getting detection method name, defaulting to detect_for_video: {e}"
-        )
+        logger.warning(f"Error getting detection method name, defaulting to detect_for_video: {e}")
         return "detect_for_video"
 
 
 def shutdown_pose_landmarker():
     """Cleanup pose landmarker resources."""
     global _pose_landmarker
-    
+
     if _pose_landmarker is not None:
         try:
             _pose_landmarker.close()

@@ -4,7 +4,8 @@ Pose Extraction Demo CLI
 
 Usage:
     python backend/scripts/pose_extract_demo.py /path/to/video.mp4
-    python backend/scripts/pose_extract_demo.py /path/to/video.mp4 --sample-fps 5 --output /tmp/output.json
+    python backend/scripts/pose_extract_demo.py /path/to/video.mp4 \
+        --sample-fps 5 --output /tmp/output.json
 
 Extracts pose keypoints from a video and writes results to JSON.
 """

@@ -89,9 +89,9 @@ def download_video_from_s3(bucket: str, key: str, local_path: str) -> None:
         s3_client.download_file(bucket, key, local_path)
         logger.info(f"Downloaded {Path(local_path).stat().st_size} bytes")
     except ClientError as e:
-        raise RuntimeError(f"Failed to download video from S3: {str(e)}") from e
+        raise RuntimeError(f"Failed to download video from S3: {e!s}") from e
     except Exception as e:
-        raise RuntimeError(f"Failed to download video: {str(e)}") from e
+        raise RuntimeError(f"Failed to download video: {e!s}") from e
 
 
 # ============================================================================
@@ -158,7 +158,7 @@ def run_analysis_pipeline(video_path: str, sample_fps: int = 10) -> dict[str, An
         return result
 
     except Exception as e:
-        logger.error(f"Analysis pipeline failed: {str(e)}", exc_info=True)
+        logger.error(f"Analysis pipeline failed: {e!s}", exc_info=True)
         raise
 
 
@@ -298,14 +298,14 @@ async def process_message(
 
     except ValueError as e:
         # Job not found or missing data
-        logger.error(f"Invalid job data: {str(e)}")
+        logger.error(f"Invalid job data: {e!s}")
         try:
             job = await load_job_from_db(job_id, db)
             await update_job_results(
                 job=job,
                 results_json={},
                 status=VideoAnalysisJobStatus.failed,
-                error_message=f"Invalid job: {str(e)}",
+                error_message=f"Invalid job: {e!s}",
                 db=db,
             )
         except Exception:
@@ -315,14 +315,14 @@ async def process_message(
 
     except Exception as e:
         # Processing error - update job status and don't delete message (will retry)
-        logger.error(f"Failed to process job {job_id}: {str(e)}", exc_info=True)
+        logger.error(f"Failed to process job {job_id}: {e!s}", exc_info=True)
         try:
             job = await load_job_from_db(job_id, db)
             await update_job_results(
                 job=job,
                 results_json={},
                 status=VideoAnalysisJobStatus.failed,
-                error_message=f"Processing failed: {str(e)}",
+                error_message=f"Processing failed: {e!s}",
                 db=db,
             )
         except Exception:
@@ -357,18 +357,20 @@ async def receive_messages() -> list[dict[str, Any]]:
             except json.JSONDecodeError:
                 body = msg.get("Body")
 
-            messages.append({
-                "id": msg.get("MessageId"),
-                "receipt_handle": msg.get("ReceiptHandle"),
-                "body": body,
-            })
+            messages.append(
+                {
+                    "id": msg.get("MessageId"),
+                    "receipt_handle": msg.get("ReceiptHandle"),
+                    "body": body,
+                }
+            )
 
         if messages:
             logger.info(f"Received {len(messages)} message(s) from SQS")
         return messages
 
     except ClientError as e:
-        logger.error(f"Failed to receive messages from SQS: {str(e)}")
+        logger.error(f"Failed to receive messages from SQS: {e!s}")
         return []
 
 
@@ -390,7 +392,7 @@ def delete_message(receipt_handle: str) -> bool:
         logger.info(f"Deleted message {receipt_handle[:20]}...")
         return True
     except ClientError as e:
-        logger.error(f"Failed to delete message: {str(e)}")
+        logger.error(f"Failed to delete message: {e!s}")
         return False
 
 
@@ -433,7 +435,7 @@ async def worker_loop() -> None:
                         logger.warning(f"Message {receipt_handle[:20]}... will be retried")
 
         except Exception as e:
-            logger.error(f"Worker error: {str(e)}", exc_info=True)
+            logger.error(f"Worker error: {e!s}", exc_info=True)
             await asyncio.sleep(SLEEP_ON_ERROR)
 
 
@@ -455,7 +457,7 @@ def main() -> None:
         logger.info("Worker interrupted by user")
         sys.exit(0)
     except Exception as e:
-        logger.error(f"Fatal error: {str(e)}", exc_info=True)
+        logger.error(f"Fatal error: {e!s}", exc_info=True)
         sys.exit(1)
 
 

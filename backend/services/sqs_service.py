@@ -45,7 +45,7 @@ class SQSService:
             body = json.dumps(message_body)
 
             # Prepare send parameters
-            params = {
+            params: dict[str, Any] = {
                 "QueueUrl": queue_url,
                 "MessageBody": body,
             }
@@ -63,7 +63,7 @@ class SQSService:
 
             return message_id
         except ClientError as e:
-            raise RuntimeError(f"Failed to send SQS message: {str(e)}") from e
+            raise RuntimeError(f"Failed to send SQS message: {e!s}") from e
 
     def receive_messages(
         self,
@@ -99,17 +99,19 @@ class SQSService:
                 except json.JSONDecodeError:
                     body = msg.get("Body")
 
-                messages.append({
-                    "id": msg.get("MessageId"),
-                    "receipt_handle": msg.get("ReceiptHandle"),
-                    "body": body,
-                    "attributes": msg.get("Attributes", {}),
-                    "message_attributes": msg.get("MessageAttributes", {}),
-                })
+                messages.append(
+                    {
+                        "id": msg.get("MessageId"),
+                        "receipt_handle": msg.get("ReceiptHandle"),
+                        "body": body,
+                        "attributes": msg.get("Attributes", {}),
+                        "message_attributes": msg.get("MessageAttributes", {}),
+                    }
+                )
 
             return messages
         except ClientError as e:
-            raise RuntimeError(f"Failed to receive SQS messages: {str(e)}") from e
+            raise RuntimeError(f"Failed to receive SQS messages: {e!s}") from e
 
     def delete_message(self, queue_url: str, receipt_handle: str) -> None:
         """
@@ -128,7 +130,7 @@ class SQSService:
                 ReceiptHandle=receipt_handle,
             )
         except ClientError as e:
-            raise RuntimeError(f"Failed to delete SQS message: {str(e)}") from e
+            raise RuntimeError(f"Failed to delete SQS message: {e!s}") from e
 
 
 # Global instance

@@ -12,6 +12,7 @@ Converts pose metrics into human-readable coaching findings with:
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ DRILL_SUGGESTIONS = {
 # Finding Definitions
 # ============================================================================
 
-FINDING_DEFINITIONS = {
+FINDING_DEFINITIONS: dict[str, dict[str, Any]] = {
     "HEAD_MOVEMENT": {
         "title": "Head movement through contact",
         "why_it_matters": "A stable head position is crucial for visual tracking and bat control. "
@@ -257,6 +258,7 @@ def _get_severity(score: float, threshold: float, is_higher_better: bool = True)
             return "high"
     else:
         # Lower is better (gap/difference metrics)
+        diff = score - threshold
         if diff < 0.05:
             return "low"
         elif diff < 0.15:
@@ -279,9 +281,7 @@ def _get_overall_level(findings: list[dict]) -> str:
         return "high"
 
     severity_scores = {"low": 1, "medium": 2, "high": 3}
-    avg_severity = sum(severity_scores.get(f["severity"], 1) for f in findings) / len(
-        findings
-    )
+    avg_severity = sum(severity_scores.get(f["severity"], 1) for f in findings) / len(findings)
 
     if avg_severity < 1.5:
         return "high"
@@ -441,7 +441,7 @@ def _check_elbow_drop(metrics: dict) -> dict | None:
 # ============================================================================
 
 
-def generate_findings(metrics: dict, context: dict | None = None) -> dict:
+def generate_findings(metrics: dict, context: dict | None = None) -> dict[str, Any]:
     """
     Generate rule-based coaching findings from metrics.
 
@@ -498,20 +498,21 @@ def generate_findings(metrics: dict, context: dict | None = None) -> dict:
 
     # Check for insufficient pose visibility across metrics
     zero_frame_metrics = sum(
-        1 for metric in metric_scores.values()
+        1
+        for metric in metric_scores.values()
         if isinstance(metric, dict) and metric.get("num_frames", 0) == 0
     )
-    
+
     if zero_frame_metrics > 2:
         # Calculate detection rate if available
         summary = metrics.get("summary", {})
         total_frames = summary.get("total_frames", 1)
         frames_with_pose = summary.get("frames_with_pose", 0)
         detection_rate = (frames_with_pose / total_frames * 100) if total_frames > 0 else 0
-        
+
         # Set severity based on detection rate
         severity = "low" if detection_rate >= 50 else "medium"
-        
+
         visibility_finding = {
             "code": "INSUFFICIENT_POSE_VISIBILITY",
             "title": "Insufficient Pose Visibility",
@@ -524,13 +525,13 @@ def generate_findings(metrics: dict, context: dict | None = None) -> dict:
             "cues": [
                 "Improve video lighting and camera angle",
                 "Ensure the athlete's full body is visible in the frame",
-                "Reduce background clutter and improve contrast"
+                "Reduce background clutter and improve contrast",
             ],
             "suggested_drills": [
                 "Re-record the video with better lighting",
                 "Adjust camera position for clearer pose visibility",
-                "Test with different camera angles if available"
-            ]
+                "Test with different camera angles if available",
+            ],
         }
         findings.append(visibility_finding)
 
@@ -539,7 +540,7 @@ def generate_findings(metrics: dict, context: dict | None = None) -> dict:
 
     logger.info(f"Generated {len(findings)} findings with overall level: {overall_level}")
 
-    result = {
+    result: dict[str, Any] = {
         "overall_level": overall_level,
         "findings": findings,
     }
