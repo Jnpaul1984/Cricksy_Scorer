@@ -12,7 +12,6 @@ Environment:
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +58,8 @@ def get_model_path() -> str:
         raise FileNotFoundError(
             f"MediaPipe pose model not found at: {model_path}\n"
             f"Expected path: {DEFAULT_MODEL_PATH}\n"
-            f"Docker volume mount: -v /host/path/pose_landmarker_full.task:/app/mediapipe_models/pose_landmarker_full.task"
+            f"Docker volume mount: -v /host/path/pose_landmarker_full.task:"
+            f"/app/mediapipe_models/pose_landmarker_full.task"
         )
     
     if not path_obj.is_file():
@@ -79,8 +79,10 @@ def get_model_path() -> str:
         # Attempt to open and read first byte to verify readability
         with open(path_obj, "rb") as f:
             _ = f.read(1)
-    except IOError as e:
-        raise RuntimeError(f"Cannot read MediaPipe model file: {model_path}\n{e}")
+    except OSError as e:
+        raise RuntimeError(
+            f"Cannot read MediaPipe model file: {model_path}\n{e}"
+        ) from e
     
     logger.info(f"✅ MediaPipe pose model path validated: {model_path} ({file_size} bytes)")
     return str(model_path)
@@ -137,14 +139,12 @@ def initialize_pose_landmarker():
     
     # Import and verify MediaPipe
     try:
-        from mediapipe.tasks import python
         from mediapipe.tasks.python import vision
         import mediapipe as mp
     except ImportError as e:
         raise ImportError(
             f"MediaPipe is not installed. Install with: pip install mediapipe\n{e}"
-        )
-    
+        ) from e
     # Verify model path exists and is readable
     model_path = get_model_path()
     _model_path_verified = True
@@ -227,11 +227,11 @@ def verify_mediapipe_setup() -> dict:
     
     # Check MediaPipe import
     try:
-        from mediapipe.tasks.python import vision
+        import mediapipe  # noqa: F401
         status["mediapipe_available"] = True
     except ImportError as e:
         status["error"] = f"MediaPipe not installed: {e}"
-        raise RuntimeError(status["error"])
+        raise RuntimeError(status["error"]) from e
     
     # Check model file
     try:
@@ -284,10 +284,11 @@ def get_pose_landmarker():
 
 def get_detection_method_name() -> str:
     """Get the appropriate detection method name based on running mode.
-    
+
     Returns:
-        str: "detect" for IMAGE mode, "detect_for_video" for VIDEO mode, "detect_async" for LIVE_STREAM
-        
+        str: "detect" for IMAGE mode, "detect_for_video" for VIDEO mode,
+        "detect_async" for LIVE_STREAM
+
     Note:
         Use this to determine which detection method to call on the landmarker:
         - IMAGE mode: landmarker.detect(image)
@@ -296,14 +297,16 @@ def get_detection_method_name() -> str:
     """
     try:
         running_mode = get_running_mode()
-        if running_mode == "IMAGE":
-            return "detect"
-        elif running_mode == "VIDEO":
-            return "detect_for_video"
-        elif running_mode == "LIVE_STREAM":
-            return "detect_async"
+        mode_map = {
+            "IMAGE": "detect",
+            "VIDEO": "detect_for_video",
+            "LIVE_STREAM": "detect_async",
+        }
+        return mode_map.get(running_mode, "detect_for_video")
     except Exception as e:
-        logger.warning(f"Error getting detection method name, defaulting to detect_for_video: {e}")
+        logger.warning(
+            f"Error getting detection method name, defaulting to detect_for_video: {e}"
+        )
         return "detect_for_video"
 
 

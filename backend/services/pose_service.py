@@ -16,11 +16,13 @@ from typing import Any
 
 import cv2
 import mediapipe as mp
+from backend.mediapipe_init import (
+    get_pose_landmarker,
+    get_model_path,
+    get_detection_method_name,
+)
 
 logger = logging.getLogger(__name__)
-
-# Import MediaPipe initialization (fails fast if model is missing)
-from backend.mediapipe_init import get_pose_landmarker, get_model_path, get_detection_method_name
 
 
 # MediaPipe Pose Landmarker outputs 33 keypoints
@@ -66,11 +68,10 @@ def extract_pose_keypoints_from_video(
     sample_fps: float = 2.0,
     max_width: int = 640,
 ) -> dict[str, Any]:
-    """
-    Extract pose keypoints from a video file using MediaPipe Tasks Vision API.
+    """Extract pose keypoints from a video file using MediaPipe Tasks Vision API.
 
-    MediaPipe Pose Landmarker detects 33 keypoints per frame (nose, shoulders, 
-    elbows, wrists, hips, knees, ankles, and facial landmarks). Each keypoint 
+    MediaPipe Pose Landmarker detects 33 keypoints per frame (nose, shoulders,
+    elbows, wrists, hips, knees, ankles, and facial landmarks). Each keypoint
     has x, y, z coordinates and visibility score.
 
     Args:
@@ -91,7 +92,8 @@ def extract_pose_keypoints_from_video(
         ValueError: If video cannot be read or has no frames
         RuntimeError: If MediaPipe model is not initialized or available
     """
-    video_path = Path(video_path)
+    if isinstance(video_path, str):
+        video_path = Path(video_path)
 
     if not video_path.exists():
         raise FileNotFoundError(f"Video file not found: {video_path}")
