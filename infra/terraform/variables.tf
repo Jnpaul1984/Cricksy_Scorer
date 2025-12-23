@@ -42,3 +42,24 @@ variable "backend_cors_origins" {
   type        = string
   default     = "http://localhost:5173,https://app.cricksy-ai.com"
 }
+variable "aws_region" {
+  description = "AWS region for S3 and SQS resources"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "s3_coach_videos_bucket" {
+  description = "S3 bucket name for coach video uploads"
+  type        = string
+}
+
+variable "s3_upload_url_expires_seconds" {
+  description = "Expiration time for S3 presigned URLs in seconds"
+  type        = number
+  default     = 3600
+}
+
+variable "sqs_video_analysis_queue_url" {
+  description = "SQS queue URL for video analysis jobs (e.g., https://sqs.us-east-1.amazonaws.com/ACCOUNT_ID/cricksy-video-analysis-prod)"
+  type        = string
+}

@@ -19,9 +19,17 @@ echo ""
 export PYTHONPATH=/app
 echo "PYTHONPATH set to: $PYTHONPATH"
 
-# Extract database name from DATABASE_URL and create it if it doesn't exist
-# DATABASE_URL format: postgresql+asyncpg://user:pass@host:port/dbname
-echo "=== Checking/Creating database ==="
+# Check if we should run migrations (default: false)
+RUN_MIGRATIONS="${RUN_MIGRATIONS:-false}"
+echo "RUN_MIGRATIONS: $RUN_MIGRATIONS"
+echo ""
+
+if [ "$RUN_MIGRATIONS" = "true" ]; then
+  echo "=== Migrations enabled. Running database setup ==="
+
+  # Extract database name from DATABASE_URL and create it if it doesn't exist
+  # DATABASE_URL format: postgresql+asyncpg://user:pass@host:port/dbname
+  echo "=== Checking/Creating database ==="
 python << 'PYEOF'
 import os
 import sys
@@ -84,14 +92,27 @@ async def ensure_database():
 asyncio.run(ensure_database())
 PYEOF
 
-echo "=== Running Alembic migrations ==="
-cd /app
-if python -m alembic -c backend/alembic.ini upgrade head; then
-    echo "Migrations completed successfully"
+  echo "=== Running Alembic migrations ==="
+  cd /app
+  if python -m alembic -c backend/alembic.ini upgrade head; then
+      echo "Migrations completed successfully"
+  else
+      echo "ERROR: Alembic migration failed with exit code $?"
+      echo "Continuing anyway to allow the server to start for debugging..."
+  fi
+
 else
-    echo "ERROR: Alembic migration failed with exit code $?"
-    echo "Continuing anyway to allow the server to start for debugging..."
+  echo "=== Migrations disabled (RUN_MIGRATIONS=false). Skipping database setup ==="
 fi
 
-echo "=== Starting FastAPI server ==="
-exec uvicorn backend.main:app --host 0.0.0.0 --port 8000
+echo ""
+echo "=== Executing container command ==="
+
+# If no command provided, default to FastAPI server
+if [ $# -eq 0 ]; then
+  echo "No command provided. Starting Uvicorn (default)."
+  exec uvicorn backend.main:app --host 0.0.0.0 --port 8000
+else
+  echo "Executing: $@"
+  exec "$@"
+fi

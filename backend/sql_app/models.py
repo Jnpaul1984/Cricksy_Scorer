@@ -1206,3 +1206,179 @@ class Delivery(Base):
         Index("ix_delivery_bowler", "bowler_id"),
         Index("ix_delivery_batter", "batter_id"),
     )
+
+
+# ============================================================================
+# Video Analysis Models (Coach Pro Plus)
+# ============================================================================
+
+
+class OwnerTypeEnum(str, enum.Enum):
+    """Type of owner for video sessions and analysis jobs."""
+
+    coach = "coach"
+    org = "org"
+
+
+class VideoSessionStatus(str, enum.Enum):
+    """Status of a video session."""
+
+    pending = "pending"  # Created but no video uploaded
+    uploaded = "uploaded"  # Video file uploaded to S3
+    processing = "processing"  # Analysis in progress
+    ready = "ready"  # Analysis complete
+    failed = "failed"  # Analysis failed
+
+
+class VideoAnalysisJobStatus(str, enum.Enum):
+    """Status of a video analysis job."""
+
+    queued = "queued"  # Job created, waiting in queue
+    processing = "processing"  # Job is being processed
+    completed = "completed"  # Job completed successfully
+    failed = "failed"  # Job failed
+
+
+class VideoSession(Base):
+    """Video session for Coach Pro Plus features.
+
+    Tracks uploaded coaching videos with metadata about ownership and S3 storage.
+    """
+
+    __tablename__ = "video_sessions"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    # Ownership (flexible: coach user or org)
+    owner_type: Mapped[OwnerTypeEnum] = mapped_column(
+        SAEnum(OwnerTypeEnum, name="owner_type"),
+        nullable=False,
+        comment="Type of owner: coach or org",
+    )
+    owner_id: Mapped[str] = mapped_column(
+        String, nullable=False, index=True, comment="Coach user_id or org_id"
+    )
+
+    # Session metadata
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    player_ids: Mapped[list[str]] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False,
+        comment="Player IDs involved",
+    )
+
+    # S3 storage details
+    s3_bucket: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="S3 bucket name where video is stored"
+    )
+    s3_key: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="S3 object key for the video file"
+    )
+
+    # Status tracking
+    status: Mapped[VideoSessionStatus] = mapped_column(
+        SAEnum(VideoSessionStatus, name="video_session_status"),
+        default=VideoSessionStatus.pending,
+        nullable=False,
+    )
+
+    # Timestamps
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    analysis_jobs: Mapped[list[VideoAnalysisJob]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("ix_video_sessions_owner", "owner_type", "owner_id"),
+        Index("ix_video_sessions_status", "status"),
+        Index("ix_video_sessions_created_at", "created_at"),
+    )
+
+
+class VideoAnalysisJob(Base):
+    """Video analysis job for processing video content.
+
+    Represents an async job in the SQS queue for frame extraction, pose detection, etc.
+    """
+
+    __tablename__ = "video_analysis_jobs"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+
+    # Reference to session
+    session_id: Mapped[str] = mapped_column(
+        String, ForeignKey("video_sessions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    # Job configuration
+    sample_fps: Mapped[int] = mapped_column(
+        Integer, default=10, nullable=False, comment="Frames sampled per second"
+    )
+    include_frames: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="Include per-frame data in results",
+    )
+
+    # Status and error handling
+    status: Mapped[VideoAnalysisJobStatus] = mapped_column(
+        SAEnum(VideoAnalysisJobStatus, name="video_analysis_job_status"),
+        default=VideoAnalysisJobStatus.queued,
+        nullable=False,
+    )
+    error_message: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Error details if job failed"
+    )
+
+    # SQS tracking
+    sqs_message_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="AWS SQS message ID when enqueued"
+    )
+
+    # Results storage
+    results: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, comment="Full analysis results: pose, metrics, findings, report"
+    )
+
+    # Timestamps
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    started_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="When processing started"
+    )
+    completed_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="When processing completed"
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    session: Mapped[VideoSession] = relationship(back_populates="analysis_jobs")
+
+    __table_args__ = (
+        Index("ix_analysis_jobs_session_id", "session_id"),
+        Index("ix_analysis_jobs_status", "status"),
+        Index("ix_analysis_jobs_created_at", "created_at"),
+        Index("ix_analysis_jobs_sqs_message_id", "sqs_message_id"),
+    )
