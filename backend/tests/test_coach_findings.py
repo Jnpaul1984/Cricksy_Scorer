@@ -114,7 +114,7 @@ class TestHeadMovementFinding:
     def test_head_stable_no_finding(self) -> None:
         """High head stability should not generate finding."""
         metrics = {
-            "head_stability_score": {"score": 0.85},
+            "head_stability_score": {"score": 0.85, "num_frames": 100},
         }
 
         finding = _check_head_movement(metrics)
@@ -123,7 +123,7 @@ class TestHeadMovementFinding:
     def test_head_unstable_low_severity(self) -> None:
         """Slightly low head stability should generate low severity finding."""
         metrics = {
-            "head_stability_score": {"score": 0.55},
+            "head_stability_score": {"score": 0.55, "num_frames": 100},
         }
 
         finding = _check_head_movement(metrics)
@@ -136,7 +136,7 @@ class TestHeadMovementFinding:
     def test_head_unstable_high_severity(self) -> None:
         """Very low head stability should generate high severity finding."""
         metrics = {
-            "head_stability_score": {"score": 0.35},
+            "head_stability_score": {"score": 0.35, "num_frames": 100},
         }
 
         finding = _check_head_movement(metrics)
@@ -157,7 +157,7 @@ class TestBalanceDriftFinding:
     def test_balance_good_no_finding(self) -> None:
         """Good balance should not generate finding."""
         metrics = {
-            "balance_drift_score": {"score": 0.75},
+            "balance_drift_score": {"score": 0.75, "num_frames": 100},
         }
 
         finding = _check_balance_drift(metrics)
@@ -166,7 +166,7 @@ class TestBalanceDriftFinding:
     def test_balance_poor_finding_generated(self) -> None:
         """Poor balance should generate finding."""
         metrics = {
-            "balance_drift_score": {"score": 0.40},
+            "balance_drift_score": {"score": 0.40, "num_frames": 100},
         }
 
         finding = _check_balance_drift(metrics)
@@ -182,7 +182,7 @@ class TestKneeCollapseFinding:
     def test_knee_braced_no_finding(self) -> None:
         """Good knee brace should not generate finding."""
         metrics = {
-            "front_knee_brace_score": {"score": 0.80},
+            "front_knee_brace_score": {"score": 0.80, "num_frames": 100},
         }
 
         finding = _check_knee_collapse(metrics)
@@ -191,7 +191,7 @@ class TestKneeCollapseFinding:
     def test_knee_collapse_medium_severity(self) -> None:
         """Medium knee collapse should generate medium severity finding."""
         metrics = {
-            "front_knee_brace_score": {"score": 0.42},
+            "front_knee_brace_score": {"score": 0.42, "num_frames": 100},
         }
 
         finding = _check_knee_collapse(metrics)
@@ -202,7 +202,7 @@ class TestKneeCollapseFinding:
     def test_knee_collapse_drills_present(self) -> None:
         """Finding should include suggested drills."""
         metrics = {
-            "front_knee_brace_score": {"score": 0.30},
+            "front_knee_brace_score": {"score": 0.30, "num_frames": 100},
         }
 
         finding = _check_knee_collapse(metrics)
@@ -216,7 +216,7 @@ class TestRotationTimingFinding:
     def test_rotation_timing_good_no_finding(self) -> None:
         """Good rotation timing should not generate finding."""
         metrics = {
-            "hip_shoulder_separation_timing": {"score": 0.12},
+            "hip_shoulder_separation_timing": {"score": 0.12, "num_frames": 100},
         }
 
         finding = _check_rotation_timing(metrics)
@@ -225,7 +225,7 @@ class TestRotationTimingFinding:
     def test_rotation_timing_slightly_off_low_severity(self) -> None:
         """Slightly off timing should generate low severity finding."""
         metrics = {
-            "hip_shoulder_separation_timing": {"score": 0.16},  # 0.04s off
+            "hip_shoulder_separation_timing": {"score": 0.16, "num_frames": 100},  # 0.04s off
         }
 
         finding = _check_rotation_timing(metrics)
@@ -236,7 +236,7 @@ class TestRotationTimingFinding:
     def test_rotation_timing_way_off_high_severity(self) -> None:
         """Way off timing should generate high severity finding."""
         metrics = {
-            "hip_shoulder_separation_timing": {"score": 0.30},  # 0.18s off
+            "hip_shoulder_separation_timing": {"score": 0.30, "num_frames": 100},  # 0.18s off
         }
 
         finding = _check_rotation_timing(metrics)
@@ -246,7 +246,7 @@ class TestRotationTimingFinding:
     def test_rotation_timing_negative_lag(self) -> None:
         """Negative lag (shoulder before hip) should trigger finding."""
         metrics = {
-            "hip_shoulder_separation_timing": {"score": -0.05},  # Shoulder first
+            "hip_shoulder_separation_timing": {"score": -0.05, "num_frames": 100},  # Shoulder first
         }
 
         finding = _check_rotation_timing(metrics)
@@ -259,7 +259,7 @@ class TestElbowDropFinding:
     def test_elbow_drop_good_no_finding(self) -> None:
         """Good elbow drop should not generate finding."""
         metrics = {
-            "elbow_drop_score": {"score": 0.75},
+            "elbow_drop_score": {"score": 0.75, "num_frames": 100},
         }
 
         finding = _check_elbow_drop(metrics)
@@ -268,7 +268,7 @@ class TestElbowDropFinding:
     def test_elbow_high_finding_generated(self) -> None:
         """High elbows should generate finding."""
         metrics = {
-            "elbow_drop_score": {"score": 0.35},
+            "elbow_drop_score": {"score": 0.35, "num_frames": 100},
         }
 
         finding = _check_elbow_drop(metrics)
@@ -288,11 +288,11 @@ class TestGenerateFindings:
         """Perfect metrics should generate no findings."""
         metrics = {
             "metrics": {
-                "head_stability_score": {"score": 0.95},
-                "balance_drift_score": {"score": 0.90},
-                "front_knee_brace_score": {"score": 0.92},
-                "hip_shoulder_separation_timing": {"score": 0.12},
-                "elbow_drop_score": {"score": 0.88},
+                "head_stability_score": {"score": 0.95, "num_frames": 100},
+                "balance_drift_score": {"score": 0.90, "num_frames": 100},
+                "front_knee_brace_score": {"score": 0.92, "num_frames": 100},
+                "hip_shoulder_separation_timing": {"score": 0.12, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.88, "num_frames": 100},
             }
         }
 
@@ -305,11 +305,11 @@ class TestGenerateFindings:
         """Multiple metric issues should generate multiple findings."""
         metrics = {
             "metrics": {
-                "head_stability_score": {"score": 0.45},  # Issue
-                "balance_drift_score": {"score": 0.40},  # Issue
-                "front_knee_brace_score": {"score": 0.35},  # Issue
-                "hip_shoulder_separation_timing": {"score": 0.12},
-                "elbow_drop_score": {"score": 0.88},
+                "head_stability_score": {"score": 0.45, "num_frames": 100},  # Issue
+                "balance_drift_score": {"score": 0.40, "num_frames": 100},  # Issue
+                "front_knee_brace_score": {"score": 0.35, "num_frames": 100},  # Issue
+                "hip_shoulder_separation_timing": {"score": 0.12, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.88, "num_frames": 100},
             }
         }
 
@@ -322,11 +322,11 @@ class TestGenerateFindings:
         """Generated findings should have required structure."""
         metrics = {
             "metrics": {
-                "head_stability_score": {"score": 0.50},
-                "balance_drift_score": {"score": 0.90},
-                "front_knee_brace_score": {"score": 0.90},
-                "hip_shoulder_separation_timing": {"score": 0.12},
-                "elbow_drop_score": {"score": 0.90},
+                "head_stability_score": {"score": 0.50, "num_frames": 100},
+                "balance_drift_score": {"score": 0.90, "num_frames": 100},
+                "front_knee_brace_score": {"score": 0.90, "num_frames": 100},
+                "hip_shoulder_separation_timing": {"score": 0.12, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.90, "num_frames": 100},
             }
         }
 
@@ -350,11 +350,11 @@ class TestGenerateFindings:
         """Context should be echoed back in response."""
         metrics = {
             "metrics": {
-                "head_stability_score": {"score": 0.90},
-                "balance_drift_score": {"score": 0.90},
-                "front_knee_brace_score": {"score": 0.90},
-                "hip_shoulder_separation_timing": {"score": 0.12},
-                "elbow_drop_score": {"score": 0.90},
+                "head_stability_score": {"score": 0.90, "num_frames": 100},
+                "balance_drift_score": {"score": 0.90, "num_frames": 100},
+                "front_knee_brace_score": {"score": 0.90, "num_frames": 100},
+                "hip_shoulder_separation_timing": {"score": 0.12, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.90, "num_frames": 100},
             }
         }
         context = {"player_id": 42, "session_type": "net_session"}
@@ -368,11 +368,11 @@ class TestGenerateFindings:
         """Single low severity issue should yield medium overall level."""
         metrics = {
             "metrics": {
-                "head_stability_score": {"score": 0.55},  # Low severity
-                "balance_drift_score": {"score": 0.90},
-                "front_knee_brace_score": {"score": 0.90},
-                "hip_shoulder_separation_timing": {"score": 0.12},
-                "elbow_drop_score": {"score": 0.90},
+                "head_stability_score": {"score": 0.55, "num_frames": 100},  # Low severity
+                "balance_drift_score": {"score": 0.90, "num_frames": 100},
+                "front_knee_brace_score": {"score": 0.90, "num_frames": 100},
+                "hip_shoulder_separation_timing": {"score": 0.12, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.90, "num_frames": 100},
             }
         }
 
@@ -385,11 +385,11 @@ class TestGenerateFindings:
         """Single high severity issue should yield low overall level."""
         metrics = {
             "metrics": {
-                "head_stability_score": {"score": 0.30},  # High severity
-                "balance_drift_score": {"score": 0.90},
-                "front_knee_brace_score": {"score": 0.90},
-                "hip_shoulder_separation_timing": {"score": 0.12},
-                "elbow_drop_score": {"score": 0.90},
+                "head_stability_score": {"score": 0.30, "num_frames": 100},  # High severity
+                "balance_drift_score": {"score": 0.90, "num_frames": 100},
+                "front_knee_brace_score": {"score": 0.90, "num_frames": 100},
+                "hip_shoulder_separation_timing": {"score": 0.12, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.90, "num_frames": 100},
             }
         }
 
@@ -412,11 +412,11 @@ class TestFindingsIntegration:
         """Good technique scenario should produce minimal findings."""
         metrics = {
             "metrics": {
-                "head_stability_score": {"score": 0.82},
-                "balance_drift_score": {"score": 0.78},
-                "front_knee_brace_score": {"score": 0.85},
-                "hip_shoulder_separation_timing": {"score": 0.115},
-                "elbow_drop_score": {"score": 0.72},
+                "head_stability_score": {"score": 0.82, "num_frames": 100},
+                "balance_drift_score": {"score": 0.78, "num_frames": 100},
+                "front_knee_brace_score": {"score": 0.85, "num_frames": 100},
+                "hip_shoulder_separation_timing": {"score": 0.115, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.72, "num_frames": 100},
             }
         }
 
@@ -429,11 +429,11 @@ class TestFindingsIntegration:
         """Poor technique scenario should produce multiple findings."""
         metrics = {
             "metrics": {
-                "head_stability_score": {"score": 0.35},
-                "balance_drift_score": {"score": 0.40},
-                "front_knee_brace_score": {"score": 0.30},
-                "hip_shoulder_separation_timing": {"score": 0.28},
-                "elbow_drop_score": {"score": 0.25},
+                "head_stability_score": {"score": 0.35, "num_frames": 100},
+                "balance_drift_score": {"score": 0.40, "num_frames": 100},
+                "front_knee_brace_score": {"score": 0.30, "num_frames": 100},
+                "hip_shoulder_separation_timing": {"score": 0.28, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.25, "num_frames": 100},
             }
         }
 
@@ -447,11 +447,11 @@ class TestFindingsIntegration:
         """Mixed technique (some good, some poor) should produce balanced findings."""
         metrics = {
             "metrics": {
-                "head_stability_score": {"score": 0.65},  # Good
-                "balance_drift_score": {"score": 0.45},  # Poor
-                "front_knee_brace_score": {"score": 0.48},  # Poor
-                "hip_shoulder_separation_timing": {"score": 0.12},  # Good
-                "elbow_drop_score": {"score": 0.80},  # Good
+                "head_stability_score": {"score": 0.65, "num_frames": 100},  # Good
+                "balance_drift_score": {"score": 0.45, "num_frames": 100},  # Poor
+                "front_knee_brace_score": {"score": 0.48, "num_frames": 100},  # Poor
+                "hip_shoulder_separation_timing": {"score": 0.12, "num_frames": 100},  # Good
+                "elbow_drop_score": {"score": 0.80, "num_frames": 100},  # Good
             }
         }
 
@@ -464,11 +464,11 @@ class TestFindingsIntegration:
         """Evidence should include actual metric values."""
         metrics = {
             "metrics": {
-                "head_stability_score": {"score": 0.42},
-                "balance_drift_score": {"score": 0.90},
-                "front_knee_brace_score": {"score": 0.90},
-                "hip_shoulder_separation_timing": {"score": 0.12},
-                "elbow_drop_score": {"score": 0.90},
+                "head_stability_score": {"score": 0.42, "num_frames": 100},
+                "balance_drift_score": {"score": 0.90, "num_frames": 100},
+                "front_knee_brace_score": {"score": 0.90, "num_frames": 100},
+                "hip_shoulder_separation_timing": {"score": 0.12, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.90, "num_frames": 100},
             }
         }
 
@@ -483,11 +483,11 @@ class TestFindingsIntegration:
         """All findings should have suggested drills."""
         metrics = {
             "metrics": {
-                "head_stability_score": {"score": 0.50},
-                "balance_drift_score": {"score": 0.50},
-                "front_knee_brace_score": {"score": 0.40},
-                "hip_shoulder_separation_timing": {"score": 0.28},
-                "elbow_drop_score": {"score": 0.50},
+                "head_stability_score": {"score": 0.50, "num_frames": 100},
+                "balance_drift_score": {"score": 0.50, "num_frames": 100},
+                "front_knee_brace_score": {"score": 0.40, "num_frames": 100},
+                "hip_shoulder_separation_timing": {"score": 0.28, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.50, "num_frames": 100},
             }
         }
 
@@ -502,11 +502,11 @@ class TestFindingsIntegration:
         """Cues should match the severity level."""
         metrics = {
             "metrics": {
-                "head_stability_score": {"score": 0.50},  # Medium severity
-                "balance_drift_score": {"score": 0.90},
-                "front_knee_brace_score": {"score": 0.90},
-                "hip_shoulder_separation_timing": {"score": 0.12},
-                "elbow_drop_score": {"score": 0.90},
+                "head_stability_score": {"score": 0.50, "num_frames": 100},  # Medium severity
+                "balance_drift_score": {"score": 0.90, "num_frames": 100},
+                "front_knee_brace_score": {"score": 0.90, "num_frames": 100},
+                "hip_shoulder_separation_timing": {"score": 0.12, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.90, "num_frames": 100},
             }
         }
 
