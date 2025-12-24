@@ -199,8 +199,8 @@ jobs:
           role-to-assume: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Fetch current task definition
-        id: fetch-task-def
+      - name: Fetch current task definition and update image
+        id: task-def
         run: |
           # Get task definition ARN from the service
           TASK_DEF_ARN=$(aws ecs describe-services \
@@ -219,29 +219,41 @@ jobs:
             --query 'taskDefinition' \
             --output json > task-definition.json
           
-          cat task-definition.json
+          # Get the container name from the task definition
+          CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' task-definition.json)
+          echo "Container name: $CONTAINER_NAME"
+          
+          # Update the image in the task definition
+          NEW_IMAGE="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ needs.build-and-scan.outputs.image_tag }}"
+          echo "New image: $NEW_IMAGE"
+          
+          jq --arg IMAGE "$NEW_IMAGE" --arg CONTAINER "$CONTAINER_NAME" \
+            '.containerDefinitions |= map(if .name == $CONTAINER then .image = $IMAGE else . end)' \
+            task-definition.json > task-definition-updated.json
+          
+          mv task-definition-updated.json task-definition.json
+          
+          echo "Updated task definition:"
+          jq '.containerDefinitions[0] | {name, image}' task-definition.json
 
-      - name: Register new task definition with new image
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: cricksy-backend
-          image: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ needs.build-and-scan.outputs.image_tag }}
-
-      - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: false
-
-      - name: Force new ECS deployment
+      - name: Register new task definition and deploy
+        id: deploy
         run: |
+          # Register the new task definition
+          REGISTER_OUTPUT=$(aws ecs register-task-definition \
+            --cli-input-json file://task-definition.json \
+            --region ${{ env.AWS_REGION }})
+          
+          NEW_TASK_DEF_ARN=$(echo "$REGISTER_OUTPUT" | jq -r '.taskDefinition.taskDefinitionArn')
+          echo "Registered new task definition: $NEW_TASK_DEF_ARN"
+          echo "task_def_arn=$NEW_TASK_DEF_ARN" >> $GITHUB_OUTPUT
+          
+          # Update service with new task definition
           aws ecs update-service \
             --cluster ${{ env.ECS_CLUSTER }} \
             --service ${{ env.ECS_SERVICE }} \
+            --task-definition "$NEW_TASK_DEF_ARN" \
+            --region ${{ env.AWS_REGION }} \
             --force-new-deployment
 
       - name: Wait for service to stabilize
