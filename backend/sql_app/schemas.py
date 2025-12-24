@@ -17,7 +17,7 @@ from backend.sql_app.models import (
 )
 
 UTC = getattr(dt, "UTC", dt.UTC)
-TeamItem: TypeAlias = str | UUID | Mapping[str, object]  # noqa: UP040
+TeamItem: TypeAlias = str | UUID | Mapping[str, object]
 ExtraCode = Literal["wd", "nb", "b", "lb"]
 
 

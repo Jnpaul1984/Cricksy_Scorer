@@ -3,8 +3,8 @@ target-version = "py312"
 exclude = ["frontend", "node_modules", ".venv", "venv"]
 
 [lint]
-select = ["E", "F", "W", "B", "C4", "SIM", "RUF", "UP", "S"]
-ignore = ["UP038", "B008"]
+select = ["E", "F", "W", "B", "C4", "SIM", "RUF", "S"]
+ignore = ["B008"]
 
 [lint.per-file-ignores]
 "backend/routes/*.py" = ["B008", "S110", "S112", "S106", "B904", "E712", "W293", "E501", "SIM102"]
