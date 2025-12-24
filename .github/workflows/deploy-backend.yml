@@ -217,21 +217,21 @@ jobs:
             --task-definition "$TASK_DEF_ARN" \
             --region ${{ env.AWS_REGION }} \
             --query 'taskDefinition' \
-            --output json > task-definition.json
+            --output json > task-definition-raw.json
           
           # Get the container name from the task definition
-          CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' task-definition.json)
+          CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' task-definition-raw.json)
           echo "Container name: $CONTAINER_NAME"
           
           # Update the image in the task definition
           NEW_IMAGE="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ needs.build-and-scan.outputs.image_tag }}"
           echo "New image: $NEW_IMAGE"
           
+          # Filter out metadata fields that register-task-definition doesn't accept
           jq --arg IMAGE "$NEW_IMAGE" --arg CONTAINER "$CONTAINER_NAME" \
-            '.containerDefinitions |= map(if .name == $CONTAINER then .image = $IMAGE else . end)' \
-            task-definition.json > task-definition-updated.json
-          
-          mv task-definition-updated.json task-definition.json
+            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) | 
+             .containerDefinitions |= map(if .name == $CONTAINER then .image = $IMAGE else . end)' \
+            task-definition-raw.json > task-definition.json
           
           echo "Updated task definition:"
           jq '.containerDefinitions[0] | {name, image}' task-definition.json
