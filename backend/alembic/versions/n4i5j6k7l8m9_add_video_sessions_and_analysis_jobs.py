@@ -21,19 +21,20 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Create enums
-    owner_type_enum = sa.Enum("coach", "org", name="owner_type")
-    owner_type_enum.create(op.get_bind(), checkfirst=True)
+    # Create enums with checkfirst=True to avoid duplicate creation
+    owner_type_enum = sa.Enum(
+        "coach", "org", name="owner_type", create_type=False
+    )
 
     video_session_status_enum = sa.Enum(
-        "pending", "uploaded", "processing", "ready", "failed", name="video_session_status"
+        "pending", "uploaded", "processing", "ready", "failed",
+        name="video_session_status", create_type=False
     )
-    video_session_status_enum.create(op.get_bind(), checkfirst=True)
 
     video_analysis_job_status_enum = sa.Enum(
-        "queued", "processing", "completed", "failed", name="video_analysis_job_status"
+        "queued", "processing", "completed", "failed",
+        name="video_analysis_job_status", create_type=False
     )
-    video_analysis_job_status_enum.create(op.get_bind(), checkfirst=True)
 
     # Create video_sessions table
     op.create_table(
