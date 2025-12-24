@@ -28,6 +28,7 @@ RUN set -eux; \
 # Install backend dependencies (requirements live in backend/)
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --default-timeout=600 --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir awscli
 
 # Preserve the backend package structure inside the container
 COPY backend/ ./backend
