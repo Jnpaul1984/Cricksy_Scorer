@@ -113,6 +113,8 @@ response*.json
 payload.json
 api_response.json
 video_request.json
+td*.json
+iam_*.json
 *.ps1
 mediapipe_models/
 .venv*/
