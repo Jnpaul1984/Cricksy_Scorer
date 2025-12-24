@@ -39,7 +39,7 @@ def upgrade() -> None:
     op.create_table(
         "video_sessions",
         sa.Column("id", sa.String(), nullable=False),
-        sa.Column("owner_type", sa.Enum("coach", "org", name="owner_type"), nullable=False),
+        sa.Column("owner_type", owner_type_enum, nullable=False),
         sa.Column("owner_id", sa.String(), nullable=False),
         sa.Column("title", sa.String(length=255), nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
@@ -48,9 +48,7 @@ def upgrade() -> None:
         sa.Column("s3_key", sa.String(length=500), nullable=True),
         sa.Column(
             "status",
-            sa.Enum(
-                "pending", "uploaded", "processing", "ready", "failed", name="video_session_status"
-            ),
+            video_session_status_enum,
             nullable=False,
         ),
         sa.Column(
@@ -80,9 +78,7 @@ def upgrade() -> None:
         sa.Column("include_frames", sa.Boolean(), nullable=False),
         sa.Column(
             "status",
-            sa.Enum(
-                "queued", "processing", "completed", "failed", name="video_analysis_job_status"
-            ),
+            video_analysis_job_status_enum,
             nullable=False,
         ),
         sa.Column("error_message", sa.Text(), nullable=True),
