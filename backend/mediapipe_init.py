@@ -86,7 +86,7 @@ def get_model_path() -> str:
 
     if not model_path:
         raise RuntimeError(
-            "MEDIAPIPE_POSE_MODEL_PATH is empty. " f"Set it or mount model to {DEFAULT_MODEL_PATH}"
+            f"MEDIAPIPE_POSE_MODEL_PATH is empty. Set it or mount model to {DEFAULT_MODEL_PATH}"
         )
 
     path_obj = Path(model_path)

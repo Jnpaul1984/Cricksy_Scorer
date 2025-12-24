@@ -141,9 +141,9 @@ class TestDLSBasicCalculations:
         )
 
         # Target should be lower when team 2 has lost wickets
-        assert (
-            result_with_wickets.target < result_no_wickets.target
-        ), "Target should be lower when chasing team has lost wickets"
+        assert result_with_wickets.target < result_no_wickets.target, (
+            "Target should be lower when chasing team has lost wickets"
+        )
 
 
 class TestDLSRealisticScenarios:
@@ -167,9 +167,9 @@ class TestDLSRealisticScenarios:
 
         # Target should be between 115-130 (roughly 64-72% of 180)
         # DLS is conservative with reduced overs
-        assert (
-            115 <= result.target <= 135
-        ), f"Target {result.target} seems unreasonable for 15-over chase of 180"
+        assert 115 <= result.target <= 135, (
+            f"Target {result.target} seems unreasonable for 15-over chase of 180"
+        )
 
         # Resources should be calculated
         assert 0 < result.R1_total <= 100, "Team 1 resources should be 0-100%"
@@ -216,9 +216,9 @@ class TestDLSRealisticScenarios:
         )
 
         # Target should be between 220-250 (roughly 80-90% of 280)
-        assert (
-            210 <= result.target <= 260
-        ), f"Target {result.target} seems unreasonable for 40-over chase of 280"
+        assert 210 <= result.target <= 260, (
+            f"Target {result.target} seems unreasonable for 40-over chase of 280"
+        )
 
 
 class TestDLSEdgeCases:
@@ -313,9 +313,9 @@ class TestDLSHelperFunctions:
 
         state = compute_state_from_ledger(deliveries)
 
-        assert (
-            state.balls_bowled == 2
-        ), "Should count only 2 legal deliveries (excluding wide and no-ball)"
+        assert state.balls_bowled == 2, (
+            "Should count only 2 legal deliveries (excluding wide and no-ball)"
+        )
         assert state.wickets_lost == 0, "Should count 0 wickets"
 
     def test_revised_target_calculation(self):
@@ -411,9 +411,9 @@ class TestDLSResourceCalculations:
         )
 
         # With no interruptions, should have full resources
-        assert (
-            95.0 <= R1 <= 100.0
-        ), f"Team 1 should have ~100% resources with no interruptions, got {R1}"
+        assert 95.0 <= R1 <= 100.0, (
+            f"Team 1 should have ~100% resources with no interruptions, got {R1}"
+        )
 
 
 if __name__ == "__main__":

@@ -564,7 +564,7 @@ def build_snapshot(
         "overs_completed": int(getattr(g, "overs_completed", 0)),
         "balls_this_over": int(getattr(g, "balls_this_over", 0)),
         "overs": (
-            f"{int(getattr(g, 'overs_completed', 0))}." f"{int(getattr(g, 'balls_this_over', 0))}"
+            f"{int(getattr(g, 'overs_completed', 0))}.{int(getattr(g, 'balls_this_over', 0))}"
         ),
         "balls_bowled_total": int(getattr(g, "overs_completed", 0)) * 6
         + int(getattr(g, "balls_this_over", 0)),
