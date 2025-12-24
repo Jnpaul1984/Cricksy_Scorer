@@ -186,8 +186,9 @@ class PitchHeatmapGenerator:
             average_value += intensity
 
             # Get zone coordinates
+            zone_enum = PitchZone(zone) if isinstance(zone, str) else zone
             x_min, x_max, y_min, y_max = PitchHeatmapGenerator.ZONE_BOUNDARIES.get(
-                zone, (40, 60, 35, 70)
+                zone_enum, (40, 60, 35, 70)
             )
             x_center = (x_min + x_max) / 2
             y_center = (y_min + y_max) / 2
@@ -260,8 +261,9 @@ class PitchHeatmapGenerator:
             intensity = (count / max_dismissals * 100) if max_dismissals > 0 else 0
 
             # Get zone coordinates
+            zone_enum = PitchZone(zone) if isinstance(zone, str) else zone
             x_min, x_max, y_min, y_max = PitchHeatmapGenerator.ZONE_BOUNDARIES.get(
-                zone, (40, 60, 35, 70)
+                zone_enum, (40, 60, 35, 70)
             )
             x_center = (x_min + x_max) / 2
             y_center = (y_min + y_max) / 2
@@ -316,8 +318,9 @@ class PitchHeatmapGenerator:
         for zone, count in zone_data.items():
             intensity = (count / max_zone_count * 100) if max_zone_count > 0 else 0
 
+            zone_enum = PitchZone(zone) if isinstance(zone, str) else zone
             x_min, x_max, y_min, y_max = PitchHeatmapGenerator.ZONE_BOUNDARIES.get(
-                zone, (40, 60, 35, 70)
+                zone_enum, (40, 60, 35, 70)
             )
             x_center = (x_min + x_max) / 2
             y_center = (y_min + y_max) / 2
