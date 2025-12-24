@@ -33,6 +33,14 @@ __all__ = [
 
 configure_logging(json=True, level=logging.INFO)
 
+# Bootstrap MediaPipe model from S3 if needed
+try:
+    from backend.utils.mediapipe_bootstrap import ensure_mediapipe_model
+
+    ensure_mediapipe_model()
+except Exception as e:
+    logging.warning(f"MediaPipe bootstrap failed: {e}. Continuing startup.")
+
 # Verify MediaPipe setup before app starts
 try:
     from backend.mediapipe_init import verify_mediapipe_setup
