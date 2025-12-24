@@ -117,7 +117,7 @@ def get_model_path() -> str:
     except OSError as e:
         raise RuntimeError(f"Cannot read MediaPipe model file: {model_path}\n{e}") from e
 
-    logger.info(f"✅ MediaPipe pose model path validated: {model_path} ({file_size} bytes)")
+    logger.info(f"[OK] MediaPipe pose model path validated: {model_path} ({file_size} bytes)")
     return str(model_path)
 
 
@@ -141,7 +141,7 @@ def get_running_mode() -> str:
             f"Supported modes: {', '.join(SUPPORTED_RUNNING_MODES)}"
         )
 
-    logger.info(f"✅ MediaPipe running mode: {running_mode}")
+    logger.info(f"[OK] MediaPipe running mode: {running_mode}")
     return running_mode
 
 
@@ -208,7 +208,7 @@ def initialize_pose_landmarker():
         logger.info(f"Creating PoseLandmarker with running_mode={running_mode_str}...")
         _pose_landmarker = vision.PoseLandmarker.create_from_options(options)
         logger.info(
-            f"✅ MediaPipe PoseLandmarker initialized successfully (mode={running_mode_str})"
+            f"[OK] MediaPipe PoseLandmarker initialized successfully (mode={running_mode_str})"
         )
 
         return _pose_landmarker
@@ -351,7 +351,7 @@ def shutdown_pose_landmarker():
     if _pose_landmarker is not None:
         try:
             _pose_landmarker.close()
-            logger.info("✅ PoseLandmarker closed")
+            logger.info("[OK] PoseLandmarker closed")
         except Exception as e:
             logger.warning(f"Error closing PoseLandmarker: {e}")
         finally:

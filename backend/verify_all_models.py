@@ -18,11 +18,11 @@ models_to_check = [
 for model_path in models_to_check:
     try:
         m = joblib.load(model_path)
-        print(f"✅ {model_path.parent.name}/{model_path.name}")
+        print(f"[OK] {model_path.parent.name}/{model_path.name}")
         print(f"   Type: {type(m).__name__}")
         print(f"   Features: {len(m.feature_names_in_)}")
         print()
     except Exception as e:
-        print(f"❌ {model_path.name}: {e}\n")
+        print(f"[FAILED] {model_path.name}: {e}\n")
 
 print("=" * 60)
