@@ -1,7 +1,7 @@
 # SQS Infrastructure Check & Proposal
 
-**Status**: ✅ No existing SQS queues found  
-**Recommendation**: ✅ Terraform resources proposed and added  
+**Status**: ✅ No existing SQS queues found
+**Recommendation**: ✅ Terraform resources proposed and added
 **Date**: December 23, 2025
 
 ## 1. Existing SQS Queue Verification
@@ -34,7 +34,7 @@ resource "aws_sqs_queue" "video_analysis" {
   name                       = "cricksy-video-analysis-prod"
   message_retention_seconds  = 86400      # 1 day
   visibility_timeout_seconds = 3600       # 1 hour
-  
+
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.video_analysis_dlq.arn
     maxReceiveCount     = 3
@@ -246,4 +246,3 @@ messages = sqs.receive_message(QueueUrl='<queue_url>')
 - Redrive policy auto-routes failed messages after 3 attempts
 - All outputs properly exported for application integration
 - Ready to deploy via `terraform apply`
-

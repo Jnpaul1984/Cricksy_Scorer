@@ -105,7 +105,7 @@ def extract_pose_keypoints_from_video(
     except Exception as e:
         logger.error(f"Failed to get MediaPipe detector: {e}")
         raise RuntimeError(
-            f"MediaPipe model not initialized. Model path: {get_model_path()}. " f"Error: {e}"
+            f"MediaPipe model not initialized. Model path: {get_model_path()}. Error: {e}"
         ) from e
 
     # Open video
@@ -276,7 +276,7 @@ def extract_pose_keypoints_from_video(
     findings = []
     if detection_rate < 50:
         findings.append(
-            f"Low detection rate ({detection_rate:.1f}%) - ensure good lighting " "and camera angle"
+            f"Low detection rate ({detection_rate:.1f}%) - ensure good lighting and camera angle"
         )
     if visibility_scores and np.mean(visibility_scores) < 0.7:
         avg_vis = np.mean(visibility_scores)
@@ -286,7 +286,7 @@ def extract_pose_keypoints_from_video(
         )
     if sampled_count < 10:
         findings.append(
-            f"Very few frames sampled ({sampled_count}) - use higher sample_fps " "for more detail"
+            f"Very few frames sampled ({sampled_count}) - use higher sample_fps for more detail"
         )
 
     report = (
@@ -298,8 +298,7 @@ def extract_pose_keypoints_from_video(
         report += f" Notes: {'; '.join(findings)}"
 
     logger.info(
-        f"Pose extraction complete: {sampled_count} frames, "
-        f"{detection_rate:.1f}% detection rate"
+        f"Pose extraction complete: {sampled_count} frames, {detection_rate:.1f}% detection rate"
     )
 
     return {

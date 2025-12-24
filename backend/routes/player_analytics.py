@@ -402,7 +402,7 @@ def _generate_dismissal_recommendations(
             )
         elif most_common_dismissal == "lbw":
             recommendations.append(
-                f"LBW dismissals ({percentage:.0f}%) - " "Improve leg-side technique and pad usage"
+                f"LBW dismissals ({percentage:.0f}%) - Improve leg-side technique and pad usage"
             )
         elif most_common_dismissal == "stumped":
             recommendations.append(
@@ -419,12 +419,12 @@ def _generate_dismissal_recommendations(
 
     if powerplay_dismissals > 0 and powerplay_dismissals > total_dismissals / 2:
         recommendations.append(
-            "Struggles to build initial innings - " "Focus on building confidence and solid starts"
+            "Struggles to build initial innings - Focus on building confidence and solid starts"
         )
 
     if death_dismissals > 0 and death_dismissals > total_dismissals / 2:
         recommendations.append(
-            "Vulnerable in death overs - " "Practice death bowling scenarios and improve judgment"
+            "Vulnerable in death overs - Practice death bowling scenarios and improve judgment"
         )
 
     # Quality of player feedback
@@ -547,7 +547,7 @@ async def get_player_consistency_score(
                 "total_matches": player.total_matches,
                 "centuries": player.centuries,
                 "half_centuries": player.half_centuries,
-                "recommendation": (f"Rating {rating} - " f"{get_consistency_message(score)}"),
+                "recommendation": (f"Rating {rating} - {get_consistency_message(score)}"),
             },
         }
 

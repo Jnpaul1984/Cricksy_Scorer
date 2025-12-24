@@ -9,7 +9,7 @@
 1️⃣  backend/requirements.txt [MODIFIED]
     ├─ Added: mediapipe==0.10.9
     └─ Added: opencv-python==4.8.1.78
-    
+
 2️⃣  backend/services/pose_service.py [NEW - 200 lines]
     ├─ Function: extract_pose_keypoints_from_video()
     ├─ Features:
@@ -87,7 +87,7 @@
   Pretrained pose detection model
   33 landmarks per frame
   CPU-only processing
-  
+
 → opencv-python==4.8.1.78
   Video frame reading and processing
   Image downscaling and transformations
@@ -112,7 +112,7 @@ Output Format:        JSON (serializable)
 Python API:
   from backend.services.coach_ai_pipeline import analyze_video_pose
   result = analyze_video_pose("video.mp4")
-  
+
 CLI:
   python backend/scripts/pose_extract_demo.py video.mp4 --output /tmp/poses.json
 
@@ -123,17 +123,17 @@ CLI:
 
 1. Create REST Endpoint
    POST /api/coaches/plus/sessions/{id}/analyze
-   
+
 2. Implement Video Storage
    S3 or local file system
-   
+
 3. Store Findings in Database
    VideoSession.pose_analysis_data
    VideoSession.pose_findings
-   
+
 4. Update Frontend
    Display pose metrics in CoachProPlusVideoSessionsView.vue
-   
+
 5. Future Enhancements
    ML metrics (swing angle, bat speed)
    LLM recommendations

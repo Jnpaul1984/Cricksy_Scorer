@@ -2,8 +2,8 @@
 
 ## Summary of Changes
 
-**Files Modified:** 2  
-**Total Lines Added:** ~145  
+**Files Modified:** 2
+**Total Lines Added:** ~145
 **New Resources:** 6 (IAM, CloudWatch, Task Definition, Service, Outputs)
 
 ---
@@ -18,9 +18,9 @@
     role   = aws_iam_role.task_execution.id
     policy = data.aws_iam_policy_document.exec_inline.json
   }
-  
+
 + data "aws_caller_identity" "current" {}
-+ 
++
 + data "aws_iam_policy_document" "task_s3_sqs" {
 +   statement {
 +     actions = [
@@ -32,7 +32,7 @@
 +       "arn:aws:s3:::${var.s3_coach_videos_bucket}/*"
 +     ]
 +   }
-+ 
++
 +   statement {
 +     actions = [
 +       "s3:ListBucket"
@@ -41,7 +41,7 @@
 +       "arn:aws:s3:::${var.s3_coach_videos_bucket}"
 +     ]
 +   }
-+ 
++
 +   statement {
 +     actions = [
 +       "sqs:ReceiveMessage",
@@ -53,7 +53,7 @@
 +     ]
 +   }
 + }
-+ 
++
 + resource "aws_iam_role_policy" "task_s3_sqs" {
 +   name   = "cricksy-ai-task-s3-sqs"
 +   role   = aws_iam_role.task.id
@@ -61,7 +61,7 @@
 + }
 ```
 
-**Summary:** 
+**Summary:**
 - Added `data.aws_caller_identity` to get AWS account ID
 - Added IAM policy document `task_s3_sqs` with S3 and SQS permissions
 - Attached policy to task role `cricksy-ai-ecs-task`
@@ -76,7 +76,7 @@
     retention_in_days = 30
     tags              = local.common_tags
   }
-  
+
 + resource "aws_cloudwatch_log_group" "worker" {
 +   name              = "/cricksy-ai/worker"
 +   retention_in_days = 30
@@ -84,7 +84,7 @@
 + }
 ```
 
-**Summary:** 
+**Summary:**
 - Created new CloudWatch log group for worker service
 - Same retention as backend (30 days)
 
@@ -127,11 +127,11 @@
       aws_lb_listener.http
     ]
   }
-  
+
 + # ========================================
 + # Worker ECS Task Definition & Service
 + # ========================================
-+ 
++
 + resource "aws_ecs_task_definition" "worker" {
 +   family                   = "cricksy-ai-worker"
 +   cpu                      = "512"
@@ -140,7 +140,7 @@
 +   requires_compatibilities = ["FARGATE"]
 +   execution_role_arn       = aws_iam_role.task_execution.arn
 +   task_role_arn            = aws_iam_role.task.arn
-+ 
++
 +   container_definitions = jsonencode([
 +     {
 +       name      = "worker"
@@ -185,10 +185,10 @@
 +       ]
 +     }
 +   ])
-+ 
++
 +   tags = local.common_tags
 + }
-+ 
++
 + resource "aws_ecs_service" "worker" {
 +   name            = "cricksy-ai-worker-service"
 +   cluster         = aws_ecs_cluster.this.id
@@ -196,21 +196,21 @@
 +   launch_type     = "FARGATE"
 +   desired_count   = 1
 +   propagate_tags  = "TASK_DEFINITION"
-+ 
++
 +   network_configuration {
 +     subnets         = var.private_subnets
 +     security_groups = [var.sg_app_id]
 +     assign_public_ip = false
 +   }
-+ 
++
 +   deployment_circuit_breaker {
 +     enable   = true
 +     rollback = true
 +   }
-+ 
++
 +   enable_execute_command = true
 +   platform_version       = "1.4.0"
-+ 
++
 +   tags = local.common_tags
 + }
 ```
@@ -234,19 +234,19 @@
   output "log_group_name" {
     value = aws_cloudwatch_log_group.api.name
   }
-  
+
 + output "worker_log_group_name" {
 +   value = aws_cloudwatch_log_group.worker.name
 + }
-+ 
++
 + output "worker_service_name" {
 +   value = aws_ecs_service.worker.name
 + }
-+ 
++
 + output "worker_service_arn" {
 +   value = aws_ecs_service.worker.arn
 + }
-+ 
++
 + output "worker_task_definition_arn" {
 +   value = aws_ecs_task_definition.worker.arn
 + }
@@ -262,10 +262,10 @@
 
 ## No Changes to Other Files
 
-✅ `infra/terraform/compute/alb.tf` — **UNCHANGED**  
-✅ `infra/terraform/compute/secrets.tf` — **UNCHANGED**  
-✅ `infra/terraform/compute/variables.tf` — **UNCHANGED** (all variables already exist)  
-✅ `backend/routes/coach_pro_plus.py` — **UNCHANGED**  
+✅ `infra/terraform/compute/alb.tf` — **UNCHANGED**
+✅ `infra/terraform/compute/secrets.tf` — **UNCHANGED**
+✅ `infra/terraform/compute/variables.tf` — **UNCHANGED** (all variables already exist)
+✅ `backend/routes/coach_pro_plus.py` — **UNCHANGED**
 ✅ `backend/scripts/run_video_analysis_worker.py` — **UNCHANGED**
 
 ---

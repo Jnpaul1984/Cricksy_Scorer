@@ -160,10 +160,10 @@ timestamp_ms = int((frame_num / fps) * 1000)
    ```bash
    # VIDEO mode (default, with timestamps)
    MEDIAPIPE_RUNNING_MODE=VIDEO python -m pytest
-   
+
    # IMAGE mode (without timestamps)
    MEDIAPIPE_RUNNING_MODE=IMAGE python -m pytest
-   
+
    # LIVE_STREAM mode (should reject with clear error)
    MEDIAPIPE_RUNNING_MODE=LIVE_STREAM python -c "..."
    ```
