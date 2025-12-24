@@ -2,6 +2,7 @@ import os
 import pathlib
 import boto3
 
+
 def ensure_mediapipe_model():
     s3_uri = os.getenv("MEDIAPIPE_MODEL_S3_URI")
     local_path = os.getenv("MEDIAPIPE_MODEL_PATH")
