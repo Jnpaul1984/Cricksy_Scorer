@@ -184,6 +184,7 @@ jobs:
     needs: [build-and-scan]
     env:
       AWS_REGION: us-east-1
+      AWS_ACCOUNT_ID: 365183982031
       ECR_REPOSITORY: cricksy-backend
       ECS_CLUSTER: cricksy-ai-cluster
       ECS_SERVICE: cricksy-ai-backend-service
@@ -197,6 +198,32 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Fetch current task definition
+        id: fetch-task-def
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition cricksy-backend \
+            --region ${{ env.AWS_REGION }} \
+            --query 'taskDefinition' \
+            --output json > task-definition.json
+          echo "task_def_json=$(cat task-definition.json)" >> $GITHUB_OUTPUT
+
+      - name: Register new task definition with new image
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: cricksy-backend
+          image: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ needs.build-and-scan.outputs.image_tag }}
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: false
 
       - name: Force new ECS deployment
         run: |
@@ -214,7 +241,7 @@ jobs:
           MAX_ATTEMPTS=60
           ATTEMPT=0
           
-          echo "Waiting for ECS service to stabilize (max ${MAX_ATTEMPTS} × 15s = ${MAX_ATTEMPTS*15}s)..."
+          echo "Waiting for ECS service to stabilize (max ${MAX_ATTEMPTS} × 15s)..."
           
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             ATTEMPT=$((ATTEMPT + 1))
@@ -245,18 +272,54 @@ jobs:
               exit 0
             fi
             
+            # Check for stopped tasks with errors
+            if [ $((ATTEMPT % 4)) -eq 0 ]; then
+              echo "  [DEBUG] Checking for stopped tasks..."
+              STOPPED_TASKS=$(aws ecs list-tasks \
+                --cluster "$CLUSTER" \
+                --service-name "$SERVICE" \
+                --desired-status STOPPED \
+                --region "$REGION" \
+                --output text --query 'taskArns[:2]' 2>/dev/null || true)
+              
+              if [ -n "${STOPPED_TASKS}" ] && [ "${STOPPED_TASKS}" != "None" ]; then
+                echo "  [DEBUG] Found stopped tasks, checking details..."
+                aws ecs describe-tasks \
+                  --cluster "$CLUSTER" \
+                  --tasks $STOPPED_TASKS \
+                  --region "$REGION" \
+                  --query 'tasks[*].[taskArn,lastStatus,stoppedReason]' \
+                  --output table 2>/dev/null || true
+              fi
+            fi
+            
             sleep 15
           done
           
-          echo "✗ Service failed to stabilize after ${MAX_ATTEMPTS} attempts (${MAX_ATTEMPTS*15}s)"
+          echo "✗ Service failed to stabilize after ${MAX_ATTEMPTS} attempts"
           echo ""
           echo "=== Service Status ==="
           aws ecs describe-services \
             --cluster "$CLUSTER" \
             --services "$SERVICE" \
             --region "$REGION" \
-            --query 'services[0].[serviceName,status,runningCount,desiredCount,deployments[*].[status,runningCount,desiredCount]]' \
+            --query 'services[0].[serviceName,status,runningCount,desiredCount,deployments[*].[status,runningCount,desiredCount,taskDefinition]]' \
             --output table
+          
+          echo ""
+          echo "=== Stopped Tasks ==="
+          aws ecs list-tasks \
+            --cluster "$CLUSTER" \
+            --service-name "$SERVICE" \
+            --desired-status STOPPED \
+            --region "$REGION" \
+            --output text --query 'taskArns' 2>/dev/null | xargs -I {} aws ecs describe-tasks \
+            --cluster "$CLUSTER" \
+            --tasks {} \
+            --region "$REGION" \
+            --query 'tasks[*].[taskArn,lastStatus,stoppedReason,containers[0].exitCode,containers[0].reason]' \
+            --output table 2>/dev/null || echo "No stopped tasks or error fetching details"
+          
           exit 1
 
       - name: Dump ECS events and stopped tasks
