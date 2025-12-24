@@ -68,4 +68,5 @@ aiosqlite==0.20.0
 numpy>=1.26.0,<2
 psycopg2-binary
 mediapipe==0.10.31
-opencv-python==4.8.1.78
+opencv-python-headless==4.8.1.78
+
