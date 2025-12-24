@@ -32,5 +32,9 @@ RUN pip install --default-timeout=600 --no-cache-dir -r requirements.txt
 # Preserve the backend package structure inside the container
 COPY backend/ ./backend
 
+# ✅ Add MediaPipe model to the image (from repo root)
+RUN mkdir -p /app/mediapipe_models
+COPY mediapipe_models/pose_landmarker_full.task /app/mediapipe_models/pose_landmarker_full.task
+
 # Start the FastAPI app from the backend package
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
