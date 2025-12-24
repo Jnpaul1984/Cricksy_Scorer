@@ -58,3 +58,22 @@ output "github_deploy_role_arn" {
   description = "IAM role ARN for GitHub Actions backend deploys"
   value       = aws_iam_role.cricksy_ai_github_deploy.arn
 }
+output "video_analysis_queue_url" {
+  description = "URL of the main video analysis SQS queue"
+  value       = module.sqs.video_analysis_queue_url
+}
+
+output "video_analysis_queue_arn" {
+  description = "ARN of the main video analysis SQS queue"
+  value       = module.sqs.video_analysis_queue_arn
+}
+
+output "video_analysis_dlq_url" {
+  description = "URL of the video analysis Dead Letter Queue"
+  value       = module.sqs.video_analysis_dlq_url
+}
+
+output "video_analysis_dlq_arn" {
+  description = "ARN of the video analysis Dead Letter Queue"
+  value       = module.sqs.video_analysis_dlq_arn
+}
