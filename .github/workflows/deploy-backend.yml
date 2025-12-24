@@ -207,9 +207,57 @@ jobs:
 
       - name: Wait for service to stabilize
         run: |
-          aws ecs wait services-stable \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --services ${{ env.ECS_SERVICE }}
+          set -e
+          CLUSTER="${{ env.ECS_CLUSTER }}"
+          SERVICE="${{ env.ECS_SERVICE }}"
+          REGION="${{ env.AWS_REGION }}"
+          MAX_ATTEMPTS=60
+          ATTEMPT=0
+          
+          echo "Waiting for ECS service to stabilize (max ${MAX_ATTEMPTS} × 15s = ${MAX_ATTEMPTS*15}s)..."
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            # Get service status
+            STATUS=$(aws ecs describe-services \
+              --cluster "$CLUSTER" \
+              --services "$SERVICE" \
+              --region "$REGION" \
+              --query 'services[0].[runningCount,desiredCount,deployments[0].status]' \
+              --output text 2>/dev/null || echo "ERROR")
+            
+            if [ "$STATUS" = "ERROR" ]; then
+              echo "[$ATTEMPT/$MAX_ATTEMPTS] Failed to get service status, retrying..."
+              sleep 15
+              continue
+            fi
+            
+            RUNNING=$(echo "$STATUS" | awk '{print $1}')
+            DESIRED=$(echo "$STATUS" | awk '{print $2}')
+            DEPLOYMENT_STATUS=$(echo "$STATUS" | awk '{print $3}')
+            
+            echo "[$ATTEMPT/$MAX_ATTEMPTS] Running: $RUNNING, Desired: $DESIRED, Deployment: $DEPLOYMENT_STATUS"
+            
+            # Service is stable when running equals desired and deployment is PRIMARY
+            if [ "$RUNNING" -eq "$DESIRED" ] && [ "$DEPLOYMENT_STATUS" = "PRIMARY" ]; then
+              echo "✓ Service is stable!"
+              exit 0
+            fi
+            
+            sleep 15
+          done
+          
+          echo "✗ Service failed to stabilize after ${MAX_ATTEMPTS} attempts (${MAX_ATTEMPTS*15}s)"
+          echo ""
+          echo "=== Service Status ==="
+          aws ecs describe-services \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --region "$REGION" \
+            --query 'services[0].[serviceName,status,runningCount,desiredCount,deployments[*].[status,runningCount,desiredCount]]' \
+            --output table
+          exit 1
 
       - name: Dump ECS events and stopped tasks
         if: failure()
