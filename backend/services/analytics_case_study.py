@@ -554,7 +554,7 @@ def _generate_ai_summary(
     return CaseStudyAIBlock(
         match_summary=summary,
         generated_at=datetime.utcnow(),
-        model_version="case-study-baseline-v1",
+        ml_model_version="case-study-baseline-v1",
         tokens_used=None,
     )
 

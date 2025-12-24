@@ -10,7 +10,7 @@ Powers the MatchCaseStudyView.vue UI with structured match analysis data.
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # -----------------------------------------------------------------------------
@@ -194,9 +194,11 @@ class CaseStudyDismissalPatterns(BaseModel):
 class CaseStudyAIBlock(BaseModel):
     """AI-generated match summary with metadata."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     match_summary: str
     generated_at: datetime | None = None
-    model_version: str | None = None
+    ml_model_version: str | None = Field(default=None, alias="model_version")
     tokens_used: int | None = None
 
 
