@@ -8,8 +8,8 @@ Provides AI-powered suggestions during match scoring:
 """
 
 from dataclasses import dataclass, field
-from typing import Any
 from enum import Enum
+from typing import Any
 
 
 class DeliveryType(str, Enum):
@@ -385,11 +385,8 @@ class TacticalSuggestionEngine:
         """
         score = 50.0  # Base score
 
-        if (
-            bowler.common_delivery == DeliveryType.PACE
-            and batter.pace_weakness > 50
-            or bowler.common_delivery == DeliveryType.SPIN
-            and batter.spin_weakness > 50
+        if (bowler.common_delivery == DeliveryType.PACE and batter.pace_weakness > 50) or (
+            bowler.common_delivery == DeliveryType.SPIN and batter.spin_weakness > 50
         ):
             score += 25
 

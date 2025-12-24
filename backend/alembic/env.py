@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# ruff: noqa: E402
 import asyncio
 import os
 import sys
@@ -13,10 +12,11 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from alembic import context
 from backend.sql_app.models import Base
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
+
+from alembic import context
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

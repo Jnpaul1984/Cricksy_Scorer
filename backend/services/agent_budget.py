@@ -18,7 +18,7 @@ async def check_agent_limits(db, agentKey, userId, tokensRequested):
         "WHERE agentKey=:agentKey AND userId=:userId AND createdAt >= :start",
         {"agentKey": agentKey, "userId": userId, "start": today},
     )
-    count, tokens = runs_today.first() if runs_today else (0, 0)
+    count, _ = runs_today.first() if runs_today else (0, 0)
     if count >= AGENT_BUDGETS[agentKey]["max_runs_per_day"]:
         return False, "Max runs per day exceeded"
     if tokensRequested > AGENT_BUDGETS[agentKey]["max_tokens_per_run"]:
