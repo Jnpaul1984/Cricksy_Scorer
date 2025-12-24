@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     )
     LOG_LEVEL: str = Field(default="INFO", alias="CRICKSY_LOG_LEVEL")
     ENV: str = Field(default="development", alias="CRICKSY_ENV")
+    COACH_REPORT_LLM_ENABLED: bool = Field(default=False, alias="CRICKSY_COACH_REPORT_LLM_ENABLED")
+    COACH_REPORT_LLM_MODEL: str = Field(default="gpt-4", alias="CRICKSY_COACH_REPORT_LLM_MODEL")
+    AWS_REGION: str = Field(default="us-east-1", alias="AWS_REGION")
+    S3_COACH_VIDEOS_BUCKET: str = Field(default="", alias="S3_COACH_VIDEOS_BUCKET")
+    S3_UPLOAD_URL_EXPIRES_SECONDS: int = Field(default=3600, alias="S3_UPLOAD_URL_EXPIRES_SECONDS")
+    SQS_VIDEO_ANALYSIS_QUEUE_URL: str = Field(default="", alias="SQS_VIDEO_ANALYSIS_QUEUE_URL")
 
     @field_validator("STATIC_ROOT", mode="before")
     @classmethod
@@ -81,6 +87,22 @@ class Settings(BaseSettings):
     @property
     def backend_cors_origins(self) -> str:
         return self.BACKEND_CORS_ORIGINS
+
+    @property
+    def aws_region(self) -> str:
+        return self.AWS_REGION
+
+    @property
+    def s3_coach_videos_bucket(self) -> str:
+        return self.S3_COACH_VIDEOS_BUCKET
+
+    @property
+    def s3_upload_url_expires_seconds(self) -> int:
+        return self.S3_UPLOAD_URL_EXPIRES_SECONDS
+
+    @property
+    def sqs_video_analysis_queue_url(self) -> str:
+        return self.SQS_VIDEO_ANALYSIS_QUEUE_URL
 
 
 settings = Settings()

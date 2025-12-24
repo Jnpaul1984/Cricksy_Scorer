@@ -12,7 +12,7 @@
     "type-check": "vue-tsc --build --force",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
     "format": "prettier --write src/",
-    "dev": "vite --host localhost",
+    "dev": "vite --host 127.0.0.1 --port 5173",
     "test": "echo \"Use npm run test:unit for unit tests\" && exit 0",
     "test:unit": "vitest run",
     "test:e2e": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\run-e2e.ps1",

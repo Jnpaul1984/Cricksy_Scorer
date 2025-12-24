@@ -15,7 +15,7 @@ const imageOptimizationPlugin = viteImagemin({
 } as Parameters<typeof viteImagemin>[0])
 
 export default defineConfig({
-  plugins: [vue(), imageOptimizationPlugin],
+  plugins: [vue(), process.env.NODE_ENV === 'production' ? imageOptimizationPlugin : null].filter(Boolean),
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)), // enables "@/..." imports

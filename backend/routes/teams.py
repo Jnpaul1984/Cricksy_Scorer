@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -159,12 +159,12 @@ async def update_team(
     return team
 
 
-@router.delete("/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{team_id}", responses={204: {"description": "Team deleted successfully"}})
 async def delete_team(
     team_id: str,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> None:
+):
     """Delete a team. Requires ownership or superuser role."""
     if not _can_manage_teams(user):
         raise HTTPException(
@@ -191,3 +191,4 @@ async def delete_team(
 
     await db.delete(team)
     await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

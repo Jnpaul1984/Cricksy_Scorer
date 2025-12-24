@@ -32,6 +32,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://postgres:RubyAnita2018@db:5432/cricksy_scorer
       # Ensure we use the real DB when running via Compose
       CRICKSY_IN_MEMORY_DB: "0"
+      # MediaPipe model path (mounted via volume)
+      MEDIAPIPE_POSE_MODEL_PATH: /app/mediapipe_models/pose_landmarker_full.task
       # Optional: control log level
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Make Python output unbuffered for better logs
@@ -42,10 +44,42 @@ services:
       - ./:/app
       # speed up repeated pip installs during dev
       - pip-cache:/root/.cache/pip
+      # Mount videos folder for analysis
+      - C:\Users\Hp\Videos:/videos
+      # Mount MediaPipe model file (required for pose detection)
+      # NOTE: Download pose_landmarker_full.task from:
+      # https://storage.googleapis.com/mediapipe-models/v1/vision_tower/pose_landmarker/full/1/pose_landmarker_full.task
+      # and place it at C:\Users\Hp\Cricksy_Scorer\mediapipe_models\
+      - ./mediapipe_models/pose_landmarker_full.task:/app/mediapipe_models/pose_landmarker_full.task:ro
     command: >
       bash -lc "
+      apt-get update &&
+      apt-get install -y --no-install-recommends
+      libgl1
+      libglib2.0-0
+      libsm6
+      libxext6
+      libxrender1
+      libgomp1
+      libgthread-2.0-0
+      libstdc++6
+      libgcc1
+      libc6
+      libx11-6
+      libharfbuzz0b
+      libwebp7
+      libtiff6
+      libfreetype6
+      libpng16-16
+      libjpeg62-turbo
+      libopenblas0
+      ffmpeg
+      libsndfile1
+      liblapack3
+      libblas3 &&
       pip install --no-input --upgrade pip &&
       pip install --no-input -r backend/requirements.txt &&
+      mkdir -p /app/mediapipe_models &&
       cd backend && alembic upgrade head && cd .. &&
       uvicorn backend.main:app --host 0.0.0.0 --port 8000
       "

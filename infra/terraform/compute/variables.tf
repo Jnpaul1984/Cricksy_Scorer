@@ -62,3 +62,25 @@ variable "backend_cors_origins" {
   description = "Comma-separated origins allowed to call the backend (e.g. \"https://YOUR_FIREBASE_SITE.web.app,https://api.cricksy-ai.com,http://localhost:5173\")"
   default     = "http://localhost:5173,https://app.cricksy-ai.com"
 }
+
+variable "aws_region" {
+  type        = string
+  description = "AWS region for S3 and SQS resources"
+  default     = "us-east-1"
+}
+
+variable "s3_coach_videos_bucket" {
+  type        = string
+  description = "S3 bucket name for coach video uploads"
+}
+
+variable "s3_upload_url_expires_seconds" {
+  type        = number
+  description = "Expiration time for S3 presigned URLs in seconds"
+  default     = 3600
+}
+
+variable "sqs_video_analysis_queue_url" {
+  type        = string
+  description = "SQS queue URL for video analysis jobs"
+}
