@@ -154,9 +154,9 @@ class TestPhaseStatistics:
         )
 
         phases = result.get("phases", [])
-        assert (
-            phases[0]["boundary_count"] == 3
-        ), f"Expected 3 boundaries, got {phases[0]['boundary_count']}"
+        assert phases[0]["boundary_count"] == 3, (
+            f"Expected 3 boundaries, got {phases[0]['boundary_count']}"
+        )
 
     def test_phase_counts_dot_balls(self):
         """Verify dot ball counting."""
@@ -178,9 +178,9 @@ class TestPhaseStatistics:
         )
 
         phases = result.get("phases", [])
-        assert (
-            phases[0]["dot_ball_count"] == 3
-        ), f"Expected 3 dots, got {phases[0]['dot_ball_count']}"
+        assert phases[0]["dot_ball_count"] == 3, (
+            f"Expected 3 dots, got {phases[0]['dot_ball_count']}"
+        )
 
 
 class TestPhaseComparisons:
