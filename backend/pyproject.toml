@@ -37,7 +37,8 @@ warn_unused_configs = false
 ignore_missing_imports = true
 follow_imports = "skip"
 disallow_untyped_defs = false
-exclude = "backend/tests/|scripts/.*|node_modules/|.venv/"
+incremental = false
+exclude = ["tests/", "scripts/", "node_modules/", ".venv/"]
 
 [tool.bandit]
 # Exclude test directories and virtual environment
