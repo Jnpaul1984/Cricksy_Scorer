@@ -17,6 +17,10 @@ _DEFAULT_CORS = [
     "http://127.0.0.1:5174",
     "http://localhost:4173",
     "http://127.0.0.1:4173",
+    "https://cricksy-ai.web.app",
+    "https://cricksy-ai.com",
+    "https://www.cricksy-ai.com",
+    "https://dev.cricksy-ai.com",
 ]
 
 
