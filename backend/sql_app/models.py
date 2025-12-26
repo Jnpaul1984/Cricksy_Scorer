@@ -1264,7 +1264,7 @@ class VideoSession(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     player_ids: Mapped[list[str]] = mapped_column(
-        JSON,
+        postgresql.ARRAY(String),
         default=list,
         nullable=False,
         comment="Player IDs involved",
