@@ -171,7 +171,7 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
       return jobId
     } catch (err) {
       let msg = 'Upload failed'
-      
+
       // Handle specific error types with better messaging
       if (err instanceof ApiError) {
         if (err.isFeatureDisabled()) {
@@ -184,7 +184,7 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
       } else if (err instanceof Error) {
         msg = err.message
       }
-      
+
       error.value = msg
       if (uploading.value) {
         uploading.value.status = 'error'

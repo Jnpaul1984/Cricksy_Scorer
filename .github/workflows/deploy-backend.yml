@@ -209,30 +209,30 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --query 'services[0].taskDefinition' \
             --output text)
-          
+
           echo "Task definition ARN: $TASK_DEF_ARN"
-          
+
           # Describe the task definition
           aws ecs describe-task-definition \
             --task-definition "$TASK_DEF_ARN" \
             --region ${{ env.AWS_REGION }} \
             --query 'taskDefinition' \
             --output json > task-definition-raw.json
-          
+
           # Get the container name from the task definition
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' task-definition-raw.json)
           echo "Container name: $CONTAINER_NAME"
-          
+
           # Update the image in the task definition
           NEW_IMAGE="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ needs.build-and-scan.outputs.image_tag }}"
           echo "New image: $NEW_IMAGE"
-          
+
           # Filter out metadata fields that register-task-definition doesn't accept
           jq --arg IMAGE "$NEW_IMAGE" --arg CONTAINER "$CONTAINER_NAME" \
-            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) | 
+            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) |
              .containerDefinitions |= map(if .name == $CONTAINER then .image = $IMAGE else . end)' \
             task-definition-raw.json > task-definition.json
-          
+
           echo "Updated task definition:"
           jq '.containerDefinitions[0] | {name, image}' task-definition.json
 
@@ -243,11 +243,11 @@ jobs:
           REGISTER_OUTPUT=$(aws ecs register-task-definition \
             --cli-input-json file://task-definition.json \
             --region ${{ env.AWS_REGION }})
-          
+
           NEW_TASK_DEF_ARN=$(echo "$REGISTER_OUTPUT" | jq -r '.taskDefinition.taskDefinitionArn')
           echo "Registered new task definition: $NEW_TASK_DEF_ARN"
           echo "task_def_arn=$NEW_TASK_DEF_ARN" >> $GITHUB_OUTPUT
-          
+
           # Update service with new task definition
           aws ecs update-service \
             --cluster ${{ env.ECS_CLUSTER }} \
@@ -264,12 +264,12 @@ jobs:
           REGION="${{ env.AWS_REGION }}"
           MAX_ATTEMPTS=60
           ATTEMPT=0
-          
+
           echo "Waiting for ECS service to stabilize (max ${MAX_ATTEMPTS} × 15s)..."
-          
+
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             ATTEMPT=$((ATTEMPT + 1))
-            
+
             # Get service status
             STATUS=$(aws ecs describe-services \
               --cluster "$CLUSTER" \
@@ -277,25 +277,25 @@ jobs:
               --region "$REGION" \
               --query 'services[0].[runningCount,desiredCount,deployments[0].status]' \
               --output text 2>/dev/null || echo "ERROR")
-            
+
             if [ "$STATUS" = "ERROR" ]; then
               echo "[$ATTEMPT/$MAX_ATTEMPTS] Failed to get service status, retrying..."
               sleep 15
               continue
             fi
-            
+
             RUNNING=$(echo "$STATUS" | awk '{print $1}')
             DESIRED=$(echo "$STATUS" | awk '{print $2}')
             DEPLOYMENT_STATUS=$(echo "$STATUS" | awk '{print $3}')
-            
+
             echo "[$ATTEMPT/$MAX_ATTEMPTS] Running: $RUNNING, Desired: $DESIRED, Deployment: $DEPLOYMENT_STATUS"
-            
+
             # Service is stable when running equals desired and deployment is PRIMARY
             if [ "$RUNNING" -eq "$DESIRED" ] && [ "$DEPLOYMENT_STATUS" = "PRIMARY" ]; then
               echo "✓ Service is stable!"
               exit 0
             fi
-            
+
             # Check for stopped tasks with errors
             if [ $((ATTEMPT % 4)) -eq 0 ]; then
               echo "  [DEBUG] Checking for stopped tasks..."
@@ -305,7 +305,7 @@ jobs:
                 --desired-status STOPPED \
                 --region "$REGION" \
                 --output text --query 'taskArns[:2]' 2>/dev/null || true)
-              
+
               if [ -n "${STOPPED_TASKS}" ] && [ "${STOPPED_TASKS}" != "None" ]; then
                 echo "  [DEBUG] Found stopped tasks, checking details..."
                 aws ecs describe-tasks \
@@ -316,10 +316,10 @@ jobs:
                   --output table 2>/dev/null || true
               fi
             fi
-            
+
             sleep 15
           done
-          
+
           echo "✗ Service failed to stabilize after ${MAX_ATTEMPTS} attempts"
           echo ""
           echo "=== Service Status ==="
@@ -329,7 +329,7 @@ jobs:
             --region "$REGION" \
             --query 'services[0].[serviceName,status,runningCount,desiredCount,deployments[*].[status,runningCount,desiredCount,taskDefinition]]' \
             --output table
-          
+
           echo ""
           echo "=== Stopped Tasks ==="
           aws ecs list-tasks \
@@ -343,7 +343,7 @@ jobs:
             --region "$REGION" \
             --query 'tasks[*].[taskArn,lastStatus,stoppedReason,containers[0].exitCode,containers[0].reason]' \
             --output table 2>/dev/null || echo "No stopped tasks or error fetching details"
-          
+
           exit 1
 
       - name: Dump ECS events and stopped tasks

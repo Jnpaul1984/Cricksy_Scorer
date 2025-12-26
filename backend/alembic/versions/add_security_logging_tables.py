@@ -3,7 +3,6 @@ Add security logging tables: request_logs, auth_events, rate_limit_events
 """
 
 from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "k1f2g3h4i5j6"
@@ -56,6 +55,6 @@ def upgrade():
 
 
 def downgrade():
-    op.execute('DROP TABLE IF EXISTS rate_limit_events;')
-    op.execute('DROP TABLE IF EXISTS auth_events;')
-    op.execute('DROP TABLE IF EXISTS request_logs;')
+    op.execute("DROP TABLE IF EXISTS rate_limit_events;")
+    op.execute("DROP TABLE IF EXISTS auth_events;")
+    op.execute("DROP TABLE IF EXISTS request_logs;")

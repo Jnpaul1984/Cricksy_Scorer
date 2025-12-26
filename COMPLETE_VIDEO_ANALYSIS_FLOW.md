@@ -12,13 +12,13 @@ Client
       ├─ Headers: Authorization: Bearer <token>
       ├─ Body: {title, player_ids, notes}
       └─ Response: {session_id, status: "pending"}
-  
+
   └─→ 2. POST /api/coaches/plus/videos/upload/initiate
       Get presigned S3 URL
       ├─ Headers: Authorization: Bearer <token>
       ├─ Body: {session_id, sample_fps: 15, include_frames: true}
       └─ Response: {job_id, presigned_url, s3_bucket, s3_key, expires_in}
-  
+
   └─→ 3. PUT <presigned_url> + video file
       Upload directly to S3
       ├─ Headers: Content-Type: video/mp4
@@ -66,17 +66,17 @@ Worker Service (2 tasks)
       ├─ Receive 1 message
       ├─ Parse job_id, session_id, sample_fps
       └─ Update job.status → "processing"
-  
+
   └─→ Load from Database
       ├─ SELECT VideoAnalysisJob WHERE id = job_id
       ├─ Get session (for s3_bucket, s3_key)
       └─ Validate session.s3_key exists
-  
+
   └─→ Download from S3
       ├─ S3GetObject(bucket, key)
       ├─ Save to /tmp/video.mp4
       └─ Verify file exists
-  
+
   └─→ Analysis Pipeline
       ├─ Step 1: extract_pose_keypoints_from_video()
       │   └─ Input: /tmp/video.mp4 (sample_fps=15)
@@ -93,7 +93,7 @@ Worker Service (2 tasks)
       └─ Step 4: generate_report_text()
           └─ Input: findings
           └─ Output: {summary, top_issues, drills, one_week_plan}
-  
+
   └─→ Persist Results
       ├─ UPDATE VideoAnalysisJob
       │   ├─ status = "completed"

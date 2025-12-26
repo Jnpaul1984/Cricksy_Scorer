@@ -1,7 +1,7 @@
 # 🧪 TESTING GUIDE - Coach Pro Plus Video Upload
 
-**Status**: Ready to Test  
-**Commit**: 895001e  
+**Status**: Ready to Test
+**Commit**: 895001e
 **Date**: December 26, 2025
 
 ---
@@ -55,12 +55,12 @@ EXPECTED RESULTS:
    a) POST /api/coaches/plus/videos/upload/initiate → 200
       Payload: {session_id, sample_fps, include_frames}
       Response: {job_id, presigned_url, s3_bucket, s3_key}
-   
+
    b) PUT https://bucket.s3.amazonaws.com/...?signature
       Headers: Content-Type: video/mp4
       Status: 200 (from S3, not your API)
       Body: File binary data
-   
+
    c) POST /api/coaches/plus/videos/upload/complete → 200
       Payload: {job_id}
       Response: {status: "processing", sqs_message_id}
@@ -330,4 +330,3 @@ Run through all tests in order. Check off as you go:
 **If all ✅**: Ready to deploy
 
 **If any ❌**: Debug and fix before merging
-

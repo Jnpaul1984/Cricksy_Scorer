@@ -1,6 +1,6 @@
 ## Production Issues: Coach Pro Plus Video Upload - Analysis & Fixes
 
-**Date**: December 26, 2025  
+**Date**: December 26, 2025
 **Status**: ✅ **DATABASE ISSUE FIXED** | 🔴 **CORS NEEDS BACKEND RESTART**
 
 ---
@@ -9,7 +9,7 @@
 
 ### 1. **Database Type Mismatch** ✅ FIXED
 
-**Symptom**: 
+**Symptom**:
 ```
 asyncpg.exceptions.DatatypeMismatchError: column "player_ids" is of type character varying[] but expression is of type json
 ```
@@ -28,11 +28,11 @@ asyncpg.exceptions.DatatypeMismatchError: column "player_ids" is of type charact
 # BEFORE
 player_ids: Mapped[list[str]] = mapped_column(JSON, ...)
 
-# AFTER  
+# AFTER
 player_ids: Mapped[list[str]] = mapped_column(postgresql.ARRAY(String), ...)
 ```
 
-**Verification**: 
+**Verification**:
 - ✅ Local test passes (test_video_session_fix.py)
 - ✅ Model now returns `ARRAY` type
 - ✅ Commit: `e3abcea`
@@ -52,7 +52,7 @@ aws ecs update-service --cluster cricksy --service backend --force-new-deploymen
 
 **Symptom** (Browser Console):
 ```
-Access to fetch at 'https://api.cricksy-ai.com/api/coaches/plus/sessions' 
+Access to fetch at 'https://api.cricksy-ai.com/api/coaches/plus/sessions'
 from origin 'https://cricksy-ai.web.app' has been blocked by CORS policy
 ```
 

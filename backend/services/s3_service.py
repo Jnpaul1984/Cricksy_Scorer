@@ -14,11 +14,10 @@ def _import_boto3():
     try:
         import boto3
         from botocore.exceptions import ClientError
+
         return boto3, ClientError
     except ImportError as e:
-        raise ImportError(
-            f"boto3 is not installed. Please install it: pip install boto3"
-        ) from e
+        raise ImportError("boto3 is not installed. Please install it: pip install boto3") from e
 
 
 class S3Service:
@@ -102,10 +101,6 @@ def _get_s3_service() -> S3Service:
     return _s3_service_instance
 
 
-# Expose through module attribute (will be created when first imported and used)
-s3_service = None  # type: ignore[assignment]
-
-
 class _LazyProxy:
     """Lazy proxy that creates S3Service on first access."""
 
@@ -113,5 +108,5 @@ class _LazyProxy:
         return getattr(_get_s3_service(), name)
 
 
-# Replace the module-level s3_service with lazy proxy
-s3_service = _LazyProxy()  # type: ignore[assignment]
+# Expose through module attribute (will be created when first imported and used)
+s3_service: Any = _LazyProxy()

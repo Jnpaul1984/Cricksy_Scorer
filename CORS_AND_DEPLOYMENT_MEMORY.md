@@ -1,9 +1,9 @@
 # CORS Configuration & ECS Deployment - Memory Notes
 
 ## Critical Issue History
-**Date**: December 26, 2025  
-**Problem**: Frontend at `https://cricksy-ai.web.app` couldn't login - received "No 'Access-Control-Allow-Origin' header" CORS errors  
-**Root Cause**: ECS task definition had wrong `BACKEND_CORS_ORIGINS` environment variable value  
+**Date**: December 26, 2025
+**Problem**: Frontend at `https://cricksy-ai.web.app` couldn't login - received "No 'Access-Control-Allow-Origin' header" CORS errors
+**Root Cause**: ECS task definition had wrong `BACKEND_CORS_ORIGINS` environment variable value
 
 ## Root Causes (Multiple Layers)
 
@@ -266,6 +266,6 @@ aws ecs update-service \
 
 ## Related Issues to Watch
 - Firebase frontend domain changes → update CORS
-- Adding new production domain → update CORS  
+- Adding new production domain → update CORS
 - Moving ALB to different domain → update CORS
 - Any "No 'Access-Control-Allow-Origin' header" error → check CORS config

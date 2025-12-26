@@ -53,12 +53,12 @@ def test_pressure_analyzer_low_pressure_scenario():
 
     assert result is not None
     assert len(result["pressure_points"]) == 12
-    assert result["summary"]["average_pressure"] < 40, (
-        "Should have low average pressure when runs flowing"
-    )
-    assert result["summary"]["high_pressure_count"] == 0, (
-        "Should have no high pressure when batters dominating"
-    )
+    assert (
+        result["summary"]["average_pressure"] < 40
+    ), "Should have low average pressure when runs flowing"
+    assert (
+        result["summary"]["high_pressure_count"] == 0
+    ), "Should have no high pressure when batters dominating"
 
 
 def test_pressure_analyzer_high_pressure_scenario():
@@ -91,9 +91,9 @@ def test_pressure_analyzer_high_pressure_scenario():
     assert result is not None
     assert len(result["pressure_points"]) == 12
     # With dots and a wicket, average pressure should be higher than low pressure scenario
-    assert result["summary"]["average_pressure"] > 5, (
-        "Should have higher pressure with dots and wicket"
-    )
+    assert (
+        result["summary"]["average_pressure"] > 5
+    ), "Should have higher pressure with dots and wicket"
     assert result["summary"]["peak_pressure"] > 10, "Should have peak pressure from wicket + dots"
 
 
@@ -223,13 +223,13 @@ def test_pressure_analyzer_phase_breakdown():
     # Verify phase breakdown - overs 0-5 (inclusive) = 36 balls
     assert len(phases["powerplay"]) == 36, "Powerplay should have 6 overs = 36 balls"
     # Overs 6-15 = 60 balls
-    assert len(phases["middle"]) == 60, (
-        f"Middle should have 10 overs = 60 balls, got {len(phases['middle'])}"
-    )
+    assert (
+        len(phases["middle"]) == 60
+    ), f"Middle should have 10 overs = 60 balls, got {len(phases['middle'])}"
     # Overs 16-19 = 24 balls
-    assert len(phases["death"]) == 24, (
-        f"Death should have 4 overs = 24 balls, got {len(phases['death'])}"
-    )
+    assert (
+        len(phases["death"]) == 24
+    ), f"Death should have 4 overs = 24 balls, got {len(phases['death'])}"
 
     # Each phase should have stats
     assert phases.get("powerplay_stats") is not None

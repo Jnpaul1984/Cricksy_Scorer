@@ -24,19 +24,19 @@ A **production-ready MVP** for Coach Pro Plus video analysis with:
 ```
 ✨ backend/services/pose_service.py (200 lines)
    └─ extract_pose_keypoints_from_video(video_path, sample_fps=10, max_width=640)
-   
+
 ✨ backend/services/coach_ai_pipeline.py (150 lines)
    └─ analyze_video_pose(video_path, sample_fps=10, max_width=640)
-   
+
 ✨ backend/scripts/pose_extract_demo.py (120 lines)
    └─ CLI: python backend/scripts/pose_extract_demo.py <video.mp4> [--options]
-   
+
 📄 COACH_PRO_PLUS_VIDEO_ANALYSIS_MVP.md
    └─ Complete implementation overview
-   
+
 📄 COACH_PRO_PLUS_VIDEO_ANALYSIS_CODE_PATCHES.md
    └─ Detailed code walkthrough and patches
-   
+
 📄 COACH_PRO_PLUS_VIDEO_ANALYSIS_DELIVERY_SUMMARY.md
    └─ Full delivery report and checklist
 ```

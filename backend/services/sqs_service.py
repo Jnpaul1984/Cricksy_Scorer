@@ -15,11 +15,11 @@ def _import_boto3():
     try:
         import boto3
         from botocore.exceptions import ClientError
+
         return boto3, ClientError
     except ImportError as e:
-        raise ImportError(
-            f"boto3 is not installed. Please install it: pip install boto3"
-        ) from e
+        raise ImportError("boto3 is not installed. Please install it: pip install boto3") from e
+
 
 class SQSService:
     """Service for SQS operations."""
@@ -142,6 +142,8 @@ class SQSService:
             )
         except self.ClientError as e:
             raise RuntimeError(f"Failed to delete SQS message: {e!s}") from e
+
+
 # Global instance (created lazily when first accessed)
 _sqs_service_instance: SQSService | None = None
 
@@ -153,10 +155,6 @@ def _get_sqs_service() -> SQSService:
     return _sqs_service_instance
 
 
-# Expose through module attribute (will be created when first imported and used)
-sqs_service = None  # type: ignore[assignment]
-
-
 class _LazyProxy:
     """Lazy proxy that creates SQSService on first access."""
 
@@ -164,5 +162,5 @@ class _LazyProxy:
         return getattr(_get_sqs_service(), name)
 
 
-# Replace the module-level sqs_service with lazy proxy
-sqs_service = _LazyProxy()  # type: ignore[assignment]
+# Expose through module attribute (will be created when first imported and used)
+sqs_service: Any = _LazyProxy()

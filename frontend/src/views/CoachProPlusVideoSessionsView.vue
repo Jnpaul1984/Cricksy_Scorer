@@ -224,8 +224,8 @@
           </div>
 
           <div class="modal-actions">
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               class="btn-primary"
               :disabled="!selectedFile"
             >
@@ -283,7 +283,7 @@
           <!-- Coaching Report -->
           <section class="results-section" v-if="selectedJob.results.report">
             <h3>📋 Coaching Report</h3>
-            
+
             <div class="report-subsection">
               <h4>Summary</h4>
               <p>{{ selectedJob.results.report.summary }}</p>

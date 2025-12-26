@@ -491,12 +491,12 @@ async def initiate_video_upload(
     try:
         # Generate S3 presigned URL (lazy import)
         from backend.services.s3_service import s3_service
-        
+
         # Key format: coach_plus/{owner_type}/{owner_id}/{session_id}/{video_id}/original.mp4
         video_id = str(uuid4())
         s3_key = f"coach_plus/{session.owner_type.value}/{session.owner_id}/{request.session_id}/{video_id}/original.mp4"
 
-        presigned_url = s3_service.generate_presigned_put_url(
+        presigned_url = s3_service.generate_presigned_put_url(  # type: ignore[union-attr]
             bucket=settings.S3_COACH_VIDEOS_BUCKET,
             key=s3_key,
             expires_in=settings.S3_UPLOAD_URL_EXPIRES_SECONDS,
@@ -581,8 +581,8 @@ async def complete_video_upload(
     # Send to SQS queue (lazy import)
     try:
         from backend.services.sqs_service import sqs_service
-        
-        message_id = sqs_service.send_message(
+
+        message_id = sqs_service.send_message(  # type: ignore[union-attr]
             queue_url=settings.SQS_VIDEO_ANALYSIS_QUEUE_URL,
             message_body=message_body,
         )
@@ -724,7 +724,7 @@ async def analyze_video(
     try:
         # Step 1: Extract pose keypoints (lazy import)
         from backend.services.pose_service import extract_pose_keypoints_from_video
-        
+
         pose_data = extract_pose_keypoints_from_video(
             video_path=request.video_path,
             sample_fps=request.sample_fps,

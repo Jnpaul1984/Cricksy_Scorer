@@ -27,6 +27,7 @@ def _import_cv2_and_mediapipe():
             get_model_path,
             get_detection_method_name,
         )
+
         return cv2, mp, get_pose_landmarker, get_model_path, get_detection_method_name
     except ImportError as e:
         raise ImportError(
@@ -34,6 +35,7 @@ def _import_cv2_and_mediapipe():
             f"Please ensure cv2 and mediapipe are installed: "
             f"pip install opencv-python-headless mediapipe"
         ) from e
+
 
 logger = logging.getLogger(__name__)
 
