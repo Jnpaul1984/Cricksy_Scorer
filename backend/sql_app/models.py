@@ -21,6 +21,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    TypeDecorator,
     func,
 )
 from sqlalchemy import Enum as SAEnum
@@ -28,6 +29,45 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
+
+
+class ArrayOrJSON(TypeDecorator):
+    """Handle both ARRAY and JSON column types for backward compatibility.
+    
+    Converts between ARRAY (legacy) and JSON (current) types transparently.
+    Reads as either type from DB, always writes as JSON.
+    """
+
+    impl = JSON
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        """Convert Python list to JSON when writing to DB."""
+        if value is None:
+            return None
+        # Always write as JSON
+        return value
+
+    def process_result_value(self, value, dialect):
+        """Convert DB value (ARRAY or JSON) to Python list when reading."""
+        if value is None:
+            return []
+        # Handle both array strings like ['a','b'] and JSON like ["a","b"]
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            # PostgreSQL might return ARRAY as string representation
+            import json
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                # If it's a string like "['a','b']", try to parse as Python literal
+                try:
+                    import ast
+                    return ast.literal_eval(value)
+                except (ValueError, SyntaxError):
+                    return [value] if value else []
+        return value if isinstance(value, list) else []
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
@@ -1264,10 +1304,10 @@ class VideoSession(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     player_ids: Mapped[list[str]] = mapped_column(
-        JSON,
+        ArrayOrJSON,
         default=list,
         nullable=False,
-        comment="Player IDs involved",
+        comment="Player IDs involved (handles both ARRAY and JSON types)",
     )
 
     # S3 storage details
