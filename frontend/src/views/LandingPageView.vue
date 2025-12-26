@@ -119,13 +119,13 @@
             <BaseBadge variant="success">For schools & clubs</BaseBadge>
           </div>
           <p class="pricing-tile-copy">Teams, coaches, dashboards and sponsor overlays.</p>
-          <p class="pricing-tile-price">From $39 / month</p>
+          <p class="pricing-tile-price">Starting at $99 / month</p>
           <BaseButton
             variant="ghost"
             size="sm"
             @click="$router.push({ name: 'PricingPage', query: { plan: 'org-starter' } })"
           >
-            Talk to us
+            Contact sales
           </BaseButton>
         </BaseCard>
       </div>

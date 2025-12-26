@@ -73,7 +73,7 @@
           variant="primary"
           size="md"
           class="plan-cta"
-          @click="goToSignup(plan.id)"
+          @click="plan.isContactSales ? handleContactSales(plan.id) : goToSignup(plan.id)"
         >
           {{ plan.ctaLabel }}
         </BaseButton>
@@ -160,6 +160,7 @@ interface PlanConfig {
   tagline: string
   monthly: number
   highlight?: boolean
+  isContactSales?: boolean
   ctaLabel: string
   note?: string
   features: string[]
@@ -258,11 +259,12 @@ const plans: PlanConfig[] = [
     name: 'Org Pro Starter',
     shortName: 'Starter',
     tagline: 'For single schools, clubs, or small leagues.',
-    monthly: 39,
-    ctaLabel: 'Choose Org Pro Starter',
+    monthly: 99,
+    isContactSales: true,
+    ctaLabel: 'Contact sales',
     features: [
       'Includes 4 teams',
-      'Includes 4 Coach Pro seats',
+      'Includes 4 Coach Pro seats (+ Coach Pro Plus)',
       'Includes 1 Analyst Pro seat',
       'League/tournament management',
       'Org-level dashboards',
@@ -270,6 +272,7 @@ const plans: PlanConfig[] = [
       'Branded viewers & overlays',
       'Basic streaming overlay integration',
       'Role & subscription management',
+      'Video session analysis (Coach Pro Plus)',
     ],
   },
   {
@@ -277,17 +280,19 @@ const plans: PlanConfig[] = [
     name: 'Org Pro Growth',
     shortName: 'Growth',
     tagline: 'For medium academies and district leagues.',
-    monthly: 79,
-    ctaLabel: 'Choose Org Pro Growth',
+    monthly: 99,
+    isContactSales: true,
+    ctaLabel: 'Contact sales',
     features: [
       'Includes 10 teams',
-      'Includes 8 Coach Pro seats',
+      'Includes 8 Coach Pro seats (+ Coach Pro Plus)',
       'Includes 3 Analyst Pro seats',
       'Everything in Org Pro Starter',
       'Multi-competition support',
       'Sponsor rotation logic',
       'Custom viewer templates',
       'Priority support',
+      'Video session analysis (Coach Pro Plus)',
     ],
   },
   {
@@ -295,18 +300,20 @@ const plans: PlanConfig[] = [
     name: 'Org Pro Elite',
     shortName: 'Elite',
     tagline: 'For national academies, big leagues, and franchises.',
-    monthly: 149,
-    ctaLabel: 'Talk to us',
-    note: 'Invite-only at launch. Best suited for high-performance programs.',
+    monthly: 99,
+    isContactSales: true,
+    ctaLabel: 'Contact sales',
+    note: 'Custom pricing based on requirements.',
     features: [
       'Includes 20 teams',
-      'Includes 15 Coach Pro seats',
+      'Includes 15 Coach Pro seats (+ Coach Pro Plus)',
       'Includes 5 Analyst Pro seats',
       'Everything in Org Pro Growth',
       'Advanced AI tuning for your league',
       'White-label viewers (logo & colors)',
       'Optional API access',
       'Quarterly analytics health check',
+      'Video session analysis (Coach Pro Plus)',
     ],
   },
 ]
@@ -321,7 +328,14 @@ const billingPeriod = ref<BillingPeriod>('monthly')
 const displayPlans = computed(() =>
   plans.map((plan) => {
     const price = billingPeriod.value === 'monthly' ? plan.monthly : plan.monthly * 10
-    const priceDisplay = price === 0 ? '$0' : `$${price % 1 === 0 ? price : price.toFixed(2)}`
+    let priceDisplay: string
+    if (plan.isContactSales) {
+      priceDisplay = 'Starting at $99'
+    } else if (price === 0) {
+      priceDisplay = '$0'
+    } else {
+      priceDisplay = `$${price % 1 === 0 ? price : price.toFixed(2)}`
+    }
     return {
       ...plan,
       price,
@@ -337,6 +351,15 @@ function setBilling(period: BillingPeriod) {
 function goToSignup(planId: string) {
   // Navigate to signup with plan preselected (adjust path as needed)
   router.push({ path: '/auth/register', query: { plan: planId } })
+}
+
+function handleContactSales(planId: string) {
+  // Open contact form or email (could also navigate to a contact page)
+  // For now, show a message and optionally open email client
+  const email = 'sales@cricksy.ai'
+  const subject = `Cricksy ${planId.replace(/-/g, ' ')} Pricing Inquiry`
+  const body = `Hi,\n\nI'm interested in learning more about the ${planId} plan for my organization.\n\nPlease contact me with more details.\n\nThanks`
+  window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }
 
 // ----------------------------------------------------------------------------
