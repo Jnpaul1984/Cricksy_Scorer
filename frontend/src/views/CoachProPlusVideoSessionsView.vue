@@ -162,8 +162,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useAuthStore } from '@/stores/authStore'
+import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore'
 
 // ============================================================================
 // Types
@@ -355,10 +356,17 @@ function formatDate(dateStr: string): string {
 // Lifecycle
 // ============================================================================
 
+const videoStore = useCoachPlusVideoStore()
+
 onMounted(() => {
   if (authStore.isCoachProPlus) {
     fetchSessions()
   }
+})
+
+onBeforeUnmount(() => {
+  // Stop all polling intervals when leaving the page
+  videoStore.cleanup()
 })
 </script>
 
