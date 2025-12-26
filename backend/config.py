@@ -21,6 +21,8 @@ _DEFAULT_CORS = [
     "https://cricksy-ai.com",
     "https://www.cricksy-ai.com",
     "https://dev.cricksy-ai.com",
+    "http://cricksy-ai-alb-1296676843.us-east-1.elb.amazonaws.com",
+    "https://cricksy-ai-alb-1296676843.us-east-1.elb.amazonaws.com",
 ]
 
 
