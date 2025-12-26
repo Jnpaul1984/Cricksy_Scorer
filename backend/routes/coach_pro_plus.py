@@ -160,7 +160,10 @@ async def create_video_session(
         )
 
     # Verify user is coach_pro_plus, org_pro, or superuser
-    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro) and not current_user.is_superuser:
+    if (
+        current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro)
+        and not current_user.is_superuser
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Coach Pro Plus users can create video sessions",
@@ -215,7 +218,10 @@ async def list_video_sessions(
         )
 
     # Verify user is coach_pro_plus, org_pro, or superuser
-    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro) and not current_user.is_superuser:
+    if (
+        current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro)
+        and not current_user.is_superuser
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Coach Pro Plus users can view video sessions",
@@ -261,7 +267,10 @@ async def get_video_session(
         )
 
     # Verify user is coach_pro_plus, org_pro, or superuser
-    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro) and not current_user.is_superuser:
+    if (
+        current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro)
+        and not current_user.is_superuser
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Coach Pro Plus users can access video sessions",
@@ -452,7 +461,10 @@ async def initiate_video_upload(
         )
 
     # Verify user is coach_pro_plus, org_pro, or superuser
-    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro) and not current_user.is_superuser:
+    if (
+        current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro)
+        and not current_user.is_superuser
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Coach Pro Plus users can upload videos",
@@ -551,7 +563,10 @@ async def complete_video_upload(
         )
 
     # Verify user is coach_pro_plus, org_pro, or superuser
-    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro) and not current_user.is_superuser:
+    if (
+        current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro)
+        and not current_user.is_superuser
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Coach Pro Plus users can upload videos",
@@ -688,7 +703,10 @@ async def analyze_video(
     - 422: Invalid request parameters
     """
     # Check role access (coach_pro_plus, org_pro, or superuser)
-    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro) and not current_user.is_superuser:
+    if (
+        current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro)
+        and not current_user.is_superuser
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Coach Pro Plus users can analyze videos",
