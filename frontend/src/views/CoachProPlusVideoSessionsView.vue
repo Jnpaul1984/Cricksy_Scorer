@@ -75,6 +75,9 @@
           </div>
 
           <div class="session-actions">
+            <button class="btn-primary" @click.stop="openUploadModal(session.id)">
+              📹 Upload & Analyze
+            </button>
             <button class="btn-secondary" @click.stop="editSession(session.id)">
               Edit
             </button>
@@ -158,40 +161,208 @@
         </div>
       </div>
     </div>
+
+    <!-- Upload Video Modal -->
+    <div v-if="showUploadModal" class="modal-overlay" @click="closeUploadModal">
+      <div class="modal-content" @click.stop>
+        <h2>Upload Video for Analysis</h2>
+
+        <div v-if="videoStore.uploading" class="upload-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: videoStore.uploadProgress + '%' }"></div>
+          </div>
+          <p class="progress-text">
+            {{ videoStore.uploadProgress }}% - {{ videoStore.uploading.status }}
+          </p>
+        </div>
+
+        <form v-else @submit.prevent="handleVideoUpload">
+          <div class="form-group">
+            <label for="video-file">Select Video File</label>
+            <input
+              id="video-file"
+              ref="fileInput"
+              type="file"
+              accept="video/mp4,video/quicktime,video/x-msvideo"
+              required
+              @change="onFileSelected"
+            />
+            <p class="file-hint">
+              Supported: MP4, MOV, AVI (max 500MB)
+            </p>
+            <p v-if="selectedFile" class="file-selected">
+              ✓ Selected: {{ selectedFile.name }} ({{ (selectedFile.size / 1024 / 1024).toFixed(1) }}MB)
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label for="sample-fps">Sample FPS (frames per second)</label>
+            <input
+              id="sample-fps"
+              v-model.number="uploadSettings.sampleFps"
+              type="number"
+              min="1"
+              max="30"
+              value="10"
+            />
+            <p class="setting-hint">
+              Higher = more detailed analysis but slower processing (10 recommended)
+            </p>
+          </div>
+
+          <div class="form-group checkbox">
+            <label>
+              <input
+                v-model="uploadSettings.includeFrames"
+                type="checkbox"
+              />
+              Include frame data in results
+            </label>
+            <p class="setting-hint">
+              Stores individual frame analysis (increases storage)
+            </p>
+          </div>
+
+          <div class="modal-actions">
+            <button 
+              type="submit" 
+              class="btn-primary"
+              :disabled="!selectedFile"
+            >
+              🚀 Upload & Analyze
+            </button>
+            <button type="button" class="btn-secondary" @click="closeUploadModal">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Results Modal -->
+    <div v-if="showResultsModal && selectedJob" class="modal-overlay" @click="closeResultsModal">
+      <div class="modal-content modal-large" @click.stop>
+        <button class="modal-close-btn" @click="closeResultsModal">✕</button>
+        <h2>Analysis Results</h2>
+
+        <div v-if="selectedJob.status === 'completed' && selectedJob.results">
+          <!-- Pose Summary -->
+          <section class="results-section">
+            <h3>📊 Pose Detection Summary</h3>
+            <div class="metrics-grid">
+              <div class="metric">
+                <span class="metric-label">Total Frames</span>
+                <span class="metric-value">{{ selectedJob.results.pose_summary.total_frames }}</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Sampled Frames</span>
+                <span class="metric-value">{{ selectedJob.results.pose_summary.sampled_frames }}</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Detection Rate</span>
+                <span class="metric-value">{{ (selectedJob.results.pose_summary.detection_rate_percent).toFixed(1) }}%</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Video FPS</span>
+                <span class="metric-value">{{ selectedJob.results.pose_summary.video_fps.toFixed(1) }}</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Biomechanical Metrics -->
+          <section class="results-section">
+            <h3>💪 Biomechanical Metrics</h3>
+            <div class="metrics-grid">
+              <div class="metric" v-for="(value, key) in selectedJob.results.metrics" :key="key">
+                <span class="metric-label">{{ formatMetricName(key) }}</span>
+                <span class="metric-value">{{ typeof value === 'number' ? value.toFixed(2) : value }}</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Coaching Report -->
+          <section class="results-section" v-if="selectedJob.results.report">
+            <h3>📋 Coaching Report</h3>
+            
+            <div class="report-subsection">
+              <h4>Summary</h4>
+              <p>{{ selectedJob.results.report.summary }}</p>
+            </div>
+
+            <div class="report-subsection">
+              <h4>🎯 Key Issues to Address</h4>
+              <ul>
+                <li v-for="(issue, idx) in selectedJob.results.report.key_issues" :key="idx">
+                  {{ issue }}
+                </li>
+              </ul>
+            </div>
+
+            <div class="report-subsection">
+              <h4>✨ Strength Areas</h4>
+              <ul v-if="selectedJob.results.findings.strength_areas">
+                <li v-for="(strength, idx) in selectedJob.results.findings.strength_areas" :key="idx">
+                  {{ strength }}
+                </li>
+              </ul>
+            </div>
+
+            <div class="report-subsection">
+              <h4>🏋️ Recommended Drills</h4>
+              <div v-for="(drill, idx) in selectedJob.results.report.drills" :key="idx" class="drill-card">
+                <h5>{{ drill.name }}</h5>
+                <p>{{ drill.description }}</p>
+                <p class="drill-meta">⏱️ {{ drill.duration_minutes }} minutes | Focus: {{ drill.focus_areas.join(', ') }}</p>
+              </div>
+            </div>
+
+            <div class="report-subsection">
+              <h4>📅 One-Week Training Plan</h4>
+              <p class="training-plan">{{ selectedJob.results.report.one_week_plan }}</p>
+            </div>
+          </section>
+        </div>
+
+        <div v-else class="results-loading">
+          <p>⏳ Analysis in progress...</p>
+          <p class="status-text">Status: {{ selectedJob.status }}</p>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" @click="closeResultsModal">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useAuthStore } from '@/stores/authStore'
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore'
-
-// ============================================================================
-// Types
-// ============================================================================
-
-interface VideoSession {
-  id: string
-  coach_id: string
-  title: string
-  player_ids: string[]
-  status: 'pending' | 'uploaded' | 'processing' | 'ready'
-  notes?: string
-  created_at: string
-  updated_at: string
-}
+import { ApiError } from '@/services/coachPlusVideoService'
+import type { VideoAnalysisJob } from '@/services/coachPlusVideoService'
 
 // ============================================================================
 // State
 // ============================================================================
 
 const authStore = useAuthStore()
+const videoStore = useCoachPlusVideoStore()
 
-const sessions = ref<VideoSession[]>([])
+const sessions = ref<any[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const showCreateModal = ref(false)
+const showUploadModal = ref(false)
+const showResultsModal = ref(false)
 const editingId = ref<string | null>(null)
+const uploadingSessionId = ref<string | null>(null)
+
+const selectedFile = ref<File | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const offset = ref(0)
 const limit = ref(10)
@@ -202,10 +373,36 @@ const formData = ref({
   notes: '',
 })
 
+const uploadSettings = ref({
+  sampleFps: 10,
+  includeFrames: false,
+})
+
 const playersText = ref('')
 
+// Watch store errors and display them
+watch(() => videoStore.error, (newError) => {
+  if (newError) {
+    error.value = newError
+  }
+})
+
+// Watch for completed jobs and show results
+const selectedJob = ref<VideoAnalysisJob | null>(null)
+
+watch(() => videoStore.processingJobs, (jobs) => {
+  // If we have a job that's completed, show results
+  if (jobs.length === 0 && uploadingSessionId.value) {
+    const completedJob = videoStore.jobStatusMap.get(videoStore.allJobs[0]?.id || '')
+    if (completedJob && completedJob.status === 'completed') {
+      selectedJob.value = completedJob
+      showResultsModal.value = true
+    }
+  }
+})
+
 // ============================================================================
-// Computed Properties
+// Computed
 // ============================================================================
 
 const currentPage = computed(() => Math.floor(offset.value / limit.value) + 1)
@@ -219,30 +416,8 @@ async function fetchSessions() {
   error.value = null
 
   try {
-    // TODO: Replace with actual API call
-    // const response = await fetch(
-    //   `/api/coaches/plus/sessions?limit=${limit.value}&offset=${offset.value}`,
-    //   {
-    //     headers: {
-    //       'Authorization': `Bearer ${authStore.token}`,
-    //     },
-    //   }
-    // )
-    // sessions.value = await response.json()
-
-    // Mock data for scaffolding
-    sessions.value = [
-      {
-        id: 'mock-1',
-        coach_id: authStore.userId,
-        title: 'Batting Technique - Opener Training',
-        player_ids: ['player1', 'player2'],
-        status: 'ready',
-        notes: 'Focus on front foot technique',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    ]
+    await videoStore.fetchSessions(limit.value, offset.value)
+    sessions.value = videoStore.sessions
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load sessions'
     console.error(err)
@@ -265,38 +440,117 @@ async function submitForm() {
     }
 
     if (editingId.value) {
-      // TODO: Update session
+      // TODO: Update session via API
       console.log('Update session:', editingId.value, formData.value)
     } else {
-      // TODO: Create session
-      // const response = await fetch('/api/coaches/plus/sessions', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': `Bearer ${authStore.token}`,
-      //   },
-      //   body: JSON.stringify(formData.value),
-      // })
-      // if (!response.ok) throw new Error('Failed to create session')
-
-      console.log('Create session:', formData.value)
+      // Create new session via store
+      const session = await videoStore.createSession(formData.value)
+      if (!session) {
+        error.value = videoStore.error || 'Failed to create session'
+        return
+      }
     }
 
     closeModal()
     await fetchSessions()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Operation failed'
+    const msg = err instanceof Error ? err.message : 'Operation failed'
+    error.value = msg
     console.error(err)
   }
 }
 
+function onFileSelected(event: Event) {
+  const target = event.target as HTMLInputElement
+  const files = target.files
+  if (files && files.length > 0) {
+    selectedFile.value = files[0]
+  }
+}
+
+async function handleVideoUpload() {
+  if (!selectedFile.value || !uploadingSessionId.value) {
+    error.value = 'Please select a video file'
+    return
+  }
+
+  // Reset results modal
+  showResultsModal.value = false
+  selectedJob.value = null
+
+  try {
+    // Start upload
+    const jobId = await videoStore.startUpload(
+      selectedFile.value,
+      uploadingSessionId.value,
+      uploadSettings.value.sampleFps,
+      uploadSettings.value.includeFrames
+    )
+
+    if (!jobId) {
+      error.value = videoStore.error || 'Failed to start upload'
+      return
+    }
+
+    // Close upload modal
+    closeUploadModal()
+
+    // Watch for completion
+    const checkCompletion = setInterval(() => {
+      const job = videoStore.jobStatusMap.get(jobId)
+      if (job && (job.status === 'completed' || job.status === 'failed')) {
+        clearInterval(checkCompletion)
+        selectedJob.value = job
+        showResultsModal.value = true
+      }
+    }, 1000)
+  } catch (err) {
+    let msg = 'Upload failed'
+    if (err instanceof ApiError) {
+      if (err.isFeatureDisabled()) {
+        msg = `Video upload feature is not enabled on your plan. ${err.detail || 'Please upgrade to use this feature.'}`
+      } else if (err.isUnauthorized()) {
+        msg = 'Your session expired. Please log in again.'
+      } else {
+        msg = err.detail || err.message
+      }
+    } else if (err instanceof Error) {
+      msg = err.message
+    }
+    error.value = msg
+    console.error(err)
+  }
+}
+
+function openUploadModal(sessionId: string) {
+  uploadingSessionId.value = sessionId
+  selectedFile.value = null
+  showUploadModal.value = true
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
+function closeUploadModal() {
+  showUploadModal.value = false
+  uploadingSessionId.value = null
+  selectedFile.value = null
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
+function closeResultsModal() {
+  showResultsModal.value = false
+  selectedJob.value = null
+}
+
 function selectSession(sessionId: string) {
-  // TODO: Navigate to session detail/edit view
   console.log('Selected session:', sessionId)
+  // TODO: Navigate to session detail view
 }
 
 function editSession(sessionId: string) {
-  // TODO: Load session data and open modal
   editingId.value = sessionId
   showCreateModal.value = true
 }
@@ -307,16 +561,8 @@ async function deleteSession(sessionId: string) {
   }
 
   try {
-    // TODO: Delete session
-    // const response = await fetch(`/api/coaches/plus/sessions/${sessionId}`, {
-    //   method: 'DELETE',
-    //   headers: {
-    //     'Authorization': `Bearer ${authStore.token}`,
-    //   },
-    // })
-    // if (!response.ok) throw new Error('Failed to delete session')
-
     console.log('Delete session:', sessionId)
+    // TODO: Delete via API
     await fetchSessions()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to delete session'
@@ -352,11 +598,17 @@ function formatDate(dateStr: string): string {
   })
 }
 
+function formatMetricName(key: string): string {
+  return key
+    .replace(/_/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
 // ============================================================================
 // Lifecycle
 // ============================================================================
-
-const videoStore = useCoachPlusVideoStore()
 
 onMounted(() => {
   if (authStore.isCoachProPlus) {
@@ -365,7 +617,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  // Stop all polling intervals when leaving the page
   videoStore.cleanup()
 })
 </script>
@@ -680,6 +931,26 @@ onBeforeUnmount(() => {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.modal-large {
+  max-width: 900px;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #999;
+}
+
+.modal-close-btn:hover {
+  color: #333;
 }
 
 .modal-content h2 {
@@ -699,7 +970,9 @@ onBeforeUnmount(() => {
   color: #333;
 }
 
-.form-group input,
+.form-group input[type="text"],
+.form-group input[type="file"],
+.form-group input[type="number"],
 .form-group textarea {
   width: 100%;
   padding: 0.75rem;
@@ -716,6 +989,57 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
+.form-group input[type="checkbox"] {
+  margin-right: 0.5rem;
+}
+
+.form-group.checkbox label {
+  display: flex;
+  align-items: center;
+}
+
+.file-hint,
+.setting-hint {
+  font-size: 0.85rem;
+  color: #999;
+  margin-top: 0.3rem;
+}
+
+.file-selected {
+  color: #00b894;
+  font-weight: bold;
+}
+
+.upload-progress {
+  margin-bottom: 1.5rem;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 30px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 0.9rem;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  margin-top: 0.5rem;
+  text-align: center;
+  color: #666;
+}
+
 .modal-actions {
   display: flex;
   gap: 1rem;
@@ -726,18 +1050,111 @@ onBeforeUnmount(() => {
   flex: 1;
 }
 
-.modal-hint {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  background: #f0f7ff;
-  border-left: 3px solid #667eea;
-  border-radius: 4px;
-  color: #333;
-  font-size: 0.9rem;
+/* Results Modal */
+.results-loading {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
 }
 
-.modal-hint p {
-  margin: 0;
+.status-text {
+  color: #999;
+  font-size: 0.95rem;
+}
+
+.results-section {
+  margin-bottom: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #eee;
+}
+
+.results-section h3 {
+  margin-top: 0;
+  margin-bottom: 1.2rem;
+  font-size: 1.3rem;
+  color: #333;
+}
+
+.results-section h4 {
+  margin: 1.2rem 0 0.8rem;
+  font-size: 1.1rem;
+  color: #555;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.metric {
+  background: #f9f9f9;
+  padding: 1rem;
+  border-radius: 6px;
+  text-align: center;
+  border: 1px solid #eee;
+}
+
+.metric-label {
+  display: block;
+  font-size: 0.85rem;
+  color: #999;
+  margin-bottom: 0.3rem;
+  font-weight: 500;
+}
+
+.metric-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #667eea;
+}
+
+.report-subsection {
+  margin-bottom: 1.2rem;
+}
+
+.report-subsection ul {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.report-subsection li {
+  margin: 0.3rem 0;
+  color: #555;
+}
+
+.drill-card {
+  background: #f9f9f9;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 0.8rem;
+  border-left: 3px solid #667eea;
+}
+
+.drill-card h5 {
+  margin: 0 0 0.5rem;
+  color: #333;
+}
+
+.drill-card p {
+  margin: 0.3rem 0;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.drill-meta {
+  color: #999;
+  font-size: 0.85rem !important;
+  margin-top: 0.5rem;
+}
+
+.training-plan {
+  background: #f9f9f9;
+  padding: 1rem;
+  border-radius: 6px;
+  line-height: 1.6;
+  color: #555;
 }
 
 /* Responsive */
