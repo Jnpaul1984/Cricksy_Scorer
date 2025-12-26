@@ -14,7 +14,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
