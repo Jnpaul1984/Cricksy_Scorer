@@ -87,9 +87,11 @@ async def run_migrations_online() -> None:
     url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
 
     # Create an async engine from the resolved URL
+    # Add longer timeout for migrations in ECS (60 seconds instead of default 10)
     connectable = create_async_engine(
         url,
         poolclass=pool.NullPool,
+        connect_args={"timeout": 60, "server_settings": {"application_name": "alembic"}},
     )
 
     # Connect to the database asynchronously
