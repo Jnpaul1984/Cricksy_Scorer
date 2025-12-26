@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import settings
 from backend.sql_app.database import get_db
 
 router = APIRouter(tags=["health"])
@@ -19,6 +20,14 @@ def health() -> dict[str, str]:
 @router.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/health/cors-config", include_in_schema=False)
+def cors_config() -> dict[str, list[str]]:
+    """Debug endpoint: show current CORS configuration."""
+    raw_cors_origins = str(getattr(settings, "BACKEND_CORS_ORIGINS", "")).strip()
+    cors_origins = [origin.strip() for origin in raw_cors_origins.split(",") if origin.strip()]
+    return {"cors_origins": cors_origins}
 
 
 @router.get("/health/db")
