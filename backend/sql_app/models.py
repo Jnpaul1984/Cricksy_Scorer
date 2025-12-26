@@ -58,16 +58,19 @@ class ArrayOrJSON(TypeDecorator):
         if isinstance(value, str):
             # PostgreSQL might return ARRAY as string representation
             import json
+
             try:
                 return json.loads(value)
             except (json.JSONDecodeError, TypeError):
                 # If it's a string like "['a','b']", try to parse as Python literal
                 try:
                     import ast
+
                     return ast.literal_eval(value)
                 except (ValueError, SyntaxError):
                     return [value] if value else []
         return value if isinstance(value, list) else []
+
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
