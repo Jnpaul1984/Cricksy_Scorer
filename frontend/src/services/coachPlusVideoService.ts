@@ -21,7 +21,7 @@ export class ApiError extends Error {
   }
 
   isFeatureDisabled(): boolean {
-    return this.status === 403 && (this.code?.includes('feature') || this.detail?.includes('feature'))
+    return !!(this.status === 403 && (this.code?.includes('feature') || this.detail?.includes('feature')))
   }
 
   isUnauthorized(): boolean {

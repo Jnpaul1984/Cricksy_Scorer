@@ -38,7 +38,7 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
   const uploading = ref<UploadState | null>(null)
 
   // Job polling state
-  const pollingJobs = ref<Map<string, NodeJS.Timer>>(new Map())
+  const pollingJobs = ref<Map<string, ReturnType<typeof setInterval>>>(new Map())
   const jobStatusMap = ref<Map<string, VideoAnalysisJob>>(new Map())
 
   // ============================================================================
