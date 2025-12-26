@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import settings as default_settings
+from backend.config import _DEFAULT_CORS
 
 from backend.error_handlers import install_exception_handlers  # NEW
 from backend.middleware.request_logging import RequestLoggingMiddleware
@@ -293,14 +294,7 @@ def create_app(
     raw_cors_origins = str(getattr(settings, "BACKEND_CORS_ORIGINS", "")).strip()
     cors_origins = [origin.strip() for origin in raw_cors_origins.split(",") if origin.strip()]
     if not cors_origins:
-        cors_origins = [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:4173",
-            "http://127.0.0.1:4173",
-        ]
+        cors_origins = _DEFAULT_CORS
 
     fastapi_app.add_middleware(
         CORSMiddleware,
