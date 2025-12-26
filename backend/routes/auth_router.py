@@ -8,10 +8,11 @@ from backend import security
 from backend.config import settings
 from backend.sql_app import models, schemas
 from backend.sql_app.database import get_db
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -256,6 +257,55 @@ async def change_password(
         email=current_user.email,
         message="Password changed successfully",
     )
+
+
+@router.get("/debug/token-info")
+async def debug_token_info(request) -> dict:
+    """
+    Debug endpoint to inspect JWT token claims (FOR DEBUGGING ONLY).
+    Extracts token from Authorization header and decodes claims without validation.
+    """
+    import json
+    import base64
+
+    auth_header = request.headers.get("Authorization", "")
+
+    if not auth_header:
+        return {"error": "No Authorization header provided"}
+
+    if not auth_header.startswith("Bearer "):
+        return {"error": "Invalid authorization header format. Expected 'Bearer <token>'"}
+
+    token = auth_header[7:]  # Remove "Bearer " prefix
+
+    try:
+        # Split JWT into parts
+        parts = token.split(".")
+        if len(parts) != 3:
+            return {"error": f"Invalid JWT format (got {len(parts)} parts, expected 3)"}
+
+        header_b64, payload_b64, signature_b64 = parts
+
+        # Add padding if needed
+        def b64_decode(data):
+            padding = "=" * (-len(data) % 4)
+            return base64.urlsafe_b64decode(data + padding)
+
+        header = json.loads(b64_decode(header_b64))
+        payload = json.loads(b64_decode(payload_b64))
+
+        return {
+            "success": True,
+            "header": header,
+            "payload": payload,
+            "note": "Token claims decoded WITHOUT signature validation.",
+            "help": "This is for debugging only. Use /auth/me endpoint for full validation.",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to decode token: {str(e)}",
+        }
 
 
 # Trigger CI
