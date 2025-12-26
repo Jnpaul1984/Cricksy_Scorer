@@ -33,7 +33,7 @@ from .database import Base
 
 class ArrayOrJSON(TypeDecorator):
     """Handle both ARRAY and JSON column types for backward compatibility.
-    
+
     Converts between ARRAY (legacy) and JSON (current) types transparently.
     Reads as either type from DB, always writes as JSON.
     """
