@@ -18,11 +18,10 @@ _DEFAULT_CORS = [
     "http://localhost:4173",
     "http://127.0.0.1:4173",
     "https://cricksy-ai.web.app",
+    "https://api.cricksy-ai.com",
     "https://cricksy-ai.com",
     "https://www.cricksy-ai.com",
     "https://dev.cricksy-ai.com",
-    "http://cricksy-ai-alb-1296676843.us-east-1.elb.amazonaws.com",
-    "https://cricksy-ai-alb-1296676843.us-east-1.elb.amazonaws.com",
 ]
 
 
