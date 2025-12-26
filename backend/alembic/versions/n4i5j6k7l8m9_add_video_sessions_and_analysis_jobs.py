@@ -51,7 +51,7 @@ def upgrade() -> None:
         sa.Column("owner_id", sa.String(), nullable=False),
         sa.Column("title", sa.String(length=255), nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("player_ids", postgresql.ARRAY(sa.String()), nullable=False),
+        sa.Column("player_ids", sa.JSON(), nullable=False),
         sa.Column("s3_bucket", sa.String(length=255), nullable=True),
         sa.Column("s3_key", sa.String(length=500), nullable=True),
         sa.Column(

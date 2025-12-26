@@ -4,10 +4,21 @@ S3 Service - Handles presigned URL generation and S3 operations.
 
 from __future__ import annotations
 
-import boto3
-from botocore.exceptions import ClientError
+from typing import Any
 
 from backend.config import settings
+
+
+def _import_boto3():
+    """Lazy import of boto3 to avoid hard dependencies in tests."""
+    try:
+        import boto3
+        from botocore.exceptions import ClientError
+        return boto3, ClientError
+    except ImportError as e:
+        raise ImportError(
+            f"boto3 is not installed. Please install it: pip install boto3"
+        ) from e
 
 
 class S3Service:
@@ -15,6 +26,9 @@ class S3Service:
 
     def __init__(self):
         """Initialize S3 client."""
+        boto3, ClientError = _import_boto3()
+        self.boto3 = boto3
+        self.ClientError = ClientError
         self.s3_client = boto3.client("s3", region_name=settings.AWS_REGION)
 
     def generate_presigned_put_url(
@@ -47,7 +61,7 @@ class S3Service:
                 ExpiresIn=expires_in,
             )
             return url
-        except ClientError as e:
+        except self.ClientError as e:
             raise RuntimeError(f"Failed to generate presigned URL: {e!s}") from e
 
     def get_object_metadata(self, bucket: str, key: str) -> dict:
@@ -71,11 +85,33 @@ class S3Service:
                 "last_modified": response.get("LastModified"),
                 "etag": response.get("ETag"),
             }
-        except ClientError as e:
+        except self.ClientError as e:
             if e.response["Error"]["Code"] == "404":
                 raise RuntimeError(f"Object not found: {key}") from e
             raise RuntimeError(f"Failed to get object metadata: {e!s}") from e
 
 
-# Global instance
-s3_service = S3Service()
+# Global instance (created lazily when first accessed)
+_s3_service_instance: S3Service | None = None
+
+
+def _get_s3_service() -> S3Service:
+    global _s3_service_instance
+    if _s3_service_instance is None:
+        _s3_service_instance = S3Service()
+    return _s3_service_instance
+
+
+# Expose through module attribute (will be created when first imported and used)
+s3_service = None  # type: ignore[assignment]
+
+
+class _LazyProxy:
+    """Lazy proxy that creates S3Service on first access."""
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(_get_s3_service(), name)
+
+
+# Replace the module-level s3_service with lazy proxy
+s3_service = _LazyProxy()  # type: ignore[assignment]

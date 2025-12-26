@@ -16,9 +16,6 @@ from backend import security
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
 from backend.services.pose_metrics import compute_pose_metrics
-from backend.services.pose_service import extract_pose_keypoints_from_video
-from backend.services.s3_service import s3_service
-from backend.services.sqs_service import sqs_service
 from backend.sql_app.database import get_db
 from backend.sql_app.models import (
     RoleEnum,
@@ -491,12 +488,14 @@ async def initiate_video_upload(
     db.add(job)
     await db.commit()
 
-    # Generate S3 presigned URL
-    # Key format: coach_plus/{owner_type}/{owner_id}/{session_id}/{video_id}/original.mp4
-    video_id = str(uuid4())
-    s3_key = f"coach_plus/{session.owner_type.value}/{session.owner_id}/{request.session_id}/{video_id}/original.mp4"
-
     try:
+        # Generate S3 presigned URL (lazy import)
+        from backend.services.s3_service import s3_service
+        
+        # Key format: coach_plus/{owner_type}/{owner_id}/{session_id}/{video_id}/original.mp4
+        video_id = str(uuid4())
+        s3_key = f"coach_plus/{session.owner_type.value}/{session.owner_id}/{request.session_id}/{video_id}/original.mp4"
+
         presigned_url = s3_service.generate_presigned_put_url(
             bucket=settings.S3_COACH_VIDEOS_BUCKET,
             key=s3_key,
@@ -579,8 +578,10 @@ async def complete_video_upload(
         "include_frames": job.include_frames,
     }
 
-    # Send to SQS queue
+    # Send to SQS queue (lazy import)
     try:
+        from backend.services.sqs_service import sqs_service
+        
         message_id = sqs_service.send_message(
             queue_url=settings.SQS_VIDEO_ANALYSIS_QUEUE_URL,
             message_body=message_body,
@@ -721,7 +722,9 @@ async def analyze_video(
         )
 
     try:
-        # Step 1: Extract pose keypoints
+        # Step 1: Extract pose keypoints (lazy import)
+        from backend.services.pose_service import extract_pose_keypoints_from_video
+        
         pose_data = extract_pose_keypoints_from_video(
             video_path=request.video_path,
             sample_fps=request.sample_fps,

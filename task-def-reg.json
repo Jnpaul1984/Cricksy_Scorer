@@ -1,0 +1,84 @@
+{
+    "family": "cricksy-ai-backend",
+    "taskRoleArn": "arn:aws:iam::365183982031:role/cricksy-ai-ecs-task",
+    "executionRoleArn": "arn:aws:iam::365183982031:role/cricksy-ai-ecs-task-exec",
+    "networkMode": "awsvpc",
+    "containerDefinitions": [
+        {
+            "name": "backend",
+            "image": "365183982031.dkr.ecr.us-east-1.amazonaws.com/cricksy-backend:1b84092d8846-20251226-042350",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 8000,
+                    "hostPort": 8000,
+                    "protocol": "tcp",
+                    "name": "backend-8000-tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "MEDIAPIPE_MODEL_PATH",
+                    "value": "/app/mediapipe_models/pose_landmarker_full.task"
+                },
+                {
+                    "name": "AWS_REGION",
+                    "value": "us-east-1"
+                },
+                {
+                    "name": "MEDIAPIPE_MODEL_S3_URI",
+                    "value": "s3://cricksy-coach-videos-prod/mediapipe/pose_landmarker_full.task"
+                },
+                {
+                    "name": "S3_UPLOAD_URL_EXPIRES_SECONDS",
+                    "value": "3600"
+                },
+                {
+                    "name": "S3_COACH_VIDEOS_BUCKET",
+                    "value": "cricksy-coach-videos-prod"
+                },
+                {
+                    "name": "SQS_VIDEO_ANALYSIS_QUEUE_URL",
+                    "value": "https://sqs.us-east-1.amazonaws.com/365183982031/cricksy-video-analysis-prod"
+                },
+                {
+                    "name": "RUN_MIGRATIONS",
+                    "value": "false"
+                },
+                {
+                    "name": "BACKEND_CORS_ORIGINS",
+                    "value": "https://app.cricksy-ai.com,http://localhost:5173"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "secrets": [
+                {
+                    "name": "APP_SECRET_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:365183982031:secret:cricksy-ai/app-secret-key-azyzM8"
+                },
+                {
+                    "name": "DATABASE_URL",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:365183982031:secret:cricksy-ai/db-url-Z78VB5"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/cricksy-ai/api",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "backend"
+                }
+            },
+            "systemControls": []
+        }
+    ],
+    "volumes": [],
+    "placementConstraints": [],
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "512",
+    "memory": "1024"
+}

@@ -14,13 +14,26 @@ import numpy as np
 from pathlib import Path
 from typing import Any
 
-import cv2
-import mediapipe as mp
-from backend.mediapipe_init import (
-    get_pose_landmarker,
-    get_model_path,
-    get_detection_method_name,
-)
+logger = logging.getLogger(__name__)
+
+
+def _import_cv2_and_mediapipe():
+    """Lazy import of cv2 and mediapipe to avoid hard dependencies in tests."""
+    try:
+        import cv2
+        import mediapipe as mp
+        from backend.mediapipe_init import (
+            get_pose_landmarker,
+            get_model_path,
+            get_detection_method_name,
+        )
+        return cv2, mp, get_pose_landmarker, get_model_path, get_detection_method_name
+    except ImportError as e:
+        raise ImportError(
+            f"Failed to import video processing dependencies: {e}\n"
+            f"Please ensure cv2 and mediapipe are installed: "
+            f"pip install opencv-python-headless mediapipe"
+        ) from e
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +111,11 @@ def extract_pose_keypoints_from_video(
         raise FileNotFoundError(f"Video file not found: {video_path_obj}")
 
     logger.info(f"Extracting pose from video: {video_path_obj}")
+
+    # Lazy import of heavy dependencies
+    cv2, mp, get_pose_landmarker, get_model_path, get_detection_method_name = (
+        _import_cv2_and_mediapipe()
+    )
 
     # Get MediaPipe detector - fails loudly if model is missing
     try:
