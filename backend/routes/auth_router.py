@@ -8,10 +8,11 @@ from backend import security
 from backend.config import settings
 from backend.sql_app import models, schemas
 from backend.sql_app.database import get_db
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -284,7 +285,7 @@ async def debug_token_info(request) -> dict:
         if len(parts) != 3:
             return {"error": f"Invalid JWT format (got {len(parts)} parts, expected 3)"}
 
-        header_b64, payload_b64, signature_b64 = parts
+        header_b64, payload_b64, _signature_b64 = parts
 
         # Add padding if needed
         def b64_decode(data):
@@ -304,7 +305,7 @@ async def debug_token_info(request) -> dict:
     except Exception as e:
         return {
             "success": False,
-            "error": f"Failed to decode token: {str(e)}",
+            "error": f"Failed to decode token: {e!s}",
         }
 
 
