@@ -159,16 +159,21 @@ async def create_video_session(
             detail="Insufficient feature access: video_upload_enabled",
         )
 
-    # Verify user is coach_pro_plus or org_pro
-    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro):
+    # Verify user is coach_pro_plus, org_pro, or superuser
+    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro) and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Coach Pro Plus users can create video sessions",
         )
 
-    # Determine ownership type
-    owner_type = OwnerTypeEnum.org if current_user.role == RoleEnum.org_pro else OwnerTypeEnum.coach
-    owner_id = current_user.org_id if current_user.role == RoleEnum.org_pro else current_user.id
+    # Determine ownership type (superuser defaults to coach)
+    if current_user.role == RoleEnum.org_pro:
+        owner_type = OwnerTypeEnum.org
+        owner_id = current_user.org_id
+    else:
+        # coach_pro_plus, coach_pro, or superuser - use personal ownership
+        owner_type = OwnerTypeEnum.coach
+        owner_id = current_user.id
 
     # Create database record
     session = VideoSession(
@@ -209,8 +214,8 @@ async def list_video_sessions(
             detail="Insufficient feature access: video_sessions_enabled",
         )
 
-    # Verify user is coach_pro_plus or org_pro
-    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro):
+    # Verify user is coach_pro_plus, org_pro, or superuser
+    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro) and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Coach Pro Plus users can view video sessions",
@@ -255,8 +260,8 @@ async def get_video_session(
             detail="Insufficient feature access: video_sessions_enabled",
         )
 
-    # Verify user is coach_pro_plus or org_pro
-    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro):
+    # Verify user is coach_pro_plus, org_pro, or superuser
+    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro) and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Coach Pro Plus users can access video sessions",
@@ -446,8 +451,8 @@ async def initiate_video_upload(
             detail="Insufficient feature access: video_upload_enabled",
         )
 
-    # Verify user is coach_pro_plus or org_pro
-    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro):
+    # Verify user is coach_pro_plus, org_pro, or superuser
+    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro) and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Coach Pro Plus users can upload videos",
@@ -545,8 +550,8 @@ async def complete_video_upload(
             detail="Insufficient feature access: video_upload_enabled",
         )
 
-    # Verify user is coach_pro_plus or org_pro
-    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro):
+    # Verify user is coach_pro_plus, org_pro, or superuser
+    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro) and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Coach Pro Plus users can upload videos",
@@ -682,8 +687,8 @@ async def analyze_video(
     - 400: Invalid video path or video not found
     - 422: Invalid request parameters
     """
-    # Check role access
-    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro):
+    # Check role access (coach_pro_plus, org_pro, or superuser)
+    if current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro) and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Coach Pro Plus users can analyze videos",
