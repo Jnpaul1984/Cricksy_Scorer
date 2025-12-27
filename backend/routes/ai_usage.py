@@ -120,14 +120,15 @@ async def get_usage_stats(
     ]
 
     # Get by month
+    month_bucket = func.to_char(models.AiUsageLog.timestamp, "YYYY-MM")
     month_query = apply_filters(
         select(
-            func.to_char(models.AiUsageLog.timestamp, "YYYY-MM").label("month"),
+            month_bucket.label("month"),
             func.sum(models.AiUsageLog.tokens_used).label("tokens"),
             func.count(models.AiUsageLog.id).label("request_count"),
         )
-        .group_by(func.to_char(models.AiUsageLog.timestamp, "YYYY-MM"))
-        .order_by(func.to_char(models.AiUsageLog.timestamp, "YYYY-MM"))
+        .group_by(month_bucket)
+        .order_by(month_bucket)
     )
     month_result = await db.execute(month_query)
     by_month = [
