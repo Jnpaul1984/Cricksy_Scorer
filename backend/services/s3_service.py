@@ -26,9 +26,18 @@ class S3Service:
     def __init__(self):
         """Initialize S3 client."""
         boto3, ClientError = _import_boto3()
+        from botocore.config import Config
+
         self.boto3 = boto3
         self.ClientError = ClientError
-        self.s3_client = boto3.client("s3", region_name=settings.AWS_REGION)
+        # Force SigV4 for presigned URLs. SigV2-style presigns can fail with
+        # temporary credentials (x-amz-security-token) due to canonicalization
+        # differences between client and S3.
+        self.s3_client = boto3.client(
+            "s3",
+            region_name=settings.AWS_REGION,
+            config=Config(signature_version="s3v4"),
+        )
 
     def generate_presigned_put_url(
         self,
