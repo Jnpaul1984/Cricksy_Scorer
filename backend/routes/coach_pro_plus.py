@@ -31,6 +31,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 router = APIRouter(prefix="/api/coaches/plus", tags=["coach_pro_plus"])
 
@@ -391,6 +392,7 @@ async def list_analysis_jobs(
     # List jobs for this session
     result = await db.execute(
         select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session))
         .where(VideoAnalysisJob.session_id == session_id)
         .order_by(VideoAnalysisJob.created_at.desc())
     )
@@ -494,6 +496,9 @@ async def initiate_video_upload(
                 detail="You don't have access to this session",
             )
 
+    owner_type_value = session.owner_type.value
+    owner_id_value = session.owner_id
+
     # Create analysis job
     job_id = str(uuid4())
     job = VideoAnalysisJob(
@@ -505,7 +510,7 @@ async def initiate_video_upload(
     )
 
     db.add(job)
-    await db.commit()
+    await db.flush()
 
     try:
         # Generate S3 presigned URL (lazy import)
@@ -513,7 +518,7 @@ async def initiate_video_upload(
 
         # Key format: coach_plus/{owner_type}/{owner_id}/{session_id}/{video_id}/original.mp4
         video_id = str(uuid4())
-        s3_key = f"coach_plus/{session.owner_type.value}/{session.owner_id}/{request.session_id}/{video_id}/original.mp4"
+        s3_key = f"coach_plus/{owner_type_value}/{owner_id_value}/{request.session_id}/{video_id}/original.mp4"
 
         presigned_url = s3_service.generate_presigned_put_url(  # type: ignore[union-attr]
             bucket=settings.S3_COACH_VIDEOS_BUCKET,
@@ -521,10 +526,13 @@ async def initiate_video_upload(
             expires_in=settings.S3_UPLOAD_URL_EXPIRES_SECONDS,
         )
     except RuntimeError as e:
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate upload URL: {e!s}",
         ) from e
+
+    await db.commit()
 
     return VideoUploadInitiateResponse(
         job_id=job_id,
@@ -575,7 +583,11 @@ async def complete_video_upload(
         )
 
     # Fetch job
-    result = await db.execute(select(VideoAnalysisJob).where(VideoAnalysisJob.id == request.job_id))
+    result = await db.execute(
+        select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session))
+        .where(VideoAnalysisJob.id == request.job_id)
+    )
     job = result.scalar_one_or_none()
 
     if not job:
