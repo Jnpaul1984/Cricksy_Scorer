@@ -34,21 +34,25 @@ from .database import Base
 class ArrayOrJSON(TypeDecorator):
     """Handle both ARRAY and JSON column types for backward compatibility.
 
-    The database column is ARRAY (character varying[]), but we treat values as JSON
-    in Python. Uses PostgreSQL ARRAY type with proper casting.
+    For PostgreSQL: Uses native ARRAY type for production database
+    For SQLite: Falls back to JSON type for test database (doesn't support ARRAY)
     """
 
-    impl = postgresql.ARRAY  # Use PostgreSQL ARRAY type matching actual column
+    impl = JSON  # Default to JSON for SQLite compatibility in tests
     cache_ok = True
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(String, *args, **kwargs)
+    def load_dialect_impl(self, dialect):
+        """Use ARRAY for PostgreSQL, JSON for SQLite."""
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(postgresql.ARRAY(String))
+        # For SQLite and others, use JSON
+        return dialect.type_descriptor(JSON())
 
     def process_bind_param(self, value, dialect):
-        """Pass list directly to PostgreSQL ARRAY - asyncpg will handle casting."""
+        """Convert Python list to appropriate format for database."""
         if value is None:
             return None
-        # Return as list; PostgreSQL ARRAY type will cast properly
+        # Return list directly - dialect-specific handling will take care of it
         if isinstance(value, list):
             return value
         return value
@@ -57,10 +61,10 @@ class ArrayOrJSON(TypeDecorator):
         """Convert DB value (ARRAY or JSON) to Python list when reading."""
         if value is None:
             return []
-        # PostgreSQL returns ARRAY as a list already
+        # Already a list from PostgreSQL ARRAY or JSON
         if isinstance(value, list):
             return value
-        # Handle JSON strings in case of legacy data
+        # Handle JSON strings
         if isinstance(value, str):
             import json
 
