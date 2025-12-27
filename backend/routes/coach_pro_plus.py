@@ -604,6 +604,9 @@ async def complete_video_upload(
     # Update job status to "uploaded"
     job.status = VideoAnalysisJobStatus.processing
 
+    job_id_value = job.id
+    status_value = job.status.value
+
     # Prepare SQS message
     message_body = {
         "job_id": job.id,
@@ -635,8 +638,8 @@ async def complete_video_upload(
     await db.commit()
 
     return VideoUploadCompleteResponse(
-        job_id=job.id,
-        status=job.status.value,
+        job_id=job_id_value,
+        status=status_value,
         sqs_message_id=message_id,
         message="Video uploaded and queued for analysis",
     )
