@@ -8,9 +8,7 @@
           Manage and analyze video recordings of coaching sessions with AI-powered insights.
           Available with Coach Pro Plus ($24.99/month).
         </p>
-        <router-link to="/pricing" class="upgrade-button">
-          Upgrade to Coach Pro Plus
-        </router-link>
+        <router-link to="/pricing" class="upgrade-button"> Upgrade to Coach Pro Plus </router-link>
       </div>
     </div>
 
@@ -18,12 +16,8 @@
     <div v-else class="sessions-container">
       <header class="sessions-header">
         <h1>Video Sessions</h1>
-        <p class="subtitle">
-          Upload, manage, and analyze coaching session videos
-        </p>
-        <button class="btn-primary" @click="showCreateModal = true">
-          + New Video Session
-        </button>
+        <p class="subtitle">Upload, manage, and analyze coaching session videos</p>
+        <button class="btn-primary" @click="showCreateModal = true">+ New Video Session</button>
       </header>
 
       <!-- Loading State -->
@@ -34,16 +28,14 @@
       <!-- Error State -->
       <div v-if="error" class="error-banner">
         <p>{{ error }}</p>
-        <button @click="error = null" class="btn-close">Dismiss</button>
+        <button class="btn-close" @click="error = null">Dismiss</button>
       </div>
 
       <!-- Empty State -->
       <div v-if="!loading && sessions.length === 0" class="empty-state">
         <p>No video sessions yet.</p>
         <p class="hint">Create your first video session to get started.</p>
-        <button class="btn-primary" @click="showCreateModal = true">
-          Create Session
-        </button>
+        <button class="btn-primary" @click="showCreateModal = true">Create Session</button>
       </div>
 
       <!-- Sessions List -->
@@ -65,9 +57,7 @@
             <p v-if="session.player_ids.length > 0">
               <strong>Players:</strong> {{ session.player_ids.length }}
             </p>
-            <p>
-              <strong>Created:</strong> {{ formatDate(session.created_at) }}
-            </p>
+            <p><strong>Created:</strong> {{ formatDate(session.created_at) }}</p>
           </div>
 
           <div v-if="session.notes" class="session-notes">
@@ -78,31 +68,21 @@
             <button class="btn-primary" @click.stop="openUploadModal(session.id)">
               📹 Upload & Analyze
             </button>
-            <button class="btn-secondary" @click.stop="editSession(session.id)">
-              Edit
-            </button>
-            <button class="btn-danger" @click.stop="deleteSession(session.id)">
-              Delete
-            </button>
+            <button class="btn-secondary" @click.stop="editSession(session.id)">Edit</button>
+            <button class="btn-danger" @click.stop="deleteSession(session.id)">Delete</button>
           </div>
         </div>
       </div>
 
       <!-- Pagination -->
       <div v-if="sessions.length > 0" class="pagination">
-        <button
-          :disabled="offset === 0"
-          @click="previousPage"
-          class="btn-pagination"
-        >
+        <button :disabled="offset === 0" class="btn-pagination" @click="previousPage">
           ← Previous
         </button>
         <span class="page-info">
           Page {{ currentPage }} (showing {{ sessions.length }} sessions)
         </span>
-        <button @click="nextPage" class="btn-pagination">
-          Next →
-        </button>
+        <button class="btn-pagination" @click="nextPage">Next →</button>
       </div>
     </div>
 
@@ -147,16 +127,14 @@
             <button type="submit" class="btn-primary">
               {{ editingId ? 'Save Changes' : 'Create Session' }}
             </button>
-            <button type="button" class="btn-secondary" @click="closeModal">
-              Cancel
-            </button>
+            <button type="button" class="btn-secondary" @click="closeModal">Cancel</button>
           </div>
         </form>
 
         <div class="modal-hint">
           <p>
-            <strong>Note:</strong> Video upload is coming soon. For now, you can create
-            sessions and add metadata. Video files will be added in the next update.
+            <strong>Note:</strong> Video upload is coming soon. For now, you can create sessions and
+            add metadata. Video files will be added in the next update.
           </p>
         </div>
       </div>
@@ -187,11 +165,11 @@
               required
               @change="onFileSelected"
             />
-            <p class="file-hint">
-              Supported: MP4, MOV, AVI (max 500MB)
-            </p>
+            <p class="file-hint">Supported: MP4, MOV, AVI (max 500MB)</p>
             <p v-if="selectedFile" class="file-selected">
-              ✓ Selected: {{ selectedFile.name }} ({{ (selectedFile.size / 1024 / 1024).toFixed(1) }}MB)
+              ✓ Selected: {{ selectedFile.name }} ({{
+                (selectedFile.size / 1024 / 1024).toFixed(1)
+              }}MB)
             </p>
           </div>
 
@@ -212,28 +190,17 @@
 
           <div class="form-group checkbox">
             <label>
-              <input
-                v-model="uploadSettings.includeFrames"
-                type="checkbox"
-              />
+              <input v-model="uploadSettings.includeFrames" type="checkbox" />
               Include frame data in results
             </label>
-            <p class="setting-hint">
-              Stores individual frame analysis (increases storage)
-            </p>
+            <p class="setting-hint">Stores individual frame analysis (increases storage)</p>
           </div>
 
           <div class="modal-actions">
-            <button
-              type="submit"
-              class="btn-primary"
-              :disabled="!selectedFile"
-            >
+            <button type="submit" class="btn-primary" :disabled="!selectedFile">
               🚀 Upload & Analyze
             </button>
-            <button type="button" class="btn-secondary" @click="closeUploadModal">
-              Cancel
-            </button>
+            <button type="button" class="btn-secondary" @click="closeUploadModal">Cancel</button>
           </div>
         </form>
       </div>
@@ -245,93 +212,167 @@
         <button class="modal-close-btn" @click="closeResultsModal">✕</button>
         <h2>Analysis Results</h2>
 
-        <div v-if="selectedJob.status === 'completed' && selectedJob.results">
-          <!-- Pose Summary -->
-          <section class="results-section">
-            <h3>📊 Pose Detection Summary</h3>
+        <!-- Progress UI (queued/processing and results missing) -->
+        <div v-if="selectedCoachAnalysis.progress.show" class="results-loading">
+          <p>⏳ Analysis in progress...</p>
+          <p class="status-text">Status: {{ selectedCoachAnalysis.status }}</p>
+          <div class="progress-bar" aria-label="Analysis progress">
+            <div class="progress-bar-indeterminate" />
+          </div>
+          <div class="step-labels">
+            <span
+              v-for="(step, idx) in selectedCoachAnalysis.progress.steps"
+              :key="idx"
+              class="step-label"
+            >
+              {{ step }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Failed -->
+        <div v-else-if="selectedCoachAnalysis.status === 'failed'" class="results-error">
+          <h3>⚠️ Analysis failed</h3>
+          <p class="status-text">
+            {{ selectedCoachAnalysis.errorMessage || 'No error message provided.' }}
+          </p>
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-primary"
+              :disabled="!selectedCoachAnalysis.sessionId"
+              @click="retrySelectedJob"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+
+        <!-- Completed but no results payload -->
+        <div
+          v-else-if="
+            selectedCoachAnalysis.status === 'completed' && !selectedCoachAnalysis.hasResults
+          "
+          class="results-loading"
+        >
+          <p>✅ Completed</p>
+          <p class="status-text">No results payload was returned for this job.</p>
+        </div>
+
+        <!-- Completed with results -->
+        <div
+          v-else-if="
+            selectedCoachAnalysis.status === 'completed' && selectedCoachAnalysis.hasResults
+          "
+        >
+          <!-- Coach Summary -->
+          <section class="results-section coach-summary-card">
+            <h3>Coach Summary</h3>
+            <p class="summary-level">
+              Overall: <strong>{{ selectedCoachAnalysis.coachSummary.overallLevel }}</strong>
+            </p>
+            <ul class="takeaways">
+              <li v-for="(t, idx) in selectedCoachAnalysis.coachSummary.takeaways" :key="idx">
+                {{ t }}
+              </li>
+            </ul>
+          </section>
+
+          <!-- What to work on next -->
+          <section v-if="selectedCoachAnalysis.nextWork.length" class="results-section">
+            <h3>What to work on next</h3>
+            <div
+              v-for="(item, idx) in selectedCoachAnalysis.nextWork.slice(0, 3)"
+              :key="idx"
+              class="finding-card"
+            >
+              <h4>{{ item.title }}</h4>
+              <p class="finding-line">{{ item.whyItMatters }}</p>
+              <p class="finding-line">{{ item.whatToFix }}</p>
+              <ul v-if="item.drillSuggestions.length" class="drills">
+                <li v-for="(d, didx) in item.drillSuggestions" :key="didx">{{ d }}</li>
+              </ul>
+            </div>
+          </section>
+
+          <!-- Numbers accordion -->
+          <details class="results-section numbers-accordion">
+            <summary>Numbers</summary>
             <div class="metrics-grid">
               <div class="metric">
                 <span class="metric-label">Total Frames</span>
-                <span class="metric-value">{{ selectedJob.results.pose_summary.total_frames }}</span>
+                <span class="metric-value">{{
+                  formatNullableNumber(selectedCoachAnalysis.numbers.totalFrames)
+                }}</span>
               </div>
               <div class="metric">
-                <span class="metric-label">Sampled Frames</span>
-                <span class="metric-value">{{ selectedJob.results.pose_summary.sampled_frames }}</span>
+                <span class="metric-label">Sampled / Analyzed Frames</span>
+                <span class="metric-value">{{
+                  formatNullableNumber(selectedCoachAnalysis.numbers.sampledFrames)
+                }}</span>
               </div>
               <div class="metric">
                 <span class="metric-label">Detection Rate</span>
-                <span class="metric-value">{{ (selectedJob.results.pose_summary.detection_rate_percent).toFixed(1) }}%</span>
+                <span class="metric-value">{{
+                  formatNullablePercent(selectedCoachAnalysis.numbers.detectionRate)
+                }}</span>
               </div>
               <div class="metric">
-                <span class="metric-label">Video FPS</span>
-                <span class="metric-value">{{ selectedJob.results.pose_summary.video_fps.toFixed(1) }}</span>
+                <span class="metric-label">FPS</span>
+                <span class="metric-value">{{
+                  formatNullableNumber(selectedCoachAnalysis.numbers.fps, 1)
+                }}</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Resolution</span>
+                <span class="metric-value">{{
+                  formatResolution(
+                    selectedCoachAnalysis.numbers.width,
+                    selectedCoachAnalysis.numbers.height,
+                  )
+                }}</span>
               </div>
             </div>
-          </section>
+          </details>
 
-          <!-- Biomechanical Metrics -->
-          <section class="results-section">
-            <h3>💪 Biomechanical Metrics</h3>
+          <!-- Metrics -->
+          <section v-if="selectedCoachAnalysis.metrics.length" class="results-section">
+            <h3>Metrics</h3>
             <div class="metrics-grid">
-              <div class="metric" v-for="(value, key) in selectedJob.results.metrics" :key="key">
-                <span class="metric-label">{{ formatMetricName(key) }}</span>
-                <span class="metric-value">{{ typeof value === 'number' ? value.toFixed(2) : value }}</span>
+              <div v-for="m in selectedCoachAnalysis.metrics" :key="m.key" class="metric">
+                <span class="metric-label">{{ m.label }}</span>
+                <span class="metric-value">{{ formatNullableNumber(m.value, 2) }}</span>
+                <span class="metric-band" :class="bandClass(m.band)">{{ m.band || '—' }}</span>
               </div>
-            </div>
-          </section>
-
-          <!-- Coaching Report -->
-          <section class="results-section" v-if="selectedJob.results.report">
-            <h3>📋 Coaching Report</h3>
-
-            <div class="report-subsection">
-              <h4>Summary</h4>
-              <p>{{ selectedJob.results.report.summary }}</p>
-            </div>
-
-            <div class="report-subsection">
-              <h4>🎯 Key Issues to Address</h4>
-              <ul>
-                <li v-for="(issue, idx) in selectedJob.results.report.key_issues" :key="idx">
-                  {{ issue }}
-                </li>
-              </ul>
-            </div>
-
-            <div class="report-subsection">
-              <h4>✨ Strength Areas</h4>
-              <ul v-if="selectedJob.results.findings.strength_areas">
-                <li v-for="(strength, idx) in selectedJob.results.findings.strength_areas" :key="idx">
-                  {{ strength }}
-                </li>
-              </ul>
-            </div>
-
-            <div class="report-subsection">
-              <h4>🏋️ Recommended Drills</h4>
-              <div v-for="(drill, idx) in selectedJob.results.report.drills" :key="idx" class="drill-card">
-                <h5>{{ drill.name }}</h5>
-                <p>{{ drill.description }}</p>
-                <p class="drill-meta">⏱️ {{ drill.duration_minutes }} minutes | Focus: {{ drill.focus_areas.join(', ') }}</p>
-              </div>
-            </div>
-
-            <div class="report-subsection">
-              <h4>📅 One-Week Training Plan</h4>
-              <p class="training-plan">{{ selectedJob.results.report.one_week_plan }}</p>
             </div>
           </section>
         </div>
 
+        <!-- Timed out -->
+        <div v-else-if="pollTimedOut" class="results-error">
+          <h3>⏱️ Analysis is taking longer than expected</h3>
+          <p class="status-text">Status: {{ selectedCoachAnalysis.status }}</p>
+          <p class="status-text">You can retry the upload, or close and check back later.</p>
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-primary"
+              :disabled="!selectedCoachAnalysis.sessionId"
+              @click="retrySelectedJob"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+
+        <!-- Any other state -->
         <div v-else class="results-loading">
-          <p>⏳ Analysis in progress...</p>
-          <p class="status-text">Status: {{ selectedJob.status }}</p>
+          <p>⏳ Waiting for analysis...</p>
+          <p class="status-text">Status: {{ selectedCoachAnalysis.status }}</p>
         </div>
 
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" @click="closeResultsModal">
-            Close
-          </button>
+          <button type="button" class="btn-secondary" @click="closeResultsModal">Close</button>
         </div>
       </div>
     </div>
@@ -339,90 +380,130 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useAuthStore } from '@/stores/authStore'
-import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore'
-import { ApiError } from '@/services/coachPlusVideoService'
-import type { VideoAnalysisJob } from '@/services/coachPlusVideoService'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+
+import { ApiError } from '@/services/coachPlusVideoService';
+import type { VideoAnalysisJob } from '@/services/coachPlusVideoService';
+import { useAuthStore } from '@/stores/authStore';
+import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
+import { normalizeCoachVideoAnalysis } from '@/utils/coachVideoAnalysisNormalize';
 
 // ============================================================================
 // State
 // ============================================================================
 
-const authStore = useAuthStore()
-const videoStore = useCoachPlusVideoStore()
+const authStore = useAuthStore();
+const videoStore = useCoachPlusVideoStore();
 
-const sessions = ref<any[]>([])
-const loading = ref(false)
-const error = ref<string | null>(null)
-const showCreateModal = ref(false)
-const showUploadModal = ref(false)
-const showResultsModal = ref(false)
-const editingId = ref<string | null>(null)
-const uploadingSessionId = ref<string | null>(null)
+const sessions = ref<any[]>([]);
+const loading = ref(false);
+const error = ref<string | null>(null);
+const showCreateModal = ref(false);
+const showUploadModal = ref(false);
+const showResultsModal = ref(false);
+const editingId = ref<string | null>(null);
+const uploadingSessionId = ref<string | null>(null);
 
-const selectedFile = ref<File | null>(null)
-const fileInput = ref<HTMLInputElement | null>(null)
+const selectedFile = ref<File | null>(null);
+const fileInput = ref<HTMLInputElement | null>(null);
 
-const offset = ref(0)
-const limit = ref(10)
+const offset = ref(0);
+const limit = ref(10);
 
 const formData = ref({
   title: '',
   player_ids: [] as string[],
   notes: '',
-})
+});
 
 const uploadSettings = ref({
   sampleFps: 10,
   includeFrames: false,
-})
+});
 
-const playersText = ref('')
+const playersText = ref('');
 
 // Watch store errors and display them
-watch(() => videoStore.error, (newError) => {
-  if (newError) {
-    error.value = newError
-  }
-})
+watch(
+  () => videoStore.error,
+  (newError) => {
+    if (newError) {
+      error.value = newError;
+    }
+  },
+);
 
 // Watch for completed jobs and show results
-const selectedJob = ref<VideoAnalysisJob | null>(null)
+const selectedJob = ref<VideoAnalysisJob | null>(null);
 
-watch(() => videoStore.processingJobs, (jobs) => {
-  // If we have a job that's completed, show results
-  if (jobs.length === 0 && uploadingSessionId.value) {
-    const completedJob = videoStore.jobStatusMap.get(videoStore.allJobs[0]?.id || '')
-    if (completedJob && completedJob.status === 'completed') {
-      selectedJob.value = completedJob
-      showResultsModal.value = true
-    }
+const selectedCoachAnalysis = computed(() => normalizeCoachVideoAnalysis(selectedJob.value));
+
+const uiPollInterval = ref<ReturnType<typeof setInterval> | null>(null);
+const pollTimedOut = ref(false);
+
+function stopUiPolling() {
+  if (uiPollInterval.value) {
+    clearInterval(uiPollInterval.value);
+    uiPollInterval.value = null;
   }
-})
+}
+
+function startUiPolling(jobId: string) {
+  stopUiPolling();
+  pollTimedOut.value = false;
+
+  const startedAt = Date.now();
+  const timeoutMs = 5 * 60 * 1000;
+
+  uiPollInterval.value = setInterval(() => {
+    const job = videoStore.jobStatusMap.get(jobId);
+    if (job) {
+      selectedJob.value = job;
+    }
+
+    const latest = selectedJob.value;
+    if (latest && (latest.status === 'completed' || latest.status === 'failed')) {
+      stopUiPolling();
+      return;
+    }
+
+    if (Date.now() - startedAt > timeoutMs) {
+      pollTimedOut.value = true;
+      stopUiPolling();
+      videoStore.stopPollingJob(jobId);
+    }
+  }, 1000);
+}
+
+function retrySelectedJob() {
+  const sessionId = selectedCoachAnalysis.value.sessionId;
+  if (!sessionId) return;
+  closeResultsModal();
+  openUploadModal(sessionId);
+}
 
 // ============================================================================
 // Computed
 // ============================================================================
 
-const currentPage = computed(() => Math.floor(offset.value / limit.value) + 1)
+const currentPage = computed(() => Math.floor(offset.value / limit.value) + 1);
 
 // ============================================================================
 // Methods
 // ============================================================================
 
 async function fetchSessions() {
-  loading.value = true
-  error.value = null
+  loading.value = true;
+  error.value = null;
 
   try {
-    await videoStore.fetchSessions(limit.value, offset.value)
-    sessions.value = videoStore.sessions
+    await videoStore.fetchSessions(limit.value, offset.value);
+    sessions.value = videoStore.sessions;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load sessions'
-    console.error(err)
+    error.value = err instanceof Error ? err.message : 'Failed to load sessions';
+    console.error(err);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
@@ -432,57 +513,59 @@ async function submitForm() {
     formData.value.player_ids = playersText.value
       .split(',')
       .map((id) => id.trim())
-      .filter((id) => id.length > 0)
+      .filter((id) => id.length > 0);
 
     if (!formData.value.title.trim()) {
-      error.value = 'Session title is required'
-      return
+      error.value = 'Session title is required';
+      return;
     }
 
     if (editingId.value) {
       // TODO: Update session via API
-      console.log('Update session:', editingId.value, formData.value)
+      console.log('Update session:', editingId.value, formData.value);
     } else {
       // Create new session via store
-      const session = await videoStore.createSession(formData.value)
+      const session = await videoStore.createSession(formData.value);
       if (!session) {
-        error.value = videoStore.error || 'Failed to create session'
-        return
+        error.value = videoStore.error || 'Failed to create session';
+        return;
       }
 
       // Immediately prompt for upload after creating a session
-      closeModal()
-      await fetchSessions()
-      openUploadModal(session.id)
-      return
+      closeModal();
+      await fetchSessions();
+      openUploadModal(session.id);
+      return;
     }
 
-    closeModal()
-    await fetchSessions()
+    closeModal();
+    await fetchSessions();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Operation failed'
-    error.value = msg
-    console.error(err)
+    const msg = err instanceof Error ? err.message : 'Operation failed';
+    error.value = msg;
+    console.error(err);
   }
 }
 
 function onFileSelected(event: Event) {
-  const target = event.target as HTMLInputElement
-  const files = target.files
+  const target = event.target as HTMLInputElement;
+  const files = target.files;
   if (files && files.length > 0) {
-    selectedFile.value = files[0]
+    selectedFile.value = files[0];
   }
 }
 
 async function handleVideoUpload() {
   if (!selectedFile.value || !uploadingSessionId.value) {
-    error.value = 'Please select a video file'
-    return
+    error.value = 'Please select a video file';
+    return;
   }
 
   // Reset results modal
-  showResultsModal.value = false
-  selectedJob.value = null
+  stopUiPolling();
+  pollTimedOut.value = false;
+  showResultsModal.value = false;
+  selectedJob.value = null;
 
   try {
     // Start upload
@@ -490,126 +573,137 @@ async function handleVideoUpload() {
       selectedFile.value,
       uploadingSessionId.value,
       uploadSettings.value.sampleFps,
-      uploadSettings.value.includeFrames
-    )
+      uploadSettings.value.includeFrames,
+    );
 
     if (!jobId) {
-      error.value = videoStore.error || 'Failed to start upload'
-      return
+      error.value = videoStore.error || 'Failed to start upload';
+      return;
     }
 
     // Close upload modal
-    closeUploadModal()
+    closeUploadModal();
 
-    // Watch for completion
-    const checkCompletion = setInterval(() => {
-      const job = videoStore.jobStatusMap.get(jobId)
-      if (job && (job.status === 'completed' || job.status === 'failed')) {
-        clearInterval(checkCompletion)
-        selectedJob.value = job
-        showResultsModal.value = true
-      }
-    }, 1000)
+    // Show modal immediately (progress UI) and keep it updated as polling runs.
+    await videoStore.updateJobStatus(jobId);
+    selectedJob.value = videoStore.jobStatusMap.get(jobId) || null;
+    showResultsModal.value = true;
+    startUiPolling(jobId);
   } catch (err) {
-    let msg = 'Upload failed'
+    let msg = 'Upload failed';
     if (err instanceof ApiError) {
       if (err.isFeatureDisabled()) {
-        msg = `Video upload feature is not enabled on your plan. ${err.detail || 'Please upgrade to use this feature.'}`
+        msg = `Video upload feature is not enabled on your plan. ${err.detail || 'Please upgrade to use this feature.'}`;
       } else if (err.isUnauthorized()) {
-        msg = 'Your session expired. Please log in again.'
+        msg = 'Your session expired. Please log in again.';
       } else {
-        msg = err.detail || err.message
+        msg = err.detail || err.message;
       }
     } else if (err instanceof Error) {
-      msg = err.message
+      msg = err.message;
     }
-    error.value = msg
-    console.error(err)
+    error.value = msg;
+    console.error(err);
   }
 }
 
 function openUploadModal(sessionId: string) {
-  uploadingSessionId.value = sessionId
-  selectedFile.value = null
-  showUploadModal.value = true
+  uploadingSessionId.value = sessionId;
+  selectedFile.value = null;
+  showUploadModal.value = true;
   if (fileInput.value) {
-    fileInput.value.value = ''
+    fileInput.value.value = '';
   }
 }
 
 function closeUploadModal() {
-  showUploadModal.value = false
-  uploadingSessionId.value = null
-  selectedFile.value = null
+  showUploadModal.value = false;
+  uploadingSessionId.value = null;
+  selectedFile.value = null;
   if (fileInput.value) {
-    fileInput.value.value = ''
+    fileInput.value.value = '';
   }
 }
 
 function closeResultsModal() {
-  showResultsModal.value = false
-  selectedJob.value = null
+  showResultsModal.value = false;
+  selectedJob.value = null;
+  stopUiPolling();
 }
 
 function selectSession(sessionId: string) {
-  console.log('Selected session:', sessionId)
+  console.log('Selected session:', sessionId);
   // TODO: Navigate to session detail view
 }
 
 function editSession(sessionId: string) {
-  editingId.value = sessionId
-  showCreateModal.value = true
+  editingId.value = sessionId;
+  showCreateModal.value = true;
 }
 
 async function deleteSession(sessionId: string) {
   if (!confirm('Are you sure you want to delete this session?')) {
-    return
+    return;
   }
 
   try {
-    console.log('Delete session:', sessionId)
+    console.log('Delete session:', sessionId);
     // TODO: Delete via API
-    await fetchSessions()
+    await fetchSessions();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to delete session'
-    console.error(err)
+    error.value = err instanceof Error ? err.message : 'Failed to delete session';
+    console.error(err);
   }
 }
 
 function closeModal() {
-  showCreateModal.value = false
-  editingId.value = null
-  formData.value = { title: '', player_ids: [], notes: '' }
-  playersText.value = ''
+  showCreateModal.value = false;
+  editingId.value = null;
+  formData.value = { title: '', player_ids: [], notes: '' };
+  playersText.value = '';
 }
 
 function previousPage() {
-  offset.value = Math.max(0, offset.value - limit.value)
-  fetchSessions()
+  offset.value = Math.max(0, offset.value - limit.value);
+  fetchSessions();
 }
 
 function nextPage() {
-  offset.value += limit.value
-  fetchSessions()
+  offset.value += limit.value;
+  fetchSessions();
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
+  const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  })
+  });
 }
 
-function formatMetricName(key: string): string {
-  return key
-    .replace(/_/g, ' ')
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
+function formatNullableNumber(value: number | null, decimals = 0): string {
+  if (value === null || !Number.isFinite(value)) return '—';
+  return value.toFixed(decimals);
+}
+
+function formatNullablePercent(value01: number | null): string {
+  if (value01 === null || !Number.isFinite(value01)) return '—';
+  return `${(value01 * 100).toFixed(1)}%`;
+}
+
+function formatResolution(width: number | null, height: number | null): string {
+  if (!width || !height) return '—';
+  return `${Math.round(width)}×${Math.round(height)}`;
+}
+
+function bandClass(band: string | null): string {
+  if (band === 'Needs work') return 'band-needs-work';
+  if (band === 'Improving') return 'band-improving';
+  if (band === 'Strong') return 'band-strong';
+  return 'band-unknown';
 }
 
 // ============================================================================
@@ -618,13 +712,14 @@ function formatMetricName(key: string): string {
 
 onMounted(() => {
   if (authStore.isCoachProPlus) {
-    fetchSessions()
+    fetchSessions();
   }
-})
+});
 
 onBeforeUnmount(() => {
-  videoStore.cleanup()
-})
+  stopUiPolling();
+  videoStore.cleanup();
+});
 </script>
 
 <style scoped>
@@ -709,6 +804,116 @@ onBeforeUnmount(() => {
 
 .loading {
   background: #f0f0f0;
+}
+
+.results-error {
+  padding: 1.5rem;
+  background: #fff3cd;
+  border: 1px solid #ffeeba;
+  border-radius: 8px;
+}
+
+.progress-bar {
+  position: relative;
+  height: 8px;
+  background: #eee;
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+.progress-bar-indeterminate {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 35%;
+  background: #667eea;
+  animation: indeterminate 1.2s infinite;
+}
+
+@keyframes indeterminate {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.step-labels {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.step-label {
+  padding: 0.25rem 0.5rem;
+  background: #f6f6f6;
+  border-radius: 999px;
+}
+
+.coach-summary-card {
+  background: #f9f9ff;
+  border: 1px solid #e7e7ff;
+}
+
+.summary-level {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.takeaways {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.finding-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 0.75rem;
+}
+
+.finding-line {
+  margin: 0.5rem 0;
+  color: #444;
+}
+
+.drills {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.numbers-accordion summary {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.metric-band {
+  display: inline-block;
+  margin-top: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #ddd;
+  color: #333;
+}
+
+.band-needs-work {
+  background: #ffeaa7;
+  border-color: #ffd36d;
+}
+
+.band-improving {
+  background: #dfe6e9;
+  border-color: #c8d0d4;
+}
+
+.band-strong {
+  background: #55efc4;
+  border-color: #31d8a8;
 }
 
 .error-banner {
@@ -976,9 +1181,9 @@ onBeforeUnmount(() => {
   color: #333;
 }
 
-.form-group input[type="text"],
-.form-group input[type="file"],
-.form-group input[type="number"],
+.form-group input[type='text'],
+.form-group input[type='file'],
+.form-group input[type='number'],
 .form-group textarea {
   width: 100%;
   padding: 0.75rem;
@@ -995,7 +1200,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.form-group input[type="checkbox"] {
+.form-group input[type='checkbox'] {
   margin-right: 0.5rem;
 }
 
