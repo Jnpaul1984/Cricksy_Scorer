@@ -34,18 +34,22 @@ from .database import Base
 class ArrayOrJSON(TypeDecorator):
     """Handle both ARRAY and JSON column types for backward compatibility.
 
-    Converts between ARRAY (legacy) and JSON (current) types transparently.
-    Reads as either type from DB, always writes as JSON.
+    The database column is ARRAY (character varying[]), but we treat values as JSON
+    in Python. On insert, we cast the JSON representation to ARRAY.
     """
 
-    impl = JSON
+    impl = String  # Use String as base, not JSON (column is ARRAY in DB)
     cache_ok = True
 
     def process_bind_param(self, value, dialect):
-        """Convert Python list to JSON when writing to DB."""
+        """Convert Python list to JSON string for insertion into ARRAY column."""
         if value is None:
             return None
-        # Always write as JSON
+        # Convert list to JSON string
+        import json
+
+        if isinstance(value, list):
+            return json.dumps(value)
         return value
 
     def process_result_value(self, value, dialect):
