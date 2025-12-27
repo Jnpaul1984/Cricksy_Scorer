@@ -8,6 +8,7 @@ Feature-gated by role (coach_pro_plus, org_pro).
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any, Annotated
 from uuid import uuid4
@@ -34,6 +35,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 router = APIRouter(prefix="/api/coaches/plus", tags=["coach_pro_plus"])
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -524,6 +527,11 @@ async def initiate_video_upload(
         video_id = str(uuid4())
         s3_key = f"coach_plus/{owner_type_value}/{owner_id_value}/{request.session_id}/{video_id}/original.mp4"
 
+        # Persist upload location onto the session so the worker can retrieve it later.
+        # The worker currently expects `job.session.s3_key`.
+        session.s3_bucket = settings.S3_COACH_VIDEOS_BUCKET
+        session.s3_key = s3_key
+
         presigned_url = s3_service.generate_presigned_put_url(  # type: ignore[union-attr]
             bucket=settings.S3_COACH_VIDEOS_BUCKET,
             key=s3_key,
@@ -607,6 +615,26 @@ async def complete_video_upload(
 
     # Message is enqueued; actual processing begins in the worker
     job.status = VideoAnalysisJobStatus.queued
+
+    # Validate we have stored upload location (worker requires this)
+    if not session.s3_key:
+        job.status = VideoAnalysisJobStatus.failed
+        job.error_message = "Upload location missing (session.s3_key is null). Re-initiate upload."
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Upload location missing for this session. Please re-initiate upload.",
+        )
+
+    logger.info(
+        "Upload complete: enqueueing analysis job",
+        extra={
+            "job_id": job.id,
+            "session_id": job.session_id,
+            "s3_bucket": session.s3_bucket or settings.S3_COACH_VIDEOS_BUCKET,
+            "s3_key": session.s3_key,
+        },
+    )
 
     job_id_value = job.id
     status_value = job.status.value
