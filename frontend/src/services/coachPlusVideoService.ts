@@ -276,7 +276,16 @@ export async function uploadToPresignedUrl(
         onProgress?.(100)
         resolve()
       } else {
-        reject(new Error(`S3 upload failed: ${xhr.status} ${xhr.statusText}`))
+        const responseText = (xhr.responseText || '').slice(0, 800)
+        console.error('[coachPlusVideo] S3 upload failed', {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          responseText,
+          responseHeaders: xhr.getAllResponseHeaders(),
+        })
+
+        const detail = responseText ? `; body: ${responseText}` : ''
+        reject(new Error(`S3 upload failed: ${xhr.status} ${xhr.statusText}${detail}`))
       }
     })
 
@@ -289,7 +298,9 @@ export async function uploadToPresignedUrl(
     })
 
     xhr.open('PUT', presignedUrl)
-    xhr.setRequestHeader('Content-Type', 'video/mp4')
+    // Use the actual file type so the upload request is consistent.
+    // (Some S3 policies/signatures may be sensitive to Content-Type.)
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
     xhr.send(file)
   })
 }

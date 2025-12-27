@@ -58,6 +58,7 @@ class S3Service:
                 "put_object",
                 Params={"Bucket": bucket, "Key": key},
                 ExpiresIn=expires_in,
+                HttpMethod="PUT",
             )
             return url
         except self.ClientError as e:
