@@ -212,16 +212,43 @@
         <button class="modal-close-btn" @click="closeResultsModal">✕</button>
         <h2>Analysis Results</h2>
 
-        <!-- Progress UI (queued/processing and results missing) -->
-        <div v-if="selectedCoachAnalysis.progress.show" class="results-loading">
+        <!-- Timed out -->
+        <div v-if="pollTimedOut" class="results-error">
+          <h3>⏱️ Analysis is taking longer than expected</h3>
+          <p class="status-text">Status: {{ selectedJob.status }}</p>
+          <p class="status-text">You can retry the upload, or close and check back later.</p>
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-primary"
+              :disabled="!selectedJob.session_id"
+              @click="retrySelectedJob"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+
+        <!-- Progress UI -->
+        <div v-else-if="selectedJob.status === 'queued' || selectedJob.status === 'processing'" class="results-loading">
+          <section class="results-section coach-summary-card">
+            <h3>Summary</h3>
+            <p class="summary-level">
+              Rating: <strong>{{ coachNarrative.summary.rating }}</strong>
+            </p>
+            <p class="status-text">{{ coachNarrative.summary.confidenceText }}</p>
+            <p class="status-text">{{ coachNarrative.summary.coverageText }}</p>
+            <p class="status-text">{{ coachNarrative.summary.coachSummaryText }}</p>
+          </section>
+
           <p>⏳ Analysis in progress...</p>
-          <p class="status-text">Status: {{ selectedCoachAnalysis.status }}</p>
+          <p class="status-text">Status: {{ selectedJob.status }}</p>
           <div class="progress-bar" aria-label="Analysis progress">
             <div class="progress-bar-indeterminate" />
           </div>
           <div class="step-labels">
             <span
-              v-for="(step, idx) in selectedCoachAnalysis.progress.steps"
+              v-for="(step, idx) in progressSteps"
               :key="idx"
               class="step-label"
             >
@@ -231,16 +258,16 @@
         </div>
 
         <!-- Failed -->
-        <div v-else-if="selectedCoachAnalysis.status === 'failed'" class="results-error">
+        <div v-else-if="selectedJob.status === 'failed'" class="results-error">
           <h3>⚠️ Analysis failed</h3>
           <p class="status-text">
-            {{ selectedCoachAnalysis.errorMessage || 'No error message provided.' }}
+            {{ coachNarrative.summary.coachSummaryText }}
           </p>
           <div class="modal-actions">
             <button
               type="button"
               class="btn-primary"
-              :disabled="!selectedCoachAnalysis.sessionId"
+              :disabled="!selectedJob.session_id"
               @click="retrySelectedJob"
             >
               Retry
@@ -248,127 +275,72 @@
           </div>
         </div>
 
-        <!-- Completed but no results payload -->
-        <div
-          v-else-if="
-            selectedCoachAnalysis.status === 'completed' && !selectedCoachAnalysis.hasResults
-          "
-          class="results-loading"
-        >
-          <p>✅ Completed</p>
-          <p class="status-text">No results payload was returned for this job.</p>
-        </div>
-
-        <!-- Completed with results -->
-        <div
-          v-else-if="
-            selectedCoachAnalysis.status === 'completed' && selectedCoachAnalysis.hasResults
-          "
-        >
-          <!-- Coach Summary -->
+        <!-- Completed / other states -->
+        <div v-else class="results-loaded">
           <section class="results-section coach-summary-card">
-            <h3>Coach Summary</h3>
+            <h3>Summary</h3>
             <p class="summary-level">
-              Overall: <strong>{{ selectedCoachAnalysis.coachSummary.overallLevel }}</strong>
+              Rating: <strong>{{ coachNarrative.summary.rating }}</strong>
             </p>
-            <ul class="takeaways">
-              <li v-for="(t, idx) in selectedCoachAnalysis.coachSummary.takeaways" :key="idx">
-                {{ t }}
-              </li>
-            </ul>
+            <p class="status-text">{{ coachNarrative.summary.confidenceText }}</p>
+            <p class="status-text">{{ coachNarrative.summary.coverageText }}</p>
+            <p class="status-text">{{ coachNarrative.summary.coachSummaryText }}</p>
           </section>
 
-          <!-- What to work on next -->
-          <section v-if="selectedCoachAnalysis.nextWork.length" class="results-section">
-            <h3>What to work on next</h3>
-            <div
-              v-for="(item, idx) in selectedCoachAnalysis.nextWork.slice(0, 3)"
-              :key="idx"
-              class="finding-card"
-            >
-              <h4>{{ item.title }}</h4>
-              <p class="finding-line">{{ item.whyItMatters }}</p>
-              <p class="finding-line">{{ item.whatToFix }}</p>
-              <ul v-if="item.drillSuggestions.length" class="drills">
-                <li v-for="(d, didx) in item.drillSuggestions" :key="didx">{{ d }}</li>
-              </ul>
-            </div>
-          </section>
-
-          <!-- Numbers accordion -->
-          <details class="results-section numbers-accordion">
-            <summary>Numbers</summary>
-            <div class="metrics-grid">
-              <div class="metric">
-                <span class="metric-label">Total Frames</span>
-                <span class="metric-value">{{
-                  formatNullableNumber(selectedCoachAnalysis.numbers.totalFrames)
-                }}</span>
-              </div>
-              <div class="metric">
-                <span class="metric-label">Sampled / Analyzed Frames</span>
-                <span class="metric-value">{{
-                  formatNullableNumber(selectedCoachAnalysis.numbers.sampledFrames)
-                }}</span>
-              </div>
-              <div class="metric">
-                <span class="metric-label">Detection Rate</span>
-                <span class="metric-value">{{
-                  formatNullablePercent(selectedCoachAnalysis.numbers.detectionRate)
-                }}</span>
-              </div>
-              <div class="metric">
-                <span class="metric-label">FPS</span>
-                <span class="metric-value">{{
-                  formatNullableNumber(selectedCoachAnalysis.numbers.fps, 1)
-                }}</span>
-              </div>
-              <div class="metric">
-                <span class="metric-label">Resolution</span>
-                <span class="metric-value">{{
-                  formatResolution(
-                    selectedCoachAnalysis.numbers.width,
-                    selectedCoachAnalysis.numbers.height,
-                  )
-                }}</span>
-              </div>
-            </div>
-          </details>
-
-          <!-- Metrics -->
-          <section v-if="selectedCoachAnalysis.metrics.length" class="results-section">
+          <section class="results-section">
             <h3>Metrics</h3>
             <div class="metrics-grid">
-              <div v-for="m in selectedCoachAnalysis.metrics" :key="m.key" class="metric">
-                <span class="metric-label">{{ m.label }}</span>
-                <span class="metric-value">{{ formatNullableNumber(m.value, 2) }}</span>
-                <span class="metric-band" :class="bandClass(m.band)">{{ m.band || '—' }}</span>
+              <div class="metric">
+                <span class="metric-label">Frames analyzed</span>
+                <span class="metric-value">{{ formatCount(coachNarrative.metrics.framesAnalyzed) }}</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Total frames</span>
+                <span class="metric-value">{{ formatCount(coachNarrative.metrics.totalFrames) }}</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Detection rate</span>
+                <span class="metric-value">{{ formatPercent01(coachNarrative.metrics.detectionRate) }}</span>
+              </div>
+            </div>
+          </section>
+
+          <section v-if="isFreeTier" class="results-section">
+            <h3>Upgrade to see priorities</h3>
+            <p class="status-text">
+              Your current plan shows the summary only. Upgrade to Coach Pro to unlock priorities and drills.
+            </p>
+          </section>
+
+          <section v-else class="results-section">
+            <h3>Priorities</h3>
+            <p v-if="coachNarrative.priorities.length === 0" class="status-text">
+              No actionable priorities were returned for this analysis yet.
+            </p>
+            <div
+              v-for="p in coachNarrative.priorities"
+              :key="p.key"
+              class="finding-card"
+            >
+              <div class="priority-header">
+                <h4>{{ p.title }}</h4>
+                <span :class="['severity-badge', `sev-${p.severity}`]">{{ severityLabel(p.severity) }}</span>
+              </div>
+              <p class="finding-line">{{ p.explanation }}</p>
+              <p class="finding-line">{{ p.impact }}</p>
+
+              <div v-if="canSeeDrills && p.drills.length" class="drills">
+                <h5>Drills</h5>
+                <ul>
+                  <li v-for="(d, didx) in p.drills" :key="didx">{{ d }}</li>
+                </ul>
               </div>
             </div>
           </section>
         </div>
 
-        <!-- Timed out -->
-        <div v-else-if="pollTimedOut" class="results-error">
-          <h3>⏱️ Analysis is taking longer than expected</h3>
-          <p class="status-text">Status: {{ selectedCoachAnalysis.status }}</p>
-          <p class="status-text">You can retry the upload, or close and check back later.</p>
-          <div class="modal-actions">
-            <button
-              type="button"
-              class="btn-primary"
-              :disabled="!selectedCoachAnalysis.sessionId"
-              @click="retrySelectedJob"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-
-        <!-- Any other state -->
-        <div v-else class="results-loading">
-          <p>⏳ Waiting for analysis...</p>
-          <p class="status-text">Status: {{ selectedCoachAnalysis.status }}</p>
+        <div v-if="canExport" class="modal-actions">
+          <button type="button" class="btn-secondary" disabled>Export (Coach Pro Plus)</button>
         </div>
 
         <div class="modal-actions">
@@ -386,7 +358,7 @@ import { ApiError } from '@/services/coachPlusVideoService';
 import type { VideoAnalysisJob } from '@/services/coachPlusVideoService';
 import { useAuthStore } from '@/stores/authStore';
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
-import { normalizeCoachVideoAnalysis } from '@/utils/coachVideoAnalysisNormalize';
+import { buildCoachNarrative } from '@/utils/coachVideoAnalysisNarrative';
 
 // ============================================================================
 // State
@@ -436,7 +408,34 @@ watch(
 // Watch for completed jobs and show results
 const selectedJob = ref<VideoAnalysisJob | null>(null);
 
-const selectedCoachAnalysis = computed(() => normalizeCoachVideoAnalysis(selectedJob.value));
+const coachNarrative = computed(() => buildCoachNarrative(selectedJob.value));
+
+const progressSteps = ['Extract pose', 'Compute metrics', 'Generate findings', 'Generate report'];
+
+const tierRaw = computed(() => {
+  const user = authStore.currentUser as unknown as { subscriptionTier?: unknown } | null;
+  const subscriptionTier = typeof user?.subscriptionTier === 'string' ? user.subscriptionTier : null;
+  return subscriptionTier ?? authStore.planName ?? authStore.role ?? 'free';
+});
+
+const isFreeTier = computed(() => {
+  const t = String(tierRaw.value).toLowerCase();
+  return t.includes('free');
+});
+
+const canSeeDrills = computed(() => {
+  // Coach Pro and above
+  if (authStore.isCoachProPlus || authStore.isCoachPro) return true;
+  const t = String(tierRaw.value).toLowerCase();
+  return t.includes('coach_pro');
+});
+
+const canExport = computed(() => {
+  // Coach Pro Plus only
+  if (authStore.isCoachProPlus) return true;
+  const t = String(tierRaw.value).toLowerCase();
+  return t.includes('plus');
+});
 
 const uiPollInterval = ref<ReturnType<typeof setInterval> | null>(null);
 const pollTimedOut = ref(false);
@@ -476,7 +475,7 @@ function startUiPolling(jobId: string) {
 }
 
 function retrySelectedJob() {
-  const sessionId = selectedCoachAnalysis.value.sessionId;
+  const sessionId = selectedJob.value?.session_id;
   if (!sessionId) return;
   closeResultsModal();
   openUploadModal(sessionId);
@@ -684,26 +683,21 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function formatNullableNumber(value: number | null, decimals = 0): string {
-  if (value === null || !Number.isFinite(value)) return '—';
-  return value.toFixed(decimals);
+function formatCount(value: number | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  return String(Math.round(value));
 }
 
-function formatNullablePercent(value01: number | null): string {
-  if (value01 === null || !Number.isFinite(value01)) return '—';
-  return `${(value01 * 100).toFixed(1)}%`;
+function formatPercent01(value01: number | undefined): string {
+  if (typeof value01 !== 'number' || !Number.isFinite(value01)) return '—';
+  const pct = Math.round(Math.max(0, Math.min(1, value01)) * 100);
+  return `${pct}%`;
 }
 
-function formatResolution(width: number | null, height: number | null): string {
-  if (!width || !height) return '—';
-  return `${Math.round(width)}×${Math.round(height)}`;
-}
-
-function bandClass(band: string | null): string {
-  if (band === 'Needs work') return 'band-needs-work';
-  if (band === 'Improving') return 'band-improving';
-  if (band === 'Strong') return 'band-strong';
-  return 'band-unknown';
+function severityLabel(sev: 'low' | 'medium' | 'high'): string {
+  if (sev === 'high') return 'High';
+  if (sev === 'medium') return 'Medium';
+  return 'Low';
 }
 
 // ============================================================================
@@ -874,6 +868,38 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   padding: 1rem;
   margin-top: 0.75rem;
+}
+
+.priority-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.severity-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #ddd;
+  color: #333;
+  white-space: nowrap;
+}
+
+.sev-high {
+  background: #ffeaa7;
+  border-color: #ffd36d;
+}
+
+.sev-medium {
+  background: #dfe6e9;
+  border-color: #c8d0d4;
+}
+
+.sev-low {
+  background: #f6f6f6;
+  border-color: #e6e6e6;
 }
 
 .finding-line {
