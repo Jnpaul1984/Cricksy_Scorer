@@ -6,6 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     ENV=ci
 
+# Ensure model cache directory exists (model is downloaded at runtime; not baked into image)
+RUN mkdir -p /app/mediapipe_models
+
 # Ensure curl and ca-certificates are present and up-to-date on common bases.
 RUN set -eux; \
     if command -v apt-get >/dev/null 2>&1; then \

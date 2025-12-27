@@ -36,6 +36,7 @@ from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
 from backend.services.pose_metrics import compute_pose_metrics
 from backend.services.pose_service import extract_pose_keypoints_from_video
+from backend.scripts.utils.model_cache import ensure_mediapipe_model_present
 from backend.sql_app.models import VideoAnalysisJob, VideoAnalysisJobStatus
 from botocore.exceptions import ClientError
 from sqlalchemy import select
@@ -119,6 +120,10 @@ def run_analysis_pipeline(video_path: str, sample_fps: int = 10) -> dict[str, An
         Exception: If any step in pipeline fails
     """
     logger.info(f"Starting analysis pipeline for {video_path}")
+
+    # Ensure MediaPipe model exists locally (download + cache)
+    model_path = ensure_mediapipe_model_present()
+    os.environ["MEDIAPIPE_POSE_MODEL_PATH"] = model_path
 
     try:
         # Step 1: Extract pose keypoints
