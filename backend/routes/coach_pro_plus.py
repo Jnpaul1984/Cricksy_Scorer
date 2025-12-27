@@ -169,12 +169,14 @@ async def create_video_session(
             detail="Only Coach Pro Plus users can create video sessions",
         )
 
-    # Determine ownership type (superuser defaults to coach)
-    if current_user.role == RoleEnum.org_pro:
+    # Determine ownership type and ID
+    # If user is org_pro and has org_id, use org ownership; otherwise use coach ownership
+    if current_user.role == RoleEnum.org_pro and current_user.org_id:
         owner_type = OwnerTypeEnum.org
         owner_id = current_user.org_id
     else:
         # coach_pro_plus, coach_pro, or superuser - use personal ownership
+        # Also fallback to personal if org_pro but no org_id
         owner_type = OwnerTypeEnum.coach
         owner_id = current_user.id
 
