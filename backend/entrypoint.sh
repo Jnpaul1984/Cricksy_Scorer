@@ -88,4 +88,12 @@ fi
 # --- end MediaPipe bootstrap ---
 
 echo "=== Starting API ==="
+
+# If a command was provided (e.g., worker), run it instead of the API.
+# This allows the same image to be used for both the web API and background workers.
+if [ "$#" -gt 0 ]; then
+  echo "=== Running command === $*"
+  exec "$@"
+fi
+
 exec uvicorn backend.main:app --host 0.0.0.0 --port 8000

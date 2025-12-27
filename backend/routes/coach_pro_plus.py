@@ -605,8 +605,8 @@ async def complete_video_upload(
             detail="You don't have access to this job",
         )
 
-    # Update job status to "uploaded"
-    job.status = VideoAnalysisJobStatus.processing
+    # Message is enqueued; actual processing begins in the worker
+    job.status = VideoAnalysisJobStatus.queued
 
     job_id_value = job.id
     status_value = job.status.value
