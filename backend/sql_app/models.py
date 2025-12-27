@@ -35,38 +35,38 @@ class ArrayOrJSON(TypeDecorator):
     """Handle both ARRAY and JSON column types for backward compatibility.
 
     The database column is ARRAY (character varying[]), but we treat values as JSON
-    in Python. On insert, we cast the JSON representation to ARRAY.
+    in Python. Uses PostgreSQL ARRAY type with proper casting.
     """
 
-    impl = String  # Use String as base, not JSON (column is ARRAY in DB)
+    impl = postgresql.ARRAY  # Use PostgreSQL ARRAY type matching actual column
     cache_ok = True
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(String, *args, **kwargs)
+
     def process_bind_param(self, value, dialect):
-        """Convert Python list to JSON string for insertion into ARRAY column."""
+        """Pass list directly to PostgreSQL ARRAY - asyncpg will handle casting."""
         if value is None:
             return None
-        # Convert list to JSON string
-        import json
-
+        # Return as list; PostgreSQL ARRAY type will cast properly
         if isinstance(value, list):
-            return json.dumps(value)
+            return value
         return value
 
     def process_result_value(self, value, dialect):
         """Convert DB value (ARRAY or JSON) to Python list when reading."""
         if value is None:
             return []
-        # Handle both array strings like ['a','b'] and JSON like ["a","b"]
+        # PostgreSQL returns ARRAY as a list already
         if isinstance(value, list):
             return value
+        # Handle JSON strings in case of legacy data
         if isinstance(value, str):
-            # PostgreSQL might return ARRAY as string representation
             import json
 
             try:
                 return json.loads(value)
             except (json.JSONDecodeError, TypeError):
-                # If it's a string like "['a','b']", try to parse as Python literal
                 try:
                     import ast
 
