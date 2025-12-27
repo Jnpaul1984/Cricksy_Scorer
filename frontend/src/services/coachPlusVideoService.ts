@@ -119,11 +119,21 @@ export async function createVideoSession(data: {
   player_ids?: string[]
   notes?: string | null
 }): Promise<VideoSession> {
+  const token = getStoredToken()
+  const authHeader = getAuthHeader()
+  console.log('[coachPlusVideoService] createVideoSession:', {
+    url: url('/api/coaches/plus/sessions'),
+    hasToken: !!token,
+    tokenLength: token?.length || 0,
+    hasAuthHeader: !!authHeader,
+    authHeaderKeys: authHeader ? Object.keys(authHeader) : [],
+  })
+
   const res = await fetch(url('/api/coaches/plus/sessions'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(getAuthHeader() || {}),
+      ...(authHeader || {}),
     },
     body: JSON.stringify(data),
   })
@@ -132,6 +142,13 @@ export async function createVideoSession(data: {
     const detail = await res.json().catch(() => ({ detail: res.statusText }))
     const errorDetail = detail?.detail || res.statusText
     const errorCode = detail?.code || undefined
+    console.error('[coachPlusVideoService] createVideoSession failed:', {
+      status: res.status,
+      statusText: res.statusText,
+      errorDetail,
+      errorCode,
+      responseBody: detail,
+    })
     throw new ApiError(
       `Failed to create session: ${res.status}`,
       res.status,
@@ -140,7 +157,9 @@ export async function createVideoSession(data: {
     )
   }
 
-  return res.json()
+  const result = await res.json()
+  console.log('[coachPlusVideoService] createVideoSession success:', result)
+  return result
 }
 
 /**
