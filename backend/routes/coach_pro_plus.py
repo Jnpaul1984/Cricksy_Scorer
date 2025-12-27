@@ -417,8 +417,12 @@ async def get_analysis_job(
             detail="Insufficient feature access: video_analysis_enabled",
         )
 
-    # Fetch job
-    result = await db.execute(select(VideoAnalysisJob).where(VideoAnalysisJob.id == job_id))
+    # Fetch job (eager-load session to avoid async lazy-load / MissingGreenlet)
+    result = await db.execute(
+        select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session))
+        .where(VideoAnalysisJob.id == job_id)
+    )
     job = result.scalar_one_or_none()
 
     if not job:
