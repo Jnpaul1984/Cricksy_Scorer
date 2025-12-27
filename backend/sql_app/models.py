@@ -1308,7 +1308,6 @@ class VideoSession(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     player_ids: Mapped[list[str]] = mapped_column(
         ArrayOrJSON,
-        default=list,
         nullable=False,
         comment="Player IDs involved (handles both ARRAY and JSON types)",
     )
