@@ -13,7 +13,7 @@ from backend import security
 from backend.sql_app import models
 from backend.sql_app.database import get_db
 
-router = APIRouter(prefix="/ai-usage", tags=["ai-usage"])
+router = APIRouter(prefix="/api/ai-usage", tags=["ai-usage"])
 
 
 # --- Response Schemas ---
