@@ -449,6 +449,12 @@ async function submitForm() {
         error.value = videoStore.error || 'Failed to create session'
         return
       }
+
+      // Immediately prompt for upload after creating a session
+      closeModal()
+      await fetchSessions()
+      openUploadModal(session.id)
+      return
     }
 
     closeModal()
