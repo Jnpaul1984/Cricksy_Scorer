@@ -84,6 +84,6 @@ def ensure_mediapipe_model_present() -> str:
         try:
             if tmp_path.exists():
                 tmp_path.unlink(missing_ok=True)
-        except Exception:
-            # Best-effort cleanup
-            pass
+        except Exception as e:
+            # Best-effort cleanup (do not fail if temp cleanup fails)
+            logger.debug(f"Failed to clean up temp model file {tmp_path}: {e!s}")
