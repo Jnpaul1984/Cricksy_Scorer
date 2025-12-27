@@ -308,8 +308,9 @@ export function normalizeCoachVideoAnalysis(
   const width = pickFirstNumber(pose?.video_width);
   const height = pickFirstNumber(pose?.video_height);
 
-  const findingsRaw = (resultsObj?.findings ?? resultsObj?.coach?.findings ?? null) as unknown;
-  const reportRaw = (resultsObj?.report ?? resultsObj?.coach?.report ?? null) as unknown;
+  const coachObj = pickFirstObject(resultsObj?.['coach']);
+  const findingsRaw = (resultsObj?.['findings'] ?? coachObj?.['findings'] ?? null) as unknown;
+  const reportRaw = (resultsObj?.['report'] ?? coachObj?.['report'] ?? null) as unknown;
 
   const nextWork = extractTopFindings(findingsRaw, reportRaw);
 

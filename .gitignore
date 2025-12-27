@@ -120,3 +120,7 @@ vpce-*.json
 mediapipe_models/
 .venv*/
 venv/
+
+# --- Local MCP artifacts (keep repo MCP files tracked) ---
+.mcp/AGENT_PLAYBOOK.md
+.mcp/proposals/
