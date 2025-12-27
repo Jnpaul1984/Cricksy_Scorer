@@ -92,6 +92,33 @@ def get_model_path() -> str:
     path_obj = Path(model_path)
 
     if not path_obj.exists():
+        # Option B: allow runtime download + cache from S3 when the model is missing.
+        # This is primarily used by the analysis worker container.
+        try:
+            from backend.utils.model_cache import ensure_mediapipe_model_present
+
+            prev_local = os.environ.get("MODEL_LOCAL_PATH")
+            os.environ["MODEL_LOCAL_PATH"] = model_path
+            try:
+                downloaded_path = ensure_mediapipe_model_present()
+                logger.info(f"MediaPipe model fetched to: {downloaded_path}")
+            finally:
+                if prev_local is None:
+                    os.environ.pop("MODEL_LOCAL_PATH", None)
+                else:
+                    os.environ["MODEL_LOCAL_PATH"] = prev_local
+
+            path_obj = Path(model_path)
+        except Exception as e:
+            raise FileNotFoundError(
+                f"MediaPipe pose model not found at: {model_path}\n"
+                f"Attempted runtime download but failed: {e!s}\n"
+                f"Expected path: {DEFAULT_MODEL_PATH}\n"
+                f"Docker volume mount: -v /host/path/pose_landmarker_full.task:"
+                f"/app/mediapipe_models/pose_landmarker_full.task"
+            ) from e
+
+    if not path_obj.exists():
         raise FileNotFoundError(
             f"MediaPipe pose model not found at: {model_path}\n"
             f"Expected path: {DEFAULT_MODEL_PATH}\n"

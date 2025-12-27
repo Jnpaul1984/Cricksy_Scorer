@@ -37,12 +37,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import selectinload, sessionmaker
 
 from backend.config import settings
-from backend.scripts.utils.model_cache import ensure_mediapipe_model_present
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
 from backend.services.pose_metrics import compute_pose_metrics
 from backend.services.pose_service import extract_pose_keypoints_from_video
 from backend.sql_app.models import VideoAnalysisJob, VideoAnalysisJobStatus
+from backend.utils.model_cache import ensure_mediapipe_model_present
 
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

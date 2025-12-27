@@ -14,9 +14,9 @@ def test_model_cache_hit_does_not_download(tmp_path: Path, monkeypatch: pytest.M
     def _boom(*args, **kwargs):
         raise AssertionError("boto3.client should not be called on cache hit")
 
-    monkeypatch.setattr("backend.scripts.utils.model_cache.boto3.client", _boom)
+    monkeypatch.setattr("backend.utils.model_cache.boto3.client", _boom)
 
-    from backend.scripts.utils.model_cache import ensure_mediapipe_model_present
+    from backend.utils.model_cache import ensure_mediapipe_model_present
 
     resolved = ensure_mediapipe_model_present()
     assert resolved == str(model_path)
@@ -37,11 +37,11 @@ def test_model_cache_miss_downloads_once(tmp_path: Path, monkeypatch: pytest.Mon
             Path(filename).write_bytes(b"x" * 1_000_001)  # satisfy size check
 
     monkeypatch.setattr(
-        "backend.scripts.utils.model_cache.boto3.client",
+        "backend.utils.model_cache.boto3.client",
         lambda *args, **kwargs: _FakeS3(),
     )
 
-    from backend.scripts.utils.model_cache import ensure_mediapipe_model_present
+    from backend.utils.model_cache import ensure_mediapipe_model_present
 
     resolved1 = ensure_mediapipe_model_present()
     assert resolved1 == str(model_path)
