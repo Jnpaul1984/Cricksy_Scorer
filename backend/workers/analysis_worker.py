@@ -172,7 +172,11 @@ async def _process_job(job_id: str) -> None:
             # If frames were requested, upload them separately (can be large)
             if deep_artifacts.frames is not None:
                 frames_key = _derive_output_key(key, "deep_frames.json")
-                await _upload_json_to_s3(bucket=bucket, key=frames_key, payload={"frames": deep_artifacts.frames})
+                await _upload_json_to_s3(
+                    bucket=bucket,
+                    key=frames_key,
+                    payload={"frames": deep_artifacts.frames},
+                )
                 deep_payload.setdefault("outputs", {})
                 deep_payload["outputs"]["deep_frames_s3_key"] = frames_key
 
@@ -279,7 +283,9 @@ async def run_worker_loop(*, poll_seconds: float = 1.0) -> None:
 
 
 def main() -> None:
-    logging.basicConfig(level=getattr(logging, (settings.LOG_LEVEL or "INFO").upper(), logging.INFO))
+    logging.basicConfig(
+        level=getattr(logging, (settings.LOG_LEVEL or "INFO").upper(), logging.INFO)
+    )
 
     asyncio.run(run_worker_loop(poll_seconds=float(settings.COACH_PLUS_ANALYSIS_POLL_SECONDS)))
 

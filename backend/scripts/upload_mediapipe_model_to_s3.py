@@ -11,7 +11,8 @@ import boto3
 def main() -> int:
     if len(sys.argv) < 2:
         print(
-            "Usage: python -m backend.scripts.upload_mediapipe_model_to_s3 <path-to-pose_landmarker_full.task>",
+            "Usage: python -m backend.scripts.upload_mediapipe_model_to_s3 "
+            "<path-to-pose_landmarker_full.task>",
             file=sys.stderr,
         )
         return 2

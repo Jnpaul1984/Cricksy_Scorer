@@ -1,8 +1,22 @@
 from __future__ import annotations
 
-from typing import Any
+import os
 
 import pytest
+from httpx import ASGITransport, AsyncClient
+
+import backend.security as security
+import backend.services.s3_service as s3_service_mod
+from backend.app import create_app
+from backend.config import Settings, settings
+from backend.sql_app.models import (
+    OwnerTypeEnum,
+    User,
+    VideoAnalysisJob,
+    VideoAnalysisJobStatus,
+    VideoSession,
+    VideoSessionStatus,
+)
 
 
 @pytest.mark.asyncio
@@ -12,20 +26,6 @@ async def test_video_stream_url_endpoint_and_job_embed(db_session, monkeypatch: 
     This is mocked (no AWS clients) by patching the lazy S3 service getter.
     """
 
-    from httpx import ASGITransport, AsyncClient
-
-    from backend.app import create_app
-    import backend.security as security
-    from backend.config import Settings, settings
-    from backend.sql_app.models import (
-        OwnerTypeEnum,
-        User,
-        VideoAnalysisJob,
-        VideoAnalysisJobStatus,
-        VideoSession,
-        VideoSessionStatus,
-    )
-
     class _FakeS3Service:
         def generate_presigned_get_url(
             self, bucket: str, key: str, expires_in: int | None = None
@@ -33,8 +33,6 @@ async def test_video_stream_url_endpoint_and_job_embed(db_session, monkeypatch: 
             return f"https://example.invalid/stream?bucket={bucket}&key={key}&exp={expires_in}"
 
     # Patch lazy S3 service to avoid real boto3 client creation
-    import backend.services.s3_service as s3_service_mod
-
     monkeypatch.setattr(s3_service_mod, "_get_s3_service", lambda: _FakeS3Service())
 
     # Use a deterministic expiry for assertions
@@ -69,10 +67,11 @@ async def test_video_stream_url_endpoint_and_job_embed(db_session, monkeypatch: 
     db_session.add(session)
     await db_session.commit()
     await db_session.refresh(session)
+    session_id = session.id
 
     # Create a job linked to that session
     job = VideoAnalysisJob(
-        session_id=session.id,
+        session_id=session_id,
         sample_fps=10,
         include_frames=False,
         status=VideoAnalysisJobStatus.completed,
@@ -81,10 +80,9 @@ async def test_video_stream_url_endpoint_and_job_embed(db_session, monkeypatch: 
     db_session.add(job)
     await db_session.commit()
     await db_session.refresh(job)
+    job_id = job.id
 
     # Build a FastAPI app that uses the real SQLAlchemy DB dependency.
-    import os
-
     monkeypatch.setenv("CRICKSY_IN_MEMORY_DB", "0")
     settings_override = Settings(
         DATABASE_URL=os.environ["DATABASE_URL"],
@@ -97,7 +95,7 @@ async def test_video_stream_url_endpoint_and_job_embed(db_session, monkeypatch: 
     try:
         # New endpoint
         resp = await client.get(
-            f"/api/coaches/plus/videos/{session.id}/stream-url",
+            f"/api/coaches/plus/videos/{session_id}/stream-url",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 200
@@ -109,7 +107,7 @@ async def test_video_stream_url_endpoint_and_job_embed(db_session, monkeypatch: 
 
         # Single-job poll response includes embedded stream info
         job_resp = await client.get(
-            f"/api/coaches/plus/analysis-jobs/{job.id}",
+            f"/api/coaches/plus/analysis-jobs/{job_id}",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert job_resp.status_code == 200

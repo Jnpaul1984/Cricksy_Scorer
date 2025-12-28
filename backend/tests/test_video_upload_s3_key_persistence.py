@@ -1,19 +1,21 @@
 from __future__ import annotations
 
+import os
+
 import pytest
+from httpx import ASGITransport, AsyncClient
+
+import backend.security as security
+import backend.services.s3_service as s3_service_mod
+from backend.app import create_app
+from backend.config import Settings, settings
+from backend.sql_app.models import OwnerTypeEnum, User, VideoSession, VideoSessionStatus
 
 
 @pytest.mark.asyncio
 async def test_upload_initiate_persists_session_s3_key(
     db_session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from httpx import ASGITransport, AsyncClient
-
-    from backend.app import create_app
-    import backend.security as security
-    from backend.config import settings
-    from backend.sql_app.models import OwnerTypeEnum, User, VideoSession, VideoSessionStatus
-
     class _FakeS3Service:
         def generate_presigned_put_url(
             self, bucket: str, key: str, expires_in: int | None = None
@@ -21,9 +23,10 @@ async def test_upload_initiate_persists_session_s3_key(
             return f"https://example.invalid/upload?bucket={bucket}&key={key}"
 
     # Patch lazy services to avoid real AWS clients
-    import backend.services.s3_service as s3_service_mod
-
     monkeypatch.setattr(s3_service_mod, "_get_s3_service", lambda: _FakeS3Service())
+
+    # Ensure backend considers S3 configured (endpoint returns 503 if empty)
+    monkeypatch.setattr(settings, "S3_COACH_VIDEOS_BUCKET", "test-bucket")
 
     # Create a Coach Pro Plus user
     user = User(
@@ -61,10 +64,6 @@ async def test_upload_initiate_persists_session_s3_key(
     # Build a FastAPI app that uses the real SQLAlchemy DB dependency.
     # The default Settings instance is created at import time with CRICKSY_IN_MEMORY_DB=1,
     # so we must pass a settings override to disable the fake-session in-memory wiring.
-    import os
-
-    from backend.config import Settings
-
     monkeypatch.setenv("CRICKSY_IN_MEMORY_DB", "0")
     settings_override = Settings(
         DATABASE_URL=os.environ["DATABASE_URL"],

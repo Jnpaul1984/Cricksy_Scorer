@@ -64,11 +64,7 @@ def _frame_identity(frame: dict[str, Any], fallback_index: int) -> tuple[int, fl
     )
 
     try:
-        if frame_num is None:
-            frame_num_int = int(fallback_index)
-        else:
-            # Be defensive across schema versions (int/str/etc)
-            frame_num_int = int(str(frame_num))
+        frame_num_int = int(fallback_index) if frame_num is None else int(str(frame_num))
     except Exception:
         frame_num_int = int(fallback_index)
 
@@ -88,9 +84,7 @@ def _looks_detected(frame: dict[str, Any]) -> bool:
     if isinstance(keypoints, dict) and len(keypoints) > 0:
         return True
     landmarks = frame.get("landmarks")
-    if isinstance(landmarks, list) and len(landmarks) > 0:
-        return True
-    return False
+    return isinstance(landmarks, list) and len(landmarks) > 0
 
 
 def _clamp01(value: float) -> float:
@@ -138,7 +132,7 @@ def _compute_per_frame_series(frames: list[dict[str, Any]]) -> dict[str, dict[st
 
     series: dict[str, dict[str, Any]] = {
         k: {"scores": [], "frame_nums": [], "timestamps_s": []}
-        for k in EVIDENCE_BAD_THRESHOLDS.keys()
+        for k in EVIDENCE_BAD_THRESHOLDS
     }
 
     # Head stability (movement between consecutive valid nose frames)
