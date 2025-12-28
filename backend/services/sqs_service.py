@@ -51,6 +51,9 @@ class SQSService:
         Raises:
             ClientError: If SQS operation fails
         """
+        if not queue_url or not queue_url.strip():
+            raise RuntimeError("SQS_VIDEO_ANALYSIS_QUEUE_URL is not configured.")
+
         try:
             # Serialize message body to JSON
             body = json.dumps(message_body)

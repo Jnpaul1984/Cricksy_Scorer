@@ -188,6 +188,7 @@ jobs:
       ECR_REPOSITORY: cricksy-backend
       ECS_CLUSTER: cricksy-ai-cluster
       ECS_SERVICE: cricksy-ai-backend-service
+      ECS_WORKER_SERVICE: cricksy-ai-worker-service
 
     steps:
       - name: Checkout
@@ -222,10 +223,12 @@ jobs:
           # Get the container name from the task definition
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' task-definition-raw.json)
           echo "Container name: $CONTAINER_NAME"
+          echo "container_name=$CONTAINER_NAME" >> $GITHUB_OUTPUT
 
           # Update the image in the task definition
           NEW_IMAGE="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ needs.build-and-scan.outputs.image_tag }}"
           echo "New image: $NEW_IMAGE"
+          echo "new_image=$NEW_IMAGE" >> $GITHUB_OUTPUT
 
           # Filter out metadata fields that register-task-definition doesn't accept
           jq --arg IMAGE "$NEW_IMAGE" --arg CONTAINER "$CONTAINER_NAME" \
@@ -236,24 +239,125 @@ jobs:
           echo "Updated task definition:"
           jq '.containerDefinitions[0] | {name, image}' task-definition.json
 
-      - name: Register new task definition and deploy
-        id: deploy
+      - name: Register new backend task definition
+        id: register
         run: |
-          # Register the new task definition
+          set -euo pipefail
+
           REGISTER_OUTPUT=$(aws ecs register-task-definition \
             --cli-input-json file://task-definition.json \
-            --region ${{ env.AWS_REGION }})
+            --region "${{ env.AWS_REGION }}")
 
           NEW_TASK_DEF_ARN=$(echo "$REGISTER_OUTPUT" | jq -r '.taskDefinition.taskDefinitionArn')
-          echo "Registered new task definition: $NEW_TASK_DEF_ARN"
+          if [ -z "$NEW_TASK_DEF_ARN" ] || [ "$NEW_TASK_DEF_ARN" = "null" ]; then
+            echo "::error::Failed to register backend task definition"
+            echo "$REGISTER_OUTPUT" | jq -r '.' || true
+            exit 1
+          fi
+
+          echo "Registered new backend task definition: $NEW_TASK_DEF_ARN"
           echo "task_def_arn=$NEW_TASK_DEF_ARN" >> $GITHUB_OUTPUT
 
-          # Update service with new task definition
+      - name: Run DB migrations (one-off ECS task)
+        env:
+          CONTAINER_NAME: ${{ steps.task-def.outputs.container_name }}
+          NEW_TASK_DEF_ARN: ${{ steps.register.outputs.task_def_arn }}
+        run: |
+          set -euo pipefail
+
+          CLUSTER="${{ env.ECS_CLUSTER }}"
+          SERVICE="${{ env.ECS_SERVICE }}"
+          REGION="${{ env.AWS_REGION }}"
+          TASK_DEF_ARN="$NEW_TASK_DEF_ARN"
+          CONTAINER="$CONTAINER_NAME"
+
+          echo "Fetching network configuration from service: $SERVICE"
+          SVC_JSON=$(aws ecs describe-services \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --region "$REGION" \
+            --output json)
+
+          AWSPVC=$(echo "$SVC_JSON" | jq -c '.services[0].networkConfiguration.awsvpcConfiguration')
+          PLATFORM=$(echo "$SVC_JSON" | jq -r '.services[0].platformVersion // "LATEST"')
+          SUBNETS=$(echo "$AWSPVC" | jq -r '.subnets | join(",")')
+          SECGROUPS=$(echo "$AWSPVC" | jq -r '.securityGroups | join(",")')
+          ASSIGN_PUBLIC_IP=$(echo "$AWSPVC" | jq -r '.assignPublicIp // "DISABLED"')
+
+          if [ -z "$SUBNETS" ] || [ "$SUBNETS" = "null" ]; then
+            echo "::error::Could not determine subnets from ECS service network configuration"
+            echo "$SVC_JSON" | jq -r '.' || true
+            exit 1
+          fi
+          if [ -z "$SECGROUPS" ] || [ "$SECGROUPS" = "null" ]; then
+            echo "::error::Could not determine security groups from ECS service network configuration"
+            echo "$SVC_JSON" | jq -r '.' || true
+            exit 1
+          fi
+
+          echo "Running migration task using task definition: $TASK_DEF_ARN"
+          echo "Platform version: $PLATFORM"
+          echo "Subnets: $SUBNETS"
+          echo "SecurityGroups: $SECGROUPS"
+          echo "AssignPublicIp: $ASSIGN_PUBLIC_IP"
+
+          OVERRIDES=$(jq -c -n --arg CN "$CONTAINER" '{containerOverrides:[{name:$CN,environment:[{name:"MIGRATE_ONLY",value:"true"}]}]}')
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --task-definition "$TASK_DEF_ARN" \
+            --launch-type FARGATE \
+            --platform-version "$PLATFORM" \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECGROUPS],assignPublicIp=$ASSIGN_PUBLIC_IP}" \
+            --overrides "$OVERRIDES" \
+            --started-by "github-actions-migrate" \
+            --region "$REGION" \
+            --query 'tasks[0].taskArn' \
+            --output text)
+
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
+            echo "::error::Failed to start migration task"
+            aws ecs run-task \
+              --cluster "$CLUSTER" \
+              --task-definition "$TASK_DEF_ARN" \
+              --launch-type FARGATE \
+              --platform-version "$PLATFORM" \
+              --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECGROUPS],assignPublicIp=$ASSIGN_PUBLIC_IP}" \
+              --overrides "$OVERRIDES" \
+              --started-by "github-actions-migrate" \
+              --region "$REGION" \
+              --output json | jq -r '.'
+            exit 1
+          fi
+
+          echo "Migration task started: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN" --region "$REGION"
+
+          DESC=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN" --region "$REGION" --output json)
+          EXIT_CODE=$(echo "$DESC" | jq -r '.tasks[0].containers[0].exitCode // -1')
+          STOPPED_REASON=$(echo "$DESC" | jq -r '.tasks[0].stoppedReason // ""')
+          CONTAINER_REASON=$(echo "$DESC" | jq -r '.tasks[0].containers[0].reason // ""')
+
+          echo "Migration task exit code: $EXIT_CODE"
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "::error::Migration task failed. stoppedReason=$STOPPED_REASON reason=$CONTAINER_REASON"
+            echo "$DESC" | jq -r '.tasks[0] | {taskArn,lastStatus,stoppedReason,containers}'
+            exit 1
+          fi
+
+          echo "✓ Migrations completed successfully"
+
+      - name: Deploy backend service (update ECS service)
+        id: deploy
+        env:
+          NEW_TASK_DEF_ARN: ${{ steps.register.outputs.task_def_arn }}
+        run: |
+          set -euo pipefail
           aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE }} \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service "${{ env.ECS_SERVICE }}" \
             --task-definition "$NEW_TASK_DEF_ARN" \
-            --region ${{ env.AWS_REGION }} \
+            --region "${{ env.AWS_REGION }}" \
             --force-new-deployment
 
       - name: Wait for service to stabilize
@@ -345,6 +449,73 @@ jobs:
             --output table 2>/dev/null || echo "No stopped tasks or error fetching details"
 
           exit 1
+
+      - name: Deploy analysis worker service (same image, worker command)
+        env:
+          NEW_IMAGE: ${{ steps.task-def.outputs.new_image }}
+        run: |
+          set -euo pipefail
+
+          CLUSTER="${{ env.ECS_CLUSTER }}"
+          SERVICE="${{ env.ECS_WORKER_SERVICE }}"
+          REGION="${{ env.AWS_REGION }}"
+
+          echo "Deploying worker service: $SERVICE"
+
+          TASK_DEF_ARN=$(aws ecs describe-services \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --region "$REGION" \
+            --query 'services[0].taskDefinition' \
+            --output text)
+
+          if [ -z "$TASK_DEF_ARN" ] || [ "$TASK_DEF_ARN" = "None" ]; then
+            echo "::error::Could not find taskDefinition for worker service $SERVICE"
+            exit 1
+          fi
+
+          aws ecs describe-task-definition \
+            --task-definition "$TASK_DEF_ARN" \
+            --region "$REGION" \
+            --query 'taskDefinition' \
+            --output json > worker-task-definition-raw.json
+
+          WORKER_CONTAINER=$(jq -r '.containerDefinitions[0].name' worker-task-definition-raw.json)
+          echo "Worker container name: $WORKER_CONTAINER"
+
+          jq --arg IMAGE "$NEW_IMAGE" --arg CONTAINER "$WORKER_CONTAINER" \
+            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) |
+             .containerDefinitions |= map(
+               if .name == $CONTAINER then
+                 (.image = $IMAGE) |
+                 (.command = ["python","-m","backend.workers.analysis_worker"])
+               else . end
+             )' \
+            worker-task-definition-raw.json > worker-task-definition.json
+
+          echo "Registering updated worker task definition..."
+          REGISTER_OUTPUT=$(aws ecs register-task-definition \
+            --cli-input-json file://worker-task-definition.json \
+            --region "$REGION")
+
+          NEW_WORKER_TASK_DEF_ARN=$(echo "$REGISTER_OUTPUT" | jq -r '.taskDefinition.taskDefinitionArn')
+          if [ -z "$NEW_WORKER_TASK_DEF_ARN" ] || [ "$NEW_WORKER_TASK_DEF_ARN" = "null" ]; then
+            echo "::error::Failed to register worker task definition"
+            echo "$REGISTER_OUTPUT" | jq -r '.' || true
+            exit 1
+          fi
+
+          echo "Updating worker service to new task definition: $NEW_WORKER_TASK_DEF_ARN"
+          aws ecs update-service \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --task-definition "$NEW_WORKER_TASK_DEF_ARN" \
+            --region "$REGION" \
+            --force-new-deployment
+
+          echo "Waiting for worker service to stabilize..."
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE" --region "$REGION"
+          echo "✓ Worker service deployed and stable"
 
       - name: Dump ECS events and stopped tasks
         if: failure()

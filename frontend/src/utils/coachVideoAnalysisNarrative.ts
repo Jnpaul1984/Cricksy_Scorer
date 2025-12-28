@@ -18,6 +18,17 @@ export type CoachNarrative = {
     explanation: string;
     impact: string;
     drills: string[];
+    evidence?: {
+      threshold?: number;
+      worstFrames: Array<{ frameNum: number; timeSeconds?: number; score?: number }>;
+      badSegments: Array<{
+        startFrame: number;
+        endFrame: number;
+        startSeconds?: number;
+        endSeconds?: number;
+        minScore?: number;
+      }>;
+    };
   }>;
   metrics: {
     framesAnalyzed?: number;
@@ -90,7 +101,13 @@ function impactTextForSeverity(severity: CoachNarrativeSeverity): string {
 }
 
 function confidenceText(jobStatus: string, detectionRate01: number | undefined, framesAnalyzed: number | undefined): string {
-  if (jobStatus === 'queued' || jobStatus === 'processing') {
+  if (
+    jobStatus === 'queued' ||
+    jobStatus === 'processing' ||
+    jobStatus === 'quick_running' ||
+    jobStatus === 'quick_done' ||
+    jobStatus === 'deep_running'
+  ) {
     return 'Confidence: Analysis is running — results will update automatically.';
   }
   if (jobStatus === 'failed') {
@@ -107,7 +124,13 @@ function confidenceText(jobStatus: string, detectionRate01: number | undefined, 
 }
 
 function coverageText(jobStatus: string, detectionRate01: number | undefined, framesAnalyzed: number | undefined, totalFrames: number | undefined): string {
-  if (jobStatus === 'queued' || jobStatus === 'processing') {
+  if (
+    jobStatus === 'queued' ||
+    jobStatus === 'processing' ||
+    jobStatus === 'quick_running' ||
+    jobStatus === 'quick_done' ||
+    jobStatus === 'deep_running'
+  ) {
     return 'Coverage: Not available yet (analysis in progress).';
   }
   if (jobStatus === 'failed') {
@@ -154,8 +177,119 @@ function extractPriorities(resultsObj: AnyObj | null): CoachNarrative['prioritie
 
   const coachObj = pickFirstObject(resultsObj['coach']);
   const findingsRaw = (resultsObj['findings'] ?? coachObj?.['findings'] ?? null) as unknown;
+  const evidenceRaw = (resultsObj['evidence'] ?? (resultsObj as any)?.metrics?.['evidence'] ?? null) as unknown;
+  const evidenceObj = pickFirstObject(evidenceRaw);
 
   const priorities: CoachNarrative['priorities'] = [];
+
+  // Backend MVP shape: { findings: [{ code, title, severity, why_it_matters, cues, suggested_drills, evidence? }] }
+  const findingsObjBackend = pickFirstObject(findingsRaw);
+  const findingsList = Array.isArray(findingsObjBackend?.['findings'])
+    ? (findingsObjBackend?.['findings'] as unknown[])
+    : [];
+
+  const codeToMetricKey: Record<string, string> = {
+    HEAD_MOVEMENT: 'head_stability_score',
+    BALANCE_DRIFT: 'balance_drift_score',
+    KNEE_COLLAPSE: 'front_knee_brace_score',
+    ROTATION_TIMING: 'hip_shoulder_separation_timing',
+    ELBOW_DROP: 'elbow_drop_score',
+  };
+
+  if (findingsList.length) {
+    for (const f of findingsList) {
+      if (!isObject(f)) continue;
+
+      const code = safeText(f['code'], 'TECHNIQUE');
+      const metricKey = codeToMetricKey[code] ?? code.toLowerCase();
+      const title = safeText(f['title'], 'Technique priority');
+      const severity = coerceSeverity(f['severity']);
+
+      const why = toNonEmptyString(f['why_it_matters']);
+      const cues = Array.isArray(f['cues']) ? uniqueStrings(f['cues'] as unknown[], 3) : [];
+      const drills = Array.isArray(f['suggested_drills'])
+        ? uniqueStrings(f['suggested_drills'] as unknown[], 5)
+        : [];
+
+      const explanationParts: string[] = [];
+      if (why) explanationParts.push(`Why it matters: ${why}`);
+      if (cues.length) explanationParts.push(`What to do: ${cues.join(' ')}.`);
+      if (!explanationParts.length) {
+        explanationParts.push(
+          'Why it matters: Improving this will help you repeat your best movement more often. What to do: Pick one clear cue and repeat it consistently.',
+        );
+      }
+
+      const evidenceForMetric = pickFirstObject(evidenceObj?.[metricKey]);
+      const worstFramesRaw = Array.isArray(evidenceForMetric?.['worst_frames'])
+        ? (evidenceForMetric?.['worst_frames'] as unknown[])
+        : [];
+      const badSegmentsRaw = Array.isArray(evidenceForMetric?.['bad_segments'])
+        ? (evidenceForMetric?.['bad_segments'] as unknown[])
+        : [];
+
+      const worstFrames = worstFramesRaw
+        .map((w) => (isObject(w) ? w : null))
+        .filter((w): w is AnyObj => !!w)
+        .map((w) => {
+          const frameNum = typeof w['frame_num'] === 'number' ? w['frame_num'] : Number(w['frame_num']);
+          const timeSeconds = typeof w['timestamp_s'] === 'number' ? w['timestamp_s'] : Number(w['timestamp_s']);
+          const score = typeof w['score'] === 'number' ? w['score'] : Number(w['score']);
+          return {
+            frameNum: Number.isFinite(frameNum) ? Math.round(frameNum) : 0,
+            ...(Number.isFinite(timeSeconds) ? { timeSeconds } : {}),
+            ...(Number.isFinite(score) ? { score } : {}),
+          };
+        })
+        .filter((w) => w.frameNum > 0);
+
+      const badSegments = badSegmentsRaw
+        .map((s) => (isObject(s) ? s : null))
+        .filter((s): s is AnyObj => !!s)
+        .map((s) => {
+          const startFrame = typeof s['start_frame'] === 'number' ? s['start_frame'] : Number(s['start_frame']);
+          const endFrame = typeof s['end_frame'] === 'number' ? s['end_frame'] : Number(s['end_frame']);
+          const startSeconds = typeof s['start_timestamp_s'] === 'number' ? s['start_timestamp_s'] : Number(s['start_timestamp_s']);
+          const endSeconds = typeof s['end_timestamp_s'] === 'number' ? s['end_timestamp_s'] : Number(s['end_timestamp_s']);
+          const minScore = typeof s['min_score'] === 'number' ? s['min_score'] : Number(s['min_score']);
+          return {
+            startFrame: Number.isFinite(startFrame) ? Math.round(startFrame) : 0,
+            endFrame: Number.isFinite(endFrame) ? Math.round(endFrame) : 0,
+            ...(Number.isFinite(startSeconds) ? { startSeconds } : {}),
+            ...(Number.isFinite(endSeconds) ? { endSeconds } : {}),
+            ...(Number.isFinite(minScore) ? { minScore } : {}),
+          };
+        })
+        .filter((s) => s.startFrame > 0 && s.endFrame > 0);
+
+      const threshold = typeof evidenceForMetric?.['threshold'] === 'number'
+        ? (evidenceForMetric?.['threshold'] as number)
+        : undefined;
+
+      priorities.push({
+        key: metricKey,
+        title,
+        severity,
+        explanation: explanationParts.join(' '),
+        impact: impactTextForSeverity(severity),
+        drills,
+        ...(worstFrames.length || badSegments.length
+          ? {
+              evidence: {
+                ...(typeof threshold === 'number' ? { threshold } : {}),
+                worstFrames,
+                badSegments,
+              },
+            }
+          : {}),
+      });
+    }
+
+    // Order: high → medium → low
+    const rank: Record<CoachNarrativeSeverity, number> = { high: 0, medium: 1, low: 2 };
+    priorities.sort((a, b) => rank[a.severity] - rank[b.severity]);
+    return priorities;
+  }
 
   // Supported shape: { key_findings: [{ title, why, fix, drills, severity }] }
   const findingsObj = pickFirstObject(findingsRaw);
@@ -181,6 +315,52 @@ function extractPriorities(resultsObj: AnyObj | null): CoachNarrative['prioritie
 
     const drills = Array.isArray(f['drills']) ? uniqueStrings(f['drills'] as unknown[], 5) : [];
 
+    const evidenceForMetric = pickFirstObject(evidenceObj?.[key]);
+    const worstFramesRaw = Array.isArray(evidenceForMetric?.['worst_frames'])
+      ? (evidenceForMetric?.['worst_frames'] as unknown[])
+      : [];
+    const badSegmentsRaw = Array.isArray(evidenceForMetric?.['bad_segments'])
+      ? (evidenceForMetric?.['bad_segments'] as unknown[])
+      : [];
+
+    const worstFrames = worstFramesRaw
+      .map((w) => (isObject(w) ? w : null))
+      .filter((w): w is AnyObj => !!w)
+      .map((w) => {
+        const frameNum = typeof w['frame_num'] === 'number' ? w['frame_num'] : Number(w['frame_num']);
+        const timeSeconds = typeof w['timestamp_s'] === 'number' ? w['timestamp_s'] : Number(w['timestamp_s']);
+        const score = typeof w['score'] === 'number' ? w['score'] : Number(w['score']);
+        return {
+          frameNum: Number.isFinite(frameNum) ? Math.round(frameNum) : 0,
+          ...(Number.isFinite(timeSeconds) ? { timeSeconds } : {}),
+          ...(Number.isFinite(score) ? { score } : {}),
+        };
+      })
+      .filter((w) => w.frameNum > 0);
+
+    const badSegments = badSegmentsRaw
+      .map((s) => (isObject(s) ? s : null))
+      .filter((s): s is AnyObj => !!s)
+      .map((s) => {
+        const startFrame = typeof s['start_frame'] === 'number' ? s['start_frame'] : Number(s['start_frame']);
+        const endFrame = typeof s['end_frame'] === 'number' ? s['end_frame'] : Number(s['end_frame']);
+        const startSeconds = typeof s['start_timestamp_s'] === 'number' ? s['start_timestamp_s'] : Number(s['start_timestamp_s']);
+        const endSeconds = typeof s['end_timestamp_s'] === 'number' ? s['end_timestamp_s'] : Number(s['end_timestamp_s']);
+        const minScore = typeof s['min_score'] === 'number' ? s['min_score'] : Number(s['min_score']);
+        return {
+          startFrame: Number.isFinite(startFrame) ? Math.round(startFrame) : 0,
+          endFrame: Number.isFinite(endFrame) ? Math.round(endFrame) : 0,
+          ...(Number.isFinite(startSeconds) ? { startSeconds } : {}),
+          ...(Number.isFinite(endSeconds) ? { endSeconds } : {}),
+          ...(Number.isFinite(minScore) ? { minScore } : {}),
+        };
+      })
+      .filter((s) => s.startFrame > 0 && s.endFrame > 0);
+
+    const threshold = typeof evidenceForMetric?.['threshold'] === 'number'
+      ? (evidenceForMetric?.['threshold'] as number)
+      : undefined;
+
     priorities.push({
       key,
       title,
@@ -188,6 +368,15 @@ function extractPriorities(resultsObj: AnyObj | null): CoachNarrative['prioritie
       explanation: `${explanation} ${whatToFix}`,
       impact: impactTextForSeverity(severity),
       drills,
+      ...(worstFrames.length || badSegments.length
+        ? {
+            evidence: {
+              ...(typeof threshold === 'number' ? { threshold } : {}),
+              worstFrames,
+              badSegments,
+            },
+          }
+        : {}),
     });
   }
 
@@ -215,7 +404,13 @@ function extractPriorities(resultsObj: AnyObj | null): CoachNarrative['prioritie
 }
 
 function extractCoachSummaryText(resultsObj: AnyObj | null, jobStatus: string, errorMessage: string | null): string {
-  if (jobStatus === 'queued' || jobStatus === 'processing') {
+  if (
+    jobStatus === 'queued' ||
+    jobStatus === 'processing' ||
+    jobStatus === 'quick_running' ||
+    jobStatus === 'quick_done' ||
+    jobStatus === 'deep_running'
+  ) {
     return 'Analysis is in progress. Keep this screen open — results will populate automatically.';
   }
   if (jobStatus === 'failed') {
@@ -243,7 +438,8 @@ export function buildCoachNarrative(analysisJob: VideoAnalysisJob | null | undef
   const framesAnalyzed = normalized.numbers.sampledFrames ?? undefined;
   const detectionRate = normalized.numbers.detectionRate ?? undefined;
 
-  const resultsObj = pickFirstObject((analysisJob?.results ?? null) as unknown);
+  const bestResults = (analysisJob?.deep_results ?? analysisJob?.quick_results ?? analysisJob?.results ?? null) as unknown;
+  const resultsObj = pickFirstObject(bestResults);
 
   const priorities = extractPriorities(resultsObj);
   const rating = ratingFromSeverities(

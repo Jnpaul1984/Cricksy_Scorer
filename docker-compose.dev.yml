@@ -28,13 +28,26 @@ services:
 
   api:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+      context: .
+      dockerfile: ./backend/Dockerfile
+    command: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:RubyAnita2018@db:5432/cricksy_scorer
       REDIS_URL: redis://cache:6379/0
       ENV: dev
+      CRICKSY_ENV: dev
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_PROFILE: ${AWS_PROFILE:-default}
+      SQS_VIDEO_ANALYSIS_QUEUE_URL: ${SQS_VIDEO_ANALYSIS_QUEUE_URL:-}
+      S3_UPLOAD_URL_EXPIRES_SECONDS: ${S3_UPLOAD_URL_EXPIRES_SECONDS:-3600}
+      S3_STREAM_URL_EXPIRES_SECONDS: ${S3_STREAM_URL_EXPIRES_SECONDS:-300}
+      # MediaPipe model download defaults (worker uses the same values)
+      MODEL_S3_BUCKET: ${MODEL_S3_BUCKET:-cricksy-coach-videos-prod}
+      MODEL_S3_KEY: ${MODEL_S3_KEY:-coach_plus/dev-test/mediapipe/pose_landmarker_full.task}
+      MODEL_LOCAL_PATH: ${MODEL_LOCAL_PATH:-/app/mediapipe_models/pose_landmarker_full.task}
     depends_on:
       db:
         condition: service_healthy
@@ -43,10 +56,44 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
+      - ./backend:/app/backend
+      - ${USERPROFILE}/.aws:/root/.aws:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
       <<: *health
+
+  analysis_worker:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+    command: ["python", "-m", "backend.workers.analysis_worker"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:RubyAnita2018@db:5432/cricksy_scorer
+      REDIS_URL: redis://cache:6379/0
+      ENV: dev
+      CRICKSY_ENV: dev
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_PROFILE: ${AWS_PROFILE:-default}
+      # MediaPipe model download (used when /app/mediapipe_models/pose_landmarker_full.task is missing)
+      # NOTE: Your IAM must allow GetObject/HeadObject for this key.
+      MODEL_S3_BUCKET: ${MODEL_S3_BUCKET:-cricksy-coach-videos-prod}
+      MODEL_S3_KEY: ${MODEL_S3_KEY:-coach_plus/dev-test/mediapipe/pose_landmarker_full.task}
+      MODEL_LOCAL_PATH: ${MODEL_LOCAL_PATH:-/app/mediapipe_models/pose_landmarker_full.task}
+      # Poll interval for DB-backed queue
+      COACH_PLUS_ANALYSIS_POLL_SECONDS: ${COACH_PLUS_ANALYSIS_POLL_SECONDS:-1}
+      # Whether to run deep stage after quick
+      COACH_PLUS_DEEP_ANALYSIS_ENABLED: ${COACH_PLUS_DEEP_ANALYSIS_ENABLED:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app/backend
+      - ${USERPROFILE}/.aws:/root/.aws:ro
 
   web:
     image: node:20

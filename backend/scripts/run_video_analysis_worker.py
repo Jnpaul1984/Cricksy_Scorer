@@ -39,7 +39,7 @@ from sqlalchemy.orm import selectinload, sessionmaker
 from backend.config import settings
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
-from backend.services.pose_metrics import compute_pose_metrics
+from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
 from backend.services.pose_service import extract_pose_keypoints_from_video
 from backend.sql_app.models import VideoAnalysisJob, VideoAnalysisJobStatus
 from backend.utils.model_cache import ensure_mediapipe_model_present
@@ -142,6 +142,13 @@ def run_analysis_pipeline(video_path: str, sample_fps: int = 10) -> dict[str, An
         metrics = compute_pose_metrics(pose_data)
         logger.info(f"  Computed {len(metrics.get('metrics', {}))} metrics")
 
+        # Evidence markers (extend-only JSON; safe if evidence cannot be computed)
+        try:
+            evidence = build_pose_metric_evidence(pose_data=pose_data, metrics_result=metrics)
+        except Exception:
+            logger.exception("Failed to compute evidence markers")
+            evidence = {}
+
         # Step 3: Generate findings
         logger.info("Step 3/4: Generating findings...")
         findings = generate_findings(metrics)
@@ -157,6 +164,12 @@ def run_analysis_pipeline(video_path: str, sample_fps: int = 10) -> dict[str, An
             "metrics": metrics,
             "findings": findings,
             "report": report,
+            # New (extend-only) keys for Coach Pro Plus UI
+            "evidence": evidence,
+            "video_fps": pose_data.get("video_fps") or pose_data.get("fps"),
+            "total_frames": pose_data.get("total_frames")
+            or pose_data.get("pose_summary", {}).get("frame_count")
+            or pose_data.get("metrics", {}).get("frame_count"),
         }
 
         logger.info("Analysis pipeline complete")
@@ -261,9 +274,14 @@ async def process_message(
     Returns:
         True if message should be deleted, False to retry
     """
-    job_id = message.get("job_id")
+    job_id_raw = message.get("job_id")
     session_id = message.get("session_id")
     sample_fps = message.get("sample_fps", 10)
+
+    if not isinstance(job_id_raw, str) or not job_id_raw:
+        raise ValueError("Message missing valid job_id")
+
+    job_id: str = job_id_raw
 
     logger.info(f"Processing message for job {job_id}, session {session_id}")
 
@@ -434,6 +452,15 @@ async def worker_loop() -> None:
                 for msg in messages:
                     receipt_handle = msg.get("receipt_handle")
                     message_body = msg.get("body")
+
+                    if not isinstance(receipt_handle, str) or not receipt_handle:
+                        logger.warning("Skipping message with invalid receipt_handle")
+                        continue
+
+                    if not isinstance(message_body, dict):
+                        logger.warning("Skipping message with non-dict body")
+                        # Avoid delete to allow retry / inspection
+                        continue
 
                     # Process message
                     success = await process_message(message_body, receipt_handle, db)

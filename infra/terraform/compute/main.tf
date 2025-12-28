@@ -300,7 +300,7 @@ resource "aws_ecs_task_definition" "worker" {
       name      = "worker"
       image     = local.backend_image
       essential = true
-      command   = ["python", "backend/scripts/run_video_analysis_worker.py"]
+      command   = ["python", "-m", "backend.workers.analysis_worker"]
       logConfiguration = {
         logDriver = "awslogs"
         options = {

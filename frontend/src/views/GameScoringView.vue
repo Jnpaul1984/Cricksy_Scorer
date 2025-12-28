@@ -180,6 +180,23 @@ const storeCanScore = computed(() => {
   return true
 })
 const canScore = computed(() => Boolean(storeCanScore.value && roleCanScore.value))
+
+// Header score display: prefer liveSnapshot, fall back to store score (helps tests and early UI)
+const headerRuns = computed(() => {
+  const snap: any = liveSnapshot.value as any
+  const storeScore: any = (gameStore as any)?.score
+  return snap?.batting_team_score ?? storeScore?.runs ?? 0
+})
+const headerWickets = computed(() => {
+  const snap: any = liveSnapshot.value as any
+  const storeScore: any = (gameStore as any)?.score
+  return snap?.batting_team_wickets ?? storeScore?.wickets ?? 0
+})
+const headerOvers = computed(() => {
+  const snap: any = liveSnapshot.value as any
+  const storeScore: any = (gameStore as any)?.score
+  return snap?.batting_team_overs ?? storeScore?.overs ?? 0
+})
 const proTooltip = 'Requires Coach Pro or Organization Pro'
 const showScoringUpsell = computed(
   () => !roleCanScore.value && (!authRole.value || isFreeUser.value || isPlayerPro.value),
@@ -261,6 +278,7 @@ function getBallLabel(b: DeliveryRowForTable) {
 }
 
 const canSubmitSimple = computed(() => {
+  if (!canScore.value) return false
   const firstBall = Number(currentOverBalls.value || 0) === 0
   if (!gameId.value || needsNewBatterLive.value) return false
   // Allow submit if it's the first ball and a bowler is chosen
@@ -280,6 +298,7 @@ const canSubmitSimple = computed(() => {
 
 async function submitSimple() {
   if (isSubmitting.value) return
+  if (!canScore.value) return
   const firstBall = Number(currentOverBalls.value || 0) === 0
   if (needsNewOverLive.value && !(firstBall && !!selectedBowler.value)) {
     openStartOver(); onError('Start the next over first'); return
@@ -1791,10 +1810,10 @@ async function confirmChangeBowler(): Promise<void> {
         <div class="stat-group main-score">
           <span class="team-name">{{ battingTeamName || 'Team' }}</span>
           <span class="score-display">
-            {{ (liveSnapshot as any)?.batting_team_score ?? 0 }}/{{ (liveSnapshot as any)?.batting_team_wickets ?? 0 }}
+            <span data-testid="scoreboard-runs">{{ headerRuns }}</span>/{{ headerWickets }}
           </span>
           <span class="overs-display">
-            ({{ (liveSnapshot as any)?.batting_team_overs ?? 0 }})
+            (<span data-testid="scoreboard-overs">{{ headerOvers }}</span>)
           </span>
         </div>
 
@@ -1904,6 +1923,7 @@ async function confirmChangeBowler(): Promise<void> {
           <!-- Runs Matrix -->
           <div class="input-matrix">
             <button v-for="r in [0,1,2,3,4,6,5]" :key="r"
+              :data-testid="`delivery-run-${r}`"
               class="btn-score"
               :class="[
                 `btn-score-${r}`,
@@ -1919,7 +1939,12 @@ async function confirmChangeBowler(): Promise<void> {
             <label class="wicket-toggle" :class="{checked: isWicket}">
               <input type="checkbox" v-model="isWicket"> WICKET
             </label>
-            <button class="btn-submit" :disabled="!canSubmitSimple || isSubmitting" @click="submitSimple">
+            <button
+              data-testid="submit-delivery"
+              class="btn-submit"
+              :disabled="!canSubmitSimple || isSubmitting"
+              @click="submitSimple"
+            >
               {{ isSubmitting ? '...' : 'SUBMIT' }}
             </button>
           </div>

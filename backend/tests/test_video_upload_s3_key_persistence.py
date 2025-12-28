@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 
@@ -22,21 +20,10 @@ async def test_upload_initiate_persists_session_s3_key(
         ) -> str:
             return f"https://example.invalid/upload?bucket={bucket}&key={key}"
 
-    class _FakeSQSService:
-        def send_message(
-            self, queue_url: str, message_body: dict[str, Any], message_attributes=None
-        ) -> str:
-            return "test-message-id"
-
     # Patch lazy services to avoid real AWS clients
     import backend.services.s3_service as s3_service_mod
-    import backend.services.sqs_service as sqs_service_mod
 
     monkeypatch.setattr(s3_service_mod, "_get_s3_service", lambda: _FakeS3Service())
-    monkeypatch.setattr(sqs_service_mod, "_get_sqs_service", lambda: _FakeSQSService())
-
-    # Ensure queue url is non-empty for the endpoint path
-    monkeypatch.setattr(settings, "SQS_VIDEO_ANALYSIS_QUEUE_URL", "https://example.invalid/sqs")
 
     # Create a Coach Pro Plus user
     user = User(

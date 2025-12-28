@@ -49,8 +49,23 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
   const uploadProgress = computed(() => uploading.value?.uploadProgressPercent ?? 0)
 
   const allJobs = computed(() => Array.from(jobStatusMap.value.values()))
+
+  function isJobInProgress(job: VideoAnalysisJob): boolean {
+    return (
+      job.status === 'queued' ||
+      job.status === 'processing' ||
+      job.status === 'quick_running' ||
+      job.status === 'quick_done' ||
+      job.status === 'deep_running'
+    )
+  }
+
+  function isJobTerminal(job: VideoAnalysisJob): boolean {
+    return job.status === 'completed' || job.status === 'done' || job.status === 'failed'
+  }
+
   const processingJobs = computed(() =>
-    allJobs.value.filter((j) => j.status === 'queued' || j.status === 'processing')
+    allJobs.value.filter((j) => isJobInProgress(j))
   )
 
   // ============================================================================
@@ -234,7 +249,7 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
       await updateJobStatus(jobId)
 
       const updated = jobStatusMap.value.get(jobId)
-      if (updated && (updated.status === 'completed' || updated.status === 'failed')) {
+      if (updated && isJobTerminal(updated)) {
         stopPollingJob(jobId)
       }
     }, intervalMs)

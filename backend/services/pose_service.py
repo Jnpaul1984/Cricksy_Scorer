@@ -82,6 +82,7 @@ def extract_pose_keypoints_from_video(
     video_path: str,
     sample_fps: float = 2.0,
     max_width: int = 640,
+    max_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Extract pose keypoints from a video file using MediaPipe Tasks Vision API.
 
@@ -93,6 +94,8 @@ def extract_pose_keypoints_from_video(
         video_path: Path to video file (e.g., "/videos/coaching_angle.mp4")
         sample_fps: Target frames per second for sampling (default 2.0 = 1 frame every 0.5 sec)
         max_width: Maximum frame width for processing (default 640 for efficiency)
+        max_seconds: Optional cap on analyzed duration (seconds). If set, only frames up to this
+            timestamp are processed.
 
     Returns:
         dict with keys:
@@ -178,6 +181,10 @@ def extract_pose_keypoints_from_video(
             # Sample frames at specified interval
             if frame_num % frame_interval == 0:
                 timestamp = frame_num / fps
+
+                # Optional duration cap for quick analysis
+                if max_seconds is not None and timestamp > max_seconds:
+                    break
 
                 # Resize for efficiency
                 if scale < 1.0:

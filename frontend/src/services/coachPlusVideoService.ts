@@ -51,17 +51,51 @@ export interface VideoAnalysisJob {
   session_id: string;
   sample_fps: number;
   include_frames: boolean;
-  status: string; // "queued" | "processing" | "completed" | "failed"
+  status: string; // "queued" | "processing" | "quick_running" | "quick_done" | "deep_running" | "done" | "completed" | "failed"
   error_message: string | null;
   sqs_message_id: string | null;
   results: VideoAnalysisResults | null;
+  // Staged analysis (new; optional for backward compatibility)
+  stage?: string | null;
+  progress_pct?: number | null;
+  deep_enabled?: boolean | null;
+  quick_results?: VideoAnalysisResults | null;
+  deep_results?: VideoAnalysisResults | null;
+  // Optional, short-lived playback URL (computed per-request; never persisted)
+  video_stream?: VideoStreamUrl | null;
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
   updated_at: string;
 }
 
+export interface VideoStreamUrl {
+  video_url: string;
+  expires_in: number;
+  bucket: string;
+  key: string;
+}
+
 export interface VideoAnalysisResults {
+  // New (extend-only) evidence markers + convenience top-level fields
+  evidence?: Record<
+    string,
+    {
+      threshold?: number;
+      worst_frames?: Array<{ frame_num?: number; timestamp_s?: number; score?: number }>;
+      bad_segments?: Array<{
+        start_frame?: number;
+        end_frame?: number;
+        start_timestamp_s?: number;
+        end_timestamp_s?: number;
+        min_score?: number;
+      }>;
+    }
+  >;
+
+  video_fps?: number;
+  total_frames?: number;
+
   // Legacy (older API payloads)
   pose_summary?: {
     total_frames?: number;
@@ -397,6 +431,30 @@ export async function listAnalysisJobs(sessionId: string): Promise<VideoAnalysis
     const errorDetail = detail?.detail || res.statusText;
     const errorCode = detail?.code || undefined;
     throw new ApiError(`Failed to list jobs: ${res.status}`, res.status, errorDetail, errorCode);
+  }
+
+  return res.json();
+}
+
+/**
+ * Get a short-lived presigned GET URL for the uploaded session video.
+ */
+export async function getVideoStreamUrl(sessionId: string): Promise<VideoStreamUrl> {
+  const res = await fetch(url(`/api/coaches/plus/videos/${sessionId}/stream-url`), {
+    method: 'GET',
+    headers: getAuthHeader() || {},
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to get stream URL: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
   }
 
   return res.json();

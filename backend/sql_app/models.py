@@ -34,18 +34,17 @@ from .database import Base
 class ArrayOrJSON(TypeDecorator):
     """Handle both ARRAY and JSON column types for backward compatibility.
 
-    For PostgreSQL: Uses native ARRAY type for production database
-    For SQLite: Falls back to JSON type for test database (doesn't support ARRAY)
+    For PostgreSQL: Uses JSONB (works with current migrations)
+    For SQLite: Uses JSON (SQLite doesn't support ARRAY)
     """
 
     impl = JSON  # Default to JSON for SQLite compatibility in tests
     cache_ok = True
 
     def load_dialect_impl(self, dialect):
-        """Use ARRAY for PostgreSQL, JSON for SQLite."""
+        """Use JSONB for PostgreSQL, JSON for SQLite/others."""
         if dialect.name == "postgresql":
-            return dialect.type_descriptor(postgresql.ARRAY(String))
-        # For SQLite and others, use JSON
+            return dialect.type_descriptor(postgresql.JSONB())
         return dialect.type_descriptor(JSON())
 
     def process_bind_param(self, value, dialect):
@@ -1285,6 +1284,14 @@ class VideoAnalysisJobStatus(str, enum.Enum):
     """Status of a video analysis job."""
 
     queued = "queued"  # Job created, waiting in queue
+
+    # Staged processing (DB-backed worker)
+    quick_running = "quick_running"
+    quick_done = "quick_done"
+    deep_running = "deep_running"
+    done = "done"
+
+    # Legacy states (kept for backward compatibility)
     processing = "processing"  # Job is being processed
     completed = "completed"  # Job completed successfully
     failed = "failed"  # Job failed
@@ -1392,6 +1399,27 @@ class VideoAnalysisJob(Base):
         default=VideoAnalysisJobStatus.queued,
         nullable=False,
     )
+
+    # Progress tracking (0-100) and stage label
+    progress_pct: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        comment="Progress percent (0-100) across quick/deep stages",
+    )
+    stage: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Current stage label (e.g. QUICK, DEEP)",
+    )
+
+    # Stage control
+    deep_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+        comment="If false, job completes after quick stage",
+    )
     error_message: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="Error details if job failed"
     )
@@ -1402,8 +1430,17 @@ class VideoAnalysisJob(Base):
     )
 
     # Results storage
+    # Keep legacy `results` for backward compatibility (older clients/tests)
     results: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON, nullable=True, comment="Full analysis results: pose, metrics, findings, report"
+        JSON, nullable=True, comment="Legacy combined analysis results"
+    )
+
+    # New staged results
+    quick_results: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, comment="Quick pass results JSON"
+    )
+    deep_results: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, comment="Deep pass results JSON"
     )
 
     # Timestamps
@@ -1415,6 +1452,20 @@ class VideoAnalysisJob(Base):
     )
     completed_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="When processing completed"
+    )
+
+    # Per-stage timestamps (optional)
+    quick_started_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="When quick stage started"
+    )
+    quick_completed_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="When quick stage completed"
+    )
+    deep_started_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="When deep stage started"
+    )
+    deep_completed_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="When deep stage completed"
     )
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),

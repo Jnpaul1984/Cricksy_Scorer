@@ -360,6 +360,40 @@ class TestVideoAnalysisPipelineIntegration:
         json.dumps(findings)
         json.dumps(report)
 
+    def test_evidence_markers_present_for_completed_results(self) -> None:
+        """Evidence markers exist (extend-only) for completed analysis payloads."""
+        from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
+
+        pose_data = _mock_pose_extraction()
+
+        # Ensure frames look "detected" across schema versions
+        frames = pose_data.get("frames")
+        assert isinstance(frames, list)
+        for i, f in enumerate(frames):
+            if isinstance(f, dict):
+                f.setdefault("detected", True)
+                f.setdefault("pose_detected", True)
+                f.setdefault("frame_num", f.get("frame_id", i))
+                f.setdefault("t", f.get("timestamp", i / 30.0))
+
+        metrics = compute_pose_metrics(pose_data)
+        evidence = build_pose_metric_evidence(pose_data=pose_data, metrics_result=metrics)
+
+        for key in (
+            "head_stability_score",
+            "balance_drift_score",
+            "front_knee_brace_score",
+            "hip_shoulder_separation_timing",
+            "elbow_drop_score",
+        ):
+            assert key in evidence
+            block = evidence[key]
+            assert "threshold" in block
+            assert "worst_frames" in block
+            assert "bad_segments" in block
+            assert isinstance(block["worst_frames"], list)
+            assert isinstance(block["bad_segments"], list)
+
 
 class TestEndpointDocumentation:
     """Verify endpoint documentation is complete."""

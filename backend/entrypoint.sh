@@ -43,7 +43,25 @@ fi
 
 # --- MediaPipe model bootstrap (S3 -> local) ---
 MEDIAPIPE_MODEL_S3_URI="${MEDIAPIPE_MODEL_S3_URI:-}"
-MEDIAPIPE_MODEL_LOCAL_PATH="${MEDIAPIPE_MODEL_LOCAL_PATH:-/app/mediapipe_models/pose_landmarker_full.task}"
+MEDIAPIPE_MODEL_LOCAL_PATH="${MEDIAPIPE_MODEL_LOCAL_PATH:-}"
+
+# Back-compat / dev convenience: allow MODEL_* env vars (used by worker code)
+# to drive the entrypoint bootstrap without needing duplicate vars.
+if [ -z "$MEDIAPIPE_MODEL_LOCAL_PATH" ] && [ -n "${MODEL_LOCAL_PATH:-}" ]; then
+  MEDIAPIPE_MODEL_LOCAL_PATH="$MODEL_LOCAL_PATH"
+fi
+
+if [ -z "$MEDIAPIPE_MODEL_LOCAL_PATH" ]; then
+  MEDIAPIPE_MODEL_LOCAL_PATH="/app/mediapipe_models/pose_landmarker_full.task"
+fi
+
+if [ -z "$MEDIAPIPE_MODEL_S3_URI" ] && [ -n "${MODEL_S3_BUCKET:-}" ] && [ -n "${MODEL_S3_KEY:-}" ]; then
+  MEDIAPIPE_MODEL_S3_URI="s3://${MODEL_S3_BUCKET}/${MODEL_S3_KEY}"
+fi
+
+# Ensure the Python bootstrap below can read these values.
+export MEDIAPIPE_MODEL_S3_URI
+export MEDIAPIPE_MODEL_LOCAL_PATH
 
 if [ -n "$MEDIAPIPE_MODEL_LOCAL_PATH" ]; then
   mkdir -p "$(dirname "$MEDIAPIPE_MODEL_LOCAL_PATH")"

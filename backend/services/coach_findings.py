@@ -441,7 +441,7 @@ def _check_elbow_drop(metrics: dict) -> dict | None:
 # ============================================================================
 
 
-def generate_findings(metrics: dict, context: dict | None = None) -> dict[str, Any]:
+def generate_findings(metrics: dict[str, Any], context: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Generate rule-based coaching findings from metrics.
 

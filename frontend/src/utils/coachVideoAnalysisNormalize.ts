@@ -263,10 +263,18 @@ export function normalizeCoachVideoAnalysis(
   job: AnalysisJob | null | undefined,
 ): CoachFriendlyAnalysis {
   const status = job?.status ?? 'unknown';
-  const isTerminal = status === 'completed' || status === 'failed';
+  const isTerminal = status === 'completed' || status === 'done' || status === 'failed';
 
-  const results = (job?.results ?? null) as unknown;
-  const resultsObj = pickFirstObject(results);
+  const isInProgressStatus =
+    status === 'queued' ||
+    status === 'processing' ||
+    status === 'quick_running' ||
+    status === 'quick_done' ||
+    status === 'deep_running';
+
+  const bestResults = (job?.deep_results ?? job?.quick_results ?? job?.results ?? null) as unknown;
+
+  const resultsObj = pickFirstObject(bestResults);
 
   const pose = pickFirstObject(resultsObj?.pose);
   const poseSummaryLegacy = pickFirstObject(resultsObj?.pose_summary);
@@ -293,6 +301,10 @@ export function normalizeCoachVideoAnalysis(
   );
 
   const detectionRateRaw = pickFirstNumber(
+    // Newer pose schema: pose.metrics.detection_rate is percent (0..100)
+    (pose as any)?.metrics?.detection_rate,
+    (pose as any)?.pose_summary?.detection_rate,
+    (pose as any)?.detection_rate_percent,
     pose?.detection_rate,
     poseSummaryLegacy?.detection_rate_percent,
   );
@@ -300,8 +312,9 @@ export function normalizeCoachVideoAnalysis(
   let detectionRate: number | null = null;
   if (detectionRateRaw !== null) {
     detectionRate = normalizeRateTo01(detectionRateRaw);
-  } else if (detectedFrames !== null && totalFrames !== null && totalFrames > 0) {
-    detectionRate = clamp01(detectedFrames / totalFrames);
+  } else if (detectedFrames !== null && sampledFrames !== null && sampledFrames > 0) {
+    // detected_frames is sampled-frame count, so normalize by sampledFrames.
+    detectionRate = clamp01(detectedFrames / sampledFrames);
   }
 
   const fps = pickFirstNumber(pose?.video_fps, poseSummaryLegacy?.video_fps);
@@ -349,6 +362,7 @@ export function normalizeCoachVideoAnalysis(
   const takeaways = buildTakeaways(numbers, nextWork, reportRaw);
 
   const hasResults = !!resultsObj;
+  const progressPct = job?.progress_pct ?? null;
 
   return {
     status,
@@ -368,7 +382,11 @@ export function normalizeCoachVideoAnalysis(
     metrics: metricEntries,
 
     progress: {
-      show: (status === 'queued' || status === 'processing') && !hasResults,
+      show:
+        !isTerminal &&
+        (typeof progressPct === 'number'
+          ? progressPct < 100
+          : isInProgressStatus && !hasResults),
       steps: ['Extract pose', 'Compute metrics', 'Generate findings', 'Generate report'],
     },
   };

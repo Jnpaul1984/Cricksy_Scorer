@@ -62,6 +62,13 @@ class S3Service:
         if expires_in is None:
             expires_in = settings.S3_UPLOAD_URL_EXPIRES_SECONDS
 
+        if not bucket or not bucket.strip():
+            raise RuntimeError(
+                "S3 bucket is not configured (S3_COACH_VIDEOS_BUCKET is empty)."
+            )
+        if not key or not key.strip():
+            raise RuntimeError("S3 key is required to generate a presigned URL.")
+
         try:
             url = self.s3_client.generate_presigned_url(
                 "put_object",
@@ -70,7 +77,48 @@ class S3Service:
                 HttpMethod="PUT",
             )
             return url
-        except self.ClientError as e:
+        except Exception as e:
+            raise RuntimeError(f"Failed to generate presigned URL: {e!s}") from e
+
+    def generate_presigned_get_url(
+        self,
+        bucket: str,
+        key: str,
+        expires_in: int | None = None,
+    ) -> str:
+        """
+        Generate a presigned GET URL for streaming/downloading from S3.
+
+        Args:
+            bucket: S3 bucket name
+            key: S3 object key (path)
+            expires_in: URL expiration time in seconds (defaults to config value)
+
+        Returns:
+            Presigned GET URL
+
+        Raises:
+            ClientError: If S3 operation fails
+        """
+        if expires_in is None:
+            expires_in = settings.S3_STREAM_URL_EXPIRES_SECONDS
+
+        if not bucket or not bucket.strip():
+            raise RuntimeError(
+                "S3 bucket is not configured (S3_COACH_VIDEOS_BUCKET is empty)."
+            )
+        if not key or not key.strip():
+            raise RuntimeError("S3 key is required to generate a presigned URL.")
+
+        try:
+            url = self.s3_client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket, "Key": key},
+                ExpiresIn=expires_in,
+                HttpMethod="GET",
+            )
+            return url
+        except Exception as e:
             raise RuntimeError(f"Failed to generate presigned URL: {e!s}") from e
 
     def get_object_metadata(self, bucket: str, key: str) -> dict:

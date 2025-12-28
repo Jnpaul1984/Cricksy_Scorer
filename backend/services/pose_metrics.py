@@ -16,6 +16,378 @@ from typing import Any, cast
 logger = logging.getLogger(__name__)
 
 
+# =========================================================================
+# Evidence Markers (Coach Pro Plus)
+# =========================================================================
+
+# Bad thresholds are used for evidence markers (per-frame series). These are
+# intentionally conservative and align with the MVP thresholds used in findings.
+EVIDENCE_BAD_THRESHOLDS: dict[str, float] = {
+    "head_stability_score": 0.60,
+    "balance_drift_score": 0.55,
+    "front_knee_brace_score": 0.50,
+    # NOTE: the aggregate metric is lag seconds; per-frame proxy score is a 0..1
+    # hip/shoulder separation angle score (higher is better).
+    "hip_shoulder_separation_timing": 0.35,
+    "elbow_drop_score": 0.55,
+}
+
+EVIDENCE_WORST_FRAMES_COUNT = 5
+EVIDENCE_MERGE_GAP_FRAMES = 3
+
+
+def _to_float(value: Any) -> float | None:
+    if isinstance(value, (int, float)) and math.isfinite(float(value)):
+        return float(value)
+    try:
+        if isinstance(value, str):
+            v = float(value)
+            return v if math.isfinite(v) else None
+    except Exception:
+        return None
+    return None
+
+
+def _frame_identity(frame: dict[str, Any], fallback_index: int) -> tuple[int, float | None]:
+    """Return (frame_num, timestamp_s) for a pose frame.
+
+    Supports multiple schema versions (frame_num/frame_id/frame_index).
+    """
+    frame_num = (
+        frame.get("frame_num")
+        if frame.get("frame_num") is not None
+        else frame.get("frame_id")
+        if frame.get("frame_id") is not None
+        else frame.get("frame_index")
+        if frame.get("frame_index") is not None
+        else fallback_index
+    )
+
+    try:
+        if frame_num is None:
+            frame_num_int = int(fallback_index)
+        else:
+            # Be defensive across schema versions (int/str/etc)
+            frame_num_int = int(str(frame_num))
+    except Exception:
+        frame_num_int = int(fallback_index)
+
+    timestamp_s = _to_float(frame.get("timestamp"))
+    if timestamp_s is None:
+        timestamp_s = _to_float(frame.get("t"))
+    return frame_num_int, timestamp_s
+
+
+def _looks_detected(frame: dict[str, Any]) -> bool:
+    """Best-effort detection flag across schema versions."""
+    if bool(frame.get("pose_detected")) or bool(frame.get("detected")):
+        return True
+
+    # Some fixtures omit detected flags; treat non-empty keypoints/landmarks as detected.
+    keypoints = frame.get("keypoints")
+    if isinstance(keypoints, dict) and len(keypoints) > 0:
+        return True
+    landmarks = frame.get("landmarks")
+    if isinstance(landmarks, list) and len(landmarks) > 0:
+        return True
+    return False
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
+def _score_from_head_movement(movement: float) -> float:
+    # Match compute_head_stability_score scale (movement ~0.3 => 0)
+    return _clamp01(1.0 - (movement / 0.3))
+
+
+def _score_from_balance_drift(drift: float) -> float:
+    # Match compute_balance_drift_score scale (drift ~0.2 => 0)
+    return _clamp01(1.0 - (drift / 0.2))
+
+
+def _score_from_knee_angle(angle_deg: float) -> float:
+    # Match compute_front_knee_brace_score scale (80 => 0, 180 => 1)
+    return _clamp01((angle_deg - 80.0) / 100.0)
+
+
+def _score_from_elbow_drop(drop: float) -> float:
+    # Match compute_elbow_drop_score scale
+    return _clamp01((drop - 0.05) / 0.25)
+
+
+def _score_from_separation_angle(separation_deg: float) -> float:
+    # Per-frame proxy: larger hip/shoulder separation angle is better.
+    # 0..90 degrees mapped to 0..1.
+    return _clamp01(abs(separation_deg) / 90.0)
+
+
+def _compute_per_frame_series(frames: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Compute per-frame score series for each metric.
+
+    Returns per metric:
+      {
+        "scores": [float...],
+        "frame_nums": [int...],
+        "timestamps_s": [float|None...]
+      }
+
+    Series includes only frames where pose is detected and required keypoints exist.
+    """
+
+    series: dict[str, dict[str, Any]] = {
+        k: {"scores": [], "frame_nums": [], "timestamps_s": []}
+        for k in EVIDENCE_BAD_THRESHOLDS.keys()
+    }
+
+    # Head stability (movement between consecutive valid nose frames)
+    prev_nose: list[float] | None = None
+    for idx, frame in enumerate(frames):
+        if not _looks_detected(frame):
+            continue
+
+        frame = ensure_keypoints_dict(frame)
+        keypoints = frame.get("keypoints", {})
+        shoulder_width = normalize_by_shoulder_width(keypoints)
+        nose = get_keypoint_value(keypoints, "nose")
+        if nose is None or shoulder_width < 0.01:
+            continue
+
+        movement = 0.0
+        if prev_nose is not None:
+            movement = distance(prev_nose, nose) / shoulder_width
+        prev_nose = nose
+
+        score = _score_from_head_movement(movement)
+        frame_num, ts = _frame_identity(frame, idx)
+        series["head_stability_score"]["scores"].append(score)
+        series["head_stability_score"]["frame_nums"].append(frame_num)
+        series["head_stability_score"]["timestamps_s"].append(ts)
+
+    # Balance drift
+    for idx, frame in enumerate(frames):
+        if not _looks_detected(frame):
+            continue
+        frame = ensure_keypoints_dict(frame)
+        keypoints = frame.get("keypoints", {})
+
+        left_hip = get_keypoint_value(keypoints, "left_hip")
+        right_hip = get_keypoint_value(keypoints, "right_hip")
+        left_ankle = get_keypoint_value(keypoints, "left_ankle")
+        right_ankle = get_keypoint_value(keypoints, "right_ankle")
+        if not (left_hip and right_hip and left_ankle and right_ankle):
+            continue
+
+        hip_mid = [(left_hip[0] + right_hip[0]) / 2, (left_hip[1] + right_hip[1]) / 2]
+        ankle_mid = [(left_ankle[0] + right_ankle[0]) / 2, (left_ankle[1] + right_ankle[1]) / 2]
+        drift = abs(hip_mid[0] - ankle_mid[0])
+
+        score = _score_from_balance_drift(drift)
+        frame_num, ts = _frame_identity(frame, idx)
+        series["balance_drift_score"]["scores"].append(score)
+        series["balance_drift_score"]["frame_nums"].append(frame_num)
+        series["balance_drift_score"]["timestamps_s"].append(ts)
+
+    # Front knee brace
+    for idx, frame in enumerate(frames):
+        if not _looks_detected(frame):
+            continue
+        frame = ensure_keypoints_dict(frame)
+        keypoints = frame.get("keypoints", {})
+
+        angles: list[float] = []
+
+        left_hip = get_keypoint_value(keypoints, "left_hip")
+        left_knee = get_keypoint_value(keypoints, "left_knee")
+        left_ankle = get_keypoint_value(keypoints, "left_ankle")
+        if left_hip and left_knee and left_ankle:
+            angles.append(angle(left_hip, left_knee, left_ankle))
+
+        right_hip = get_keypoint_value(keypoints, "right_hip")
+        right_knee = get_keypoint_value(keypoints, "right_knee")
+        right_ankle = get_keypoint_value(keypoints, "right_ankle")
+        if right_hip and right_knee and right_ankle:
+            angles.append(angle(right_hip, right_knee, right_ankle))
+
+        if not angles:
+            continue
+
+        # Use the worst (minimum) angle for the frame
+        min_angle = min(angles)
+        score = _score_from_knee_angle(min_angle)
+        frame_num, ts = _frame_identity(frame, idx)
+        series["front_knee_brace_score"]["scores"].append(score)
+        series["front_knee_brace_score"]["frame_nums"].append(frame_num)
+        series["front_knee_brace_score"]["timestamps_s"].append(ts)
+
+    # Hip/shoulder separation timing (per-frame proxy score)
+    for idx, frame in enumerate(frames):
+        if not _looks_detected(frame):
+            continue
+        frame = ensure_keypoints_dict(frame)
+        keypoints = frame.get("keypoints", {})
+
+        left_hip = get_keypoint_value(keypoints, "left_hip")
+        right_hip = get_keypoint_value(keypoints, "right_hip")
+        left_shoulder = get_keypoint_value(keypoints, "left_shoulder")
+        right_shoulder = get_keypoint_value(keypoints, "right_shoulder")
+        if not (left_hip and right_hip and left_shoulder and right_shoulder):
+            continue
+
+        hip_ang = line_angle(left_hip, right_hip)
+        shoulder_ang = line_angle(left_shoulder, right_shoulder)
+        sep = shoulder_ang - hip_ang
+        score = _score_from_separation_angle(sep)
+        frame_num, ts = _frame_identity(frame, idx)
+        series["hip_shoulder_separation_timing"]["scores"].append(score)
+        series["hip_shoulder_separation_timing"]["frame_nums"].append(frame_num)
+        series["hip_shoulder_separation_timing"]["timestamps_s"].append(ts)
+
+    # Elbow drop
+    for idx, frame in enumerate(frames):
+        if not _looks_detected(frame):
+            continue
+        frame = ensure_keypoints_dict(frame)
+        keypoints = frame.get("keypoints", {})
+
+        drops: list[float] = []
+
+        left_shoulder = get_keypoint_value(keypoints, "left_shoulder")
+        left_elbow = get_keypoint_value(keypoints, "left_elbow")
+        if left_shoulder and left_elbow:
+            drops.append(left_elbow[1] - left_shoulder[1])
+
+        right_shoulder = get_keypoint_value(keypoints, "right_shoulder")
+        right_elbow = get_keypoint_value(keypoints, "right_elbow")
+        if right_shoulder and right_elbow:
+            drops.append(right_elbow[1] - right_shoulder[1])
+
+        if not drops:
+            continue
+
+        avg_drop = sum(drops) / len(drops)
+        score = _score_from_elbow_drop(avg_drop)
+        frame_num, ts = _frame_identity(frame, idx)
+        series["elbow_drop_score"]["scores"].append(score)
+        series["elbow_drop_score"]["frame_nums"].append(frame_num)
+        series["elbow_drop_score"]["timestamps_s"].append(ts)
+
+    return series
+
+
+def build_pose_metric_evidence(
+    pose_data: dict[str, Any],
+    metrics_result: dict[str, Any],
+) -> dict[str, Any]:
+    """Build coach-friendly evidence markers from per-frame metric series.
+
+    Output shape:
+      results.evidence[metric_key] = {
+        threshold: number,
+        worst_frames: [{frame_num, timestamp_s?, score}],
+        bad_segments: [{start_frame, end_frame, start_timestamp_s?, end_timestamp_s?, min_score}]
+      }
+    """
+
+    frames: list[dict[str, Any]] = []
+    if isinstance(pose_data.get("frames"), list):
+        frames = cast(list[dict[str, Any]], pose_data.get("frames"))
+    elif isinstance(pose_data.get("frames_data"), list):
+        frames = cast(list[dict[str, Any]], pose_data.get("frames_data"))
+
+    per_frame = _compute_per_frame_series(frames)
+
+    # Attach per-frame series to metrics_result (extend only, do not remove)
+    metrics_block = metrics_result.get("metrics")
+    if isinstance(metrics_block, dict):
+        for metric_key, data in per_frame.items():
+            metric_obj = metrics_block.get(metric_key)
+            if isinstance(metric_obj, dict):
+                metric_obj.setdefault("per_frame_scores", data["scores"])
+                metric_obj.setdefault("per_frame_frame_nums", data["frame_nums"])
+                metric_obj.setdefault("per_frame_timestamps_s", data["timestamps_s"])
+
+    evidence: dict[str, Any] = {}
+    for metric_key, threshold in EVIDENCE_BAD_THRESHOLDS.items():
+        scores = per_frame.get(metric_key, {}).get("scores", [])
+        frame_nums = per_frame.get(metric_key, {}).get("frame_nums", [])
+        timestamps_s = per_frame.get(metric_key, {}).get("timestamps_s", [])
+
+        # Worst frames (lowest scores)
+        indexed = list(enumerate(scores))
+        indexed.sort(key=lambda x: x[1])
+        worst_frames = []
+        for i, score in indexed[:EVIDENCE_WORST_FRAMES_COUNT]:
+            frame_num = int(frame_nums[i]) if i < len(frame_nums) else int(i)
+            ts = _to_float(timestamps_s[i]) if i < len(timestamps_s) else None
+            worst_frames.append(
+                {
+                    "frame_num": frame_num,
+                    **({"timestamp_s": ts} if ts is not None else {}),
+                    "score": float(score),
+                }
+            )
+
+        # Bad segments: contiguous runs where score < threshold, merged if gaps <= 3 frames
+        raw_segments: list[dict[str, Any]] = []
+        seg_start: int | None = None
+        seg_min = 1.0
+        for i, score in enumerate(scores):
+            if score < threshold:
+                if seg_start is None:
+                    seg_start = i
+                    seg_min = float(score)
+                else:
+                    seg_min = min(seg_min, float(score))
+            else:
+                if seg_start is not None:
+                    raw_segments.append({"start": seg_start, "end": i - 1, "min": seg_min})
+                    seg_start = None
+                    seg_min = 1.0
+        if seg_start is not None:
+            raw_segments.append({"start": seg_start, "end": len(scores) - 1, "min": seg_min})
+
+        merged: list[dict[str, Any]] = []
+        for seg in raw_segments:
+            if not merged:
+                merged.append(seg)
+                continue
+            prev = merged[-1]
+            gap = int(seg["start"]) - int(prev["end"]) - 1
+            if gap <= EVIDENCE_MERGE_GAP_FRAMES:
+                prev["end"] = seg["end"]
+                prev["min"] = min(float(prev["min"]), float(seg["min"]))
+            else:
+                merged.append(seg)
+
+        bad_segments: list[dict[str, Any]] = []
+        for seg in merged:
+            s_idx = int(seg["start"])
+            e_idx = int(seg["end"])
+            start_frame = int(frame_nums[s_idx]) if s_idx < len(frame_nums) else int(s_idx)
+            end_frame = int(frame_nums[e_idx]) if e_idx < len(frame_nums) else int(e_idx)
+            start_ts = _to_float(timestamps_s[s_idx]) if s_idx < len(timestamps_s) else None
+            end_ts = _to_float(timestamps_s[e_idx]) if e_idx < len(timestamps_s) else None
+            bad_segments.append(
+                {
+                    "start_frame": start_frame,
+                    "end_frame": end_frame,
+                    **({"start_timestamp_s": start_ts} if start_ts is not None else {}),
+                    **({"end_timestamp_s": end_ts} if end_ts is not None else {}),
+                    "min_score": float(seg["min"]),
+                }
+            )
+
+        evidence[metric_key] = {
+            "threshold": float(threshold),
+            "worst_frames": worst_frames,
+            "bad_segments": bad_segments,
+        }
+
+    return evidence
+
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
@@ -728,6 +1100,19 @@ def compute_pose_metrics(pose_data: dict[str, Any]) -> dict[str, Any]:
         "hip_shoulder_separation_timing": compute_hip_shoulder_separation_timing(frames),
         "elbow_drop_score": compute_elbow_drop_score(frames),
     }
+
+    # Extend metric objects with per-frame score series (do not change existing keys)
+    try:
+        per_frame = _compute_per_frame_series(frames)
+        for metric_key, data in per_frame.items():
+            metric_obj = metrics.get(metric_key)
+            if isinstance(metric_obj, dict):
+                metric_obj.setdefault("per_frame_scores", data["scores"])
+                metric_obj.setdefault("per_frame_frame_nums", data["frame_nums"])
+                metric_obj.setdefault("per_frame_timestamps_s", data["timestamps_s"])
+    except Exception:
+        # Evidence is best-effort; metrics must remain robust.
+        logger.exception("Failed to compute per-frame metric series")
 
     # Summary stats
     frames_with_pose = sum(1 for f in frames if f.get("pose_detected") or f.get("detected", False))

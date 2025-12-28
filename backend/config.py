@@ -51,8 +51,19 @@ class Settings(BaseSettings):
     COACH_REPORT_LLM_MODEL: str = Field(default="gpt-4", alias="CRICKSY_COACH_REPORT_LLM_MODEL")
     AWS_REGION: str = Field(default="us-east-1", alias="AWS_REGION")
     S3_COACH_VIDEOS_BUCKET: str = Field(default="", alias="S3_COACH_VIDEOS_BUCKET")
+    COACH_PLUS_S3_PREFIX: str = Field(default="coach_plus", alias="COACH_PLUS_S3_PREFIX")
     S3_UPLOAD_URL_EXPIRES_SECONDS: int = Field(default=3600, alias="S3_UPLOAD_URL_EXPIRES_SECONDS")
+    S3_STREAM_URL_EXPIRES_SECONDS: int = Field(default=300, alias="S3_STREAM_URL_EXPIRES_SECONDS")
     SQS_VIDEO_ANALYSIS_QUEUE_URL: str = Field(default="", alias="SQS_VIDEO_ANALYSIS_QUEUE_URL")
+
+    # Coach Pro Plus analysis worker (DB-backed queue)
+    COACH_PLUS_ANALYSIS_POLL_SECONDS: float = Field(
+        default=1.0, alias="COACH_PLUS_ANALYSIS_POLL_SECONDS"
+    )
+    COACH_PLUS_DEEP_ANALYSIS_ENABLED: bool = Field(
+        default=True, alias="COACH_PLUS_DEEP_ANALYSIS_ENABLED"
+    )
+    COACH_PLUS_QUICK_MAX_SECONDS: int = Field(default=30, alias="COACH_PLUS_QUICK_MAX_SECONDS")
 
     @field_validator("STATIC_ROOT", mode="before")
     @classmethod
@@ -107,8 +118,28 @@ class Settings(BaseSettings):
         return self.S3_UPLOAD_URL_EXPIRES_SECONDS
 
     @property
+    def coach_plus_s3_prefix(self) -> str:
+        return self.COACH_PLUS_S3_PREFIX
+
+    @property
+    def s3_stream_url_expires_seconds(self) -> int:
+        return self.S3_STREAM_URL_EXPIRES_SECONDS
+
+    @property
     def sqs_video_analysis_queue_url(self) -> str:
         return self.SQS_VIDEO_ANALYSIS_QUEUE_URL
+
+    @property
+    def coach_plus_analysis_poll_seconds(self) -> float:
+        return self.COACH_PLUS_ANALYSIS_POLL_SECONDS
+
+    @property
+    def coach_plus_deep_analysis_enabled(self) -> bool:
+        return self.COACH_PLUS_DEEP_ANALYSIS_ENABLED
+
+    @property
+    def coach_plus_quick_max_seconds(self) -> int:
+        return self.COACH_PLUS_QUICK_MAX_SECONDS
 
 
 settings = Settings()

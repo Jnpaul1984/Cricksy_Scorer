@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import logging
 
+from typing import Any
+
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
@@ -222,9 +224,9 @@ def _build_weekly_plan(findings: list[dict], player_context: dict | None = None)
 
 
 def generate_report_text(
-    findings_payload: dict,
-    player_context: dict | None = None,
-) -> dict:
+    findings_payload: dict[str, Any],
+    player_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Generate a coaching report from findings JSON.
 

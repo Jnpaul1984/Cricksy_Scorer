@@ -1,7 +1,7 @@
 <template>
   <div class="coach-pro-plus-video-sessions">
-    <!-- Feature Gate: Not Coach Pro Plus -->
-    <div v-if="!authStore.isCoachProPlus" class="feature-gate">
+    <!-- Feature Gate: Not Coach (Pro / Pro Plus) -->
+    <div v-if="!authStore.isCoach" class="feature-gate">
       <div class="upgrade-card">
         <h2>Unlock Video Sessions</h2>
         <p>
@@ -12,7 +12,7 @@
       </div>
     </div>
 
-    <!-- Main Content: Coach Pro Plus Users -->
+    <!-- Main Content: Coach Users -->
     <div v-else class="sessions-container">
       <header class="sessions-header">
         <h1>Video Sessions</h1>
@@ -141,7 +141,7 @@
     </div>
 
     <!-- Upload Video Modal -->
-    <div v-if="showUploadModal" class="modal-overlay" @click="closeUploadModal">
+    <div v-if="showUploadModal" class="modal-overlay" @click="() => closeUploadModal()">
       <div class="modal-content" @click.stop>
         <h2>Upload Video for Analysis</h2>
 
@@ -200,7 +200,7 @@
             <button type="submit" class="btn-primary" :disabled="!selectedFile">
               🚀 Upload & Analyze
             </button>
-            <button type="button" class="btn-secondary" @click="closeUploadModal">Cancel</button>
+            <button type="button" class="btn-secondary" @click="() => closeUploadModal()">Cancel</button>
           </div>
         </form>
       </div>
@@ -230,7 +230,16 @@
         </div>
 
         <!-- Progress UI -->
-        <div v-else-if="selectedJob.status === 'queued' || selectedJob.status === 'processing'" class="results-loading">
+        <div
+          v-else-if="
+            selectedJob.status === 'queued' ||
+            selectedJob.status === 'processing' ||
+            selectedJob.status === 'quick_running' ||
+            selectedJob.status === 'quick_done' ||
+            selectedJob.status === 'deep_running'
+          "
+          class="results-loading"
+        >
           <section class="results-section coach-summary-card">
             <h3>Summary</h3>
             <p class="summary-level">
@@ -277,6 +286,23 @@
 
         <!-- Completed / other states -->
         <div v-else class="results-loaded">
+          <section v-if="canSeeEvidence" class="results-section">
+            <h3>Video</h3>
+            <p v-if="!videoPlaybackSrc" class="status-text">
+              Video preview is not available yet. Evidence markers can still be listed, but “Jump to” requires a
+              playable video source.
+            </p>
+            <video
+              v-else
+              ref="resultsVideoEl"
+              class="results-video"
+              :src="videoPlaybackSrc"
+              controls
+              preload="metadata"
+              @loadedmetadata="onVideoLoaded"
+            />
+          </section>
+
           <section class="results-section coach-summary-card">
             <h3>Summary</h3>
             <p class="summary-level">
@@ -329,6 +355,61 @@
               <p class="finding-line">{{ p.explanation }}</p>
               <p class="finding-line">{{ p.impact }}</p>
 
+              <div v-if="canSeeEvidence && p.evidence" class="evidence">
+                <h5>Evidence</h5>
+
+                <div v-if="videoDurationSec && p.evidence.badSegments.length" class="timeline">
+                  <div class="timeline-bar">
+                    <div
+                      v-for="(seg, sidx) in p.evidence.badSegments"
+                      :key="sidx"
+                      class="timeline-seg"
+                      :style="timelineSegStyle(seg)"
+                    />
+                  </div>
+                </div>
+
+                <div v-if="p.evidence.worstFrames.length" class="evidence-block">
+                  <h6>Worst moments</h6>
+                  <ul>
+                    <li v-for="(w, widx) in p.evidence.worstFrames" :key="widx" class="evidence-row">
+                      <span>
+                        Frame {{ w.frameNum }}
+                        <span v-if="formatMomentTime(w)" class="evidence-time">({{ formatMomentTime(w) }})</span>
+                      </span>
+                      <button
+                        v-if="canSeekToMoment(w)"
+                        type="button"
+                        class="btn-secondary btn-small"
+                        @click="jumpToMoment(w)"
+                      >
+                        Jump to
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+
+                <div v-if="p.evidence.badSegments.length" class="evidence-block">
+                  <h6>Problem segments</h6>
+                  <ul>
+                    <li v-for="(seg, sidx) in p.evidence.badSegments" :key="sidx" class="evidence-row">
+                      <span>
+                        Frames {{ seg.startFrame }}–{{ seg.endFrame }}
+                        <span v-if="formatSegmentTime(seg)" class="evidence-time">({{ formatSegmentTime(seg) }})</span>
+                      </span>
+                      <button
+                        v-if="canSeekToSegment(seg)"
+                        type="button"
+                        class="btn-secondary btn-small"
+                        @click="jumpToSegment(seg)"
+                      >
+                        Jump to
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
               <div v-if="canSeeDrills && p.drills.length" class="drills">
                 <h5>Drills</h5>
                 <ul>
@@ -356,6 +437,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 
 import { ApiError } from '@/services/coachPlusVideoService';
 import type { VideoAnalysisJob } from '@/services/coachPlusVideoService';
+import { getVideoStreamUrl } from '@/services/coachPlusVideoService';
 import { useAuthStore } from '@/stores/authStore';
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
 import { buildCoachNarrative } from '@/utils/coachVideoAnalysisNarrative';
@@ -378,6 +460,10 @@ const uploadingSessionId = ref<string | null>(null);
 
 const selectedFile = ref<File | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
+const videoPreviewUrl = ref<string | null>(null);
+const videoStreamUrl = ref<string | null>(null);
+const resultsVideoEl = ref<HTMLVideoElement | null>(null);
+const videoDurationSec = ref<number | null>(null);
 
 const offset = ref(0);
 const limit = ref(10);
@@ -410,6 +496,15 @@ const selectedJob = ref<VideoAnalysisJob | null>(null);
 
 const coachNarrative = computed(() => buildCoachNarrative(selectedJob.value));
 
+watch(
+  () => [showResultsModal.value, selectedJob.value?.id, selectedJob.value?.status, videoPreviewUrl.value] as const,
+  async ([open]) => {
+    if (!open) return;
+    await ensureStreamUrlForSelectedJob();
+  },
+  { immediate: true },
+);
+
 const progressSteps = ['Extract pose', 'Compute metrics', 'Generate findings', 'Generate report'];
 
 const tierRaw = computed(() => {
@@ -419,6 +514,9 @@ const tierRaw = computed(() => {
 });
 
 const isFreeTier = computed(() => {
+  // Role/capability should override any legacy subscriptionTier strings.
+  // Superusers (and Coach Pro/Plus) should never be treated as free.
+  if (authStore.isCoachProPlus || authStore.isCoachPro || authStore.isSuperuser) return false;
   const t = String(tierRaw.value).toLowerCase();
   return t.includes('free');
 });
@@ -430,6 +528,11 @@ const canSeeDrills = computed(() => {
   return t.includes('coach_pro');
 });
 
+const canSeeEvidence = computed(() => {
+  // Coach Pro Plus only (and superuser)
+  return authStore.isCoachProPlus;
+});
+
 const canExport = computed(() => {
   // Coach Pro Plus only
   if (authStore.isCoachProPlus) return true;
@@ -439,6 +542,32 @@ const canExport = computed(() => {
 
 const uiPollInterval = ref<ReturnType<typeof setInterval> | null>(null);
 const pollTimedOut = ref(false);
+
+const videoPlaybackSrc = computed(() => videoPreviewUrl.value ?? videoStreamUrl.value);
+
+async function ensureStreamUrlForSelectedJob(): Promise<void> {
+  // Only needed when we don't have a local Object URL (e.g. after reload)
+  if (!canSeeEvidence.value) return;
+  if (videoPreviewUrl.value) return;
+  if (videoStreamUrl.value) return;
+
+  const sessionId = selectedJob.value?.session_id;
+  if (!sessionId) return;
+
+  // Prefer embedded stream URL from the single-job poll response
+  const embedded = selectedJob.value?.video_stream?.video_url;
+  if (typeof embedded === 'string' && embedded.length > 0) {
+    videoStreamUrl.value = embedded;
+    return;
+  }
+
+  try {
+    const stream = await getVideoStreamUrl(sessionId);
+    videoStreamUrl.value = stream.video_url;
+  } catch {
+    // Best-effort: keep UI working without a stream URL.
+  }
+}
 
 function stopUiPolling() {
   if (uiPollInterval.value) {
@@ -461,7 +590,7 @@ function startUiPolling(jobId: string) {
     }
 
     const latest = selectedJob.value;
-    if (latest && (latest.status === 'completed' || latest.status === 'failed')) {
+    if (latest && (latest.status === 'completed' || latest.status === 'done' || latest.status === 'failed')) {
       stopUiPolling();
       return;
     }
@@ -551,7 +680,27 @@ function onFileSelected(event: Event) {
   const files = target.files;
   if (files && files.length > 0) {
     selectedFile.value = files[0];
+    setVideoPreviewFromFile(files[0]);
   }
+}
+
+function setVideoPreviewFromFile(file: File) {
+  if (videoPreviewUrl.value) {
+    URL.revokeObjectURL(videoPreviewUrl.value);
+    videoPreviewUrl.value = null;
+  }
+  videoPreviewUrl.value = URL.createObjectURL(file);
+  videoDurationSec.value = null;
+}
+
+function clearVideoPreview() {
+  if (videoPreviewUrl.value) {
+    URL.revokeObjectURL(videoPreviewUrl.value);
+  }
+  videoPreviewUrl.value = null;
+  videoStreamUrl.value = null;
+  videoDurationSec.value = null;
+  resultsVideoEl.value = null;
 }
 
 async function handleVideoUpload() {
@@ -580,8 +729,8 @@ async function handleVideoUpload() {
       return;
     }
 
-    // Close upload modal
-    closeUploadModal();
+    // Close upload modal but keep local video preview for jump-to UX
+    closeUploadModal(true);
 
     // Show modal immediately (progress UI) and keep it updated as polling runs.
     await videoStore.updateJobStatus(jobId);
@@ -609,16 +758,20 @@ async function handleVideoUpload() {
 function openUploadModal(sessionId: string) {
   uploadingSessionId.value = sessionId;
   selectedFile.value = null;
+  clearVideoPreview();
   showUploadModal.value = true;
   if (fileInput.value) {
     fileInput.value.value = '';
   }
 }
 
-function closeUploadModal() {
+function closeUploadModal(keepPreviewForResults = false) {
   showUploadModal.value = false;
   uploadingSessionId.value = null;
   selectedFile.value = null;
+  if (!keepPreviewForResults) {
+    clearVideoPreview();
+  }
   if (fileInput.value) {
     fileInput.value.value = '';
   }
@@ -628,6 +781,130 @@ function closeResultsModal() {
   showResultsModal.value = false;
   selectedJob.value = null;
   stopUiPolling();
+  clearVideoPreview();
+}
+
+function onVideoLoaded() {
+  const el = resultsVideoEl.value;
+  if (!el) return;
+  const d = el.duration;
+  videoDurationSec.value = Number.isFinite(d) ? d : null;
+}
+
+function formatMmSs(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '—';
+  const s = Math.floor(seconds);
+  const mm = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${mm}:${String(ss).padStart(2, '0')}`;
+}
+
+function getJobFps(): number | null {
+  const results: any = selectedJob.value?.results as any;
+  const fps =
+    (typeof results?.video_fps === 'number' ? results.video_fps : null) ??
+    (typeof results?.pose?.video_fps === 'number' ? results.pose.video_fps : null) ??
+    (typeof results?.pose?.fps === 'number' ? results.pose.fps : null) ??
+    null;
+  return fps && Number.isFinite(fps) && fps > 0 ? fps : null;
+}
+
+function momentSeconds(w: { frameNum: number; timeSeconds?: number }): number | null {
+  if (typeof w.timeSeconds === 'number' && Number.isFinite(w.timeSeconds) && w.timeSeconds >= 0) {
+    return w.timeSeconds;
+  }
+  const fps = getJobFps();
+  if (!fps) return null;
+  if (!Number.isFinite(w.frameNum) || w.frameNum <= 0) return null;
+  return w.frameNum / fps;
+}
+
+function segmentStartSeconds(seg: {
+  startFrame: number;
+  startSeconds?: number;
+}): number | null {
+  if (typeof seg.startSeconds === 'number' && Number.isFinite(seg.startSeconds) && seg.startSeconds >= 0) {
+    return seg.startSeconds;
+  }
+  const fps = getJobFps();
+  if (!fps) return null;
+  return seg.startFrame > 0 ? seg.startFrame / fps : null;
+}
+
+function segmentEndSeconds(seg: { endFrame: number; endSeconds?: number }): number | null {
+  if (typeof seg.endSeconds === 'number' && Number.isFinite(seg.endSeconds) && seg.endSeconds >= 0) {
+    return seg.endSeconds;
+  }
+  const fps = getJobFps();
+  if (!fps) return null;
+  return seg.endFrame > 0 ? seg.endFrame / fps : null;
+}
+
+function formatMomentTime(w: { frameNum: number; timeSeconds?: number }): string | null {
+  const sec = momentSeconds(w);
+  return sec == null ? null : formatMmSs(sec);
+}
+
+function formatSegmentTime(seg: {
+  startFrame: number;
+  endFrame: number;
+  startSeconds?: number;
+  endSeconds?: number;
+}): string | null {
+  const s = segmentStartSeconds(seg);
+  const e = segmentEndSeconds(seg);
+  if (s == null || e == null) return null;
+  return `${formatMmSs(s)}–${formatMmSs(e)}`;
+}
+
+function canSeekToMoment(w: { frameNum: number; timeSeconds?: number }): boolean {
+  return !!resultsVideoEl.value && momentSeconds(w) != null;
+}
+
+function canSeekToSegment(seg: { startFrame: number; startSeconds?: number }): boolean {
+  return !!resultsVideoEl.value && segmentStartSeconds(seg) != null;
+}
+
+function jumpTo(seconds: number) {
+  const el = resultsVideoEl.value;
+  if (!el) return;
+  el.currentTime = Math.max(0, seconds);
+  el.play().catch(() => {
+    // Autoplay may be blocked; seeking is still applied.
+  });
+}
+
+function jumpToMoment(w: { frameNum: number; timeSeconds?: number }) {
+  const sec = momentSeconds(w);
+  if (sec == null) return;
+  jumpTo(sec);
+}
+
+function jumpToSegment(seg: { startFrame: number; startSeconds?: number }) {
+  const sec = segmentStartSeconds(seg);
+  if (sec == null) return;
+  jumpTo(sec);
+}
+
+function timelineSegStyle(seg: {
+  startFrame: number;
+  endFrame: number;
+  startSeconds?: number;
+  endSeconds?: number;
+}): Record<string, string> {
+  const dur = videoDurationSec.value;
+  if (!dur || !Number.isFinite(dur) || dur <= 0) return { display: 'none' };
+  const s = segmentStartSeconds(seg);
+  const e = segmentEndSeconds(seg);
+  if (s == null || e == null) return { display: 'none' };
+  const start = Math.max(0, Math.min(1, s / dur));
+  const end = Math.max(0, Math.min(1, e / dur));
+  const left = Math.min(start, end);
+  const width = Math.max(0.002, Math.abs(end - start));
+  return {
+    left: `${left * 100}%`,
+    width: `${width * 100}%`,
+  };
 }
 
 function selectSession(sessionId: string) {
@@ -877,6 +1154,12 @@ onBeforeUnmount(() => {
   gap: 0.75rem;
 }
 
+.results-video {
+  width: 100%;
+  max-height: 360px;
+  border-radius: 10px;
+}
+
 .severity-badge {
   display: inline-block;
   padding: 0.15rem 0.5rem;
@@ -905,6 +1188,52 @@ onBeforeUnmount(() => {
 .finding-line {
   margin: 0.5rem 0;
   color: #444;
+}
+
+.evidence {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #eee;
+}
+
+.evidence-block {
+  margin-top: 0.6rem;
+}
+
+.evidence-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.evidence-time {
+  color: #666;
+  margin-left: 0.35rem;
+}
+
+.btn-small {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+.timeline {
+  margin: 0.6rem 0;
+}
+
+.timeline-bar {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: #f2f2f2;
+  overflow: hidden;
+}
+
+.timeline-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(220, 53, 69, 0.55);
 }
 
 .drills {

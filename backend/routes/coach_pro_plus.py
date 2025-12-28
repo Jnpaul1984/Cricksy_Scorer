@@ -16,7 +16,8 @@ from uuid import uuid4
 from backend import security
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
-from backend.services.pose_metrics import compute_pose_metrics
+from backend.services.pose_metrics import compute_pose_metrics, build_pose_metric_evidence
+from backend.services.s3_service import s3_service
 from backend.sql_app.database import get_db
 from backend.sql_app.models import (
     RoleEnum,
@@ -85,6 +86,15 @@ class VideoSessionRead(BaseModel):
         from_attributes = True
 
 
+class VideoStreamUrlRead(BaseModel):
+    """Response schema for a short-lived presigned GET URL."""
+
+    video_url: str
+    expires_in: int
+    bucket: str
+    key: str
+
+
 class VideoAnalysisJobRead(BaseModel):
     """Response schema for a video analysis job"""
 
@@ -93,13 +103,22 @@ class VideoAnalysisJobRead(BaseModel):
     sample_fps: int
     include_frames: bool
     status: str  # "queued", "processing", "completed", "failed"
+    stage: str | None = None
+    progress_pct: int = 0
     error_message: str | None = None
     sqs_message_id: str | None = None
+    # Legacy combined results (kept for backward compatibility)
     results: dict | None = None
+    # New staged results
+    quick_results: dict | None = None
+    deep_results: dict | None = None
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
     updated_at: datetime
+
+    # Optional short-lived streaming URL (computed per-request; never persisted)
+    video_stream: VideoStreamUrlRead | None = None
 
     class Config:
         from_attributes = True
@@ -324,7 +343,7 @@ async def create_analysis_job(
     """
     Create a video analysis job for a session.
 
-    The job is queued and sent to SQS for async processing.
+    The job is queued in the database for background processing.
     """
     # Verify feature access
     if not await _check_feature_access(current_user, "video_analysis_enabled"):
@@ -353,6 +372,9 @@ async def create_analysis_job(
         sample_fps=sample_fps,
         include_frames=include_frames,
         status=VideoAnalysisJobStatus.queued,
+        stage="QUEUED",
+        progress_pct=0,
+        deep_enabled=bool(settings.COACH_PLUS_DEEP_ANALYSIS_ENABLED),
     )
 
     db.add(job)
@@ -439,7 +461,89 @@ async def get_analysis_job(
             detail="You don't have access to this job",
         )
 
-    return VideoAnalysisJobRead.model_validate(job)
+    job_read = VideoAnalysisJobRead.model_validate(job)
+
+    # Best-effort: attach a short-lived streaming URL for this single job.
+    # Do not do this on list endpoints to avoid bulk presign costs.
+    try:
+        if session.s3_bucket and session.s3_key:
+            expires_in = settings.S3_STREAM_URL_EXPIRES_SECONDS
+            url = s3_service.generate_presigned_get_url(
+                bucket=session.s3_bucket,
+                key=session.s3_key,
+                expires_in=expires_in,
+            )
+            job_read = job_read.model_copy(
+                update={
+                    "video_stream": VideoStreamUrlRead(
+                        video_url=url,
+                        expires_in=expires_in,
+                        bucket=session.s3_bucket,
+                        key=session.s3_key,
+                    )
+                }
+            )
+    except Exception:
+        # Graceful degradation: preserve existing response shape without stream URL.
+        pass
+
+    return job_read
+
+
+@router.get("/videos/{session_id}/stream-url", response_model=VideoStreamUrlRead)
+async def get_video_stream_url(
+    session_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> VideoStreamUrlRead:
+    """
+    Get a short-lived presigned GET URL for the uploaded video of a session.
+
+    This is computed per-request and is not persisted.
+    """
+    # Verify feature access
+    if not await _check_feature_access(current_user, "video_upload_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_upload_enabled",
+        )
+
+    # Fetch session from database
+    result = await db.execute(select(VideoSession).where(VideoSession.id == session_id))
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Video session not found")
+
+    # Verify ownership
+    if current_user.role == RoleEnum.coach_pro_plus:
+        if session.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this session",
+            )
+    else:
+        if session.owner_type == OwnerTypeEnum.org and session.owner_id != current_user.org_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this session",
+            )
+
+    if not session.s3_bucket or not session.s3_key:
+        raise HTTPException(status_code=404, detail="Video not available for this session")
+
+    expires_in = settings.S3_STREAM_URL_EXPIRES_SECONDS
+    video_url = s3_service.generate_presigned_get_url(
+        bucket=session.s3_bucket,
+        key=session.s3_key,
+        expires_in=expires_in,
+    )
+    return VideoStreamUrlRead(
+        video_url=video_url,
+        expires_in=expires_in,
+        bucket=session.s3_bucket,
+        key=session.s3_key,
+    )
 
 
 # ============================================================================
@@ -506,6 +610,12 @@ async def initiate_video_upload(
     owner_type_value = session.owner_type.value
     owner_id_value = session.owner_id
 
+    if not settings.S3_COACH_VIDEOS_BUCKET or not settings.S3_COACH_VIDEOS_BUCKET.strip():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="S3 video storage is not configured (S3_COACH_VIDEOS_BUCKET is empty).",
+        )
+
     # Create analysis job
     job_id = str(uuid4())
     job = VideoAnalysisJob(
@@ -514,6 +624,9 @@ async def initiate_video_upload(
         sample_fps=request.sample_fps,
         include_frames=request.include_frames,
         status=VideoAnalysisJobStatus.queued,
+        stage="QUEUED",
+        progress_pct=0,
+        deep_enabled=bool(settings.COACH_PLUS_DEEP_ANALYSIS_ENABLED),
     )
 
     db.add(job)
@@ -523,9 +636,20 @@ async def initiate_video_upload(
         # Generate S3 presigned URL (lazy import)
         from backend.services.s3_service import s3_service
 
-        # Key format: coach_plus/{owner_type}/{owner_id}/{session_id}/{video_id}/original.mp4
+        import boto3
+        import logging
+
+        try:
+            sts = boto3.client("sts")
+            identity = sts.get_caller_identity()
+            logging.warning(f"AWS IDENTITY IN CONTAINER: {identity}")
+        except Exception as e:
+            logging.warning(f"AWS IDENTITY IN CONTAINER: <unavailable: {e!s}>")
+
+        # Key format: {prefix}/{owner_type}/{owner_id}/{session_id}/{video_id}/original.mp4
         video_id = str(uuid4())
-        s3_key = f"coach_plus/{owner_type_value}/{owner_id_value}/{request.session_id}/{video_id}/original.mp4"
+        prefix = (settings.COACH_PLUS_S3_PREFIX or "coach_plus").strip().strip("/")
+        s3_key = f"{prefix}/{owner_type_value}/{owner_id_value}/{request.session_id}/{video_id}/original.mp4"
 
         # Persist upload location onto the session so the worker can retrieve it later.
         # The worker currently expects `job.session.s3_key`.
@@ -563,7 +687,7 @@ async def complete_video_upload(
     db: AsyncSession = Depends(get_db),
 ) -> VideoUploadCompleteResponse:
     """
-    Complete a video upload by updating job status and enqueuing to SQS.
+    Complete a video upload by updating job status and leaving it queued in DB.
 
     Flow:
     1. Validate job exists and user owns session
@@ -613,8 +737,15 @@ async def complete_video_upload(
             detail="You don't have access to this job",
         )
 
-    # Message is enqueued; actual processing begins in the worker
+    # Mark job queued for the DB-backed worker
     job.status = VideoAnalysisJobStatus.queued
+    job.stage = "QUEUED"
+    job.progress_pct = 0
+    job.error_message = None
+    job.sqs_message_id = None
+
+    job_id_value = job.id
+    status_value = job.status.value
 
     # Validate we have stored upload location (worker requires this)
     if not session.s3_key:
@@ -626,53 +757,13 @@ async def complete_video_upload(
             detail="Upload location missing for this session. Please re-initiate upload.",
         )
 
-    logger.info(
-        "Upload complete: enqueueing analysis job",
-        extra={
-            "job_id": job.id,
-            "session_id": job.session_id,
-            "s3_bucket": session.s3_bucket or settings.S3_COACH_VIDEOS_BUCKET,
-            "s3_key": session.s3_key,
-        },
-    )
-
-    job_id_value = job.id
-    status_value = job.status.value
-
-    # Prepare SQS message
-    message_body = {
-        "job_id": job.id,
-        "session_id": job.session_id,
-        "sample_fps": job.sample_fps,
-        "include_frames": job.include_frames,
-    }
-
-    # Send to SQS queue (lazy import)
-    try:
-        from backend.services.sqs_service import sqs_service
-
-        message_id = sqs_service.send_message(  # type: ignore[union-attr]
-            queue_url=settings.SQS_VIDEO_ANALYSIS_QUEUE_URL,
-            message_body=message_body,
-        )
-        job.sqs_message_id = message_id
-    except RuntimeError as e:
-        job.status = VideoAnalysisJobStatus.failed
-        job.error_message = f"Failed to enqueue job: {e!s}"
-        await db.commit()
-
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to queue video for processing: {e!s}",
-        ) from e
-
-    # Commit changes
+    session.status = VideoSessionStatus.uploaded
     await db.commit()
 
     return VideoUploadCompleteResponse(
         job_id=job_id_value,
         status=status_value,
-        sqs_message_id=message_id,
+        sqs_message_id=None,
         message="Video uploaded and queued for analysis",
     )
 
@@ -891,6 +982,14 @@ async def analyze_video(
         # Step 2: Compute metrics from pose
         metrics_result = compute_pose_metrics(pose_payload_for_metrics)
 
+        # Evidence markers (extend-only; safe fallback on errors)
+        try:
+            evidence = build_pose_metric_evidence(pose_payload_for_metrics, metrics_result)
+            if isinstance(metrics_result, dict):
+                metrics_result.setdefault("evidence", evidence)
+        except Exception:
+            logger.exception("Failed to compute evidence markers")
+
         # Ensure metrics_result has normalized summary keys for downstream functions
         if isinstance(metrics_result, dict):
             metrics_result.setdefault("total_frames", normalized["total_frames"])
@@ -949,8 +1048,8 @@ async def analyze_video(
         # Detailed error for debugging KeyError issues
         import logging as log_module
 
-        logger = log_module.getLogger(__name__)
-        logger.exception(f"KeyError in video analysis pipeline: {e}")
+        local_logger = log_module.getLogger(__name__)
+        local_logger.exception(f"KeyError in video analysis pipeline: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Analysis failed: Missing required field {e!s}. Check logs for details.",
