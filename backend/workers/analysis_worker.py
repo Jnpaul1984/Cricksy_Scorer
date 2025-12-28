@@ -198,26 +198,26 @@ async def _claim_one_job() -> str | None:
     session_local = get_session_local()
 
     async with session_local() as db, db.begin():
-            stmt = (
-                select(VideoAnalysisJob)
-                .where(VideoAnalysisJob.status == VideoAnalysisJobStatus.queued)
-                .order_by(VideoAnalysisJob.created_at)
-                .with_for_update(skip_locked=True)
-                .limit(1)
-            )
-            result = await db.execute(stmt)
-            job = result.scalars().first()
-            if job is None:
-                return None
+        stmt = (
+            select(VideoAnalysisJob)
+            .where(VideoAnalysisJob.status == VideoAnalysisJobStatus.queued)
+            .order_by(VideoAnalysisJob.created_at)
+            .with_for_update(skip_locked=True)
+            .limit(1)
+        )
+        result = await db.execute(stmt)
+        job = result.scalars().first()
+        if job is None:
+            return None
 
-            # Claim by moving to QUICK_RUNNING (prevents other workers)
-            job.status = VideoAnalysisJobStatus.quick_running
-            job.stage = "QUICK"
-            job.progress_pct = 0
-            job.started_at = job.started_at or _now_utc()
-            job.quick_started_at = _now_utc()
+        # Claim by moving to QUICK_RUNNING (prevents other workers)
+        job.status = VideoAnalysisJobStatus.quick_running
+        job.stage = "QUICK"
+        job.progress_pct = 0
+        job.started_at = job.started_at or _now_utc()
+        job.quick_started_at = _now_utc()
 
-            return job.id
+        return job.id
 
 
 async def run_worker_loop(*, poll_seconds: float = 1.0) -> None:

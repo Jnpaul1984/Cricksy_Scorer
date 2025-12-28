@@ -125,9 +125,7 @@ def run_pose_metrics_findings_report(
     frames_out: list[dict[str, Any]] | None = None
     if include_frames:
         frames_out = (
-            pose_data.get("frames")
-            or pose_data.get("frames_data")
-            or pose_data.get("pose_frames")
+            pose_data.get("frames") or pose_data.get("frames_data") or pose_data.get("pose_frames")
         )
         if not isinstance(frames_out, list):
             frames_out = None

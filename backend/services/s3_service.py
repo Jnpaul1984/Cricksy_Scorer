@@ -63,9 +63,7 @@ class S3Service:
             expires_in = settings.S3_UPLOAD_URL_EXPIRES_SECONDS
 
         if not bucket or not bucket.strip():
-            raise RuntimeError(
-                "S3 bucket is not configured (S3_COACH_VIDEOS_BUCKET is empty)."
-            )
+            raise RuntimeError("S3 bucket is not configured (S3_COACH_VIDEOS_BUCKET is empty).")
         if not key or not key.strip():
             raise RuntimeError("S3 key is required to generate a presigned URL.")
 
@@ -104,9 +102,7 @@ class S3Service:
             expires_in = settings.S3_STREAM_URL_EXPIRES_SECONDS
 
         if not bucket or not bucket.strip():
-            raise RuntimeError(
-                "S3 bucket is not configured (S3_COACH_VIDEOS_BUCKET is empty)."
-            )
+            raise RuntimeError("S3 bucket is not configured (S3_COACH_VIDEOS_BUCKET is empty).")
         if not key or not key.strip():
             raise RuntimeError("S3 key is required to generate a presigned URL.")
 

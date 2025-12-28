@@ -131,8 +131,7 @@ def _compute_per_frame_series(frames: list[dict[str, Any]]) -> dict[str, dict[st
     """
 
     series: dict[str, dict[str, Any]] = {
-        k: {"scores": [], "frame_nums": [], "timestamps_s": []}
-        for k in EVIDENCE_BAD_THRESHOLDS
+        k: {"scores": [], "frame_nums": [], "timestamps_s": []} for k in EVIDENCE_BAD_THRESHOLDS
     }
 
     # Head stability (movement between consecutive valid nose frames)

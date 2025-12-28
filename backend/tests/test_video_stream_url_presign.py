@@ -20,7 +20,9 @@ from backend.sql_app.models import (
 
 
 @pytest.mark.asyncio
-async def test_video_stream_url_endpoint_and_job_embed(db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_video_stream_url_endpoint_and_job_embed(
+    db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Ensures stream URL is returned via the new endpoint and embedded on the single-job response.
 
     This is mocked (no AWS clients) by patching the lazy S3 service getter.

@@ -33,13 +33,9 @@ def upgrade() -> None:
 
     # Extend enum in Postgres
     if dialect_name == "postgresql":
-        op.execute(
-            "ALTER TYPE video_analysis_job_status ADD VALUE IF NOT EXISTS 'quick_running'"
-        )
+        op.execute("ALTER TYPE video_analysis_job_status ADD VALUE IF NOT EXISTS 'quick_running'")
         op.execute("ALTER TYPE video_analysis_job_status ADD VALUE IF NOT EXISTS 'quick_done'")
-        op.execute(
-            "ALTER TYPE video_analysis_job_status ADD VALUE IF NOT EXISTS 'deep_running'"
-        )
+        op.execute("ALTER TYPE video_analysis_job_status ADD VALUE IF NOT EXISTS 'deep_running'")
         op.execute("ALTER TYPE video_analysis_job_status ADD VALUE IF NOT EXISTS 'done'")
 
     # Add progress/stage columns
