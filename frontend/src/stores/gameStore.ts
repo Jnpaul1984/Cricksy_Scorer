@@ -307,10 +307,6 @@ function normalizeServerSnapshot(s: any): UiSnapshot {
     // Win Probability / Analytics fields
     current_run_rate: s?.current_run_rate ?? null,
     required_run_rate: s?.required_run_rate ?? null,
-
-    // Win Probability / Analytics fields
-    current_run_rate: s?.current_run_rate ?? null,
-    required_run_rate: s?.required_run_rate ?? null,
   }
 }
 

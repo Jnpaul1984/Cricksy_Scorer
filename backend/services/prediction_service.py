@@ -149,7 +149,7 @@ class WinProbabilityPredictor:
             total_balls_limit = overs_limit * 6
             progress = total_balls / total_balls_limit
             confidence = min(75.0, progress * 100.0)
-            
+
             # Calculate current run rate
             current_rr = (total_runs / total_balls) * 6 if total_balls > 0 else 0.0
 
@@ -183,7 +183,7 @@ class WinProbabilityPredictor:
         # Calculate balls bowled
         total_balls = overs_completed * 6 + balls_this_over
         total_balls_limit = overs_limit * 6
-        
+
         # Calculate current run rate
         current_rr = (total_runs / total_balls) * 6 if total_balls > 0 else 0.0
 
@@ -202,7 +202,7 @@ class WinProbabilityPredictor:
                     "projected_score": round(projected_score, 0),
                     "prediction_method": "rule_based_early",
                 },
-                
+
             }
 
         # Project final score
