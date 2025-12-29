@@ -273,7 +273,7 @@ def train_win_predictor(match_format: Literal["t20", "odi"]) -> None:
         json.dump(metadata, f, indent=2)
 
     print(f"[OK] Metadata saved to: {metadata_path}")
-    
+
     # Upload to S3 (if configured)
     try:
         from backend.scripts.s3_upload_utils import upload_model_to_s3

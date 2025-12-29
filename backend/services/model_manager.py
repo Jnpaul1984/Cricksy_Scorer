@@ -36,7 +36,7 @@ MatchFormat = Literal["t20", "odi"]
 class ModelManager:
     """
     Thread-safe manager for ML models with S3 backend and automatic reloading.
-    
+
     Implements lazy loading pattern:
     - Models downloaded from S3 on first access
     - Cached in local filesystem for fast subsequent access
@@ -108,7 +108,7 @@ class ModelManager:
     def _download_from_s3(self, s3_key: str, local_path: Path) -> bool:
         """
         Download file from S3 to local path.
-        
+
         Returns:
             True if successful, False otherwise
         """
@@ -133,7 +133,7 @@ class ModelManager:
     ) -> dict[str, Any] | None:
         """
         Fetch latest.json from S3 to get current model version.
-        
+
         Returns:
             Dict with {version, updated_at, s3_prefix} or None if not found
         """
@@ -161,7 +161,7 @@ class ModelManager:
     ) -> Path | None:
         """
         Get path to bundled model in Docker image (fallback when S3 unavailable).
-        
+
         Returns:
             Path to .pkl file or None if not found
         """
@@ -181,17 +181,17 @@ class ModelManager:
     ) -> Any:
         """
         Load model (from S3 or local cache).
-        
+
         Strategy:
         1. Check in-memory cache first
         2. Try S3 download if configured
         3. Fall back to bundled models
         4. Return None if all fail
-        
+
         Args:
             model_type: "win_probability" or "score_predictor"
             match_format: "t20" or "odi"
-            
+
         Returns:
             Loaded model object or None
         """
@@ -216,7 +216,7 @@ class ModelManager:
     ) -> Any:
         """
         Load model from S3 or local fallback.
-        
+
         Returns:
             Loaded model or None
         """
@@ -266,7 +266,7 @@ class ModelManager:
     async def _check_for_updates_async(self):
         """
         Background task to poll S3 for model updates.
-        
+
         Runs every 120s (configurable) and reloads models if new versions detected.
         """
         while not self._shutdown_event.is_set():
