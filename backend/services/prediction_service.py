@@ -149,6 +149,9 @@ class WinProbabilityPredictor:
             total_balls_limit = overs_limit * 6
             progress = total_balls / total_balls_limit
             confidence = min(75.0, progress * 100.0)
+            
+            # Calculate current run rate
+            current_rr = (total_runs / total_balls) * 6 if total_balls > 0 else 0.0
 
             logger.info(
                 f"ML score prediction: {match_format} format, "
@@ -162,6 +165,7 @@ class WinProbabilityPredictor:
                 "factors": {
                     "projected_score": round(projected_score, 0),
                     "par_score": round(par_score, 0),
+                    "current_run_rate": round(current_rr, 2),
                     "prediction_method": "ml_score_predictor",
                     "wickets_remaining": 10 - total_wickets,
                     "balls_remaining": total_balls_limit - total_balls,
@@ -179,9 +183,14 @@ class WinProbabilityPredictor:
         # Calculate balls bowled
         total_balls = overs_completed * 6 + balls_this_over
         total_balls_limit = overs_limit * 6
+        
+        # Calculate current run rate
+        current_rr = (total_runs / total_balls) * 6 if total_balls > 0 else 0.0
 
         # Early innings - low confidence
         if total_balls < 12:  # Less than 2 overs
+            # Project score based on current run rate for early innings
+            projected_score = current_rr * overs_limit if current_rr > 0 else 0.0
             return {
                 "batting_team_win_prob": 50.0,
                 "bowling_team_win_prob": 50.0,
@@ -189,11 +198,12 @@ class WinProbabilityPredictor:
                 "factors": {
                     "reason": "Too early to predict reliably",
                     "balls_bowled": total_balls,
+                    "current_run_rate": round(current_rr, 2),
+                    "projected_score": round(projected_score, 0),
+                    "prediction_method": "rule_based_early",
                 },
+                
             }
-
-        # Calculate current run rate
-        current_rr = (total_runs / total_balls) * 6 if total_balls > 0 else 0.0
 
         # Project final score
         wickets_remaining = max(0, 10 - total_wickets)

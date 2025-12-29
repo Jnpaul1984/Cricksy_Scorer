@@ -213,6 +213,9 @@ function coerceSnapshot(s: ApiSnapshot | any): UiSnapshot {
 
     target: s?.target ?? null,
     status: s?.status ?? undefined,
+    // Win Probability / Analytics fields
+    current_run_rate: s?.current_run_rate ?? null,
+    required_run_rate: s?.required_run_rate ?? null,
 
     // ✅ top-level “gate” flags
     needs_new_batter: Boolean(s?.needs_new_batter ?? false),
@@ -301,6 +304,13 @@ function normalizeServerSnapshot(s: any): UiSnapshot {
     needs_new_innings: Boolean(s?.needs_new_innings ?? false),
     target: s?.target ?? null,
     status: s?.status ?? undefined,
+    // Win Probability / Analytics fields
+    current_run_rate: s?.current_run_rate ?? null,
+    required_run_rate: s?.required_run_rate ?? null,
+
+    // Win Probability / Analytics fields
+    current_run_rate: s?.current_run_rate ?? null,
+    required_run_rate: s?.required_run_rate ?? null,
   }
 }
 
@@ -1078,6 +1088,13 @@ const requiredRunRate = computed<number | null>(() => {
   const inn = Number(g.current_inning ?? 1)
   if (inn !== 2) return null
 
+  // Prefer backend-calculated required_run_rate
+  const backendRrr = liveSnapshot.value?.required_run_rate ?? g.required_run_rate
+  if (backendRrr != null) {
+    return Number(backendRrr)
+  }
+
+  // Fallback to local calculation
   const limit = Number(g.overs_limit ?? 0)
   if (!Number.isFinite(limit) || limit <= 0) return null
 
@@ -1524,6 +1541,9 @@ async function stopInterruptionAction(kind?: 'weather' | 'injury' | 'light' | 'o
       current_non_striker_id: currentGame.value?.current_non_striker_id ?? null,
       target: currentGame.value?.target ?? null,
       status: currentGame.value?.status ?? undefined,
+      // Win Probability / Analytics fields - preserve from payload or liveSnapshot
+      current_run_rate: (p as any)?.current_run_rate ?? liveSnapshot.value?.current_run_rate ?? null,
+      required_run_rate: (p as any)?.required_run_rate ?? liveSnapshot.value?.required_run_rate ?? null,
     }
   }
 

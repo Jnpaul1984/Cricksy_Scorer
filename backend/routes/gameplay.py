@@ -857,6 +857,29 @@ async def get_snapshot(
             for p in list(bowling_team_map.get("players", []) or [])
         ],
     }
+
+    # Add win probability prediction to snapshot (so frontend has it on page load)
+    try:
+        from backend.services.prediction_service import get_win_probability
+
+        game_state_for_prediction = {
+            "current_inning": g.current_inning,
+            "total_runs": g.total_runs,
+            "total_wickets": g.total_wickets,
+            "overs_completed": g.overs_completed,
+            "balls_this_over": g.balls_this_over,
+            "overs_limit": g.overs_limit,
+            "target": g.target,
+            "match_type": g.match_type,
+        }
+        prediction = get_win_probability(game_state_for_prediction)
+        prediction["batting_team"] = g.batting_team_name
+        prediction["bowling_team"] = g.bowling_team_name
+        snap["prediction"] = prediction
+    except Exception:
+        # Don't break snapshot if prediction fails
+        pass
+
     return snap
 
 

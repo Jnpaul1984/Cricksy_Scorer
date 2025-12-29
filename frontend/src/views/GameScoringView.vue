@@ -8,6 +8,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 
 /* --- UI Components --- */
+import { BaseButton, BaseCard, BaseInput } from '@/components'
 import BattingCard from '@/components/BattingCard.vue'
 import BowlingCard from '@/components/BowlingCard.vue'
 import DeliveryTable from '@/components/DeliveryTable.vue'
@@ -15,6 +16,7 @@ import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
 import WinProbabilityWidget from '@/components/WinProbabilityWidget.vue'
+import WinProbabilityChart from '@/components/WinProbabilityChart.vue'
 import InningsGradeWidget from '@/components/InningsGradeWidget.vue'
 import PressureMapWidget from '@/components/PressureMapWidget.vue'
 import PhaseTimelineWidget from '@/components/PhaseTimelineWidget.vue'
@@ -185,17 +187,21 @@ const canScore = computed(() => Boolean(storeCanScore.value && roleCanScore.valu
 const headerRuns = computed(() => {
   const snap: any = liveSnapshot.value as any
   const storeScore: any = (gameStore as any)?.score
-  return snap?.batting_team_score ?? storeScore?.runs ?? 0
+  return snap?.total_runs ?? snap?.batting_team_score ?? storeScore?.runs ?? 0
 })
 const headerWickets = computed(() => {
   const snap: any = liveSnapshot.value as any
   const storeScore: any = (gameStore as any)?.score
-  return snap?.batting_team_wickets ?? storeScore?.wickets ?? 0
+  return snap?.total_wickets ?? snap?.batting_team_wickets ?? storeScore?.wickets ?? 0
 })
 const headerOvers = computed(() => {
   const snap: any = liveSnapshot.value as any
   const storeScore: any = (gameStore as any)?.score
-  return snap?.batting_team_overs ?? storeScore?.overs ?? 0
+  // Format overs as "X.Y" from overs_completed and balls_this_over
+  const overs = snap?.overs_completed ?? 0
+  const balls = snap?.balls_this_over ?? 0
+  const oversDisplay = `${overs}.${balls}`
+  return snap?.batting_team_overs ?? oversDisplay ?? storeScore?.overs ?? '0.0'
 })
 const proTooltip = 'Requires Coach Pro or Organization Pro'
 const showScoringUpsell = computed(
@@ -235,12 +241,30 @@ const gameId = computed<string>(() => (route.params.gameId as string) || (route.
 watch(gameId, async (id) => {
   if (id) {
     try {
-      await fetchCurrentInningsGrade(id)
-      await fetchPressureMap(id)
-      await fetchPhaseMap(id)
+      // Get current inning number from game state (default to 1)
+      const currentInning = currentGame.value?.current_inning || 1
+      await fetchCurrentInningsGrade(id, currentInning)
+      await fetchPressureMap(id, currentInning)
+      await fetchPhaseMap(id, currentInning)
       await fetchPredictions(id)
+      
+      // Manually fetch win probability prediction to populate initial state
+      // (predictions are normally only emitted via Socket.IO after deliveries)
+      try {
+        const predictionResponse = await fetch(`http://localhost:8000/games/${id}/snapshot`)
+        const snapshotData = await predictionResponse.json()
+        
+        // Update liveSnapshot so CRR and other stats display correctly
+        gameStore.liveSnapshot = snapshotData
+        
+        if (snapshotData.prediction) {
+          gameStore.currentPrediction = snapshotData.prediction
+        }
+      } catch {
+        // Silently ignore - predictions will come via Socket.IO after next delivery
+      }
     } catch (err) {
-      console.warn('Failed to fetch analytics:', err)
+      // Silently handle - analytics features may not be fully implemented yet
     }
   }
 }, { immediate: true })
@@ -1820,7 +1844,7 @@ async function confirmChangeBowler(): Promise<void> {
         <div class="stat-divider"></div>
 
         <div class="stat-group rates">
-          <span class="rate-item">CRR: <strong>{{ ((liveSnapshot as any)?.crr ?? 0).toFixed(2) }}</strong></span>
+          <span class="rate-item">CRR: <strong>{{ ((liveSnapshot as any)?.current_run_rate ?? (liveSnapshot as any)?.crr ?? 0).toFixed(2) }}</strong></span>
           <span v-if="targetSafe" class="rate-item">Target: <strong>{{ targetSafe }}</strong></span>
           <span v-if="targetSafe" class="rate-item">RRR: <strong>{{ (requiredRunRate ?? 0).toFixed(2) }}</strong></span>
           <span v-if="targetSafe" class="rate-item need-txt">Need <strong>{{ runsRequired }}</strong></span>
@@ -2086,14 +2110,7 @@ async function confirmChangeBowler(): Promise<void> {
                 </div>
 
                 <div class="analytics-widget-section">
-                    <h3>Win Probability</h3>
-                    <WinProbabilityWidget
-                      :prediction="gameStore.currentPrediction"
-                      :batting-team="battingTeamName"
-                      :bowling-team="(currentGame?.bowling_team_name ?? '')"
-                      theme="dark"
-                      :show-chart="true"
-                    />
+                    <WinProbabilityChart :show-chart="true" />
                 </div>
             </div>
         </div>
