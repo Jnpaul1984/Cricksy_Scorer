@@ -5,6 +5,8 @@ ML Model Service for Cricket Predictions
 Handles loading and inference for ML models:
 - Win probability prediction (T20/ODI)
 - Score prediction (T20/ODI)
+
+Now integrated with ModelManager for S3-backed model storage and automatic reloading.
 """
 
 import logging
@@ -13,6 +15,8 @@ from typing import Any, Literal, Protocol
 
 import joblib
 import numpy as np
+
+from .model_manager import get_model_manager
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +37,9 @@ class MLModelService:
     """Service for loading and using ML models for cricket predictions."""
 
     def __init__(self):
-        """Initialize the ML model service."""
-        self._models: dict[str, MLModel] = {}
+        """Initialize the ML model service with ModelManager backend."""
+        self._model_manager = get_model_manager()
+        # Legacy: keep base_path for fallback compatibility
         self._base_path = Path(__file__).parent.parent / "ml_models"
 
     def load_model(
@@ -43,7 +48,7 @@ class MLModelService:
         match_format: Literal["t20", "odi"],
     ) -> MLModel | None:
         """
-        Load a specific ML model.
+        Load a specific ML model via ModelManager (S3-backed with automatic reloading).
 
         Args:
             model_type: Either 'win_probability' or 'score_predictor'
@@ -52,15 +57,11 @@ class MLModelService:
         Returns:
             Loaded model or None if loading fails
         """
-        cache_key = f"{model_type}_{match_format}"
-
-        # Return cached model if already loaded
-        if cache_key in self._models:
-            return self._models[cache_key]
-
-        model_path = self._resolve_model_path(model_type, match_format)
-        model = self._load_model_from_disk(model_path)
+        # Use ModelManager for S3-backed loading
+        model = self._model_manager.load_model(model_type, match_format)
+        
         if model is None:
+            # Fall back to heuristic model
             model = self._build_fallback_model(model_type, match_format)
             logger.warning(
                 "Falling back to heuristic %s model for %s format",
@@ -68,30 +69,7 @@ class MLModelService:
                 match_format,
             )
 
-        self._models[cache_key] = model
         return model
-
-    def _resolve_model_path(
-        self,
-        model_type: Literal["win_probability", "score_predictor"],
-        match_format: Literal["t20", "odi"],
-    ) -> Path:
-        if model_type == "win_probability":
-            return self._base_path / "win_probability" / f"{match_format}_win_predictor_v3.pkl"
-        if match_format == "t20":
-            return self._base_path / "score_predictor" / "t20_score_predictor.pkl"
-        return self._base_path / "score_predictor" / "odi_score_predictor_v3.pkl"
-
-    def _load_model_from_disk(self, path: Path) -> MLModel | None:
-        if not path.exists():
-            logger.warning("Model not found: %s", path)
-            return None
-        try:
-            logger.info("Loading ML model: %s", path.name)
-            return joblib.load(path)
-        except Exception as exc:
-            logger.error("Error loading ML model %s: %s", path, exc)
-            return None
 
     def _build_fallback_model(
         self,

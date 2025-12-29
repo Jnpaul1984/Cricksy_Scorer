@@ -294,6 +294,34 @@ def train_score_predictor(match_format: Literal["t20", "odi"]) -> None:
         json.dump(metadata, f, indent=2)
 
     print(f"[OK] Metadata saved to: {metadata_path}")
+    
+    # Upload to S3 (if configured)
+    try:
+        from backend.scripts.s3_upload_utils import upload_model_to_s3
+
+        metrics = {
+            "mae": float(mae),
+            "rmse": float(rmse),
+            "r2": float(r2),
+            "training_samples": len(X_train),
+            "test_samples": len(X_test),
+        }
+
+        upload_success = upload_model_to_s3(
+            model_path=output_path,
+            model_type="score_predictor",
+            match_format=match_format,
+            metrics=metrics,
+            feature_names=feature_cols,
+        )
+
+        if upload_success:
+            print("[OK] Model uploaded to S3 successfully!")
+        else:
+            print("[WARN] S3 upload skipped (S3_MODEL_BUCKET not set)")
+    except Exception as e:
+        print(f"[WARN] S3 upload failed: {e}")
+
     print(f"{'=' * 60}\n")
 
 

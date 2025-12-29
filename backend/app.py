@@ -405,10 +405,25 @@ def create_app(
             sec.add_in_memory_user(superuser)
             print("[DEV] Seeded superuser: admin@test.com / admin123")
 
+    @fastapi_app.on_event("startup")  # type: ignore[reportDeprecated]
+    async def _startup_model_manager() -> None:  # type: ignore[reportUnusedFunction]
+        """Start background model polling for automatic S3 model reloading."""
+        from backend.services.model_manager import get_model_manager
+
+        model_manager = get_model_manager()
+        model_manager.start_background_polling()
+        logging.info("ModelManager background polling started")
+
     @fastapi_app.on_event("shutdown")  # type: ignore[reportDeprecated]
     async def _shutdown_db_event() -> None:  # type: ignore[reportUnusedFunction]
         import contextlib
 
+        # Shutdown ModelManager
+        from backend.services.model_manager import get_model_manager
+
+        get_model_manager().shutdown()
+
+        # Dispose database connection pool
         with contextlib.suppress(Exception):
             await db.engine.dispose()  # nosec
 
