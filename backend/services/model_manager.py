@@ -54,7 +54,7 @@ class ModelManager:
 
         # Local cache configuration
         self.cache_dir = Path(
-            os.getenv("MODEL_CACHE_DIR", "/tmp/cricksy_models")  # nosec B108
+            os.getenv("MODEL_CACHE_DIR", "/tmp/cricksy_models")  # nosec B108  # noqa: S108
         )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
