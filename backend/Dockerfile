@@ -35,6 +35,9 @@ RUN pip install --default-timeout=600 --no-cache-dir -r requirements.txt
 # Preserve the backend package structure inside the container
 COPY backend/ ./backend
 
+# Copy ML models into the image (enables predictions without external dependencies)
+COPY backend/ml_models/ ./backend/ml_models/
+
 # Copy and set entrypoint script
 COPY backend/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh

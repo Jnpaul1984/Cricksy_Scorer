@@ -157,7 +157,7 @@ const isFirstInnings = computed(() => {
 
 // Get current run rate from game state
 const currentRunRate = computed(() => {
-  return currentGame.value?.current_run_rate || 0
+  return (currentGame.value as any)?.current_run_rate || 0
 })
 
 // Historical data for chart

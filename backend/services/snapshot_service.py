@@ -550,24 +550,41 @@ def build_snapshot(
     elif status_str in ("COMPLETE", "COMPLETED"):
         status_str = "COMPLETED"
 
+    # Calculate current run rate
+    total_balls = int(getattr(g, "overs_completed", 0)) * 6 + int(getattr(g, "balls_this_over", 0))
+    total_runs = int(getattr(g, "total_runs", 0))
+    current_run_rate = round((total_runs / total_balls) * 6, 2) if total_balls > 0 else 0.0
+
+    # Calculate required run rate (for second innings when chasing)
+    target = getattr(g, "target", None)
+    overs_limit = getattr(g, "overs_limit", None)
+    required_run_rate = None
+    if target is not None and overs_limit is not None:
+        runs_needed = target - total_runs
+        total_balls_limit = overs_limit * 6
+        balls_remaining = total_balls_limit - total_balls
+        if balls_remaining > 0:
+            required_run_rate = round((runs_needed / balls_remaining) * 6, 2)
+
     snapshot: dict[str, Any] = {
         "id": getattr(g, "id", None),
         "status": status_str,
         "score": {
-            "runs": int(getattr(g, "total_runs", 0)),
+            "runs": total_runs,
             "wickets": int(getattr(g, "total_wickets", 0)),
             "overs": int(getattr(g, "overs_completed", 0)),
         },
         # Add top-level score fields for compatibility
-        "total_runs": int(getattr(g, "total_runs", 0)),
+        "total_runs": total_runs,
         "total_wickets": int(getattr(g, "total_wickets", 0)),
         "overs_completed": int(getattr(g, "overs_completed", 0)),
         "balls_this_over": int(getattr(g, "balls_this_over", 0)),
+        "current_run_rate": current_run_rate,
+        "required_run_rate": required_run_rate,
         "overs": (
             f"{int(getattr(g, 'overs_completed', 0))}.{int(getattr(g, 'balls_this_over', 0))}"
         ),
-        "balls_bowled_total": int(getattr(g, "overs_completed", 0)) * 6
-        + int(getattr(g, "balls_this_over", 0)),
+        "balls_bowled_total": total_balls,
         "batsmen": {
             "striker": {
                 "id": getattr(g, "current_striker_id", None),

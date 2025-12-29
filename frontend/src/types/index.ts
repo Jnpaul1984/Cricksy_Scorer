@@ -104,6 +104,8 @@ export interface GameState {
   total_wickets: number
   overs_completed: number
   balls_this_over: number
+  current_run_rate?: number  // Added: calculated run rate
+  required_run_rate?: number  // Added: required run rate for chasing
   current_striker_id: string | null
   current_non_striker_id: string | null
   target: number | null
@@ -129,6 +131,8 @@ export interface Snapshot {
   total_wickets?: number
   overs_completed?: number
   balls_this_over?: number
+  current_run_rate?: number  // Added: calculated run rate
+  required_run_rate?: number  // Added: required run rate for chasing
   current_inning?: number
   batting_team_name?: string
   bowling_team_name?: string

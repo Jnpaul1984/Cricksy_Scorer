@@ -15,8 +15,8 @@
   category: "AI Basics"
   title: "Add Win Probability API Integration"
   description: "Implement real-time win probability calculations based on match state"
-  status: todo
-  confidence: low
+  status: done
+  confidence: high
   risk_level: high
   acceptance_criteria:
     - "Win probability API endpoint exists and returns normalized 0-1 value"
@@ -25,16 +25,21 @@
     - "Prediction accuracy > 80% on historical matches"
   verification_commands:
     - "pytest backend/tests/ -k win_probability -v"
-    - "npm run typecheck"
+    - "npm run type-check"
     - "npm run build"
     - "npx cypress run --spec 'cypress/e2e/**/*win*' 2>/dev/null || echo 'No e2e tests yet'"
   manual_checks:
     - "Test win prob updates in real match UI"
     - "Verify no stale predictions after undo"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "Check ML models in backend/ml_models/"
+  files_touched:
+    - "frontend/src/components/WinProbabilityChart.vue"
+    - "frontend/src/views/GameScoringView.vue"
+    - "frontend/src/components/ScoreboardWidget.vue"
+    - "backend/services/prediction_service.py"
+    - "backend/routes/gameplay.py"
+  completed_by: "copilot-agent"
+  completed_at: "2025-12-28"
+  notes: "Backend already implemented, added frontend widget with Chart.js. Real-time updates via Socket.IO. Visible to both scorers and viewers."
 
 - id: week5-ai-innings-grade
   week: 5

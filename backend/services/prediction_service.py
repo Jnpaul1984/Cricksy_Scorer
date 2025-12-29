@@ -202,7 +202,6 @@ class WinProbabilityPredictor:
                     "projected_score": round(projected_score, 0),
                     "prediction_method": "rule_based_early",
                 },
-
             }
 
         # Project final score

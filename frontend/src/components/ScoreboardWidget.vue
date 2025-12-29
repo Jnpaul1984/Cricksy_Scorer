@@ -10,7 +10,7 @@ import { useRoleBadge } from '@/composables/useRoleBadge'
 import { useGameStore } from '@/stores/gameStore'
 import { isValidUUID } from '@/utils'
 import { fmtSR, fmtEconomy, oversDisplayFromBalls, oversDisplayFromAny, deriveBowlerFigures } from '@/utils/cricket'
-import WinProbabilityWidget from '@/components/WinProbabilityWidget.vue'
+import WinProbabilityChart from '@/components/WinProbabilityChart.vue'
 /* ------------------------------------------------------------------ */
 /* Props                                                               */
 /* ------------------------------------------------------------------ */
@@ -391,10 +391,16 @@ const wkts = computed(() =>
         currentGame.value?.total_wickets ?? 0)
 )
 
-// Rates now based on totalBalls
-const crr = computed(() =>
-  totalBallsThisInnings.value ? (runs.value / (totalBallsThisInnings.value / 6)).toFixed(2) : '—'
-)
+// Rates now based on backend calculations (fallback to local calculation)
+const crr = computed(() => {
+  // Prefer backend-calculated current_run_rate
+  const backendCrr = liveSnapshot.value?.current_run_rate ?? currentGame.value?.current_run_rate
+  if (backendCrr != null) {
+    return backendCrr.toFixed(2)
+  }
+  // Fallback to local calculation
+  return totalBallsThisInnings.value ? (runs.value / (totalBallsThisInnings.value / 6)).toFixed(2) : '—'
+})
 
 // Show CRR only when at least one ball has been bowled
 const showCrr = computed(() => totalBallsThisInnings.value > 0)
@@ -1175,15 +1181,10 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
         </div>
       </div> <!-- /.grid -->
 
-      <!-- Win Probability Prediction -->
-      <WinProbabilityWidget
-        :prediction="currentPrediction"
-        :batting-team="battingTeamName"
-        :bowling-team="bowlingTeamName"
-        :theme="props.theme"
-        :show-chart="true"
-        :compact="false"
-      />
+      <!-- Win Probability Prediction (visible to viewers) -->
+      <div v-if="currentPrediction" class="prediction-section">
+        <WinProbabilityChart :show-chart="false" />
+      </div>
     </div>   <!-- /.card -->
   </section>
 </template>
@@ -1698,5 +1699,12 @@ async function resumePlay(kind: 'weather' | 'injury' | 'light' | 'other' = 'weat
 
 .pane {
   padding: var(--sb-density-padding);
+}
+
+/* Win Probability Section */
+.prediction-section {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
 }
 </style>

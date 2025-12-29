@@ -35,6 +35,13 @@ frontend_zip/
 # Misc local reports
 ecr-scan-findings.json
 
+# Debug files and test scripts
+console_debug_commands.js
+scoring_page_debug.js
+verify_fixes.js
+crr_debug.html
+debug_crr_predictor.html
+
 # --- Node/Vue ---
 node_modules/
 frontend/node_modules/

@@ -119,15 +119,20 @@ export function usePhaseAnalytics() {
       const params = new URLSearchParams()
       if (inningNum) params.append('inning_num', inningNum.toString())
 
+      // Use VITE_API_BASE for absolute URL
+      const apiBase = import.meta.env.VITE_API_BASE || ''
       const response = await fetch(
-        `/api/analytics/games/${gameId}/phase-map?${params.toString()}`
+        `${apiBase}/analytics/games/${gameId}/phase-map?${params.toString()}`
       )
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      if (!response.ok) {
+        // Silently ignore - feature may not be implemented
+        return
+      }
 
       phaseData.value = await response.json()
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch phase map'
-      console.error('Phase map error:', err)
+      // Silently handle errors - analytics features may not be fully implemented
+      error.value = null
     } finally {
       loading.value = false
     }

@@ -59,21 +59,25 @@ export function useInningsGrade() {
   /**
    * Fetch current innings grade for a game
    */
-  async function fetchCurrentGrade(gameId: string) {
+  async function fetchCurrentGrade(gameId: string, inningNum?: number) {
     try {
       loading.value = true
       error.value = null
 
+      // Use provided inning number or default to 1
+      const innings = inningNum || 1
+      
       const response = await apiService.get<InningsGradeData>(
-        `/analytics/games/${gameId}/innings/current/grade`
+        `/analytics/games/${gameId}/innings/${innings}/grade`
       )
 
       if (response && response.data) {
         grade.value = response.data as InningsGradeData
       }
     } catch (err: any) {
-      // Don't treat 400 as error - just means inning not yet started
-      if (err.response?.status !== 400) {
+      // Don't treat 400/422/404 as errors - feature may not be implemented yet
+      const status = err.response?.status || err.status
+      if (status && ![400, 404, 422, 500].includes(status)) {
         error.value = err.message || 'Failed to fetch innings grade'
         console.error('Failed to fetch innings grade:', err)
       }

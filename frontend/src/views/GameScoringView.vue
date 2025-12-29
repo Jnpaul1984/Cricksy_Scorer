@@ -243,7 +243,7 @@ watch(gameId, async (id) => {
     try {
       // Get current inning number from game state (default to 1)
       const currentInning = currentGame.value?.current_inning || 1
-      await fetchCurrentInningsGrade(id, currentInning)
+      await fetchCurrentInningsGrade(id)  // Function only accepts gameId
       await fetchPressureMap(id, currentInning)
       await fetchPhaseMap(id, currentInning)
       await fetchPredictions(id)

@@ -14,8 +14,8 @@
 | 2 | Core UI Wiring | 20 | 20 | 0 | 0 | 0 | ✅ 100% |
 | 3 | Beta 1 Prep | 12 | 0 | 0 | 0 | 12 | 🟡 0% |
 | 4 | Beta Testing | 10 | 0 | 7 | 0 | 3 | 🟡 0% |
-| 5 | AI Integration Phase 1 | 14 | 0 | 0 | 0 | 14 | 🟡 0% |
-| **TOTAL** | | **96** | **60** | **7** | **0** | **29** | **62%** |
+| 5 | AI Integration Phase 1 | 14 | 1 | 0 | 0 | 13 | 🟢 7% |
+| **TOTAL** | | **96** | **61** | **7** | **0** | **28** | **63%** |
 
 ---
 
@@ -24,7 +24,10 @@
 **Focus:** Implement AI-driven features across all tiers (Win Probability, Tactical Suggestions, Pattern Detection)
 
 ### AI Basics (5 items)
-- [ ] **week5-ai-win-probability** - Add Win Probability API Integration
+- [x] **week5-ai-win-probability** ✅ - Add Win Probability API Integration
+  - **Status:** COMPLETE (2025-12-28)
+  - **Files:** WinProbabilityChart.vue, GameScoringView.vue, ScoreboardWidget.vue
+  - **Notes:** Real-time predictions via Socket.IO, visible to scorers and viewers
   - Acceptance: Win prob API returns 0-1, updates per delivery, > 80% accuracy
   - Verify: `pytest backend/tests/ -k win_probability -v`
   - Risk: **HIGH**

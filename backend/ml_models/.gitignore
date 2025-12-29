@@ -1,6 +1,11 @@
-# Ignore model files by default (can be overridden with git add -f)
-*.pkl
-*.joblib
+# ML Models ARE tracked in git (files are small: 1-5MB each)
+# Models are bundled into Docker image and deployed to production
+# 
+# If models become too large (>50MB), switch to S3 download approach
+# and uncomment the *.pkl line below:
+# *.pkl
+
+# Ignore large model formats (not currently used)
 *.h5
 *.keras
 *.pt

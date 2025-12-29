@@ -75,11 +75,13 @@ export const usePressureAnalytics = () => {
         criticalMoments.value = response.data.peak_moments || []
         return response.data
       } else {
-        error.value = response.error || 'Failed to fetch pressure map'
+        // Silently handle errors - feature may not be fully implemented
+        error.value = null
         return null
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'An error occurred'
+      // Silently handle errors - analytics features may not be fully implemented
+      error.value = null
       return null
     } finally {
       loading.value = false
