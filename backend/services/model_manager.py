@@ -176,9 +176,7 @@ class ModelManager:
 
         return path if path.exists() else None
 
-    def load_model(
-        self, model_type: ModelType, match_format: MatchFormat
-    ) -> Any:
+    def load_model(self, model_type: ModelType, match_format: MatchFormat) -> Any:
         """
         Load model (from S3 or local cache).
 
@@ -211,9 +209,7 @@ class ModelManager:
 
         return model
 
-    def _load_model_from_storage(
-        self, model_type: ModelType, match_format: MatchFormat
-    ) -> Any:
+    def _load_model_from_storage(self, model_type: ModelType, match_format: MatchFormat) -> Any:
         """
         Load model from S3 or local fallback.
 
@@ -233,9 +229,7 @@ class ModelManager:
                 # Download if not cached
                 if not local_model_path.exists():
                     if self._download_from_s3(s3_model_key, local_model_path):
-                        logger.info(
-                            "Downloaded model %s version %s from S3", cache_key, version
-                        )
+                        logger.info("Downloaded model %s version %s from S3", cache_key, version)
 
                 # Try loading from cache
                 if local_model_path.exists():
