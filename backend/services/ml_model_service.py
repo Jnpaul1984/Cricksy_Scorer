@@ -13,7 +13,6 @@ import logging
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
-import joblib
 import numpy as np
 
 from .model_manager import get_model_manager
