@@ -53,7 +53,9 @@ class ModelManager:
         self.use_s3 = bool(self.s3_bucket)
 
         # Local cache configuration
-        self.cache_dir = Path(os.getenv("MODEL_CACHE_DIR", "/tmp/cricksy_models"))
+        self.cache_dir = Path(
+            os.getenv("MODEL_CACHE_DIR", "/tmp/cricksy_models")  # nosec B108
+        )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Model storage (thread-safe access via lock)

@@ -41,6 +41,8 @@ class MLModelService:
         self._model_manager = get_model_manager()
         # Legacy: keep base_path for fallback compatibility
         self._base_path = Path(__file__).parent.parent / "ml_models"
+        # Cache for fallback models (when S3/bundled unavailable)
+        self._fallback_cache: dict[str, MLModel] = {}
 
     def load_model(
         self,
@@ -61,17 +63,18 @@ class MLModelService:
         model = self._model_manager.load_model(model_type, match_format)
         
         if model is None:
-            # Fall back to heuristic model
-            model = self._build_fallback_model(model_type, match_format)
-            logger.warning(
-                "Falling back to heuristic %s model for %s format",
-                model_type,
-                match_format,
-            )
-
-        return model
-
-    def _build_fallback_model(
+            # Fall back to heuristic model (cached)
+            cache_key = f"{model_type}_{match_format}"
+            if cache_key not in self._fallback_cache:
+                self._fallback_cache[cache_key] = self._build_fallback_model(
+                    model_type, match_format
+                )
+                logger.warning(
+                    "Falling back to heuristic %s model for %s format",
+                    model_type,
+                    match_format,
+                )
+            model = self._fallback_cache[cache_key]
         self,
         model_type: Literal["win_probability", "score_predictor"],
         match_format: Literal["t20", "odi"],
