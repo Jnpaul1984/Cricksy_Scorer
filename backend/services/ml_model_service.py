@@ -61,7 +61,7 @@ class MLModelService:
         """
         # Use ModelManager for S3-backed loading
         model = self._model_manager.load_model(model_type, match_format)
-        
+
         if model is None:
             # Fall back to heuristic model (cached)
             cache_key = f"{model_type}_{match_format}"
@@ -75,6 +75,10 @@ class MLModelService:
                     match_format,
                 )
             model = self._fallback_cache[cache_key]
+
+        return model
+
+    def _build_fallback_model(
         self,
         model_type: Literal["win_probability", "score_predictor"],
         match_format: Literal["t20", "odi"],
