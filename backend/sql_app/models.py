@@ -344,6 +344,11 @@ class Game(Base):
         back_populates="game", cascade="all, delete-orphan"
     )
 
+    # Pressure points relationship
+    pressure_points: Mapped[list[PressurePoint]] = relationship(
+        back_populates="game", cascade="all, delete-orphan"
+    )
+
     # New relationships for analytics routes
     batting_scorecards: Mapped[list[BattingScorecard]] = relationship(
         back_populates="game", cascade="all, delete-orphan"
@@ -471,6 +476,52 @@ Index(
     InningsGrade.game_id,
     InningsGrade.inning_num,
     unique=True,
+)
+
+
+# ===== Pressure Points =====
+
+
+class PressurePoint(Base):
+    """Stores pressure analysis data for each delivery in a game."""
+
+    __tablename__ = "pressure_points"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    game_id: Mapped[str] = mapped_column(
+        String, ForeignKey("games.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    inning_num: Mapped[int] = mapped_column(Integer, nullable=False)
+    delivery_num: Mapped[int] = mapped_column(Integer, nullable=False)
+    over_num: Mapped[float] = mapped_column(Float, nullable=False)
+    pressure_score: Mapped[float] = mapped_column(Float, nullable=False)  # 0-100
+    pressure_level: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # low, moderate, building, high, extreme
+    factors: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    rates: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    cumulative_stats: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+    game: Mapped[Game] = relationship(back_populates="pressure_points")
+
+
+# Unique index for (game_id, inning_num, delivery_num)
+Index(
+    "ix_pressure_points_game_inning_delivery",
+    PressurePoint.game_id,
+    PressurePoint.inning_num,
+    PressurePoint.delivery_num,
+    unique=True,
+)
+
+# Index for faster lookups by game and inning
+Index(
+    "ix_pressure_points_game_inning",
+    PressurePoint.game_id,
+    PressurePoint.inning_num,
 )
 
 
