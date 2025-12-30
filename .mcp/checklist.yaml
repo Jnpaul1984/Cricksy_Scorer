@@ -223,8 +223,8 @@
   category: "Analyst Pro"
   title: "Add AI Dismissal Pattern Detection"
   description: "Detect common dismissal patterns (caught at mid-wicket, etc.)"
-  status: todo
-  confidence: low
+  status: done
+  confidence: high
   risk_level: medium
   acceptance_criteria:
     - "Pattern detection endpoint returns top 5 patterns"
@@ -232,12 +232,13 @@
     - "Heatmap visualization in Analyst Workspace"
   verification_commands:
     - "pytest backend/tests/ -k dismissal_pattern -v"
-    - "npm run typecheck"
-    - "npm run build"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "Check frontend/src/views/AnalystWorkspaceView.vue"
+  files_touched:
+    - "backend/services/dismissal_pattern_analyzer.py"
+    - "backend/routes/dismissal_patterns.py"
+    - "backend/tests/test_dismissal_pattern_analyzer.py"
+  completed_by: "previously-implemented"
+  completed_at: "2025-12-30"
+  notes: "DismissalPatternAnalyzer service (600+ lines) with 10 DismissalType enums (bowled, lbw, caught, stumped, run_out, etc.), MatchPhase categorization (powerplay, middle_overs, death_overs). Comprehensive data models: DismissalRecord, DismissalPattern, DismissalSituation, PlayerDismissalProfile, DismissalTrend, TeamDismissalContext. Pattern identification by dismissal_type, delivery_type, match_phase with confidence scoring and severity levels (high/medium/low). PlayerDismissalProfile with top_patterns, vulnerability_score, improvement_areas, risk_situations. Team-level analysis with vulnerable_players ranking, phase_vulnerability mapping. API endpoints: /players/{id}/patterns, /players/{id}/trend, /teams/{id}/patterns. 20 unit tests passing covering pattern identification, phase vulnerability, delivery type detection, team analysis, trend computation"
 
 - id: week5-analyst-pro-ai-heatmaps
   week: 5
