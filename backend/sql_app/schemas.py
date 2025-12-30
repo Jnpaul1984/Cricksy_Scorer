@@ -1253,3 +1253,93 @@ class InningsGradeDB(InningsGradeBase):
     created_at: dt.datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ===== Pressure Point Schemas =====
+
+
+class PressureFactors(BaseModel):
+    """Breakdown of factors contributing to pressure score."""
+
+    dot_streak: int
+    dot_streak_factor: float
+    rrr_gap: float
+    rrr_factor: float
+    wicket_factor: float
+    overs_factor: float
+    situation_factor: float
+
+
+class PressureRates(BaseModel):
+    """Run rate information for pressure calculation."""
+
+    required_run_rate: float
+    actual_run_rate: float
+
+
+class PressureCumulativeStats(BaseModel):
+    """Cumulative statistics at pressure point."""
+
+    runs: int
+    wickets: int
+    dot_count: int
+    strike_rate: float
+    balls_remaining: int
+    overs_remaining: float
+
+
+class PressurePointBase(BaseModel):
+    """Base schema for pressure point data."""
+
+    delivery_num: int
+    over_num: float
+    pressure_score: float
+    pressure_level: str
+    factors: PressureFactors
+    rates: PressureRates
+    cumulative_stats: PressureCumulativeStats
+
+
+class PressurePointResponse(PressurePointBase):
+    """Full pressure point response with metadata."""
+
+    inning_num: int
+    game_id: str
+
+
+class PressureMapSummary(BaseModel):
+    """Summary statistics for pressure map."""
+
+    total_deliveries: int
+    average_pressure: float
+    peak_pressure: float
+    peak_pressure_at_delivery: int | None = None
+    critical_moments: int
+    high_pressure_count: int
+
+
+class PressureMapResponse(BaseModel):
+    """Complete pressure map response."""
+
+    pressure_points: list[PressurePointBase]
+    summary: PressureMapSummary
+    peak_moments: list[PressurePointBase]
+    phases: dict[str, Any]
+
+
+class PressurePointDB(BaseModel):
+    """Database model for pressure points."""
+
+    id: int
+    game_id: str
+    inning_num: int
+    delivery_num: int
+    over_num: float
+    pressure_score: float
+    pressure_level: str
+    factors: dict[str, Any]
+    rates: dict[str, Any]
+    cumulative_stats: dict[str, Any]
+    created_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)

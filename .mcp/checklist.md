@@ -14,8 +14,8 @@
 | 2 | Core UI Wiring | 20 | 20 | 0 | 0 | 0 | ✅ 100% |
 | 3 | Beta 1 Prep | 12 | 0 | 0 | 0 | 12 | 🟡 0% |
 | 4 | Beta Testing | 10 | 0 | 7 | 0 | 3 | 🟡 0% |
-| 5 | AI Integration Phase 1 | 14 | 2 | 0 | 0 | 12 | 🟢 14% |
-| **TOTAL** | | **96** | **61** | **7** | **0** | **28** | **63%** |
+| 5 | AI Integration Phase 1 | 14 | 3 | 0 | 0 | 11 | 🟢 21% |
+| **TOTAL** | | **96** | **62** | **7** | **0** | **27** | **64%** |
 
 ---
 
@@ -40,7 +40,10 @@
   - Verify: `pytest backend/tests/ -k innings_grade -v`
   - Risk: **MEDIUM**
 
-- [ ] **week5-ai-pressure-mapping** - Add Pressure Mapping Visualization
+- [x] **week5-ai-pressure-mapping** ✅ - Add Pressure Mapping Visualization
+  - **Status:** COMPLETE (2025-12-30)
+  - **Files:** PressurePoint model, schemas, analytics.py, pressure_analyzer.py, PressureMapWidget.vue, test_pressure_analyzer.py
+  - **Notes:** Database model + migration, API endpoints, real-time Socket.IO emission, 7 unit tests (all passing)
   - Acceptance: Pressure index 0-100, visual indicator, aggregated by phase
   - Verify: `npm run build && npm run typecheck`
   - Risk: **MEDIUM**

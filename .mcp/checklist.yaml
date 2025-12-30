@@ -73,8 +73,8 @@
   category: "AI Basics"
   title: "Add Pressure Mapping Visualization"
   description: "Map delivery-by-delivery pressure metrics on scoreboard"
-  status: todo
-  confidence: low
+  status: done
+  confidence: high
   risk_level: medium
   acceptance_criteria:
     - "Pressure index (0-100) computed per delivery"
@@ -84,10 +84,18 @@
     - "npm run build"
     - "npm run typecheck"
     - "npx cypress run --spec 'cypress/e2e/viewer*.cy.ts' 2>/dev/null || true"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "Visual design pending"
+  files_touched:
+    - "backend/sql_app/models.py"
+    - "backend/sql_app/schemas.py"
+    - "backend/routes/analytics.py"
+    - "backend/services/live_bus.py"
+    - "backend/services/pressure_analyzer.py"
+    - "backend/alembic/versions/89c9c0a2cf2f_add_pressure_points_table.py"
+    - "backend/tests/test_pressure_analyzer.py"
+    - "frontend/src/components/PressureMapWidget.vue"
+  completed_by: "copilot-agent"
+  completed_at: "2025-12-30"
+  notes: "Database model + migration, API endpoints (GET /games/{id}/pressure-map), real-time Socket.IO emission, 7 unit tests (all passing), frontend widget already existed"
 
 - id: week5-ai-phase-predictions
   week: 5
