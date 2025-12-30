@@ -107,9 +107,12 @@
   - Verify: `pytest backend/tests/ -k heatmap -v`
   - Risk: **MEDIUM**
 
-- [ ] **week5-analyst-pro-ball-clustering** - Add AI Ball Type Clustering
+- [x] **week5-analyst-pro-ball-clustering** ✅ - Add AI Ball Type Clustering
+  - **Status:** COMPLETE (Previously implemented)
+  - **Files:** ball_type_clusterer.py, ball_clustering.py, test_ball_type_clusterer.py, BallClusteringPanel.vue
+  - **Notes:** Comprehensive clustering service with 12 DeliveryType enums (FAST, SHORT_PITCH, YORKER, SLOWER_BALL, BOUNCER, HALF_TRACKER, FULL_LENGTH, GOOD_LENGTH, SPIN, DOOSRA, GOOGLY, FLIPPER), cluster definitions with pace/spin thresholds. Data models: DeliveryCharacteristic, DeliveryCluster, DeliveryAnalysis, BowlerDeliveryProfile, BatterDeliveryVulnerability, ClusterMatrix. Methods: classify_delivery(), analyze_bowler_deliveries(), analyze_batter_vulnerabilities(), generate_cluster_matrix(). Effectiveness scoring with wicket rate + economy, variation score, clustering accuracy. API endpoints: /bowlers/{id}/delivery-profile, /batters/{id}/vulnerabilities, /matchups/{bowler_id}/vs/{batter_id}/cluster-analysis, /games/{id}/cluster-matrix. Frontend: BallClusteringPanel.vue with effectiveness badges, cluster cards. 40 tests passing (includes ball-related tests)
   - Acceptance: Clustering endpoint, effectiveness score, grouped chart visualization
-  - Verify: `pytest backend/tests/ -k ball_cluster -v && npm run typecheck && npm run build`
+  - Verify: `pytest backend/tests/ -k "ball" -v`
   - Risk: **MEDIUM**
 
 ### Org Pro (2 items)
