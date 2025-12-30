@@ -1343,3 +1343,78 @@ class PressurePointDB(BaseModel):
     created_at: dt.datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ===== Phase Predictions =====
+
+
+class PhaseStatsSnapshot(BaseModel):
+    """Phase statistics snapshot at prediction time."""
+
+    current_phase: str
+    runs_in_phase: int
+    wickets_in_phase: int
+    run_rate: float
+    expected_run_rate: float
+    efficiency: float
+
+
+class NextOverPrediction(BaseModel):
+    """Prediction for the next over."""
+
+    predicted_runs: int
+    range_min: int
+    range_max: int
+    confidence: float
+
+
+class PhasePredictionBase(BaseModel):
+    """Base schema for phase prediction data."""
+
+    delivery_num: int
+    current_over: float
+    current_phase: str
+    projected_total: int
+    next_over_predicted_runs: int
+    next_over_range_min: int
+    next_over_range_max: int
+    confidence: float
+    phase_stats: dict[str, Any]
+    win_probability: float | None = None
+
+
+class PhasePredictionResponse(PhasePredictionBase):
+    """Full phase prediction response with metadata."""
+
+    inning_num: int
+    game_id: str
+
+
+class PhasePredictionSummary(BaseModel):
+    """Summary of phase predictions for an innings."""
+
+    total_predictions: int
+    average_confidence: float
+    projected_total_latest: int
+    accuracy_metrics: dict[str, Any] | None = None
+
+
+class PhasePredictionDB(BaseModel):
+    """Database model for phase predictions."""
+
+    id: int
+    game_id: str
+    inning_num: int
+    delivery_num: int
+    current_over: float
+    current_phase: str
+    projected_total: int
+    next_over_predicted_runs: int
+    next_over_range_min: int
+    next_over_range_max: int
+    confidence: float
+    phase_stats: dict[str, Any]
+    win_probability: float | None
+    created_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)

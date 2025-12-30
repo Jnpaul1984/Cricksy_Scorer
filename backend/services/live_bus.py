@@ -63,6 +63,15 @@ async def emit_pressure_update(game_id: str, pressure_data: dict[str, Any]) -> N
     )
 
 
+async def emit_phase_prediction_update(game_id: str, prediction_data: dict[str, Any]) -> None:
+    """Emit phase prediction update to clients."""
+    await emit(
+        "phase_prediction:update",
+        {"game_id": game_id, "prediction_data": prediction_data},
+        room=game_id,
+    )
+
+
 # Sync-friendly wrapper used by some sync routes (e.g., games_dls)
 def publish_game_update(game_id: str, payload: dict[str, Any]) -> None:
     """
