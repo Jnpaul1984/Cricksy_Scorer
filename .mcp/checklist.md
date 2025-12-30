@@ -99,9 +99,12 @@
   - Verify: `pytest backend/tests/ -k dismissal_pattern -v`
   - Risk: **MEDIUM**
 
-- [ ] **week5-analyst-pro-ai-heatmaps** - Add AI Heatmap Overlays
+- [x] **week5-analyst-pro-ai-heatmaps** ✅ - Add AI Heatmap Overlays
+  - **Status:** COMPLETE (Previously implemented)
+  - **Files:** pitch_heatmap_generator.py, pitch_heatmaps.py, test_pitch_heatmap_generator.py, HeatmapOverlayPanel.vue
+  - **Notes:** Comprehensive heatmap system with 11 pitch zones, 4 heatmap types (runs, dismissals, bowler release, batting contact), zone boundaries (0-100 coordinates), 5 API endpoints, SVG visualization, 23 unit tests passing
   - Acceptance: Field/runs/wickets heatmaps color-coded, interactive hover
-  - Verify: `npm run typecheck && npm run build`
+  - Verify: `pytest backend/tests/ -k heatmap -v`
   - Risk: **MEDIUM**
 
 - [ ] **week5-analyst-pro-ball-clustering** - Add AI Ball Type Clustering

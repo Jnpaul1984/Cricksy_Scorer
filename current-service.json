@@ -1,0 +1,603 @@
+{
+    "services": [
+        {
+            "serviceArn": "arn:aws:ecs:us-east-1:365183982031:service/cricksy-ai-cluster/cricksy-ai-backend-service",
+            "serviceName": "cricksy-ai-backend-service",
+            "clusterArn": "arn:aws:ecs:us-east-1:365183982031:cluster/cricksy-ai-cluster",
+            "loadBalancers": [
+                {
+                    "targetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76",
+                    "containerName": "backend",
+                    "containerPort": 8000
+                }
+            ],
+            "serviceRegistries": [],
+            "status": "ACTIVE",
+            "desiredCount": 1,
+            "runningCount": 1,
+            "pendingCount": 0,
+            "launchType": "FARGATE",
+            "platformVersion": "LATEST",
+            "platformFamily": "Linux",
+            "taskDefinition": "arn:aws:ecs:us-east-1:365183982031:task-definition/cricksy-ai-backend:95",
+            "deploymentConfiguration": {
+                "deploymentCircuitBreaker": {
+                    "enable": true,
+                    "rollback": false
+                },
+                "maximumPercent": 200,
+                "minimumHealthyPercent": 100,
+                "strategy": "ROLLING",
+                "bakeTimeInMinutes": 0
+            },
+            "deployments": [
+                {
+                    "id": "ecs-svc/3294620055810944443",
+                    "status": "PRIMARY",
+                    "taskDefinition": "arn:aws:ecs:us-east-1:365183982031:task-definition/cricksy-ai-backend:95",
+                    "desiredCount": 1,
+                    "pendingCount": 0,
+                    "runningCount": 1,
+                    "failedTasks": 0,
+                    "createdAt": "2025-12-29T08:25:38.651000-04:00",
+                    "updatedAt": "2025-12-29T08:36:16.792000-04:00",
+                    "launchType": "FARGATE",
+                    "platformVersion": "1.4.0",
+                    "platformFamily": "Linux",
+                    "networkConfiguration": {
+                        "awsvpcConfiguration": {
+                            "subnets": [
+                                "subnet-04e9fc92b0d786afc",
+                                "subnet-0486d19b6fc1ebc8e"
+                            ],
+                            "securityGroups": [
+                                "sg-0036030aa24e8b44e"
+                            ],
+                            "assignPublicIp": "DISABLED"
+                        }
+                    },
+                    "rolloutState": "COMPLETED",
+                    "rolloutStateReason": "ECS deployment ecs-svc/3294620055810944443 completed."
+                }
+            ],
+            "roleArn": "arn:aws:iam::365183982031:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS",
+            "events": [
+                {
+                    "id": "8e25b0ae-da71-4fa3-b5ac-c074a5ad17bf",
+                    "createdAt": "2025-12-29T20:37:06.270000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "4df63f09-65d7-4940-93d0-870ebe0b3a41",
+                    "createdAt": "2025-12-29T14:36:53.282000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "570325d8-d506-4fc8-b758-75541d696bfc",
+                    "createdAt": "2025-12-29T08:36:16.800000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "37290a36-afd7-44b2-9986-7b82380fb636",
+                    "createdAt": "2025-12-29T08:36:16.799000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/3294620055810944443) deployment completed."
+                },
+                {
+                    "id": "37e1d3bd-393b-4c79-8b05-d8a48ee66e9d",
+                    "createdAt": "2025-12-29T08:35:15.885000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/0639679383536776982) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "deef2533-6d76-4147-a5ca-89439304ff7f",
+                    "createdAt": "2025-12-29T08:35:15.881000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "b037bdef-2fd8-41bb-b55e-2f64d3954b7e",
+                    "createdAt": "2025-12-29T08:35:05.530000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task f489593d4e6a4d10bfbce2c6121644dc)."
+                },
+                {
+                    "id": "c4bdc4fd-2217-42a0-9220-b1551b391f15",
+                    "createdAt": "2025-12-29T08:32:09.546000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "c52756f0-c6f4-4bb9-857a-1a796775a33b",
+                    "createdAt": "2025-12-29T08:31:28.210000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task 6f533ebe1e614430a404be2bc6486ef0)."
+                },
+                {
+                    "id": "bd769b79-4c03-46e1-9247-4cfc4d9d2001",
+                    "createdAt": "2025-12-29T08:25:45.786000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/9055116060152076502) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "1e77ce70-97ab-4388-9962-078e0fe1c16c",
+                    "createdAt": "2025-12-29T08:25:45.781000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "b1e5c070-3220-48ec-b8c0-74105bd7779f",
+                    "createdAt": "2025-12-29T08:25:35.478000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task ba3c7379e2cc43e8a98523ad296cd93c)."
+                },
+                {
+                    "id": "95a78836-acbb-4146-a072-f78f73e59daf",
+                    "createdAt": "2025-12-29T08:24:44.158000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "3d37a227-2828-4828-9835-b3049cb5ed2d",
+                    "createdAt": "2025-12-29T08:24:03.123000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task f489593d4e6a4d10bfbce2c6121644dc)."
+                },
+                {
+                    "id": "bf1d827e-1de9-4028-a82b-73c53c008059",
+                    "createdAt": "2025-12-29T08:19:32.940000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "d53c812b-ab0a-42f8-8cb3-c967ad1ad849",
+                    "createdAt": "2025-12-29T08:19:32.939000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/9055116060152076502) deployment completed."
+                },
+                {
+                    "id": "a428df1f-7577-47e8-8b00-5cda7464b36a",
+                    "createdAt": "2025-12-29T08:18:30.894000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/9105806507749056473) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "1ad8d43f-c888-49c0-a184-4a336652630f",
+                    "createdAt": "2025-12-29T08:18:30.888000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "f836147e-2e97-43a8-96ce-bf90a0ed98c9",
+                    "createdAt": "2025-12-29T08:18:20.396000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task ba135585aff44c52987489bed578a239)."
+                },
+                {
+                    "id": "ff68551c-daf6-4093-836d-6bea9a9e1617",
+                    "createdAt": "2025-12-29T08:17:28.220000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "50711bad-26a6-4079-b254-a3fe4ac86a5d",
+                    "createdAt": "2025-12-29T08:16:48.099000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task ba3c7379e2cc43e8a98523ad296cd93c)."
+                },
+                {
+                    "id": "ad529a4c-b100-4dab-994b-94a5509a3229",
+                    "createdAt": "2025-12-29T08:12:37.652000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "80efbc0b-3023-4aa5-b636-fcaeabb74105",
+                    "createdAt": "2025-12-29T08:12:37.651000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/9105806507749056473) deployment completed."
+                },
+                {
+                    "id": "a77e1449-cd45-4056-9f7f-d9cee48dabbb",
+                    "createdAt": "2025-12-29T08:11:35.527000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/3949378233904311280) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "6ccd754d-0c18-4a3f-89f5-9f23af991e88",
+                    "createdAt": "2025-12-29T08:11:35.505000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "42af4e90-54ad-4308-bfc0-6129966877e5",
+                    "createdAt": "2025-12-29T08:11:25.934000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task ba39e5c0623f4f6aabf18bed3d55e995)."
+                },
+                {
+                    "id": "2e73682a-d68d-4a63-a0bb-d82523181a31",
+                    "createdAt": "2025-12-29T08:10:34.587000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "dfadaa2f-c284-49fb-be49-1bbf8885948d",
+                    "createdAt": "2025-12-29T08:09:53.672000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task ba135585aff44c52987489bed578a239)."
+                },
+                {
+                    "id": "3e0d7208-0d5f-440b-8c5c-5d682a81e41d",
+                    "createdAt": "2025-12-29T02:22:01.154000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "871fb4a4-5066-4485-8578-850de34d5857",
+                    "createdAt": "2025-12-29T02:22:01.153000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/3949378233904311280) deployment completed."
+                },
+                {
+                    "id": "15c6d3ec-22b9-4ce3-b06e-fae8ebdf4328",
+                    "createdAt": "2025-12-29T02:20:48.840000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/7343415947501557764) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "4d0d4c64-4a76-471a-ba1d-32b82ee11cb1",
+                    "createdAt": "2025-12-29T02:20:48.834000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "b6455b1e-bbab-46da-be48-6e32cdf99a7b",
+                    "createdAt": "2025-12-29T02:20:37.746000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task 64c769c9c9654c0798f5720e01d7bb54)."
+                },
+                {
+                    "id": "cb55e70d-ec66-47f6-ac0b-378be4b0e8f6",
+                    "createdAt": "2025-12-29T02:19:46.857000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "06eb9e11-c5da-4e69-b983-b8b95f7e15a6",
+                    "createdAt": "2025-12-29T02:19:06.298000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task ba39e5c0623f4f6aabf18bed3d55e995)."
+                },
+                {
+                    "id": "94af086d-aa1a-426c-b71f-48a876de6610",
+                    "createdAt": "2025-12-29T02:14:35.532000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "32474da1-8a2f-4a24-a5f7-9176369619c3",
+                    "createdAt": "2025-12-29T02:14:35.531000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/7343415947501557764) deployment completed."
+                },
+                {
+                    "id": "895beb13-0a4b-4c42-8faf-98bf0d8930ab",
+                    "createdAt": "2025-12-29T02:13:23.707000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/8984077414450931344) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "3d8232b9-cfee-401c-bdb0-e7fa52c43d7c",
+                    "createdAt": "2025-12-29T02:13:23.701000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "288ea250-6058-4469-84f3-557ecd147f75",
+                    "createdAt": "2025-12-29T02:13:22.473000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task a8052d4ef41f4ede8fc330d7bc554cfe)."
+                },
+                {
+                    "id": "eb7f3299-dcfe-4508-b00d-dce67a5b8c53",
+                    "createdAt": "2025-12-29T02:12:31.418000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "41a2938a-8c44-4470-af4a-2c66864957ca",
+                    "createdAt": "2025-12-29T02:11:50.280000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task 64c769c9c9654c0798f5720e01d7bb54)."
+                },
+                {
+                    "id": "eb14bd38-c1b0-4858-af0a-54182349a2e3",
+                    "createdAt": "2025-12-29T01:30:54.544000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "f7a063b6-3a20-4db4-b8bc-1980def3ed5a",
+                    "createdAt": "2025-12-29T01:30:54.543000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/8984077414450931344) deployment completed."
+                },
+                {
+                    "id": "033e18d3-7dcf-4918-9471-597d247962cb",
+                    "createdAt": "2025-12-29T01:29:52.417000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/2771055694938284638) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "dd3ece77-e694-4a9d-ae01-f8c3ecb5b3a2",
+                    "createdAt": "2025-12-29T01:29:52.412000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "8bd5a27d-f2ea-44ea-97cf-35113d58f8eb",
+                    "createdAt": "2025-12-29T01:29:42.035000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task cfbb07bcf8ac48a698056ff8837379e0)."
+                },
+                {
+                    "id": "3d94c7fd-4b41-43ff-9bd5-d823edf8d734",
+                    "createdAt": "2025-12-29T01:28:51.759000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "6182375b-840e-4934-b657-498741ba9176",
+                    "createdAt": "2025-12-29T01:28:09.641000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task a8052d4ef41f4ede8fc330d7bc554cfe)."
+                },
+                {
+                    "id": "5dc09b2e-1816-4e25-8e9f-dfd458388ee4",
+                    "createdAt": "2025-12-29T01:18:59.865000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "6abb29e0-49c0-408f-9783-406309e17229",
+                    "createdAt": "2025-12-29T01:18:59.864000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/2771055694938284638) deployment completed."
+                },
+                {
+                    "id": "155af20b-c949-46a0-afb1-10079a734760",
+                    "createdAt": "2025-12-29T01:17:57.532000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/6596114543639572434) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "95edf125-b56b-48c3-b98f-a6db62310851",
+                    "createdAt": "2025-12-29T01:17:57.527000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "7e83443d-1b9a-4b0d-9c4e-e1aa17917ab2",
+                    "createdAt": "2025-12-29T01:17:48.425000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task 29ccb7d0238b477e8a8af70fce02ff38)."
+                },
+                {
+                    "id": "c371fbb5-f93d-4169-88c5-0f20bf3b10d0",
+                    "createdAt": "2025-12-29T01:16:55.740000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "c177fd19-4d36-4859-aaf8-3e034d62a2b1",
+                    "createdAt": "2025-12-29T01:16:15.713000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task cfbb07bcf8ac48a698056ff8837379e0)."
+                },
+                {
+                    "id": "1ac28ede-48a0-48d0-8696-74e142ca8404",
+                    "createdAt": "2025-12-29T01:11:33.938000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "d898fcaf-86aa-4cf4-9228-2cdd8e1d8d89",
+                    "createdAt": "2025-12-29T01:11:33.937000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/6596114543639572434) deployment completed."
+                },
+                {
+                    "id": "526dc547-ebbb-4a6f-96c9-870dd2809f69",
+                    "createdAt": "2025-12-29T01:10:33.155000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/2386441343118323230) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "abb12e7a-df7f-4e1a-96bb-c4e94b9284f0",
+                    "createdAt": "2025-12-29T01:10:33.150000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "af77cc88-61dd-4cf9-8122-38c98f8decc8",
+                    "createdAt": "2025-12-29T01:10:22.945000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task da026b601a8e4ace98dcde2a511169a9)."
+                },
+                {
+                    "id": "7023af5c-6275-4fb3-ade4-0e1854b90da9",
+                    "createdAt": "2025-12-29T01:09:30.860000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "9e110c67-3dba-44dd-93fc-83fedd450b00",
+                    "createdAt": "2025-12-29T01:08:49.981000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task 29ccb7d0238b477e8a8af70fce02ff38)."
+                },
+                {
+                    "id": "a3b25ea9-3a87-4009-9566-6103dd2b591c",
+                    "createdAt": "2025-12-28T19:50:16.827000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "9a70ddd9-aefd-422b-85a9-7f3545417981",
+                    "createdAt": "2025-12-28T19:50:16.826000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/2386441343118323230) deployment completed."
+                },
+                {
+                    "id": "b169c51c-0501-4f20-b584-d65437daf609",
+                    "createdAt": "2025-12-28T19:49:15.429000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/6685893509875533117) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "cdbe020a-4f31-46e0-b65a-d12938c11555",
+                    "createdAt": "2025-12-28T19:49:15.425000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "bf5b0fe3-1b55-4947-8086-eae2222c9e9f",
+                    "createdAt": "2025-12-28T19:49:05.648000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task 167899e02003461ebe1a6830feec7640)."
+                },
+                {
+                    "id": "e881024d-8d62-4c3d-819f-18089fcb2827",
+                    "createdAt": "2025-12-28T19:48:14.330000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "a81c3ace-ee7c-421b-a8fd-1e2827d8fdbf",
+                    "createdAt": "2025-12-28T19:47:32.211000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task da026b601a8e4ace98dcde2a511169a9)."
+                },
+                {
+                    "id": "346cb714-efbf-4c75-84d8-ae56dde54252",
+                    "createdAt": "2025-12-28T19:27:20.848000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "1714f1c9-6f45-47bf-a24e-c6bf9852fd68",
+                    "createdAt": "2025-12-28T19:27:20.847000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/6685893509875533117) deployment completed."
+                },
+                {
+                    "id": "ee332bff-f5f7-4d49-870e-8aad160d4ae8",
+                    "createdAt": "2025-12-28T19:26:18.315000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/9233535699941486975) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "30c87478-914c-4014-97ad-c62026d4cee4",
+                    "createdAt": "2025-12-28T19:26:18.311000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "8e0446b7-9a10-4daa-8505-9c7e5746811f",
+                    "createdAt": "2025-12-28T19:26:08.491000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task 96acfc1cff694ec98668ee003f608060)."
+                },
+                {
+                    "id": "17d24a62-6096-4bcc-89fd-11689f73b148",
+                    "createdAt": "2025-12-28T19:25:17.265000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "fcc2efbc-5410-413c-a26d-96ae95c62f3e",
+                    "createdAt": "2025-12-28T19:24:35.349000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task 167899e02003461ebe1a6830feec7640)."
+                },
+                {
+                    "id": "56f7ffb7-9e75-4f37-911c-ced49b3b6b30",
+                    "createdAt": "2025-12-28T17:44:59.309000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "8430a065-50cd-43d7-80f3-e0783aacd9cb",
+                    "createdAt": "2025-12-28T17:44:59.308000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/9233535699941486975) deployment completed."
+                },
+                {
+                    "id": "ba60ae29-b6df-4820-9b71-33c5db49e259",
+                    "createdAt": "2025-12-28T17:43:57.510000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/7447478407840208729) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "ef7a3820-0f8a-4d4b-b6aa-b1644c4e44d5",
+                    "createdAt": "2025-12-28T17:43:57.504000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "5888306d-fbf5-473b-b366-a4c51c35898d",
+                    "createdAt": "2025-12-28T17:43:47.217000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task c7c1aaeb50d542fe85fa4dfed15f921a)."
+                },
+                {
+                    "id": "a4c49582-88dc-4660-b365-5887e39b4467",
+                    "createdAt": "2025-12-28T17:42:55.855000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "6d2f630b-9064-40f7-94ec-aa956cc48471",
+                    "createdAt": "2025-12-28T17:42:14.110000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task 96acfc1cff694ec98668ee003f608060)."
+                },
+                {
+                    "id": "ff84a3d3-6b30-4da5-aa5b-11732ef623ce",
+                    "createdAt": "2025-12-28T13:56:58.909000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "9b7477be-12af-49a8-b279-f12dd3d0394f",
+                    "createdAt": "2025-12-28T13:56:58.908000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/7447478407840208729) deployment completed."
+                },
+                {
+                    "id": "9ebe9171-c832-462e-aaeb-cc6d312132c6",
+                    "createdAt": "2025-12-28T13:56:07.265000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/6421852779395793982) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "00687987-038b-4f36-8f6f-0dc78cb9c215",
+                    "createdAt": "2025-12-28T13:56:07.260000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "13683ea6-e8e6-4acf-a8c4-f57c54d883c4",
+                    "createdAt": "2025-12-28T13:55:56.086000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task f911b19e2e644b06bc9cef5c9d163fa9)."
+                },
+                {
+                    "id": "78707043-cdd0-4230-8c6b-4a7d22aa271b",
+                    "createdAt": "2025-12-28T13:55:04.149000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "86235ba3-10ee-4a83-8fe0-dda37eaab4e4",
+                    "createdAt": "2025-12-28T13:54:23.968000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task c7c1aaeb50d542fe85fa4dfed15f921a)."
+                },
+                {
+                    "id": "70b8bb18-6698-4423-acd7-35f43f4d501b",
+                    "createdAt": "2025-12-28T13:26:55.768000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "4e9b86de-f0dd-49c2-9c32-3962d9cc42b7",
+                    "createdAt": "2025-12-28T13:26:55.767000-04:00",
+                    "message": "(service cricksy-ai-backend-service) (deployment ecs-svc/6421852779395793982) deployment completed."
+                },
+                {
+                    "id": "1a5f0a43-abcc-4ba2-ab1f-aeec9afce568",
+                    "createdAt": "2025-12-28T13:25:53.761000-04:00",
+                    "message": "(service cricksy-ai-backend-service, taskSet ecs-svc/7276536404857259940) has begun draining connections on 1 tasks."
+                },
+                {
+                    "id": "1c1f9bff-24c8-4f1f-8fa6-1a06856e076d",
+                    "createdAt": "2025-12-28T13:25:53.756000-04:00",
+                    "message": "(service cricksy-ai-backend-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "9013ef23-6795-4fe8-a423-233e767e2a84",
+                    "createdAt": "2025-12-28T13:25:42.926000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has stopped 1 running tasks: (task 628a815abd0a4939a02f2d7a5d65cacc)."
+                },
+                {
+                    "id": "7cfec861-f814-41ab-8938-497fe9316f75",
+                    "createdAt": "2025-12-28T13:24:53.208000-04:00",
+                    "message": "(service cricksy-ai-backend-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-1:365183982031:targetgroup/cricksy-ai-tg/8bf3e1368fe35a76)"
+                },
+                {
+                    "id": "51cd87fc-0e97-458d-8744-c00aa8d06e5b",
+                    "createdAt": "2025-12-28T13:24:12.399000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has started 1 tasks: (task f911b19e2e644b06bc9cef5c9d163fa9)."
+                },
+                {
+                    "id": "6864f30b-ae8e-422f-bf95-29519841daf9",
+                    "createdAt": "2025-12-28T09:20:47.163000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                },
+                {
+                    "id": "8e4a8528-503f-4551-bca3-118937ac4ab5",
+                    "createdAt": "2025-12-28T03:20:20.592000-04:00",
+                    "message": "(service cricksy-ai-backend-service) has reached a steady state."
+                }
+            ],
+            "createdAt": "2025-11-13T01:35:52.012000-04:00",
+            "currentServiceRevisions": [
+                {
+                    "arn": "arn:aws:ecs:us-east-1:365183982031:service-revision/cricksy-ai-cluster/cricksy-ai-backend-service/3294620055810944443",
+                    "requestedTaskCount": 1,
+                    "runningTaskCount": 1,
+                    "pendingTaskCount": 0
+                }
+            ],
+            "placementConstraints": [],
+            "placementStrategy": [],
+            "networkConfiguration": {
+                "awsvpcConfiguration": {
+                    "subnets": [
+                        "subnet-04e9fc92b0d786afc",
+                        "subnet-0486d19b6fc1ebc8e"
+                    ],
+                    "securityGroups": [
+                        "sg-0036030aa24e8b44e"
+                    ],
+                    "assignPublicIp": "DISABLED"
+                }
+            },
+            "healthCheckGracePeriodSeconds": 0,
+            "schedulingStrategy": "REPLICA",
+            "deploymentController": {
+                "type": "ECS"
+            },
+            "createdBy": "arn:aws:iam::365183982031:user/terraform-admin",
+            "enableECSManagedTags": false,
+            "propagateTags": "TASK_DEFINITION",
+            "enableExecuteCommand": true,
+            "availabilityZoneRebalancing": "ENABLED",
+            "resourceManagementType": "CUSTOMER"
+        }
+    ],
+    "failures": []
+}
