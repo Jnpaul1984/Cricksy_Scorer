@@ -430,9 +430,67 @@ async def end_current_innings(
     _gh("_recompute_totals_and_runtime", u)
     snap = _snapshot_from_game(u, None, BASE_DIR)
 
-    from backend.services.live_bus import emit_state_update
+    from backend.services.live_bus import emit_innings_grade_update, emit_state_update
 
     await emit_state_update(game_id, snap)
+
+    # Calculate and emit innings grade
+    try:
+        from backend.services.innings_grade_service import get_innings_grade
+
+        # Get deliveries for this innings
+        deliveries_data = None
+        if u.deliveries:
+            deliveries_data = [
+                d
+                for d in u.deliveries
+                if d.get("inning_no") == u.current_inning or d.get("innings_no") == u.current_inning
+            ]
+
+        game_state = {
+            "total_runs": u.total_runs,
+            "total_wickets": u.total_wickets,
+            "overs_completed": u.overs_completed,
+            "balls_this_over": u.balls_this_over,
+            "overs_limit": u.overs_limit,
+            "deliveries": deliveries_data or [],
+            "is_completed": True,  # Innings is completed
+        }
+
+        grade_data = get_innings_grade(game_state)
+        grade_data["inning_num"] = u.current_inning
+        grade_data["game_id"] = game_id
+        grade_data["batting_team"] = u.batting_team_name
+        grade_data["bowling_team"] = u.bowling_team_name
+
+        # Store in database
+        innings_grade = models.InningsGrade(
+            game_id=game_id,
+            inning_num=u.current_inning,
+            grade=grade_data["grade"],
+            score_percentage=grade_data["score_percentage"],
+            par_score=grade_data["par_score"],
+            total_runs=grade_data["total_runs"],
+            run_rate=grade_data["run_rate"],
+            wickets_lost=grade_data["wickets_lost"],
+            wicket_efficiency=grade_data["wicket_efficiency"],
+            boundary_count=grade_data["boundary_count"],
+            boundary_percentage=grade_data["boundary_percentage"],
+            dot_ball_ratio=grade_data["dot_ball_ratio"],
+            overs_played=grade_data["overs_played"],
+        )
+
+        db.add(innings_grade)
+        await db.commit()
+
+        # Emit real-time grade update
+        await emit_innings_grade_update(game_id, grade_data)
+    except Exception as e:
+        # Don't let grade calculation failure break the innings end flow
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to calculate innings grade: {e}")
 
     return snap
 

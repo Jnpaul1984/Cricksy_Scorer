@@ -45,6 +45,15 @@ async def emit_prediction_update(game_id: str, prediction: dict[str, Any]) -> No
     )
 
 
+async def emit_innings_grade_update(game_id: str, grade_data: dict[str, Any]) -> None:
+    """Emit innings grade update to clients."""
+    await emit(
+        "innings_grade:update",
+        {"game_id": game_id, "grade_data": grade_data},
+        room=game_id,
+    )
+
+
 # Sync-friendly wrapper used by some sync routes (e.g., games_dls)
 def publish_game_update(game_id: str, payload: dict[str, Any]) -> None:
     """

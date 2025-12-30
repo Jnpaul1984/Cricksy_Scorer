@@ -1204,3 +1204,53 @@ class BowlingScorecard(BaseModel):
     updated_at: dt.datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ===== Innings Grade Schemas =====
+
+
+class InningsGradeFactors(BaseModel):
+    """Breakdown of factors contributing to innings grade."""
+
+    score_percentage_contribution: str
+    wicket_efficiency_contribution: str
+    strike_rotation_contribution: str
+    boundary_efficiency_contribution: str
+
+
+class InningsGradeBase(BaseModel):
+    """Base schema for innings grade data."""
+
+    grade: Literal["A+", "A", "B", "C", "D"]
+    score_percentage: float
+    par_score: int
+    total_runs: int
+    run_rate: float
+    wickets_lost: int
+    wicket_efficiency: float
+    boundary_count: int
+    boundary_percentage: float
+    dot_ball_ratio: float
+    overs_played: float
+    grade_factors: InningsGradeFactors
+
+
+class InningsGradeResponse(InningsGradeBase):
+    """Full innings grade response with metadata."""
+
+    inning_num: int
+    game_id: str
+    batting_team: str = ""
+    bowling_team: str = ""
+
+
+class InningsGradeDB(InningsGradeBase):
+    """Database model for innings grades."""
+
+    id: int
+    game_id: str
+    inning_num: int
+    created_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+

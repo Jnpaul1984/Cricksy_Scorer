@@ -339,6 +339,11 @@ class Game(Base):
         back_populates="game", cascade="all, delete-orphan"
     )
 
+    # Innings grades relationship
+    innings_grades: Mapped[list[InningsGrade]] = relationship(
+        back_populates="game", cascade="all, delete-orphan"
+    )
+
     # New relationships for analytics routes
     batting_scorecards: Mapped[list[BattingScorecard]] = relationship(
         back_populates="game", cascade="all, delete-orphan"
@@ -425,6 +430,46 @@ Index(
     GameContributor.game_id,
     GameContributor.user_id,
     GameContributor.role,
+    unique=True,
+)
+
+
+# ===== Innings Grades =====
+
+
+class InningsGrade(Base):
+    """Stores letter grades for innings performance (A+, A, B, C, D)."""
+
+    __tablename__ = "innings_grades"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    game_id: Mapped[str] = mapped_column(
+        String, ForeignKey("games.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    inning_num: Mapped[int] = mapped_column(Integer, nullable=False)
+    grade: Mapped[str] = mapped_column(String(3), nullable=False)  # A+, A, B, C, D
+    score_percentage: Mapped[float] = mapped_column(Float, nullable=False)
+    par_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_runs: Mapped[int] = mapped_column(Integer, nullable=False)
+    run_rate: Mapped[float] = mapped_column(Float, nullable=False)
+    wickets_lost: Mapped[int] = mapped_column(Integer, nullable=False)
+    wicket_efficiency: Mapped[float] = mapped_column(Float, nullable=False)
+    boundary_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    boundary_percentage: Mapped[float] = mapped_column(Float, nullable=False)
+    dot_ball_ratio: Mapped[float] = mapped_column(Float, nullable=False)
+    overs_played: Mapped[float] = mapped_column(Float, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+    game: Mapped[Game] = relationship(back_populates="innings_grades")
+
+
+# Unique index for (game_id, inning_num)
+Index(
+    "ix_innings_grades_game_inning",
+    InningsGrade.game_id,
+    InningsGrade.inning_num,
     unique=True,
 )
 
