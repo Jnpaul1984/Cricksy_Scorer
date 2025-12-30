@@ -1,7 +1,7 @@
 """
-Coach Pro Plus AI Pipeline - Pose Analysis & Rule-Based Findings
+Coach Pro Plus AI Pipeline - Pose & Ball Tracking Analysis
 
-Orchestrates pose extraction and rule-based analysis.
+Orchestrates pose extraction, ball tracking, and rule-based analysis.
 Extensible for future ML metrics and LLM integration (not implemented in MVP).
 """
 
@@ -182,3 +182,126 @@ def _analyze_posture(detected_frames: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_shoulder_height_consistency": round(consistency, 2),
         "notes": "Rule-based MVP: More metrics (swing angle, bat speed, etc.) coming soon",
     }
+
+
+def analyze_video_with_ball_tracking(
+    video_path: str,
+    ball_color: str = "red",
+    sample_fps: int = 30,
+    max_width: int = 640,
+) -> dict[str, Any]:
+    """
+    Analyze video with both pose and ball tracking.
+
+    Args:
+        video_path: Path to video file
+        ball_color: Color of ball (red/white/pink)
+        sample_fps: Sampling rate for tracking
+        max_width: Max frame width for processing
+
+    Returns:
+        Combined analysis with pose and ball tracking:
+        {
+            "success": true,
+            "pose_data": {...},
+            "ball_tracking": {
+                "trajectory": {...},
+                "metrics": {...}
+            },
+            "findings": {...},
+            "error": null
+        }
+    """
+    try:
+        logger.info(f"Starting combined analysis (pose + ball) for: {video_path}")
+
+        # 1. Extract pose keypoints
+        pose_data = extract_pose_keypoints_from_video(
+            video_path=video_path,
+            sample_fps=sample_fps,
+            max_width=max_width,
+        )
+
+        # 2. Track ball
+        from backend.services.ball_tracking_service import (
+            BallTracker,
+            analyze_ball_trajectory,
+        )
+
+        tracker = BallTracker(ball_color=ball_color)
+        trajectory = tracker.track_ball_in_video(
+            video_path=video_path,
+            sample_fps=float(sample_fps),
+        )
+        ball_metrics = analyze_ball_trajectory(trajectory)
+
+        # 3. Generate findings (pose-based)
+        pose_findings = _generate_findings(pose_data)
+
+        # 4. Add ball tracking insights to findings
+        combined_findings = {
+            **pose_findings,
+            "ball_tracking": {
+                "detection_rate": round(trajectory.detection_rate, 1),
+                "avg_velocity": round(trajectory.avg_velocity, 2),
+                "trajectory_curve": ball_metrics.trajectory_curve,
+                "swing_detected": ball_metrics.spin_detected,
+                "release_consistency": round(ball_metrics.release_consistency, 1),
+            },
+        }
+
+        # 5. Convert trajectory to dict for JSON serialization
+        ball_tracking_data = {
+            "trajectory": {
+                "total_frames": trajectory.total_frames,
+                "detected_frames": trajectory.detected_frames,
+                "detection_rate": trajectory.detection_rate,
+                "avg_velocity": trajectory.avg_velocity,
+                "max_velocity": trajectory.max_velocity,
+                "trajectory_length": trajectory.trajectory_length,
+                "release_point": {
+                    "x": trajectory.release_point.x,
+                    "y": trajectory.release_point.y,
+                    "timestamp": trajectory.release_point.timestamp,
+                }
+                if trajectory.release_point
+                else None,
+                "bounce_point": {
+                    "x": trajectory.bounce_point.x,
+                    "y": trajectory.bounce_point.y,
+                    "timestamp": trajectory.bounce_point.timestamp,
+                }
+                if trajectory.bounce_point
+                else None,
+            },
+            "metrics": {
+                "release_height": ball_metrics.release_height,
+                "release_position_x": ball_metrics.release_position_x,
+                "swing_deviation": ball_metrics.swing_deviation,
+                "flight_time": ball_metrics.flight_time,
+                "ball_speed_estimate": ball_metrics.ball_speed_estimate,
+                "bounce_distance": ball_metrics.bounce_distance,
+                "bounce_angle": ball_metrics.bounce_angle,
+                "trajectory_curve": ball_metrics.trajectory_curve,
+                "spin_detected": ball_metrics.spin_detected,
+            },
+        }
+
+        return {
+            "success": True,
+            "pose_data": pose_data,
+            "ball_tracking": ball_tracking_data,
+            "findings": combined_findings,
+            "error": None,
+        }
+
+    except Exception as e:
+        logger.error(f"Combined analysis failed: {e}", exc_info=True)
+        return {
+            "success": False,
+            "pose_data": None,
+            "ball_tracking": None,
+            "findings": None,
+            "error": f"Analysis failed: {e!s}",
+        }
+

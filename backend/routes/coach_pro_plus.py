@@ -1076,3 +1076,213 @@ async def analyze_video(
 #
 # @router.get("/sessions/{session_id}/ai-report")
 # - Return AI-generated insights from video analysis
+
+
+# ============================================================================
+# Ball Tracking Endpoints
+# ============================================================================
+
+
+class BallTrackingRequest(BaseModel):
+    """Request for ball tracking analysis."""
+
+    video_path: str = Field(..., description="Path to video file")
+    ball_color: str = Field(default="red", description="Ball color: red, white, or pink")
+    sample_fps: float = Field(default=30.0, ge=1, le=60, description="Frames per second to sample")
+    min_radius: int = Field(default=5, ge=1, le=50, description="Minimum ball radius in pixels")
+    max_radius: int = Field(default=50, ge=5, le=200, description="Maximum ball radius in pixels")
+
+
+class BallPositionResponse(BaseModel):
+    """Ball position in a frame."""
+
+    frame_num: int
+    timestamp: float
+    x: float
+    y: float
+    confidence: float
+    radius: float
+    velocity_x: float = 0.0
+    velocity_y: float = 0.0
+
+
+class BallTrajectoryResponse(BaseModel):
+    """Ball trajectory analysis response."""
+
+    positions: list[BallPositionResponse]
+    total_frames: int
+    detected_frames: int
+    detection_rate: float
+    release_point: BallPositionResponse | None = None
+    bounce_point: BallPositionResponse | None = None
+    impact_point: BallPositionResponse | None = None
+    avg_velocity: float
+    max_velocity: float
+    trajectory_length: float
+
+
+class BallMetricsResponse(BaseModel):
+    """Ball tracking metrics for coaching."""
+
+    release_height: float | None = None
+    release_position_x: float | None = None
+    swing_deviation: float = 0.0
+    flight_time: float = 0.0
+    ball_speed_estimate: float = 0.0
+    bounce_distance: float | None = None
+    bounce_angle: float | None = None
+    trajectory_curve: str = "straight"
+    spin_detected: bool = False
+    release_consistency: float = 100.0
+
+
+class BallTrackingResponse(BaseModel):
+    """Complete ball tracking analysis response."""
+
+    trajectory: BallTrajectoryResponse
+    metrics: BallMetricsResponse
+
+
+@router.post(
+    "/videos/track-ball",
+    response_model=BallTrackingResponse,
+    response_model_exclude_none=True,
+)
+async def track_ball_in_video(
+    request: BallTrackingRequest,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> BallTrackingResponse:
+    """
+    Track cricket ball trajectory in video.
+
+    Uses computer vision (color-based detection) to track ball position
+    across frames and compute trajectory metrics.
+
+    Feature-gated: Requires coach_pro_plus or org_pro role.
+
+    **Request:**
+    - `video_path`: Path to video file
+    - `ball_color`: red/white/pink (default: red)
+    - `sample_fps`: Sampling rate (1-60 fps, default: 30)
+    - `min_radius`/`max_radius`: Ball size constraints in pixels
+
+    **Response:**
+    - `trajectory`: Frame-by-frame ball positions with velocities
+    - `metrics`: Coaching metrics (release point, swing, bounce, speed)
+
+    **Use Cases:**
+    - Bowling analysis: release point consistency, swing detection
+    - Batting analysis: impact point tracking, shot trajectories
+    - Combined with pose analysis for timing feedback
+
+    Errors:
+    - 403: Insufficient role/feature access
+    - 400: Invalid video path or unsupported ball color
+    """
+    # Check role access
+    if (
+        current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro)
+        and not current_user.is_superuser
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Coach Pro Plus users can track ball in videos",
+        )
+
+    # Check feature access
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    # Validate video path
+    from pathlib import Path
+
+    video_file = Path(request.video_path)
+    if not video_file.exists():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Video file not found: {request.video_path}",
+        )
+
+    try:
+        # Import ball tracking service
+        from backend.services.ball_tracking_service import (
+            BallTracker,
+            analyze_ball_trajectory,
+        )
+
+        # Track ball
+        tracker = BallTracker(
+            ball_color=request.ball_color,
+            min_radius=request.min_radius,
+            max_radius=request.max_radius,
+        )
+
+        trajectory = tracker.track_ball_in_video(
+            video_path=request.video_path,
+            sample_fps=request.sample_fps,
+        )
+
+        # Analyze trajectory
+        metrics = analyze_ball_trajectory(trajectory)
+
+        # Convert to response models
+        def _pos_to_response(pos):
+            if pos is None:
+                return None
+            return BallPositionResponse(
+                frame_num=pos.frame_num,
+                timestamp=pos.timestamp,
+                x=pos.x,
+                y=pos.y,
+                confidence=pos.confidence,
+                radius=pos.radius,
+                velocity_x=pos.velocity_x,
+                velocity_y=pos.velocity_y,
+            )
+
+        trajectory_response = BallTrajectoryResponse(
+            positions=[_pos_to_response(p) for p in trajectory.positions],
+            total_frames=trajectory.total_frames,
+            detected_frames=trajectory.detected_frames,
+            detection_rate=trajectory.detection_rate,
+            release_point=_pos_to_response(trajectory.release_point),
+            bounce_point=_pos_to_response(trajectory.bounce_point),
+            impact_point=_pos_to_response(trajectory.impact_point),
+            avg_velocity=trajectory.avg_velocity,
+            max_velocity=trajectory.max_velocity,
+            trajectory_length=trajectory.trajectory_length,
+        )
+
+        metrics_response = BallMetricsResponse(
+            release_height=metrics.release_height,
+            release_position_x=metrics.release_position_x,
+            swing_deviation=metrics.swing_deviation,
+            flight_time=metrics.flight_time,
+            ball_speed_estimate=metrics.ball_speed_estimate,
+            bounce_distance=metrics.bounce_distance,
+            bounce_angle=metrics.bounce_angle,
+            trajectory_curve=metrics.trajectory_curve,
+            spin_detected=metrics.spin_detected,
+            release_consistency=metrics.release_consistency,
+        )
+
+        return BallTrackingResponse(
+            trajectory=trajectory_response,
+            metrics=metrics_response,
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Ball tracking failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ball tracking failed: {str(e)}",
+        )
