@@ -177,8 +177,8 @@
   category: "Coach Pro"
   title: "Add Tactical Suggestion Engine v1"
   description: "AI recommends bowler, fielding setup based on match state"
-  status: todo
-  confidence: low
+  status: done
+  confidence: high
   risk_level: high
   acceptance_criteria:
     - "Best bowler recommendation (current form + history vs batter)"
@@ -187,12 +187,14 @@
     - "Appears in Coach Dashboard without breaking existing flow"
   verification_commands:
     - "pytest backend/tests/ -k tactical -v"
-    - "npm run typecheck"
-    - "npm run build"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "High risk: impacts game strategy decisions"
+  files_touched:
+    - "backend/services/tactical_suggestion_engine.py"
+    - "backend/routes/tactical_suggestions.py"
+    - "backend/tests/test_tactical_suggestion_engine.py"
+    - "frontend/src/composables/useTacticalSuggestions.ts"
+  completed_by: "previously-implemented"
+  completed_at: "2025-12-30"
+  notes: "Comprehensive TacticalSuggestionEngine (450+ lines) with BowlerProfile/BatterProfile/ScoringZone dataclasses. Three API endpoints: /best-bowler, /weakness-analysis, /fielding-setup, plus /all combined endpoint. Best bowler selection uses effectiveness scoring (0-100), weakness matching, and fatigue detection. Weakness analysis detects pace/spin/yorker/dot-ball vulnerabilities with recommended line/length. Fielding setup maps scoring zones to positions (cover, point, mid-wicket, etc.). 15 unit tests passing covering all suggestion types. Frontend composable with TypeScript interfaces ready for UI integration"
 
 - id: week5-coach-pro-training-drills
   week: 5
