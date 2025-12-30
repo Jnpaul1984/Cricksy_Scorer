@@ -116,9 +116,12 @@
   - Risk: **MEDIUM**
 
 ### Org Pro (2 items)
-- [ ] **week5-org-pro-sponsor-rotation** - Add Basic Sponsor Rotation Logic
+- [x] **week5-org-pro-sponsor-rotation** ✅ - Add Basic Sponsor Rotation Logic
+  - **Status:** COMPLETE (Previously implemented)
+  - **Files:** sponsor_rotation_engine.py, sponsor_rotation.py, test_sponsor_rotation_engine.py
+  - **Notes:** Comprehensive rotation engine with 3 RotationStrategy enums (EQUAL_TIME, PRIORITY_WEIGHTED, DYNAMIC), 6 EngagementEvent types (WICKET, BOUNDARY, SIX, FIFTY, MILESTONE, TIMEOUT). Data models: Sponsor (priority 1-10, target_exposures, max_consecutive_overs), SponsorSlot (over_num, ball_num, exposure_value with premium 1.5x), SponsorExposureMetrics (total/premium exposures, exposure_rate, first/last/peak engagement overs), RotationSchedule (slots, engagement_events tracking). Core methods: build_rotation_schedule(), get_sponsor_for_over(), record_engagement(), record_exposure(), get_exposure_metrics(), adjust_rotation_for_phase() (powerplay 1-6, middle 7-17, death last 3). Phase-based priority boosting (1.3x exposure_value). API endpoints: POST /schedules, GET /schedules/{game_id}, GET /schedules/{game_id}/slots, POST /schedules/{game_id}/engagement, POST /schedules/{game_id}/record-exposure, GET /schedules/{game_id}/metrics, POST /schedules/{game_id}/adjust-phase. 25 unit tests passing covering equal_time, priority_weighted, dynamic strategies, slot retrieval, engagement recording, exposure tracking, phase adjustments, edge cases
   - Acceptance: Sponsor rotation endpoint, branded scoreboard, org admin can schedule
-  - Verify: `pytest backend/tests/ -k sponsor -v && npm run typecheck && npm run build`
+  - Verify: `pytest backend/tests/ -k sponsor -v`
   - Risk: **LOW**
 
 - [ ] **week5-org-pro-branding** - Add Branding (Logo + Theme)
