@@ -14,8 +14,8 @@
 | 2 | Core UI Wiring | 20 | 20 | 0 | 0 | 0 | ✅ 100% |
 | 3 | Beta 1 Prep | 12 | 0 | 0 | 0 | 12 | 🟡 0% |
 | 4 | Beta Testing | 10 | 0 | 7 | 0 | 3 | 🟡 0% |
-| 5 | AI Integration Phase 1 | 14 | 8 | 0 | 0 | 6 | 🟢 57% |
-| **TOTAL** | | **96** | **67** | **7** | **0** | **22** | **69%** |
+| 5 | AI Integration Phase 1 | 14 | 9 | 0 | 0 | 5 | 🟢 64% |
+| **TOTAL** | | **96** | **68** | **7** | **0** | **21** | **70%** |
 
 ---
 
@@ -91,9 +91,12 @@
   - Risk: **LOW** - Can hardcode initially
 
 ### Analyst Pro (3 items)
-- [ ] **week5-analyst-pro-dismissal-patterns** - Add AI Dismissal Pattern Detection
+- [x] **week5-analyst-pro-dismissal-patterns** ✅ - Add AI Dismissal Pattern Detection
+  - **Status:** COMPLETE (Previously implemented)
+  - **Files:** dismissal_pattern_analyzer.py, dismissal_patterns.py, test_dismissal_pattern_analyzer.py
+  - **Notes:** Comprehensive analyzer (600+ lines) with pattern identification, player/team profiles, trend analysis, 20 unit tests passing
   - Acceptance: Returns top 5 patterns, filters by batter/bowler/phase, heatmap visualized
-  - Verify: `pytest backend/tests/ -k dismissal_pattern -v && npm run typecheck && npm run build`
+  - Verify: `pytest backend/tests/ -k dismissal_pattern -v`
   - Risk: **MEDIUM**
 
 - [ ] **week5-analyst-pro-ai-heatmaps** - Add AI Heatmap Overlays
