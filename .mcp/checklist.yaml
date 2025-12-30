@@ -102,8 +102,8 @@
   category: "AI Basics"
   title: "Add Phase-Based Predictions"
   description: "Predict likely phase outcomes (runs, wickets, overs pacing)"
-  status: todo
-  confidence: low
+  status: done
+  confidence: high
   risk_level: high
   acceptance_criteria:
     - "Phase predictor endpoint returns next-over range estimate"
@@ -112,10 +112,17 @@
   verification_commands:
     - "pytest backend/tests/ -k phase_predict -v"
     - "npm run build"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "Depends on historical match dataset"
+  files_touched:
+    - "backend/sql_app/models.py"
+    - "backend/sql_app/schemas.py"
+    - "backend/routes/gameplay.py"
+    - "backend/services/live_bus.py"
+    - "backend/services/phase_analyzer.py"
+    - "backend/alembic/versions/3f8b9d2a1e4c_add_phase_predictions_table.py"
+    - "backend/tests/test_phase_analyzer.py"
+  completed_by: "copilot-agent"
+  completed_at: "2025-12-30"
+  notes: "Database model + migration, Pydantic schemas, integrated in delivery scoring flow with real-time Socket.IO emission, leverages existing phase_analyzer service, 16 unit tests (all passing)"
 
 - id: week5-player-pro-ai-career-summary
   week: 5

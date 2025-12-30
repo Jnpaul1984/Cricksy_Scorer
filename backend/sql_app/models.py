@@ -349,6 +349,11 @@ class Game(Base):
         back_populates="game", cascade="all, delete-orphan"
     )
 
+    # Phase predictions relationship
+    phase_predictions: Mapped[list[PhasePrediction]] = relationship(
+        back_populates="game", cascade="all, delete-orphan"
+    )
+
     # New relationships for analytics routes
     batting_scorecards: Mapped[list[BattingScorecard]] = relationship(
         back_populates="game", cascade="all, delete-orphan"
@@ -522,6 +527,62 @@ Index(
     "ix_pressure_points_game_inning",
     PressurePoint.game_id,
     PressurePoint.inning_num,
+)
+
+
+# ===== Phase Predictions =====
+
+
+class PhasePrediction(Base):
+    """Stores phase-based predictions for each delivery in a game."""
+
+    __tablename__ = "phase_predictions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    game_id: Mapped[str] = mapped_column(
+        String, ForeignKey("games.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    inning_num: Mapped[int] = mapped_column(Integer, nullable=False)
+    delivery_num: Mapped[int] = mapped_column(Integer, nullable=False)
+    current_over: Mapped[float] = mapped_column(Float, nullable=False)
+    current_phase: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # powerplay, middle, death, mini_death
+
+    # Prediction fields
+    projected_total: Mapped[int] = mapped_column(Integer, nullable=False)
+    next_over_predicted_runs: Mapped[int] = mapped_column(Integer, nullable=False)
+    next_over_range_min: Mapped[int] = mapped_column(Integer, nullable=False)
+    next_over_range_max: Mapped[int] = mapped_column(Integer, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)  # 0-1
+
+    # Phase statistics at this point
+    phase_stats: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+    # Win probability (if chasing)
+    win_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+    game: Mapped[Game] = relationship(back_populates="phase_predictions")
+
+
+# Unique index for (game_id, inning_num, delivery_num)
+Index(
+    "ix_phase_predictions_game_inning_delivery",
+    PhasePrediction.game_id,
+    PhasePrediction.inning_num,
+    PhasePrediction.delivery_num,
+    unique=True,
+)
+
+# Index for faster lookups by game and inning
+Index(
+    "ix_phase_predictions_game_inning",
+    PhasePrediction.game_id,
+    PhasePrediction.inning_num,
 )
 
 

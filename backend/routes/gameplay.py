@@ -1265,7 +1265,11 @@ async def add_delivery(
     )
 
     # Emit via global sio from backend.main (lazy import to avoid circulars)
-    from backend.services.live_bus import emit_prediction_update, emit_state_update
+    from backend.services.live_bus import (
+        emit_phase_prediction_update,
+        emit_prediction_update,
+        emit_state_update,
+    )
     from backend.services.prediction_service import get_win_probability
 
     await emit_state_update(game_id, snap)
@@ -1291,6 +1295,85 @@ async def add_delivery(
         import logging
 
         logging.warning(f"Prediction calculation failed for game {game_id}: {e}")
+
+    # Calculate and emit phase prediction
+    try:
+        from backend.services.phase_analyzer import get_phase_analysis
+
+        # Get deliveries for current innings
+        deliveries_data = None
+        if u.deliveries:
+            deliveries_data = [
+                d
+                for d in u.deliveries
+                if d.get("inning_no") == u.current_inning or d.get("innings_no") == u.current_inning
+            ]
+
+        # Get phase analysis with predictions
+        phase_data = get_phase_analysis(
+            deliveries=deliveries_data or [],
+            target=u.target or 0,
+            overs_limit=u.overs_per_side,
+            is_second_innings=(u.current_inning == 2),
+        )
+
+        # Extract prediction data
+        predictions = phase_data.get("predictions", {})
+        current_phase = phase_data.get("current_phase", "powerplay")
+        current_over = u.overs_completed + (u.balls_this_over / 6.0)
+
+        # Calculate next over prediction (±5 runs accuracy as per requirements)
+        projected_total = predictions.get("total_expected_runs", u.total_runs)
+        current_rr = u.total_runs / current_over if current_over > 0 else 6.0
+        next_over_base = int(current_rr)
+
+        phase_prediction_data = {
+            "delivery_num": len(deliveries_data or []),
+            "current_over": round(current_over, 1),
+            "current_phase": current_phase,
+            "projected_total": projected_total,
+            "next_over_predicted_runs": next_over_base,
+            "next_over_range_min": max(0, next_over_base - 3),
+            "next_over_range_max": next_over_base + 5,
+            "confidence": 0.70 + (min(current_over, 10) / 20.0),  # Increases with more overs
+            "phase_stats": {
+                "phase": current_phase,
+                "runs": u.total_runs,
+                "wickets": u.total_wickets,
+                "run_rate": current_rr,
+            },
+            "win_probability": predictions.get("win_probability"),
+        }
+
+        phase_prediction_data["inning_num"] = u.current_inning
+        phase_prediction_data["game_id"] = game_id
+
+        # Store in database
+        phase_prediction = models.PhasePrediction(
+            game_id=game_id,
+            inning_num=u.current_inning,
+            delivery_num=phase_prediction_data["delivery_num"],
+            current_over=phase_prediction_data["current_over"],
+            current_phase=current_phase,
+            projected_total=projected_total,
+            next_over_predicted_runs=phase_prediction_data["next_over_predicted_runs"],
+            next_over_range_min=phase_prediction_data["next_over_range_min"],
+            next_over_range_max=phase_prediction_data["next_over_range_max"],
+            confidence=phase_prediction_data["confidence"],
+            phase_stats=phase_prediction_data["phase_stats"],
+            win_probability=phase_prediction_data.get("win_probability"),
+        )
+
+        db.add(phase_prediction)
+        await db.commit()
+
+        # Emit real-time phase prediction update
+        await emit_phase_prediction_update(game_id, phase_prediction_data)
+    except Exception as e:
+        # Don't break scoring if phase prediction fails
+        import logging
+
+        logging.warning(f"Phase prediction calculation failed for game {game_id}: {e}")
 
     return snap
 
