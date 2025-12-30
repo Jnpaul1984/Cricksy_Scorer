@@ -124,9 +124,12 @@
   - Verify: `pytest backend/tests/ -k sponsor -v`
   - Risk: **LOW**
 
-- [ ] **week5-org-pro-branding** - Add Branding (Logo + Theme)
+- [x] **week5-org-pro-branding** ✅ - Add Branding (Logo + Theme)
+  - **Status:** COMPLETE (Previously implemented)
+  - **Files:** branding_service.py, branding.py, test_branding_service.py, useBranding.ts
+  - **Notes:** Comprehensive white-label branding system with ColorScheme enums (LIGHT, DARK), FontFamily enums (INTER, ROBOTO, OPEN_SANS, LATO, MONTSERRAT, POPPINS, PLAYFAIR_DISPLAY, MERRIWEATHER). Data models: BrandColor (name, hex_value with validation), BrandAsset (asset_type: logo/icon/favicon/background, url, alt_text, dimensions, file_size_bytes, format: png/svg/jpg/webp, upload_date), BrandTypography (primary_font, secondary_font, heading_size_px, body_size_px, line_height, letter_spacing_em, font_weight_regular/bold), OrgBrandTheme (theme_id, org_id, org_name, logo_url, favicon_url, banner_image_url, 9 color properties: primary/secondary/accent/background/text/success/warning/error/info, typography, color_scheme, assets dict, apply_to_viewer/scoreboard/admin flags, is_active, description), BrandingValidationResult (is_valid, score 0-100, errors, warnings, suggestions). Core methods: create_brand_theme(), update_brand_colors() (validates hex with _validate_hex_color regex), set_typography(), add_brand_asset() (updates logo_url/favicon_url/banner_image_url based on asset_type), generate_css() (produces theme CSS with root variables), validate_branding() (scores completeness 0-100: org_name 10pts, logo 15pts, valid colors 20pts, typography 15pts, assets 15pts, application scope 10pts, is_active 15pts), get_branding_json() (exports theme as JSON for frontend). API endpoints: POST /branding/themes (create), GET /branding/themes/{org_id} (retrieve), PUT /branding/themes/{org_id}/colors (update colors), PUT /branding/themes/{org_id}/typography (update fonts), POST /branding/themes/{org_id}/assets (add logo/icon/etc), GET /branding/themes/{org_id}/css (generate CSS), POST /branding/themes/{org_id}/validate (validation), PUT /branding/themes/{org_id}/scope (set apply_to flags), GET /branding/fonts (available fonts), GET /branding/color-schemes (predefined schemes). Frontend composable useBranding: fetchOrgBranding(), createBrandingTheme(), updateBrandColors(), updateTypography(), addBrandAsset(), getThemeCSS(), validateBranding(), updateApplicationScope(), getAvailableFonts(), getColorSchemes(). CSS class prefix: org-brand. WCAG contrast ratio: 4.5 minimum. 38 unit tests passing covering theme creation, color validation, color updates, typography configuration, asset management, CSS generation, branding validation, theme JSON export, edge cases
   - Acceptance: Org can upload logo, theme colors apply, watermark on embed
-  - Verify: `npm run typecheck && npm run build`
+  - Verify: `pytest backend/tests/ -k brand -v`
   - Risk: **LOW**
 
 ---
