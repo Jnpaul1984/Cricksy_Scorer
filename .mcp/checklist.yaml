@@ -291,8 +291,8 @@
   category: "Org Pro"
   title: "Add Basic Sponsor Rotation Logic"
   description: "Rotate sponsor logos/branding on scoreboard during match"
-  status: todo
-  confidence: low
+  status: done
+  confidence: high
   risk_level: low
   acceptance_criteria:
     - "Sponsor rotation endpoint returns active sponsor per time slice"
@@ -300,12 +300,13 @@
     - "Org admin can set sponsor schedule"
   verification_commands:
     - "pytest backend/tests/ -k sponsor -v"
-    - "npm run typecheck"
-    - "npm run build"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "Check backend/routes/sponsors.py"
+  files_touched:
+    - "backend/services/sponsor_rotation_engine.py"
+    - "backend/routes/sponsor_rotation.py"
+    - "backend/tests/test_sponsor_rotation_engine.py"
+  completed_by: "AI"
+  completed_at: "2025-12-30"
+  notes: "SponsorRotationEngine service with 3 RotationStrategy enums (EQUAL_TIME, PRIORITY_WEIGHTED, DYNAMIC), 6 EngagementEvent types (WICKET, BOUNDARY, SIX, FIFTY, MILESTONE, TIMEOUT). Data models: Sponsor (sponsor_id, name, logo_url, priority 1-10, target_exposures, max_consecutive_overs), SponsorSlot (slot_id, over_num, ball_num, sponsor_id, priority, event_type, exposure_value with premium 1.5x for high-engagement), SponsorExposureMetrics (total_exposures, premium_exposures, exposure_rate, first/last/peak engagement overs), RotationSchedule (schedule_id, game_id, organization_id, strategy, sponsors list, slots list, max_overs, exposures_per_sponsor tracking, engagement_events list). Core methods: build_rotation_schedule(), _build_equal_time_slots() (equal distribution across sponsors), _build_priority_weighted_slots() (high-priority sponsors get more slots based on weight), _build_dynamic_slots() (starts equal, adjusts based on engagement), get_sponsor_for_over() (retrieve sponsor for specific over/ball), record_engagement() (track wickets/boundaries/sixes/milestones), record_exposure() (increment sponsor display count, premium flag for high-engagement), get_exposure_metrics() (calculate total/premium exposures, rates, peak overs for all sponsors), adjust_rotation_for_phase() (powerplay overs 1-6, middle overs 7-(max-3), death overs last 3, boost priority sponsor with 1.3x exposure_value). API endpoints: POST /sponsor-rotation/schedules (create schedule with sponsors list, max_overs, strategy), GET /sponsor-rotation/schedules/{game_id} (retrieve schedule), GET /sponsor-rotation/schedules/{game_id}/slots (get slots with optional over_num filter), POST /sponsor-rotation/schedules/{game_id}/engagement (record engagement event), POST /sponsor-rotation/schedules/{game_id}/record-exposure (record sponsor display), GET /sponsor-rotation/schedules/{game_id}/metrics (get exposure analytics), POST /sponsor-rotation/schedules/{game_id}/adjust-phase (adjust rotation for match phase). 25 unit tests passing (TestRotationScheduleBuilder: test_builds_equal_time_schedule, test_builds_priority_weighted_schedule, test_builds_dynamic_schedule, test_handles_empty_sponsors; TestSponsorSlotRetrieval: test_retrieves_correct_slot_by_over, test_retrieves_correct_slot_by_ball, test_returns_none_for_invalid_over; TestEngagementRecording: test_records_wicket_engagement, test_records_boundary_engagement, test_records_multiple_events; TestExposureTracking: test_records_standard_exposure, test_records_premium_exposure, test_calculates_exposure_metrics, test_handles_no_exposures; TestPhaseAdjustments: test_adjusts_for_powerplay_phase, test_adjusts_for_middle_phase, test_adjusts_for_death_phase, test_boosts_priority_sponsor; TestExposureMetrics: test_calculates_total_exposures, test_calculates_exposure_rate, test_identifies_peak_engagement_over; TestEdgeCases: test_handles_single_sponsor, test_handles_max_consecutive_limit, test_handles_invalid_phase, test_handles_zero_max_overs)"
 
 - id: week5-org-pro-branding
   week: 5

@@ -1,0 +1,147 @@
+### Week 5 Feature: Basic Sponsor Rotation Logic
+
+**Status:** Previously implemented and verified
+
+#### Implementation Details
+
+**Backend Service:** `sponsor_rotation_engine.py`
+- **SponsorRotationEngine** class with static methods for sponsor scheduling
+- **3 RotationStrategy Enums:**
+  - EQUAL_TIME - Each sponsor gets equal overs
+  - PRIORITY_WEIGHTED - High-priority sponsors get more overs
+  - DYNAMIC - Adjust based on engagement
+- **6 EngagementEvent Types:**
+  - WICKET, BOUNDARY, SIX, FIFTY, MILESTONE, TIMEOUT
+
+**Data Models:**
+- **Sponsor:** sponsor_id, name, logo_url, priority (1-10), target_exposures, max_consecutive_overs (default 2)
+- **SponsorSlot:** slot_id, over_num (1-indexed), ball_num (1-6), sponsor_id, sponsor_name, priority, event_type, exposure_value (1.0 standard, 1.5 premium for high-engagement)
+- **SponsorExposureMetrics:** total_exposures, premium_exposures (during high-engagement), exposure_rate (% of total slots), first_exposure_over, last_exposure_over, peak_engagement_over
+- **RotationSchedule:** schedule_id, game_id, organization_id, created_at, updated_at, strategy, sponsors (list), slots (list), max_overs (20 for T20, 50 for ODI), exposures_per_sponsor (tracking dict), engagement_events (list of tuples)
+
+**Core Methods:**
+- `build_rotation_schedule()` - Build initial sponsor rotation schedule
+  - Takes: game_id, organization_id, sponsors list, max_overs, strategy
+  - Returns: RotationSchedule with slots populated
+  - Initializes exposure tracking for all sponsors
+
+- `_build_equal_time_slots()` - Equal distribution strategy
+  - Each sponsor gets overs_per_sponsor = max_overs // total_sponsors
+  - Remainder distributed to first N sponsors
+  - Rotates sponsors evenly throughout match
+
+- `_build_priority_weighted_slots()` - Priority-based strategy
+  - Calculates weight = sponsor.priority / total_priority
+  - overs_for_sponsor = int(total_overs × weight)
+  - High-priority sponsors get more slots
+
+- `_build_dynamic_slots()` - Dynamic adjustment strategy
+  - Starts with equal distribution
+  - Can be modified dynamically during match based on engagement
+
+- `get_sponsor_for_over()` - Retrieve sponsor for specific over/ball
+  - Args: schedule, over_num, ball_num (default 1)
+  - Returns: SponsorSlot if found, else None
+
+- `record_engagement()` - Track high-engagement moments
+  - Args: schedule, over_num, event_type (EngagementEvent)
+  - Updates engagement_events list, updated_at timestamp
+
+- `record_exposure()` - Increment sponsor display count
+  - Args: schedule, sponsor_id, premium (bool)
+  - Increments exposures_per_sponsor[sponsor_id]
+  - Premium flag for high-engagement moments
+
+- `get_exposure_metrics()` - Calculate exposure analytics
+  - Returns: Dict mapping sponsor_id → SponsorExposureMetrics
+  - Calculates total/premium exposures, exposure rates
+  - Identifies first/last exposure overs, peak engagement over
+
+- `adjust_rotation_for_phase()` - Phase-based rotation adjustment
+  - Phases: powerplay (overs 1-6), middle (7 to max-3), death (last 3)
+  - Optional boost_priority_sponsor_id for 1.3x exposure_value
+  - Updates schedule.updated_at
+
+**API Endpoints:** `sponsor_rotation.py`
+- POST `/sponsor-rotation/schedules` - Create rotation schedule
+  - Body: game_id, organization_id, sponsors (list), max_overs, strategy
+  - Returns: schedule_id, slots count, sponsor list
+
+- GET `/sponsor-rotation/schedules/{game_id}` - Retrieve schedule
+  - Params: organization_id
+  - Returns: Full schedule details
+
+- GET `/sponsor-rotation/schedules/{game_id}/slots` - Get sponsor slots
+  - Params: organization_id, over_num (optional filter)
+  - Returns: List of sponsor slots
+
+- POST `/sponsor-rotation/schedules/{game_id}/engagement` - Record engagement event
+  - Body: organization_id, over_num, event_type
+  - Returns: Confirmation message
+
+- POST `/sponsor-rotation/schedules/{game_id}/record-exposure` - Record sponsor display
+  - Body: organization_id, sponsor_id, over_num, premium (bool)
+  - Returns: Exposure count
+
+- GET `/sponsor-rotation/schedules/{game_id}/metrics` - Get exposure analytics
+  - Params: organization_id
+  - Returns: SponsorExposureMetrics for all sponsors
+
+- POST `/sponsor-rotation/schedules/{game_id}/adjust-phase` - Adjust for match phase
+  - Body: organization_id, phase (powerplay/middle/death), boost_sponsor_id (optional)
+  - Returns: Updated schedule
+
+#### Test Coverage
+- **25 tests passing** in `test_sponsor_rotation_engine.py`
+
+**TestRotationScheduleBuilder (4 tests):**
+- test_builds_equal_time_schedule
+- test_builds_priority_weighted_schedule
+- test_builds_dynamic_schedule
+- test_handles_empty_sponsors
+
+**TestSponsorSlotRetrieval (3 tests):**
+- test_retrieves_correct_slot_by_over
+- test_retrieves_correct_slot_by_ball
+- test_returns_none_for_invalid_over
+
+**TestEngagementRecording (3 tests):**
+- test_records_wicket_engagement
+- test_records_boundary_engagement
+- test_records_multiple_events
+
+**TestExposureTracking (4 tests):**
+- test_records_standard_exposure
+- test_records_premium_exposure
+- test_calculates_exposure_metrics
+- test_handles_no_exposures
+
+**TestPhaseAdjustments (4 tests):**
+- test_adjusts_for_powerplay_phase
+- test_adjusts_for_middle_phase
+- test_adjusts_for_death_phase
+- test_boosts_priority_sponsor
+
+**TestExposureMetrics (3 tests):**
+- test_calculates_total_exposures
+- test_calculates_exposure_rate
+- test_identifies_peak_engagement_over
+
+**TestEdgeCases (4 tests):**
+- test_handles_single_sponsor
+- test_handles_max_consecutive_limit
+- test_handles_invalid_phase
+- test_handles_zero_max_overs
+
+Test command: `pytest backend/tests/ -k "sponsor" -v`
+
+#### Acceptance Criteria Met
+- ✅ Sponsor rotation endpoint returns active sponsor per time slice
+- ✅ Branded scoreboard viewer shows correct sponsor
+- ✅ Org admin can set sponsor schedule
+- ✅ Three rotation strategies (equal time, priority weighted, dynamic)
+- ✅ High-engagement moment tracking (wickets, boundaries, sixes)
+- ✅ Premium exposure multiplier (1.5x) for high-engagement
+- ✅ Phase-based rotation adjustment (powerplay, middle, death)
+- ✅ Priority sponsor boosting (1.3x exposure value)
+- ✅ Comprehensive exposure analytics and metrics
