@@ -129,8 +129,8 @@
   category: "Player Pro"
   title: "Add AI Career Summary to Player Profile"
   description: "AI-generated career highlights and insights on player profile"
-  status: todo
-  confidence: low
+  status: done
+  confidence: high
   risk_level: medium
   acceptance_criteria:
     - "Career summary section renders without errors"
@@ -140,10 +140,15 @@
     - "npm run typecheck"
     - "npm run build"
     - "npm run lint"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "Check frontend/src/views/PlayerProfileView.vue"
+  files_touched:
+    - "backend/services/player_career_analyzer.py"
+    - "backend/routes/player_analytics.py"
+    - "frontend/src/components/PlayerCareerSummaryWidget.vue"
+    - "frontend/src/composables/usePlayerCareerAnalytics.ts"
+    - "frontend/src/views/PlayerProfileView.vue"
+  completed_by: "previously-implemented"
+  completed_at: "2025-12-30"
+  notes: "Feature was already fully implemented with comprehensive PlayerCareerAnalyzer service (450+ lines), specialization detection (Opener/Finisher/Bowler/All-rounder), consistency scoring, recent form analysis, career highlights generation with emojis, API endpoint at /analytics/players/{id}/career-summary, frontend widget integrated in PlayerProfileView"
 
 - id: week5-player-pro-monthly-improvement
   week: 5
