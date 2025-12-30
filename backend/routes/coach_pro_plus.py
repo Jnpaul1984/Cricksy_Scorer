@@ -10,25 +10,25 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Annotated
+from typing import Annotated, Any
 from uuid import uuid4
 
 from backend import security
+from backend.config import settings
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
-from backend.services.pose_metrics import compute_pose_metrics, build_pose_metric_evidence
+from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
 from backend.services.s3_service import s3_service
 from backend.sql_app.database import get_db
 from backend.sql_app.models import (
+    OwnerTypeEnum,
     RoleEnum,
     User,
-    VideoSession,
     VideoAnalysisJob,
-    VideoSessionStatus,
     VideoAnalysisJobStatus,
-    OwnerTypeEnum,
+    VideoSession,
+    VideoSessionStatus,
 )
-from backend.config import settings
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -634,10 +634,10 @@ async def initiate_video_upload(
 
     try:
         # Generate S3 presigned URL (lazy import)
-        from backend.services.s3_service import s3_service
+        import logging
 
         import boto3
-        import logging
+        from backend.services.s3_service import s3_service
 
         try:
             sts = boto3.client("sts")
@@ -1284,5 +1284,5 @@ async def track_ball_in_video(
         logger.error(f"Ball tracking failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ball tracking failed: {str(e)}",
+            detail=f"Ball tracking failed: {e!s}",
         )

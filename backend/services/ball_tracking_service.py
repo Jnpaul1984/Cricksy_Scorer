@@ -10,10 +10,11 @@ Uses OpenCV color-based tracking with Kalman filtering for smoothing.
 from __future__ import annotations
 
 import logging
-import numpy as np
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 

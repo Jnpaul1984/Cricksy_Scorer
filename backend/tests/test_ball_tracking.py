@@ -5,21 +5,21 @@ Tests ball detection, trajectory analysis, and coaching metrics.
 Uses synthetic data for unit tests. Integration tests require video files.
 """
 
-import pytest
+from unittest.mock import MagicMock, patch
+
 import numpy as np
-from unittest.mock import Mock, patch, MagicMock
+import pytest
 
 from backend.services.ball_tracking_service import (
-    BallPosition,
-    BallTrajectory,
     BallMetrics,
+    BallPosition,
     BallTracker,
-    analyze_ball_trajectory,
-    analyze_multiple_deliveries,
+    BallTrajectory,
     _calculate_swing_deviation,
     _classify_trajectory_shape,
+    analyze_ball_trajectory,
+    analyze_multiple_deliveries,
 )
-
 
 # ============================================================================
 # Fixtures
