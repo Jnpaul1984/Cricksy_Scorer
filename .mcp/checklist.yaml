@@ -46,8 +46,8 @@
   category: "AI Basics"
   title: "Add Innings Grade (Performance Rating)"
   description: "Implement AI-based innings performance grading (A+ to D)"
-  status: todo
-  confidence: low
+  status: done
+  confidence: high
   risk_level: medium
   acceptance_criteria:
     - "Grade appears in viewer after innings end"
@@ -57,10 +57,16 @@
   verification_commands:
     - "pytest backend/tests/ -k innings_grade -v"
     - "npm run build"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: ""
+  files_touched:
+    - "backend/sql_app/models.py"
+    - "backend/sql_app/schemas.py"
+    - "backend/routes/gameplay.py"
+    - "backend/services/live_bus.py"
+    - "backend/alembic/versions/2e6435fe0fee_add_innings_grades_table.py"
+    - "backend/tests/test_innings_grade_service.py"
+  completed_by: "copilot-agent"
+  completed_at: "2025-12-29"
+  notes: "Added database model + migration, Pydantic schemas, real-time Socket.IO emission on innings end. Service class, API endpoints, and frontend widget already existed. Comprehensive test suite with 19 tests (all passing). Grade calculation: 70% run rate vs par, 15% wicket efficiency, 10% strike rotation & boundaries."
 
 - id: week5-ai-pressure-mapping
   week: 5
