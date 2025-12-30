@@ -42,7 +42,12 @@ def upgrade() -> None:
     )
     # Create index for faster lookups
     op.create_index('ix_innings_grades_game_id', 'innings_grades', ['game_id'])
-    op.create_index('ix_innings_grades_game_inning', 'innings_grades', ['game_id', 'inning_num'], unique=True)
+    op.create_index(
+        'ix_innings_grades_game_inning',
+        'innings_grades',
+        ['game_id', 'inning_num'],
+        unique=True,
+    )
 
 
 def downgrade() -> None:
