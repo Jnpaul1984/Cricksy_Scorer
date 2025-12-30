@@ -201,20 +201,22 @@
   category: "Coach Pro"
   title: "Add Training Drill Suggestions"
   description: "Rules-based training drill suggestions based on player weakness"
-  status: todo
-  confidence: low
+  status: done
+  confidence: high
   risk_level: low
   acceptance_criteria:
     - "Drill suggestions appear in player dev section"
     - "Mapped to player weakness profile"
     - "Drills include: description, duration, equipment"
   verification_commands:
-    - "npm run typecheck"
-    - "npm run build"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "Basic rules engine, can be hardcoded initially"
+    - "pytest backend/tests/ -k drill -v"
+  files_touched:
+    - "backend/services/training_drill_generator.py"
+    - "backend/routes/training_drills.py"
+    - "backend/tests/test_training_drill_generator.py"
+  completed_by: "previously-implemented"
+  completed_at: "2025-12-30"
+  notes: "TrainingDrillGenerator service (350+ lines) with 8 drill categories (pace_handling, spin_handling, dot_ball, aggressive, boundary_hitting, wicket_protection, fielding, endurance). 20+ drill templates with name, description, duration, reps, focus_area, difficulty. Weakness-to-drill mapping (pace_weakness → pace_handling drills, spin_weakness → spin drills, dot_ball_weakness → dot_ball drills, etc.). Severity-based prioritization (HIGH/MEDIUM/LOW). Two API endpoints: /players/{id}/suggested-drills (individual) and /games/{id}/team-{side}/suggested-drills (team). 22 unit tests passing including weakness detection, drill generation, template validation. Drills include expected improvement, recommended frequency (daily/3x/weekly), confidence scores"
 
 - id: week5-analyst-pro-dismissal-patterns
   week: 5

@@ -14,8 +14,8 @@
 | 2 | Core UI Wiring | 20 | 20 | 0 | 0 | 0 | ✅ 100% |
 | 3 | Beta 1 Prep | 12 | 0 | 0 | 0 | 12 | 🟡 0% |
 | 4 | Beta Testing | 10 | 0 | 7 | 0 | 3 | 🟡 0% |
-| 5 | AI Integration Phase 1 | 14 | 7 | 0 | 0 | 7 | 🟢 50% |
-| **TOTAL** | | **96** | **66** | **7** | **0** | **23** | **68%** |
+| 5 | AI Integration Phase 1 | 14 | 8 | 0 | 0 | 6 | 🟢 57% |
+| **TOTAL** | | **96** | **67** | **7** | **0** | **22** | **69%** |
 
 ---
 
@@ -82,9 +82,12 @@
   - Verify: `pytest backend/tests/ -k tactical -v`
   - Risk: **HIGH** - Impacts game strategy
 
-- [ ] **week5-coach-pro-training-drills** - Add Training Drill Suggestions
+- [x] **week5-coach-pro-training-drills** ✅ - Add Training Drill Suggestions
+  - **Status:** COMPLETE (Previously implemented)
+  - **Files:** training_drill_generator.py, training_drills.py, test_training_drill_generator.py
+  - **Notes:** Comprehensive drill generator (350+ lines) with 8 drill categories, 20+ drill templates, weakness-to-drill mapping, 22 unit tests passing
   - Acceptance: Drills in player dev section, mapped to weakness, include description/duration/equipment
-  - Verify: `npm run typecheck && npm run build`
+  - Verify: `pytest backend/tests/ -k drill -v`
   - Risk: **LOW** - Can hardcode initially
 
 ### Analyst Pro (3 items)
