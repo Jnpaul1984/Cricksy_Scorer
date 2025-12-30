@@ -1,0 +1,55 @@
+### Week 5 Feature: AI Heatmap Overlays
+
+**Status:** Previously implemented and verified
+
+#### Implementation Details
+
+**Backend Service:** `pitch_heatmap_generator.py`
+- **PitchHeatmapGenerator** class with static methods
+- **Zone System:** 11 PitchZone enums with ZONE_BOUNDARIES mapping
+  - off_side_short, off_side_full, off_side_yorker
+  - middle_short, middle_full, middle_yorker
+  - leg_side_short, leg_side_full, leg_side_yorker
+  - wide_off, wide_leg
+- **Coordinate System:** 0-100 scale (X: leg→middle→off, Y: bowler→stumps)
+- **Heatmap Types:** HeatmapType.RUNS, DISMISSALS, BOWLER_RELEASE, BATTING_CONTACT
+
+**Core Methods:**
+- `generate_batter_scoring_heatmap()` - Where player scores runs
+- `generate_dismissal_heatmap()` - Where player gets dismissed
+- `generate_bowler_release_heatmap()` - Bowler release point consistency
+- `analyze_batter_profile()` - Comprehensive spatial scoring analysis
+- `analyze_bowler_profile()` - Delivery zone effectiveness
+- `analyze_matchup()` - Batter vs bowler spatial analysis
+
+**API Endpoints:** `pitch_heatmaps.py`
+- GET `/heatmaps/players/{id}/batting-heatmap`
+- GET `/heatmaps/players/{id}/dismissal-heatmap`
+- GET `/heatmaps/bowlers/{id}/release-zones`
+- GET `/heatmaps/matchups/{batter_id}/vs/{bowler_id}`
+- GET `/heatmaps/games/{id}/team-{side}/heatmap-summary`
+
+**Frontend Component:**
+- `HeatmapOverlayPanel.vue` - SVG-based pitch visualization with color-coded zones
+- Interactive hover for zone details
+- Field position selection
+
+**Data Models:**
+- PitchHeatmap
+- HeatmapDataPoint
+- BatterProfile
+- BowlerProfile
+- MatchupAnalysis
+
+#### Test Coverage
+- **23 tests passing** in `test_pitch_heatmap_generator.py`
+- Test command: `pytest backend/tests/ -k heatmap -v`
+
+#### Acceptance Criteria Met
+- ✅ Field heatmap renders correctly
+- ✅ Runs/wickets heatmaps color-coded
+- ✅ Interactive (hover for details)
+- ✅ Zone boundaries defined with coordinate mapping
+- ✅ Multiple heatmap types (runs, dismissals, bowler release)
+- ✅ Batter/bowler profile analysis
+- ✅ Matchup analysis functionality
