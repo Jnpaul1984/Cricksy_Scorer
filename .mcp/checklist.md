@@ -14,7 +14,7 @@
 | 2 | Core UI Wiring | 20 | 20 | 0 | 0 | 0 | ✅ 100% |
 | 3 | Beta 1 Prep | 12 | 0 | 0 | 0 | 12 | 🟡 0% |
 | 4 | Beta Testing | 10 | 0 | 7 | 0 | 3 | 🟡 0% |
-| 5 | AI Integration Phase 1 | 14 | 1 | 0 | 0 | 13 | 🟢 7% |
+| 5 | AI Integration Phase 1 | 14 | 2 | 0 | 0 | 12 | 🟢 14% |
 | **TOTAL** | | **96** | **61** | **7** | **0** | **28** | **63%** |
 
 ---
@@ -32,7 +32,10 @@
   - Verify: `pytest backend/tests/ -k win_probability -v`
   - Risk: **HIGH**
 
-- [ ] **week5-ai-innings-grade** - Add Innings Grade (Performance Rating)
+- [x] **week5-ai-innings-grade** ✅ - Add Innings Grade (Performance Rating)
+  - **Status:** COMPLETE (2025-12-29)
+  - **Files:** InningsGrade model, schemas, live_bus.py, gameplay.py, test_innings_grade_service.py
+  - **Notes:** Database model + migration, real-time Socket.IO emission, 19 unit tests (all passing)
   - Acceptance: Grade A+ to D, consistent, considers SR/boundaries/wickets
   - Verify: `pytest backend/tests/ -k innings_grade -v`
   - Risk: **MEDIUM**
