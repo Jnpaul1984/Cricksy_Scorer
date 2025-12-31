@@ -180,10 +180,7 @@ class TestBallTracker:
 
     def test_identifies_release_point(self):
         """Test release point identification."""
-        positions = [
-            BallPosition(i, i * 0.1, 100.0, 50.0 + i * 10, 0.9, 10.0)
-            for i in range(10)
-        ]
+        positions = [BallPosition(i, i * 0.1, 100.0, 50.0 + i * 10, 0.9, 10.0) for i in range(10)]
 
         tracker = BallTracker()
         trajectory = BallTrajectory(positions=positions)
@@ -545,8 +542,7 @@ class TestEdgeCases:
         """Test bounce detection when no bounce occurs."""
         # All velocities going down (no reversal)
         positions = [
-            BallPosition(i, i * 0.1, 100.0, 50.0, 0.9, 10.0, 10.0, 50.0)
-            for i in range(10)
+            BallPosition(i, i * 0.1, 100.0, 50.0, 0.9, 10.0, 10.0, 50.0) for i in range(10)
         ]
 
         tracker = BallTracker()

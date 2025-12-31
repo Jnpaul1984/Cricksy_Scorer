@@ -304,4 +304,3 @@ def analyze_video_with_ball_tracking(
             "findings": None,
             "error": f"Analysis failed: {e!s}",
         }
-

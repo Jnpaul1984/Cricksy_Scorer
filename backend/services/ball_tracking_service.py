@@ -23,6 +23,7 @@ def _import_cv2():
     """Lazy import of OpenCV to avoid hard dependencies in tests."""
     try:
         import cv2
+
         return cv2
     except ImportError as e:
         raise ImportError(
@@ -259,7 +260,7 @@ class BallTracker:
 
         for contour in contours:
             area = cv2.contourArea(contour)
-            if area < (np.pi * self.min_radius ** 2):
+            if area < (np.pi * self.min_radius**2):
                 continue
 
             # Fit circle
@@ -270,7 +271,7 @@ class BallTracker:
 
             # Calculate circularity score
             perimeter = cv2.arcLength(contour, True)
-            circularity = 4 * np.pi * area / (perimeter ** 2) if perimeter > 0 else 0
+            circularity = 4 * np.pi * area / (perimeter**2) if perimeter > 0 else 0
 
             # Score combines circularity and size appropriateness
             size_score = 1.0 - abs(radius - 15) / 15  # Prefer ~15 pixel radius
@@ -367,10 +368,7 @@ class BallTracker:
             return
 
         # Average and max velocity
-        velocities = [
-            np.sqrt(p.velocity_x ** 2 + p.velocity_y ** 2)
-            for p in trajectory.positions
-        ]
+        velocities = [np.sqrt(p.velocity_x**2 + p.velocity_y**2) for p in trajectory.positions]
         trajectory.avg_velocity = float(np.mean(velocities))
         trajectory.max_velocity = float(np.max(velocities))
 
@@ -379,7 +377,7 @@ class BallTracker:
         for i in range(1, len(trajectory.positions)):
             dx = trajectory.positions[i].x - trajectory.positions[i - 1].x
             dy = trajectory.positions[i].y - trajectory.positions[i - 1].y
-            total_distance += np.sqrt(dx ** 2 + dy ** 2)
+            total_distance += np.sqrt(dx**2 + dy**2)
         trajectory.trajectory_length = total_distance
 
 
@@ -408,14 +406,12 @@ def analyze_ball_trajectory(
 
     # Flight metrics
     if trajectory.release_point and trajectory.bounce_point:
-        metrics.flight_time = (
-            trajectory.bounce_point.timestamp - trajectory.release_point.timestamp
-        )
+        metrics.flight_time = trajectory.bounce_point.timestamp - trajectory.release_point.timestamp
 
         # Bounce distance (horizontal)
         dx = abs(trajectory.bounce_point.x - trajectory.release_point.x)
         dy = abs(trajectory.bounce_point.y - trajectory.release_point.y)
-        metrics.bounce_distance = float(np.sqrt(dx ** 2 + dy ** 2))
+        metrics.bounce_distance = float(np.sqrt(dx**2 + dy**2))
 
         # Bounce angle
         if dx > 0:
@@ -514,9 +510,7 @@ def analyze_multiple_deliveries(
         return {"delivery_count": 0, "consistency_score": 0}
 
     # Extract release points
-    release_points = [
-        t.release_point for t in trajectories if t.release_point is not None
-    ]
+    release_points = [t.release_point for t in trajectories if t.release_point is not None]
 
     if not release_points:
         return {"delivery_count": len(trajectories), "consistency_score": 0}
