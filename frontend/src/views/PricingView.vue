@@ -1,170 +1,141 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
+import { usePricingStore } from '@/stores/pricingStore'
 
-interface PlanFeature {
-  text: string
-  included: boolean
+// ============================================================================
+// Pricing Store - Single Source of Truth
+// ============================================================================
+
+const pricingStore = usePricingStore()
+
+// Fetch pricing on component mount if not already loaded
+onMounted(async () => {
+  if (pricingStore.displayPlans.length === 0) {
+    await pricingStore.fetchPricing()
+  }
+})
+
+// ============================================================================
+// Price Formatting Helper
+// ============================================================================
+
+function formatPlanPrice(plan: any): { amount: string; period: string } {
+  if (plan.isContactSales || plan.monthlyPrice === null) {
+    return { amount: 'Contact us', period: '' }
+  }
+  if (plan.monthlyPrice === 0) {
+    return { amount: 'Free', period: 'forever' }
+  }
+  return { amount: plan.monthlyDisplay, period: '/month' }
 }
 
-interface Plan {
-  id: string
-  name: string
-  price: string
-  period: string
-  description: string
-  features: PlanFeature[]
-  recommended?: boolean
-  cta: string
-  ctaLink: string
-}
+// ============================================================================
+// Display Plans
+// ============================================================================
 
-const plans: Plan[] = [
-  {
-    id: 'free',
-    name: 'Free / Fan',
-    price: '$0',
-    period: 'forever',
-    description: 'Follow matches, score games, and explore core features.',
-    features: [
-      { text: 'View live scoreboards', included: true },
-      { text: 'Score matches (unlimited)', included: true },
-      { text: 'Follow favorite players', included: true },
-      { text: 'Access leaderboards', included: true },
-      { text: 'Player profile & stats', included: false },
-      { text: 'Advanced analytics', included: false },
-    ],
-    cta: 'Get Started',
-    ctaLink: '/fan',
-  },
-  {
-    id: 'player-pro',
-    name: 'Player Pro',
-    price: '$1.99',
-    period: '/month',
-    description: 'Your personal cricket profile and social media showcase.',
-    features: [
-      { text: 'Everything in Free', included: true },
-      { text: 'Personal player profile', included: true },
-      { text: 'Career stats & analytics', included: true },
-      { text: 'Social media exports', included: true },
-      { text: 'Shareable stat cards', included: true },
-      { text: 'Team management', included: false },
-    ],
-    cta: 'Start Free Trial',
-    ctaLink: '/login',
-  },
-  {
-    id: 'scorer-pro',
-    name: 'Scorer Pro',
-    price: '$9',
-    period: '/month',
-    description: 'Score your own matches with advanced features and insights.',
-    features: [
-      { text: 'Everything in Player Pro', included: true },
-      { text: 'Ball-by-ball recording', included: true },
-      { text: 'Detailed scoring tools', included: true },
-      { text: 'Match history export', included: true },
-      { text: 'Team management', included: false },
-      { text: 'Advanced analytics', included: false },
-    ],
-    cta: 'Start Free Trial',
-    ctaLink: '/login',
-  },
-  {
-    id: 'coach',
-    name: 'Coach Pro',
-    price: '$29',
-    period: '/month',
-    description: 'Manage teams and access advanced analytics.',
-    features: [
-      { text: 'Everything in Scorer Pro', included: true },
-      { text: 'Multi-team management', included: true },
-      { text: 'Player performance tracking', included: true },
-      { text: 'Advanced analytics & ML predictions', included: true },
-      { text: 'Custom reports & exports', included: true },
-      { text: 'Priority support', included: true },
-    ],
-    recommended: true,
-    cta: 'Start Free Trial',
-    ctaLink: '/login',
-  },
-  {
-    id: 'org',
-    name: 'Organization',
-    price: '$99',
-    period: '/month',
-    description: 'For leagues, clubs, and cricket organizations.',
-    features: [
-      { text: 'Everything in Coach Pro', included: true },
-      { text: 'Unlimited teams & users', included: true },
-      { text: 'Tournament management', included: true },
-      { text: 'Embeddable scoreboards', included: true },
-      { text: 'API access', included: true },
-      { text: 'Dedicated support', included: true },
-    ],
-    cta: 'Contact Sales',
-    ctaLink: '/login',
-  },
-]
+const displayPlans = computed(() => {
+  return pricingStore.individualDisplayPlans.map((plan) => {
+    const { amount, period } = formatPlanPrice(plan)
+
+    // Convert features array to PlanFeature format for template
+    const features = plan.features.map((text: string) => ({
+      text,
+      included: true
+    }))
+
+    return {
+      id: plan.id,
+      backendId: plan.backendId,
+      name: plan.name,
+      price: amount,
+      period: period,
+      description: plan.tagline,
+      features,
+      recommended: plan.highlight,
+      cta: plan.ctaLabel,
+      ctaLink: plan.monthlyPrice === 0 ? '/fan' : '/login'
+    }
+  })
+})
+
+// Show scoring is free message from API
+const scoringIsFreeBanner = computed(() => pricingStore.scoringIsFree)
 </script>
 
 <template>
   <div class="pricing">
-    <!-- Header -->
-    <section class="pricing-header">
-      <h1 class="pricing-title">Choose Your Plan</h1>
-      <p class="pricing-subtitle">
-        From casual fans to professional organizations, we have a plan for you.
-      </p>
-    </section>
+    <!-- Loading State -->
+    <div v-if="pricingStore.loading" class="pricing-loading">
+      <p>Loading pricing plans...</p>
+    </div>
 
-    <!-- Plans Grid -->
-    <section class="plans-section">
-      <div class="plans-grid">
-        <div
-          v-for="plan in plans"
-          :key="plan.id"
-          class="plan-card"
-          :class="{ 'plan-recommended': plan.recommended }"
-        >
-          <div v-if="plan.recommended" class="plan-badge">Most Popular</div>
-          <h2 class="plan-name">{{ plan.name }}</h2>
-          <div class="plan-price">
-            <span class="price-amount">{{ plan.price }}</span>
-            <span class="price-period">{{ plan.period }}</span>
-          </div>
-          <p class="plan-description">{{ plan.description }}</p>
+    <!-- Error State -->
+    <div v-else-if="pricingStore.error" class="pricing-error">
+      <p>Unable to load pricing. Please try again later.</p>
+    </div>
 
-          <ul class="plan-features">
-            <li
-              v-for="feature in plan.features"
-              :key="feature.text"
-              class="feature-item"
-              :class="{ 'feature-excluded': !feature.included }"
-            >
-              <span class="feature-icon">{{ feature.included ? '✓' : '✗' }}</span>
-              <span class="feature-text">{{ feature.text }}</span>
-            </li>
-          </ul>
+    <!-- Pricing Content -->
+    <div v-else>
+      <!-- Header -->
+      <section class="pricing-header">
+        <h1 class="pricing-title">Choose Your Plan</h1>
+        <p class="pricing-subtitle">
+          From casual fans to professional organizations, we have a plan for you.
+        </p>
+        <p v-if="scoringIsFreeBanner" class="scoring-free-badge">
+          ✓ Match scoring is always free
+        </p>
+      </section>
 
-          <RouterLink
-            :to="plan.ctaLink"
-            class="plan-cta"
-            :class="plan.recommended ? 'cta-primary' : 'cta-secondary'"
+      <!-- Plans Grid -->
+      <section class="plans-section">
+        <div class="plans-grid">
+          <div
+            v-for="plan in displayPlans"
+            :key="plan.id"
+            class="plan-card"
+            :class="{ 'plan-recommended': plan.recommended }"
           >
-            {{ plan.cta }}
-          </RouterLink>
-        </div>
-      </div>
-    </section>
+            <div v-if="plan.recommended" class="plan-badge">Most Popular</div>
+            <h2 class="plan-name">{{ plan.name }}</h2>
+            <div class="plan-price">
+              <span class="price-amount">{{ plan.price }}</span>
+              <span class="price-period">{{ plan.period }}</span>
+            </div>
+            <p class="plan-description">{{ plan.description }}</p>
 
-    <!-- FAQ or additional info -->
-    <section class="pricing-footer">
-      <p class="pricing-note">
-        All plans include a 14-day free trial. No credit card required.
-      </p>
-      <RouterLink to="/" class="back-link">← Back to Home</RouterLink>
-    </section>
+            <ul class="plan-features">
+              <li
+                v-for="feature in plan.features"
+                :key="feature.text"
+                class="feature-item"
+                :class="{ 'feature-excluded': !feature.included }"
+              >
+                <span class="feature-icon">{{ feature.included ? '✓' : '✗' }}</span>
+                <span class="feature-text">{{ feature.text }}</span>
+              </li>
+            </ul>
+
+            <RouterLink
+              :to="plan.ctaLink"
+              class="plan-cta"
+              :class="plan.recommended ? 'cta-primary' : 'cta-secondary'"
+            >
+              {{ plan.cta }}
+            </RouterLink>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ or additional info -->
+      <section class="pricing-footer">
+        <p class="pricing-note">
+          All plans include a 14-day free trial. No credit card required.
+        </p>
+        <RouterLink to="/" class="back-link">← Back to Home</RouterLink>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -174,6 +145,19 @@ const plans: Plan[] = [
   padding: var(--space-6) var(--space-4);
   max-width: 1200px;
   margin: 0 auto;
+}
+
+/* Loading & Error States */
+.pricing-loading,
+.pricing-error {
+  text-align: center;
+  padding: var(--space-8);
+  font-size: var(--text-lg);
+  color: var(--color-text-secondary);
+}
+
+.pricing-error {
+  color: var(--color-danger);
 }
 
 /* Header */
@@ -197,6 +181,17 @@ const plans: Plan[] = [
   max-width: 500px;
   margin-left: auto;
   margin-right: auto;
+}
+
+.scoring-free-badge {
+  display: inline-block;
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-success-bg, #d1fae5);
+  color: var(--color-success-text, #065f46);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
 }
 
 /* Plans Grid */

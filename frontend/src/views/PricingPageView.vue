@@ -30,8 +30,20 @@
       </div>
     </section>
 
+    <!-- Loading state -->
+    <section v-if="pricingStore.loading" class="plans-grid">
+      <div class="pricing-loading">Loading pricing...</div>
+    </section>
+
+    <!-- Error state -->
+    <section v-else-if="pricingStore.error" class="plans-grid">
+      <div class="pricing-error">
+        Failed to load pricing. Please refresh the page.
+      </div>
+    </section>
+
     <!-- PLAN CARDS (7 cards, responsive grid) -->
-    <section class="plans-grid">
+    <section v-else class="plans-grid">
       <BaseCard
         v-for="plan in displayPlans"
         :key="plan.id"
@@ -51,7 +63,7 @@
 
         <div class="plan-price">
           <span class="amount">{{ plan.priceDisplay }}</span>
-          <span class="period">
+          <span v-if="!plan.isContactSales" class="period">
             /{{ billingPeriod === 'monthly' ? 'month' : 'year' }}
           </span>
         </div>
@@ -77,10 +89,6 @@
         >
           {{ plan.ctaLabel }}
         </BaseButton>
-
-        <p v-if="plan.note" class="plan-note">
-          {{ plan.note }}
-        </p>
       </BaseCard>
     </section>
 
@@ -96,7 +104,7 @@
               :key="plan.id"
               class="matrix-plan-col"
             >
-              {{ plan.shortName }}
+              {{ plan.name }}
             </div>
           </div>
 
@@ -142,10 +150,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseCard, BaseButton, BaseBadge } from '@/components'
+import { usePricingStore } from '@/stores/pricingStore'
 
 // ----------------------------------------------------------------------------
 // Types
@@ -153,189 +162,38 @@ import { BaseCard, BaseButton, BaseBadge } from '@/components'
 
 type BillingPeriod = 'monthly' | 'annual'
 
-interface PlanConfig {
-  id: string
-  name: string
-  shortName: string
-  tagline: string
-  monthly: number
-  highlight?: boolean
-  isContactSales?: boolean
-  ctaLabel: string
-  note?: string
-  features: string[]
-}
-
 // ----------------------------------------------------------------------------
-// Plan definitions
+// Pinia Store - SINGLE SOURCE OF TRUTH
 // ----------------------------------------------------------------------------
 
-const plans: PlanConfig[] = [
-  {
-    id: 'free',
-    name: 'Cricksy Free',
-    shortName: 'Free',
-    tagline: 'For casual scorers, fans, parents, and kids at school games.',
-    monthly: 0,
-    ctaLabel: 'Start Free',
-    features: [
-      'Manual match scoring',
-      'Basic live text scoreboard',
-      'Simple player stats (recent matches)',
-      '1 active competition at a time',
-      'Public viewer with basic info',
-    ],
-  },
-  {
-    id: 'player-pro',
-    name: 'Player Pro',
-    shortName: 'Player',
-    tagline: 'For serious players who want to track their career.',
-    monthly: 2.99,
-    ctaLabel: 'Get Player Pro',
-    features: [
-      'Everything in Free',
-      'Full career dashboard (all formats)',
-      'Form tracker & season graphs',
-      'Strength/weakness views (zones & dismissals)',
-      'AI-powered career summary',
-      'Monthly progress report',
-    ],
-  },
-  {
-    id: 'coach-pro',
-    name: 'Coach Pro',
-    shortName: 'Coach',
-    tagline: 'For school coaches, academies, and serious club coaches.',
-    monthly: 9.99,
-    ctaLabel: 'Choose Coach Pro',
-    features: [
-      'Everything in Player Pro',
-      'Player development dashboard',
-      'Coach → Player assignment',
-      'Session notebook (per player, per session)',
-      'Multi-player comparisons',
-      'AI session summaries',
-      'Export reports to PDF',
-    ],
-  },
-  {
-    id: 'coach-pro-plus',
-    name: 'Coach Pro Plus',
-    shortName: 'Coach+',
-    tagline: 'Coach Pro with video session management and AI insights.',
-    monthly: 24.99,
-    ctaLabel: 'Choose Coach Pro Plus',
-    features: [
-      'Everything in Coach Pro',
-      'Video session upload & streaming',
-      'AI video session reports',
-      '25 GB video storage',
-      'Video playlist organization',
-    ],
-  },
-  {
-    id: 'analyst-pro',
-    name: 'Analyst Pro',
-    shortName: 'Analyst',
-    tagline: 'For analysts and high-performance programs.',
-    monthly: 14.99,
-    highlight: true,
-    ctaLabel: 'Choose Analyst Pro',
-    features: [
-      'Everything in Coach Pro',
-      'Analyst workspace & saved views',
-      'AI dismissal pattern detection',
-      'AI heatmaps & ball-type clustering',
-      'Phase-based analysis (powerplay, middle, death)',
-      'Flexible query engine',
-      'Analyst notebook',
-      'CSV/JSON data exports',
-      'Case study tagging for matches',
-    ],
-  },
-  {
-    id: 'org-starter',
-    name: 'Org Pro Starter',
-    shortName: 'Starter',
-    tagline: 'For single schools, clubs, or small leagues.',
-    monthly: 99,
-    isContactSales: true,
-    ctaLabel: 'Contact sales',
-    features: [
-      'Includes 4 teams',
-      'Includes 4 Coach Pro seats (+ Coach Pro Plus)',
-      'Includes 1 Analyst Pro seat',
-      'League/tournament management',
-      'Org-level dashboards',
-      'Basic sponsor panel',
-      'Branded viewers & overlays',
-      'Basic streaming overlay integration',
-      'Role & subscription management',
-      'Video session analysis (Coach Pro Plus)',
-    ],
-  },
-  {
-    id: 'org-growth',
-    name: 'Org Pro Growth',
-    shortName: 'Growth',
-    tagline: 'For medium academies and district leagues.',
-    monthly: 99,
-    isContactSales: true,
-    ctaLabel: 'Contact sales',
-    features: [
-      'Includes 10 teams',
-      'Includes 8 Coach Pro seats (+ Coach Pro Plus)',
-      'Includes 3 Analyst Pro seats',
-      'Everything in Org Pro Starter',
-      'Multi-competition support',
-      'Sponsor rotation logic',
-      'Custom viewer templates',
-      'Priority support',
-      'Video session analysis (Coach Pro Plus)',
-    ],
-  },
-  {
-    id: 'org-elite',
-    name: 'Org Pro Elite',
-    shortName: 'Elite',
-    tagline: 'For national academies, big leagues, and franchises.',
-    monthly: 99,
-    isContactSales: true,
-    ctaLabel: 'Contact sales',
-    note: 'Custom pricing based on requirements.',
-    features: [
-      'Includes 20 teams',
-      'Includes 15 Coach Pro seats (+ Coach Pro Plus)',
-      'Includes 5 Analyst Pro seats',
-      'Everything in Org Pro Growth',
-      'Advanced AI tuning for your league',
-      'White-label viewers (logo & colors)',
-      'Optional API access',
-      'Quarterly analytics health check',
-      'Video session analysis (Coach Pro Plus)',
-    ],
-  },
-]
-
-// ----------------------------------------------------------------------------
-// Billing state and computed display plans
-// ----------------------------------------------------------------------------
-
+const pricingStore = usePricingStore()
 const router = useRouter()
 const billingPeriod = ref<BillingPeriod>('monthly')
 
+// Fetch pricing on component mount
+onMounted(async () => {
+  if (pricingStore.displayPlans.length === 0) {
+    await pricingStore.fetchPricing()
+  }
+})
+
+// ----------------------------------------------------------------------------
+// Computed display plans with billing period
+// ----------------------------------------------------------------------------
+
 const displayPlans = computed(() =>
-  plans.map((plan) => {
-    const price = billingPeriod.value === 'monthly' ? plan.monthly : plan.monthly * 10
+  pricingStore.individualDisplayPlans.map((plan) => {
+    const price = billingPeriod.value === 'monthly' ? plan.monthlyPrice : plan.annualPrice
     let priceDisplay: string
+
     if (plan.isContactSales) {
-      priceDisplay = 'Starting at $99'
+      priceDisplay = 'Contact Sales'
     } else if (price === 0) {
       priceDisplay = '$0'
     } else {
-      priceDisplay = `$${price % 1 === 0 ? price : price.toFixed(2)}`
+      priceDisplay = billingPeriod.value === 'monthly' ? plan.monthlyDisplay : plan.annualDisplay
     }
+
     return {
       ...plan,
       price,
@@ -368,13 +226,14 @@ function handleContactSales(planId: string) {
 
 function trialInfoFor(planId: string): { trialLabel: string; cardRequired?: boolean } | null {
   switch (planId) {
-    case 'free':
+    case 'free-scoring': // Backend: free_scoring
       return null // Free plan has no trial
     case 'player-pro':
     case 'coach-pro':
     case 'coach-pro-plus':
     case 'analyst-pro':
       return { trialLabel: '14-day free trial' }
+    case 'org-pro': // Org plans consolidated
     case 'org-starter':
     case 'org-growth':
     case 'org-elite':
@@ -426,7 +285,7 @@ function rowIncluded(rowKey: string, planId: string): boolean {
     case 'basic_stats':
       return index >= 0
 
-    // Player Pro and up
+    // Scorers Pro and up
     case 'career_dashboard':
     case 'form_tracker':
     case 'ai_player_insights':
@@ -618,6 +477,27 @@ function rowIncluded(rowKey: string, planId: string): boolean {
 }
 
 /* Matrix */
+.feature-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Loading & Error States */
+.pricing-loading,
+.pricing-error {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.125rem;
+  color: var(--color-text-muted);
+}
+
+.pricing-error {
+  color: var(--color-error);
+  background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
+  border-radius: var(--radius-md);
+}
+
 .feature-matrix {
   display: flex;
   flex-direction: column;

@@ -11,6 +11,7 @@ from typing import Any, TypedDict
 from pydantic import BaseModel
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -111,6 +112,7 @@ class RoleEnum(str, enum.Enum):
     coach_pro_plus = "coach_pro_plus"
     analyst_pro = "analyst_pro"
     org_pro = "org_pro"
+    venue_admin = "venue_admin"  # NEW: Ground/facility administrators
 
 
 class PlayerCoachingNoteVisibility(str, enum.Enum):
@@ -1292,6 +1294,188 @@ class AiUsageLog(Base):
     )
 
 
+class BetaAccess(Base):
+    """Beta access entitlements for early access users.
+
+    Allows granting feature access beyond role restrictions:
+    - is_super_beta: Access to all features (beta super user)
+    - entitlements: Specific features like ["video_upload", "advanced_analytics"]
+    - expires_at: Optional expiration date
+    """
+
+    __tablename__ = "beta_access"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    is_super_beta: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="Grants all features (beta super user)",
+    )
+    entitlements: Mapped[list[str] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment='Custom feature list: ["video_upload", "advanced_analytics"]',
+    )
+    expires_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Beta access expiration (NULL = permanent)",
+    )
+    granted_by: Mapped[str | None] = mapped_column(
+        String, nullable=True, comment="Admin who granted access"
+    )
+    notes: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Admin notes about beta access"
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (Index("ix_beta_access_expires_at", "expires_at"),)
+
+
+# -------- Cricket Player & Statistics Models --------
+
+
+# ============================================================================
+# Coach Notes (Coach Pro Plus)
+# ============================================================================
+
+
+class CoachNoteSeverity(str, enum.Enum):
+    """Severity level for coach notes."""
+
+    info = "info"
+    improvement = "improvement"
+    critical = "critical"
+
+
+class VideoMomentType(str, enum.Enum):
+    """Types of moments to mark in fielding/wicketkeeping videos."""
+
+    setup = "setup"  # Initial positioning
+    catch = "catch"  # Taking a catch
+    throw = "throw"  # Throwing the ball
+    dive = "dive"  # Diving save or effort
+    stumping = "stumping"  # Wicketkeeping stumping
+    other = "other"  # Other notable moments
+
+
+class VideoMomentMarker(Base):
+    """Timestamped markers for specific moments in video sessions.
+
+    Used primarily for fielding and wicketkeeping analysis to mark
+    key moments like catches, throws, dives, stumpings, etc.
+    """
+
+    __tablename__ = "video_moment_markers"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    video_session_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("video_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    timestamp_ms: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        index=True,
+        comment="Timestamp in milliseconds from video start",
+    )
+    moment_type: Mapped[VideoMomentType] = mapped_column(
+        SAEnum(VideoMomentType, name="video_moment_type"),
+        nullable=False,
+        index=True,
+    )
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="Coach who created this marker",
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class CoachNote(Base):
+    """Coach feedback/notes on individual players.
+
+    Allows coaches to document observations, areas for improvement,
+    and feedback linked to specific video sessions.
+    """
+
+    __tablename__ = "coach_notes"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    coach_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="Coach who created the note",
+    )
+    player_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("players.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="Player the note is about",
+    )
+    video_session_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("video_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Optional link to video session",
+    )
+    moment_marker_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("video_moment_markers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Optional link to specific moment in video",
+    )
+    note_text: Mapped[str] = mapped_column(Text, nullable=False)
+    tags: Mapped[list[str] | None] = mapped_column(
+        ArrayOrJSON,
+        nullable=True,
+        comment='Tags like ["footwork", "timing", "technique"]',
+    )
+    severity: Mapped[CoachNoteSeverity] = mapped_column(
+        SAEnum(CoachNoteSeverity, name="coach_note_severity"),
+        nullable=False,
+        server_default="info",
+        index=True,
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 # -------- Cricket Player & Statistics Models --------
 
 
@@ -1437,6 +1621,15 @@ class VideoSessionStatus(str, enum.Enum):
     failed = "failed"  # Analysis failed
 
 
+class VideoSessionType(str, enum.Enum):
+    """Type of cricket coaching session."""
+
+    batting = "batting"
+    bowling = "bowling"
+    fielding = "fielding"
+    wicketkeeping = "wicketkeeping"
+
+
 class VideoAnalysisJobStatus(str, enum.Enum):
     """Status of a video analysis job."""
 
@@ -1478,6 +1671,18 @@ class VideoSession(Base):
     # Session metadata
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    session_type: Mapped[VideoSessionType | None] = mapped_column(
+        SAEnum(VideoSessionType, name="video_session_type"),
+        nullable=True,
+        index=True,
+        comment="Type of session: batting, bowling, fielding, wicketkeeping",
+    )
+    min_duration_seconds: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="300",
+        comment="Minimum video duration required (default 5 minutes)",
+    )
     player_ids: Mapped[list[str]] = mapped_column(
         ArrayOrJSON,
         nullable=False,
@@ -1490,6 +1695,9 @@ class VideoSession(Base):
     )
     s3_key: Mapped[str | None] = mapped_column(
         String(500), nullable=True, comment="S3 object key for the video file"
+    )
+    file_size_bytes: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="File size in bytes for quota tracking"
     )
 
     # Status tracking

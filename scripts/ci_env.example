@@ -1,0 +1,59 @@
+# ==============================================================================
+# Cricksy Scorer - CI Environment Variables (Example)
+# ==============================================================================
+# This file documents all environment variables used in GitHub Actions CI.
+# Copy this file to `.env.local` and customize for local development.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Backend Test Environment (matches ci.yml)
+# ------------------------------------------------------------------------------
+
+# Use in-memory SQLite for tests (matches CI exactly)
+CRICKSY_IN_MEMORY_DB=1
+
+# Database URL (in-memory SQLite with shared cache)
+DATABASE_URL=sqlite+aiosqlite:///:memory:?cache=shared
+
+# Application secret key for JWT signing (test value)
+APP_SECRET_KEY=test-secret-key
+
+# Python path (required for imports)
+# Windows: PYTHONPATH=C:\Users\YourUser\Cricksy_Scorer
+# Linux/Mac: PYTHONPATH=/path/to/Cricksy_Scorer
+PYTHONPATH=<REPO_ROOT>
+
+# ------------------------------------------------------------------------------
+# Frontend Build Environment (matches ci.yml)
+# ------------------------------------------------------------------------------
+
+# API base URL for production builds
+# Local development: http://localhost:8000
+# Production: https://api.cricksy-ai.com
+VITE_API_BASE=http://localhost:8000
+
+# WebSocket URL (same as API base)
+VITE_SOCKET_URL=http://localhost:8000
+
+# ------------------------------------------------------------------------------
+# CI-Only Variables (NOT needed for local runs)
+# ------------------------------------------------------------------------------
+
+# These are used in deployment workflows only, not in local CI:
+# - AWS_GITHUB_DEPLOY_ROLE_ARN (AWS deployment)
+# - FIREBASE_TOKEN (Frontend deployment)
+# - CODECOV_TOKEN (Code coverage upload)
+# - COPILOT_AUTOMATION_TOKEN (Copilot agent automation)
+
+# ------------------------------------------------------------------------------
+# Optional: Development Overrides
+# ------------------------------------------------------------------------------
+
+# Skip integration tests that require external services
+# PYTEST_MARKERS=-m "not integration"
+
+# Enable verbose pytest output
+# PYTEST_VERBOSE=1
+
+# Enable mypy strict mode
+# MYPY_STRICT=1
