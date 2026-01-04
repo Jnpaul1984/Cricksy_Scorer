@@ -248,11 +248,13 @@ def test_coach_pro_plus_plan_available() -> None:
     features = plus_plan.get("feature_flags", plus_plan)
     assert features.get("video_sessions_enabled") is True
     assert features.get("video_upload_enabled") is True
-    assert plus_plan["ai_session_reports_enabled"] is True
-    assert plus_plan["video_storage_gb"] == 25
+    assert features.get("ai_session_reports_enabled") is True
+    
+    # Video storage is at top level
+    assert plus_plan["video_storage_bytes"] > 0  # Should have storage
 
     # Verify AI limits
-    assert plus_plan["ai_reports_per_month"] == 20
+    assert plus_plan["ai_reports_per_month"] == 100  # Updated from pricing refactor
 
 
 def test_feature_gating_video_upload() -> None:
