@@ -223,77 +223,74 @@ async def test_user(reset_db):
 
 
 @pytest_asyncio.fixture
-async def test_player(reset_db, test_user):
+async def test_player(db_session, reset_db, test_user):
     """Create a test player for coach notes."""
-    from backend.sql_app.database import get_db
     from backend.sql_app.models import Player
     from backend import app
 
-    async for db in get_db():
-        player = Player(
-            id=1,
-            name="Test Player",
-            country="Test Country",
-            role="Batsman",
-        )
-        db.add(player)
-        await db.commit()
+    player = Player(
+        id=1,
+        name="Test Player",
+        country="Test Country",
+        role="Batsman",
+    )
+    db_session.add(player)
+    await db_session.commit()
+    await db_session.refresh(player)
 
-        # Add to in-memory storage for in-memory DB tests
-        app._in_memory_players[player.id] = player
+    # Add to in-memory storage for in-memory DB tests
+    app._in_memory_players[player.id] = player
 
-        return player
+    return player
 
 
 @pytest_asyncio.fixture
-async def test_video_session(reset_db, test_user):
+async def test_video_session(db_session, reset_db, test_user):
     """Create a test video session for moment markers."""
-    from backend.sql_app.database import get_db
     from backend.sql_app.models import OwnerTypeEnum, VideoSession, VideoSessionStatus
     from backend import app
 
-    async for db in get_db():
-        session = VideoSession(
-            id="test-session-001",
-            owner_type=OwnerTypeEnum.coach,
-            owner_id=test_user.id,
-            title="Test Video Session",
-            player_ids=["player1", "player2"],
-            status=VideoSessionStatus.uploaded,
-            min_duration_seconds=300,
-        )
-        db.add(session)
-        await db.commit()
+    session = VideoSession(
+        id="test-session-001",
+        owner_type=OwnerTypeEnum.coach,
+        owner_id=test_user.id,
+        title="Test Video Session",
+        player_ids=["player1", "player2"],
+        status=VideoSessionStatus.uploaded,
+        min_duration_seconds=300,
+    )
+    db_session.add(session)
+    await db_session.commit()
+    await db_session.refresh(session)
 
-        # Add to in-memory storage for in-memory DB tests
-        app._in_memory_video_sessions[session.id] = session
+    # Add to in-memory storage for in-memory DB tests
+    app._in_memory_video_sessions[session.id] = session
 
-        return session
+    return session
 
 
 @pytest_asyncio.fixture
-async def other_user(reset_db):
+async def other_user(db_session, reset_db):
     """Create another test user for ownership tests."""
     import backend.security as security
-    from backend.sql_app.database import get_db
     from backend.sql_app.models import RoleEnum, User
 
-    async for db in get_db():
-        user = User(
-            id="test-coach-002",
-            email="coach2@test.com",
-            hashed_password="test_hashed_password",  # noqa: S106
-            role=RoleEnum.coach_pro_plus,
-            is_active=True,
-            is_superuser=False,
-        )
-        db.add(user)
-        await db.commit()
+    user = User(
+        id="test-coach-002",
+        email="coach2@test.com",
+        hashed_password="test_hashed_password",  # noqa: S106
+        role=RoleEnum.coach_pro_plus,
+        is_active=True,
+        is_superuser=False,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
 
-        # Add to in-memory cache for in-memory DB tests
-        security.add_in_memory_user(user)
+    # Add to in-memory cache for in-memory DB tests
+    security.add_in_memory_user(user)
 
-        return user
+    return user
 
 
 @pytest_asyncio.fixture
