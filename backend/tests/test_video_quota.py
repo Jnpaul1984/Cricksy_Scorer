@@ -5,7 +5,6 @@ Tests for video storage quota enforcement.
 from __future__ import annotations
 
 import pytest
-from backend.services.billing_service import PLAN_FEATURES
 from backend.services.video_quota_service import (
     check_video_quota,
     compute_user_video_usage_bytes,
@@ -37,7 +36,7 @@ async def test_compute_user_video_usage_bytes_with_sessions(db_session):
         role=RoleEnum.coach_pro_plus,
     )
     db_session.add(user)
-    
+
     # Create sessions with different statuses
     session1 = VideoSession(
         id="s1",
@@ -68,7 +67,7 @@ async def test_compute_user_video_usage_bytes_with_sessions(db_session):
     )
     db_session.add_all([session1, session2, session3])
     await db_session.commit()
-    
+
     usage = await compute_user_video_usage_bytes(db_session, "coach_1")
     assert usage == 1_500_000_000  # Only s1 + s2
 
@@ -77,7 +76,7 @@ async def test_compute_user_video_usage_bytes_with_sessions(db_session):
 async def test_get_user_video_quota_bytes_coach_pro_plus(db_session):
     """Test that coach_pro_plus gets quota from pricing config."""
     from backend.config.pricing import IndividualPlan, get_video_storage_bytes
-    
+
     user = User(
         id="coach_1",
         email="coach@test.com",
@@ -85,7 +84,7 @@ async def test_get_user_video_quota_bytes_coach_pro_plus(db_session):
         role=RoleEnum.coach_pro_plus,
     )
     quota_bytes = await get_user_video_quota_bytes(user)
-    
+
     # Get expected value from pricing config (single source of truth)
     expected = get_video_storage_bytes(IndividualPlan.COACH_PRO_PLUS)
     assert quota_bytes == expected
@@ -95,7 +94,7 @@ async def test_get_user_video_quota_bytes_coach_pro_plus(db_session):
 async def test_get_user_video_quota_bytes_org_pro_unlimited(db_session):
     """Test that org_pro has unlimited quota (from pricing config)."""
     from backend.config.pricing import IndividualPlan, get_video_storage_bytes
-    
+
     user = User(
         id="org_1",
         email="org@test.com",
@@ -103,7 +102,7 @@ async def test_get_user_video_quota_bytes_org_pro_unlimited(db_session):
         role=RoleEnum.org_pro,
     )
     quota_bytes = await get_user_video_quota_bytes(user)
-    
+
     # Verify against pricing config
     expected = get_video_storage_bytes(IndividualPlan.ORG_PRO)
     assert quota_bytes is None  # Unlimited
@@ -113,8 +112,7 @@ async def test_get_user_video_quota_bytes_org_pro_unlimited(db_session):
 @pytest.mark.asyncio
 async def test_check_video_quota_allowed(db_session):
     """Test that upload is allowed when under quota."""
-    from backend.config.pricing import IndividualPlan, get_video_storage_bytes
-    
+
     user = User(
         id="coach_1",
         email="coach@test.com",
@@ -123,7 +121,7 @@ async def test_check_video_quota_allowed(db_session):
     )
     db_session.add(user)
     await db_session.commit()
-    
+
     # Check 1GB upload (well under quota)
     allowed, error = await check_video_quota(db_session, user, 1_000_000_000)
     assert allowed is True
@@ -134,7 +132,7 @@ async def test_check_video_quota_allowed(db_session):
 async def test_check_video_quota_exceeded(db_session):
     """Test that upload is blocked when quota exceeded."""
     from backend.config.pricing import IndividualPlan, get_video_storage_bytes
-    
+
     user = User(
         id="coach_1",
         email="coach@test.com",
@@ -142,11 +140,11 @@ async def test_check_video_quota_exceeded(db_session):
         role=RoleEnum.coach_pro_plus,
     )
     db_session.add(user)
-    
+
     # Get quota from pricing config
     quota_bytes = get_video_storage_bytes(IndividualPlan.COACH_PRO_PLUS)
     assert quota_bytes is not None, "Should have a quota"
-    
+
     # Create session just under quota
     almost_full = quota_bytes - 1_000_000_000  # Leave 1GB free
     session1 = VideoSession(
@@ -160,7 +158,7 @@ async def test_check_video_quota_exceeded(db_session):
     )
     db_session.add(session1)
     await db_session.commit()
-    
+
     # Try to upload more than remaining space (2GB > 1GB remaining)
     allowed, error = await check_video_quota(db_session, user, 2_000_000_000)
     assert allowed is False
@@ -179,7 +177,7 @@ async def test_check_video_quota_superuser_unlimited(db_session):
     )
     db_session.add(user)
     await db_session.commit()
-    
+
     # Can upload any amount
     allowed, error = await check_video_quota(db_session, user, 100_000_000_000)
     assert allowed is True

@@ -9,7 +9,7 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 
-from backend.sql_app.models import CoachNoteSeverity, Player, RoleEnum, User
+from backend.sql_app.models import CoachNoteSeverity, Player, User
 
 
 @pytest.mark.asyncio
@@ -72,6 +72,7 @@ async def test_create_note_response_schema(
 
     # Contract: ISO 8601 datetime format
     from datetime import datetime
+
     datetime.fromisoformat(data["created_at"].replace("Z", "+00:00"))
     datetime.fromisoformat(data["updated_at"].replace("Z", "+00:00"))
 

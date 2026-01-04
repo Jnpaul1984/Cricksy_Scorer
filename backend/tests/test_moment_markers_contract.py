@@ -9,7 +9,7 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 
-from backend.sql_app.models import RoleEnum, User, VideoMomentType, VideoSession
+from backend.sql_app.models import User, VideoMomentType, VideoSession
 
 
 @pytest.mark.asyncio
@@ -63,6 +63,7 @@ async def test_create_marker_response_schema(
 
     # Contract: ISO 8601 datetime format
     from datetime import datetime
+
     datetime.fromisoformat(data["created_at"].replace("Z", "+00:00"))
 
 

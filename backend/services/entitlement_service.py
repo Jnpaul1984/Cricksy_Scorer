@@ -35,7 +35,7 @@ async def can_access_feature(
 ) -> bool:
     """
     Check if a user can access a specific feature.
-    
+
     Decision flow:
     1. If user.is_superuser → TRUE (bypass all checks)
     2. Check beta_access table:
@@ -43,15 +43,15 @@ async def can_access_feature(
        - If feature_name in entitlements and not expired → TRUE
     3. Check subscription plan features (role-based)
     4. Default → FALSE
-    
+
     Args:
         db: Database session
         user: User object
         feature_name: Feature key (e.g., "video_upload_enabled", "advanced_analytics")
-    
+
     Returns:
         True if user has access, False otherwise
-    
+
     Examples:
         >>> await can_access_feature(db, user, "video_upload_enabled")
         True  # If user is coach_pro_plus OR has beta access
@@ -59,12 +59,12 @@ async def can_access_feature(
     # 1. Superuser bypass
     if user.is_superuser:
         return True
-    
+
     # 2. Check beta access grants
     stmt = select(BetaAccess).where(BetaAccess.user_id == user.id)
     result = await db.execute(stmt)
     beta_access = result.scalar_one_or_none()
-    
+
     if beta_access:
         # Check expiration
         if beta_access.expires_at:
@@ -75,17 +75,17 @@ async def can_access_feature(
                 # Not expired, check grants
                 if beta_access.is_super_beta:
                     return True
-                
+
                 if beta_access.entitlements and feature_name in beta_access.entitlements:
                     return True
         else:
             # No expiration (permanent beta access)
             if beta_access.is_super_beta:
                 return True
-            
+
             if beta_access.entitlements and feature_name in beta_access.entitlements:
                 return True
-    
+
     # 3. Check subscription plan (role-based features from pricing.py)
     try:
         plan = IndividualPlan(user.role.value if hasattr(user.role, "value") else str(user.role))
@@ -103,11 +103,11 @@ async def get_user_entitlements(
 ) -> dict[str, Any]:
     """
     Get all entitlements for a user (for display/debugging).
-    
+
     Args:
         db: Database session
         user: User object
-    
+
     Returns:
         Dictionary with:
         - role: Current role
@@ -119,14 +119,14 @@ async def get_user_entitlements(
     stmt = select(BetaAccess).where(BetaAccess.user_id == user.id)
     result = await db.execute(stmt)
     beta_access = result.scalar_one_or_none()
-    
+
     # Get plan features from pricing.py
     try:
         plan = IndividualPlan(user.role.value if hasattr(user.role, "value") else str(user.role))
         plan_features = get_entitlements_for_plan(plan)
     except (ValueError, KeyError):
         plan_features = {}
-    
+
     return {
         "role": user.role.value if hasattr(user.role, "value") else str(user.role),
         "is_superuser": user.is_superuser,
@@ -134,8 +134,12 @@ async def get_user_entitlements(
             "active": beta_access is not None,
             "is_super_beta": beta_access.is_super_beta if beta_access else False,
             "entitlements": beta_access.entitlements if beta_access else [],
-            "expires_at": beta_access.expires_at.isoformat() if beta_access and beta_access.expires_at else None,
-        } if beta_access else None,
+            "expires_at": beta_access.expires_at.isoformat()
+            if beta_access and beta_access.expires_at
+            else None,
+        }
+        if beta_access
+        else None,
         "plan_features": plan_features,
     }
 
@@ -143,22 +147,22 @@ async def get_user_entitlements(
 def require_feature(feature_name: str):
     """
     FastAPI dependency decorator that enforces feature access.
-    
+
     Usage:
         @router.get("/premium-endpoint", dependencies=[require_feature("advanced_analytics")])
         async def premium_feature(...):
             pass
-    
+
     Args:
         feature_name: Feature key to check
-    
+
     Returns:
         FastAPI Depends wrapper that validates access
     """
     from fastapi import Depends, HTTPException, status
     from backend.security import get_current_active_user
     from backend.sql_app.database import get_db
-    
+
     async def _check_access(
         current_user: User = Depends(get_current_active_user),
         db: AsyncSession = Depends(get_db),
@@ -170,5 +174,5 @@ def require_feature(feature_name: str):
                 detail=f"Access denied: '{feature_name}' requires a higher plan or beta access.",
             )
         return current_user
-    
+
     return Depends(_check_access)
