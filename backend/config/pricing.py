@@ -18,8 +18,10 @@ from typing import TypedDict
 # INDIVIDUAL PLANS - Player & Coach Focused
 # =============================================================================
 
+
 class IndividualPlan(str, Enum):
     """Individual user subscription plans."""
+
     FREE_SCORING = "free"
     PLAYER_PRO = "player_pro"
     COACH_PRO = "coach_pro"
@@ -32,6 +34,7 @@ class IndividualPlan(str, Enum):
 
 class IndividualPricing(TypedDict):
     """Pricing structure for individual plans."""
+
     monthly_usd: Decimal
     name: str
     tagline: str
@@ -85,8 +88,10 @@ INDIVIDUAL_PRICES: dict[IndividualPlan, IndividualPricing] = {
 # VENUE PLANS - Ground/Facility Focused
 # =============================================================================
 
+
 class VenuePlan(str, Enum):
     """Venue/ground subscription plans."""
+
     VENUE_SCORING_PRO = "venue_scoring_pro"
     VENUE_BROADCAST_PLUS = "venue_broadcast_plus"
     LEAGUE_LICENSE = "league_license"
@@ -94,6 +99,7 @@ class VenuePlan(str, Enum):
 
 class VenuePricing(TypedDict):
     """Pricing structure for venue plans."""
+
     monthly_usd: Decimal | None  # None = contact for pricing
     name: str
     tagline: str
@@ -122,24 +128,26 @@ VENUE_PRICES: dict[VenuePlan, VenuePricing] = {
 # FEATURE ENTITLEMENTS - What Each Plan Unlocks
 # =============================================================================
 
+
 class FeatureEntitlements(TypedDict, total=False):
     """Feature flags for each subscription plan."""
+
     # Core Scoring (FREE for individuals)
     live_scoring: bool
     scoring_access: bool
-    
+
     # AI & Analytics
     ai_predictions: bool
     ai_reports_per_month: int | None  # None = unlimited
     tokens_limit: int | None  # None = unlimited
     advanced_analytics: bool
-    
+
     # Data & Export
     export_pdf: bool
     export_csv: bool
     max_games: int | None  # None = unlimited
     max_tournaments: int | None  # None = unlimited
-    
+
     # Coaching Features
     coach_dashboard: bool
     coaching_sessions: bool
@@ -151,11 +159,11 @@ class FeatureEntitlements(TypedDict, total=False):
     ai_session_reports_enabled: bool
     video_storage_gb: int | None  # None = unlimited (org plans)
     max_video_duration_seconds: int | None  # Per upload, None = unlimited
-    
+
     # Organization
     team_management: bool
     priority_support: bool
-    
+
     # Venue/Broadcast (Ground-level)
     branding_removal: bool
     custom_logo: bool
@@ -368,13 +376,14 @@ VENUE_ENTITLEMENTS: dict[VenuePlan, FeatureEntitlements] = {
 # HELPER FUNCTIONS
 # =============================================================================
 
+
 def get_price_for_plan(plan: IndividualPlan | VenuePlan) -> Decimal | None:
     """
     Get monthly price for any plan.
-    
+
     Args:
         plan: Plan enum value
-        
+
     Returns:
         Monthly price in USD, or None for contact-only pricing
     """
@@ -388,10 +397,10 @@ def get_price_for_plan(plan: IndividualPlan | VenuePlan) -> Decimal | None:
 def get_entitlements_for_plan(plan: IndividualPlan | VenuePlan) -> FeatureEntitlements:
     """
     Get feature entitlements for any plan.
-    
+
     Args:
         plan: Plan enum value
-        
+
     Returns:
         Dictionary of feature flags
     """
@@ -405,47 +414,49 @@ def get_entitlements_for_plan(plan: IndividualPlan | VenuePlan) -> FeatureEntitl
 def get_video_storage_bytes(plan: IndividualPlan | VenuePlan) -> int | None:
     """
     Get video storage quota in bytes for a plan.
-    
+
     Args:
         plan: Plan enum value
-        
+
     Returns:
         Storage quota in bytes, or None for unlimited
     """
     entitlements = get_entitlements_for_plan(plan)
     storage_gb = entitlements.get("video_storage_gb")
-    
+
     if storage_gb is None:
         return None  # Unlimited
     if storage_gb == 0:
         return 0  # No video access
-    
+
     return int(storage_gb * 1024 * 1024 * 1024)  # Convert GB to bytes
 
 
 def get_complete_plan_details(plan: IndividualPlan | VenuePlan) -> dict:
     """
     Get complete plan details including pricing, entitlements, and computed values.
-    
+
     Args:
         plan: Plan enum value
-        
+
     Returns:
-        Dictionary with plan_id, display_name, price_monthly_usd, 
+        Dictionary with plan_id, display_name, price_monthly_usd,
         video_storage_bytes, and all feature_flags
     """
     price_info: IndividualPricing | VenuePricing = (
-        INDIVIDUAL_PRICES[plan] if isinstance(plan, IndividualPlan)  # type: ignore[index]
+        INDIVIDUAL_PRICES[plan]
+        if isinstance(plan, IndividualPlan)  # type: ignore[index]
         else VENUE_PRICES[plan]  # type: ignore[index]
     )
     entitlements = get_entitlements_for_plan(plan)
-    
+
     return {
         "plan_id": plan.value,
         "display_name": price_info["name"],
         "price_monthly_usd": (
             float(price_info["monthly_usd"])  # type: ignore[arg-type]
-            if price_info["monthly_usd"] else None
+            if price_info["monthly_usd"]
+            else None
         ),
         "video_storage_bytes": get_video_storage_bytes(plan),
         "max_video_duration_seconds": entitlements.get("max_video_duration_seconds"),
@@ -457,10 +468,10 @@ def get_complete_plan_details(plan: IndividualPlan | VenuePlan) -> dict:
 def can_score_for_free(plan: IndividualPlan) -> bool:
     """
     Verify that scoring is always free for individuals.
-    
+
     Args:
         plan: Individual plan enum
-        
+
     Returns:
         True (always - scoring is free for all individual users)
     """
@@ -496,7 +507,7 @@ This is subject to fair-use guidelines:
 
 VIDEO DURATION LIMITS PER UPLOAD:
 - Coach Pro Plus: 2 hours (7200 seconds)
-- Coach Live AI: 3 hours (10800 seconds)  
+- Coach Live AI: 3 hours (10800 seconds)
 - Coach Live AI Advanced: Unlimited
 - Organization Pro: Unlimited
 """

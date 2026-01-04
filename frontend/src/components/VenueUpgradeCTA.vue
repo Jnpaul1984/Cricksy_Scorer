@@ -10,7 +10,7 @@
       <p class="upgrade-tagline">
         {{ tagline }}
       </p>
-      
+
       <div v-if="!pricingStore.loading" class="venue-plans">
         <div
           v-for="plan in pricingStore.venueDisplayPlans"
@@ -26,7 +26,7 @@
           </div>
           <p class="plan-price">{{ plan.monthlyDisplay }}/month</p>
           <p class="plan-tagline">{{ plan.tagline }}</p>
-          
+
           <ul class="plan-features-compact">
             <li v-for="(feature, idx) in plan.features.slice(0, 3)" :key="idx">
               • {{ feature }}
@@ -35,7 +35,7 @@
               + {{ plan.features.length - 3 }} more features
             </li>
           </ul>
-          
+
           <BaseButton
             :variant="plan.id === recommendedPlan ? 'primary' : 'ghost'"
             size="sm"
@@ -45,11 +45,11 @@
           </BaseButton>
         </div>
       </div>
-      
+
       <div v-else class="loading-state">
         Loading venue plans...
       </div>
-      
+
       <router-link to="/pricing" class="view-all-plans">
         View all pricing →
       </router-link>
@@ -92,7 +92,7 @@ const router = useRouter()
 
 function handleUpgrade(planId: string) {
   const plan = pricingStore.getPlanById(planId)
-  
+
   if (plan?.isContactSales) {
     // Contact sales flow
     const email = 'sales@cricksy.ai'

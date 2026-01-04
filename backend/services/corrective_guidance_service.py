@@ -12,7 +12,7 @@ from typing import TypedDict, cast
 
 class Checkpoint(TypedDict):
     """A single corrective checkpoint."""
-    
+
     title: str
     description: str
     priority: str  # "high", "medium", "low"
@@ -20,7 +20,7 @@ class Checkpoint(TypedDict):
 
 class Drill(TypedDict):
     """A practice drill recommendation."""
-    
+
     name: str
     description: str
     duration_minutes: int
@@ -29,7 +29,7 @@ class Drill(TypedDict):
 
 class CorrectiveGuidance(TypedDict):
     """Complete corrective guidance response."""
-    
+
     checkpoints: list[Checkpoint]
     drills: list[Drill]
     reference_media: list[str]
@@ -259,19 +259,19 @@ def get_corrective_guidance(
 ) -> CorrectiveGuidance:
     """
     Generate corrective guidance based on role and skill focus.
-    
+
     Args:
         role: Player role ("batting", "bowling", "fielding", "wicketkeeping")
         skill_focus: Specific skill area (e.g., "footwork", "timing", "catching")
         note_text: Optional coach note text for context
-    
+
     Returns:
         CorrectiveGuidance with checkpoints, drills, and references
     """
     checkpoints: list[Checkpoint] = []
     drills: list[Drill] = []
     reference_media: list[str] = []
-    
+
     # Select knowledge base by role
     if role == "batting":
         checkpoint_db = BATTING_CHECKPOINTS
@@ -307,29 +307,31 @@ def get_corrective_guidance(
             "drills": drills,
             "reference_media": [],
         }
-    
+
     # Get checkpoints for skill focus
     if skill_focus in checkpoint_db:
         checkpoints = cast(list[Checkpoint], list(checkpoint_db[skill_focus]))
     else:
         # If skill_focus not found, provide all checkpoints for role
         for skill_checkpoints in checkpoint_db.values():
-            checkpoints.extend(cast(list[Checkpoint], list(skill_checkpoints[:2])))  # Top 2 from each category
-    
+            checkpoints.extend(
+                cast(list[Checkpoint], list(skill_checkpoints[:2]))
+            )  # Top 2 from each category
+
     # Get drills for skill focus
     if skill_focus in drill_db:
         drills = cast(list[Drill], list(drill_db[skill_focus]))
     else:
         # Provide sample drills from first category
-        first_category = list(drill_db.values())[0] if drill_db else []
+        first_category = next(iter(drill_db.values())) if drill_db else []
         drills = cast(list[Drill], list(first_category[:2])) if first_category else []
-    
+
     # Add reference media (placeholder URLs - would link to actual coaching videos)
     reference_media = [
         f"https://coaching.cricksy.com/{role}/{skill_focus}/basics",
         f"https://coaching.cricksy.com/{role}/{skill_focus}/advanced",
     ]
-    
+
     return {
         "checkpoints": checkpoints[:5],  # Limit to 5 checkpoints
         "drills": drills[:3],  # Limit to 3 drills

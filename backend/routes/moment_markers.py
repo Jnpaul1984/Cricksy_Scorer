@@ -34,8 +34,12 @@ class VideoMomentMarkerCreate(BaseModel):
     """Request schema for creating a video moment marker."""
 
     timestamp_ms: int = Field(..., ge=0, description="Timestamp in milliseconds from video start")
-    moment_type: str = Field(..., description="Type of moment: setup, catch, throw, dive, stumping, other")
-    description: str | None = Field(None, max_length=1000, description="Optional description of the moment")
+    moment_type: str = Field(
+        ..., description="Type of moment: setup, catch, throw, dive, stumping, other"
+    )
+    description: str | None = Field(
+        None, max_length=1000, description="Optional description of the moment"
+    )
 
 
 class VideoMomentMarkerUpdate(BaseModel):
@@ -58,7 +62,11 @@ class VideoMomentMarkerRead(BaseModel):
     created_at: str
 
 
-@router.post("/sessions/{session_id}/markers", response_model=VideoMomentMarkerRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/sessions/{session_id}/markers",
+    response_model=VideoMomentMarkerRead,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_moment_marker(
     session_id: str,
     marker_data: VideoMomentMarkerCreate,
@@ -67,7 +75,7 @@ async def create_moment_marker(
 ) -> VideoMomentMarkerRead:
     """
     Create a new moment marker in a video session.
-    
+
     Only coach_pro_plus, org_pro, or superuser can create markers.
     User must own the video session.
     """
@@ -102,9 +110,11 @@ async def create_moment_marker(
 
     # Check ownership
     is_owner = False
-    if session.owner_id == current_user.id:
-        is_owner = True
-    elif session.owner_type.value == "org" and session.owner_id == current_user.org_id:
+    if (
+        session.owner_id == current_user.id
+        or session.owner_type.value == "org"
+        and session.owner_id == current_user.org_id
+    ):
         is_owner = True
 
     if not is_owner and not current_user.is_superuser:
@@ -149,7 +159,7 @@ async def list_session_markers(
 ) -> list[VideoMomentMarkerRead]:
     """
     List all moment markers for a video session.
-    
+
     Returns markers ordered by timestamp_ms ascending.
     """
     # Verify user is a coach or admin
@@ -173,9 +183,11 @@ async def list_session_markers(
 
     # Check ownership
     is_owner = False
-    if session.owner_id == current_user.id:
-        is_owner = True
-    elif session.owner_type.value == "org" and session.owner_id == current_user.org_id:
+    if (
+        session.owner_id == current_user.id
+        or session.owner_type.value == "org"
+        and session.owner_id == current_user.org_id
+    ):
         is_owner = True
 
     if not is_owner and not current_user.is_superuser:
@@ -229,7 +241,7 @@ async def update_moment_marker(
 ) -> VideoMomentMarkerRead:
     """
     Update an existing moment marker.
-    
+
     Only the creator can update their own markers.
     """
     # Fetch marker
@@ -290,7 +302,7 @@ async def delete_moment_marker(
 ) -> None:
     """
     Delete a moment marker.
-    
+
     Only the creator or superuser can delete markers.
     """
     # Fetch marker

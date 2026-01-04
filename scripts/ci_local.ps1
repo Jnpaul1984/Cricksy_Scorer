@@ -77,13 +77,13 @@ function Show-Summary {
 
 function Test-VenvActivation {
     Write-Host "`n[CHECK] Virtual environment..." -ForegroundColor Cyan
-    
+
     if (-not (Test-Path $VENV_ACTIVATE)) {
         Write-Host "[FAIL] .venv\Scripts\Activate.ps1 not found" -ForegroundColor Red
         Write-Host "Create venv with: python -m venv .venv" -ForegroundColor Yellow
         return $false
     }
-    
+
     try {
         & $VENV_ACTIVATE
         Write-Host "[PASS] Virtual environment activated" -ForegroundColor Green
@@ -115,13 +115,13 @@ function Invoke-PreCommit {
 
     Write-Host "Running: pre-commit run --all-files --show-diff-on-failure"
     pre-commit run --all-files --show-diff-on-failure
-    
+
     if ($LASTEXITCODE -ne 0) {
         Write-Host "`n[FAIL] Pre-commit hooks failed" -ForegroundColor Red
         Add-Result "Pre-commit" "FAIL"
         return $false
     }
-    
+
     Write-Host "[PASS] Pre-commit hooks passed" -ForegroundColor Green
     Add-Result "Pre-commit" "PASS"
     return $true

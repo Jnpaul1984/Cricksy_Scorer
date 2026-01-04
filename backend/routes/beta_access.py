@@ -27,17 +27,19 @@ UTC = dt.UTC
 
 class GrantBetaAccessRequest(BaseModel):
     """Request to grant beta access to a user."""
-    
+
     user_id: str = Field(..., description="User ID to grant beta access")
     is_super_beta: bool = Field(False, description="Grant all features (beta super user)")
-    entitlements: list[str] | None = Field(None, description='Specific features: ["video_upload", "advanced_analytics"]')
+    entitlements: list[str] | None = Field(
+        None, description='Specific features: ["video_upload", "advanced_analytics"]'
+    )
     expires_at: dt.datetime | None = Field(None, description="Expiration date (None = permanent)")
     notes: str | None = Field(None, description="Admin notes")
 
 
 class BetaAccessResponse(BaseModel):
     """Response with beta access details."""
-    
+
     id: str
     user_id: str
     user_email: str
@@ -57,7 +59,7 @@ async def grant_beta_access(
 ) -> BetaAccessResponse:
     """
     Grant beta access to a user (superuser only).
-    
+
     Allows granting:
     - Super beta access (all features)
     - Specific feature entitlements
@@ -65,17 +67,17 @@ async def grant_beta_access(
     """
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Only superusers can grant beta access")
-    
+
     # Check target user exists
     user_result = await db.execute(select(User).where(User.id == request.user_id))
     target_user = user_result.scalar_one_or_none()
     if not target_user:
         raise HTTPException(status_code=404, detail=f"User {request.user_id} not found")
-    
+
     # Check if beta access already exists
     beta_result = await db.execute(select(BetaAccess).where(BetaAccess.user_id == request.user_id))
     existing = beta_result.scalar_one_or_none()
-    
+
     if existing:
         # Update existing
         existing.is_super_beta = request.is_super_beta
@@ -96,10 +98,10 @@ async def grant_beta_access(
             notes=request.notes,
         )
         db.add(beta_access)
-    
+
     await db.commit()
     await db.refresh(beta_access)
-    
+
     return BetaAccessResponse(
         id=beta_access.id,
         user_id=beta_access.user_id,
@@ -122,16 +124,16 @@ async def revoke_beta_access(
     """Revoke beta access from a user (superuser only)."""
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Only superusers can revoke beta access")
-    
+
     result = await db.execute(select(BetaAccess).where(BetaAccess.user_id == user_id))
     beta_access = result.scalar_one_or_none()
-    
+
     if not beta_access:
         raise HTTPException(status_code=404, detail="Beta access not found for this user")
-    
+
     await db.delete(beta_access)
     await db.commit()
-    
+
     return {"message": f"Beta access revoked for user {user_id}"}
 
 
@@ -143,17 +145,17 @@ async def get_entitlements(
 ) -> dict:
     """
     Get all entitlements for a user (for debugging/support).
-    
+
     Accessible by:
     - Superuser (any user)
     - User themselves
     """
     if not current_user.is_superuser and current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Can only view your own entitlements")
-    
+
     user_result = await db.execute(select(User).where(User.id == user_id))
     user = user_result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     return await get_user_entitlements(db, user)
