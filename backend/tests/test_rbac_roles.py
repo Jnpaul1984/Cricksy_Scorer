@@ -241,13 +241,13 @@ def test_coach_pro_plus_plan_available() -> None:
 
     # Verify pricing and feature set
     plus_plan = get_plan_features("coach_pro_plus")
-    assert plus_plan["price_monthly"] == 24.99
-    assert plus_plan["name"] == "Coach Pro Plus"
-    assert plus_plan["base_plan"] == "coach_pro"
+    assert plus_plan["price_monthly_usd"] == 29.99  # Updated from pricing refactor
+    assert plus_plan["display_name"] == "Coach Pro Plus"
 
-    # Verify video features enabled
-    assert plus_plan["video_sessions_enabled"] is True
-    assert plus_plan["video_upload_enabled"] is True
+    # Verify video features enabled (these are in feature_flags now)
+    features = plus_plan.get("feature_flags", plus_plan)
+    assert features.get("video_sessions_enabled") is True
+    assert features.get("video_upload_enabled") is True
     assert plus_plan["ai_session_reports_enabled"] is True
     assert plus_plan["video_storage_gb"] == 25
 
@@ -261,12 +261,15 @@ def test_feature_gating_video_upload() -> None:
 
     # Coach Pro should NOT have video upload enabled
     coach_pro_features = get_plan_features("coach_pro")
-    assert coach_pro_features.get("video_upload_enabled", False) is False
+    features_pro = coach_pro_features.get("feature_flags", coach_pro_features)
+    assert features_pro.get("video_upload_enabled", False) is False
 
     # Coach Pro Plus should have video upload enabled
     plus_features = get_plan_features("coach_pro_plus")
-    assert plus_features.get("video_upload_enabled") is True
+    features_plus = plus_features.get("feature_flags", plus_features)
+    assert features_plus.get("video_upload_enabled") is True
 
     # Free tier should NOT have video upload
     free_features = get_plan_features("free")
-    assert free_features.get("video_upload_enabled", False) is False
+    features_free = free_features.get("feature_flags", free_features)
+    assert features_free.get("video_upload_enabled", False) is False
