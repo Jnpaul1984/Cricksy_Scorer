@@ -97,3 +97,117 @@ async def reset_db(_setup_db):
 
     # Clear in-memory user cache (critical for tests using IN_MEMORY_DB)
     backend.security._in_memory_users.clear()
+
+
+@pytest_asyncio.fixture
+async def async_client():
+    """Async HTTP client for testing FastAPI endpoints."""
+    from httpx import AsyncClient
+
+    from backend.app import create_app
+
+    app = create_app()
+
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        yield client
+
+
+@pytest_asyncio.fixture
+async def test_user(reset_db):
+    """Create a test coach user with coach_pro_plus role."""
+    from backend.sql_app.database import get_db
+    from backend.sql_app.models import RoleEnum, User
+
+    async for db in get_db():
+        user = User(
+            id="test-coach-001",
+            email="coach@test.com",
+            hashed_password="test_hashed_password",  # noqa: S106
+            role=RoleEnum.coach_pro_plus,
+            is_active=True,
+            is_superuser=False,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return user
+
+
+@pytest_asyncio.fixture
+async def test_player(reset_db, test_user):
+    """Create a test player for coach notes."""
+    from backend.sql_app.database import get_db
+    from backend.sql_app.models import Player
+
+    async for db in get_db():
+        player = Player(
+            id=1,
+            name="Test Player",
+            country="Test Country",
+            role="Batsman",
+        )
+        db.add(player)
+        await db.commit()
+        await db.refresh(player)
+        return player
+
+
+@pytest_asyncio.fixture
+async def test_video_session(reset_db, test_user):
+    """Create a test video session for moment markers."""
+    from backend.sql_app.database import get_db
+    from backend.sql_app.models import OwnerTypeEnum, VideoSession, VideoSessionStatus
+
+    async for db in get_db():
+        session = VideoSession(
+            id="test-session-001",
+            owner_type=OwnerTypeEnum.coach,
+            owner_id=test_user.id,
+            title="Test Video Session",
+            player_ids=["player1", "player2"],
+            status=VideoSessionStatus.uploaded,
+            min_duration_seconds=300,
+        )
+        db.add(session)
+        await db.commit()
+        await db.refresh(session)
+        return session
+
+
+@pytest_asyncio.fixture
+async def other_user(reset_db):
+    """Create another test user for ownership tests."""
+    from backend.sql_app.database import get_db
+    from backend.sql_app.models import RoleEnum, User
+
+    async for db in get_db():
+        user = User(
+            id="test-coach-002",
+            email="coach2@test.com",
+            hashed_password="test_hashed_password",  # noqa: S106
+            role=RoleEnum.coach_pro_plus,
+            is_active=True,
+            is_superuser=False,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return user
+
+
+@pytest_asyncio.fixture
+async def auth_headers(test_user):
+    """Generate auth headers for test_user."""
+    from backend.security import create_access_token
+
+    token = create_access_token(test_user.id, test_user.role.value)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def other_auth_headers(other_user):
+    """Generate auth headers for other_user."""
+    from backend.security import create_access_token
+
+    token = create_access_token(other_user.id, other_user.role.value)
+    return {"Authorization": f"Bearer {token}"}

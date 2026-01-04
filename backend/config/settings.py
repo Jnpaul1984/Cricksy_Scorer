@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Resolve relative to backend/ directory
+_ROOT = Path(__file__).resolve().parent
+
+_DEFAULT_CORS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+    "https://cricksy-ai.web.app",
+    "https://cricksy-ai-web.app",
+    "https://api.cricksy-ai.com",
+    "https://cricksy-ai.com",
+    "https://www.cricksy-ai.com",
+    "https://dev.cricksy-ai.com",
+]
+
+
+class Settings(BaseSettings):
+    """Runtime configuration sourced from environment/Secrets Manager."""
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    API_TITLE: str = Field(default="Cricksy Scorer API", alias="CRICKSY_API_TITLE")
+    DATABASE_URL: str = Field(..., alias="DATABASE_URL")
+    APP_SECRET_KEY: str = Field(..., alias="APP_SECRET_KEY")
+    BACKEND_CORS_ORIGINS: str = Field(
+        default=",".join(_DEFAULT_CORS),
+        alias="BACKEND_CORS_ORIGINS",
+    )
+    IN_MEMORY_DB: bool = Field(default=False, alias="CRICKSY_IN_MEMORY_DB")
+    STATIC_ROOT: Path = Field(default=_ROOT / "static", alias="CRICKSY_STATIC_ROOT")
+    SPONSORS_DIR: Path = Field(default=_ROOT / "static" / "sponsors", alias="CRICKSY_SPONSORS_DIR")
+    SIO_CORS_ALLOWED_ORIGINS: str | list[str] = Field(
+        default="*",
+        alias="CRICKSY_SIO_CORS_ORIGINS",
+    )
+    LOG_LEVEL: str = Field(default="INFO", alias="CRICKSY_LOG_LEVEL")
+    ENV: str = Field(default="development", alias="CRICKSY_ENV")
+    COACH_REPORT_LLM_ENABLED: bool = Field(default=False, alias="CRICKSY_COACH_REPORT_LLM_ENABLED")
+    COACH_REPORT_LLM_MODEL: str = Field(default="gpt-4", alias="CRICKSY_COACH_REPORT_LLM_MODEL")
+    AWS_REGION: str = Field(default="us-east-1", alias="AWS_REGION")
+    S3_COACH_VIDEOS_BUCKET: str = Field(default="", alias="S3_COACH_VIDEOS_BUCKET")
+    COACH_PLUS_S3_PREFIX: str = Field(default="coach_plus", alias="COACH_PLUS_S3_PREFIX")
+    S3_UPLOAD_URL_EXPIRES_SECONDS: int = Field(default=3600, alias="S3_UPLOAD_URL_EXPIRES_SECONDS")
+    S3_STREAM_URL_EXPIRES_SECONDS: int = Field(default=300, alias="S3_STREAM_URL_EXPIRES_SECONDS")
+    SQS_VIDEO_ANALYSIS_QUEUE_URL: str = Field(default="", alias="SQS_VIDEO_ANALYSIS_QUEUE_URL")
+
+    # Coach Pro Plus analysis worker (DB-backed queue)
+    COACH_PLUS_ANALYSIS_POLL_SECONDS: float = Field(
+        default=1.0, alias="COACH_PLUS_ANALYSIS_POLL_SECONDS"
+    )
+    COACH_PLUS_DEEP_ANALYSIS_ENABLED: bool = Field(
+        default=True, alias="COACH_PLUS_DEEP_ANALYSIS_ENABLED"
+    )
+    COACH_PLUS_QUICK_MAX_SECONDS: int = Field(default=30, alias="COACH_PLUS_QUICK_MAX_SECONDS")
+
+    @field_validator("STATIC_ROOT", mode="before")
+    @classmethod
+    def _resolve_static_root(cls, value: Path | str | None) -> Path:
+        if isinstance(value, Path):
+            return value
+        if value is None:
+            return _ROOT / "static"
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return _ROOT / "static"
+            return Path(stripped)
+        return Path(value)
+
+    @field_validator("SPONSORS_DIR", mode="before")
+    @classmethod
+    def _resolve_sponsors_dir(cls, value: Path | str | None) -> Path:
+        if isinstance(value, Path):
+            return value
+        if value is None:
+            return _ROOT / "static" / "sponsors"
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return _ROOT / "static" / "sponsors"
+            return Path(stripped)
+        return Path(value)
+
+    @property
+    def database_url(self) -> str:
+        return self.DATABASE_URL
+
+    @property
+    def app_secret_key(self) -> str:
+        return self.APP_SECRET_KEY
+
+    @property
+    def backend_cors_origins(self) -> str:
+        return self.BACKEND_CORS_ORIGINS
+
+    @property
+    def aws_region(self) -> str:
+        return self.AWS_REGION
+
+    @property
+    def s3_coach_videos_bucket(self) -> str:
+        return self.S3_COACH_VIDEOS_BUCKET
+
+    @property
+    def s3_upload_url_expires_seconds(self) -> int:
+        return self.S3_UPLOAD_URL_EXPIRES_SECONDS
+
+    @property
+    def coach_plus_s3_prefix(self) -> str:
+        return self.COACH_PLUS_S3_PREFIX
+
+    @property
+    def s3_stream_url_expires_seconds(self) -> int:
+        return self.S3_STREAM_URL_EXPIRES_SECONDS
+
+    @property
+    def sqs_video_analysis_queue_url(self) -> str:
+        return self.SQS_VIDEO_ANALYSIS_QUEUE_URL
+
+    @property
+    def coach_plus_analysis_poll_seconds(self) -> float:
+        return self.COACH_PLUS_ANALYSIS_POLL_SECONDS
+
+    @property
+    def coach_plus_deep_analysis_enabled(self) -> bool:
+        return self.COACH_PLUS_DEEP_ANALYSIS_ENABLED
+
+    @property
+    def coach_plus_quick_max_seconds(self) -> int:
+        return self.COACH_PLUS_QUICK_MAX_SECONDS
+
+
+settings = Settings()

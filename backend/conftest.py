@@ -75,6 +75,17 @@ async def reset_db(_setup_db):
     # Clear in-memory user cache (critical for tests using IN_MEMORY_DB)
     backend.security._in_memory_users.clear()
 
+    # Clear in-memory coaching models cache
+    try:
+        from backend import app
+
+        app._in_memory_video_sessions.clear()
+        app._in_memory_moment_markers.clear()
+        app._in_memory_coach_notes.clear()
+        app._in_memory_players.clear()
+    except (ImportError, AttributeError):
+        pass
+
 
 @pytest_asyncio.fixture
 async def db_session(_setup_db):
@@ -179,3 +190,129 @@ async def test_game_with_deliveries(db_session):
     await db_session.commit()
     await db_session.refresh(game)
     return game
+
+
+# ============================================================================
+# Coaching Feature Contract Test Fixtures
+# ============================================================================
+
+
+@pytest_asyncio.fixture
+async def test_user(reset_db):
+    """Create a test coach user with coach_pro_plus role."""
+    import backend.security as security
+    from backend.sql_app.database import get_db
+    from backend.sql_app.models import RoleEnum, User
+
+    async for db in get_db():
+        user = User(
+            id="test-coach-001",
+            email="coach@test.com",
+            hashed_password="test_hashed_password",  # noqa: S106
+            role=RoleEnum.coach_pro_plus,
+            is_active=True,
+            is_superuser=False,
+        )
+        db.add(user)
+        await db.commit()
+
+        # Add to in-memory cache for in-memory DB tests
+        security.add_in_memory_user(user)
+
+        return user
+
+
+@pytest_asyncio.fixture
+async def test_player(reset_db, test_user):
+    """Create a test player for coach notes."""
+    from backend.sql_app.database import get_db
+    from backend.sql_app.models import Player
+    from backend import app
+
+    async for db in get_db():
+        player = Player(
+            id=1,
+            name="Test Player",
+            country="Test Country",
+            role="Batsman",
+        )
+        db.add(player)
+        await db.commit()
+
+        # Add to in-memory storage for in-memory DB tests
+        app._in_memory_players[player.id] = player
+
+        return player
+
+
+@pytest_asyncio.fixture
+async def test_video_session(reset_db, test_user):
+    """Create a test video session for moment markers."""
+    from backend.sql_app.database import get_db
+    from backend.sql_app.models import OwnerTypeEnum, VideoSession, VideoSessionStatus
+    from backend import app
+
+    async for db in get_db():
+        session = VideoSession(
+            id="test-session-001",
+            owner_type=OwnerTypeEnum.coach,
+            owner_id=test_user.id,
+            title="Test Video Session",
+            player_ids=["player1", "player2"],
+            status=VideoSessionStatus.uploaded,
+            min_duration_seconds=300,
+        )
+        db.add(session)
+        await db.commit()
+
+        # Add to in-memory storage for in-memory DB tests
+        app._in_memory_video_sessions[session.id] = session
+
+        return session
+
+
+@pytest_asyncio.fixture
+async def other_user(reset_db):
+    """Create another test user for ownership tests."""
+    import backend.security as security
+    from backend.sql_app.database import get_db
+    from backend.sql_app.models import RoleEnum, User
+
+    async for db in get_db():
+        user = User(
+            id="test-coach-002",
+            email="coach2@test.com",
+            hashed_password="test_hashed_password",  # noqa: S106
+            role=RoleEnum.coach_pro_plus,
+            is_active=True,
+            is_superuser=False,
+        )
+        db.add(user)
+        await db.commit()
+
+        # Add to in-memory cache for in-memory DB tests
+        security.add_in_memory_user(user)
+
+        return user
+
+
+@pytest_asyncio.fixture
+async def auth_headers(test_user):
+    """Generate auth headers for test_user."""
+    from backend.security import create_access_token
+
+    token = create_access_token(
+        {"sub": test_user.id, "email": test_user.email, "role": test_user.role.value}
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def other_auth_headers(other_user):
+    """Generate auth headers for other_user."""
+    from backend.security import create_access_token
+
+    token = create_access_token(
+        {"sub": other_user.id, "email": other_user.email, "role": other_user.role.value}
+    )
+    return {"Authorization": f"Bearer {token}"}

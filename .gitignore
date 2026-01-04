@@ -26,6 +26,7 @@ artifacts/*.jsonl
 # Local databases
 dev.db
 test_app.db
+test.db
 *.sqlite3
 
 # Local backup / snapshot zips
@@ -124,6 +125,8 @@ td*.json
 iam_*.json
 vpce-*.json
 *.ps1
+!scripts/*.ps1
+!scripts/*.sh
 mediapipe_models/
 .venv*/
 venv/
