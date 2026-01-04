@@ -110,10 +110,8 @@ async def create_moment_marker(
 
     # Check ownership
     is_owner = False
-    if (
-        session.owner_id == current_user.id
-        or session.owner_type.value == "org"
-        and session.owner_id == current_user.org_id
+    if session.owner_id == current_user.id or (
+        session.owner_type.value == "org" and session.owner_id == current_user.org_id
     ):
         is_owner = True
 
@@ -183,10 +181,8 @@ async def list_session_markers(
 
     # Check ownership
     is_owner = False
-    if (
-        session.owner_id == current_user.id
-        or session.owner_type.value == "org"
-        and session.owner_id == current_user.org_id
+    if session.owner_id == current_user.id or (
+        session.owner_type.value == "org" and session.owner_id == current_user.org_id
     ):
         is_owner = True
 
