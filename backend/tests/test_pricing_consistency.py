@@ -31,9 +31,9 @@ class TestScoringIsFree:
         """Every individual plan must have scoring_access=True."""
         for plan in IndividualPlan:
             entitlements = INDIVIDUAL_ENTITLEMENTS[plan]
-            assert (
-                entitlements.get("scoring_access", False) is True
-            ), f"Plan {plan.value} must have scoring_access=True"
+            assert entitlements.get("scoring_access", False) is True, (
+                f"Plan {plan.value} must have scoring_access=True"
+            )
 
     def test_free_plan_has_zero_price(self):
         """Free plan must cost $0.00."""
@@ -43,9 +43,9 @@ class TestScoringIsFree:
     def test_can_score_for_free_helper(self):
         """All plans return True for can_score_for_free()."""
         for plan in IndividualPlan:
-            assert (
-                can_score_for_free(plan) is True
-            ), f"can_score_for_free({plan.value}) must return True"
+            assert can_score_for_free(plan) is True, (
+                f"can_score_for_free({plan.value}) must return True"
+            )
 
 
 class TestPricingConsistency:
@@ -102,16 +102,16 @@ class TestCoachingContractPreserved:
         ]
 
         for feature in required_features:
-            assert (
-                entitlements.get(feature) is True
-            ), f"Coach Pro Plus must have {feature}=True (contract requirement)"
+            assert entitlements.get(feature) is True, (
+                f"Coach Pro Plus must have {feature}=True (contract requirement)"
+            )
 
     def test_coach_pro_plus_price_correct(self):
         """Coach Pro Plus must cost $29.99."""
         pricing = INDIVIDUAL_PRICES[IndividualPlan.COACH_PRO_PLUS]
-        assert pricing["monthly_usd"] == Decimal(
-            "29.99"
-        ), "Coach Pro Plus must cost $29.99 (contract requirement)"
+        assert pricing["monthly_usd"] == Decimal("29.99"), (
+            "Coach Pro Plus must cost $29.99 (contract requirement)"
+        )
 
 
 class TestVenueEntitlements:
@@ -138,9 +138,9 @@ class TestVenueEntitlements:
         ]
 
         for feature in broadcast_features:
-            assert (
-                entitlements.get(feature) is True
-            ), f"Venue Broadcast Plus must have {feature}=True"
+            assert entitlements.get(feature) is True, (
+                f"Venue Broadcast Plus must have {feature}=True"
+            )
 
     def test_venue_plans_pricing_correct(self):
         """Venue plans must have correct pricing."""

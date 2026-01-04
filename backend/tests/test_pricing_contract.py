@@ -62,9 +62,9 @@ class TestPricingContract:
         """Verify that org_pro has unlimited video storage."""
         org_details = get_complete_plan_details(IndividualPlan.ORG_PRO)
         assert org_details["video_storage_bytes"] is None, "Org Pro should have unlimited storage"
-        assert (
-            org_details["max_video_duration_seconds"] is None
-        ), "Org Pro should have unlimited duration"
+        assert org_details["max_video_duration_seconds"] is None, (
+            "Org Pro should have unlimited duration"
+        )
 
         # Also test via get_video_storage_bytes
         storage = get_video_storage_bytes(IndividualPlan.ORG_PRO)
@@ -75,12 +75,12 @@ class TestPricingContract:
         free_details = get_complete_plan_details(IndividualPlan.FREE_SCORING)
         features = free_details["feature_flags"]
 
-        assert (
-            features.get("video_upload_enabled", False) is False
-        ), "Free plan should not allow video uploads"
-        assert (
-            features.get("video_sessions_enabled", False) is False
-        ), "Free plan should not have video sessions"
+        assert features.get("video_upload_enabled", False) is False, (
+            "Free plan should not allow video uploads"
+        )
+        assert features.get("video_sessions_enabled", False) is False, (
+            "Free plan should not have video sessions"
+        )
 
     def test_coach_pro_plus_video_quota(self) -> None:
         """Verify coach_pro_plus has expected video storage quota."""
@@ -88,15 +88,15 @@ class TestPricingContract:
 
         # 25 GB in bytes
         expected_bytes = 25 * 1024 * 1024 * 1024
-        assert (
-            details["video_storage_bytes"] == expected_bytes
-        ), "Coach Pro Plus should have 25GB storage"
+        assert details["video_storage_bytes"] == expected_bytes, (
+            "Coach Pro Plus should have 25GB storage"
+        )
 
         # 2 hours in seconds
         expected_duration = 7200
-        assert (
-            details["max_video_duration_seconds"] == expected_duration
-        ), "Coach Pro Plus should allow 2 hour videos"
+        assert details["max_video_duration_seconds"] == expected_duration, (
+            "Coach Pro Plus should allow 2 hour videos"
+        )
 
     def test_plan_features_backward_compatibility(self) -> None:
         """Test that PLAN_FEATURES exports all plans for backward compatibility."""
@@ -167,14 +167,14 @@ class TestPricingContract:
 
             if entitlements.get("video_upload_enabled"):
                 # If video upload is enabled, duration limit must be defined (even if None for unlimited)
-                assert (
-                    "max_video_duration_seconds" in entitlements
-                ), f"Plan {plan.value} has video_upload_enabled but no max_video_duration_seconds"
+                assert "max_video_duration_seconds" in entitlements, (
+                    f"Plan {plan.value} has video_upload_enabled but no max_video_duration_seconds"
+                )
 
     def test_scoring_always_free(self) -> None:
         """Verify that scoring_access is True for all individual plans."""
         for plan in IndividualPlan:
             entitlements = INDIVIDUAL_ENTITLEMENTS[plan]
-            assert (
-                entitlements.get("scoring_access") is True
-            ), f"Plan {plan.value} must have scoring_access=True (scoring is free for individuals)"
+            assert entitlements.get("scoring_access") is True, (
+                f"Plan {plan.value} must have scoring_access=True (scoring is free for individuals)"
+            )
