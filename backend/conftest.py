@@ -218,7 +218,7 @@ async def test_user(db_session, reset_db):
     # Add to in-memory cache for in-memory DB tests
     security.add_in_memory_user(user)
 
-        return user
+    return user
 
 
 @pytest_asyncio.fixture
