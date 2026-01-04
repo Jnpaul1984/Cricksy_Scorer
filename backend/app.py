@@ -13,8 +13,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.config import settings as default_settings
-from backend.config import _DEFAULT_CORS
+from backend.config.settings import settings as default_settings
+from backend.config.settings import _DEFAULT_CORS
 
 from backend.error_handlers import install_exception_handlers  # NEW
 from backend.middleware.request_logging import RequestLoggingMiddleware
@@ -42,7 +42,11 @@ from backend.routes.ball_clustering import router as ball_clustering_router
 from backend.routes.sponsor_rotation import router as sponsor_rotation_router
 from backend.routes.branding import router as branding_router
 from backend.routes.auth_router import router as auth_router
+from backend.routes.beta_access import router as beta_access_router
 from backend.routes.billing import router as billing_router
+from backend.routes.coach_notes import router as coach_notes_router
+from backend.routes.moment_markers import router as moment_markers_router
+from backend.routes.pricing import router as pricing_router
 
 # Routers
 from backend.routes.coach_pro import router as coach_pro_router
@@ -99,6 +103,9 @@ except Exception:
 
 # Minimal no-op async session & result for in-memory mode safety
 class _FakeResult:
+    def __init__(self, query: Any = None):
+        self._query = query
+
     def scalars(self) -> _FakeResult:
         return self
 
@@ -110,6 +117,29 @@ class _FakeResult:
         return None
 
     def scalar_one_or_none(self) -> Any | None:
+        # Check if this is a VideoSession query
+        if self._query is not None and hasattr(self._query, "whereclause"):
+            query_str = str(self._query)
+            # VideoSession query
+            if "video_sessions" in query_str.lower():
+                whereclause = str(self._query.whereclause)
+                for session_id, session in _in_memory_video_sessions.items():
+                    if session_id in whereclause or str(session.id) in whereclause:
+                        return session
+            # VideoMomentMarker query
+            elif "video_moment_markers" in query_str.lower():
+                whereclause = str(self._query.whereclause)
+                for marker_id, marker in _in_memory_moment_markers.items():
+                    if marker_id in whereclause or str(marker.id) in whereclause:
+                        return marker
+            # User query (for authentication)
+            elif "users" in query_str.lower():
+                whereclause = str(self._query.whereclause)
+                from backend import security
+
+                for user in security._in_memory_users.values():
+                    if str(user.id) in whereclause or user.email in whereclause:
+                        return user
         return None
 
 
@@ -203,13 +233,40 @@ class _MemoryExecResult(_FakeResult):
 
 class _FakeSession:
     def add(self, obj: Any) -> None:
-        pass
+        # Store coaching models in in-memory dictionaries
+        try:
+            from backend.sql_app.models import VideoSession, VideoMomentMarker, CoachNote, Player
+
+            if isinstance(obj, VideoSession):
+                _in_memory_video_sessions[obj.id] = obj
+            elif isinstance(obj, VideoMomentMarker):
+                _in_memory_moment_markers[obj.id] = obj
+            elif isinstance(obj, CoachNote):
+                _in_memory_coach_notes[obj.id] = obj
+            elif isinstance(obj, Player):
+                _in_memory_players[obj.id] = obj
+        except ImportError:
+            pass
 
     def add_all(self, seq: list[Any]) -> None:
         pass
 
     async def commit(self) -> None:
         pass
+
+    async def delete(self, obj: Any) -> None:
+        """Delete object from in-memory storage."""
+        try:
+            from backend.sql_app.models import VideoSession, VideoMomentMarker, CoachNote
+
+            if isinstance(obj, VideoMomentMarker):
+                _in_memory_moment_markers.pop(obj.id, None)
+            elif isinstance(obj, VideoSession):
+                _in_memory_video_sessions.pop(obj.id, None)
+            elif isinstance(obj, CoachNote):
+                _in_memory_coach_notes.pop(obj.id, None)
+        except ImportError:
+            pass
 
     async def refresh(self, obj: Any) -> None:
         pass
@@ -241,10 +298,46 @@ class _FakeSession:
             if repo is not None:
                 # return all stored games (sync list wrapped in async fetcher)
                 return _MemoryExecResult(lambda: list(repo._games.values()))
-        return _FakeResult()
+        # Handle VideoMomentMarker list queries
+        if args and hasattr(args[0], "whereclause"):
+            query_str = str(args[0])
+            if "video_moment_markers" in query_str.lower():
+                # Filter markers by session_id if in whereclause
+                whereclause = str(args[0].whereclause)
+                markers = []
+                for marker in _in_memory_moment_markers.values():
+                    # Check if this marker matches the query (simple string match)
+                    if (
+                        not whereclause
+                        or str(marker.video_session_id) in whereclause
+                        or "video_session_id" not in whereclause
+                    ):
+                        markers.append(marker)
+                # Sort by timestamp_ms ascending (contract requirement)
+                markers.sort(key=lambda m: m.timestamp_ms)
+                return _MemoryExecResult(lambda: markers)
+        # Return result with query for scalar_one_or_none() support
+        query = args[0] if args else None
+        return _FakeResult(query=query)
 
     # ADD THIS: emulate AsyncSession.scalar(...) for in-memory mode
     async def scalar(self, *args: Any, **kwargs: Any) -> Any | None:
+        # Check if this is a VideoSession query
+        if args and hasattr(args[0], "whereclause"):
+            query_str = str(args[0])
+            # VideoSession query
+            if "video_sessions" in query_str.lower():
+                # Extract session_id from whereclause
+                whereclause = str(args[0].whereclause)
+                for session_id, session in _in_memory_video_sessions.items():
+                    if session_id in whereclause or str(session.id) in whereclause:
+                        return session
+            # VideoMomentMarker query
+            elif "video_moment_markers" in query_str.lower():
+                whereclause = str(args[0].whereclause)
+                for marker_id, marker in _in_memory_moment_markers.items():
+                    if marker_id in whereclause or str(marker.id) in whereclause:
+                        return marker
         # We don't have a real DB in in-memory mode; returning None lets routes 404 cleanly
         return None
 
@@ -260,9 +353,33 @@ class _FakeSession:
                 for user in security._in_memory_users.values():
                     if str(user.id) == str(ident):
                         return user
+
+            # Support VideoSession lookup
+            if entity == models.VideoSession:
+                return _in_memory_video_sessions.get(str(ident))
+
+            # Support VideoMomentMarker lookup
+            if entity == models.VideoMomentMarker:
+                return _in_memory_moment_markers.get(str(ident))
+
+            # Support CoachNote lookup
+            if entity == models.CoachNote:
+                return _in_memory_coach_notes.get(str(ident))
+
+            # Support Player lookup
+            if entity == models.Player:
+                return _in_memory_players.get(int(ident))
+
         except ImportError:
             pass
         return None
+
+
+# In-memory storage for coaching models (used in tests)
+_in_memory_video_sessions: dict[str, Any] = {}
+_in_memory_moment_markers: dict[str, Any] = {}
+_in_memory_coach_notes: dict[str, Any] = {}
+_in_memory_players: dict[int, Any] = {}
 
 
 def create_app(
@@ -347,6 +464,10 @@ def create_app(
     fastapi_app.include_router(feedback_router)
     fastapi_app.include_router(teams_router)
     fastapi_app.include_router(billing_router)
+    fastapi_app.include_router(pricing_router)  # NEW: Pricing API
+    fastapi_app.include_router(beta_access_router)
+    fastapi_app.include_router(coach_notes_router)
+    fastapi_app.include_router(moment_markers_router)
     fastapi_app.include_router(admin_agents.router)  # Added admin_agents router
 
     # Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
