@@ -12,116 +12,47 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.sql_app.models import AiUsageLog, RoleEnum, User
 
+from backend.config.pricing import IndividualPlan, get_complete_plan_details
 
-# Plan feature definitions
-PLAN_FEATURES: dict[str, dict] = {
-    "free": {
-        "name": "Free",
-        "price_monthly": 0,
-        "tokens_limit": 10_000,
-        "ai_reports_per_month": 5,
-        "max_games": 10,
-        "max_tournaments": 1,
+# Plan feature definitions - dynamically generated from pricing config
+# This ensures backward compatibility while using the new single source of truth
+PLAN_FEATURES: dict[str, dict] = {}
+
+# Build PLAN_FEATURES from the IndividualPlan enum
+for plan in IndividualPlan:
+    details = get_complete_plan_details(plan)
+    PLAN_FEATURES[plan.value] = details
+
+# Add legacy aliases for backward compatibility
+PLAN_FEATURES["superuser"] = {
+    "plan_id": "superuser",
+    "display_name": "Superuser",
+    "price_monthly_usd": 0.0,
+    "tokens_limit": None,
+    "ai_reports_per_month": None,
+    "max_games": None,
+    "max_tournaments": None,
+    "live_scoring": True,
+    "ai_predictions": True,
+    "export_pdf": True,
+    "priority_support": True,
+    "team_management": True,
+    "advanced_analytics": True,
+    "feature_flags": {
         "live_scoring": True,
+        "scoring_access": True,
         "ai_predictions": True,
-        "export_pdf": False,
-        "priority_support": False,
-        "team_management": False,
-        "advanced_analytics": False,
-    },
-    "player_pro": {
-        "name": "Player Pro",
-        "price_monthly": 9.99,
-        "tokens_limit": 100_000,
-        "ai_reports_per_month": 50,
-        "max_games": None,  # Unlimited
-        "max_tournaments": 10,
-        "live_scoring": True,
-        "ai_predictions": True,
-        "export_pdf": True,
-        "priority_support": False,
-        "team_management": False,
-        "advanced_analytics": True,
-    },
-    "coach_pro": {
-        "name": "Coach Pro",
-        "price_monthly": 19.99,
-        "tokens_limit": 100_000,
-        "ai_reports_per_month": 100,
-        "max_games": None,
-        "max_tournaments": 50,
-        "live_scoring": True,
-        "ai_predictions": True,
-        "export_pdf": True,
-        "priority_support": True,
-        "team_management": True,
-        "advanced_analytics": True,
-    },
-    "coach_pro_plus": {
-        "name": "Coach Pro Plus",
-        "price_monthly": 24.99,
-        "base_plan": "coach_pro",
-        "tokens_limit": 100_000,
-        "ai_reports_per_month": 20,
-        "max_games": None,
-        "max_tournaments": 50,
-        "live_scoring": True,
-        "ai_predictions": True,
-        "export_pdf": True,
-        "priority_support": True,
-        "team_management": True,
-        "advanced_analytics": True,
-        "coach_dashboard": True,
-        "coaching_sessions": True,
-        "player_assignments": True,
-        "video_sessions_enabled": True,
-        "video_upload_enabled": True,
-        "ai_session_reports_enabled": True,
-        "video_storage_gb": 25,
-    },
-    "analyst_pro": {
-        "name": "Analyst Pro",
-        "price_monthly": 29.99,
-        "tokens_limit": 100_000,
-        "ai_reports_per_month": 200,
-        "max_games": None,
-        "max_tournaments": None,
-        "live_scoring": True,
-        "ai_predictions": True,
-        "export_pdf": True,
-        "priority_support": True,
-        "team_management": True,
-        "advanced_analytics": True,
-    },
-    "org_pro": {
-        "name": "Organization Pro",
-        "price_monthly": 99.99,
-        "tokens_limit": None,  # Unlimited
-        "ai_reports_per_month": None,  # Unlimited
-        "max_games": None,
-        "max_tournaments": None,
-        "live_scoring": True,
-        "ai_predictions": True,
-        "export_pdf": True,
-        "priority_support": True,
-        "team_management": True,
-        "advanced_analytics": True,
-    },
-    "superuser": {
-        "name": "Superuser",
-        "price_monthly": 0,
-        "tokens_limit": None,
         "ai_reports_per_month": None,
+        "tokens_limit": None,
         "max_games": None,
         "max_tournaments": None,
-        "live_scoring": True,
-        "ai_predictions": True,
         "export_pdf": True,
         "priority_support": True,
         "team_management": True,
         "advanced_analytics": True,
     },
 }
+
 
 
 def get_plan_features(plan: str) -> dict:
@@ -132,9 +63,28 @@ def get_plan_features(plan: str) -> dict:
         plan: Plan identifier (free, player_pro, coach_pro, etc.)
 
     Returns:
-        Dictionary of plan features and limits
+        Dictionary of plan features and limits with plan_id, display_name,
+        price_monthly_usd, and feature_flags
     """
-    return PLAN_FEATURES.get(plan, PLAN_FEATURES["free"]).copy()
+    # Import here to avoid circular dependency
+    from backend.config.pricing import (
+        IndividualPlan,
+        get_complete_plan_details,
+    )
+
+    # Try to convert string to IndividualPlan enum
+    try:
+        plan_enum = IndividualPlan(plan)
+        return get_complete_plan_details(plan_enum)
+    except ValueError:
+        # Fallback to old PLAN_FEATURES for backward compatibility
+        details = PLAN_FEATURES.get(plan, PLAN_FEATURES["free"]).copy()
+        # Add missing fields for backward compatibility
+        details["plan_id"] = plan
+        details["display_name"] = details.get("name", "Unknown Plan")
+        details["price_monthly_usd"] = details.get("price_monthly", 0.0)
+        details["feature_flags"] = details
+        return details
 
 
 def get_user_plan_id(user: User) -> str:

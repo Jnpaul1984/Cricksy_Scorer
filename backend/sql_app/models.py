@@ -1697,7 +1697,7 @@ class VideoSession(Base):
         String(500), nullable=True, comment="S3 object key for the video file"
     )
     file_size_bytes: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, comment="File size in bytes for quota tracking"
+        BigInteger, nullable=True, comment="File size in bytes for quota tracking"
     )
 
     # Status tracking

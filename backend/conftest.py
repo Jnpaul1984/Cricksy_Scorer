@@ -198,26 +198,25 @@ async def test_game_with_deliveries(db_session):
 
 
 @pytest_asyncio.fixture
-async def test_user(reset_db):
+async def test_user(db_session, reset_db):
     """Create a test coach user with coach_pro_plus role."""
     import backend.security as security
-    from backend.sql_app.database import get_db
     from backend.sql_app.models import RoleEnum, User
 
-    async for db in get_db():
-        user = User(
-            id="test-coach-001",
-            email="coach@test.com",
-            hashed_password="test_hashed_password",  # noqa: S106
-            role=RoleEnum.coach_pro_plus,
-            is_active=True,
-            is_superuser=False,
-        )
-        db.add(user)
-        await db.commit()
+    user = User(
+        id="test-coach-001",
+        email="coach@test.com",
+        hashed_password="test_hashed_password",  # noqa: S106
+        role=RoleEnum.coach_pro_plus,
+        is_active=True,
+        is_superuser=False,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
 
-        # Add to in-memory cache for in-memory DB tests
-        security.add_in_memory_user(user)
+    # Add to in-memory cache for in-memory DB tests
+    security.add_in_memory_user(user)
 
         return user
 
