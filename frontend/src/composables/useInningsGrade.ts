@@ -66,7 +66,7 @@ export function useInningsGrade() {
 
       // Use provided inning number or default to 1
       const innings = inningNum || 1
-      
+
       const response = await apiService.get<InningsGradeData>(
         `/analytics/games/${gameId}/innings/${innings}/grade`
       )

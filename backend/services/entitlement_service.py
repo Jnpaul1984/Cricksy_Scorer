@@ -91,11 +91,11 @@ async def can_access_feature(
     stmt = select(User.role).where(User.id == user.id)
     result = await db.execute(stmt)
     user_role = result.scalar_one_or_none()
-    
+
     if not user_role:
         logger.warning(f"Could not find role for user {user.id}")
         return False
-    
+
     try:
         role_value = user_role.value if hasattr(user_role, "value") else str(user_role)
         plan = IndividualPlan(role_value)
@@ -129,7 +129,7 @@ async def get_user_entitlements(
     stmt = select(User.role).where(User.id == user.id)
     result = await db.execute(stmt)
     user_role = result.scalar_one_or_none()
-    
+
     # Get beta access
     stmt = select(BetaAccess).where(BetaAccess.user_id == user.id)
     result = await db.execute(stmt)
@@ -141,12 +141,16 @@ async def get_user_entitlements(
         try:
             role_value = user_role.value if hasattr(user_role, "value") else str(user_role)
             plan = IndividualPlan(role_value)
-            plan_features = get_entitlements_for_plan(plan).model_dump()
+            plan_features = dict(get_entitlements_for_plan(plan))
         except (ValueError, KeyError):
             pass
 
     return {
-        "role": user_role.value if user_role and hasattr(user_role, "value") else str(user_role) if user_role else "unknown",
+        "role": user_role.value
+        if user_role and hasattr(user_role, "value")
+        else str(user_role)
+        if user_role
+        else "unknown",
         "is_superuser": user.is_superuser,
         "beta_access": {
             "active": beta_access is not None,

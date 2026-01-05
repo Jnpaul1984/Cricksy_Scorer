@@ -54,7 +54,6 @@ PLAN_FEATURES["superuser"] = {
 }
 
 
-
 def get_plan_features(plan: str) -> dict:
     """
     Get feature set for a subscription plan.
@@ -100,7 +99,7 @@ async def get_user_plan_id(db: AsyncSession, user: User) -> str:
     """
     # Try to access role directly first (works if already loaded or user is transient)
     try:
-        if hasattr(user, '__dict__') and 'role' in user.__dict__:
+        if hasattr(user, "__dict__") and "role" in user.__dict__:
             # Role is already loaded in the object's dict
             user_role = user.role
         else:
@@ -111,7 +110,7 @@ async def get_user_plan_id(db: AsyncSession, user: User) -> str:
     except Exception:
         # Fallback: try direct access (for transient objects not yet in DB)
         user_role = user.role
-    
+
     return user_role.value if isinstance(user_role, RoleEnum) else str(user_role)
 
 

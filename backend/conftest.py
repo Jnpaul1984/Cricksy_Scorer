@@ -250,13 +250,13 @@ async def test_video_session(db_session, reset_db, test_user):
     from backend.sql_app.models import OwnerTypeEnum, VideoSession, VideoSessionStatus
     from backend import app
 
-    # Cache user.id before it gets expired
-    user_id = test_user.id
-    
+    # Refresh to preload all attributes before using them
+    await db_session.refresh(test_user)
+
     session = VideoSession(
         id="test-session-001",
         owner_type=OwnerTypeEnum.coach,
-        owner_id=user_id,
+        owner_id=test_user.id,
         title="Test Video Session",
         player_ids=["player1", "player2"],
         status=VideoSessionStatus.uploaded,
@@ -300,18 +300,13 @@ async def other_user(db_session, reset_db):
 @pytest_asyncio.fixture
 async def auth_headers(test_user, db_session):
     """Generate auth headers for test_user."""
-    from sqlalchemy import select
     from backend.security import create_access_token
-    from backend.sql_app.models import User
 
-    # Query user data to avoid lazy-load issues with expired session state
-    stmt = select(User.id, User.email, User.role).where(User.id == test_user.id)
-    result = await db_session.execute(stmt)
-    row = result.one()
-    user_id, user_email, user_role = row
-    
+    # Refresh to preload all attributes before using them
+    await db_session.refresh(test_user)
+
     token = create_access_token(
-        {"sub": user_id, "email": user_email, "role": user_role.value}
+        {"sub": test_user.id, "email": test_user.email, "role": test_user.role.value}
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -319,17 +314,12 @@ async def auth_headers(test_user, db_session):
 @pytest_asyncio.fixture
 async def other_auth_headers(other_user, db_session):
     """Generate auth headers for other_user."""
-    from sqlalchemy import select
     from backend.security import create_access_token
-    from backend.sql_app.models import User
 
-    # Query user data to avoid lazy-load issues with expired session state
-    stmt = select(User.id, User.email, User.role).where(User.id == other_user.id)
-    result = await db_session.execute(stmt)
-    row = result.one()
-    user_id, user_email, user_role = row
-    
+    # Refresh to preload all attributes before using them
+    await db_session.refresh(other_user)
+
     token = create_access_token(
-        {"sub": user_id, "email": user_email, "role": user_role.value}
+        {"sub": other_user.id, "email": other_user.email, "role": other_user.role.value}
     )
     return {"Authorization": f"Bearer {token}"}

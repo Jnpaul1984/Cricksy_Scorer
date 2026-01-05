@@ -1,7 +1,7 @@
 # Coaching Feature API Contract
 
-**Version:** 1.0.0  
-**Last Updated:** 2026-01-04  
+**Version:** 1.0.0
+**Last Updated:** 2026-01-04
 **Status:** 🔒 LOCKED - Breaking changes require major version bump
 
 ---
@@ -28,8 +28,8 @@ This document defines the **immutable contract** between backend and frontend fo
 
 ### 1.1 Create Video Session
 
-**Endpoint:** `POST /sessions`  
-**Auth Required:** Yes (coach_pro_plus, org_pro, or superuser)  
+**Endpoint:** `POST /sessions`
+**Auth Required:** Yes (coach_pro_plus, org_pro, or superuser)
 **Beta Feature:** `video_upload`
 
 **Request Body:**
@@ -72,7 +72,7 @@ This document defines the **immutable contract** between backend and frontend fo
 
 ### 1.2 List Video Sessions
 
-**Endpoint:** `GET /sessions`  
+**Endpoint:** `GET /sessions`
 **Auth Required:** Yes (coach_pro_plus, org_pro, or superuser)
 
 **Query Parameters:**
@@ -101,7 +101,7 @@ VideoSessionRead[]  // Array of session objects (same schema as create response)
 
 ### 1.3 Get Upload URL
 
-**Endpoint:** `POST /sessions/{session_id}/upload-url`  
+**Endpoint:** `POST /sessions/{session_id}/upload-url`
 **Auth Required:** Yes (must own the session)
 
 **Success Response (200 OK):**
@@ -131,7 +131,7 @@ VideoSessionRead[]  // Array of session objects (same schema as create response)
 
 ### 2.1 Create Coach Note
 
-**Endpoint:** `POST /players/{player_id}/notes`  
+**Endpoint:** `POST /players/{player_id}/notes`
 **Auth Required:** Yes (coach_pro, coach_pro_plus, org_pro, or superuser)
 
 **Path Parameters:**
@@ -180,7 +180,7 @@ VideoSessionRead[]  // Array of session objects (same schema as create response)
 
 ### 2.2 List Player Notes
 
-**Endpoint:** `GET /players/{player_id}/notes`  
+**Endpoint:** `GET /players/{player_id}/notes`
 **Auth Required:** Yes (coach_pro, coach_pro_plus, org_pro, or superuser)
 
 **Query Parameters:**
@@ -209,7 +209,7 @@ CoachNoteRead[]  // Array of note objects (same schema as create response)
 
 ### 2.3 Get Single Note
 
-**Endpoint:** `GET /notes/{note_id}`  
+**Endpoint:** `GET /notes/{note_id}`
 **Auth Required:** Yes (must be note owner or org admin)
 
 **Success Response (200 OK):**
@@ -226,7 +226,7 @@ CoachNoteRead  // Same schema as create response
 
 ### 2.4 Update Coach Note
 
-**Endpoint:** `PATCH /notes/{note_id}`  
+**Endpoint:** `PATCH /notes/{note_id}`
 **Auth Required:** Yes (must be note owner)
 
 **Request Body:**
@@ -253,7 +253,7 @@ CoachNoteRead  // Updated note object
 
 ### 2.5 Delete Coach Note
 
-**Endpoint:** `DELETE /notes/{note_id}`  
+**Endpoint:** `DELETE /notes/{note_id}`
 **Auth Required:** Yes (must be note owner or superuser)
 
 **Success Response (204 No Content):**
@@ -270,14 +270,14 @@ CoachNoteRead  // Updated note object
 
 ### 2.6 Get AI Corrective Guidance
 
-**Endpoint:** `POST /corrective-guidance`  
+**Endpoint:** `POST /corrective-guidance`
 **Auth Required:** Yes (coach_pro, coach_pro_plus, org_pro, or superuser)
 
 **Request Body:**
 ```typescript
 {
   player_role: "batter" | "bowler" | "wicketkeeper" | "fielder";
-  skill_focus: "batting_stance" | "footwork" | "bowling_action" | 
+  skill_focus: "batting_stance" | "footwork" | "bowling_action" |
                "wicketkeeping_stance" | "catching" | "throwing";
   observed_issue: string;  // Free text describing the problem
 }
@@ -315,7 +315,7 @@ CoachNoteRead  // Updated note object
 
 ### 3.1 Create Moment Marker
 
-**Endpoint:** `POST /sessions/{session_id}/markers`  
+**Endpoint:** `POST /sessions/{session_id}/markers`
 **Auth Required:** Yes (coach_pro_plus, org_pro, or superuser; must own session)
 
 **Path Parameters:**
@@ -356,7 +356,7 @@ CoachNoteRead  // Updated note object
 
 ### 3.2 List Session Markers
 
-**Endpoint:** `GET /sessions/{session_id}/markers`  
+**Endpoint:** `GET /sessions/{session_id}/markers`
 **Auth Required:** Yes (coach_pro_plus, org_pro, or superuser; must own session)
 
 **Query Parameters:**
@@ -380,7 +380,7 @@ VideoMomentMarkerRead[]  // Array ordered by timestamp_ms ASC
 
 ### 3.3 Update Moment Marker
 
-**Endpoint:** `PATCH /markers/{marker_id}`  
+**Endpoint:** `PATCH /markers/{marker_id}`
 **Auth Required:** Yes (must be creator)
 
 **Request Body:**
@@ -407,7 +407,7 @@ VideoMomentMarkerRead  // Updated marker
 
 ### 3.4 Delete Moment Marker
 
-**Endpoint:** `DELETE /markers/{marker_id}`  
+**Endpoint:** `DELETE /markers/{marker_id}`
 **Auth Required:** Yes (must be creator or superuser)
 
 **Success Response (204 No Content):**

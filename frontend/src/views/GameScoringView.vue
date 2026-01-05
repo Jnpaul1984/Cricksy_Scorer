@@ -247,16 +247,16 @@ watch(gameId, async (id) => {
       await fetchPressureMap(id, currentInning)
       await fetchPhaseMap(id, currentInning)
       await fetchPredictions(id)
-      
+
       // Manually fetch win probability prediction to populate initial state
       // (predictions are normally only emitted via Socket.IO after deliveries)
       try {
         const predictionResponse = await fetch(`http://localhost:8000/games/${id}/snapshot`)
         const snapshotData = await predictionResponse.json()
-        
+
         // Update liveSnapshot so CRR and other stats display correctly
         gameStore.liveSnapshot = snapshotData
-        
+
         if (snapshotData.prediction) {
           gameStore.currentPrediction = snapshotData.prediction
         }

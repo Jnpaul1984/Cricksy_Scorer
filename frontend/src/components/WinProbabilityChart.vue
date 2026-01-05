@@ -13,7 +13,7 @@
         <div class="score-label">Projected Final Score</div>
         <div class="score-value">{{ Math.round(prediction.factors.projected_score) }}</div>
         <div class="score-details">
-          Par Score: {{ Math.round(prediction.factors.par_score || 0) }} 
+          Par Score: {{ Math.round(prediction.factors.par_score || 0) }}
           <span :class="{'above-par': prediction.factors.projected_score > (prediction.factors.par_score || 0), 'below-par': prediction.factors.projected_score < (prediction.factors.par_score || 0)}">
             ({{ prediction.factors.projected_score > (prediction.factors.par_score || 0) ? '+' : '' }}{{ Math.round(prediction.factors.projected_score - (prediction.factors.par_score || 0)) }})
           </span>
@@ -26,8 +26,8 @@
       <div class="team-prob batting">
         <div class="team-name">{{ prediction.batting_team || 'Batting' }}</div>
         <div class="prob-bar-container">
-          <div 
-            class="prob-bar" 
+          <div
+            class="prob-bar"
             :style="{ width: `${prediction.batting_team_win_prob}%` }"
           />
         </div>
@@ -37,8 +37,8 @@
       <div class="team-prob bowling">
         <div class="team-name">{{ prediction.bowling_team || 'Bowling' }}</div>
         <div class="prob-bar-container">
-          <div 
-            class="prob-bar" 
+          <div
+            class="prob-bar"
             :style="{ width: `${prediction.bowling_team_win_prob}%` }"
           />
         </div>
@@ -73,7 +73,7 @@
             <span class="factor-value">{{ prediction.factors.wickets_remaining }}</span>
           </div>
         </template>
-        
+
         <!-- First Innings Factors -->
         <template v-else>
           <div v-if="currentRunRate != null" class="factor">
@@ -177,7 +177,7 @@ watch(
       const oversCompleted = currentGame?.overs_completed ?? 0
       const ballsThisOver = currentGame?.balls_this_over ?? 0
       const currentOver = `${oversCompleted}.${ballsThisOver}`
-      
+
       predictionHistory.value.push({
         over: currentOver,
         battingProb: newPred.batting_team_win_prob,

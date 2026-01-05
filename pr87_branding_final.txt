@@ -19,7 +19,7 @@
   - dimensions (tuple: width, height in pixels, optional)
   - file_size_bytes, format (png/svg/jpg/webp)
   - upload_date
-  
+
 - **BrandTypography:**
   - primary_font (FontFamily enum)
   - secondary_font (optional)

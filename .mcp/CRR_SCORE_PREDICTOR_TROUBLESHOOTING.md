@@ -5,7 +5,7 @@
 ## ✅ Backend Confirmed Working
 
 - API: `GET /games/{id}/snapshot` returns `current_run_rate: 24` ✓
-- Calculation: 4 runs in 1 ball = 24 run rate (correct) ✓  
+- Calculation: 4 runs in 1 ball = 24 run rate (correct) ✓
 - Socket.IO: `emit_prediction_update()` called after each delivery ✓
 - Deliveries: 1 delivery scored in game ✓
 
@@ -115,32 +115,32 @@ window.io?.connected  // Should be true
 ## 🎯 Most Likely Issues
 
 ### Issue 1: Browser Cache
-**Symptom**: Old JavaScript running without new changes  
+**Symptom**: Old JavaScript running without new changes
 **Fix**: Hard refresh `Ctrl + Shift + R` or clear cache
 
 ### Issue 2: Socket.IO Wrong Port
-**Symptom**: WebSocket connecting to port 5173 instead of 8000  
-**Fix**: 
+**Symptom**: WebSocket connecting to port 5173 instead of 8000
+**Fix**:
 1. Verify `frontend/.env` has `VITE_SOCKET_URL=http://localhost:8000`
 2. Restart Vite dev server
 3. Hard refresh browser
 
 ### Issue 3: Socket.IO Not Connected
-**Symptom**: Network tab shows no WebSocket connection  
+**Symptom**: Network tab shows no WebSocket connection
 **Fix**:
 1. Check backend running: `docker ps | grep backend`
 2. Check browser console for Socket.IO errors
 3. Verify `gameStore.initLive()` called on page load
 
 ### Issue 4: Component Not Mounted
-**Symptom**: WinProbabilityChart not in DOM  
+**Symptom**: WinProbabilityChart not in DOM
 **Fix**:
 1. Navigate to Analytics tab in scoring page
 2. Check if `<WinProbabilityChart />` in GameScoringView template
 3. Verify component imported correctly
 
 ### Issue 5: Conditional Rendering
-**Symptom**: Elements exist but `v-if` false  
+**Symptom**: Elements exist but `v-if` false
 **Fix**:
 1. CRR: Check `showCrr` computed (needs `totalBallsThisInnings > 0`)
 2. Predictor: Check `prediction && isFirstInnings` condition
@@ -191,7 +191,7 @@ WinProbabilityChart shows Score Prediction
 When working correctly, you should see:
 
 1. **CRR in Scoreboard**: "CRR 24.00" in info strip below bowler stats
-2. **Score Predictor**: 
+2. **Score Predictor**:
    - Title: "Score Prediction"
    - Large projected score number
    - Par score comparison

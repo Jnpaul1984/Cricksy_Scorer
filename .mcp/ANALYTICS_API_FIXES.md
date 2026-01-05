@@ -1,6 +1,6 @@
 # Analytics API Error Fixes
 
-**Date**: December 28, 2025  
+**Date**: December 28, 2025
 **Issue**: Frontend showing 422 and 500 errors for AI analytics features on page load
 
 ## Problems Fixed
@@ -8,7 +8,7 @@
 ### 1. Innings Grade API - 422 Unprocessable Entity
 **Error**: `Input should be a valid integer, unable to parse string as an integer, input: "current"`
 
-**Root Cause**: 
+**Root Cause**:
 - Frontend calling `/analytics/games/{id}/innings/current/grade`
 - Backend expects `/analytics/games/{id}/innings/{inning_num}/grade` with integer
 
@@ -30,7 +30,7 @@
 ### 3. Phase Map API - JSON Parse Error
 **Error**: `SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON`
 
-**Root Cause**: 
+**Root Cause**:
 - Using relative URL `/api/analytics/...` which doesn't exist
 - Need absolute URL with VITE_API_BASE
 
@@ -47,7 +47,7 @@
 async function fetchCurrentGrade(gameId: string)
   `/analytics/games/${gameId}/innings/current/grade`
 
-// After  
+// After
 async function fetchCurrentGrade(gameId: string, inningNum?: number)
   const innings = inningNum || 1
   `/analytics/games/${gameId}/innings/${innings}/grade`
@@ -108,19 +108,19 @@ await fetchPhaseMap(id, currentInning)
 
 From `docker compose logs backend`:
 
-1. **Innings Grade**: 
+1. **Innings Grade**:
    ```
    "input": "current" → validation_error: Input should be a valid integer
    ```
    ✅ Fixed by passing integer inning number
 
-2. **Pressure Map**: 
+2. **Pressure Map**:
    ```
    status: 500 → Internal Server Error
    ```
    ✅ Fixed by silent error handling (backend needs implementation)
 
-3. **Phase Map**: 
+3. **Phase Map**:
    ```
    Returning HTML 404 page instead of JSON
    ```

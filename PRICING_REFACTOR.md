@@ -52,7 +52,7 @@ pytest backend/tests/ -m "not integration"
 ## Test Results ✅
 
 - Pricing contract: 10/10 passing
-- Video quota: 7/7 passing  
+- Video quota: 7/7 passing
 - RBAC roles: 2/2 passing
 - **Full suite: 714 passed, 5 skipped**
 - Ruff/mypy: Clean (acceptable FastAPI warnings only)

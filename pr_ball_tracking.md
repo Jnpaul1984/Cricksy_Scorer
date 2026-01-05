@@ -18,14 +18,14 @@ Added computer vision-based ball tracking to Coach Pro Plus tier, enabling traje
   - Morphological operations for noise reduction
   - Circle detection with circularity scoring
   - Frame-by-frame position tracking
-  
+
 - **`BallPosition`** - Frame-level data
   - x, y coordinates (pixels)
   - Timestamp (seconds)
   - Confidence score (0-1)
   - Ball radius (pixels)
   - Velocity (vx, vy in pixels/second)
-  
+
 - **`BallTrajectory`** - Complete trajectory
   - All detected positions
   - Detection rate (% frames with ball)
@@ -49,12 +49,12 @@ Added computer vision-based ball tracking to Coach Pro Plus tier, enabling traje
   - Detects ball using HSV color ranges
   - Calculates velocities via finite differences
   - Identifies release/bounce/impact points
-  
+
 - `analyze_ball_trajectory()` - Metrics computation
   - Extracts coaching-relevant metrics
   - Classifies trajectory shape
   - Detects swing/spin
-  
+
 - `analyze_multiple_deliveries()` - Consistency analysis
   - Cross-delivery variance calculation
   - Release point consistency scoring
@@ -65,23 +65,23 @@ Added computer vision-based ball tracking to Coach Pro Plus tier, enabling traje
    - Convert BGR → HSV color space
    - Apply color-specific HSV ranges
    - Morphological close/open to remove noise
-   
+
 2. **Circle Fitting:**
    - Find contours in masked image
    - Fit minimum enclosing circle
    - Score by circularity & size appropriateness
    - Select best candidate per frame
-   
+
 3. **Velocity Calculation:**
    - Central difference for middle frames
    - Forward/backward difference at endpoints
    - Pixel-based velocity (convertible to real units with calibration)
-   
+
 4. **Key Point Detection:**
    - Release: First detected position (or highest in first 20%)
    - Bounce: Vertical velocity reversal (downward → upward)
    - Impact: Last detected position
-   
+
 5. **Swing Detection:**
    - Fit line from release to impact
    - Calculate perpendicular distance for all points
@@ -235,17 +235,17 @@ Added computer vision-based ball tracking to Coach Pro Plus tier, enabling traje
    - Track release position across deliveries
    - Score consistency (0-100)
    - Identify variance patterns
-   
+
 2. **Swing Analysis**
    - Detect inswing vs outswing
    - Measure deviation magnitude
    - Correlate with pose at release
-   
+
 3. **Pace Tracking**
    - Estimate ball speed from pixel velocity
    - Compare across overs/spells
    - Fatigue detection via velocity drop
-   
+
 4. **Line & Length**
    - Bounce point tracking
    - Pitch map visualization (with frontend)
@@ -256,12 +256,12 @@ Added computer vision-based ball tracking to Coach Pro Plus tier, enabling traje
    - Where ball meets bat
    - Contact timing (early/late)
    - Shot selection feedback
-   
+
 2. **Shot Trajectories**
    - Track ball after contact
    - Scoring zone analysis
    - Power estimation from post-impact velocity
-   
+
 3. **Timing Correlation**
    - Combine with pose data
    - Bat position when ball arrives
@@ -272,7 +272,7 @@ Added computer vision-based ball tracking to Coach Pro Plus tier, enabling traje
    - Body position at release
    - Front arm alignment
    - Follow-through correlation with swing
-   
+
 2. **Shot Execution**
    - Bat-ball contact timing
    - Head position at impact
@@ -300,15 +300,15 @@ Added computer vision-based ball tracking to Coach Pro Plus tier, enabling traje
      - Ball same color as background
      - Multiple similar-colored objects
    - Future: Deep learning detector (YOLOv8) for robustness
-   
+
 2. **Calibration:**
    - Currently pixel-based metrics
    - Future: Camera calibration for real-world units (km/h, meters)
-   
+
 3. **Occlusion:**
    - Ball not detected when hidden (behind player, off-screen)
    - Trajectory gaps handled gracefully
-   
+
 4. **Ball Color:**
    - Must specify correct color (red/white/pink)
    - Auto-detection not implemented
