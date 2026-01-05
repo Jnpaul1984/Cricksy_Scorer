@@ -237,9 +237,7 @@ def build_pose_landmarker():
 
         logger.info(f"Creating PoseLandmarker with running_mode={running_mode_str}...")
         landmarker = vision.PoseLandmarker.create_from_options(options)
-        logger.info(
-            f"[OK] MediaPipe PoseLandmarker created successfully (mode={running_mode_str})"
-        )
+        logger.info(f"[OK] MediaPipe PoseLandmarker created successfully (mode={running_mode_str})")
 
         return landmarker
 

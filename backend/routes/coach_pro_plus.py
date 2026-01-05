@@ -660,7 +660,7 @@ async def initiate_video_upload(
         # The worker currently expects `job.session.s3_key`.
         session.s3_bucket = settings.S3_COACH_VIDEOS_BUCKET
         session.s3_key = s3_key
-        
+
         # CRITICAL: Snapshot S3 location in job to prevent 404s from session mutations
         job.s3_bucket = settings.S3_COACH_VIDEOS_BUCKET
         job.s3_key = s3_key
@@ -795,12 +795,12 @@ async def complete_video_upload(
     # Preflight check: verify S3 object exists before queuing analysis
     bucket = session.s3_bucket
     key = session.s3_key
-    
+
     logger.info(
         f"Upload complete request: job_id={job.id} session_id={session.id} "
         f"bucket={bucket} key={key} user_id={current_user.id}"
     )
-    
+
     try:
         s3 = boto3.client("s3", region_name=settings.AWS_REGION)
         s3.head_object(Bucket=bucket, Key=key)
@@ -808,17 +808,17 @@ async def complete_video_upload(
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
         request_id = e.response.get("ResponseMetadata", {}).get("RequestId", "N/A")
-        
+
         error_detail = (
             f"Upload not found in S3. bucket={bucket} key={key} "
             f"error_code={error_code} request_id={request_id}"
         )
-        
+
         if error_code in ("404", "NoSuchKey"):
             logger.warning(f"S3 preflight check FAILED (not found): job_id={job.id} {error_detail}")
         else:
             logger.error(f"S3 preflight check ERROR: job_id={job.id} {error_detail}")
-        
+
         job.status = VideoAnalysisJobStatus.failed
         job.stage = "FAILED"
         job.error_message = f"Upload verification failed: {error_detail}"
@@ -838,7 +838,7 @@ async def complete_video_upload(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to verify upload. Error: {e!s}",
         ) from e
-    
+
     logger.info(f"S3 object verified: job_id={job.id} proceeding to queue analysis")
 
     # Preflight passed - transition job to queued (now claimable by worker)
@@ -848,7 +848,7 @@ async def complete_video_upload(
     job.error_message = None
     job.sqs_message_id = None
     session.status = VideoSessionStatus.uploaded
-    
+
     await db.commit()
 
     return VideoUploadCompleteResponse(

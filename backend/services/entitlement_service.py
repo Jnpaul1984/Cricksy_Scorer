@@ -131,7 +131,7 @@ async def get_user_entitlements(
     row = result.one_or_none()
     if not row:
         return {"role": "unknown", "is_superuser": False, "plan_features": {}}
-    
+
     user_role, is_superuser = row
 
     # Get beta access

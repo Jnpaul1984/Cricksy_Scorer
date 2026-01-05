@@ -19,7 +19,7 @@ depends_on = None
 
 def upgrade():
     """Add S3 location snapshot columns to video_analysis_jobs.
-    
+
     These columns store an immutable snapshot of the S3 bucket/key at job creation time,
     preventing intermittent 404s caused by session.s3_key mutations during retries or
     re-uploads.

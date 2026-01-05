@@ -6,9 +6,18 @@ Tests the fix for S3 HeadObject 404 errors by ensuring:
 3. Worker only claims queued jobs
 4. Upload-complete is idempotent
 """
+
 from __future__ import annotations
 
 import os
+
+# CRITICAL: Set environment variables BEFORE any backend imports
+# The settings module loads config at import time
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+os.environ.setdefault("APP_SECRET_KEY", "test-secret-key")
+os.environ.setdefault("CRICKSY_IN_MEMORY_DB", "1")
+os.environ["S3_COACH_VIDEOS_BUCKET"] = "test-bucket"  # Force set for tests
+
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
@@ -18,12 +27,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import async_sessionmaker
-
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("APP_SECRET_KEY", "test-secret-key")
-os.environ.setdefault("CRICKSY_IN_MEMORY_DB", "1")
-os.environ["S3_COACH_VIDEOS_BUCKET"] = "test-bucket"  # Force set for tests
+    pass
 
 from backend.main import fastapi_app
 from backend.sql_app import models

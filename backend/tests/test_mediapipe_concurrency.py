@@ -15,10 +15,11 @@ def test_get_pose_landmarker_returns_new_instance():
     """Verify get_pose_landmarker is a factory that returns new instances."""
     from backend.mediapipe_init import get_pose_landmarker
 
-    with patch("backend.mediapipe_init.get_model_path") as mock_path, patch(
-        "backend.mediapipe_init.get_running_mode"
-    ) as mock_mode, patch("mediapipe.tasks.python.vision.PoseLandmarker") as mock_landmarker_class:
-
+    with (
+        patch("backend.mediapipe_init.get_model_path") as mock_path,
+        patch("backend.mediapipe_init.get_running_mode") as mock_mode,
+        patch("mediapipe.tasks.python.vision.PoseLandmarker") as mock_landmarker_class,
+    ):
         mock_path.return_value = "/fake/model.task"
         mock_mode.return_value = "VIDEO"
 
@@ -77,12 +78,11 @@ async def test_concurrent_video_analysis_no_timestamp_collision():
         mock_detector_instances.append(detector)
         return detector
 
-    with patch(
-        "backend.services.pose_service._import_cv2_and_mediapipe"
-    ) as mock_import, patch("pathlib.Path.exists", return_value=True), patch(
-        "cv2.VideoCapture"
-    ) as mock_video_cap:
-
+    with (
+        patch("backend.services.pose_service._import_cv2_and_mediapipe") as mock_import,
+        patch("pathlib.Path.exists", return_value=True),
+        patch("cv2.VideoCapture") as mock_video_cap,
+    ):
         # Setup mock imports
         mock_cv2 = MagicMock()
         mock_mp = MagicMock()
@@ -145,7 +145,6 @@ async def test_concurrent_video_analysis_no_timestamp_collision():
 
         # Mock numpy
         with patch("numpy.uint8", int), patch("numpy.ascontiguousarray", lambda x: x):
-
             # Run two concurrent analysis jobs
             async def job1():
                 return extract_pose_keypoints_from_video(
@@ -219,12 +218,11 @@ def test_fps_defensive_fallback():
     """Test that invalid fps values trigger fallback to 30.0."""
     from backend.services.pose_service import extract_pose_keypoints_from_video
 
-    with patch(
-        "backend.services.pose_service._import_cv2_and_mediapipe"
-    ) as mock_import, patch("pathlib.Path.exists", return_value=True), patch(
-        "cv2.VideoCapture"
-    ) as mock_video_cap:
-
+    with (
+        patch("backend.services.pose_service._import_cv2_and_mediapipe") as mock_import,
+        patch("pathlib.Path.exists", return_value=True),
+        patch("cv2.VideoCapture") as mock_video_cap,
+    ):
         # Setup mocks
         mock_cv2 = MagicMock()
         mock_mp = MagicMock()
@@ -284,7 +282,6 @@ def test_fps_defensive_fallback():
         mock_detector.detect = MagicMock(return_value=MagicMock(pose_landmarks=[]))
 
         with patch("numpy.uint8", int), patch("numpy.ascontiguousarray", lambda x: x):
-
             # Should not raise error despite fps=0 (should fall back to 30.0)
             result = extract_pose_keypoints_from_video("/fake/video.mp4")
 
