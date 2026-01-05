@@ -56,9 +56,6 @@ async def can_access_feature(
         >>> await can_access_feature(db, user, "video_upload_enabled")
         True  # If user is coach_pro_plus OR has beta access
     """
-    # Refresh user to ensure attributes are loaded in current session
-    await db.refresh(user, ["role"])
-    
     # 1. Superuser bypass
     if user.is_superuser:
         return True
@@ -90,13 +87,23 @@ async def can_access_feature(
                 return True
 
     # 3. Check subscription plan (role-based features from pricing.py)
+    # Requery user to get role in current session context
+    stmt = select(User.role).where(User.id == user.id)
+    result = await db.execute(stmt)
+    user_role = result.scalar_one_or_none()
+    
+    if not user_role:
+        logger.warning(f"Could not find role for user {user.id}")
+        return False
+    
     try:
-        plan = IndividualPlan(user.role.value if hasattr(user.role, "value") else str(user.role))
+        role_value = user_role.value if hasattr(user_role, "value") else str(user_role)
+        plan = IndividualPlan(role_value)
         user_features = get_entitlements_for_plan(plan)
         return bool(user_features.get(feature_name, False))
     except (ValueError, KeyError):
         # Unknown plan - default deny
-        logger.warning(f"Unknown plan for user {user.id}: {user.role}")
+        logger.warning(f"Unknown plan for user {user.id}: {user_role}")
         return False
 
 
@@ -118,8 +125,10 @@ async def get_user_entitlements(
         - beta_access: BetaAccess record if exists
         - plan_features: Features from subscription plan
     """
-    # Refresh user to ensure attributes are loaded in current session
-    await db.refresh(user, ["role"])
+    # Requery user role to avoid lazy load issues
+    stmt = select(User.role).where(User.id == user.id)
+    result = await db.execute(stmt)
+    user_role = result.scalar_one_or_none()
     
     # Get beta access
     stmt = select(BetaAccess).where(BetaAccess.user_id == user.id)
@@ -127,14 +136,17 @@ async def get_user_entitlements(
     beta_access = result.scalar_one_or_none()
 
     # Get plan features from pricing.py
-    try:
-        plan = IndividualPlan(user.role.value if hasattr(user.role, "value") else str(user.role))
-        plan_features = get_entitlements_for_plan(plan)
-    except (ValueError, KeyError):
-        plan_features = {}
+    plan_features = {}
+    if user_role:
+        try:
+            role_value = user_role.value if hasattr(user_role, "value") else str(user_role)
+            plan = IndividualPlan(role_value)
+            plan_features = get_entitlements_for_plan(plan)
+        except (ValueError, KeyError):
+            pass
 
     return {
-        "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+        "role": user_role.value if user_role and hasattr(user_role, "value") else str(user_role) if user_role else "unknown",
         "is_superuser": user.is_superuser,
         "beta_access": {
             "active": beta_access is not None,
