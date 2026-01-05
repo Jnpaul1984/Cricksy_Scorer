@@ -188,8 +188,9 @@ async def test_get_user_entitlements_super_beta(db_session: AsyncSession):
     )
     db_session.add(beta)
     await db_session.commit()
+    await db_session.refresh(user)  # Refresh to preload user.id
 
-    entitlements = await get_user_entitlements(db_session, user)
+    entitlements = await get_user_entitlements(db_session, user.id)
 
     assert entitlements["role"] == "free"
     assert entitlements["beta_access"] is not None
@@ -220,9 +221,9 @@ async def test_get_user_entitlements_specific(db_session: AsyncSession):
     )
     db_session.add(beta)
     await db_session.commit()
-    await db_session.refresh(user)  # Refresh to avoid lazy loading issues
+    await db_session.refresh(user)  # Refresh to preload user.id
 
-    entitlements = await get_user_entitlements(db_session, user)
+    entitlements = await get_user_entitlements(db_session, user.id)
 
     assert entitlements["beta_access"] is not None
     assert entitlements["beta_access"]["is_super_beta"] is False

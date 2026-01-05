@@ -252,11 +252,14 @@ async def test_video_session(db_session, reset_db, test_user):
 
     # Refresh to preload all attributes before using them
     await db_session.refresh(test_user)
+    
+    # Cache user ID immediately after refresh to avoid lazy loading
+    user_id = test_user.id
 
     session = VideoSession(
         id="test-session-001",
         owner_type=OwnerTypeEnum.coach,
-        owner_id=test_user.id,
+        owner_id=user_id,
         title="Test Video Session",
         player_ids=["player1", "player2"],
         status=VideoSessionStatus.uploaded,
@@ -304,9 +307,14 @@ async def auth_headers(test_user, db_session):
 
     # Refresh to preload all attributes before using them
     await db_session.refresh(test_user)
+    
+    # Cache values immediately after refresh
+    user_id = test_user.id
+    user_email = test_user.email
+    user_role = test_user.role.value
 
     token = create_access_token(
-        {"sub": test_user.id, "email": test_user.email, "role": test_user.role.value}
+        {"sub": user_id, "email": user_email, "role": user_role}
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -319,7 +327,12 @@ async def other_auth_headers(other_user, db_session):
     # Refresh to preload all attributes before using them
     await db_session.refresh(other_user)
 
+    # Cache values immediately after refresh
+    user_id = other_user.id
+    user_email = other_user.email
+    user_role = other_user.role.value
+    
     token = create_access_token(
-        {"sub": other_user.id, "email": other_user.email, "role": other_user.role.value}
+        {"sub": user_id, "email": user_email, "role": user_role}
     )
     return {"Authorization": f"Bearer {token}"}

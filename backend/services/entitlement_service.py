@@ -109,14 +109,14 @@ async def can_access_feature(
 
 async def get_user_entitlements(
     db: AsyncSession,
-    user: User,
+    user_id: str,
 ) -> dict[str, Any]:
     """
     Get all entitlements for a user (for display/debugging).
 
     Args:
         db: Database session
-        user: User object
+        user_id: User ID string
 
     Returns:
         Dictionary with:
@@ -125,13 +125,17 @@ async def get_user_entitlements(
         - beta_access: BetaAccess record if exists
         - plan_features: Features from subscription plan
     """
-    # Requery user role to avoid lazy load issues
-    stmt = select(User.role).where(User.id == user.id)
+    # Query user data
+    stmt = select(User.role, User.is_superuser).where(User.id == user_id)
     result = await db.execute(stmt)
-    user_role = result.scalar_one_or_none()
+    row = result.one_or_none()
+    if not row:
+        return {"role": "unknown", "is_superuser": False, "plan_features": {}}
+    
+    user_role, is_superuser = row
 
     # Get beta access
-    stmt = select(BetaAccess).where(BetaAccess.user_id == user.id)
+    stmt = select(BetaAccess).where(BetaAccess.user_id == user_id)
     result = await db.execute(stmt)
     beta_access = result.scalar_one_or_none()
 
@@ -151,7 +155,7 @@ async def get_user_entitlements(
         else str(user_role)
         if user_role
         else "unknown",
-        "is_superuser": user.is_superuser,
+        "is_superuser": is_superuser,
         "beta_access": {
             "active": beta_access is not None,
             "is_super_beta": beta_access.is_super_beta if beta_access else False,
