@@ -123,6 +123,7 @@ def extract_pose_keypoints_from_video(
     )
 
     # Get MediaPipe detector - fails loudly if model is missing
+    # Factory returns NEW instance per call to avoid timestamp monotonicity bugs
     try:
         detector = get_pose_landmarker()
     except Exception as e:
@@ -134,6 +135,7 @@ def extract_pose_keypoints_from_video(
     # Open video
     cap = cv2.VideoCapture(str(video_path_obj))
     if not cap.isOpened():
+        detector.close()
         raise ValueError(f"Cannot open video file: {video_path_obj}")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -141,8 +143,19 @@ def extract_pose_keypoints_from_video(
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    if total_frames == 0 or fps == 0:
+    # Defensive: fallback to 30 fps if invalid
+    try:
+        if fps is None or fps <= 0 or not isinstance(fps, (int, float)):
+            logger.warning(f"Invalid fps={fps} detected, falling back to 30.0")
+            fps = 30.0
+    except (TypeError, AttributeError):
+        # MagicMock or other non-numeric type
+        logger.warning(f"Non-numeric fps={fps!r} detected, falling back to 30.0")
+        fps = 30.0
+
+    if total_frames == 0:
         cap.release()
+        detector.close()
         raise ValueError(f"Invalid video: {total_frames} frames, {fps} fps")
 
     logger.info(f"Video: {total_frames} frames @ {fps}fps, {width}x{height}")
@@ -171,6 +184,7 @@ def extract_pose_keypoints_from_video(
     visibility_scores = []
 
     frame_num = 0
+    last_timestamp_ms: int | None = None  # Track last timestamp for monotonic guard
 
     try:
         while True:
@@ -201,7 +215,15 @@ def extract_pose_keypoints_from_video(
                 # Create MediaPipe Image
                 try:
                     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
-                    timestamp_ms = int((frame_num / fps) * 1000)  # Monotonic timestamp
+                    timestamp_ms = int((frame_num / fps) * 1000)
+
+                    # Monotonic timestamp guard: detect_for_video requires strictly increasing timestamps
+                    if last_timestamp_ms is not None and timestamp_ms <= last_timestamp_ms:
+                        timestamp_ms = last_timestamp_ms + 1
+                        logger.debug(
+                            f"Timestamp collision at frame {frame_num}: adjusted to {timestamp_ms}ms"
+                        )
+                    last_timestamp_ms = timestamp_ms
 
                     # Call appropriate detection method based on running mode
                     if detection_method == "detect_for_video":
@@ -279,6 +301,7 @@ def extract_pose_keypoints_from_video(
 
     finally:
         cap.release()
+        detector.close()
 
     # Calculate metrics
     sampled_count = len(frames_data)

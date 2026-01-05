@@ -59,7 +59,7 @@ KEYPOINT_NAMES = [
 ]
 
 # Module-level state
-_pose_landmarker = None
+# Note: _pose_landmarker removed - now using factory pattern to avoid timestamp monotonicity bugs
 _model_path_verified = False
 
 
@@ -172,8 +172,12 @@ def get_running_mode() -> str:
     return running_mode
 
 
-def initialize_pose_landmarker():
-    """Initialize MediaPipe PoseLandmarker with loaded model.
+def build_pose_landmarker():
+    """Build a new MediaPipe PoseLandmarker instance.
+
+    Factory function that creates a fresh PoseLandmarker for each call.
+    This is required because detect_for_video() is stateful and requires
+    monotonically increasing timestamps per detector instance.
 
     Validates model file exists and attempts to create PoseLandmarker.
     Running mode is determined by MEDIAPIPE_RUNNING_MODE environment variable.
@@ -181,21 +185,20 @@ def initialize_pose_landmarker():
     incompatible, MediaPipe will raise an error here.
 
     Returns:
-        mediapipe.tasks.python.vision.PoseLandmarker: Initialized detector
+        mediapipe.tasks.python.vision.PoseLandmarker: New detector instance
 
     Raises:
         ImportError: If MediaPipe is not installed
         FileNotFoundError: If model file is missing
         ValueError: If running mode is invalid
         RuntimeError: If initialization fails
+
+    Note:
+        Caller MUST call detector.close() when done to release resources.
     """
-    global _pose_landmarker, _model_path_verified
+    global _model_path_verified
 
-    if _pose_landmarker is not None:
-        logger.debug("Reusing existing PoseLandmarker instance")
-        return _pose_landmarker
-
-    logger.info("Initializing MediaPipe PoseLandmarker...")
+    logger.info("Building new MediaPipe PoseLandmarker instance...")
 
     # Import and verify MediaPipe
     try:
@@ -233,12 +236,12 @@ def initialize_pose_landmarker():
         )
 
         logger.info(f"Creating PoseLandmarker with running_mode={running_mode_str}...")
-        _pose_landmarker = vision.PoseLandmarker.create_from_options(options)
+        landmarker = vision.PoseLandmarker.create_from_options(options)
         logger.info(
-            f"[OK] MediaPipe PoseLandmarker initialized successfully (mode={running_mode_str})"
+            f"[OK] MediaPipe PoseLandmarker created successfully (mode={running_mode_str})"
         )
 
-        return _pose_landmarker
+        return landmarker
 
     except FileNotFoundError as e:
         raise FileNotFoundError(
@@ -329,20 +332,22 @@ def verify_mediapipe_setup() -> dict:
 
 
 def get_pose_landmarker():
-    """Get initialized PoseLandmarker instance.
+    """Create a new PoseLandmarker instance (factory function).
+
+    Returns a fresh detector instance for each call to avoid timestamp
+    monotonicity conflicts when processing multiple videos concurrently.
 
     Returns:
-        mediapipe.tasks.python.vision.PoseLandmarker
+        mediapipe.tasks.python.vision.PoseLandmarker: New detector instance
 
     Raises:
-        RuntimeError: If not initialized or initialization failed
+        RuntimeError: If initialization failed
+
+    Note:
+        Caller MUST call detector.close() when done to release resources.
+        Do not cache the returned instance - get a new one per video analysis job.
     """
-    global _pose_landmarker
-
-    if _pose_landmarker is None:
-        initialize_pose_landmarker()
-
-    return _pose_landmarker
+    return build_pose_landmarker()
 
 
 def get_detection_method_name() -> str:
@@ -371,15 +376,5 @@ def get_detection_method_name() -> str:
         return "detect_for_video"
 
 
-def shutdown_pose_landmarker():
-    """Cleanup pose landmarker resources."""
-    global _pose_landmarker
-
-    if _pose_landmarker is not None:
-        try:
-            _pose_landmarker.close()
-            logger.info("[OK] PoseLandmarker closed")
-        except Exception as e:
-            logger.warning(f"Error closing PoseLandmarker: {e}")
-        finally:
-            _pose_landmarker = None
+# shutdown_pose_landmarker() removed - no longer needed with factory pattern.
+# Each caller must close their own detector instance in a finally block.
