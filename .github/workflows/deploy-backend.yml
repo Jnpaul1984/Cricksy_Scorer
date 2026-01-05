@@ -3,7 +3,16 @@ name: Deploy Backend
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.mcp/**'
+      - 'frontend/**'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel deployments
 
 permissions:
   id-token: write
@@ -37,15 +46,35 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version-file: ".python-version"
           cache: pip
           cache-dependency-path: backend/requirements.txt
+
+      - name: CI Diagnostics - Environment
+        run: |
+          echo "=== CI Environment Diagnostics ==="
+          echo "OS: $(uname -a)"
+          echo "Python: $(python --version)"
+          echo "Pip: $(pip --version)"
+          echo "Working directory: $(pwd)"
+          echo "PYTHONPATH: $PYTHONPATH"
+          echo "DATABASE_URL: ${DATABASE_URL%%@*}@***"  # Redact password
+          echo ""
+          echo "=== PostgreSQL Connection Test ==="
+          timeout 5 bash -c 'until pg_isready -h localhost -p 5432; do echo "Waiting for postgres..."; sleep 1; done' || echo "PostgreSQL not ready"
+          echo ""
+          echo "=== File Structure ==="
+          ls -la
+          ls -la backend/ | head -20
 
       - name: Install backend dependencies
         working-directory: .
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
+          echo ""
+          echo "=== Installed Packages (key ones) ==="
+          pip list | grep -E "(sqlalchemy|asyncpg|pytest|fastapi|pydantic)"
 
       - name: Run Alembic migrations
         working-directory: .

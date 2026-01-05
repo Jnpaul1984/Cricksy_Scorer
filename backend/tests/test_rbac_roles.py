@@ -249,7 +249,7 @@ def test_coach_pro_plus_plan_available() -> None:
     assert features.get("video_sessions_enabled") is True
     assert features.get("video_upload_enabled") is True
     assert features.get("ai_session_reports_enabled") is True
-    
+
     # Video storage is at top level
     assert plus_plan["video_storage_bytes"] > 0  # Should have storage
 

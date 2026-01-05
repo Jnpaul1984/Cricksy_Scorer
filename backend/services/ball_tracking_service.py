@@ -244,7 +244,7 @@ class BallTracker:
         mask = cv2.inRange(hsv, color_range["lower"], color_range["upper"])
 
         # Morphological operations to reduce noise
-        kernel = np.ones((5, 5), np.uint8)
+        kernel: np.ndarray = np.ones((5, 5), np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
