@@ -87,7 +87,9 @@ jobs:
       - name: Run backend tests
         working-directory: .
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+          CRICKSY_IN_MEMORY_DB: "1"
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:?cache=shared"
+          APP_SECRET_KEY: "test-secret-key"
           PYTHONPATH: ${{ github.workspace }}
         run: |
           pytest -v

@@ -1,5 +1,46 @@
 # CI Consistency Engineer (MCP Protocol)
 
+## Critical Fix: Environment Variables for Test Workflows
+
+**IMPORTANT**: All GitHub Actions workflows that run backend tests MUST set these three environment variables in their test steps:
+
+```yaml
+env:
+  CRICKSY_IN_MEMORY_DB: "1"
+  DATABASE_URL: "sqlite+aiosqlite:///:memory:?cache=shared"
+  APP_SECRET_KEY: "test-secret-key"
+```
+
+###  Why This Matters
+
+The application uses Pydantic Settings which reads environment variables **at import time** when creating the global `settings` object. If `CRICKSY_IN_MEMORY_DB` is not explicitly set:
+
+1. The `backend/config.py` Settings object is instantiated early (when first imported)
+2. `settings.IN_MEMORY_DB` defaults to `False` (no env var present)
+3. Later, `backend/tests/_ci_utils.py` may auto-detect and set the env var
+4. **BUT** the Settings object was already created with `IN_MEMORY_DB=False`
+5. This causes tests to try using PostgreSQL instead of in-memory SQLite
+6. Results in auth failures (401) and other unpredictable test behavior
+
+### SQLAlchemy Session Configuration
+
+All `async_sessionmaker` instances MUST include `expire_on_commit=False`:
+
+```python
+session_local = async_sessionmaker(
+    bind=eng,
+    autocommit=False,
+    autoflush=False,
+    expire_on_commit=False,  # ← CRITICAL: Prevents MissingGreenlet errors
+)
+```
+
+This setting prevents ORM objects from expiring after `session.commit()`, which would trigger lazy loading in async contexts and cause `MissingGreenlet` errors or 401 auth failures.
+
+See `.mcp/SQLALCHEMY_ASYNC_BEST_PRACTICES.md` Rule 0 for details.
+
+---
+
 ## Mission
 Guarantee deterministic CI: **Any change that passes locally using the CI entrypoint must pass on GitHub Actions.**
 If GitHub fails while local passes, treat it as an **engineering defect** and resolve via diagnosis + parity, not guesswork.
