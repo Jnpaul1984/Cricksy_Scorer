@@ -293,10 +293,13 @@ async def other_user(db_session, reset_db):
 
 
 @pytest_asyncio.fixture
-async def auth_headers(test_user):
+async def auth_headers(test_user, db_session):
     """Generate auth headers for test_user."""
     from backend.security import create_access_token
 
+    # Refresh user to ensure role is loaded in current session context
+    await db_session.refresh(test_user, ["role"])
+    
     token = create_access_token(
         {"sub": test_user.id, "email": test_user.email, "role": test_user.role.value}
     )
@@ -304,10 +307,13 @@ async def auth_headers(test_user):
 
 
 @pytest_asyncio.fixture
-async def other_auth_headers(other_user):
+async def other_auth_headers(other_user, db_session):
     """Generate auth headers for other_user."""
     from backend.security import create_access_token
 
+    # Refresh user to ensure role is loaded in current session context
+    await db_session.refresh(other_user, ["role"])
+    
     token = create_access_token(
         {"sub": other_user.id, "email": other_user.email, "role": other_user.role.value}
     )

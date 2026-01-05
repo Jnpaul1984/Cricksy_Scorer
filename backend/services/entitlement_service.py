@@ -56,6 +56,9 @@ async def can_access_feature(
         >>> await can_access_feature(db, user, "video_upload_enabled")
         True  # If user is coach_pro_plus OR has beta access
     """
+    # Refresh user to ensure attributes are loaded in current session
+    await db.refresh(user, ["role"])
+    
     # 1. Superuser bypass
     if user.is_superuser:
         return True
@@ -115,6 +118,9 @@ async def get_user_entitlements(
         - beta_access: BetaAccess record if exists
         - plan_features: Features from subscription plan
     """
+    # Refresh user to ensure attributes are loaded in current session
+    await db.refresh(user, ["role"])
+    
     # Get beta access
     stmt = select(BetaAccess).where(BetaAccess.user_id == user.id)
     result = await db.execute(stmt)
