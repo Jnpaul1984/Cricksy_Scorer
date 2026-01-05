@@ -83,7 +83,7 @@ async def test_get_user_video_quota_bytes_coach_pro_plus(db_session):
         hashed_password="hashed",
         role=RoleEnum.coach_pro_plus,
     )
-    quota_bytes = await get_user_video_quota_bytes(user)
+    quota_bytes = await get_user_video_quota_bytes(db_session, user)
 
     # Get expected value from pricing config (single source of truth)
     expected = get_video_storage_bytes(IndividualPlan.COACH_PRO_PLUS)
@@ -101,7 +101,7 @@ async def test_get_user_video_quota_bytes_org_pro_unlimited(db_session):
         hashed_password="hashed",
         role=RoleEnum.org_pro,
     )
-    quota_bytes = await get_user_video_quota_bytes(user)
+    quota_bytes = await get_user_video_quota_bytes(db_session, user)
 
     # Verify against pricing config
     expected = get_video_storage_bytes(IndividualPlan.ORG_PRO)

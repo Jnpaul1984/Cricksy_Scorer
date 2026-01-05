@@ -50,11 +50,12 @@ async def compute_user_video_usage_bytes(db: AsyncSession, user_id: str) -> int:
     return int(total_bytes)
 
 
-async def get_user_video_quota_bytes(user: User) -> int | None:
+async def get_user_video_quota_bytes(db: AsyncSession, user: User) -> int | None:
     """
     Get the video storage quota for a user in bytes.
 
     Args:
+        db: Database session
         user: User object
 
     Returns:
@@ -63,7 +64,7 @@ async def get_user_video_quota_bytes(user: User) -> int | None:
     if user.is_superuser:
         return None  # Unlimited
 
-    features = get_user_features(user)
+    features = await get_user_features(db, user)
     # New structure has feature_flags nested
     feature_flags = features.get("feature_flags", features)
     quota_gb = feature_flags.get("video_storage_gb")
@@ -94,7 +95,7 @@ async def check_video_quota(
         Tuple of (allowed: bool, error_message: str | None)
         If allowed=False, error_message explains why.
     """
-    quota_bytes = await get_user_video_quota_bytes(user)
+    quota_bytes = await get_user_video_quota_bytes(db, user)
 
     # Unlimited quota (superuser or org_pro)
     if quota_bytes is None:

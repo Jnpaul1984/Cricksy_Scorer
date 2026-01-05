@@ -87,45 +87,62 @@ def get_plan_features(plan: str) -> dict:
         return details
 
 
-def get_user_plan_id(user: User) -> str:
+async def get_user_plan_id(db: AsyncSession, user: User) -> str:
     """
     Get the plan ID (role) for a user.
 
     Args:
+        db: Database session
         user: User object
 
     Returns:
         Plan identifier string (free, player_pro, coach_pro, etc.)
     """
-    return user.role.value if isinstance(user.role, RoleEnum) else str(user.role)
+    # Try to access role directly first (works if already loaded or user is transient)
+    try:
+        if hasattr(user, '__dict__') and 'role' in user.__dict__:
+            # Role is already loaded in the object's dict
+            user_role = user.role
+        else:
+            # Need to query the database
+            stmt = select(User.role).where(User.id == user.id)
+            result = await db.execute(stmt)
+            user_role = result.scalar_one()
+    except Exception:
+        # Fallback: try direct access (for transient objects not yet in DB)
+        user_role = user.role
+    
+    return user_role.value if isinstance(user_role, RoleEnum) else str(user_role)
 
 
-def get_user_features(user: User) -> dict:
+async def get_user_features(db: AsyncSession, user: User) -> dict:
     """
     Get the feature set for a user based on their role/plan.
 
     Args:
+        db: Database session
         user: User object
 
     Returns:
         Dictionary of plan features and limits
     """
-    plan_id = get_user_plan_id(user)
+    plan_id = await get_user_plan_id(db, user)
     return get_plan_features(plan_id)
 
 
-def user_has_feature(user: User, feature_name: str) -> bool:
+async def user_has_feature(db: AsyncSession, user: User, feature_name: str) -> bool:
     """
     Check if a user has access to a specific feature.
 
     Args:
+        db: Database session
         user: User object
         feature_name: Feature key to check (e.g., 'video_upload_enabled')
 
     Returns:
         True if user's plan includes the feature and it is enabled, False otherwise
     """
-    features = get_user_features(user)
+    features = await get_user_features(db, user)
     return features.get(feature_name, False)
 
 
@@ -318,9 +335,12 @@ def require_feature(feature_name: str):
         current_user: User = Depends(
             __import__("backend.security", fromlist=["get_current_user"]).get_current_user
         ),
+        db: AsyncSession = Depends(
+            __import__("backend.sql_app.database", fromlist=["get_db"]).get_db
+        ),
     ) -> User:
-        if not user_has_feature(current_user, feature_name):
-            plan = get_user_plan_id(current_user)
+        if not await user_has_feature(db, current_user, feature_name):
+            plan = await get_user_plan_id(db, current_user)
             plan_info = get_plan_features(plan)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
