@@ -48,6 +48,37 @@ If GitHub fails while local passes, treat it as an **engineering defect** and re
 ---
 
 ## Non-Negotiables (Hard Rules)
+
+### PRE-COMMIT VALIDATION (MANDATORY)
+**CRITICAL**: Before ANY commit or push, run ALL of these commands locally:
+
+```powershell
+# Backend (from backend/ directory)
+cd backend
+
+# 1. Type checking (mypy)
+$env:PYTHONPATH = "C:\Users\Hp\Cricksy_Scorer"
+mypy --config-file pyproject.toml --explicit-package-bases .
+
+# 2. Linting (ruff)
+ruff check .
+
+# 3. Format check
+ruff format --check .
+
+# 4. Tests with coverage
+$env:CRICKSY_IN_MEMORY_DB = "1"
+$env:DATABASE_URL = "sqlite+aiosqlite:///:memory:?cache=shared"
+$env:APP_SECRET_KEY = "test-secret-key"
+pytest tests/ -q
+
+# 5. Pre-commit hooks (ALL files)
+cd ..
+pre-commit run --all-files
+```
+
+**If ANY of these fail, DO NOT commit. Fix the errors first.**
+
 1. **Single Source of Truth Command**
    - CI must run exactly one entrypoint (choose one):
      - `make ci` (preferred), OR
@@ -156,6 +187,8 @@ If GitHub fails while local passes, treat it as an **engineering defect** and re
 ---
 
 ## Implementation Checklist for Any CI Change
+- [ ] **RAN ALL PRE-COMMIT CHECKS LOCALLY** (mypy, ruff, ruff format, pytest, pre-commit)
+- [ ] **VERIFIED ALL CHECKS PASS** before committing
 - [ ] CI calls the canonical entrypoint only
 - [ ] Python version pinned and consistent
 - [ ] Node version pinned and consistent
@@ -165,3 +198,30 @@ If GitHub fails while local passes, treat it as an **engineering defect** and re
 - [ ] Tests deterministic (no flakiness)
 - [ ] Concurrency + path filters in place
 - [ ] Docs updated: dev runs same commands as CI
+
+## Agent Pre-Commit Protocol
+
+When an AI agent makes code changes, it MUST:
+
+1. **BEFORE any git commit/push operations:**
+   - Run `mypy` on changed files
+   - Run `ruff check` on changed files
+   - Run `ruff format --check` on changed files
+   - Run relevant `pytest` tests (minimum: affected test files)
+   - Run `pre-commit run --all-files` if hooks are configured
+
+2. **NEVER commit if ANY check fails:**
+   - Fix errors immediately
+   - Re-run all checks after fixes
+   - Only proceed to commit when ALL checks pass
+
+3. **Document what was run:**
+   - Include in commit message: "Tested: [commands run]"
+   - Example: "Tested: mypy, ruff, pytest tests/test_mediapipe_concurrency.py"
+
+**VIOLATION CONSEQUENCE**: If GitHub Actions fails on checks that should have been run locally, this is a CRITICAL AGENT ERROR. The agent must:
+- Immediately acknowledge the failure
+- Fix all errors
+- Re-run ALL local checks
+- Update this document if new checks need to be added
+- Create a fixup commit with all corrections

@@ -119,15 +119,12 @@ async def test_concurrent_video_analysis_no_timestamp_collision():
             frame_count = [0]
 
             def mock_get(prop):
-                if prop == 7:  # CAP_PROP_FRAME_COUNT
-                    return 10
-                elif prop == 5:  # CAP_PROP_FPS
-                    return 30.0
-                elif prop == 3:  # CAP_PROP_FRAME_WIDTH
-                    return 640
-                elif prop == 4:  # CAP_PROP_FRAME_HEIGHT
-                    return 480
-                return 0
+                return {
+                    7: 10,  # CAP_PROP_FRAME_COUNT
+                    5: 30.0,  # CAP_PROP_FPS
+                    3: 640,  # CAP_PROP_FRAME_WIDTH
+                    4: 480,  # CAP_PROP_FRAME_HEIGHT
+                }.get(prop, 0)
 
             cap.get = mock_get
 
@@ -251,15 +248,12 @@ def test_fps_defensive_fallback():
         mock_cap.isOpened.return_value = True
 
         def mock_get(prop):
-            if prop == 7:  # CAP_PROP_FRAME_COUNT
-                return 5
-            elif prop == 5:  # CAP_PROP_FPS
-                return 0  # Invalid!
-            elif prop == 3:  # CAP_PROP_FRAME_WIDTH
-                return 640
-            elif prop == 4:  # CAP_PROP_FRAME_HEIGHT
-                return 480
-            return 0
+            return {
+                7: 5,  # CAP_PROP_FRAME_COUNT
+                5: 0,  # CAP_PROP_FPS - Invalid!
+                3: 640,  # CAP_PROP_FRAME_WIDTH
+                4: 480,  # CAP_PROP_FRAME_HEIGHT
+            }.get(prop, 0)
 
         mock_cap.get = mock_get
 

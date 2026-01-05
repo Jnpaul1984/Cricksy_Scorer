@@ -321,7 +321,7 @@ def verify_mediapipe_setup() -> dict:
 
     # Check landmarker
     try:
-        landmarker = initialize_pose_landmarker()
+        landmarker = build_pose_landmarker()
         status["landmarker_initialized"] = landmarker is not None
     except Exception as e:
         status["error"] = f"Landmarker init failed: {e}"
