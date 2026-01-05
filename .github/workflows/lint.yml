@@ -42,12 +42,14 @@ jobs:
           pip install ruff==0.6.5 mypy==1.11.2
 
       - name: Ruff (lint)
+        working-directory: backend
         run: |
-          ruff check . --config backend/pyproject.toml
+          ruff check . --config pyproject.toml
 
       - name: Ruff (format check)
+        working-directory: backend
         run: |
-          ruff format . --check --config backend/pyproject.toml
+          ruff format . --check --config pyproject.toml
 
       - name: MyPy
         env:
