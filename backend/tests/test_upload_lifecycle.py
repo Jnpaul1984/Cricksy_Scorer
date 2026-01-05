@@ -9,15 +9,6 @@ Tests the fix for S3 HeadObject 404 errors by ensuring:
 
 from __future__ import annotations
 
-import os
-
-# CRITICAL: Set environment variables BEFORE any backend imports
-# The settings module loads config at import time
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("APP_SECRET_KEY", "test-secret-key")
-os.environ.setdefault("CRICKSY_IN_MEMORY_DB", "1")
-os.environ["S3_COACH_VIDEOS_BUCKET"] = "test-bucket"  # Force set for tests
-
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 

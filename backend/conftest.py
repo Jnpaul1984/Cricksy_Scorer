@@ -22,6 +22,7 @@ if "DATABASE_URL" not in os.environ:
     os.environ["CRICKSY_IN_MEMORY_DB"] = "1"
     os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory?cache=shared"
     os.environ["APP_SECRET_KEY"] = "test-secret-key"
+    os.environ["S3_COACH_VIDEOS_BUCKET"] = "test-bucket"
 
 # On Windows, use the selector event loop policy
 if sys.platform.startswith("win"):
