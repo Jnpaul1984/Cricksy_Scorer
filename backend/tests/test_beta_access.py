@@ -47,6 +47,7 @@ async def test_super_beta_user_all_features(db_session: AsyncSession):
     )
     db_session.add(beta)
     await db_session.commit()
+    await db_session.refresh(user)  # Refresh to avoid lazy loading issues
 
     # Should have access to all coach_pro_plus features
     assert await can_access_feature(db_session, user, "video_upload_enabled")
@@ -78,6 +79,7 @@ async def test_specific_entitlements(db_session: AsyncSession):
     )
     db_session.add(beta)
     await db_session.commit()
+    await db_session.refresh(user)  # Refresh to avoid lazy loading issues
 
     # Should have access to granted features
     assert await can_access_feature(db_session, user, "video_upload_enabled")
@@ -114,6 +116,7 @@ async def test_expired_beta_access_no_grant(db_session: AsyncSession):
     )
     db_session.add(beta)
     await db_session.commit()
+    await db_session.refresh(user)  # Refresh to avoid lazy loading issues
 
     # Should NOT have access (expired)
     assert not await can_access_feature(db_session, user, "video_upload_enabled")
@@ -134,6 +137,7 @@ async def test_role_based_fallback_no_beta(db_session: AsyncSession):
     )
     db_session.add(user)
     await db_session.commit()
+    await db_session.refresh(user)  # Refresh to avoid lazy loading issues
 
     # Should have access via role features
     assert await can_access_feature(db_session, user, "video_upload_enabled")
@@ -153,6 +157,7 @@ async def test_superuser_bypass(db_session: AsyncSession):
     )
     db_session.add(user)
     await db_session.commit()
+    await db_session.refresh(user)  # Refresh to avoid lazy loading issues
 
     # Superuser should access everything
     assert await can_access_feature(db_session, user, "video_upload_enabled")
@@ -215,6 +220,7 @@ async def test_get_user_entitlements_specific(db_session: AsyncSession):
     )
     db_session.add(beta)
     await db_session.commit()
+    await db_session.refresh(user)  # Refresh to avoid lazy loading issues
 
     entitlements = await get_user_entitlements(db_session, user)
 

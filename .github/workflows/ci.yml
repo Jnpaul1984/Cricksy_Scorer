@@ -186,7 +186,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-.12
+
+      - name: Set up Python 3.12.12
         uses: actions/setup-python@v5
         with:
           python-version-file: '.python-version'
@@ -219,8 +220,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: '.nvmrc
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 

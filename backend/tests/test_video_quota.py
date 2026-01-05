@@ -121,6 +121,7 @@ async def test_check_video_quota_allowed(db_session):
     )
     db_session.add(user)
     await db_session.commit()
+    await db_session.refresh(user)  # Refresh to avoid lazy loading issues
 
     # Check 1GB upload (well under quota)
     allowed, error = await check_video_quota(db_session, user, 1_000_000_000)
@@ -158,6 +159,7 @@ async def test_check_video_quota_exceeded(db_session):
     )
     db_session.add(session1)
     await db_session.commit()
+    await db_session.refresh(user)  # Refresh to avoid lazy loading issues
 
     # Try to upload more than remaining space (2GB > 1GB remaining)
     allowed, error = await check_video_quota(db_session, user, 2_000_000_000)
@@ -177,6 +179,7 @@ async def test_check_video_quota_superuser_unlimited(db_session):
     )
     db_session.add(user)
     await db_session.commit()
+    await db_session.refresh(user)  # Refresh to avoid lazy loading issues
 
     # Can upload any amount
     allowed, error = await check_video_quota(db_session, user, 100_000_000_000)
