@@ -618,15 +618,15 @@ async def initiate_video_upload(
             detail="S3 video storage is not configured (S3_COACH_VIDEOS_BUCKET is empty).",
         )
 
-    # Create analysis job
+    # Create analysis job with awaiting_upload status (not claimable yet)
     job_id = str(uuid4())
     job = VideoAnalysisJob(
         id=job_id,
         session_id=request.session_id,
         sample_fps=request.sample_fps,
         include_frames=request.include_frames,
-        status=VideoAnalysisJobStatus.queued,
-        stage="QUEUED",
+        status=VideoAnalysisJobStatus.awaiting_upload,  # NOT queued yet
+        stage="AWAITING_UPLOAD",
         progress_pct=0,
         deep_enabled=bool(settings.COACH_PLUS_DEEP_ANALYSIS_ENABLED),
         # S3 location will be set after key generation
@@ -664,6 +664,9 @@ async def initiate_video_upload(
         # CRITICAL: Snapshot S3 location in job to prevent 404s from session mutations
         job.s3_bucket = settings.S3_COACH_VIDEOS_BUCKET
         job.s3_key = s3_key
+
+        # Set session status to uploading (awaiting client upload)
+        session.status = VideoSessionStatus.pending  # or could use a custom "uploading" status
 
         presigned_url = s3_service.generate_presigned_put_url(  # type: ignore[union-attr]
             bucket=settings.S3_COACH_VIDEOS_BUCKET,
@@ -746,15 +749,38 @@ async def complete_video_upload(
             detail="You don't have access to this job",
         )
 
-    # Mark job queued for the DB-backed worker
-    job.status = VideoAnalysisJobStatus.queued
-    job.stage = "QUEUED"
-    job.progress_pct = 0
-    job.error_message = None
-    job.sqs_message_id = None
+    # Idempotency: If already queued, processing, or completed, return success
+    if job.status in (
+        VideoAnalysisJobStatus.queued,
+        VideoAnalysisJobStatus.quick_running,
+        VideoAnalysisJobStatus.quick_done,
+        VideoAnalysisJobStatus.deep_running,
+        VideoAnalysisJobStatus.done,
+        VideoAnalysisJobStatus.completed,
+    ):
+        logger.info(
+            f"Upload complete called on already-processed job: job_id={job.id} "
+            f"status={job.status.value} - returning success (idempotent)"
+        )
+        return VideoUploadCompleteResponse(
+            job_id=job.id,
+            status=job.status.value,
+            sqs_message_id=job.sqs_message_id,
+            message=f"Job already {job.status.value} - no action taken",
+        )
 
-    job_id_value = job.id
-    status_value = job.status.value
+    # If job is failed, allow retry by proceeding with validation
+    if job.status == VideoAnalysisJobStatus.failed:
+        logger.info(
+            f"Upload complete called on failed job: job_id={job.id} - will retry validation"
+        )
+
+    # Only proceed if job is awaiting_upload or failed
+    if job.status not in (VideoAnalysisJobStatus.awaiting_upload, VideoAnalysisJobStatus.failed):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot complete upload for job in status: {job.status.value}",
+        )
 
     # Validate we have stored upload location (worker requires this)
     if not session.s3_key:
@@ -771,14 +797,14 @@ async def complete_video_upload(
     key = session.s3_key
     
     logger.info(
-        f"Upload complete request: job_id={job_id_value} session_id={session.id} "
+        f"Upload complete request: job_id={job.id} session_id={session.id} "
         f"bucket={bucket} key={key} user_id={current_user.id}"
     )
     
     try:
         s3 = boto3.client("s3", region_name=settings.AWS_REGION)
         s3.head_object(Bucket=bucket, Key=key)
-        logger.info(f"S3 preflight check PASSED: job_id={job_id_value} bucket={bucket} key={key}")
+        logger.info(f"S3 preflight check PASSED: job_id={job.id} bucket={bucket} key={key}")
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
         request_id = e.response.get("ResponseMetadata", {}).get("RequestId", "N/A")
@@ -789,11 +815,12 @@ async def complete_video_upload(
         )
         
         if error_code in ("404", "NoSuchKey"):
-            logger.warning(f"S3 preflight check FAILED (not found): job_id={job_id_value} {error_detail}")
+            logger.warning(f"S3 preflight check FAILED (not found): job_id={job.id} {error_detail}")
         else:
-            logger.error(f"S3 preflight check ERROR: job_id={job_id_value} {error_detail}")
+            logger.error(f"S3 preflight check ERROR: job_id={job.id} {error_detail}")
         
         job.status = VideoAnalysisJobStatus.failed
+        job.stage = "FAILED"
         job.error_message = f"Upload verification failed: {error_detail}"
         await db.commit()
         raise HTTPException(
@@ -802,8 +829,9 @@ async def complete_video_upload(
         ) from None
     except Exception as e:
         error_detail = f"S3 preflight check failed: bucket={bucket} key={key} error={e!s}"
-        logger.error(f"S3 preflight check EXCEPTION: job_id={job_id_value} {error_detail}")
+        logger.error(f"S3 preflight check EXCEPTION: job_id={job.id} {error_detail}")
         job.status = VideoAnalysisJobStatus.failed
+        job.stage = "FAILED"
         job.error_message = error_detail
         await db.commit()
         raise HTTPException(
@@ -811,14 +839,21 @@ async def complete_video_upload(
             detail=f"Failed to verify upload. Error: {e!s}",
         ) from e
     
-    logger.info(f"S3 object verified: job_id={job_id_value} proceeding to queue analysis")
+    logger.info(f"S3 object verified: job_id={job.id} proceeding to queue analysis")
 
+    # Preflight passed - transition job to queued (now claimable by worker)
+    job.status = VideoAnalysisJobStatus.queued
+    job.stage = "QUEUED"
+    job.progress_pct = 0
+    job.error_message = None
+    job.sqs_message_id = None
     session.status = VideoSessionStatus.uploaded
+    
     await db.commit()
 
     return VideoUploadCompleteResponse(
-        job_id=job_id_value,
-        status=status_value,
+        job_id=job.id,
+        status=job.status.value,
         sqs_message_id=None,
         message="Video uploaded and queued for analysis",
     )

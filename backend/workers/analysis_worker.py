@@ -262,6 +262,14 @@ async def _process_job(job_id: str) -> None:
 
 
 async def _claim_one_job() -> str | None:
+    """Claim a single queued job for processing.
+    
+    Only jobs with status=queued are eligible for claiming.
+    Jobs in awaiting_upload status are NOT claimed (upload not yet confirmed).
+    
+    Returns:
+        job_id if claimed, None if no jobs available
+    """
     session_local = get_session_local()
 
     async with session_local() as db, db.begin():

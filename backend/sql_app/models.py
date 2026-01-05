@@ -1633,7 +1633,8 @@ class VideoSessionType(str, enum.Enum):
 class VideoAnalysisJobStatus(str, enum.Enum):
     """Status of a video analysis job."""
 
-    queued = "queued"  # Job created, waiting in queue
+    awaiting_upload = "awaiting_upload"  # Job created, waiting for upload to complete
+    queued = "queued"  # Upload confirmed, ready for worker to claim
 
     # Staged processing (DB-backed worker)
     quick_running = "quick_running"
