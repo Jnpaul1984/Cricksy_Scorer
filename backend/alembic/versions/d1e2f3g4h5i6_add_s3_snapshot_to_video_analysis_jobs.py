@@ -1,7 +1,7 @@
 """Add s3_bucket and s3_key snapshot to video_analysis_jobs
 
 Revision ID: d1e2f3g4h5i6
-Revises: a1b2c3d4e5f6
+Revises: b2c3d4e5f6g7
 Create Date: 2026-01-05 14:00:00.000000
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "d1e2f3g4h5i6"
-down_revision = "a1b2c3d4e5f6"
+down_revision = "b2c3d4e5f6g7"  # Updated to follow beta_access migration
 branch_labels = None
 depends_on = None
 
