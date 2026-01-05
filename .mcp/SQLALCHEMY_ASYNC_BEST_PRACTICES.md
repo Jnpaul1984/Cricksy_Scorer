@@ -9,10 +9,37 @@
 - Accessing attributes on ORM objects after `session.commit()`
 - Passing ORM objects between pytest fixtures with different scopes
 - Using ORM object attributes in fixture setup when the object was created in a different session
+- **PostgreSQL vs SQLite difference**: PostgreSQL more strictly enforces session boundaries in CI
 
 ---
 
 ## Critical Rules
+
+### Rule 0: Configure SessionMaker Correctly ⭐ ESSENTIAL
+**Always set `expire_on_commit=False`** when creating the `async_sessionmaker` for tests and development.
+
+#### ✅ CORRECT - Prevent Object Expiry
+```python
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+session_local = async_sessionmaker(
+    bind=engine,
+    autocommit=False,
+    autoflush=False,
+    expire_on_commit=False,  # ← CRITICAL: Prevents MissingGreenlet errors
+)
+```
+
+**Why This Matters**:
+- By default, SQLAlchemy expires all ORM objects after `commit()`
+- Expired objects trigger lazy loading when attributes are accessed
+- Lazy loading requires async DB queries, which fail outside greenlet context
+- **CI PostgreSQL** is stricter about this than local SQLite
+- Setting `expire_on_commit=False` keeps objects valid after commit
+
+**Where to Set**:
+- `backend/sql_app/database.py` - ALL sessionmakers (in-memory, test, production)
+- Test conftest fixtures if creating custom sessionmakers
 
 ### Rule 1: Preload Attributes Before Session Expiry
 **Always preload attributes** that you'll need after a commit or session expiry.

@@ -61,7 +61,12 @@ def _create_engine_and_session() -> tuple[AsyncEngine, async_sessionmaker[AsyncS
         else:
             eng = create_async_engine(database_url, pool_pre_ping=True)
 
-        session_local = async_sessionmaker(autocommit=False, autoflush=False, bind=eng)
+        session_local = async_sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=eng,
+            expire_on_commit=False,
+        )
 
     return eng, session_local
 
