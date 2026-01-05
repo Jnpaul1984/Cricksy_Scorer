@@ -136,12 +136,12 @@ async def get_user_entitlements(
     beta_access = result.scalar_one_or_none()
 
     # Get plan features from pricing.py
-    plan_features = {}
+    plan_features: dict[str, Any] = {}
     if user_role:
         try:
             role_value = user_role.value if hasattr(user_role, "value") else str(user_role)
             plan = IndividualPlan(role_value)
-            plan_features = get_entitlements_for_plan(plan)
+            plan_features = get_entitlements_for_plan(plan).model_dump()
         except (ValueError, KeyError):
             pass
 
