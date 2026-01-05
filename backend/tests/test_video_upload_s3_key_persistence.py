@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from unittest.mock import MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -21,6 +22,18 @@ async def test_upload_initiate_persists_session_s3_key(
             self, bucket: str, key: str, expires_in: int | None = None
         ) -> str:
             return f"https://example.invalid/upload?bucket={bucket}&key={key}"
+
+    # Mock boto3.client for S3 preflight check
+    mock_s3_client = MagicMock()
+    mock_s3_client.head_object.return_value = {"ContentLength": 1024, "ContentType": "video/mp4"}
+
+    import boto3
+
+    monkeypatch.setattr(
+        boto3,
+        "client",
+        lambda service, **kwargs: mock_s3_client if service == "s3" else MagicMock(),
+    )
 
     # Patch lazy services to avoid real AWS clients
     monkeypatch.setattr(s3_service_mod, "_get_s3_service", lambda: _FakeS3Service())
