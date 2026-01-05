@@ -30,6 +30,16 @@ def client(reset_db: Any) -> TestClient:  # type: ignore[misc]
     """Test client with database override."""
     from backend.sql_app.database import SessionLocal
 
+    # Patch settings object directly (env vars don't affect already-loaded settings)
+    from backend import config
+    from backend.routes import coach_pro_plus
+
+    config.settings.S3_COACH_VIDEOS_BUCKET = "test-bucket"
+    coach_pro_plus.settings.S3_COACH_VIDEOS_BUCKET = "test-bucket"
+
+    # Verify patch applied
+    assert config.settings.S3_COACH_VIDEOS_BUCKET == "test-bucket", "Settings patch failed"
+
     async def override_get_db():
         async with SessionLocal() as session:
             yield session
