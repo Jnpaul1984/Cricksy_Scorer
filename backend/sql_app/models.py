@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-# Import security logging models for DB discovery (import module to register models)
-from backend.sql_app import models_security  # noqa: F401
-
 import datetime as dt
 import enum
 import uuid
@@ -28,6 +25,9 @@ from sqlalchemy import (
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+# Import security logging models for DB discovery (import module to register models)
+from backend.sql_app import models_security  # noqa: F401
 
 from .database import Base
 
@@ -1792,6 +1792,14 @@ class VideoAnalysisJob(Base):
     # SQS tracking
     sqs_message_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="AWS SQS message ID when enqueued"
+    )
+
+    # S3 storage snapshot (immutable per job - prevents 404s from session mutations)
+    s3_bucket: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="S3 bucket snapshot at job creation"
+    )
+    s3_key: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="S3 key snapshot at job creation"
     )
 
     # Results storage

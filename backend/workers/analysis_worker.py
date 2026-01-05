@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 import boto3
+from botocore.exceptions import ClientError
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -27,12 +28,46 @@ def _now_utc() -> datetime:
     return datetime.now(UTC)
 
 
-async def _download_from_s3(*, bucket: str, key: str, dst_path: str) -> None:
+async def _download_from_s3(*, bucket: str, key: str, dst_path: str, job_id: str | None = None) -> None:
+    """Download video from S3 to local path with comprehensive logging.
+    
+    Args:
+        bucket: S3 bucket name
+        key: S3 object key
+        dst_path: Local destination path
+        job_id: Optional job ID for context logging
+    
+    Raises:
+        ClientError: S3 operation failed (re-raised after logging)
+    """
     s3 = cast(Any, boto3.client("s3", region_name=settings.AWS_REGION))  # pyright: ignore[reportUnknownMemberType]
     loop = asyncio.get_running_loop()
+    
+    logger.info(
+        f"Downloading video from S3: bucket={bucket} key={key} -> {dst_path} job_id={job_id or 'N/A'}"
+    )
 
     def _dl() -> None:
-        s3.download_file(bucket, key, dst_path)
+        try:
+            s3.download_file(bucket, key, dst_path)
+            # Log file size after successful download
+            try:
+                import os
+                file_size = os.path.getsize(dst_path)
+                logger.info(
+                    f"S3 download complete: bucket={bucket} key={key} "
+                    f"file_size_bytes={file_size} job_id={job_id or 'N/A'}"
+                )
+            except Exception as size_err:
+                logger.warning(f"Could not determine file size: {size_err}")
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
+            request_id = e.response.get("ResponseMetadata", {}).get("RequestId", "N/A")
+            logger.error(
+                f"S3 download failed: bucket={bucket} key={key} "
+                f"error_code={error_code} request_id={request_id} job_id={job_id or 'N/A'}"
+            )
+            raise
 
     await loop.run_in_executor(None, _dl)
 
@@ -63,6 +98,8 @@ async def _process_job(job_id: str) -> None:
     session_local = get_session_local()
 
     async with session_local() as db:
+        logger.info(f"Processing analysis job: job_id={job_id}")
+        
         result = await db.execute(
             select(VideoAnalysisJob)
             .options(selectinload(VideoAnalysisJob.session))
@@ -78,17 +115,46 @@ async def _process_job(job_id: str) -> None:
         deep_fps = float(job.sample_fps or 10)
         include_frames = bool(job.include_frames)
 
-        if not video_session.s3_bucket or not video_session.s3_key:
+        # Prefer job-level S3 snapshot (immutable), fallback to session (mutable)
+        # Job-level snapshot prevents 404s from session mutations during retries
+        bucket = job.s3_bucket or video_session.s3_bucket
+        key = job.s3_key or video_session.s3_key
+        
+        # Log if fallback occurred (indicates old job or missing snapshot)
+        if not job.s3_bucket or not job.s3_key:
+            logger.warning(
+                f"Job S3 snapshot missing, using session values: job_id={job_id} "
+                f"job.s3_bucket={job.s3_bucket} job.s3_key={job.s3_key} "
+                f"session.s3_bucket={video_session.s3_bucket} session.s3_key={video_session.s3_key}"
+            )
+        
+        # Log if job and session values differ (session was mutated)
+        if job.s3_bucket and job.s3_key and (
+            job.s3_bucket != video_session.s3_bucket or job.s3_key != video_session.s3_key
+        ):
+            logger.warning(
+                f"Job/session S3 location mismatch (session was mutated): job_id={job_id} "
+                f"job: bucket={job.s3_bucket} key={job.s3_key} | "
+                f"session: bucket={video_session.s3_bucket} key={video_session.s3_key}"
+            )
+
+        if not bucket or not key:
             job.status = VideoAnalysisJobStatus.failed
             job.stage = "FAILED"
             job.progress_pct = 0
-            job.error_message = "Missing session.s3_bucket or session.s3_key"
+            job.error_message = (
+                f"Missing S3 location: job.s3_bucket={job.s3_bucket} job.s3_key={job.s3_key} "
+                f"session.s3_bucket={video_session.s3_bucket} session.s3_key={video_session.s3_key}"
+            )
             job.completed_at = _now_utc()
             await db.commit()
+            logger.error(f"Job failed - missing S3 location: job_id={job_id} {job.error_message}")
             return
-
-        bucket = video_session.s3_bucket
-        key = video_session.s3_key
+        
+        logger.info(
+            f"Job S3 location: job_id={job_id} bucket={bucket} key={key} "
+            f"session_id={video_session.id} using_snapshot={'yes' if job.s3_bucket else 'no'}"
+        )
 
         # Download to temp file
         with tempfile.TemporaryDirectory(prefix="coach_plus_video_") as tmpdir:
@@ -103,7 +169,7 @@ async def _process_job(job_id: str) -> None:
             video_session.status = VideoSessionStatus.processing
             await db.commit()
 
-            await _download_from_s3(bucket=bucket, key=key, dst_path=local_video_path)
+            await _download_from_s3(bucket=bucket, key=key, dst_path=local_video_path, job_id=job_id)
 
             # Best-effort progress bump
             job.progress_pct = 5
@@ -223,6 +289,23 @@ async def _claim_one_job() -> str | None:
 async def run_worker_loop(*, poll_seconds: float = 1.0) -> None:
     logger.info("analysis_worker starting")
     logger.info("ENV=%s", settings.ENV)
+    
+    # Log AWS configuration for debugging
+    logger.info(
+        f"AWS Configuration: region={settings.AWS_REGION} "
+        f"S3_COACH_VIDEOS_BUCKET={settings.S3_COACH_VIDEOS_BUCKET or '<not set>'}"
+    )
+    
+    # Log AWS identity (account/role) for verification
+    try:
+        import boto3
+        sts = boto3.client("sts", region_name=settings.AWS_REGION)
+        identity = sts.get_caller_identity()
+        account_id = identity.get("Account", "Unknown")
+        arn = identity.get("Arn", "Unknown")
+        logger.info(f"AWS Identity: account={account_id} arn={arn}")
+    except Exception as e:
+        logger.warning(f"Could not retrieve AWS identity: {e}")
 
     stop_event = asyncio.Event()
 

@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Annotated, Any
 from uuid import uuid4
 
+import boto3
 from backend import security
 from backend.config import settings
 from backend.services.coach_findings import generate_findings
@@ -29,6 +30,7 @@ from backend.sql_app.models import (
     VideoSession,
     VideoSessionStatus,
 )
+from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -627,6 +629,9 @@ async def initiate_video_upload(
         stage="QUEUED",
         progress_pct=0,
         deep_enabled=bool(settings.COACH_PLUS_DEEP_ANALYSIS_ENABLED),
+        # S3 location will be set after key generation
+        s3_bucket=None,
+        s3_key=None,
     )
 
     db.add(job)
@@ -655,6 +660,10 @@ async def initiate_video_upload(
         # The worker currently expects `job.session.s3_key`.
         session.s3_bucket = settings.S3_COACH_VIDEOS_BUCKET
         session.s3_key = s3_key
+        
+        # CRITICAL: Snapshot S3 location in job to prevent 404s from session mutations
+        job.s3_bucket = settings.S3_COACH_VIDEOS_BUCKET
+        job.s3_key = s3_key
 
         presigned_url = s3_service.generate_presigned_put_url(  # type: ignore[union-attr]
             bucket=settings.S3_COACH_VIDEOS_BUCKET,
@@ -756,6 +765,53 @@ async def complete_video_upload(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Upload location missing for this session. Please re-initiate upload.",
         )
+
+    # Preflight check: verify S3 object exists before queuing analysis
+    bucket = session.s3_bucket
+    key = session.s3_key
+    
+    logger.info(
+        f"Upload complete request: job_id={job_id_value} session_id={session.id} "
+        f"bucket={bucket} key={key} user_id={current_user.id}"
+    )
+    
+    try:
+        s3 = boto3.client("s3", region_name=settings.AWS_REGION)
+        s3.head_object(Bucket=bucket, Key=key)
+        logger.info(f"S3 preflight check PASSED: job_id={job_id_value} bucket={bucket} key={key}")
+    except ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "Unknown")
+        request_id = e.response.get("ResponseMetadata", {}).get("RequestId", "N/A")
+        
+        error_detail = (
+            f"Upload not found in S3. bucket={bucket} key={key} "
+            f"error_code={error_code} request_id={request_id}"
+        )
+        
+        if error_code in ("404", "NoSuchKey"):
+            logger.warning(f"S3 preflight check FAILED (not found): job_id={job_id_value} {error_detail}")
+        else:
+            logger.error(f"S3 preflight check ERROR: job_id={job_id_value} {error_detail}")
+        
+        job.status = VideoAnalysisJobStatus.failed
+        job.error_message = f"Upload verification failed: {error_detail}"
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Upload not found in S3. Please retry upload. Details: {error_detail}",
+        ) from None
+    except Exception as e:
+        error_detail = f"S3 preflight check failed: bucket={bucket} key={key} error={e!s}"
+        logger.error(f"S3 preflight check EXCEPTION: job_id={job_id_value} {error_detail}")
+        job.status = VideoAnalysisJobStatus.failed
+        job.error_message = error_detail
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to verify upload. Error: {e!s}",
+        ) from e
+    
+    logger.info(f"S3 object verified: job_id={job_id_value} proceeding to queue analysis")
 
     session.status = VideoSessionStatus.uploaded
     await db.commit()
