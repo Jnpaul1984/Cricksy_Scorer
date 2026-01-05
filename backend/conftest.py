@@ -297,13 +297,17 @@ async def other_user(db_session, reset_db):
 @pytest_asyncio.fixture
 async def auth_headers(test_user, db_session):
     """Generate auth headers for test_user."""
+    from sqlalchemy import select
     from backend.security import create_access_token
+    from backend.sql_app.models import User
 
-    # Refresh user to ensure role is loaded in current session context
-    await db_session.refresh(test_user, ["role"])
+    # Query role directly to avoid lazy-load issues
+    stmt = select(User.role).where(User.id == test_user.id)
+    result = await db_session.execute(stmt)
+    user_role = result.scalar_one()
     
     token = create_access_token(
-        {"sub": test_user.id, "email": test_user.email, "role": test_user.role.value}
+        {"sub": test_user.id, "email": test_user.email, "role": user_role.value}
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -311,12 +315,16 @@ async def auth_headers(test_user, db_session):
 @pytest_asyncio.fixture
 async def other_auth_headers(other_user, db_session):
     """Generate auth headers for other_user."""
+    from sqlalchemy import select
     from backend.security import create_access_token
+    from backend.sql_app.models import User
 
-    # Refresh user to ensure role is loaded in current session context
-    await db_session.refresh(other_user, ["role"])
+    # Query role directly to avoid lazy-load issues
+    stmt = select(User.role).where(User.id == other_user.id)
+    result = await db_session.execute(stmt)
+    user_role = result.scalar_one()
     
     token = create_access_token(
-        {"sub": other_user.id, "email": other_user.email, "role": other_user.role.value}
+        {"sub": other_user.id, "email": other_user.email, "role": user_role.value}
     )
     return {"Authorization": f"Bearer {token}"}
