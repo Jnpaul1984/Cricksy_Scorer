@@ -44,7 +44,8 @@ async def _download_from_s3(*, bucket: str, key: str, dst_path: str, job_id: str
     loop = asyncio.get_running_loop()
     
     logger.info(
-        f"Downloading video from S3: bucket={bucket} key={key} -> {dst_path} job_id={job_id or 'N/A'}"
+        f"Downloading from S3: bucket={bucket} key={key} -> {dst_path} "
+        f"job_id={job_id or 'N/A'}"
     )
 
     def _dl() -> None:
