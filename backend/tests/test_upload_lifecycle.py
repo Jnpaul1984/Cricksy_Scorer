@@ -96,10 +96,11 @@ async def test_upload_lifecycle_prevents_premature_claiming(client: TestClient):
     assert resp.status_code == 200, resp.text
     session_id = resp.json()["id"]
 
-    # Step 2: Initiate upload (mocking S3)
-    with patch("backend.routes.coach_pro_plus.s3_service") as mock_s3:
-        mock_s3.generate_presigned_put_url.return_value = "https://fake-presigned-url"
-
+    # Step 2: Initiate upload (mocking S3 at source module)
+    with patch(
+        "backend.services.s3_service.s3_service.generate_presigned_put_url",
+        return_value="https://fake-presigned-url",
+    ) as mock_presigned:
         resp = client.post(
             "/api/coaches/plus/videos/upload/initiate",
             json={"session_id": session_id, "sample_fps": 10, "include_frames": False},
@@ -108,6 +109,9 @@ async def test_upload_lifecycle_prevents_premature_claiming(client: TestClient):
         assert resp.status_code == 200, resp.text
         data = resp.json()
         job_id = data["job_id"]
+
+        # Verify mock was actually called (proves patch worked)
+        mock_presigned.assert_called_once()
 
     # Step 3: Verify job is awaiting_upload (NOT queued)
     status = await get_job_status(session_maker, job_id)
@@ -158,14 +162,17 @@ async def test_upload_complete_idempotency(client: TestClient):
     assert resp.status_code == 200
     session_id = resp.json()["id"]
 
-    with patch("backend.routes.coach_pro_plus.s3_service") as mock_s3:
-        mock_s3.generate_presigned_put_url.return_value = "https://fake-url"
+    with patch(
+        "backend.services.s3_service.s3_service.generate_presigned_put_url",
+        return_value="https://fake-url",
+    ) as mock_presigned:
         resp = client.post(
             "/api/coaches/plus/videos/upload/initiate",
             json={"session_id": session_id, "sample_fps": 10, "include_frames": False},
             headers={"Authorization": f"Bearer {token}"},
         )
         job_id = resp.json()["job_id"]
+        mock_presigned.assert_called_once()
 
     # Complete upload first time
     with patch("boto3.client") as mock_boto:
@@ -208,14 +215,17 @@ async def test_upload_complete_fails_on_missing_s3_object(client: TestClient):
     assert resp.status_code == 200
     session_id = resp.json()["id"]
 
-    with patch("backend.routes.coach_pro_plus.s3_service") as mock_s3:
-        mock_s3.generate_presigned_put_url.return_value = "https://fake-url"
+    with patch(
+        "backend.services.s3_service.s3_service.generate_presigned_put_url",
+        return_value="https://fake-url",
+    ) as mock_presigned:
         resp = client.post(
             "/api/coaches/plus/videos/upload/initiate",
             json={"session_id": session_id, "sample_fps": 10, "include_frames": False},
             headers={"Authorization": f"Bearer {token}"},
         )
         job_id = resp.json()["job_id"]
+        mock_presigned.assert_called_once()
 
     # Complete upload with missing S3 object (404)
     with patch("boto3.client") as mock_boto:
