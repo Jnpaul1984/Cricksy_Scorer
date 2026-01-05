@@ -10,7 +10,7 @@ Tests the fix for S3 HeadObject 404 errors by ensuring:
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from botocore.exceptions import ClientError
@@ -23,6 +23,30 @@ if TYPE_CHECKING:
 from backend.main import fastapi_app
 from backend.sql_app import models
 from backend.sql_app.database import get_db
+
+
+@pytest.fixture(autouse=True)
+def mock_s3_boto3(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Mock boto3 to prevent real AWS calls and return fake S3 client."""
+    mock_s3_client = MagicMock()
+    mock_s3_client.generate_presigned_url.return_value = "https://fake-presigned-url"
+    mock_s3_client.head_object.return_value = {"ContentLength": 1024}
+
+    def mock_boto3_client(*args: Any, **kwargs: Any) -> MagicMock:
+        return mock_s3_client
+
+    # Patch boto3.client at the point where s3_service imports it
+    import backend.services.s3_service as s3_mod
+
+    # Clear any existing s3_service instance to force re-initialization with mock
+    s3_mod._s3_service_instance = None
+
+    # Mock boto3 module
+    import boto3
+
+    monkeypatch.setattr(boto3, "client", mock_boto3_client)
+
+    return mock_s3_client
 
 
 @pytest.fixture
@@ -81,7 +105,9 @@ async def get_job_status(session_maker: Any, job_id: str) -> str | None:
 
 
 @pytest.mark.asyncio
-async def test_upload_lifecycle_prevents_premature_claiming(client: TestClient):
+async def test_upload_lifecycle_prevents_premature_claiming(
+    client: TestClient, mock_s3_boto3: MagicMock
+):
     """Test that jobs are not claimable until upload completes."""
     token = register_and_login(client, "coach@example.com")
     session_maker = client.session_maker  # type: ignore[attr-defined]
@@ -96,22 +122,18 @@ async def test_upload_lifecycle_prevents_premature_claiming(client: TestClient):
     assert resp.status_code == 200, resp.text
     session_id = resp.json()["id"]
 
-    # Step 2: Initiate upload (mocking S3 at source module)
-    with patch(
-        "backend.services.s3_service.s3_service.generate_presigned_put_url",
-        return_value="https://fake-presigned-url",
-    ) as mock_presigned:
-        resp = client.post(
-            "/api/coaches/plus/videos/upload/initiate",
-            json={"session_id": session_id, "sample_fps": 10, "include_frames": False},
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        assert resp.status_code == 200, resp.text
-        data = resp.json()
-        job_id = data["job_id"]
+    # Step 2: Initiate upload (S3 mocked via fixture)
+    resp = client.post(
+        "/api/coaches/plus/videos/upload/initiate",
+        json={"session_id": session_id, "sample_fps": 10, "include_frames": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    job_id = data["job_id"]
 
-        # Verify mock was actually called (proves patch worked)
-        mock_presigned.assert_called_once()
+    # Verify presigned URL was generated
+    assert mock_s3_boto3.generate_presigned_url.called
 
     # Step 3: Verify job is awaiting_upload (NOT queued)
     status = await get_job_status(session_maker, job_id)
@@ -123,19 +145,14 @@ async def test_upload_lifecycle_prevents_premature_claiming(client: TestClient):
     claimed_id = await _claim_one_job()
     assert claimed_id is None, "Worker should not claim awaiting_upload jobs"
 
-    # Step 5: Complete upload successfully (mocking S3 head_object)
-    with patch("boto3.client") as mock_boto:
-        mock_s3_client = MagicMock()
-        mock_boto.return_value = mock_s3_client
-        mock_s3_client.head_object.return_value = {"ContentLength": 1024}
-
-        resp = client.post(
-            "/api/coaches/plus/videos/upload/complete",
-            json={"job_id": job_id},
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        assert resp.status_code == 200, resp.text
-        assert resp.json()["status"] == "queued"
+    # Step 5: Complete upload successfully (S3 head_object already mocked via fixture)
+    resp = client.post(
+        "/api/coaches/plus/videos/upload/complete",
+        json={"job_id": job_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "queued"
 
     # Step 6: Verify job is now queued (claimable)
     status = await get_job_status(session_maker, job_id)
@@ -147,7 +164,7 @@ async def test_upload_lifecycle_prevents_premature_claiming(client: TestClient):
 
 
 @pytest.mark.asyncio
-async def test_upload_complete_idempotency(client: TestClient):
+async def test_upload_complete_idempotency(client: TestClient, mock_s3_boto3: MagicMock):
     """Test that calling upload-complete twice doesn't break anything."""
     token = register_and_login(client, "coach2@example.com")
     session_maker = client.session_maker  # type: ignore[attr-defined]
@@ -162,45 +179,37 @@ async def test_upload_complete_idempotency(client: TestClient):
     assert resp.status_code == 200
     session_id = resp.json()["id"]
 
-    with patch(
-        "backend.services.s3_service.s3_service.generate_presigned_put_url",
-        return_value="https://fake-url",
-    ) as mock_presigned:
-        resp = client.post(
-            "/api/coaches/plus/videos/upload/initiate",
-            json={"session_id": session_id, "sample_fps": 10, "include_frames": False},
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        job_id = resp.json()["job_id"]
-        mock_presigned.assert_called_once()
+    resp = client.post(
+        "/api/coaches/plus/videos/upload/initiate",
+        json={"session_id": session_id, "sample_fps": 10, "include_frames": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    job_id = resp.json()["job_id"]
 
     # Complete upload first time
-    with patch("boto3.client") as mock_boto:
-        mock_s3_client = MagicMock()
-        mock_boto.return_value = mock_s3_client
-        mock_s3_client.head_object.return_value = {"ContentLength": 1024}
+    resp1 = client.post(
+        "/api/coaches/plus/videos/upload/complete",
+        json={"job_id": job_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp1.status_code == 200
+    assert resp1.json()["status"] == "queued"
 
-        resp1 = client.post(
-            "/api/coaches/plus/videos/upload/complete",
-            json={"job_id": job_id},
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        assert resp1.status_code == 200
-        assert resp1.json()["status"] == "queued"
-
-        # Call complete again (idempotent)
-        resp2 = client.post(
-            "/api/coaches/plus/videos/upload/complete",
-            json={"job_id": job_id},
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        assert resp2.status_code == 200
-        # Should return success without changes
-        assert "already" in resp2.json()["message"].lower() or resp2.json()["status"] == "queued"
+    # Call complete again (idempotent)
+    resp2 = client.post(
+        "/api/coaches/plus/videos/upload/complete",
+        json={"job_id": job_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp2.status_code == 200
+    # Should return success without changes
+    assert "already" in resp2.json()["message"].lower() or resp2.json()["status"] == "queued"
 
 
 @pytest.mark.asyncio
-async def test_upload_complete_fails_on_missing_s3_object(client: TestClient):
+async def test_upload_complete_fails_on_missing_s3_object(
+    client: TestClient, mock_s3_boto3: MagicMock
+):
     """Test that upload-complete fails if S3 object doesn't exist."""
     token = register_and_login(client, "coach3@example.com")
     session_maker = client.session_maker  # type: ignore[attr-defined]
@@ -215,32 +224,24 @@ async def test_upload_complete_fails_on_missing_s3_object(client: TestClient):
     assert resp.status_code == 200
     session_id = resp.json()["id"]
 
-    with patch(
-        "backend.services.s3_service.s3_service.generate_presigned_put_url",
-        return_value="https://fake-url",
-    ) as mock_presigned:
-        resp = client.post(
-            "/api/coaches/plus/videos/upload/initiate",
-            json={"session_id": session_id, "sample_fps": 10, "include_frames": False},
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        job_id = resp.json()["job_id"]
-        mock_presigned.assert_called_once()
+    resp = client.post(
+        "/api/coaches/plus/videos/upload/initiate",
+        json={"session_id": session_id, "sample_fps": 10, "include_frames": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    job_id = resp.json()["job_id"]
 
-    # Complete upload with missing S3 object (404)
-    with patch("boto3.client") as mock_boto:
-        mock_s3_client = MagicMock()
-        mock_boto.return_value = mock_s3_client
-        error_response = {"Error": {"Code": "404"}}
-        mock_s3_client.head_object.side_effect = ClientError(error_response, "HeadObject")
+    # Complete upload with missing S3 object (404) - configure mock to raise error
+    error_response = {"Error": {"Code": "404"}}
+    mock_s3_boto3.head_object.side_effect = ClientError(error_response, "HeadObject")
 
-        resp = client.post(
-            "/api/coaches/plus/videos/upload/complete",
-            json={"job_id": job_id},
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        assert resp.status_code == 400, resp.text
-        assert "not found" in resp.json()["detail"].lower()
+    resp = client.post(
+        "/api/coaches/plus/videos/upload/complete",
+        json={"job_id": job_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 400, resp.text
+    assert "not found" in resp.json()["detail"].lower()
 
     # Verify job is marked failed
     status = await get_job_status(session_maker, job_id)
