@@ -213,7 +213,8 @@ async def test_user(db_session, reset_db):
     )
     db_session.add(user)
     await db_session.commit()
-    await db_session.refresh(user)
+    # Use refresh with attribute names to eagerly load relationship attributes
+    await db_session.refresh(user, ["role", "is_active", "is_superuser"])
 
     # Add to in-memory cache for in-memory DB tests
     security.add_in_memory_user(user)
@@ -284,7 +285,8 @@ async def other_user(db_session, reset_db):
     )
     db_session.add(user)
     await db_session.commit()
-    await db_session.refresh(user)
+    # Use refresh with attribute names to eagerly load relationship attributes
+    await db_session.refresh(user, ["role", "is_active", "is_superuser"])
 
     # Add to in-memory cache for in-memory DB tests
     security.add_in_memory_user(user)
