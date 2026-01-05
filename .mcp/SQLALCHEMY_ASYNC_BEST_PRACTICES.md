@@ -17,22 +17,45 @@
 ### Rule 1: Preload Attributes Before Session Expiry
 **Always preload attributes** that you'll need after a commit or session expiry.
 
-#### ✅ CORRECT - Refresh Before Using
+**CRITICAL**: After calling `refresh()`, **immediately cache any attributes you'll need** into local variables. Don't rely on accessing the object attributes later - they can still trigger lazy loading if the session context changes.
+
+#### ✅ CORRECT - Refresh AND Cache Immediately
 ```python
 @pytest_asyncio.fixture
 async def auth_headers(test_user, db_session):
     from backend.security import create_access_token
     
-    # Refresh to preload all attributes
+    # 1. Refresh to preload all attributes
     await db_session.refresh(test_user)
     
-    # Now safe to access attributes
+    # 2. IMMEDIATELY cache values - don't access test_user later!
+    user_id = test_user.id
+    user_email = test_user.email
+    user_role = test_user.role.value
+    
+    # 3. Use cached values
     token = create_access_token({
-        "sub": test_user.id,
+        "sub": user_id,
+        "email": user_email,
+        "role": user_role
+    })
+    return {"Authorization": f"Bearer {token}"}
+```
+
+#### ❌ WRONG - Refresh Without Caching
+```python
+@pytest_asyncio.fixture
+async def auth_headers(test_user, db_session):
+    # Refresh is good, but...
+    await db_session.refresh(test_user)
+    
+    # ❌ BAD - Still accessing object attributes later
+    # Can trigger lazy loading if session context changes!
+    token = create_access_token({
+        "sub": test_user.id,  # ❌ Lazy load risk!
         "email": test_user.email,
         "role": test_user.role.value
     })
-    return {"Authorization": f"Bearer {token}"}
 ```
 
 #### ✅ ALSO CORRECT - Cache Values Before Commit
@@ -77,29 +100,32 @@ async def test_something(db_session, test_user):
 
 ---
 
-### Rule 3: Use Explicit Queries in Fixtures
-For fixtures that create auth tokens or need user data:
+### Rule 3: Accept IDs, Not ORM Objects in Service Functions
+When service functions receive ORM objects from other parts of the codebase, they risk lazy loading if the object came from a different session or expired context.
+
+**Best Practice**: Service functions should accept primitive types (strings, ints) instead of ORM objects.
 
 ```python
-# ✅ BEST - Explicit query
-@pytest_asyncio.fixture
-async def auth_headers(test_user, db_session):
-    from sqlalchemy import select
-    from backend.sql_app.models import User
+# ❌ WRONG - Accepts User object, triggers lazy loading
+async def get_user_entitlements(db: AsyncSession, user: User) -> dict[str, Any]:
+    # This triggers lazy loading!
+    stmt = select(User.role).where(User.id == user.id)  # ❌ user.id lazy loads!
+    ...
+
+# ✅ CORRECT - Accepts user_id string
+async def get_user_entitlements(db: AsyncSession, user_id: str) -> dict[str, Any]:
+    # Query fresh data in current session
+    stmt = select(User.role, User.is_superuser).where(User.id == user_id)
+    result = await db.execute(stmt)
+    row = result.one_or_none()
+    if not row:
+        return {"role": "unknown", "is_superuser": False}
     
-    # Explicit query ensures fresh data
-    stmt = select(User.id, User.email, User.role).where(User.id == test_user.id)
-    result = await db_session.execute(stmt)
-    row = result.one()
-    user_id, user_email, user_role = row
-    
-    token = create_access_token({
-        "sub": user_id,
-        "email": user_email,
-        "role": user_role.value
-    })
-    return {"Authorization": f"Bearer {token}"}
+    user_role, is_superuser = row  # Fresh data from current session
+    ...
 ```
+
+**Why**: Service functions are often called from different contexts (tests, routes, other services). They should own their data fetching rather than relying on passed objects that may be expired.
 
 ---
 
@@ -224,4 +250,6 @@ Before pushing code that touches SQLAlchemy async:
 ---
 
 **Last Updated**: January 4, 2026  
-**CI Failures Fixed**: 9 MissingGreenlet errors, 1 mypy typing error
+**CI Failures Fixed**: 
+- Round 1: 9 MissingGreenlet errors, 1 mypy typing error
+- Round 2: 11 additional MissingGreenlet errors (auth token + entitlement service)
