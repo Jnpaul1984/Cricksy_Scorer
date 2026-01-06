@@ -133,6 +133,10 @@ class VideoAnalysisJobRead(BaseModel):
     quick_results_s3_key: str | None = None
     deep_results_s3_key: str | None = None
     
+    # Presigned URLs for downloading results (computed per-request, short-lived)
+    quick_results_url: str | None = None
+    deep_results_url: str | None = None
+    
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -484,9 +488,28 @@ async def get_analysis_job(
 
     job_read = VideoAnalysisJobRead.model_validate(job)
 
-    # Best-effort: attach a short-lived streaming URL for this single job.
-    # Do not do this on list endpoints to avoid bulk presign costs.
+    # Best-effort: attach presigned URLs for results and video
     try:
+        # Generate presigned URLs for S3 results if available
+        updates = {}
+        
+        if job.quick_results_s3_key:
+            quick_url = s3_service.generate_presigned_get_url(
+                bucket=settings.S3_COACH_VIDEOS_BUCKET,
+                key=job.quick_results_s3_key,
+                expires_in=settings.S3_STREAM_URL_EXPIRES_SECONDS,
+            )
+            updates["quick_results_url"] = quick_url
+            
+        if job.deep_results_s3_key:
+            deep_url = s3_service.generate_presigned_get_url(
+                bucket=settings.S3_COACH_VIDEOS_BUCKET,
+                key=job.deep_results_s3_key,
+                expires_in=settings.S3_STREAM_URL_EXPIRES_SECONDS,
+            )
+            updates["deep_results_url"] = deep_url
+        
+        # Attach video streaming URL for this single job
         if session.s3_bucket and session.s3_key:
             expires_in = settings.S3_STREAM_URL_EXPIRES_SECONDS
             url = s3_service.generate_presigned_get_url(
@@ -494,18 +517,19 @@ async def get_analysis_job(
                 key=session.s3_key,
                 expires_in=expires_in,
             )
-            job_read = job_read.model_copy(
-                update={
-                    "video_stream": VideoStreamUrlRead(
-                        video_url=url,
-                        expires_in=expires_in,
-                        bucket=session.s3_bucket,
-                        key=session.s3_key,
-                    )
-                }
+            updates["video_stream"] = VideoStreamUrlRead(
+                video_url=url,
+                expires_in=expires_in,
+                bucket=session.s3_bucket,
+                key=session.s3_key,
             )
+        
+        # Apply all updates at once if any
+        if updates:
+            job_read = job_read.model_copy(update=updates)
+            
     except Exception:
-        # Graceful degradation: preserve existing response shape without stream URL.
+        # Graceful degradation: preserve existing response shape without URLs
         pass
 
     return job_read

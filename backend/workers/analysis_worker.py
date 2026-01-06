@@ -224,7 +224,7 @@ async def _process_job(job_id: str) -> None:
                 f"Persisted quick artifacts: job_id={job.id} "
                 f"results_s3_key={quick_out_key} "
                 f"findings_len={len(quick_findings.get('findings', [])) if quick_findings else 0} "
-                f"report_len={len(str(quick_report.get('text', ''))) if quick_report else 0}"
+                f"report_summary_len={len(str(quick_report.get('summary', ''))) if quick_report else 0}"
             )
 
             if not deep_enabled:
@@ -267,8 +267,8 @@ async def _process_job(job_id: str) -> None:
                         if quick_findings
                         else 0
                     } "
-                    f"report_len={
-                        len(str(quick_report.get('text', '')))
+                    f"report_summary_len={
+                        len(str(quick_report.get('summary', '')))
                         if quick_report
                         else 0
                     }"
@@ -362,12 +362,17 @@ async def _process_job(job_id: str) -> None:
 
             await db.commit()
             await db.refresh(job)
+            
+            # Verify persisted data after refresh
             logger.info(
                 f"[PERSISTED] Deep job completed: job_id={job.id} "
                 f"status_after={job.status.value} stage={job.stage} progress={job.progress_pct}% "
                 f"deep_results_s3_key={deep_out_key} "
+                f"deep_findings={'present' if job.deep_findings else 'MISSING'} "
+                f"deep_report={'present' if job.deep_report else 'MISSING'} "
                 f"findings_len={len(deep_findings.get('findings', [])) if deep_findings else 0} "
-                f"report_len={len(str(deep_report.get('text', ''))) if deep_report else 0}"
+                f"report_summary_len={len(str(deep_report.get('summary', ''))) if deep_report else 0} "
+                f"report_keys={list(deep_report.keys()) if deep_report else []}"
             )
 
 

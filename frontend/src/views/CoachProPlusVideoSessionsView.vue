@@ -595,10 +595,10 @@ function startUiPolling(jobId: string) {
       return;
     }
 
-    if (Date.now() - startedAt > timeoutMs) {
+    // Show timeout message but KEEP POLLING until terminal status
+    if (Date.now() - startedAt > timeoutMs && !pollTimedOut.value) {
       pollTimedOut.value = true;
-      stopUiPolling();
-      videoStore.stopPollingJob(jobId);
+      // DO NOT stop polling - keep checking until done/failed
     }
   }, 1000);
 }
