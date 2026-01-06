@@ -660,7 +660,10 @@ async def initiate_video_upload(
         # Key format: {prefix}/{owner_type}/{owner_id}/{session_id}/{video_id}/original.mp4
         video_id = str(uuid4())
         prefix = (settings.COACH_PLUS_S3_PREFIX or "coach_plus").strip().strip("/")
-        s3_key = f"{prefix}/{owner_type_value}/{owner_id_value}/{request.session_id}/{video_id}/original.mp4"
+        s3_key = (
+            f"{prefix}/{owner_type_value}/{owner_id_value}/"
+            f"{request.session_id}/{video_id}/original.mp4"
+        )
 
         # Persist upload location onto the session so the worker can retrieve it later.
         # The worker currently expects `job.session.s3_key`.
@@ -904,12 +907,11 @@ async def complete_video_upload(
                 detail=f"Failed to prepare video for processing: {e!s}",
             ) from e
         finally:
+            import contextlib
             import os
 
-            try:
+            with contextlib.suppress(Exception):
                 os.unlink(tmp_path)
-            except Exception:
-                pass
     else:
         # CPU mode: simple queue transition (existing behavior)
         job.status = VideoAnalysisJobStatus.queued

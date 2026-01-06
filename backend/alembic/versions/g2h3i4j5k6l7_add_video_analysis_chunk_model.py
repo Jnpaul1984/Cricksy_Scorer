@@ -8,6 +8,7 @@ Create Date: 2026-01-05 18:00:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -25,12 +26,16 @@ def upgrade() -> None:
     - Progress tracking via completed_chunks/total_chunks
     - Resumable jobs via chunk checkpoints
     """
-    # Create chunk status enum
+    # Create chunk status enum (idempotent for CI retries)
     op.execute(
         """
-        CREATE TYPE video_analysis_chunk_status AS ENUM (
-            'queued', 'processing', 'completed', 'failed'
-        );
+        DO $$ BEGIN
+            CREATE TYPE video_analysis_chunk_status AS ENUM (
+                'queued', 'processing', 'completed', 'failed'
+            );
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
         """
     )
 

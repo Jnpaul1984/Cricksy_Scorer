@@ -11,15 +11,13 @@ import logging
 from typing import Any, cast
 
 import boto3
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from backend.config import settings
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
-from backend.sql_app.models import VideoAnalysisChunk, VideoAnalysisJob, VideoSessionStatus
+from backend.sql_app.models import VideoAnalysisChunk, VideoAnalysisJob
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +154,6 @@ async def aggregate_chunks_and_finalize(
     # Get S3 location
     session = await db.get(type(job.session), job.session.id)
     bucket = job.s3_bucket or session.s3_bucket
-    key = job.s3_key or session.s3_key
 
     if not bucket:
         raise ValueError(f"Missing S3 bucket for job {job.id}")

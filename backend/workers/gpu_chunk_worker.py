@@ -24,7 +24,7 @@ from sqlalchemy.orm import selectinload
 
 from backend.config import settings
 from backend.services.coach_plus_analysis import extract_pose_landmarks
-from backend.sql_app.database import get_engine, get_session_local
+from backend.sql_app.database import get_session_local
 from backend.sql_app.models import (
     VideoAnalysisChunk,
     VideoAnalysisChunkStatus,
@@ -128,7 +128,6 @@ def extract_chunk_poses(
         # Get video properties
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        duration = total_frames / fps if fps > 0 else 0
 
         # Calculate frame range for chunk
         start_frame = int(start_sec * fps)
@@ -362,10 +361,8 @@ async def run_gpu_worker_loop(*, poll_seconds: float = 1.0) -> None:
                 logger.exception(f"Chunk processing error: chunk_id={chunk_id} error={e!s}")
         else:
             # No chunks available - wait before polling again
-            try:
+            with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(stop_event.wait(), timeout=poll_seconds)
-            except asyncio.TimeoutError:
-                pass
 
     logger.info("gpu_chunk_worker stopped")
 
