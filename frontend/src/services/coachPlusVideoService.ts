@@ -440,6 +440,25 @@ export async function listAnalysisJobs(sessionId: string): Promise<VideoAnalysis
 }
 
 /**
+ * Get analysis history for a video session (ordered by created_at desc)
+ */
+export async function getAnalysisHistory(sessionId: string): Promise<VideoAnalysisJob[]> {
+  const res = await fetch(url(`/api/coaches/plus/video-sessions/${sessionId}/analysis-history`), {
+    method: 'GET',
+    headers: getAuthHeader() || {},
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(`Failed to get analysis history: ${res.status}`, res.status, errorDetail, errorCode);
+  }
+
+  return res.json();
+}
+
+/**
  * Get a short-lived presigned GET URL for the uploaded session video.
  */
 export async function getVideoStreamUrl(sessionId: string): Promise<VideoStreamUrl> {

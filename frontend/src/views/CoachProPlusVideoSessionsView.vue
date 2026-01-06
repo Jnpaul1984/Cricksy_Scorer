@@ -206,6 +206,67 @@
       </div>
     </div>
 
+    <!-- Session History Modal -->
+    <div v-if="showHistoryModal && selectedSession" class="modal-overlay" @click="closeHistoryModal">
+      <div class="modal-content" @click.stop>
+        <button class="modal-close-btn" @click="closeHistoryModal">✕</button>
+        
+        <h2>{{ selectedSession.title }} - Analysis History</h2>
+        
+        <div v-if="loadingHistory" class="loading">
+          <p>Loading analysis history...</p>
+        </div>
+
+        <div v-else-if="analysisHistory.length === 0" class="empty-state">
+          <p>No analysis jobs yet for this session.</p>
+          <button class="btn-primary" @click="closeHistoryModalAndUpload">Upload & Analyze Video</button>
+        </div>
+
+        <div v-else class="history-list">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="job in analysisHistory" :key="job.id">
+                <td>{{ formatDate(job.created_at) }}</td>
+                <td>
+                  <span :class="['status-badge', `status-${job.status}`]">
+                    {{ job.status }}
+                  </span>
+                </td>
+                <td class="history-actions">
+                  <button 
+                    class="btn-small btn-primary" 
+                    @click="viewJobResults(job)"
+                    :disabled="job.status === 'queued' || job.status === 'processing'"
+                  >
+                    View
+                  </button>
+                  <button 
+                    v-if="canExport"
+                    class="btn-small btn-secondary" 
+                    @click="exportJobPdf(job.id)"
+                    :disabled="exportingPdf || !isJobCompleted(job)"
+                  >
+                    {{ exportingPdf ? '...' : 'Export PDF' }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" @click="closeHistoryModal">Close</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Results Modal -->
     <div v-if="showResultsModal && selectedJob" class="modal-overlay" @click="closeResultsModal">
       <div class="modal-content modal-large" @click.stop>
@@ -460,8 +521,14 @@ const error = ref<string | null>(null);
 const showCreateModal = ref(false);
 const showUploadModal = ref(false);
 const showResultsModal = ref(false);
+const showHistoryModal = ref(false);
 const editingId = ref<string | null>(null);
 const uploadingSessionId = ref<string | null>(null);
+
+// Session history state
+const selectedSession = ref<any | null>(null);
+const analysisHistory = ref<VideoAnalysisJob[]>([]);
+const loadingHistory = ref(false);
 
 const selectedFile = ref<File | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -962,41 +1029,25 @@ function timelineSegStyle(seg: {
 
 async function selectSession(sessionId: string) {
   try {
-    // Fetch all jobs for this session
-    await videoStore.fetchJobsForSession(sessionId);
-    
-    // Find the latest job (by created_at)
-    const sessionJobs = Array.from(videoStore.jobStatusMap.values())
-      .filter(job => job.session_id === sessionId)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    
-    if (sessionJobs.length === 0) {
-      // No analysis jobs yet - just show info or prompt to upload
-      console.log('No analysis jobs found for session:', sessionId);
+    // Find the session
+    const session = sessions.value.find(s => s.id === sessionId);
+    if (!session) {
+      error.value = 'Session not found';
       return;
     }
-    
-    const latestJob = sessionJobs[0];
-    
-    // Force fetch to get absolutely fresh status (bypasses cache protection)
-    const freshJob = await videoStore.forceFetchJob(latestJob.id);
-    
-    if (!freshJob) {
-      error.value = 'Failed to load analysis results';
-      return;
-    }
-    
-    // Open modal with fresh job
-    selectedJob.value = freshJob;
-    showResultsModal.value = true;
-    
-    // Start polling if not terminal
-    if (freshJob.status !== 'completed' && freshJob.status !== 'done' && freshJob.status !== 'failed') {
-      startUiPolling(freshJob.id);
-    }
+
+    // Load analysis history
+    selectedSession.value = session;
+    loadingHistory.value = true;
+    showHistoryModal.value = true;
+
+    const { getAnalysisHistory } = await import('@/services/coachPlusVideoService');
+    analysisHistory.value = await getAnalysisHistory(sessionId);
+    loadingHistory.value = false;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load session';
+    error.value = err instanceof Error ? err.message : 'Failed to load session history';
     console.error('selectSession error:', err);
+    loadingHistory.value = false;
   }
 }
 
@@ -1025,6 +1076,61 @@ function closeModal() {
   editingId.value = null;
   formData.value = { title: '', player_ids: [], notes: '' };
   playersText.value = '';
+}
+
+function closeHistoryModal() {
+  showHistoryModal.value = false;
+  selectedSession.value = null;
+  analysisHistory.value = [];
+}
+
+function closeHistoryModalAndUpload() {
+  const sessionId = selectedSession.value?.id;
+  closeHistoryModal();
+  if (sessionId) {
+    openUploadModal(sessionId);
+  }
+}
+
+function viewJobResults(job: VideoAnalysisJob) {
+  selectedJob.value = job;
+  showHistoryModal.value = false;
+  showResultsModal.value = true;
+  
+  // Start polling if not terminal
+  if (!isJobCompleted(job)) {
+    startUiPolling(job.id);
+  }
+}
+
+async function exportJobPdf(jobId: string) {
+  exportingPdf.value = true;
+  error.value = null;
+
+  try {
+    const { exportAnalysisPdf } = await import('@/services/coachPlusVideoService');
+    const response = await exportAnalysisPdf(jobId);
+
+    console.log(`[ExportPDF] Generated PDF: ${response.pdf_size_bytes} bytes, S3 key: ${response.pdf_s3_key}`);
+
+    // Download PDF
+    const link = document.createElement('a');
+    link.href = response.pdf_url;
+    link.download = `analysis-${jobId}.pdf`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (err) {
+    console.error('[ExportPDF] Failed:', err);
+    error.value = err instanceof Error ? err.message : 'Failed to export PDF';
+  } finally {
+    exportingPdf.value = false;
+  }
+}
+
+function isJobCompleted(job: VideoAnalysisJob): boolean {
+  return job.status === 'completed' || job.status === 'done' || job.status === 'failed';
 }
 
 function previousPage() {
@@ -1841,5 +1947,70 @@ onBeforeUnmount(() => {
   .session-actions button {
     width: 100%;
   }
+}
+
+/* History Modal */
+.history-list {
+  margin-top: 1.5rem;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+}
+
+.history-table th,
+.history-table td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.history-table th {
+  background: #f9f9f9;
+  font-weight: 600;
+  color: #555;
+}
+
+.history-table tbody tr:hover {
+  background: #f5f5f5;
+}
+
+.history-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-small {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.875rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-small.btn-primary {
+  background: #667eea;
+  color: white;
+}
+
+.btn-small.btn-primary:hover:not(:disabled) {
+  background: #5568d3;
+}
+
+.btn-small.btn-secondary {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.btn-small.btn-secondary:hover:not(:disabled) {
+  background: #d0d0d0;
+}
+
+.btn-small:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

@@ -455,6 +455,19 @@ async def list_analysis_jobs(
     return [VideoAnalysisJobRead.model_validate(job) for job in jobs]
 
 
+@router.get("/video-sessions/{session_id}/analysis-history", response_model=list[VideoAnalysisJobRead])
+async def get_analysis_history(
+    session_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> list[VideoAnalysisJobRead]:
+    """
+    Get analysis history for a video session (alias for list_analysis_jobs).
+    Returns jobs ordered by created_at descending (newest first).
+    """
+    return await list_analysis_jobs(session_id, current_user, db)
+
+
 @router.get("/analysis-jobs/{job_id}", response_model=VideoAnalysisJobRead)
 async def get_analysis_job(
     job_id: str,

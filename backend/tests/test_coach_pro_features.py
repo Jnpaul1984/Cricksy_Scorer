@@ -320,3 +320,96 @@ async def test_coach_cannot_manage_unassigned_player(client: TestClient) -> None
         json={"outcome": "Should not work"},
     )
     assert resp_update.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_analysis_history_endpoint(client: TestClient):
+    """Test GET /video-sessions/{session_id}/analysis-history endpoint."""
+    # Register and upgrade user to coach_pro_plus
+    user = register_user(client, "coach-video@example.com")
+    await set_role(client, user["email"], models.RoleEnum.coach_pro_plus)
+    token = login_user(client, user["email"])
+    headers = _auth_headers(token)
+
+    # Create a video session
+    session_resp = client.post(
+        "/api/coaches/plus/sessions",
+        headers=headers,
+        json={"title": "Test Session", "player_ids": [], "notes": "Test notes"},
+    )
+    assert session_resp.status_code == 200, session_resp.text
+    session_id = session_resp.json()["id"]
+
+    # Initially, history should be empty
+    history_resp = client.get(
+        f"/api/coaches/plus/video-sessions/{session_id}/analysis-history",
+        headers=headers,
+    )
+    assert history_resp.status_code == 200, history_resp.text
+    history = history_resp.json()
+    assert isinstance(history, list)
+    assert len(history) == 0
+
+    # Create an analysis job manually for testing
+    from backend.sql_app.database import SessionLocal
+    from datetime import datetime, timezone
+
+    async with SessionLocal() as db:
+        job = models.VideoAnalysisJob(
+            session_id=session_id,
+            sample_fps=10,
+            include_frames=False,
+            status=models.VideoAnalysisJobStatus.completed,
+            quick_results={"pose_summary": {"detection_rate_percent": 95}},
+            quick_findings={"key_issues": ["balance", "follow_through"]},
+        )
+        db.add(job)
+        await db.commit()
+        await db.refresh(job)
+        job1_id = job.id
+
+    # Now history should have 1 job
+    history_resp = client.get(
+        f"/api/coaches/plus/video-sessions/{session_id}/analysis-history",
+        headers=headers,
+    )
+    assert history_resp.status_code == 200, history_resp.text
+    history = history_resp.json()
+    assert len(history) == 1
+    assert history[0]["session_id"] == session_id
+    assert history[0]["status"] == "completed"
+    assert "quick_results" in history[0]
+    assert "quick_findings" in history[0]
+
+    # Verify ordered by created_at desc (newest first)
+    async with SessionLocal() as db:
+        # Fetch the first job and modify its created_at to be older
+        result = await db.execute(
+            select(models.VideoAnalysisJob).where(models.VideoAnalysisJob.id == job1_id)
+        )
+        job1 = result.scalar_one()
+        job1.created_at = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        
+        # Create second job with newer timestamp
+        job2 = models.VideoAnalysisJob(
+            session_id=session_id,
+            sample_fps=10,
+            include_frames=False,
+            status=models.VideoAnalysisJobStatus.done,
+        )
+        job2.created_at = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+        db.add(job2)
+        await db.commit()
+        await db.refresh(job2)
+        job2_id = job2.id
+
+    history_resp = client.get(
+        f"/api/coaches/plus/video-sessions/{session_id}/analysis-history",
+        headers=headers,
+    )
+    assert history_resp.status_code == 200, history_resp.text
+    history = history_resp.json()
+    assert len(history) == 2
+    # Newest (job2) should be first
+    assert history[0]["id"] == job2_id
+    assert history[1]["id"] == job1_id
