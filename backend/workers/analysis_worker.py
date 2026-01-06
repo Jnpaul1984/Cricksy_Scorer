@@ -224,7 +224,11 @@ async def _process_job(job_id: str) -> None:
                 f"Persisted quick artifacts: job_id={job.id} "
                 f"results_s3_key={quick_out_key} "
                 f"findings_len={len(quick_findings.get('findings', [])) if quick_findings else 0} "
-                f"report_summary_len={len(str(quick_report.get('summary', ''))) if quick_report else 0}"
+                f"report_summary_len={
+                    len(str(quick_report.get('summary', '')))
+                    if quick_report
+                    else 0
+                }"
             )
 
             if not deep_enabled:
@@ -371,7 +375,11 @@ async def _process_job(job_id: str) -> None:
                 f"deep_findings={'present' if job.deep_findings else 'MISSING'} "
                 f"deep_report={'present' if job.deep_report else 'MISSING'} "
                 f"findings_len={len(deep_findings.get('findings', [])) if deep_findings else 0} "
-                f"report_summary_len={len(str(deep_report.get('summary', ''))) if deep_report else 0} "
+                f"report_summary_len={
+                    len(str(deep_report.get('summary', '')))
+                    if deep_report
+                    else 0
+                } "
                 f"report_keys={list(deep_report.keys()) if deep_report else []}"
             )
 
