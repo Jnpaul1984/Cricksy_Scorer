@@ -262,8 +262,16 @@ async def _process_job(job_id: str) -> None:
                     f"status_after={job.status.value} stage={job.stage} "
                     f"progress={job.progress_pct}% "
                     f"quick_results_s3_key={quick_out_key} "
-                    f"findings_len={len(quick_findings.get('findings', [])) if quick_findings else 0} "
-                    f"report_len={len(str(quick_report.get('text', ''))) if quick_report else 0}"
+                    f"findings_len={
+                        len(quick_findings.get('findings', []))
+                        if quick_findings
+                        else 0
+                    } "
+                    f"report_len={
+                        len(str(quick_report.get('text', '')))
+                        if quick_report
+                        else 0
+                    }"
                 )
                 return
 
@@ -414,7 +422,11 @@ async def _check_and_aggregate_chunks() -> str | None:
                 VideoAnalysisJob.total_chunks.isnot(None),
                 VideoAnalysisJob.completed_chunks == VideoAnalysisJob.total_chunks,
                 VideoAnalysisJob.status.notin_(
-                    [VideoAnalysisJobStatus.done, VideoAnalysisJobStatus.completed, VideoAnalysisJobStatus.failed]
+                    [
+                        VideoAnalysisJobStatus.done,
+                        VideoAnalysisJobStatus.completed,
+                        VideoAnalysisJobStatus.failed,
+                    ]
                 ),
             )
             .with_for_update(skip_locked=True)
