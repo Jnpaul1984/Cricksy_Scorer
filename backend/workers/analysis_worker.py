@@ -222,7 +222,8 @@ async def _process_job(job_id: str) -> None:
                 await db.refresh(job)
                 logger.info(
                     f"[PERSISTED] Quick-only job completed: job_id={job.id} "
-                    f"status_after={job.status.value} stage={job.stage} progress={job.progress_pct}%"
+                    f"status_after={job.status.value} stage={job.stage} "
+                    f"progress={job.progress_pct}%"
                 )
                 return
 
