@@ -540,6 +540,7 @@ const canExport = computed(() => {
 
 const uiPollInterval = ref<ReturnType<typeof setInterval> | null>(null);
 const pollTimedOut = ref(false);
+const pollBackoffMs = ref(1000); // Start with 1 second, increase on errors
 
 const videoPlaybackSrc = computed(() => videoPreviewUrl.value ?? videoStreamUrl.value);
 
@@ -577,14 +578,24 @@ function stopUiPolling() {
 function startUiPolling(jobId: string) {
   stopUiPolling();
   pollTimedOut.value = false;
+  pollBackoffMs.value = 1000; // Reset backoff
 
   const startedAt = Date.now();
   const timeoutMs = 5 * 60 * 1000;
+  const maxBackoffMs = 10000; // Max 10 second backoff
 
-  uiPollInterval.value = setInterval(() => {
-    const job = videoStore.jobStatusMap.get(jobId);
-    if (job) {
-      selectedJob.value = job;
+  uiPollInterval.value = setInterval(async () => {
+    try {
+      // Force fetch to get latest status (bypasses terminal status protection)
+      const freshJob = await videoStore.forceFetchJob(jobId);
+      if (freshJob) {
+        selectedJob.value = freshJob;
+        pollBackoffMs.value = 1000; // Reset backoff on success
+      }
+    } catch (err) {
+      console.error('[CoachProPlus] Poll error:', err);
+      // Exponential backoff on error
+      pollBackoffMs.value = Math.min(pollBackoffMs.value * 2, maxBackoffMs);
     }
 
     const latest = selectedJob.value;
@@ -599,7 +610,7 @@ function startUiPolling(jobId: string) {
       pollTimedOut.value = true;
       // DO NOT stop polling - keep checking until done/failed
     }
-  }, 1000);
+  }, pollBackoffMs.value);
 }
 
 function retrySelectedJob() {
@@ -906,9 +917,44 @@ function timelineSegStyle(seg: {
   };
 }
 
-function selectSession(sessionId: string) {
-  console.log('Selected session:', sessionId);
-  // TODO: Navigate to session detail view
+async function selectSession(sessionId: string) {
+  try {
+    // Fetch all jobs for this session
+    await videoStore.fetchJobsForSession(sessionId);
+    
+    // Find the latest job (by created_at)
+    const sessionJobs = Array.from(videoStore.jobStatusMap.values())
+      .filter(job => job.session_id === sessionId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    if (sessionJobs.length === 0) {
+      // No analysis jobs yet - just show info or prompt to upload
+      console.log('No analysis jobs found for session:', sessionId);
+      return;
+    }
+    
+    const latestJob = sessionJobs[0];
+    
+    // Force fetch to get absolutely fresh status (bypasses cache protection)
+    const freshJob = await videoStore.forceFetchJob(latestJob.id);
+    
+    if (!freshJob) {
+      error.value = 'Failed to load analysis results';
+      return;
+    }
+    
+    // Open modal with fresh job
+    selectedJob.value = freshJob;
+    showResultsModal.value = true;
+    
+    // Start polling if not terminal
+    if (freshJob.status !== 'completed' && freshJob.status !== 'done' && freshJob.status !== 'failed') {
+      startUiPolling(freshJob.id);
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to load session';
+    console.error('selectSession error:', err);
+  }
 }
 
 function editSession(sessionId: string) {

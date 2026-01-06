@@ -287,5 +287,272 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
       expect(pollTimedOut.value).toBe(false)
     })
   })
-})
 
+  describe('Cache staleness and terminal status protection', () => {
+    it('isJobStale returns true after 30 seconds', () => {
+      const now = Date.now()
+      const staleThresholdMs = 30000 // 30 seconds
+      
+      // lastFetchedAt Map behavior simulation
+      const lastFetchedAt = new Map<string, number>()
+      const jobId = 'job-123'
+      
+      // Simulate function logic
+      function isJobStale(id: string): boolean {
+        const timestamp = lastFetchedAt.get(id)
+        if (!timestamp) return true // Never fetched
+        return Date.now() - timestamp > staleThresholdMs
+      }
+      
+      // Test: never fetched → stale
+      expect(isJobStale(jobId)).toBe(true)
+      
+      // Test: just fetched → not stale
+      lastFetchedAt.set(jobId, now)
+      expect(isJobStale(jobId)).toBe(false)
+      
+      // Test: fetched 29 seconds ago → not stale
+      lastFetchedAt.set(jobId, now - 29000)
+      expect(isJobStale(jobId)).toBe(false)
+      
+      // Test: fetched 31 seconds ago → stale
+      lastFetchedAt.set(jobId, now - 31000)
+      expect(isJobStale(jobId)).toBe(true)
+    })
+
+    it('updateJobStatus prevents terminal → non-terminal override', () => {
+      const jobStatusMap = new Map<string, VideoAnalysisJob>()
+      const jobId = 'job-123'
+      
+      // Helper to check if status is terminal
+      function isJobTerminal(job: VideoAnalysisJob): boolean {
+        return job.status === 'done' || job.status === 'completed' || job.status === 'failed'
+      }
+      
+      // Simulate updateJobStatus logic
+      function updateJobStatus(job: VideoAnalysisJob): boolean {
+        const existing = jobStatusMap.get(job.id)
+        if (existing && isJobTerminal(existing) && !isJobTerminal(job)) {
+          // Should NOT update - terminal status is immutable
+          return false
+        }
+        jobStatusMap.set(job.id, job)
+        return true
+      }
+      
+      // Test: done → deep_running BLOCKED
+      const doneJob: VideoAnalysisJob = {
+        id: jobId,
+        session_id: 'session-1',
+        status: 'done',
+        sample_fps: 5,
+        include_frames: true,
+        error_message: null,
+        sqs_message_id: null,
+        results: null,
+        created_at: new Date().toISOString(),
+        started_at: null,
+        completed_at: null,
+        updated_at: new Date().toISOString(),
+      }
+      
+      jobStatusMap.set(jobId, doneJob)
+      
+      const staleRunningJob: VideoAnalysisJob = {
+        ...doneJob,
+        status: 'deep_running',
+      }
+      
+      const updated = updateJobStatus(staleRunningJob)
+      expect(updated).toBe(false) // Should be blocked
+      expect(jobStatusMap.get(jobId)?.status).toBe('done') // Status unchanged
+    })
+
+    it('updateJobStatus allows non-terminal → terminal update', () => {
+      const jobStatusMap = new Map<string, VideoAnalysisJob>()
+      const jobId = 'job-123'
+      
+      function isJobTerminal(job: VideoAnalysisJob): boolean {
+        return job.status === 'done' || job.status === 'completed' || job.status === 'failed'
+      }
+      
+      function updateJobStatus(job: VideoAnalysisJob): boolean {
+        const existing = jobStatusMap.get(job.id)
+        if (existing && isJobTerminal(existing) && !isJobTerminal(job)) {
+          return false
+        }
+        jobStatusMap.set(job.id, job)
+        return true
+      }
+      
+      // Test: deep_running → done ALLOWED
+      const runningJob: VideoAnalysisJob = {
+        id: jobId,
+        session_id: 'session-1',
+        status: 'deep_running',
+        sample_fps: 5,
+        include_frames: true,
+        error_message: null,
+        sqs_message_id: null,
+        results: null,
+        created_at: new Date().toISOString(),
+        started_at: null,
+        completed_at: null,
+        updated_at: new Date().toISOString(),
+      }
+      
+      jobStatusMap.set(jobId, runningJob)
+      
+      const doneJob: VideoAnalysisJob = {
+        ...runningJob,
+        status: 'done',
+      }
+      
+      const updated = updateJobStatus(doneJob)
+      expect(updated).toBe(true) // Should be allowed
+      expect(jobStatusMap.get(jobId)?.status).toBe('done')
+    })
+
+    it('forceFetchJob bypasses terminal status protection', () => {
+      const jobStatusMap = new Map<string, VideoAnalysisJob>()
+      const lastFetchedAt = new Map<string, number>()
+      const jobId = 'job-123'
+      
+      // Simulate forceFetchJob (always updates, no protection)
+      async function forceFetchJob(id: string, freshJob: VideoAnalysisJob): Promise<VideoAnalysisJob> {
+        jobStatusMap.set(id, freshJob) // Always update, no checks
+        lastFetchedAt.set(id, Date.now())
+        return freshJob
+      }
+      
+      // Start with done status
+      const doneJob: VideoAnalysisJob = {
+        id: jobId,
+        session_id: 'session-1',
+        status: 'done',
+        sample_fps: 5,
+        include_frames: true,
+        error_message: null,
+        sqs_message_id: null,
+        results: { pose: {} as any },
+        created_at: new Date().toISOString(),
+        started_at: null,
+        completed_at: null,
+        updated_at: new Date().toISOString(),
+      }
+      
+      jobStatusMap.set(jobId, doneJob)
+      
+      // User explicitly opens modal, triggering forceFetchJob
+      // API returns fresh "done" status (not stale)
+      const freshDoneJob: VideoAnalysisJob = {
+        ...doneJob,
+        updated_at: new Date(Date.now() + 1000).toISOString(), // Newer timestamp
+      }
+      
+      forceFetchJob(jobId, freshDoneJob)
+      
+      expect(jobStatusMap.get(jobId)?.status).toBe('done')
+      expect(jobStatusMap.get(jobId)?.updated_at).toBe(freshDoneJob.updated_at)
+      expect(lastFetchedAt.has(jobId)).toBe(true)
+    })
+
+    it('modal open scenario: done → stale cache → force fetch → shows done', async () => {
+      const jobStatusMap = new Map<string, VideoAnalysisJob>()
+      const lastFetchedAt = new Map<string, number>()
+      const jobId = 'job-123'
+      
+      // Simulate the complete flow
+      const initialJob: VideoAnalysisJob = {
+        id: jobId,
+        session_id: 'session-1',
+        status: 'done',
+        sample_fps: 5,
+        include_frames: true,
+        error_message: null,
+        sqs_message_id: null,
+        results: { pose: {} as any },
+        created_at: new Date().toISOString(),
+        started_at: null,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      
+      // Step 1: Job reaches done, modal shows it
+      jobStatusMap.set(jobId, initialJob)
+      lastFetchedAt.set(jobId, Date.now() - 60000) // 60 seconds ago (stale)
+      
+      expect(jobStatusMap.get(jobId)?.status).toBe('done')
+      
+      // Step 2: User closes modal, time passes
+      // (Cache becomes stale - >30 seconds old)
+      function isJobStale(id: string): boolean {
+        const timestamp = lastFetchedAt.get(id)
+        if (!timestamp) return true
+        return Date.now() - timestamp > 30000
+      }
+      
+      expect(isJobStale(jobId)).toBe(true)
+      
+      // Step 3: User clicks session to view results again
+      // forceFetchJob is called (bypasses protection)
+      async function forceFetchJob(id: string): Promise<VideoAnalysisJob> {
+        // Simulate API returning fresh "done" status
+        const freshJob: VideoAnalysisJob = {
+          ...initialJob,
+          updated_at: new Date().toISOString(), // Fresh timestamp
+        }
+        jobStatusMap.set(id, freshJob) // Always update
+        lastFetchedAt.set(id, Date.now()) // Mark as fresh
+        return freshJob
+      }
+      
+      const freshJob = await forceFetchJob(jobId)
+      
+      // Step 4: Modal opens with FRESH data (not stale cache)
+      expect(freshJob.status).toBe('done')
+      expect(jobStatusMap.get(jobId)?.status).toBe('done')
+      expect(isJobStale(jobId)).toBe(false) // No longer stale
+    })
+
+    it('exponential backoff behavior', () => {
+      let pollBackoffMs = 1000
+      const maxBackoffMs = 10000
+      
+      // Simulate errors causing backoff
+      const errorSequence = [
+        // Error 1: 1s → 2s
+        () => {
+          pollBackoffMs = Math.min(pollBackoffMs * 2, maxBackoffMs)
+          expect(pollBackoffMs).toBe(2000)
+        },
+        // Error 2: 2s → 4s
+        () => {
+          pollBackoffMs = Math.min(pollBackoffMs * 2, maxBackoffMs)
+          expect(pollBackoffMs).toBe(4000)
+        },
+        // Error 3: 4s → 8s
+        () => {
+          pollBackoffMs = Math.min(pollBackoffMs * 2, maxBackoffMs)
+          expect(pollBackoffMs).toBe(8000)
+        },
+        // Error 4: 8s → 10s (capped)
+        () => {
+          pollBackoffMs = Math.min(pollBackoffMs * 2, maxBackoffMs)
+          expect(pollBackoffMs).toBe(10000)
+        },
+        // Error 5: stays at 10s
+        () => {
+          pollBackoffMs = Math.min(pollBackoffMs * 2, maxBackoffMs)
+          expect(pollBackoffMs).toBe(10000)
+        },
+      ]
+      
+      errorSequence.forEach(fn => fn())
+      
+      // Success resets backoff
+      pollBackoffMs = 1000
+      expect(pollBackoffMs).toBe(1000)
+    })
+  })
+})

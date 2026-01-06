@@ -40,6 +40,7 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
   // Job polling state
   const pollingJobs = ref<Map<string, ReturnType<typeof setInterval>>>(new Map())
   const jobStatusMap = ref<Map<string, VideoAnalysisJob>>(new Map())
+  const lastFetchedAt = ref<Map<string, number>>(new Map()) // Timestamp when job was last fetched
 
   // ============================================================================
   // COMPUTED
@@ -67,6 +68,16 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
   const processingJobs = computed(() =>
     allJobs.value.filter((j) => isJobInProgress(j))
   )
+
+  /**
+   * Check if a job's cached data is stale (older than 30 seconds)
+   */
+  function isJobStale(jobId: string): boolean {
+    const fetchedAt = lastFetchedAt.value.get(jobId)
+    if (!fetchedAt) return true // Never fetched = stale
+    const ageMs = Date.now() - fetchedAt
+    return ageMs > 30000 // Stale if older than 30 seconds
+  }
 
   // ============================================================================
   // ACTIONS
@@ -259,13 +270,40 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
 
   /**
    * Fetch and cache latest job status
+   * CRITICAL: Never override terminal status with non-terminal status (prevents regression)
    */
   async function updateJobStatus(jobId: string): Promise<void> {
     try {
       const job = await getAnalysisJobStatus(jobId)
+      const existing = jobStatusMap.value.get(jobId)
+      
+      // REGRESSION PREVENTION: If existing job is terminal, only update if new status is also terminal
+      if (existing && isJobTerminal(existing) && !isJobTerminal(job)) {
+        console.warn(
+          `[coachPlusVideo] Prevented terminal status override: ${existing.status} -> ${job.status} for job ${jobId}`
+        )
+        return // Do not update
+      }
+      
       jobStatusMap.value.set(jobId, job)
+      lastFetchedAt.value.set(jobId, Date.now())
     } catch (err) {
       console.error(`[coachPlusVideo] Failed to update job ${jobId}:`, err)
+    }
+  }
+
+  /**
+   * Force fetch job status, bypassing terminal status protection (for modal open)
+   */
+  async function forceFetchJob(jobId: string): Promise<VideoAnalysisJob | null> {
+    try {
+      const job = await getAnalysisJobStatus(jobId)
+      jobStatusMap.value.set(jobId, job)
+      lastFetchedAt.value.set(jobId, Date.now())
+      return job
+    } catch (err) {
+      console.error(`[coachPlusVideo] Failed to force fetch job ${jobId}:`, err)
+      return null
     }
   }
 
@@ -306,6 +344,7 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
     error,
     uploading,
     jobStatusMap,
+    lastFetchedAt,
     allJobs,
     processingJobs,
 
@@ -321,6 +360,8 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
     pollJobUntilComplete,
     stopPollingJob,
     updateJobStatus,
+    forceFetchJob,
+    isJobStale,
     clearUploadState,
     cleanup,
   }
