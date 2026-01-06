@@ -194,20 +194,56 @@ async def _process_job(job_id: str) -> None:
 
             quick_payload = quick_artifacts.results
             quick_out_key = _derive_output_key(key, "quick_results.json")
+            
+            logger.info(
+                f"Saving quick results to S3: job_id={job.id} bucket={bucket} key={quick_out_key}"
+            )
             await _upload_json_to_s3(bucket=bucket, key=quick_out_key, payload=quick_payload)
+            
             quick_payload = {
                 **quick_payload,
                 "outputs": {"quick_results_s3_key": quick_out_key},
             }
 
+            # Extract findings and report for frontend
+            quick_findings = quick_payload.get("findings")
+            quick_report = quick_payload.get("report")
+            
+            # Persist results and extracted artifacts
             job.quick_results = quick_payload
+            job.quick_results_s3_key = quick_out_key
+            job.quick_findings = quick_findings
+            job.quick_report = quick_report
             job.status = VideoAnalysisJobStatus.quick_done
             job.stage = "QUICK_DONE"
             job.progress_pct = 50
             job.quick_completed_at = _now_utc()
             await db.commit()
+            
+            logger.info(
+                f"Persisted quick artifacts: job_id={job.id} "
+                f"results_s3_key={quick_out_key} "
+                f"findings_len={len(quick_findings.get('findings', [])) if quick_findings else 0} "
+                f"report_len={len(str(quick_report.get('text', ''))) if quick_report else 0}"
+            )
 
             if not deep_enabled:
+                # Guardrail: Verify critical artifacts exist before marking done
+                if not quick_findings or not quick_report:
+                    error_msg = (
+                        f"Critical artifacts missing: "
+                        f"findings={'present' if quick_findings else 'MISSING'} "
+                        f"report={'present' if quick_report else 'MISSING'}"
+                    )
+                    logger.error(f"Quick-only job failed validation: job_id={job.id} {error_msg}")
+                    job.status = VideoAnalysisJobStatus.failed
+                    job.stage = "FAILED"
+                    job.error_message = error_msg
+                    job.completed_at = _now_utc()
+                    video_session.status = VideoSessionStatus.failed
+                    await db.commit()
+                    raise ValueError(error_msg)
+                
                 logger.info(
                     f"[COMPLETE] Quick-only job finishing: job_id={job.id} "
                     f"status_before={job.status.value} setting_to=done"
@@ -224,7 +260,10 @@ async def _process_job(job_id: str) -> None:
                 logger.info(
                     f"[PERSISTED] Quick-only job completed: job_id={job.id} "
                     f"status_after={job.status.value} stage={job.stage} "
-                    f"progress={job.progress_pct}%"
+                    f"progress={job.progress_pct}% "
+                    f"quick_results_s3_key={quick_out_key} "
+                    f"findings_len={len(quick_findings.get('findings', [])) if quick_findings else 0} "
+                    f"report_len={len(str(quick_report.get('text', ''))) if quick_report else 0}"
                 )
                 return
 
@@ -247,7 +286,12 @@ async def _process_job(job_id: str) -> None:
 
             deep_payload = deep_artifacts.results
             deep_out_key = _derive_output_key(key, "deep_results.json")
+            
+            logger.info(
+                f"Saving deep results to S3: job_id={job.id} bucket={bucket} key={deep_out_key}"
+            )
             await _upload_json_to_s3(bucket=bucket, key=deep_out_key, payload=deep_payload)
+            
             deep_payload = {
                 **deep_payload,
                 "outputs": {"deep_results_s3_key": deep_out_key},
@@ -256,6 +300,10 @@ async def _process_job(job_id: str) -> None:
             # If frames were requested, upload them separately (can be large)
             if deep_artifacts.frames is not None:
                 frames_key = _derive_output_key(key, "deep_frames.json")
+                logger.info(
+                    f"Saving deep frames to S3: job_id={job.id} bucket={bucket} key={frames_key} "
+                    f"frames_count={len(deep_artifacts.frames)}"
+                )
                 await _upload_json_to_s3(
                     bucket=bucket,
                     key=frames_key,
@@ -264,7 +312,32 @@ async def _process_job(job_id: str) -> None:
                 deep_payload.setdefault("outputs", {})
                 deep_payload["outputs"]["deep_frames_s3_key"] = frames_key
 
+            # Extract findings and report for frontend
+            deep_findings = deep_payload.get("findings")
+            deep_report = deep_payload.get("report")
+            
+            # Guardrail: Verify critical artifacts exist before marking done
+            if not deep_findings or not deep_report:
+                error_msg = (
+                    f"Critical artifacts missing: "
+                    f"findings={'present' if deep_findings else 'MISSING'} "
+                    f"report={'present' if deep_report else 'MISSING'}"
+                )
+                logger.error(f"Deep job failed validation: job_id={job.id} {error_msg}")
+                job.status = VideoAnalysisJobStatus.failed
+                job.stage = "FAILED"
+                job.error_message = error_msg
+                job.completed_at = _now_utc()
+                video_session.status = VideoSessionStatus.failed
+                await db.commit()
+                raise ValueError(error_msg)
+            
+            # Persist results and extracted artifacts
             job.deep_results = deep_payload
+            job.deep_results_s3_key = deep_out_key
+            job.deep_findings = deep_findings
+            job.deep_report = deep_report
+            
             logger.info(
                 f"[COMPLETE] Deep job finishing: job_id={job.id} "
                 f"status_before={job.status.value} setting_to=done"
@@ -283,7 +356,10 @@ async def _process_job(job_id: str) -> None:
             await db.refresh(job)
             logger.info(
                 f"[PERSISTED] Deep job completed: job_id={job.id} "
-                f"status_after={job.status.value} stage={job.stage} progress={job.progress_pct}%"
+                f"status_after={job.status.value} stage={job.stage} progress={job.progress_pct}% "
+                f"deep_results_s3_key={deep_out_key} "
+                f"findings_len={len(deep_findings.get('findings', [])) if deep_findings else 0} "
+                f"report_len={len(str(deep_report.get('text', ''))) if deep_report else 0}"
             )
 
 

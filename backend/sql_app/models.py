@@ -1841,6 +1841,28 @@ class VideoAnalysisJob(Base):
         JSON, nullable=True, comment="Deep pass results JSON"
     )
 
+    # Extracted artifacts for frontend consumption
+    quick_findings: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, comment="Quick pass findings extracted from quick_results"
+    )
+    quick_report: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, comment="Quick pass report extracted from quick_results"
+    )
+    deep_findings: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, comment="Deep pass findings extracted from deep_results"
+    )
+    deep_report: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, comment="Deep pass report extracted from deep_results"
+    )
+
+    # S3 artifact keys for large payloads
+    quick_results_s3_key: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="S3 key for quick results JSON"
+    )
+    deep_results_s3_key: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="S3 key for deep results JSON"
+    )
+
     # Timestamps
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

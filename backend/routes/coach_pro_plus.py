@@ -115,11 +115,24 @@ class VideoAnalysisJobRead(BaseModel):
     progress_pct: int = 0
     error_message: str | None = None
     sqs_message_id: str | None = None
+    
     # Legacy combined results (kept for backward compatibility)
     results: dict | None = None
+    
     # New staged results
     quick_results: dict | None = None
     deep_results: dict | None = None
+    
+    # Extracted artifacts for frontend consumption
+    quick_findings: dict | None = None
+    quick_report: dict | None = None
+    deep_findings: dict | None = None
+    deep_report: dict | None = None
+    
+    # S3 keys for downloading full results
+    quick_results_s3_key: str | None = None
+    deep_results_s3_key: str | None = None
+    
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
