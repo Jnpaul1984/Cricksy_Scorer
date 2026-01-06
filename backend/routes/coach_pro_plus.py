@@ -133,6 +133,10 @@ class VideoAnalysisJobRead(BaseModel):
     quick_results_s3_key: str | None = None
     deep_results_s3_key: str | None = None
     
+    # PDF export
+    pdf_s3_key: str | None = None
+    pdf_generated_at: datetime | None = None
+    
     # Presigned URLs for downloading results (computed per-request, short-lived)
     quick_results_url: str | None = None
     deep_results_url: str | None = None
@@ -533,6 +537,120 @@ async def get_analysis_job(
         pass
 
     return job_read
+
+
+class PdfExportResponse(BaseModel):
+    """Response schema for PDF export"""
+
+    job_id: str
+    pdf_url: str
+    expires_in: int
+    pdf_s3_key: str
+    pdf_size_bytes: int
+
+
+@router.post("/analysis-jobs/{job_id}/export-pdf", response_model=PdfExportResponse)
+async def export_analysis_pdf(
+    job_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> PdfExportResponse:
+    """
+    Generate and export a PDF report for a video analysis job.
+
+    Creates a PDF from available analysis data (results JSON + findings),
+    uploads it to S3, and returns a presigned download URL.
+    """
+    from backend.services.pdf_export_service import generate_analysis_pdf
+
+    # Verify feature access
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    # Fetch job with session
+    result = await db.execute(
+        select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session))
+        .where(VideoAnalysisJob.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+
+    # Check ownership via session
+    session = job.session
+    if current_user.role == RoleEnum.coach_pro_plus and session.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this job",
+        )
+
+    # Generate PDF from available data
+    try:
+        pdf_bytes = generate_analysis_pdf(
+            job_id=job.id,
+            session_title=session.title,
+            status=job.status.value,
+            quick_findings=job.quick_findings,
+            deep_findings=job.deep_findings,
+            quick_results=job.quick_results,
+            deep_results=job.deep_results,
+            created_at=job.created_at,
+            completed_at=job.completed_at,
+        )
+
+        pdf_size_bytes = len(pdf_bytes)
+        logger.info(f"Generated PDF for job {job_id}: {pdf_size_bytes} bytes ({pdf_size_bytes / 1024:.2f} KB)")
+
+    except Exception as e:
+        logger.error(f"Failed to generate PDF for job {job_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate PDF: {str(e)}",
+        )
+
+    # Upload PDF to S3
+    pdf_s3_key = f"jobs/{job_id}/exports/report.pdf"
+    try:
+        s3_service.upload_file_obj(
+            file_obj=pdf_bytes,
+            bucket=settings.S3_COACH_VIDEOS_BUCKET,
+            key=pdf_s3_key,
+            content_type="application/pdf",
+        )
+        logger.info(f"Uploaded PDF to S3: bucket={settings.S3_COACH_VIDEOS_BUCKET}, key={pdf_s3_key}")
+
+    except Exception as e:
+        logger.error(f"Failed to upload PDF to S3 for job {job_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload PDF: {str(e)}",
+        )
+
+    # Update job with PDF metadata
+    job.pdf_s3_key = pdf_s3_key
+    job.pdf_generated_at = datetime.now(datetime.UTC) if hasattr(datetime, 'UTC') else datetime.utcnow()
+    await db.commit()
+
+    # Generate presigned download URL
+    expires_in = settings.S3_STREAM_URL_EXPIRES_SECONDS
+    pdf_url = s3_service.generate_presigned_get_url(
+        bucket=settings.S3_COACH_VIDEOS_BUCKET,
+        key=pdf_s3_key,
+        expires_in=expires_in,
+    )
+
+    return PdfExportResponse(
+        job_id=job_id,
+        pdf_url=pdf_url,
+        expires_in=expires_in,
+        pdf_s3_key=pdf_s3_key,
+        pdf_size_bytes=pdf_size_bytes,
+    )
 
 
 @router.get("/videos/{session_id}/stream-url", response_model=VideoStreamUrlRead)

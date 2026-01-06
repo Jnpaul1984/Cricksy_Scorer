@@ -143,6 +143,44 @@ class S3Service:
                 raise RuntimeError(f"Object not found: {key}") from e
             raise RuntimeError(f"Failed to get object metadata: {e!s}") from e
 
+    def upload_file_obj(
+        self,
+        file_obj: bytes,
+        bucket: str,
+        key: str,
+        content_type: str | None = None,
+    ) -> None:
+        """
+        Upload a file object (bytes) to S3.
+
+        Args:
+            file_obj: File content as bytes
+            bucket: S3 bucket name
+            key: S3 object key (path)
+            content_type: MIME content type (e.g., 'application/pdf')
+
+        Raises:
+            ClientError: If S3 operation fails
+        """
+        if not bucket or not bucket.strip():
+            raise RuntimeError("S3 bucket is not configured.")
+        if not key or not key.strip():
+            raise RuntimeError("S3 key is required for upload.")
+
+        try:
+            extra_args = {}
+            if content_type:
+                extra_args["ContentType"] = content_type
+
+            self.s3_client.put_object(
+                Bucket=bucket,
+                Key=key,
+                Body=file_obj,
+                **extra_args,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to upload to S3: {e!s}") from e
+
 
 # Global instance (created lazily when first accessed)
 _s3_service_instance: S3Service | None = None

@@ -1863,6 +1863,14 @@ class VideoAnalysisJob(Base):
         String(500), nullable=True, comment="S3 key for deep results JSON"
     )
 
+    # PDF export
+    pdf_s3_key: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="S3 key for exported PDF report"
+    )
+    pdf_generated_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="When PDF was generated"
+    )
+
     # Timestamps
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

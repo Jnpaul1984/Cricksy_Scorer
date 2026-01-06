@@ -419,7 +419,14 @@
         </div>
 
         <div v-if="canExport" class="modal-actions">
-          <button type="button" class="btn-secondary" disabled>Export (Coach Pro Plus)</button>
+          <button 
+            type="button" 
+            class="btn-primary" 
+            :disabled="exportingPdf || !selectedJob"
+            @click="exportPdf"
+          >
+            {{ exportingPdf ? 'Generating PDF...' : 'Export PDF' }}
+          </button>
         </div>
 
         <div class="modal-actions">
@@ -478,6 +485,9 @@ const uploadSettings = ref({
 });
 
 const playersText = ref('');
+
+// PDF export state
+const exportingPdf = ref(false);
 
 // Watch store errors and display them
 watch(
@@ -618,6 +628,39 @@ function retrySelectedJob() {
   if (!sessionId) return;
   closeResultsModal();
   openUploadModal(sessionId);
+}
+
+async function exportPdf() {
+  const jobId = selectedJob.value?.id;
+  if (!jobId) return;
+
+  exportingPdf.value = true;
+  error.value = null;
+
+  try {
+    const { exportAnalysisPdf } = await import('@/services/coachPlusVideoService');
+    const response = await exportAnalysisPdf(jobId);
+
+    console.log(`[ExportPDF] Generated PDF: ${response.pdf_size_bytes} bytes, S3 key: ${response.pdf_s3_key}`);
+
+    // Download via blob or open in new tab
+    // Option 1: Download as file
+    const link = document.createElement('a');
+    link.href = response.pdf_url;
+    link.download = `analysis-${jobId}.pdf`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Optional: Also open in new tab for preview
+    // window.open(response.pdf_url, '_blank');
+  } catch (err) {
+    console.error('[ExportPDF] Failed:', err);
+    error.value = err instanceof Error ? err.message : 'Failed to export PDF';
+  } finally {
+    exportingPdf.value = false;
+  }
 }
 
 // ============================================================================

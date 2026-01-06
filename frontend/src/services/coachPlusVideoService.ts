@@ -61,6 +61,9 @@ export interface VideoAnalysisJob {
   deep_enabled?: boolean | null;
   quick_results?: VideoAnalysisResults | null;
   deep_results?: VideoAnalysisResults | null;
+  // PDF export
+  pdf_s3_key?: string | null;
+  pdf_generated_at?: string | null;
   // Optional, short-lived playback URL (computed per-request; never persisted)
   video_stream?: VideoStreamUrl | null;
   created_at: string;
@@ -451,6 +454,38 @@ export async function getVideoStreamUrl(sessionId: string): Promise<VideoStreamU
     const errorCode = detail?.code || undefined;
     throw new ApiError(
       `Failed to get stream URL: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
+  }
+
+  return res.json();
+}
+
+/**
+ * Export analysis results as PDF
+ */
+export interface PdfExportResponse {
+  job_id: string;
+  pdf_url: string;
+  expires_in: number;
+  pdf_s3_key: string;
+  pdf_size_bytes: number;
+}
+
+export async function exportAnalysisPdf(jobId: string): Promise<PdfExportResponse> {
+  const res = await fetch(url(`/api/coaches/plus/analysis-jobs/${jobId}/export-pdf`), {
+    method: 'POST',
+    headers: getAuthHeader() || {},
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to export PDF: ${res.status}`,
       res.status,
       errorDetail,
       errorCode,
