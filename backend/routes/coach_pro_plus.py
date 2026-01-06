@@ -282,7 +282,10 @@ async def list_video_sessions(
         )
 
     # Build query based on user role
-    if current_user.role == RoleEnum.org_pro:
+    if current_user.is_superuser:
+        # Superusers see all sessions
+        query = select(VideoSession)
+    elif current_user.role == RoleEnum.org_pro:
         # Org users see all sessions for their org
         query = select(VideoSession).where(
             (VideoSession.owner_type == OwnerTypeEnum.org)
