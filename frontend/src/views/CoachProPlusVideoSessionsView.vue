@@ -54,6 +54,12 @@
           </div>
 
           <div class="session-meta">
+            <p v-if="session.analysis_context">
+              <strong>Analysis:</strong> {{ formatAnalysisContext(session.analysis_context) }}
+              <span v-if="session.camera_view" class="camera-view">
+                ({{ formatCameraView(session.camera_view) }})
+              </span>
+            </p>
             <p v-if="session.player_ids.length > 0">
               <strong>Players:</strong> {{ session.player_ids.length }}
             </p>
@@ -101,6 +107,36 @@
               placeholder="e.g., Batting Technique - Session 1"
               required
             />
+          </div>
+
+          <div class="form-group">
+            <label for="analysis-context">What are we analyzing? <span class="required">*</span></label>
+            <select
+              id="analysis-context"
+              v-model="formData.analysis_context"
+              required
+            >
+              <option value="">Select analysis type...</option>
+              <option value="batting">Batting</option>
+              <option value="bowling">Bowling</option>
+              <option value="wicketkeeping">Wicketkeeping</option>
+              <option value="fielding">Fielding</option>
+              <option value="mixed">Mixed/General</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="camera-view">Camera Angle/View</label>
+            <select
+              id="camera-view"
+              v-model="formData.camera_view"
+            >
+              <option value="">Select camera angle...</option>
+              <option value="side">Side View</option>
+              <option value="front">Front View</option>
+              <option value="behind">Behind View</option>
+              <option value="other">Other</option>
+            </select>
           </div>
 
           <div class="form-group">
@@ -272,6 +308,12 @@
       <div class="modal-content modal-large" @click.stop>
         <button class="modal-close-btn" @click="closeResultsModal">✕</button>
         <h2>Analysis Results</h2>
+        <div v-if="selectedJob.analysis_context" class="analysis-context-header">
+          <span class="context-label">{{ formatAnalysisContext(selectedJob.analysis_context) }}</span>
+          <span v-if="selectedJob.camera_view" class="camera-label">
+            • {{ formatCameraView(selectedJob.camera_view) }}
+          </span>
+        </div>
 
         <!-- Timed out -->
         <div v-if="pollTimedOut" class="results-error">
@@ -544,6 +586,8 @@ const formData = ref({
   title: '',
   player_ids: [] as string[],
   notes: '',
+  analysis_context: '',
+  camera_view: '',
 });
 
 const uploadSettings = ref({
@@ -1154,6 +1198,27 @@ function formatDate(dateStr: string): string {
   });
 }
 
+function formatAnalysisContext(context: string): string {
+  const map: Record<string, string> = {
+    batting: 'Batting',
+    bowling: 'Bowling',
+    wicketkeeping: 'Wicketkeeping',
+    fielding: 'Fielding',
+    mixed: 'Mixed/General',
+  };
+  return map[context] || context;
+}
+
+function formatCameraView(view: string): string {
+  const map: Record<string, string> = {
+    side: 'Side View',
+    front: 'Front View',
+    behind: 'Behind View',
+    other: 'Other',
+  };
+  return map[view] || view;
+}
+
 function formatCount(value: number | undefined): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
   return String(Math.round(value));
@@ -1576,6 +1641,30 @@ onBeforeUnmount(() => {
   margin: 0.3rem 0;
 }
 
+.session-meta .camera-view {
+  color: #999;
+  font-style: italic;
+}
+
+.analysis-context-header {
+  background: #f0f4ff;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.analysis-context-header .context-label {
+  font-weight: 600;
+}
+
+.analysis-context-header .camera-label {
+  color: #999;
+  margin-left: 0.25rem;
+}
+
 .session-notes {
   background: #f9f9f9;
   padding: 0.75rem;
@@ -1730,9 +1819,15 @@ onBeforeUnmount(() => {
   color: #333;
 }
 
+.form-group label .required {
+  color: #e74c3c;
+  margin-left: 0.25rem;
+}
+
 .form-group input[type='text'],
 .form-group input[type='file'],
 .form-group input[type='number'],
+.form-group select,
 .form-group textarea {
   width: 100%;
   padding: 0.75rem;
@@ -1743,6 +1838,7 @@ onBeforeUnmount(() => {
 }
 
 .form-group input:focus,
+.form-group select:focus,
 .form-group textarea:focus {
   outline: none;
   border-color: #667eea;

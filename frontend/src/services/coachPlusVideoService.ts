@@ -40,6 +40,8 @@ export interface VideoSession {
   player_ids: string[];
   status: string; // "pending" | "uploaded" | "processing" | "ready" | "failed"
   notes: string | null;
+  analysis_context: string | null; // "batting" | "bowling" | "wicketkeeping" | "fielding" | "mixed"
+  camera_view: string | null; // "side" | "front" | "behind" | "other"
   s3_bucket: string | null;
   s3_key: string | null;
   created_at: string;
@@ -55,6 +57,9 @@ export interface VideoAnalysisJob {
   error_message: string | null;
   sqs_message_id: string | null;
   results: VideoAnalysisResults | null;
+  // Session context (denormalized from session)
+  analysis_context?: string | null;
+  camera_view?: string | null;
   // Staged analysis (new; optional for backward compatibility)
   stage?: string | null;
   progress_pct?: number | null;
@@ -187,6 +192,8 @@ export async function createVideoSession(data: {
   title: string;
   player_ids?: string[];
   notes?: string | null;
+  analysis_context?: string | null;
+  camera_view?: string | null;
 }): Promise<VideoSession> {
   const token = getStoredToken();
   const authHeader = getAuthHeader();

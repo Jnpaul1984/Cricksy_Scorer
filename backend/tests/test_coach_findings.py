@@ -364,6 +364,48 @@ class TestGenerateFindings:
         assert "context" in result
         assert result["context"] == context
 
+    def test_generate_findings_with_analysis_context_batting(self) -> None:
+        """Analysis context should customize finding titles for batting."""
+        metrics = {
+            "metrics": {
+                "head_stability_score": {"score": 0.50, "num_frames": 100},  # Trigger finding
+                "balance_drift_score": {"score": 0.90, "num_frames": 100},
+                "front_knee_brace_score": {"score": 0.90, "num_frames": 100},
+                "hip_shoulder_separation_timing": {"score": 0.12, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.90, "num_frames": 100},
+            }
+        }
+        context = {"analysis_context": "batting"}
+
+        result = generate_findings(metrics, context)
+
+        assert "findings" in result
+        assert len(result["findings"]) > 0
+        head_finding = next((f for f in result["findings"] if f["code"] == "HEAD_MOVEMENT"), None)
+        assert head_finding is not None
+        assert "batting" in head_finding["title"].lower()
+
+    def test_generate_findings_with_analysis_context_bowling(self) -> None:
+        """Analysis context should customize finding titles for bowling."""
+        metrics = {
+            "metrics": {
+                "head_stability_score": {"score": 0.50, "num_frames": 100},  # Trigger finding
+                "balance_drift_score": {"score": 0.90, "num_frames": 100},
+                "front_knee_brace_score": {"score": 0.90, "num_frames": 100},
+                "hip_shoulder_separation_timing": {"score": 0.12, "num_frames": 100},
+                "elbow_drop_score": {"score": 0.90, "num_frames": 100},
+            }
+        }
+        context = {"analysis_context": "bowling"}
+
+        result = generate_findings(metrics, context)
+
+        assert "findings" in result
+        assert len(result["findings"]) > 0
+        head_finding = next((f for f in result["findings"] if f["code"] == "HEAD_MOVEMENT"), None)
+        assert head_finding is not None
+        assert "bowling" in head_finding["title"].lower()
+
     def test_generate_findings_single_issue_low_severity(self) -> None:
         """Single low severity issue should yield medium overall level."""
         metrics = {

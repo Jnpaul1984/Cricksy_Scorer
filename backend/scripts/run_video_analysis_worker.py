@@ -100,7 +100,11 @@ def download_video_from_s3(bucket: str, key: str, local_path: str) -> None:
 # ============================================================================
 
 
-def run_analysis_pipeline(video_path: str, sample_fps: int = 10) -> dict[str, Any]:
+def run_analysis_pipeline(
+    video_path: str, 
+    sample_fps: int = 10, 
+    session_context: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """
     Run complete analysis pipeline on video.
 
@@ -113,6 +117,7 @@ def run_analysis_pipeline(video_path: str, sample_fps: int = 10) -> dict[str, An
     Args:
         video_path: Path to video file
         sample_fps: Frames to sample per second
+        session_context: Optional session metadata (analysis_context, camera_view, etc.)
 
     Returns:
         dict with keys: pose_data, metrics, findings, report
@@ -121,6 +126,8 @@ def run_analysis_pipeline(video_path: str, sample_fps: int = 10) -> dict[str, An
         Exception: If any step in pipeline fails
     """
     logger.info(f"Starting analysis pipeline for {video_path}")
+    if session_context:
+        logger.info(f"Session context: {session_context}")
 
     # Ensure MediaPipe model exists locally (download + cache)
     model_path = ensure_mediapipe_model_present()
@@ -151,7 +158,7 @@ def run_analysis_pipeline(video_path: str, sample_fps: int = 10) -> dict[str, An
 
         # Step 3: Generate findings
         logger.info("Step 3/4: Generating findings...")
-        findings = generate_findings(metrics)
+        findings = generate_findings(metrics, context=session_context)
         logger.info(f"  Generated {len(findings.get('findings', []))} findings")
 
         # Step 4: Generate report
@@ -302,6 +309,14 @@ async def process_message(
         s3_bucket = settings.S3_COACH_VIDEOS_BUCKET
         s3_key = job.session.s3_key
 
+        # Build session context for findings
+        session_context = {
+            "analysis_context": job.session.analysis_context,
+            "camera_view": job.session.camera_view,
+            "session_id": job.session.id,
+            "session_title": job.session.title,
+        }
+
         # Download video to temporary file
         with tempfile.TemporaryDirectory() as tmpdir:
             video_path = Path(tmpdir) / "video.mp4"
@@ -311,6 +326,7 @@ async def process_message(
             results = run_analysis_pipeline(
                 video_path=str(video_path),
                 sample_fps=sample_fps,
+                session_context=session_context,
             )
 
             # Persist results to database

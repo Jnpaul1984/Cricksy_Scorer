@@ -267,6 +267,58 @@ def _get_severity(score: float, threshold: float, is_higher_better: bool = True)
             return "high"
 
 
+def _contextualize_finding(finding: dict[str, Any], analysis_context: str | None) -> dict[str, Any]:
+    """
+    Adjust finding wording based on analysis context (batting, bowling, etc.).
+    
+    Args:
+        finding: The finding dict to contextualize
+        analysis_context: One of "batting", "bowling", "wicketkeeping", "fielding", "mixed"
+    
+    Returns:
+        Updated finding with context-aware messages
+    """
+    if not analysis_context or analysis_context == "mixed":
+        return finding
+    
+    # Context-specific title adjustments
+    title_adjustments = {
+        "batting": {
+            "HEAD_MOVEMENT": "Head movement during batting stroke",
+            "BALANCE_DRIFT": "Balance drift in batting stance",
+            "KNEE_COLLAPSE": "Front knee collapse during batting",
+            "ROTATION_TIMING": "Hip-shoulder separation in batting swing",
+            "ELBOW_DROP": "Elbow position in batting swing",
+        },
+        "bowling": {
+            "HEAD_MOVEMENT": "Head movement during bowling delivery",
+            "BALANCE_DRIFT": "Balance drift in bowling action",
+            "KNEE_COLLAPSE": "Front knee collapse at delivery",
+            "ROTATION_TIMING": "Hip-shoulder separation in bowling action",
+            "ELBOW_DROP": "Elbow drop during bowling delivery",
+        },
+        "wicketkeeping": {
+            "HEAD_MOVEMENT": "Head movement during keeping",
+            "BALANCE_DRIFT": "Balance stability while keeping",
+            "KNEE_COLLAPSE": "Knee stability in wicketkeeping stance",
+            "ROTATION_TIMING": "Body rotation while taking the ball",
+        },
+        "fielding": {
+            "HEAD_MOVEMENT": "Head movement during fielding",
+            "BALANCE_DRIFT": "Balance during fielding movements",
+            "KNEE_COLLAPSE": "Knee stability during fielding",
+        },
+    }
+    
+    code = finding.get("code")
+    if code and analysis_context in title_adjustments:
+        context_titles = title_adjustments[analysis_context]
+        if code in context_titles:
+            finding["title"] = context_titles[code]
+    
+    return finding
+
+
 def _get_overall_level(findings: list[dict]) -> str:
     """
     Compute overall performance level from findings.
@@ -451,7 +503,7 @@ def generate_findings(
         metrics: Dict with metric scores from compute_pose_metrics()
                  Expected keys: head_stability_score, balance_drift_score, etc.
         context: Optional context dict for future extensibility
-                (e.g., player level, session type)
+                (e.g., player level, session type, analysis_context, camera_view)
 
     Returns:
         {
@@ -474,28 +526,37 @@ def generate_findings(
     # Extract metrics from nested structure if needed
     metric_scores = metrics.get("metrics", metrics)
     logger.info(f"Generating findings for {len(metric_scores)} metrics")
+    
+    # Extract analysis context for context-aware messaging
+    analysis_context = context.get("analysis_context") if context else None
+    logger.info(f"Analysis context: {analysis_context}")
 
     # Check all conditions
     findings = []
 
     head_finding = _check_head_movement(metric_scores)
     if head_finding:
+        head_finding = _contextualize_finding(head_finding, analysis_context)
         findings.append(head_finding)
 
     balance_finding = _check_balance_drift(metric_scores)
     if balance_finding:
+        balance_finding = _contextualize_finding(balance_finding, analysis_context)
         findings.append(balance_finding)
 
     knee_finding = _check_knee_collapse(metric_scores)
     if knee_finding:
+        knee_finding = _contextualize_finding(knee_finding, analysis_context)
         findings.append(knee_finding)
 
     rotation_finding = _check_rotation_timing(metric_scores)
     if rotation_finding:
+        rotation_finding = _contextualize_finding(rotation_finding, analysis_context)
         findings.append(rotation_finding)
 
     elbow_finding = _check_elbow_drop(metric_scores)
     if elbow_finding:
+        elbow_finding = _contextualize_finding(elbow_finding, analysis_context)
         findings.append(elbow_finding)
 
     # Check for insufficient pose visibility across metrics

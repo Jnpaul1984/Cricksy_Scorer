@@ -1630,6 +1630,25 @@ class VideoSessionType(str, enum.Enum):
     wicketkeeping = "wicketkeeping"
 
 
+class AnalysisContext(str, enum.Enum):
+    """What aspect of cricket is being analyzed in the video."""
+
+    batting = "batting"
+    bowling = "bowling"
+    wicketkeeping = "wicketkeeping"
+    fielding = "fielding"
+    mixed = "mixed"
+
+
+class CameraView(str, enum.Enum):
+    """Camera angle/view for the video recording."""
+
+    side = "side"
+    front = "front"
+    behind = "behind"
+    other = "other"
+
+
 class VideoAnalysisJobStatus(str, enum.Enum):
     """Status of a video analysis job."""
 
@@ -1677,6 +1696,17 @@ class VideoSession(Base):
         nullable=True,
         index=True,
         comment="Type of session: batting, bowling, fielding, wicketkeeping",
+    )
+    analysis_context: Mapped[AnalysisContext | None] = mapped_column(
+        SAEnum(AnalysisContext, name="analysis_context"),
+        nullable=True,
+        index=True,
+        comment="What aspect is being analyzed: batting, bowling, wicketkeeping, fielding, mixed",
+    )
+    camera_view: Mapped[CameraView | None] = mapped_column(
+        SAEnum(CameraView, name="camera_view"),
+        nullable=True,
+        comment="Camera angle: side, front, behind, other",
     )
     min_duration_seconds: Mapped[int] = mapped_column(
         Integer,

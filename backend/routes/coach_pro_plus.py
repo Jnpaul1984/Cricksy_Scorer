@@ -73,6 +73,8 @@ class VideoSessionCreate(BaseModel):
     title: str
     player_ids: list[str] = []
     notes: str | None = None
+    analysis_context: str | None = None  # batting, bowling, wicketkeeping, fielding, mixed
+    camera_view: str | None = None  # side, front, behind, other
 
 
 class VideoSessionRead(BaseModel):
@@ -85,6 +87,8 @@ class VideoSessionRead(BaseModel):
     player_ids: list[str]
     status: str  # "pending", "uploaded", "processing", "ready", "failed"
     notes: str | None = None
+    analysis_context: str | None = None  # batting, bowling, wicketkeeping, fielding, mixed
+    camera_view: str | None = None  # side, front, behind, other
     s3_bucket: str | None = None
     s3_key: str | None = None
     created_at: datetime
@@ -115,6 +119,10 @@ class VideoAnalysisJobRead(BaseModel):
     progress_pct: int = 0
     error_message: str | None = None
     sqs_message_id: str | None = None
+    
+    # Session context (denormalized for frontend convenience)
+    analysis_context: str | None = None
+    camera_view: str | None = None
     
     # Legacy combined results (kept for backward compatibility)
     results: dict | None = None
@@ -239,6 +247,8 @@ async def create_video_session(
         title=session_data.title,
         player_ids=session_data.player_ids,
         notes=session_data.notes,
+        analysis_context=session_data.analysis_context,
+        camera_view=session_data.camera_view,
         status=VideoSessionStatus.pending,
         s3_bucket=None,  # Will be populated after upload
         s3_key=None,  # Will be populated after upload
@@ -455,7 +465,17 @@ async def list_analysis_jobs(
     )
     jobs = result.scalars().all()
 
-    return [VideoAnalysisJobRead.model_validate(job) for job in jobs]
+    # Add session context to each job response
+    job_reads = []
+    for job in jobs:
+        job_read = VideoAnalysisJobRead.model_validate(job)
+        job_read = job_read.model_copy(update={
+            "analysis_context": session.analysis_context,
+            "camera_view": session.camera_view,
+        })
+        job_reads.append(job_read)
+    
+    return job_reads
 
 
 @router.get("/video-sessions/{session_id}/analysis-history", response_model=list[VideoAnalysisJobRead])
@@ -512,6 +532,10 @@ async def get_analysis_job(
     try:
         # Generate presigned URLs for S3 results if available
         updates = {}
+        
+        # Add session context to job response
+        updates["analysis_context"] = session.analysis_context
+        updates["camera_view"] = session.camera_view
         
         if job.quick_results_s3_key:
             quick_url = s3_service.generate_presigned_get_url(
