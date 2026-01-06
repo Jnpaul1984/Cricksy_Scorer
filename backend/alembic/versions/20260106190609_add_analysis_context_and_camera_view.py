@@ -17,33 +17,50 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create enums
-    analysis_context_enum = postgresql.ENUM(
-        'batting', 'bowling', 'wicketkeeping', 'fielding', 'mixed',
-        name='analysis_context', create_type=False
-    )
-    camera_view_enum = postgresql.ENUM(
-        'side', 'front', 'behind', 'other',
-        name='camera_view', create_type=False
-    )
+    # Get database connection to detect dialect
+    conn = op.get_bind()
+    is_postgres = conn.dialect.name == 'postgresql'
     
-    # Create enum types
-    analysis_context_enum.create(op.get_bind(), checkfirst=True)
-    camera_view_enum.create(op.get_bind(), checkfirst=True)
-    
-    # Add columns to video_sessions
-    op.add_column('video_sessions', sa.Column(
-        'analysis_context',
-        sa.Enum('batting', 'bowling', 'wicketkeeping', 'fielding', 'mixed', name='analysis_context'),
-        nullable=True,
-        comment='What aspect is being analyzed: batting, bowling, wicketkeeping, fielding, mixed'
-    ))
-    op.add_column('video_sessions', sa.Column(
-        'camera_view',
-        sa.Enum('side', 'front', 'behind', 'other', name='camera_view'),
-        nullable=True,
-        comment='Camera angle: side, front, behind, other'
-    ))
+    if is_postgres:
+        # PostgreSQL: Create enums
+        analysis_context_enum = postgresql.ENUM(
+            'batting', 'bowling', 'wicketkeeping', 'fielding', 'mixed',
+            name='analysis_context', create_type=False
+        )
+        camera_view_enum = postgresql.ENUM(
+            'side', 'front', 'behind', 'other',
+            name='camera_view', create_type=False
+        )
+        
+        # Create enum types
+        analysis_context_enum.create(conn, checkfirst=True)
+        camera_view_enum.create(conn, checkfirst=True)
+        
+        # Add columns with enum types
+        op.add_column('video_sessions', sa.Column(
+            'analysis_context',
+            sa.Enum('batting', 'bowling', 'wicketkeeping', 'fielding', 'mixed', name='analysis_context'),
+            nullable=True,
+            comment='What aspect is being analyzed: batting, bowling, wicketkeeping, fielding, mixed'
+        ))
+        op.add_column('video_sessions', sa.Column(
+            'camera_view',
+            sa.Enum('side', 'front', 'behind', 'other', name='camera_view'),
+            nullable=True,
+            comment='Camera angle: side, front, behind, other'
+        ))
+    else:
+        # SQLite: Use VARCHAR instead of ENUM
+        op.add_column('video_sessions', sa.Column(
+            'analysis_context',
+            sa.String(20),
+            nullable=True
+        ))
+        op.add_column('video_sessions', sa.Column(
+            'camera_view',
+            sa.String(20),
+            nullable=True
+        ))
     
     # Create index on analysis_context
     op.create_index(
@@ -55,6 +72,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Get database connection to detect dialect
+    conn = op.get_bind()
+    is_postgres = conn.dialect.name == 'postgresql'
+    
     # Drop index
     op.drop_index(op.f('ix_video_sessions_analysis_context'), table_name='video_sessions')
     
@@ -62,6 +83,7 @@ def downgrade() -> None:
     op.drop_column('video_sessions', 'camera_view')
     op.drop_column('video_sessions', 'analysis_context')
     
-    # Drop enums
-    sa.Enum(name='camera_view').drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name='analysis_context').drop(op.get_bind(), checkfirst=True)
+    if is_postgres:
+        # Drop enums only for PostgreSQL
+        sa.Enum(name='camera_view').drop(conn, checkfirst=True)
+        sa.Enum(name='analysis_context').drop(conn, checkfirst=True)
