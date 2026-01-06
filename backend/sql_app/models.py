@@ -1786,8 +1786,32 @@ class VideoAnalysisJob(Base):
         nullable=False,
         comment="If false, job completes after quick stage",
     )
+    deep_mode: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        default="cpu",
+        comment="Deep processing mode: cpu (monolithic) or gpu (chunked)",
+    )
     error_message: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="Error details if job failed"
+    )
+
+    # Chunked processing tracking
+    total_chunks: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Total number of chunks for GPU processing",
+    )
+    completed_chunks: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        default=0,
+        comment="Number of completed chunks",
+    )
+    video_duration_seconds: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        comment="Video duration in seconds",
     )
 
     # SQS tracking
@@ -1850,10 +1874,98 @@ class VideoAnalysisJob(Base):
 
     # Relationships
     session: Mapped[VideoSession] = relationship(back_populates="analysis_jobs")
+    chunks: Mapped[list[VideoAnalysisChunk]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_analysis_jobs_session_id", "session_id"),
         Index("ix_analysis_jobs_status", "status"),
         Index("ix_analysis_jobs_created_at", "created_at"),
         Index("ix_analysis_jobs_sqs_message_id", "sqs_message_id"),
+    )
+
+
+class VideoAnalysisChunkStatus(str, enum.Enum):
+    """Status of a video analysis chunk."""
+
+    queued = "queued"  # Chunk ready for GPU worker
+    processing = "processing"  # Chunk being processed
+    completed = "completed"  # Chunk processing complete
+    failed = "failed"  # Chunk processing failed
+
+
+class VideoAnalysisChunk(Base):
+    """Individual chunk for parallel GPU processing.
+
+    Each chunk represents a time segment of the video to be processed independently.
+    GPU workers claim chunks via SKIP LOCKED for parallel processing.
+    """
+
+    __tablename__ = "video_analysis_chunks"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+
+    # Reference to parent job
+    job_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("video_analysis_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Chunk specification
+    chunk_index: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="0-based chunk index for ordering"
+    )
+    start_sec: Mapped[float] = mapped_column(
+        Float, nullable=False, comment="Start time in seconds"
+    )
+    end_sec: Mapped[float] = mapped_column(
+        Float, nullable=False, comment="End time in seconds"
+    )
+
+    # Status tracking
+    status: Mapped[VideoAnalysisChunkStatus] = mapped_column(
+        SAEnum(VideoAnalysisChunkStatus, name="video_analysis_chunk_status"),
+        default=VideoAnalysisChunkStatus.queued,
+        nullable=False,
+    )
+    attempts: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, comment="Number of processing attempts"
+    )
+
+    # Results
+    artifact_s3_key: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="S3 key for chunk JSON output: jobs/{job_id}/chunks/chunk_{index:04d}.json",
+    )
+    runtime_ms: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="Processing time in milliseconds"
+    )
+    error_message: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Error details if chunk failed"
+    )
+
+    # Timestamps
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    started_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="When processing started"
+    )
+    completed_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="When processing completed"
+    )
+
+    # Relationships
+    job: Mapped[VideoAnalysisJob] = relationship(back_populates="chunks")
+
+    __table_args__ = (
+        Index("ix_analysis_chunks_job_id", "job_id"),
+        Index("ix_analysis_chunks_status", "status"),
+        Index("ix_analysis_chunks_job_chunk_idx", "job_id", "chunk_index", unique=True),
     )

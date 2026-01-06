@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     )
     COACH_PLUS_QUICK_MAX_SECONDS: int = Field(default=30, alias="COACH_PLUS_QUICK_MAX_SECONDS")
 
+    # GPU Chunked Processing
+    CHUNK_SECONDS: int = Field(default=30, alias="CHUNK_SECONDS")
+    SAMPLE_FPS: float = Field(default=10.0, alias="SAMPLE_FPS")
+    MAX_WIDTH: int = Field(default=640, alias="MAX_WIDTH")
+
     @field_validator("STATIC_ROOT", mode="before")
     @classmethod
     def _resolve_static_root(cls, value: Path | str | None) -> Path:

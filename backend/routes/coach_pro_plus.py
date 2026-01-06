@@ -20,11 +20,17 @@ from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
 from backend.services.s3_service import s3_service
+from backend.services.video_chunking import (
+    create_chunk_specs,
+    get_video_duration_from_s3,
+)
 from backend.sql_app.database import get_db
 from backend.sql_app.models import (
     OwnerTypeEnum,
     RoleEnum,
     User,
+    VideoAnalysisChunk,
+    VideoAnalysisChunkStatus,
     VideoAnalysisJob,
     VideoAnalysisJobStatus,
     VideoSession,
@@ -841,10 +847,76 @@ async def complete_video_upload(
 
     logger.info(f"S3 object verified: job_id={job.id} proceeding to queue analysis")
 
-    # Preflight passed - transition job to queued (now claimable by worker)
-    job.status = VideoAnalysisJobStatus.queued
-    job.stage = "QUEUED"
-    job.progress_pct = 0
+    # Determine processing mode: GPU (chunked) or CPU (monolithic)
+    deep_mode = job.deep_mode or "cpu"
+
+    if deep_mode == "gpu":
+        # GPU mode: compute duration and create chunks
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            # Download video to compute duration
+            duration = await get_video_duration_from_s3(bucket, key, tmp_path)
+            job.video_duration_seconds = duration
+
+            # Create chunk specifications
+            chunk_specs = create_chunk_specs(
+                duration_seconds=duration,
+                chunk_seconds=settings.CHUNK_SECONDS,
+            )
+
+            # Create chunk records
+            chunks = []
+            for spec in chunk_specs:
+                chunk = VideoAnalysisChunk(
+                    job_id=job.id,
+                    chunk_index=spec["index"],
+                    start_sec=spec["start_sec"],
+                    end_sec=spec["end_sec"],
+                    status=VideoAnalysisChunkStatus.queued,
+                )
+                chunks.append(chunk)
+
+            db.add_all(chunks)
+
+            # Update job with chunk tracking
+            job.total_chunks = len(chunks)
+            job.completed_chunks = 0
+            job.status = VideoAnalysisJobStatus.queued
+            job.stage = "DEEP_QUEUED"
+            job.progress_pct = 0
+
+            logger.info(
+                f"GPU mode: created {len(chunks)} chunks for job_id={job.id} "
+                f"duration={duration:.2f}s chunk_size={settings.CHUNK_SECONDS}s"
+            )
+        except Exception as e:
+            logger.error(f"Failed to create chunks: job_id={job.id} error={e!s}")
+            job.status = VideoAnalysisJobStatus.failed
+            job.stage = "FAILED"
+            job.error_message = f"Chunk creation failed: {e!s}"
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to prepare video for processing: {e!s}",
+            ) from e
+        finally:
+            import os
+
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+    else:
+        # CPU mode: simple queue transition (existing behavior)
+        job.status = VideoAnalysisJobStatus.queued
+        job.stage = "QUEUED"
+        job.progress_pct = 0
+
+    # Common cleanup
     job.error_message = None
     job.sqs_message_id = None
     session.status = VideoSessionStatus.uploaded

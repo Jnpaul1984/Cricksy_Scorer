@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from backend.config import settings
+from backend.services.chunk_aggregation import aggregate_chunks_and_finalize
 from backend.services.coach_plus_analysis import run_pose_metrics_findings_report
 from backend.sql_app.database import get_engine, get_session_local
 from backend.sql_app.models import VideoAnalysisJob, VideoAnalysisJobStatus, VideoSessionStatus
@@ -320,6 +321,75 @@ async def _claim_one_job() -> str | None:
         return job.id
 
 
+async def _check_and_aggregate_chunks() -> str | None:
+    """Check for jobs with all chunks completed and aggregate them.
+
+    Returns:
+        job_id if aggregation performed, None otherwise
+    """
+    session_local = get_session_local()
+
+    async with session_local() as db, db.begin():
+        # Find jobs in GPU mode with all chunks completed
+        stmt = (
+            select(VideoAnalysisJob)
+            .where(
+                VideoAnalysisJob.deep_mode == "gpu",
+                VideoAnalysisJob.total_chunks.isnot(None),
+                VideoAnalysisJob.completed_chunks == VideoAnalysisJob.total_chunks,
+                VideoAnalysisJob.status.notin_(
+                    [VideoAnalysisJobStatus.done, VideoAnalysisJobStatus.completed, VideoAnalysisJobStatus.failed]
+                ),
+            )
+            .with_for_update(skip_locked=True)
+            .limit(1)
+        )
+        result = await db.execute(stmt)
+        job = result.scalars().first()
+        if job is None:
+            return None
+
+        job_id = job.id
+        logger.info(
+            f"Aggregating completed chunks: job_id={job_id} "
+            f"chunks={job.completed_chunks}/{job.total_chunks}"
+        )
+
+        try:
+            # Mark as finalizing
+            job.status = VideoAnalysisJobStatus.deep_running
+            job.stage = "AGGREGATING"
+            job.progress_pct = 99
+            await db.commit()
+
+            # Reload with session relationship
+            await db.refresh(job, ["session"])
+
+            # Aggregate chunks into final report
+            await aggregate_chunks_and_finalize(db, job)
+
+            # Mark complete
+            job.status = VideoAnalysisJobStatus.done
+            job.stage = "DONE"
+            job.progress_pct = 100
+            job.completed_at = _now_utc()
+            job.session.status = VideoSessionStatus.ready
+
+            await db.commit()
+
+            logger.info(f"Chunk aggregation successful: job_id={job_id}")
+            return job_id
+
+        except Exception as e:
+            logger.exception(f"Chunk aggregation failed: job_id={job_id} error={e!s}")
+            job.status = VideoAnalysisJobStatus.failed
+            job.stage = "FAILED"
+            job.error_message = f"Aggregation failed: {e!s}"
+            job.session.status = VideoSessionStatus.failed
+            await db.commit()
+            raise
+
+
 async def run_worker_loop(*, poll_seconds: float = 1.0) -> None:
     logger.info("analysis_worker starting")
     logger.info("ENV=%s", settings.ENV)
@@ -361,6 +431,13 @@ async def run_worker_loop(*, poll_seconds: float = 1.0) -> None:
 
     while not stop_event.is_set():
         try:
+            # First check for chunk aggregation (higher priority)
+            agg_job_id = await _check_and_aggregate_chunks()
+            if agg_job_id:
+                logger.info(f"Aggregated chunks for job_id={agg_job_id}")
+                continue  # Check again immediately
+
+            # Then claim regular jobs
             job_id = await _claim_one_job()
             if job_id is None:
                 await asyncio.sleep(poll_seconds)

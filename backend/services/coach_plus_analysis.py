@@ -11,6 +11,51 @@ from backend.services.pose_metrics import build_pose_metric_evidence, compute_po
 logger = logging.getLogger(__name__)
 
 
+def extract_pose_landmarks(
+    *,
+    video_path: str,
+    sample_fps: float,
+    max_width: int = 640,
+    max_seconds: float | None = None,
+) -> list[dict[str, Any]]:
+    """Extract raw pose landmarks from video (for GPU chunk processing).
+
+    Returns only the pose landmark data without metrics/findings/report.
+    Used by GPU workers to extract poses for individual chunks.
+
+    Args:
+        video_path: Path to video file
+        sample_fps: Target sampling rate
+        max_width: Max video width for processing
+        max_seconds: Max duration to process
+
+    Returns:
+        List of pose frames with landmarks
+    """
+    from backend.services.pose_service import extract_pose_keypoints_from_video
+
+    pose_data = extract_pose_keypoints_from_video(
+        video_path=video_path,
+        sample_fps=sample_fps,
+        max_width=max_width,
+        max_seconds=max_seconds,
+    )
+
+    # Return frames with pose landmarks
+    frames = (
+        pose_data.get("frames")
+        or pose_data.get("frames_data")
+        or pose_data.get("pose_frames")
+        or []
+    )
+
+    if not isinstance(frames, list):
+        logger.warning(f"Unexpected frames format: {type(frames)}")
+        return []
+
+    return frames
+
+
 @dataclass(frozen=True)
 class AnalysisArtifacts:
     results: dict[str, Any]
