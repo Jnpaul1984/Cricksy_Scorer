@@ -8,8 +8,8 @@ Create Date: 2026-01-05 18:00:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "g2h3i4j5k6l7"
@@ -26,18 +26,13 @@ def upgrade() -> None:
     - Progress tracking via completed_chunks/total_chunks
     - Resumable jobs via chunk checkpoints
     """
-    # Create chunk status enum (idempotent for CI retries)
-    op.execute(
-        """
-        DO $$ BEGIN
-            CREATE TYPE video_analysis_chunk_status AS ENUM (
-                'queued', 'processing', 'completed', 'failed'
-            );
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-        """
+    # Create chunk status enum using PostgreSQL ENUM with checkfirst for idempotency
+    chunk_status_enum = postgresql.ENUM(
+        'queued', 'processing', 'completed', 'failed',
+        name='video_analysis_chunk_status',
+        create_type=False  # We'll create it separately
     )
+    chunk_status_enum.create(op.get_bind(), checkfirst=True)
 
     # Add chunking fields to video_analysis_jobs
     op.add_column(
@@ -110,7 +105,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "status",
-            sa.Enum("queued", "processing", "completed", "failed", name="video_analysis_chunk_status"),
+            chunk_status_enum,
             nullable=False,
             server_default="queued",
         ),
