@@ -229,14 +229,12 @@
           </div>
         </div>
 
-        <!-- Progress UI -->
+        <!-- Progress UI (only before results are available) -->
         <div
           v-else-if="
             selectedJob.status === 'queued' ||
             selectedJob.status === 'processing' ||
-            selectedJob.status === 'quick_running' ||
-            selectedJob.status === 'quick_done' ||
-            selectedJob.status === 'deep_running'
+            selectedJob.status === 'quick_running'
           "
           class="results-loading"
         >
@@ -591,6 +589,7 @@ function startUiPolling(jobId: string) {
 
     const latest = selectedJob.value;
     if (latest && (latest.status === 'completed' || latest.status === 'done' || latest.status === 'failed')) {
+      pollTimedOut.value = false; // Reset timeout flag when terminal status reached
       stopUiPolling();
       return;
     }
