@@ -207,6 +207,10 @@ async def _process_job(job_id: str) -> None:
             await db.commit()
 
             if not deep_enabled:
+                logger.info(
+                    f"[COMPLETE] Quick-only job finishing: job_id={job.id} "
+                    f"status_before={job.status.value} setting_to=done"
+                )
                 job.status = VideoAnalysisJobStatus.done
                 job.stage = "DONE"
                 job.progress_pct = 100
@@ -215,6 +219,11 @@ async def _process_job(job_id: str) -> None:
                 # Keep legacy results populated for older clients
                 job.results = {"quick": quick_payload}
                 await db.commit()
+                await db.refresh(job)
+                logger.info(
+                    f"[PERSISTED] Quick-only job completed: job_id={job.id} "
+                    f"status_after={job.status.value} stage={job.stage} progress={job.progress_pct}%"
+                )
                 return
 
             # Stage: DEEP
@@ -254,6 +263,10 @@ async def _process_job(job_id: str) -> None:
                 deep_payload["outputs"]["deep_frames_s3_key"] = frames_key
 
             job.deep_results = deep_payload
+            logger.info(
+                f"[COMPLETE] Deep job finishing: job_id={job.id} "
+                f"status_before={job.status.value} setting_to=done"
+            )
             job.status = VideoAnalysisJobStatus.done
             job.stage = "DONE"
             job.progress_pct = 100
@@ -265,6 +278,11 @@ async def _process_job(job_id: str) -> None:
             job.results = {"quick": quick_payload, "deep": deep_payload}
 
             await db.commit()
+            await db.refresh(job)
+            logger.info(
+                f"[PERSISTED] Deep job completed: job_id={job.id} "
+                f"status_after={job.status.value} stage={job.stage} progress={job.progress_pct}%"
+            )
 
 
 async def _claim_one_job() -> str | None:
