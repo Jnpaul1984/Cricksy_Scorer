@@ -381,11 +381,16 @@ async def create_analysis_job(
     db: AsyncSession = Depends(get_db),
     sample_fps: int = Query(10, ge=1, le=30),
     include_frames: bool = Query(False),
+    analysis_mode: str | None = Query(None, pattern="^(batting|bowling|wicketkeeping)$"),
 ) -> VideoAnalysisJobRead:
     """
     Create a video analysis job for a session.
 
     The job is queued in the database for background processing.
+
+    Args:
+        analysis_mode: Optional analysis mode (batting, bowling, or wicketkeeping).
+                      Determines which findings/drills are generated.
     """
     # Verify feature access
     if not await _check_feature_access(current_user, "video_analysis_enabled"):
@@ -417,6 +422,7 @@ async def create_analysis_job(
         stage="QUEUED",
         progress_pct=0,
         deep_enabled=bool(settings.COACH_PLUS_DEEP_ANALYSIS_ENABLED),
+        analysis_mode=analysis_mode,  # Store analysis mode
     )
 
     db.add(job)

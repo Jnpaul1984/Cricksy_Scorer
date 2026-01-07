@@ -34,7 +34,8 @@ THRESHOLDS = {
 # Drill Database (Strings for MVP)
 # ============================================================================
 
-DRILL_SUGGESTIONS = {
+# Batting-specific drills
+BATTING_DRILL_SUGGESTIONS = {
     "HEAD_MOVEMENT": [
         "Batting against a wall with eyes fixed on the ball contact point",
         "Playing in front of a mirror to observe head position through shots",
@@ -66,6 +67,77 @@ DRILL_SUGGESTIONS = {
         "Throwing drills to develop natural arm drop pattern",
     ],
 }
+
+# Bowling-specific drills
+BOWLING_DRILL_SUGGESTIONS = {
+    "HEAD_MOVEMENT": [
+        "Head stabilization drills focusing on target fixation",
+        "Bowling at a single stump with head position awareness",
+        "Neck strengthening exercises for delivery stride stability",
+        "Mirror work to observe head control through release",
+    ],
+    "BALANCE_DRIFT": [
+        "Single-leg balance drills on landing leg",
+        "Core stability exercises for gather and delivery stride",
+        "Rope drill walking to develop stable gather position",
+        "Balance board work specific to bowling action",
+    ],
+    "KNEE_COLLAPSE": [
+        "Front knee bracing drills with resistance bands",
+        "Eccentric quadriceps loading exercises",
+        "Landing leg stability work with medicine balls",
+        "Plyometric exercises for knee control on impact",
+    ],
+    "ROTATION_TIMING": [
+        "Hip-shoulder separation drills using rotation poles",
+        "Counter-rotation exercises to enhance torque",
+        "Medicine ball throws mimicking bowling action",
+        "Flexibility work to maximize upper body coil",
+    ],
+    "ELBOW_DROP": [
+        "High elbow position drills at release point",
+        "Resistance band work for bowling arm path",
+        "Wall drills maintaining elbow height through delivery",
+        "Video analysis of release point consistency",
+    ],
+}
+
+# Wicketkeeping-specific drills
+WICKETKEEPING_DRILL_SUGGESTIONS = {
+    "HEAD_MOVEMENT": [
+        "Head tracking drills following ball from bowler to gloves",
+        "Stationary catching with focus on head stillness",
+        "Reaction ball exercises with head position awareness",
+        "Mirror work to observe head control during takes",
+    ],
+    "BALANCE_DRIFT": [
+        "Lateral movement drills maintaining low center of gravity",
+        "Split-step timing exercises for balance preparation",
+        "Single-leg stability work for diving movements",
+        "Agility ladder work with emphasis on controlled stops",
+    ],
+    "KNEE_COLLAPSE": [
+        "Squat endurance exercises for sustained low position",
+        "Lateral lunge drills for leg strength and stability",
+        "Knee tracking exercises during dive mechanics",
+        "Core and leg integration work for stable crouch",
+    ],
+    "ROTATION_TIMING": [
+        "Hip rotation drills for throws to stumps",
+        "Medicine ball throws from crouched position",
+        "Rotational power work for quick releases",
+        "Footwork drills emphasizing hip drive on throws",
+    ],
+    "ELBOW_DROP": [
+        "Catching drills focusing on soft hands technique",
+        "Hand position exercises for optimal glove angle",
+        "Resistance work for forearm and wrist strength",
+        "High-repetition catching to develop natural hand positioning",
+    ],
+}
+
+# Default/generic drills (used when no mode specified)
+DRILL_SUGGESTIONS = BATTING_DRILL_SUGGESTIONS
 
 # ============================================================================
 # Finding Definitions
@@ -418,7 +490,9 @@ def _attach_evidence_markers(
     return finding
 
 
-def _check_head_movement(metrics: dict, evidence: dict | None = None) -> dict | None:
+def _check_head_movement(
+    metrics: dict, evidence: dict | None = None, drill_db: dict | None = None
+) -> dict | None:
     """Check head stability metric."""
     head_score = metrics.get("head_stability_score", {}).get("score")
 
@@ -438,7 +512,7 @@ def _check_head_movement(metrics: dict, evidence: dict | None = None) -> dict | 
             },
             "why_it_matters": FINDING_DEFINITIONS["HEAD_MOVEMENT"]["why_it_matters"],
             "cues": FINDING_DEFINITIONS["HEAD_MOVEMENT"][f"{severity}_severity"]["cues"],
-            "suggested_drills": DRILL_SUGGESTIONS.get("HEAD_MOVEMENT", []),
+            "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("HEAD_MOVEMENT", []),
         }
 
         return _attach_evidence_markers(finding, "head_stability_score", evidence)
@@ -446,7 +520,9 @@ def _check_head_movement(metrics: dict, evidence: dict | None = None) -> dict | 
     return None
 
 
-def _check_balance_drift(metrics: dict, evidence: dict | None = None) -> dict | None:
+def _check_balance_drift(
+    metrics: dict, evidence: dict | None = None, drill_db: dict | None = None
+) -> dict | None:
     """Check balance drift metric."""
     balance_score = metrics.get("balance_drift_score", {}).get("score")
 
@@ -466,7 +542,7 @@ def _check_balance_drift(metrics: dict, evidence: dict | None = None) -> dict | 
             },
             "why_it_matters": FINDING_DEFINITIONS["BALANCE_DRIFT"]["why_it_matters"],
             "cues": FINDING_DEFINITIONS["BALANCE_DRIFT"][f"{severity}_severity"]["cues"],
-            "suggested_drills": DRILL_SUGGESTIONS.get("BALANCE_DRIFT", []),
+            "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("BALANCE_DRIFT", []),
         }
 
         return _attach_evidence_markers(finding, "balance_drift_score", evidence)
@@ -474,7 +550,9 @@ def _check_balance_drift(metrics: dict, evidence: dict | None = None) -> dict | 
     return None
 
 
-def _check_knee_collapse(metrics: dict, evidence: dict | None = None) -> dict | None:
+def _check_knee_collapse(
+    metrics: dict, evidence: dict | None = None, drill_db: dict | None = None
+) -> dict | None:
     """Check knee brace metric."""
     knee_score = metrics.get("front_knee_brace_score", {}).get("score")
 
@@ -494,7 +572,7 @@ def _check_knee_collapse(metrics: dict, evidence: dict | None = None) -> dict | 
             },
             "why_it_matters": FINDING_DEFINITIONS["KNEE_COLLAPSE"]["why_it_matters"],
             "cues": FINDING_DEFINITIONS["KNEE_COLLAPSE"][f"{severity}_severity"]["cues"],
-            "suggested_drills": DRILL_SUGGESTIONS.get("KNEE_COLLAPSE", []),
+            "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("KNEE_COLLAPSE", []),
         }
 
         return _attach_evidence_markers(finding, "front_knee_brace_score", evidence)
@@ -502,7 +580,9 @@ def _check_knee_collapse(metrics: dict, evidence: dict | None = None) -> dict | 
     return None
 
 
-def _check_rotation_timing(metrics: dict, evidence: dict | None = None) -> dict | None:
+def _check_rotation_timing(
+    metrics: dict, evidence: dict | None = None, drill_db: dict | None = None
+) -> dict | None:
     """Check hip-shoulder separation timing metric."""
     timing_value = metrics.get("hip_shoulder_separation_timing")
 
@@ -537,13 +617,15 @@ def _check_rotation_timing(metrics: dict, evidence: dict | None = None) -> dict 
         },
         "why_it_matters": FINDING_DEFINITIONS["ROTATION_TIMING"]["why_it_matters"],
         "cues": FINDING_DEFINITIONS["ROTATION_TIMING"][f"{severity}_severity"]["cues"],
-        "suggested_drills": DRILL_SUGGESTIONS.get("ROTATION_TIMING", []),
+        "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("ROTATION_TIMING", []),
     }
 
     return _attach_evidence_markers(finding, "hip_shoulder_separation_timing", evidence)
 
 
-def _check_elbow_drop(metrics: dict, evidence: dict | None = None) -> dict | None:
+def _check_elbow_drop(
+    metrics: dict, evidence: dict | None = None, drill_db: dict | None = None
+) -> dict | None:
     """Check elbow drop metric."""
     elbow_score = metrics.get("elbow_drop_score", {}).get("score")
 
@@ -563,7 +645,7 @@ def _check_elbow_drop(metrics: dict, evidence: dict | None = None) -> dict | Non
             },
             "why_it_matters": FINDING_DEFINITIONS["ELBOW_DROP"]["why_it_matters"],
             "cues": FINDING_DEFINITIONS["ELBOW_DROP"][f"{severity}_severity"]["cues"],
-            "suggested_drills": DRILL_SUGGESTIONS.get("ELBOW_DROP", []),
+            "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("ELBOW_DROP", []),
         }
 
         return _attach_evidence_markers(finding, "elbow_drop_score", evidence)
@@ -579,10 +661,12 @@ def _check_elbow_drop(metrics: dict, evidence: dict | None = None) -> dict | Non
 
 
 def generate_findings(
-    metrics: dict[str, Any], context: dict[str, Any] | None = None
+    metrics: dict[str, Any], context: dict[str, Any] | None = None, analysis_mode: str | None = None
 ) -> dict[str, Any]:
     """
     Generate rule-based coaching findings from metrics.
+
+    Routes to mode-specific generator based on analysis_mode parameter.
 
     Args:
         metrics: Dict with metric scores from compute_pose_metrics()
@@ -590,6 +674,7 @@ def generate_findings(
                  Can also include "evidence" dict with worst_frames/bad_segments
         context: Optional context dict for future extensibility
                 (e.g., player level, session type, analysis_context, camera_view)
+        analysis_mode: Optional analysis mode (batting, bowling, wicketkeeping)
 
     Returns:
         {
@@ -614,6 +699,55 @@ def generate_findings(
             "detection_rate": float  # pose detection rate for reliability gating
         }
     """
+    # Route to mode-specific generator
+    if analysis_mode == "batting":
+        return generate_batting_findings(metrics, context)
+    elif analysis_mode == "bowling":
+        return generate_bowling_findings(metrics, context)
+    elif analysis_mode == "wicketkeeping":
+        return generate_wicketkeeping_findings(metrics, context)
+    else:
+        # Default to batting for backward compatibility
+        return generate_batting_findings(metrics, context)
+
+
+def generate_batting_findings(
+    metrics: dict[str, Any], context: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Generate batting-specific findings from metrics."""
+    return _generate_findings_internal(metrics, context, BATTING_DRILL_SUGGESTIONS)
+
+
+def generate_bowling_findings(
+    metrics: dict[str, Any], context: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Generate bowling-specific findings from metrics."""
+    return _generate_findings_internal(metrics, context, BOWLING_DRILL_SUGGESTIONS)
+
+
+def generate_wicketkeeping_findings(
+    metrics: dict[str, Any], context: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Generate wicketkeeping-specific findings from metrics."""
+    return _generate_findings_internal(metrics, context, WICKETKEEPING_DRILL_SUGGESTIONS)
+
+
+def _generate_findings_internal(
+    metrics: dict[str, Any],
+    context: dict[str, Any] | None,
+    drill_db: dict[str, list[str]],
+) -> dict[str, Any]:
+    """
+    Internal findings generator with mode-specific drill database.
+
+    Args:
+        metrics: Pose metrics result
+        context: Optional context dict
+        drill_db: Mode-specific drill suggestions dictionary
+
+    Returns:
+        Findings result dictionary
+    """
     # Extract metrics from nested structure if needed
     metric_scores = metrics.get("metrics", metrics)
     evidence_data = metrics.get("evidence")  # Extract evidence markers
@@ -630,30 +764,30 @@ def generate_findings(
     detection_rate = (frames_with_pose / total_frames * 100) if total_frames > 0 else 0
     logger.info(f"Pose detection rate: {detection_rate:.1f}%")
 
-    # Check all conditions (passing evidence to each)
+    # Check all conditions (passing evidence and drill_db to each)
     findings = []
 
-    head_finding = _check_head_movement(metric_scores, evidence_data)
+    head_finding = _check_head_movement(metric_scores, evidence_data, drill_db)
     if head_finding:
         head_finding = _contextualize_finding(head_finding, analysis_context)
         findings.append(head_finding)
 
-    balance_finding = _check_balance_drift(metric_scores, evidence_data)
+    balance_finding = _check_balance_drift(metric_scores, evidence_data, drill_db)
     if balance_finding:
         balance_finding = _contextualize_finding(balance_finding, analysis_context)
         findings.append(balance_finding)
 
-    knee_finding = _check_knee_collapse(metric_scores, evidence_data)
+    knee_finding = _check_knee_collapse(metric_scores, evidence_data, drill_db)
     if knee_finding:
         knee_finding = _contextualize_finding(knee_finding, analysis_context)
         findings.append(knee_finding)
 
-    rotation_finding = _check_rotation_timing(metric_scores, evidence_data)
+    rotation_finding = _check_rotation_timing(metric_scores, evidence_data, drill_db)
     if rotation_finding:
         rotation_finding = _contextualize_finding(rotation_finding, analysis_context)
         findings.append(rotation_finding)
 
-    elbow_finding = _check_elbow_drop(metric_scores, evidence_data)
+    elbow_finding = _check_elbow_drop(metric_scores, evidence_data, drill_db)
     if elbow_finding:
         elbow_finding = _contextualize_finding(elbow_finding, analysis_context)
         findings.append(elbow_finding)

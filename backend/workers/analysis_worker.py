@@ -183,6 +183,7 @@ async def _process_job(job_id: str) -> None:
             job.progress_pct = 5
             await db.commit()
 
+            # Pass analysis_mode from job to analysis pipeline
             quick_artifacts = run_pose_metrics_findings_report(
                 video_path=local_video_path,
                 sample_fps=5.0,
@@ -190,6 +191,7 @@ async def _process_job(job_id: str) -> None:
                 max_width=640,
                 max_seconds=30.0,
                 player_context=None,
+                analysis_mode=job.analysis_mode,
             )
 
             quick_payload = quick_artifacts.results
@@ -294,6 +296,7 @@ async def _process_job(job_id: str) -> None:
                 max_width=640,
                 max_seconds=None,
                 player_context=None,
+                analysis_mode=job.analysis_mode,
             )
 
             deep_payload = deep_artifacts.results

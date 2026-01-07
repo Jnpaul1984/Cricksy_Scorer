@@ -1844,6 +1844,13 @@ class VideoAnalysisJob(Base):
         comment="Video duration in seconds",
     )
 
+    # Analysis configuration
+    analysis_mode: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Analysis mode: batting, bowling, or wicketkeeping",
+    )
+
     # SQS tracking
     sqs_message_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="AWS SQS message ID when enqueued"

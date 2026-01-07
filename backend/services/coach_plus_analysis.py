@@ -115,10 +115,15 @@ def run_pose_metrics_findings_report(
     max_width: int = 640,
     max_seconds: float | None = None,
     player_context: dict[str, Any] | None = None,
+    analysis_mode: str | None = None,
 ) -> AnalysisArtifacts:
     """Shared analysis pipeline used by the background worker.
 
     Returns lightweight results dict plus optional frames payload.
+
+    Args:
+        analysis_mode: Optional analysis mode (batting, bowling, wicketkeeping).
+                      Determines which findings/drills are generated.
     """
     from backend.services.pose_service import extract_pose_keypoints_from_video
 
@@ -164,7 +169,8 @@ def run_pose_metrics_findings_report(
     metrics_result.setdefault("video_fps", normalized["video_fps"])
     metrics_result.setdefault("model", normalized["model"])
 
-    findings_result = generate_findings(metrics_result)
+    # Pass analysis_mode to findings generation
+    findings_result = generate_findings(metrics_result, analysis_mode=analysis_mode)
     report_result = cast(dict[str, Any], generate_report_text(findings_result, player_context))
 
     frames_out: list[dict[str, Any]] | None = None
@@ -190,6 +196,7 @@ def run_pose_metrics_findings_report(
         "meta": {
             "sample_fps": float(sample_fps),
             "max_seconds": float(max_seconds) if max_seconds is not None else None,
+            "analysis_mode": analysis_mode,
         },
     }
 
