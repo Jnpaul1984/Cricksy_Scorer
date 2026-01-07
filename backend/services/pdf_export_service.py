@@ -68,6 +68,14 @@ def generate_analysis_pdf(
         spaceAfter=10,
         spaceBefore=12,
     )
+    subheading_style = ParagraphStyle(
+        'CustomSubheading',
+        parent=styles['Heading2'],
+        fontSize=12,
+        textColor=colors.HexColor('#7F8C8D'),
+        spaceAfter=6,
+        spaceBefore=8,
+    )
     body_style = styles['BodyText']
     
     # Title
@@ -104,6 +112,13 @@ def generate_analysis_pdf(
         if quick_findings:
             findings_text = _format_findings(quick_findings)
             elements.append(Paragraph(findings_text, body_style))
+            
+            # Add Proof of Work section for quick analysis
+            proof_of_work = _format_proof_of_work(quick_findings, quick_results, "Quick")
+            if proof_of_work:
+                elements.append(Spacer(1, 0.15*inch))
+                elements.append(Paragraph("Proof of Work: Quick Analysis", subheading_style))
+                elements.append(Paragraph(proof_of_work, body_style))
         elif quick_results:
             # Fallback: extract summary from results
             summary = _extract_summary_from_results(quick_results, "Quick")
@@ -118,6 +133,13 @@ def generate_analysis_pdf(
         if deep_findings:
             findings_text = _format_findings(deep_findings)
             elements.append(Paragraph(findings_text, body_style))
+            
+            # Add Proof of Work section for deep analysis
+            proof_of_work = _format_proof_of_work(deep_findings, deep_results, "Deep")
+            if proof_of_work:
+                elements.append(Spacer(1, 0.15*inch))
+                elements.append(Paragraph("Proof of Work: Deep Analysis", subheading_style))
+                elements.append(Paragraph(proof_of_work, body_style))
         elif deep_results:
             # Fallback: extract summary from results
             summary = _extract_summary_from_results(deep_results, "Deep")
@@ -183,3 +205,69 @@ def _extract_summary_from_results(results: dict[str, Any], stage: str) -> str:
             lines.append(f"  • {metric_label}: Threshold = {threshold}")
     
     return '<br/>'.join(lines) if len(lines) > 1 else f"{stage} analysis data available in full results JSON."
+
+
+def _format_proof_of_work(findings: dict[str, Any], results: dict[str, Any] | None, stage: str) -> str:
+    """
+    Format proof of work section showing detection rate and video evidence.
+    
+    Args:
+        findings: Findings dictionary (output from coach_findings.generate_findings)
+        results: Raw analysis results (optional, contains pose summary)
+        stage: "Quick" or "Deep"
+    
+    Returns:
+        HTML-formatted proof of work text
+    """
+    lines = []
+    
+    # Detection rate and reliability
+    detection_rate = findings.get('detection_rate', 0.0)
+    if detection_rate > 0:
+        reliability_emoji = "✅" if detection_rate >= 60.0 else "⚠️"
+        reliability_text = "High confidence" if detection_rate >= 80.0 else (
+            "Moderate confidence" if detection_rate >= 60.0 else "Low confidence"
+        )
+        lines.append(
+            f"<b>{reliability_emoji} Pose Detection Rate:</b> {detection_rate}% ({reliability_text})<br/>"
+        )
+    
+    # Total frames analyzed
+    if results:
+        pose_summary = results.get('pose_summary') or results.get('pose', {})
+        if isinstance(pose_summary, dict):
+            total_frames = pose_summary.get('total_frames', 0)
+            frames_with_pose = pose_summary.get('frames_with_pose', 0)
+            if total_frames > 0:
+                lines.append(
+                    f"<b>Frames Analyzed:</b> {frames_with_pose:,} of {total_frames:,} total frames<br/><br/>"
+                )
+    
+    # Per-finding video evidence
+    finding_list = findings.get('findings', [])
+    if finding_list:
+        lines.append("<b>Video Evidence by Finding:</b><br/>")
+        
+        for idx, finding in enumerate(finding_list, 1):
+            title = finding.get('title', 'Unknown')
+            severity = finding.get('severity', 'low').upper()
+            video_evidence = finding.get('video_evidence', {})
+            
+            if video_evidence:
+                worst_frames = video_evidence.get('worst_frames', [])
+                bad_segments = video_evidence.get('bad_segments', [])
+                
+                lines.append(f"<br/><b>{idx}. {title}</b> ({severity})<br/>")
+                
+                if bad_segments:
+                    segment_texts = [f"{seg['start']}–{seg['end']}" for seg in bad_segments]
+                    lines.append(f"  • Time Ranges: {', '.join(segment_texts)}<br/>")
+                
+                if worst_frames:
+                    frame_texts = [f"frame {wf['frame']} ({wf['timestamp']})" for wf in worst_frames]
+                    lines.append(f"  • Worst Instances: {', '.join(frame_texts)}<br/>")
+    
+    if not lines:
+        return ""
+    
+    return ''.join(lines)

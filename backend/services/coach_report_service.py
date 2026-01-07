@@ -157,7 +157,7 @@ def _get_summary_level(findings: list[dict]) -> str:
 
 
 def _get_top_issues(findings: list[dict], top_n: int = 3) -> list[dict]:
-    """Extract top N issues sorted by severity and title."""
+    """Extract top N issues sorted by severity and title, with video evidence."""
     sorted_findings = sorted(
         findings,
         key=lambda f: (
@@ -166,15 +166,34 @@ def _get_top_issues(findings: list[dict], top_n: int = 3) -> list[dict]:
         ),
     )
 
-    return [
-        {
+    issues = []
+    for f in sorted_findings[:top_n]:
+        issue = {
             "issue": f.get("title", "Unknown"),
             "severity": f.get("severity", "low"),
             "why_it_matters": f.get("why_it_matters", ""),
             "cues": f.get("cues", [])[:2],  # Top 2 cues
         }
-        for f in sorted_findings[:top_n]
-    ]
+        
+        # Add video evidence if available
+        video_evidence = f.get("video_evidence", {})
+        worst_frames = video_evidence.get("worst_frames", [])
+        bad_segments = video_evidence.get("bad_segments", [])
+        
+        if bad_segments or worst_frames:
+            evidence_parts = []
+            if bad_segments:
+                # Prioritize time ranges
+                ranges = [f"{seg['start']}–{seg['end']}" for seg in bad_segments]
+                evidence_parts.append(f"Observed at {', '.join(ranges)}")
+            if worst_frames:
+                frames_text = ", ".join([f"{wf['timestamp']}" for wf in worst_frames])
+                evidence_parts.append(f"worst instances at {frames_text}")
+            issue["video_evidence"] = "; ".join(evidence_parts)
+        
+        issues.append(issue)
+    
+    return issues
 
 
 def _get_recommended_drills(findings: list[dict], max_drills: int = 8) -> list[str]:
@@ -239,7 +258,8 @@ def generate_report_text(
             {
                 "overall_level": "low|medium|high",
                 "findings": [...],
-                "context": {...}
+                "context": {...},
+                "detection_rate": float (NEW)
             }
         player_context: Optional context about the player
             {
@@ -256,11 +276,13 @@ def generate_report_text(
             "drills": [...],
             "one_week_plan": [...],
             "notes": str,
-            "generated_with_llm": bool
+            "generated_with_llm": bool,
+            "reliability_warning": str | None (NEW)
         }
     """
     findings = findings_payload.get("findings", [])
     context = findings_payload.get("context", {})
+    detection_rate = findings_payload.get("detection_rate", 100.0)
 
     # Merge contexts
     effective_context = {}
@@ -269,7 +291,17 @@ def generate_report_text(
     if context:
         effective_context.update(context)
 
-    logger.info(f"Generating report for {len(findings)} findings")
+    logger.info(f"Generating report for {len(findings)} findings (detection rate: {detection_rate}%)")
+
+    # Check if low detection rate requires reliability warning
+    reliability_warning = None
+    if detection_rate < 60.0:
+        reliability_warning = (
+            f"⚠️ Low pose visibility detected ({detection_rate}% frames). "
+            "Analysis confidence may be reduced. Consider recording in better lighting "
+            "or with clearer camera angle."
+        )
+        logger.warning(f"Low detection rate: {detection_rate}%")
 
     # Deterministic path (always works)
     summary_level = _get_summary_level(findings)
@@ -285,8 +317,9 @@ def generate_report_text(
         "top_issues": _get_top_issues(findings),
         "drills": _get_recommended_drills(findings),
         "one_week_plan": _build_weekly_plan(findings, effective_context),
-        "notes": _generate_notes(findings, effective_context),
+        "notes": _generate_notes(findings, effective_context, detection_rate),
         "generated_with_llm": False,
+        "reliability_warning": reliability_warning,
     }
 
     # LLM enhancement (MVP: not implemented, placeholder)
@@ -298,8 +331,8 @@ def generate_report_text(
     return report
 
 
-def _generate_notes(findings: list[dict], player_context: dict | None = None) -> str:
-    """Generate personalized closing notes."""
+def _generate_notes(findings: list[dict], player_context: dict | None = None, detection_rate: float = 100.0) -> str:
+    """Generate personalized closing notes with detection rate context."""
     notes_parts = []
 
     if not findings:
