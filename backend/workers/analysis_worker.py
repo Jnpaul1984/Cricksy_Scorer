@@ -300,6 +300,86 @@ async def _process_job(job_id: str) -> None:
             )
 
             deep_payload = deep_artifacts.results
+
+            # Ball tracking for bowling mode
+            if job.analysis_mode == "bowling":
+                try:
+                    logger.info(f"Running ball tracking for bowling analysis: job_id={job.id}")
+                    from backend.services.ball_tracking_service import (
+                        BallTracker,
+                        analyze_ball_trajectory,
+                    )
+
+                    tracker = BallTracker(ball_color="red")  # TODO: make configurable
+                    trajectory = tracker.track_ball_in_video(
+                        video_path=local_video_path,
+                        sample_fps=deep_fps,
+                    )
+                    ball_metrics = analyze_ball_trajectory(trajectory)
+
+                    ball_tracking_payload = {
+                        "trajectory": {
+                            "total_frames": trajectory.total_frames,
+                            "detected_frames": trajectory.detected_frames,
+                            "detection_rate": trajectory.detection_rate,
+                            "avg_velocity": trajectory.avg_velocity,
+                            "max_velocity": trajectory.max_velocity,
+                            "trajectory_length": trajectory.trajectory_length,
+                            "release_point": {
+                                "x": trajectory.release_point.x,
+                                "y": trajectory.release_point.y,
+                                "timestamp": trajectory.release_point.timestamp,
+                            }
+                            if trajectory.release_point
+                            else None,
+                            "bounce_point": {
+                                "x": trajectory.bounce_point.x,
+                                "y": trajectory.bounce_point.y,
+                                "timestamp": trajectory.bounce_point.timestamp,
+                            }
+                            if trajectory.bounce_point
+                            else None,
+                        },
+                        "metrics": {
+                            "release_height": ball_metrics.release_height,
+                            "release_position_x": ball_metrics.release_position_x,
+                            "swing_deviation": ball_metrics.swing_deviation,
+                            "flight_time": ball_metrics.flight_time,
+                            "ball_speed_estimate": ball_metrics.ball_speed_estimate,
+                            "bounce_distance": ball_metrics.bounce_distance,
+                            "bounce_angle": ball_metrics.bounce_angle,
+                            "trajectory_curve": ball_metrics.trajectory_curve,
+                            "spin_detected": ball_metrics.spin_detected,
+                            "release_consistency": ball_metrics.release_consistency,
+                        },
+                    }
+
+                    # Upload ball tracking results to S3
+                    ball_tracking_s3_key = _derive_output_key(key, "ball_tracking_results.json")
+                    await _upload_json_to_s3(
+                        bucket=bucket, key=ball_tracking_s3_key, payload=ball_tracking_payload
+                    )
+                    logger.info(
+                        f"Ball tracking complete: job_id={job.id} "
+                        f"detection_rate={trajectory.detection_rate:.1f}% "
+                        f"s3_key={ball_tracking_s3_key}"
+                    )
+
+                    # Add to deep payload
+                    deep_payload["ball_tracking"] = ball_tracking_payload
+                    deep_payload.setdefault("outputs", {})
+                    deep_payload["outputs"]["ball_tracking_s3_key"] = ball_tracking_s3_key
+
+                except Exception as e:
+                    logger.warning(
+                        f"Ball tracking failed: job_id={job.id} error={e}", exc_info=True
+                    )
+                    # Don't fail the whole job if ball tracking fails
+                    deep_payload["ball_tracking"] = {
+                        "error": str(e),
+                        "detection_rate": 0,
+                    }
+
             deep_out_key = _derive_output_key(key, "deep_results.json")
 
             logger.info(

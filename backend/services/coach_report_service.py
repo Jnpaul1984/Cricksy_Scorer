@@ -336,17 +336,46 @@ def generate_report_text(
 def _generate_notes(
     findings: list[dict], player_context: dict | None = None, detection_rate: float = 100.0
 ) -> str:
-    """Generate personalized closing notes with detection rate context."""
+    """Generate personalized closing notes with detection rate and ball tracking context."""
     notes_parts = []
 
     if not findings:
         return "Excellent technique! Continue maintaining your current practice standards."
 
+    # Check for ball tracking insights
+    ball_tracking_findings = [
+        f
+        for f in findings
+        if f.get("code")
+        in ["INSUFFICIENT_BALL_TRACKING", "SWING_ANALYSIS", "INCONSISTENT_RELEASE_POINT"]
+    ]
+
+    if ball_tracking_findings:
+        notes_parts.append("📊 Ball Tracking Insights:")
+        for finding in ball_tracking_findings:
+            if finding["code"] == "INSUFFICIENT_BALL_TRACKING":
+                detection = finding["evidence"]["detection_rate"]
+                notes_parts.append(
+                    f"  • Ball detection: {detection} (below 40% threshold - swing/length analysis suppressed). "
+                    "Improve video quality for better tracking."
+                )
+            elif finding["code"] == "SWING_ANALYSIS":
+                evidence = finding["evidence"]
+                notes_parts.append(
+                    f"  • Swing: {evidence['trajectory_curve']} "
+                    f"(deviation: {evidence['swing_deviation']}px, "
+                    f"speed est: {evidence['ball_speed_estimate']} px/s)"
+                )
+            elif finding["code"] == "INCONSISTENT_RELEASE_POINT":
+                consistency = finding["evidence"]["release_consistency_score"]
+                status = "Excellent" if consistency >= 85 else "Needs work"
+                notes_parts.append(f"  • Release consistency: {consistency}% ({status})")
+
     high_severity = [f for f in findings if f.get("severity") == "high"]
 
     if high_severity:
         notes_parts.append(
-            f"Priority: Focus on the {len(high_severity)} high-severity finding(s) first. "
+            f"\nPriority: Focus on the {len(high_severity)} high-severity finding(s) first. "
             "Building strong fundamentals in these areas will elevate your overall performance."
         )
 
@@ -365,6 +394,13 @@ def _generate_notes(
         notes_parts.append("Remember that bowling action changes are gradual - patience is key.")
     elif player_context and player_context.get("role") == "batter":
         notes_parts.append("Muscle memory develops through repetition - focus on quality reps.")
+
+    # Add detection rate warning if low
+    if detection_rate < 60:
+        notes_parts.append(
+            f"\n⚠️ Note: Pose detection rate is {detection_rate:.1f}%. "
+            "Results may be less reliable. Consider re-recording with better lighting."
+        )
 
     return " ".join(notes_parts)
 

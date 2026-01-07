@@ -12,7 +12,7 @@ Converts pose metrics into human-readable coaching findings with:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +99,18 @@ BOWLING_DRILL_SUGGESTIONS = {
         "Resistance band work for bowling arm path",
         "Wall drills maintaining elbow height through delivery",
         "Video analysis of release point consistency",
+    ],
+    "RELEASE_POINT": [
+        "Rope drill with release point markers",
+        "Mirror work at gather position",
+        "Consistent stride length drills",
+        "Target bowling with release point focus",
+    ],
+    "SWING_VARIATION": [
+        "Wrist position drills for swing control",
+        "Seam angle practice with video feedback",
+        "Shiny/rough side awareness drills",
+        "Grip variations for different swing types",
     ],
 }
 
@@ -297,6 +309,71 @@ FINDING_DEFINITIONS: dict[str, dict[str, Any]] = {
                 "Work exclusively on elbow drop drills until corrected",
                 "Address any underlying tension or flexibility issues",
             ],
+        },
+    },
+}
+
+# ============================================================================
+# Ball Tracking Findings (Bowling Mode)
+# ============================================================================
+
+BOWLING_BALL_TRACKING_FINDINGS = {
+    "INSUFFICIENT_BALL_TRACKING": {
+        "title": "Ball tracking insufficient for swing/length analysis",
+        "why_it_matters": "Reliable ball tracking is essential for analyzing swing, seam position, and length. "
+        "Low detection rates may be due to poor lighting, ball color contrast, or camera angle.",
+        "cues": [
+            "Improve video quality with better lighting",
+            "Ensure ball color contrasts with background",
+            "Use higher frame rate camera if available",
+            "Adjust camera angle to track full ball flight",
+        ],
+        "drills": [
+            "Re-record delivery with improved lighting setup",
+            "Use contrasting background (dark sight-screen for red ball)",
+            "Test camera positioning to capture full trajectory",
+        ],
+    },
+    "INCONSISTENT_RELEASE_POINT": {
+        "title": "Release point inconsistency detected",
+        "why_it_matters": "Consistent release points are crucial for line and length control. "
+        "Variation indicates mechanical issues in gather or delivery stride.",
+        "low_severity": {
+            "message": "Minor release point variation detected.",
+            "cues": [
+                "Focus on consistent gather position",
+                "Mark your release point reference in practice",
+                "Maintain consistent stride length",
+            ],
+        },
+        "medium_severity": {
+            "message": "Moderate release point inconsistency affecting control.",
+            "cues": [
+                "Release point is varying significantly",
+                "Work on consistent run-up rhythm",
+                "Practice with target markers at release point",
+                "Video review of gather and release phases",
+            ],
+        },
+        "high_severity": {
+            "message": "High release point variation - major control issue.",
+            "cues": [
+                "Release point variance is severe",
+                "Rebuild bowling action fundamentals",
+                "Work with coach on gather mechanics",
+                "Daily consistency drills with immediate feedback",
+            ],
+        },
+    },
+    "SWING_ANALYSIS": {
+        "title": "Ball swing characteristics",
+        "why_it_matters": "Understanding your natural swing helps plan field settings and "
+        "develop variations. Swing is influenced by wrist position, seam angle, and release.",
+        "analysis": {
+            "straight": "Ball traveling straight - good for accuracy, consider developing swing variations",
+            "inswing": "Natural inswing detected - use for attacking stumps and LBW opportunities",
+            "outswing": "Natural outswing detected - excellent for taking outside edge",
+            "swing": "Variable swing detected - work on consistent wrist position",
         },
     },
 }
@@ -655,6 +732,108 @@ def _check_elbow_drop(
     return None
 
 
+def _generate_ball_tracking_findings(ball_tracking: dict[str, Any]) -> list[dict[str, Any]]:
+    """Generate findings from ball tracking data for bowling analysis."""
+    findings: list[dict[str, Any]] = []
+
+    trajectory: dict[str, Any] = ball_tracking.get("trajectory", {})
+    metrics_data: dict[str, Any] = ball_tracking.get("metrics", {})
+
+    detection_rate: float = float(trajectory.get("detection_rate", 0))
+
+    # Gating: Low detection rate (<40%)
+    if detection_rate < 40:
+        finding_def_insufficient: dict[str, Any] = cast(
+            dict[str, Any], BOWLING_BALL_TRACKING_FINDINGS["INSUFFICIENT_BALL_TRACKING"]
+        )
+        findings.append(
+            {
+                "code": "INSUFFICIENT_BALL_TRACKING",
+                "title": finding_def_insufficient["title"],
+                "severity": "medium",
+                "evidence": {
+                    "detection_rate": f"{detection_rate:.1f}%",
+                    "threshold": "40%",
+                },
+                "why_it_matters": finding_def_insufficient["why_it_matters"],
+                "cues": finding_def_insufficient["cues"],
+                "suggested_drills": finding_def_insufficient["drills"],
+            }
+        )
+        # Suppress swing/length claims if detection is poor
+        return findings
+
+    # Release consistency analysis
+    release_consistency: float = float(metrics_data.get("release_consistency", 100))
+    if release_consistency < 85:
+        severity = (
+            "low"
+            if release_consistency >= 70
+            else ("medium" if release_consistency >= 50 else "high")
+        )
+        finding_def: dict[str, Any] = cast(
+            dict[str, Any], BOWLING_BALL_TRACKING_FINDINGS["INCONSISTENT_RELEASE_POINT"]
+        )
+        findings.append(
+            {
+                "code": "INCONSISTENT_RELEASE_POINT",
+                "title": finding_def["title"],
+                "severity": severity,
+                "evidence": {
+                    "release_consistency_score": round(release_consistency, 1),
+                    "threshold": 85.0,
+                },
+                "why_it_matters": finding_def["why_it_matters"],
+                "cues": finding_def[f"{severity}_severity"]["cues"],
+                "suggested_drills": BOWLING_DRILL_SUGGESTIONS.get(
+                    "RELEASE_POINT",
+                    [
+                        "Rope drill with release point markers",
+                        "Mirror work at gather position",
+                        "Consistent stride length drills",
+                    ],
+                ),
+            }
+        )
+
+    # Swing analysis (informational, only if tracking is reliable)
+    if detection_rate >= 60:
+        trajectory_curve: str = str(metrics_data.get("trajectory_curve", "straight"))
+        swing_deviation: float = float(metrics_data.get("swing_deviation", 0))
+
+        swing_def: dict[str, Any] = cast(
+            dict[str, Any], BOWLING_BALL_TRACKING_FINDINGS["SWING_ANALYSIS"]
+        )
+        swing_message: str = str(
+            swing_def["analysis"].get(trajectory_curve, f"Trajectory: {trajectory_curve}")
+        )
+
+        findings.append(
+            {
+                "code": "SWING_ANALYSIS",
+                "title": swing_def["title"],
+                "severity": "low",  # Informational
+                "evidence": {
+                    "trajectory_curve": trajectory_curve,
+                    "swing_deviation": round(swing_deviation, 1),
+                    "ball_speed_estimate": round(metrics_data.get("ball_speed_estimate", 0), 1),
+                },
+                "why_it_matters": swing_def["why_it_matters"],
+                "cues": [swing_message],
+                "suggested_drills": BOWLING_DRILL_SUGGESTIONS.get(
+                    "SWING_VARIATION",
+                    [
+                        "Wrist position drills for swing control",
+                        "Seam angle practice with video feedback",
+                        "Shiny/rough side awareness drills",
+                    ],
+                ),
+            }
+        )
+
+    return findings
+
+
 # ============================================================================
 # Main API
 # ============================================================================
@@ -721,8 +900,17 @@ def generate_batting_findings(
 def generate_bowling_findings(
     metrics: dict[str, Any], context: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """Generate bowling-specific findings from metrics."""
-    return _generate_findings_internal(metrics, context, BOWLING_DRILL_SUGGESTIONS)
+    """Generate bowling-specific findings from metrics with ball tracking integration."""
+    # Generate base pose findings
+    base_findings = _generate_findings_internal(metrics, context, BOWLING_DRILL_SUGGESTIONS)
+
+    # Add ball tracking findings if available
+    ball_tracking = metrics.get("ball_tracking")
+    if ball_tracking and not ball_tracking.get("error"):
+        ball_findings = _generate_ball_tracking_findings(ball_tracking)
+        base_findings["findings"].extend(ball_findings)
+
+    return base_findings
 
 
 def generate_wicketkeeping_findings(
