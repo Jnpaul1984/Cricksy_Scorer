@@ -74,7 +74,7 @@ session.status = VideoSessionStatus.uploaded
 ```python
 async def _claim_one_job() -> str | None:
     """Claim a single queued job for processing.
-    
+
     Only jobs with status=queued are eligible for claiming.
     Jobs in awaiting_upload status are NOT claimed (upload not yet confirmed).
     """
@@ -90,7 +90,7 @@ async def _claim_one_job() -> str | None:
 ```python
 def upgrade() -> None:
     op.execute("""
-        ALTER TYPE video_analysis_job_status 
+        ALTER TYPE video_analysis_job_status
         ADD VALUE IF NOT EXISTS 'awaiting_upload' BEFORE 'queued';
     """)
 ```
@@ -175,8 +175,8 @@ pytest tests/test_upload_lifecycle.py -v
 
 2. **Verify enum update:**
    ```sql
-   SELECT enumlabel FROM pg_enum 
-   WHERE enumtypid = 'video_analysis_job_status'::regtype 
+   SELECT enumlabel FROM pg_enum
+   WHERE enumtypid = 'video_analysis_job_status'::regtype
    ORDER BY enumsortorder;
    ```
 
@@ -201,12 +201,12 @@ pytest tests/test_upload_lifecycle.py -v
 **Log queries:**
 ```python
 # Find jobs stuck awaiting upload for >5 minutes
-SELECT id, created_at FROM video_analysis_jobs 
-WHERE status = 'awaiting_upload' 
+SELECT id, created_at FROM video_analysis_jobs
+WHERE status = 'awaiting_upload'
 AND created_at < NOW() - INTERVAL '5 minutes';
 
 # Count jobs by status
-SELECT status, COUNT(*) FROM video_analysis_jobs 
+SELECT status, COUNT(*) FROM video_analysis_jobs
 GROUP BY status;
 ```
 
@@ -217,7 +217,7 @@ If issues arise:
 2. **Code**: Revert to previous version
 3. **Stuck jobs**: Manually transition to `queued`:
    ```sql
-   UPDATE video_analysis_jobs 
+   UPDATE video_analysis_jobs
    SET status = 'queued', stage = 'QUEUED'
    WHERE status = 'awaiting_upload' AND created_at < NOW() - INTERVAL '10 minutes';
    ```

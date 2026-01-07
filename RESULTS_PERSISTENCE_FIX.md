@@ -4,7 +4,7 @@
 
 **SYMPTOM**: UI shows "analysis not working" despite production logs proving that:
 - Quick analysis runs: 151 frames processed
-- Deep analysis runs: 3653 frames processed  
+- Deep analysis runs: 3653 frames processed
 - Metrics computed (5 metrics)
 - Findings generated (4 findings with overall level: low)
 - Report generated successfully
@@ -88,13 +88,13 @@ job.deep_report = deep_report
 ```python
 class VideoAnalysisJobRead(BaseModel):
     # ... existing fields ...
-    
+
     # Extracted artifacts for frontend consumption
     quick_findings: dict | None = None
     quick_report: dict | None = None
     deep_findings: dict | None = None
     deep_report: dict | None = None
-    
+
     # S3 keys for downloading full results
     quick_results_s3_key: str | None = None
     deep_results_s3_key: str | None = None
@@ -140,10 +140,10 @@ INFO: [PERSISTED] Deep job completed: job_id=0184a7d5-... status_after=done stag
 ### Database Verification
 
 ```sql
-SELECT 
-    id, 
-    status, 
-    stage, 
+SELECT
+    id,
+    status,
+    stage,
     progress_pct,
     deep_findings IS NOT NULL as has_findings,
     deep_report IS NOT NULL as has_report,

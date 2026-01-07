@@ -1,7 +1,7 @@
 """
 Tests for evidence-driven coaching reports.
 
-Tests the complete flow from pose metrics → findings with evidence → 
+Tests the complete flow from pose metrics → findings with evidence →
 reports with timestamps → PDF with proof of work.
 """
 
@@ -33,37 +33,45 @@ def test_format_timestamp_edge_cases():
 def test_attach_evidence_markers_complete():
     """Test evidence attachment with all data present."""
     finding = {"title": "Head Movement", "severity": "high"}
-    
+
     evidence_data = {
         "head_stability_score": {
             "worst_frames": [
                 {"frame_num": 100, "timestamp_s": 3.33, "score": 0.15},
                 {"frame_num": 150, "timestamp_s": 5.0, "score": 0.18},
                 {"frame_num": 200, "timestamp_s": 6.67, "score": 0.22},
-                {"frame_num": 250, "timestamp_s": 8.33, "score": 0.25},  # Should be ignored (only top 3)
+                {
+                    "frame_num": 250,
+                    "timestamp_s": 8.33,
+                    "score": 0.25,
+                },  # Should be ignored (only top 3)
             ],
             "bad_segments": [
                 {"start_timestamp_s": 3.0, "end_timestamp_s": 7.5, "min_score": 0.12},
                 {"start_timestamp_s": 10.0, "end_timestamp_s": 15.0, "min_score": 0.14},
                 {"start_timestamp_s": 20.0, "end_timestamp_s": 25.0, "min_score": 0.16},
-                {"start_timestamp_s": 30.0, "end_timestamp_s": 35.0, "min_score": 0.18},  # Should be ignored
+                {
+                    "start_timestamp_s": 30.0,
+                    "end_timestamp_s": 35.0,
+                    "min_score": 0.18,
+                },  # Should be ignored
             ],
         }
     }
-    
+
     coach_findings._attach_evidence_markers(finding, "head_stability_score", evidence_data)
-    
+
     assert "video_evidence" in finding
     assert "worst_frames" in finding["video_evidence"]
     assert "bad_segments" in finding["video_evidence"]
-    
+
     # Check top 3 worst frames
     worst_frames = finding["video_evidence"]["worst_frames"]
     assert len(worst_frames) == 3
     assert worst_frames[0]["frame"] == 100
     assert worst_frames[0]["timestamp"] == "00:03"
     assert worst_frames[0]["score"] == 0.15
-    
+
     # Check top 3 bad segments
     bad_segments = finding["video_evidence"]["bad_segments"]
     assert len(bad_segments) == 3
@@ -75,15 +83,15 @@ def test_attach_evidence_markers_complete():
 def test_attach_evidence_markers_missing_data():
     """Test evidence attachment when data is missing."""
     finding = {"title": "Head Movement"}
-    
+
     # Empty evidence
     coach_findings._attach_evidence_markers(finding, "head_stability_score", {})
     assert "video_evidence" not in finding
-    
+
     # None evidence
     coach_findings._attach_evidence_markers(finding, "head_stability_score", None)
     assert "video_evidence" not in finding
-    
+
     # Metric not in evidence
     evidence_data = {"balance_drift_score": {"worst_frames": []}}
     coach_findings._attach_evidence_markers(finding, "head_stability_score", evidence_data)
@@ -93,7 +101,7 @@ def test_attach_evidence_markers_missing_data():
 def test_attach_evidence_markers_partial_data():
     """Test evidence attachment with only some fields present."""
     finding = {"title": "Knee Collapse"}
-    
+
     evidence_data = {
         "front_knee_brace_score": {
             "worst_frames": [
@@ -102,9 +110,9 @@ def test_attach_evidence_markers_partial_data():
             # No bad_segments
         }
     }
-    
+
     coach_findings._attach_evidence_markers(finding, "front_knee_brace_score", evidence_data)
-    
+
     assert "video_evidence" in finding
     assert len(finding["video_evidence"]["worst_frames"]) == 1
     assert finding["video_evidence"]["worst_frames"][0]["timestamp"] == "00:01"
@@ -121,7 +129,7 @@ def test_check_head_movement_with_evidence():
     metrics = {
         "head_stability_score": {"score": 0.15},  # Below threshold (0.60)
     }
-    
+
     evidence = {
         "head_stability_score": {
             "worst_frames": [
@@ -132,9 +140,9 @@ def test_check_head_movement_with_evidence():
             ],
         }
     }
-    
+
     finding = coach_findings._check_head_movement(metrics, evidence)
-    
+
     assert finding is not None
     assert finding["code"] == "HEAD_MOVEMENT"
     assert "video_evidence" in finding
@@ -151,12 +159,14 @@ def test_check_functions_without_evidence():
         "hip_shoulder_separation_timing": 0.28,  # Direct float, not nested
         "elbow_drop_score": {"score": 0.12},
     }
-    
+
     # Should not crash when evidence is None
     assert coach_findings._check_head_movement(metrics_low, None) is not None
     assert coach_findings._check_balance_drift(metrics_low, None) is not None
     assert coach_findings._check_knee_collapse(metrics_low, None) is not None
-    assert coach_findings._check_rotation_timing(metrics_low, None) is not None  # Will trigger because 0.28 is far from target 0.12
+    assert (
+        coach_findings._check_rotation_timing(metrics_low, None) is not None
+    )  # Will trigger because 0.28 is far from target 0.12
     assert coach_findings._check_elbow_drop(metrics_low, None) is not None
 
 
@@ -169,10 +179,10 @@ def test_generate_findings_with_evidence_and_detection_rate():
     """Test complete findings generation with evidence and detection rate."""
     metrics = {
         "head_stability_score": {"score": 0.45},  # Will trigger finding (below 0.60)
-        "balance_drift_score": {"score": 0.90},   # OK
-        "front_knee_brace_score": {"score": 0.85},      # OK
+        "balance_drift_score": {"score": 0.90},  # OK
+        "front_knee_brace_score": {"score": 0.85},  # OK
         "hip_shoulder_separation_timing": 0.12,  # OK (close to target)
-        "elbow_drop_score": {"score": 0.88},      # OK
+        "elbow_drop_score": {"score": 0.88},  # OK
         "summary": {
             "frames_with_pose": 450,
             "total_frames": 500,
@@ -190,17 +200,17 @@ def test_generate_findings_with_evidence_and_detection_rate():
             }
         },
     }
-    
+
     result = coach_findings.generate_findings(metrics, context={})
-    
+
     # Check structure
     assert "findings" in result
     assert "overall_level" in result
     assert "detection_rate" in result
-    
+
     # Check detection rate
     assert result["detection_rate"] == 90.0
-    
+
     # Check findings have evidence (head + rotation timing detected)
     assert len(result["findings"]) >= 1
     finding = next(f for f in result["findings"] if f["code"] == "HEAD_MOVEMENT")
@@ -224,9 +234,9 @@ def test_generate_findings_low_detection_rate():
         },
         "evidence": {},
     }
-    
+
     result = coach_findings.generate_findings(metrics, context={})
-    
+
     assert result["detection_rate"] == 50.0
     # Low detection rate should be flagged downstream
 
@@ -242,15 +252,18 @@ def test_generate_findings_missing_evidence():
         },
         # No "evidence" field
     }
-    
+
     result = coach_findings.generate_findings(metrics, context={})
-    
+
     # Should work without crashing
     assert result["detection_rate"] == 96.0
     assert len(result["findings"]) == 1
     # Finding should not have video_evidence since none was provided
     finding = result["findings"][0]
-    assert "video_evidence" not in finding or len(finding.get("video_evidence", {}).get("worst_frames", [])) == 0
+    assert (
+        "video_evidence" not in finding
+        or len(finding.get("video_evidence", {}).get("worst_frames", [])) == 0
+    )
 
 
 # ============================================================================
@@ -283,15 +296,15 @@ def test_report_includes_video_evidence():
         ],
         "context": {},
     }
-    
+
     report = coach_report_service.generate_report_text(findings_payload)
-    
+
     assert "top_issues" in report
     assert len(report["top_issues"]) == 1
-    
+
     issue = report["top_issues"][0]
     assert "video_evidence" in issue
-    assert "00:01–00:04" in issue["video_evidence"]  # Bad segment
+    assert "00:01-00:04" in issue["video_evidence"]  # Bad segment
     assert "00:01" in issue["video_evidence"]  # Worst frame timestamp
 
 
@@ -303,9 +316,9 @@ def test_report_reliability_warning_low_detection():
         "findings": [],
         "context": {},
     }
-    
+
     report = coach_report_service.generate_report_text(findings_payload)
-    
+
     assert "reliability_warning" in report
     assert report["reliability_warning"] is not None
     assert "45" in report["reliability_warning"]
@@ -320,9 +333,9 @@ def test_report_no_warning_high_detection():
         "findings": [],
         "context": {},
     }
-    
+
     report = coach_report_service.generate_report_text(findings_payload)
-    
+
     assert "reliability_warning" in report
     assert report["reliability_warning"] is None
 
@@ -351,27 +364,27 @@ def test_pdf_proof_of_work_format():
             }
         ],
     }
-    
+
     results = {
         "pose_summary": {
             "total_frames": 500,
             "frames_with_pose": 440,
         }
     }
-    
+
     proof_text = pdf_export_service._format_proof_of_work(findings, results, "Quick")
-    
+
     # Should include detection rate
     assert "88.0%" in proof_text
     assert "High confidence" in proof_text or "Moderate confidence" in proof_text
-    
+
     # Should include frame counts
     assert "440" in proof_text
     assert "500" in proof_text
-    
+
     # Should include video evidence
     assert "Head Movement" in proof_text
-    assert "00:01–00:05" in proof_text  # Time range
+    assert "00:01-00:05" in proof_text  # Time range
     assert "frame 42" in proof_text  # Frame number
 
 
@@ -381,9 +394,9 @@ def test_pdf_proof_of_work_low_confidence():
         "detection_rate": 55.0,
         "findings": [],
     }
-    
+
     proof_text = pdf_export_service._format_proof_of_work(findings, None, "Deep")
-    
+
     assert "55.0%" in proof_text
     assert "Low confidence" in proof_text
     assert "⚠️" in proof_text  # Warning emoji
@@ -404,14 +417,14 @@ def test_pdf_generation_with_proof_of_work():
             }
         ],
     }
-    
+
     quick_results = {
         "pose_summary": {
             "total_frames": 300,
             "frames_with_pose": 270,
         }
     }
-    
+
     pdf_bytes = pdf_export_service.generate_analysis_pdf(
         job_id="test-123",
         session_title="Test Session",
@@ -423,12 +436,12 @@ def test_pdf_generation_with_proof_of_work():
         created_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
     )
-    
+
     # Should generate valid PDF bytes
     assert isinstance(pdf_bytes, bytes)
     assert len(pdf_bytes) > 0
     # PDF header check
-    assert pdf_bytes[:4] == b'%PDF'
+    assert pdf_bytes[:4] == b"%PDF"
 
 
 # ============================================================================
@@ -468,28 +481,28 @@ def test_end_to_end_evidence_flow():
             },
         },
     }
-    
+
     # Step 2: Generate findings
     findings_result = coach_findings.generate_findings(metrics, context={"name": "Test Player"})
-    
+
     assert findings_result["detection_rate"] == 95.0
     assert len(findings_result["findings"]) >= 2  # Head + balance (and possibly rotation timing)
-    
+
     head_finding = next(f for f in findings_result["findings"] if f["code"] == "HEAD_MOVEMENT")
     assert "video_evidence" in head_finding
     assert len(head_finding["video_evidence"]["worst_frames"]) == 2
-    
+
     # Step 3: Generate report
     report = coach_report_service.generate_report_text(findings_result)
-    
+
     assert report["reliability_warning"] is None  # High detection rate
     assert len(report["top_issues"]) >= 2
-    
+
     head_issue = next((i for i in report["top_issues"] if "Head" in i["issue"]), None)
     assert head_issue is not None
     assert "video_evidence" in head_issue
-    assert "00:01–00:03" in head_issue["video_evidence"]
-    
+    assert "00:01-00:03" in head_issue["video_evidence"]
+
     # Step 4: Generate PDF
     pdf_bytes = pdf_export_service.generate_analysis_pdf(
         job_id="integration-test",
@@ -502,7 +515,7 @@ def test_end_to_end_evidence_flow():
         created_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
     )
-    
+
     assert isinstance(pdf_bytes, bytes)
     assert len(pdf_bytes) > 1000  # Reasonable PDF size
     # PDF content is compiled/compressed, so text search isn't reliable

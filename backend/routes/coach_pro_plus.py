@@ -119,36 +119,36 @@ class VideoAnalysisJobRead(BaseModel):
     progress_pct: int = 0
     error_message: str | None = None
     sqs_message_id: str | None = None
-    
+
     # Session context (denormalized for frontend convenience)
     analysis_context: str | None = None
     camera_view: str | None = None
-    
+
     # Legacy combined results (kept for backward compatibility)
     results: dict | None = None
-    
+
     # New staged results
     quick_results: dict | None = None
     deep_results: dict | None = None
-    
+
     # Extracted artifacts for frontend consumption
     quick_findings: dict | None = None
     quick_report: dict | None = None
     deep_findings: dict | None = None
     deep_report: dict | None = None
-    
+
     # S3 keys for downloading full results
     quick_results_s3_key: str | None = None
     deep_results_s3_key: str | None = None
-    
+
     # PDF export
     pdf_s3_key: str | None = None
     pdf_generated_at: datetime | None = None
-    
+
     # Presigned URLs for downloading results (computed per-request, short-lived)
     quick_results_url: str | None = None
     deep_results_url: str | None = None
-    
+
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -469,16 +469,20 @@ async def list_analysis_jobs(
     job_reads = []
     for job in jobs:
         job_read = VideoAnalysisJobRead.model_validate(job)
-        job_read = job_read.model_copy(update={
-            "analysis_context": session.analysis_context,
-            "camera_view": session.camera_view,
-        })
+        job_read = job_read.model_copy(
+            update={
+                "analysis_context": session.analysis_context,
+                "camera_view": session.camera_view,
+            }
+        )
         job_reads.append(job_read)
-    
+
     return job_reads
 
 
-@router.get("/video-sessions/{session_id}/analysis-history", response_model=list[VideoAnalysisJobRead])
+@router.get(
+    "/video-sessions/{session_id}/analysis-history", response_model=list[VideoAnalysisJobRead]
+)
 async def get_analysis_history(
     session_id: str,
     current_user: Annotated[User, Depends(security.get_current_active_user)],
@@ -532,11 +536,11 @@ async def get_analysis_job(
     try:
         # Generate presigned URLs for S3 results if available
         updates = {}
-        
+
         # Add session context to job response
         updates["analysis_context"] = session.analysis_context
         updates["camera_view"] = session.camera_view
-        
+
         if job.quick_results_s3_key:
             quick_url = s3_service.generate_presigned_get_url(
                 bucket=settings.S3_COACH_VIDEOS_BUCKET,
@@ -544,7 +548,7 @@ async def get_analysis_job(
                 expires_in=settings.S3_STREAM_URL_EXPIRES_SECONDS,
             )
             updates["quick_results_url"] = quick_url
-            
+
         if job.deep_results_s3_key:
             deep_url = s3_service.generate_presigned_get_url(
                 bucket=settings.S3_COACH_VIDEOS_BUCKET,
@@ -552,7 +556,7 @@ async def get_analysis_job(
                 expires_in=settings.S3_STREAM_URL_EXPIRES_SECONDS,
             )
             updates["deep_results_url"] = deep_url
-        
+
         # Attach video streaming URL for this single job
         if session.s3_bucket and session.s3_key:
             expires_in = settings.S3_STREAM_URL_EXPIRES_SECONDS
@@ -567,11 +571,11 @@ async def get_analysis_job(
                 bucket=session.s3_bucket,
                 key=session.s3_key,
             )
-        
+
         # Apply all updates at once if any
         if updates:
             job_read = job_read.model_copy(update=updates)
-            
+
     except Exception:
         # Graceful degradation: preserve existing response shape without URLs
         pass
@@ -644,13 +648,15 @@ async def export_analysis_pdf(
         )
 
         pdf_size_bytes = len(pdf_bytes)
-        logger.info(f"Generated PDF for job {job_id}: {pdf_size_bytes} bytes ({pdf_size_bytes / 1024:.2f} KB)")
+        logger.info(
+            f"Generated PDF for job {job_id}: {pdf_size_bytes} bytes ({pdf_size_bytes / 1024:.2f} KB)"
+        )
 
     except Exception as e:
         logger.error(f"Failed to generate PDF for job {job_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate PDF: {str(e)}",
+            detail=f"Failed to generate PDF: {e!s}",
         )
 
     # Upload PDF to S3
@@ -662,18 +668,22 @@ async def export_analysis_pdf(
             key=pdf_s3_key,
             content_type="application/pdf",
         )
-        logger.info(f"Uploaded PDF to S3: bucket={settings.S3_COACH_VIDEOS_BUCKET}, key={pdf_s3_key}")
+        logger.info(
+            f"Uploaded PDF to S3: bucket={settings.S3_COACH_VIDEOS_BUCKET}, key={pdf_s3_key}"
+        )
 
     except Exception as e:
         logger.error(f"Failed to upload PDF to S3 for job {job_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to upload PDF: {str(e)}",
+            detail=f"Failed to upload PDF: {e!s}",
         )
 
     # Update job with PDF metadata
     job.pdf_s3_key = pdf_s3_key
-    job.pdf_generated_at = datetime.now(datetime.UTC) if hasattr(datetime, 'UTC') else datetime.utcnow()
+    job.pdf_generated_at = (
+        datetime.now(datetime.UTC) if hasattr(datetime, "UTC") else datetime.utcnow()
+    )
     await db.commit()
 
     # Generate presigned download URL

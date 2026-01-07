@@ -5,6 +5,7 @@ Revises: f1a2b3c4d5e6
 Create Date: 2026-01-05 18:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -28,9 +29,12 @@ def upgrade() -> None:
     """
     # Create chunk status enum using PostgreSQL ENUM with checkfirst for idempotency
     chunk_status_enum = postgresql.ENUM(
-        'queued', 'processing', 'completed', 'failed',
-        name='video_analysis_chunk_status',
-        create_type=False  # We'll create it separately
+        "queued",
+        "processing",
+        "completed",
+        "failed",
+        name="video_analysis_chunk_status",
+        create_type=False,  # We'll create it separately
     )
     chunk_status_enum.create(op.get_bind(), checkfirst=True)
 

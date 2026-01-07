@@ -50,8 +50,8 @@ alembic upgrade head
 **Verification:**
 ```sql
 -- Check enum values
-SELECT enumlabel FROM pg_enum 
-WHERE enumtypid = 'video_analysis_job_status'::regtype 
+SELECT enumlabel FROM pg_enum
+WHERE enumtypid = 'video_analysis_job_status'::regtype
 ORDER BY enumsortorder;
 
 -- Expected output includes 'awaiting_upload' before 'queued'
@@ -93,10 +93,10 @@ docker compose logs worker -f
 
 ### 1. Check Job Status Distribution
 ```sql
-SELECT status, COUNT(*) as count 
-FROM video_analysis_jobs 
+SELECT status, COUNT(*) as count
+FROM video_analysis_jobs
 WHERE created_at > NOW() - INTERVAL '1 hour'
-GROUP BY status 
+GROUP BY status
 ORDER BY count DESC;
 ```
 
@@ -149,9 +149,9 @@ docker compose up -d backend
 #### Option 2: Manual Job Fix
 ```sql
 -- Fix stuck jobs (only if needed)
-UPDATE video_analysis_jobs 
+UPDATE video_analysis_jobs
 SET status = 'queued', stage = 'QUEUED'
-WHERE status = 'awaiting_upload' 
+WHERE status = 'awaiting_upload'
   AND created_at < NOW() - INTERVAL '10 minutes';
 ```
 
@@ -159,27 +159,27 @@ WHERE status = 'awaiting_upload'
 
 ## Success Criteria
 
-✅ **Migration complete**: Enum has `awaiting_upload` value  
-✅ **No backend errors**: Service starts without errors  
-✅ **Jobs created correctly**: New jobs start with `awaiting_upload`  
-✅ **Upload flow works**: Jobs transition `awaiting_upload` → `queued` → `processing`  
-✅ **Worker claims jobs**: Only `queued` jobs are claimed  
-✅ **No S3 404s**: Zero HeadObject errors for new jobs  
-✅ **Idempotency works**: Calling complete twice doesn't break anything  
+✅ **Migration complete**: Enum has `awaiting_upload` value
+✅ **No backend errors**: Service starts without errors
+✅ **Jobs created correctly**: New jobs start with `awaiting_upload`
+✅ **Upload flow works**: Jobs transition `awaiting_upload` → `queued` → `processing`
+✅ **Worker claims jobs**: Only `queued` jobs are claimed
+✅ **No S3 404s**: Zero HeadObject errors for new jobs
+✅ **Idempotency works**: Calling complete twice doesn't break anything
 
 ## Monitoring Alerts
 
 Set up alerts for:
 ```sql
 -- Jobs stuck in awaiting_upload >5 minutes
-SELECT COUNT(*) FROM video_analysis_jobs 
-WHERE status = 'awaiting_upload' 
+SELECT COUNT(*) FROM video_analysis_jobs
+WHERE status = 'awaiting_upload'
   AND created_at < NOW() - INTERVAL '5 minutes';
 -- Alert if count > 5
 
 -- Job failure rate spike
-SELECT COUNT(*) FROM video_analysis_jobs 
-WHERE status = 'failed' 
+SELECT COUNT(*) FROM video_analysis_jobs
+WHERE status = 'failed'
   AND created_at > NOW() - INTERVAL '1 hour';
 -- Alert if count > 10
 ```
@@ -204,12 +204,12 @@ If successful, document learnings:
 
 ## Contact
 
-**On-call Engineer:** [Your Name]  
-**Escalation:** Team Lead  
-**Monitoring:** Grafana Dashboard → Video Processing  
+**On-call Engineer:** [Your Name]
+**Escalation:** Team Lead
+**Monitoring:** Grafana Dashboard → Video Processing
 
 ---
 
-**Deployment Date:** _____________  
-**Deployed By:** _____________  
-**Sign-off:** _____________  
+**Deployment Date:** _____________
+**Deployed By:** _____________
+**Sign-off:** _____________

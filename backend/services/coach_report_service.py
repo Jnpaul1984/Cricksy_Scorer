@@ -174,25 +174,25 @@ def _get_top_issues(findings: list[dict], top_n: int = 3) -> list[dict]:
             "why_it_matters": f.get("why_it_matters", ""),
             "cues": f.get("cues", [])[:2],  # Top 2 cues
         }
-        
+
         # Add video evidence if available
         video_evidence = f.get("video_evidence", {})
         worst_frames = video_evidence.get("worst_frames", [])
         bad_segments = video_evidence.get("bad_segments", [])
-        
+
         if bad_segments or worst_frames:
             evidence_parts = []
             if bad_segments:
                 # Prioritize time ranges
-                ranges = [f"{seg['start']}–{seg['end']}" for seg in bad_segments]
+                ranges = [f"{seg['start']}-{seg['end']}" for seg in bad_segments]
                 evidence_parts.append(f"Observed at {', '.join(ranges)}")
             if worst_frames:
                 frames_text = ", ".join([f"{wf['timestamp']}" for wf in worst_frames])
                 evidence_parts.append(f"worst instances at {frames_text}")
             issue["video_evidence"] = "; ".join(evidence_parts)
-        
+
         issues.append(issue)
-    
+
     return issues
 
 
@@ -291,7 +291,9 @@ def generate_report_text(
     if context:
         effective_context.update(context)
 
-    logger.info(f"Generating report for {len(findings)} findings (detection rate: {detection_rate}%)")
+    logger.info(
+        f"Generating report for {len(findings)} findings (detection rate: {detection_rate}%)"
+    )
 
     # Check if low detection rate requires reliability warning
     reliability_warning = None
@@ -331,7 +333,9 @@ def generate_report_text(
     return report
 
 
-def _generate_notes(findings: list[dict], player_context: dict | None = None, detection_rate: float = 100.0) -> str:
+def _generate_notes(
+    findings: list[dict], player_context: dict | None = None, detection_rate: float = 100.0
+) -> str:
     """Generate personalized closing notes with detection rate context."""
     notes_parts = []
 

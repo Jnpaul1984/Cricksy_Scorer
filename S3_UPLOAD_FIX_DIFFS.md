@@ -5,11 +5,11 @@
 ```diff
  class VideoAnalysisJobStatus(str, enum.Enum):
      """Status of a video analysis job."""
- 
+
 +    awaiting_upload = "awaiting_upload"  # Job created, waiting for upload to complete
 -    queued = "queued"  # Job created, waiting in queue
 +    queued = "queued"  # Upload confirmed, ready for worker to claim
- 
+
      # Staged processing (DB-backed worker)
      quick_running = "quick_running"
 ```
@@ -41,7 +41,7 @@
          # CRITICAL: Snapshot S3 location in job to prevent 404s from session mutations
          job.s3_bucket = settings.S3_COACH_VIDEOS_BUCKET
          job.s3_key = s3_key
- 
+
 +        # Set session status to uploading (awaiting client upload)
 +        session.status = VideoSessionStatus.pending
 +
@@ -105,10 +105,10 @@ if job.status not in (VideoAnalysisJobStatus.awaiting_upload, VideoAnalysisJobSt
          job.error_message = f"Upload verification failed: {error_detail}"
          await db.commit()
          raise HTTPException(400, ...)
-     
+
 -    logger.info(f"S3 object verified: job_id={job_id_value} ...")
 +    logger.info(f"S3 object verified: job_id={job.id} proceeding to queue analysis")
- 
+
 +    # Preflight passed - transition job to queued (now claimable by worker)
 +    job.status = VideoAnalysisJobStatus.queued
 +    job.stage = "QUEUED"
@@ -116,9 +116,9 @@ if job.status not in (VideoAnalysisJobStatus.awaiting_upload, VideoAnalysisJobSt
 +    job.error_message = None
 +    job.sqs_message_id = None
      session.status = VideoSessionStatus.uploaded
-+    
++
      await db.commit()
- 
+
      return VideoUploadCompleteResponse(
 -        job_id=job_id_value,
 -        status=status_value,
@@ -134,15 +134,15 @@ if job.status not in (VideoAnalysisJobStatus.awaiting_upload, VideoAnalysisJobSt
 ```diff
  async def _claim_one_job() -> str | None:
 +    """Claim a single queued job for processing.
-+    
++
 +    Only jobs with status=queued are eligible for claiming.
 +    Jobs in awaiting_upload status are NOT claimed (upload not yet confirmed).
-+    
++
 +    Returns:
 +        job_id if claimed, None if no jobs available
 +    """
      session_local = get_session_local()
- 
+
      async with session_local() as db, db.begin():
          stmt = (
              select(VideoAnalysisJob)
@@ -157,7 +157,7 @@ if job.status not in (VideoAnalysisJobStatus.awaiting_upload, VideoAnalysisJobSt
 def upgrade() -> None:
     """Add awaiting_upload status to VideoAnalysisJobStatus enum."""
     op.execute("""
-        ALTER TYPE video_analysis_job_status 
+        ALTER TYPE video_analysis_job_status
         ADD VALUE IF NOT EXISTS 'awaiting_upload' BEFORE 'queued';
     """)
 
@@ -174,23 +174,23 @@ def downgrade() -> None:
 @pytest.mark.asyncio
 async def test_upload_lifecycle_prevents_premature_claiming(client):
     """Test that jobs are not claimable until upload completes."""
-    
+
     # 1. Initiate upload
     resp = client.post("/api/coaches/plus/videos/upload/initiate", ...)
     job_id = resp.json()["job_id"]
-    
+
     # 2. Verify job is awaiting_upload
     status = await get_job_status(session_maker, job_id)
     assert status == "awaiting_upload"
-    
+
     # 3. Verify worker CANNOT claim
     claimed_id = await _claim_one_job()
     assert claimed_id is None
-    
+
     # 4. Complete upload
     resp = client.post("/api/coaches/plus/videos/upload/complete", ...)
     assert resp.json()["status"] == "queued"
-    
+
     # 5. Verify worker CAN now claim
     claimed_id = await _claim_one_job()
     assert claimed_id == job_id

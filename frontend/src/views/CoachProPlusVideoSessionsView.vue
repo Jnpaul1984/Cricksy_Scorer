@@ -246,9 +246,9 @@
     <div v-if="showHistoryModal && selectedSession" class="modal-overlay" @click="closeHistoryModal">
       <div class="modal-content" @click.stop>
         <button class="modal-close-btn" @click="closeHistoryModal">✕</button>
-        
+
         <h2>{{ selectedSession.title }} - Analysis History</h2>
-        
+
         <div v-if="loadingHistory" class="loading">
           <p>Loading analysis history...</p>
         </div>
@@ -276,16 +276,16 @@
                   </span>
                 </td>
                 <td class="history-actions">
-                  <button 
-                    class="btn-small btn-primary" 
+                  <button
+                    class="btn-small btn-primary"
                     @click="viewJobResults(job)"
                     :disabled="job.status === 'queued' || job.status === 'processing'"
                   >
                     View
                   </button>
-                  <button 
+                  <button
                     v-if="canExport"
-                    class="btn-small btn-secondary" 
+                    class="btn-small btn-secondary"
                     @click="exportJobPdf(job.id)"
                     :disabled="exportingPdf || !isJobCompleted(job)"
                   >
@@ -522,9 +522,9 @@
         </div>
 
         <div v-if="canExport" class="modal-actions">
-          <button 
-            type="button" 
-            class="btn-primary" 
+          <button
+            type="button"
+            class="btn-primary"
             :disabled="exportingPdf || !selectedJob"
             @click="exportPdf"
           >
@@ -1146,7 +1146,7 @@ function viewJobResults(job: VideoAnalysisJob) {
   selectedJob.value = job;
   showHistoryModal.value = false;
   showResultsModal.value = true;
-  
+
   // Start polling if not terminal
   if (!isJobCompleted(job)) {
     startUiPolling(job.id);

@@ -19,7 +19,7 @@ awaiting_upload → queued → processing → done
 # OLD
 status=VideoAnalysisJobStatus.queued  # ❌ Immediately claimable
 
-# NEW  
+# NEW
 status=VideoAnalysisJobStatus.awaiting_upload  # ✅ Not claimable
 ```
 
@@ -41,10 +41,10 @@ else:
 
 ## 🔐 Safety Features
 
-✅ **Idempotency**: Calling upload-complete multiple times is safe  
-✅ **S3 Verification**: HeadObject confirms upload before queueing  
-✅ **Early Failure**: 404s caught before worker attempts download  
-✅ **Backward Compatible**: Existing `queued` jobs still work  
+✅ **Idempotency**: Calling upload-complete multiple times is safe
+✅ **S3 Verification**: HeadObject confirms upload before queueing
+✅ **Early Failure**: 404s caught before worker attempts download
+✅ **Backward Compatible**: Existing `queued` jobs still work
 
 ## 📝 Migration
 
@@ -74,12 +74,12 @@ pytest tests/test_upload_lifecycle.py -v
 
 ```sql
 -- Jobs awaiting upload >5 min (stuck uploads)
-SELECT id, created_at FROM video_analysis_jobs 
-WHERE status = 'awaiting_upload' 
+SELECT id, created_at FROM video_analysis_jobs
+WHERE status = 'awaiting_upload'
 AND created_at < NOW() - INTERVAL '5 minutes';
 
 -- Job status distribution
-SELECT status, COUNT(*) FROM video_analysis_jobs 
+SELECT status, COUNT(*) FROM video_analysis_jobs
 GROUP BY status;
 ```
 
@@ -89,7 +89,7 @@ If jobs get stuck in `awaiting_upload`:
 
 ```sql
 -- Force to queued (after confirming S3 upload)
-UPDATE video_analysis_jobs 
+UPDATE video_analysis_jobs
 SET status = 'queued', stage = 'QUEUED'
 WHERE id = '<job_id>';
 ```

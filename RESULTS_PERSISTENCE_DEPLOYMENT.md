@@ -78,7 +78,7 @@ Response includes deep_findings and deep_report fields
 
 ```sql
 -- Check a completed job
-SELECT 
+SELECT
     id,
     status,
     stage,

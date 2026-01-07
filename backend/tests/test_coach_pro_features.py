@@ -389,7 +389,7 @@ async def test_analysis_history_endpoint(client: TestClient):
         )
         job1 = result.scalar_one()
         job1.created_at = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        
+
         # Create second job with newer timestamp
         job2 = models.VideoAnalysisJob(
             session_id=session_id,

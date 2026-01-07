@@ -276,7 +276,7 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
     try {
       const job = await getAnalysisJobStatus(jobId)
       const existing = jobStatusMap.value.get(jobId)
-      
+
       // REGRESSION PREVENTION: If existing job is terminal, only update if new status is also terminal
       if (existing && isJobTerminal(existing) && !isJobTerminal(job)) {
         console.warn(
@@ -284,7 +284,7 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
         )
         return // Do not update
       }
-      
+
       jobStatusMap.value.set(jobId, job)
       lastFetchedAt.value.set(jobId, Date.now())
     } catch (err) {

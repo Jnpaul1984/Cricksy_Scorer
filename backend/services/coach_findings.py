@@ -270,17 +270,17 @@ def _get_severity(score: float, threshold: float, is_higher_better: bool = True)
 def _contextualize_finding(finding: dict[str, Any], analysis_context: str | None) -> dict[str, Any]:
     """
     Adjust finding wording based on analysis context (batting, bowling, etc.).
-    
+
     Args:
         finding: The finding dict to contextualize
         analysis_context: One of "batting", "bowling", "wicketkeeping", "fielding", "mixed"
-    
+
     Returns:
         Updated finding with context-aware messages
     """
     if not analysis_context or analysis_context == "mixed":
         return finding
-    
+
     # Context-specific title adjustments
     title_adjustments = {
         "batting": {
@@ -309,13 +309,13 @@ def _contextualize_finding(finding: dict[str, Any], analysis_context: str | None
             "KNEE_COLLAPSE": "Knee stability during fielding",
         },
     }
-    
+
     code = finding.get("code")
     if code and analysis_context in title_adjustments:
         context_titles = title_adjustments[analysis_context]
         if code in context_titles:
             finding["title"] = context_titles[code]
-    
+
     return finding
 
 
@@ -363,20 +363,20 @@ def _attach_evidence_markers(
     evidence_data: dict | None,
 ) -> dict:
     """Attach worst_frames and bad_segments from evidence to finding.
-    
+
     Args:
         finding: Finding dict to enhance
         metric_key: Key to lookup in evidence (e.g., "head_stability_score")
         evidence_data: Evidence dict from metrics_result["evidence"]
-    
+
     Returns:
         Enhanced finding dict with video_evidence attached
     """
     if not evidence_data or metric_key not in evidence_data:
         return finding
-    
+
     metric_evidence = evidence_data[metric_key]
-    
+
     # Extract worst frames with timestamps
     worst_frames = metric_evidence.get("worst_frames", [])
     worst_frame_refs = []
@@ -385,12 +385,14 @@ def _attach_evidence_markers(
         timestamp_s = wf.get("timestamp_s")
         score = wf.get("score")
         if timestamp_s is not None:
-            worst_frame_refs.append({
-                "frame": frame_num,
-                "timestamp": _format_timestamp(timestamp_s),
-                "score": round(score, 2) if score is not None else None,
-            })
-    
+            worst_frame_refs.append(
+                {
+                    "frame": frame_num,
+                    "timestamp": _format_timestamp(timestamp_s),
+                    "score": round(score, 2) if score is not None else None,
+                }
+            )
+
     # Extract bad segments (time ranges)
     bad_segments = metric_evidence.get("bad_segments", [])
     segment_refs = []
@@ -399,18 +401,20 @@ def _attach_evidence_markers(
         end_ts = seg.get("end_timestamp_s")
         min_score = seg.get("min_score")
         if start_ts is not None and end_ts is not None:
-            segment_refs.append({
-                "start": _format_timestamp(start_ts),
-                "end": _format_timestamp(end_ts),
-                "min_score": round(min_score, 2) if min_score is not None else None,
-            })
-    
+            segment_refs.append(
+                {
+                    "start": _format_timestamp(start_ts),
+                    "end": _format_timestamp(end_ts),
+                    "min_score": round(min_score, 2) if min_score is not None else None,
+                }
+            )
+
     # Attach to finding
     finding["video_evidence"] = {
         "worst_frames": worst_frame_refs,
         "bad_segments": segment_refs,
     }
-    
+
     return finding
 
 
@@ -436,7 +440,7 @@ def _check_head_movement(metrics: dict, evidence: dict | None = None) -> dict | 
             "cues": FINDING_DEFINITIONS["HEAD_MOVEMENT"][f"{severity}_severity"]["cues"],
             "suggested_drills": DRILL_SUGGESTIONS.get("HEAD_MOVEMENT", []),
         }
-        
+
         return _attach_evidence_markers(finding, "head_stability_score", evidence)
 
     return None
@@ -464,7 +468,7 @@ def _check_balance_drift(metrics: dict, evidence: dict | None = None) -> dict | 
             "cues": FINDING_DEFINITIONS["BALANCE_DRIFT"][f"{severity}_severity"]["cues"],
             "suggested_drills": DRILL_SUGGESTIONS.get("BALANCE_DRIFT", []),
         }
-        
+
         return _attach_evidence_markers(finding, "balance_drift_score", evidence)
 
     return None
@@ -492,7 +496,7 @@ def _check_knee_collapse(metrics: dict, evidence: dict | None = None) -> dict | 
             "cues": FINDING_DEFINITIONS["KNEE_COLLAPSE"][f"{severity}_severity"]["cues"],
             "suggested_drills": DRILL_SUGGESTIONS.get("KNEE_COLLAPSE", []),
         }
-        
+
         return _attach_evidence_markers(finding, "front_knee_brace_score", evidence)
 
     return None
@@ -501,12 +505,9 @@ def _check_knee_collapse(metrics: dict, evidence: dict | None = None) -> dict | 
 def _check_rotation_timing(metrics: dict, evidence: dict | None = None) -> dict | None:
     """Check hip-shoulder separation timing metric."""
     timing_value = metrics.get("hip_shoulder_separation_timing")
-    
+
     # Handle both direct float and nested dict format
-    if isinstance(timing_value, dict):
-        lag = timing_value.get("score")
-    else:
-        lag = timing_value
+    lag = timing_value.get("score") if isinstance(timing_value, dict) else timing_value
 
     if lag is None:
         return None
@@ -538,7 +539,7 @@ def _check_rotation_timing(metrics: dict, evidence: dict | None = None) -> dict 
         "cues": FINDING_DEFINITIONS["ROTATION_TIMING"][f"{severity}_severity"]["cues"],
         "suggested_drills": DRILL_SUGGESTIONS.get("ROTATION_TIMING", []),
     }
-    
+
     return _attach_evidence_markers(finding, "hip_shoulder_separation_timing", evidence)
 
 
@@ -564,7 +565,7 @@ def _check_elbow_drop(metrics: dict, evidence: dict | None = None) -> dict | Non
             "cues": FINDING_DEFINITIONS["ELBOW_DROP"][f"{severity}_severity"]["cues"],
             "suggested_drills": DRILL_SUGGESTIONS.get("ELBOW_DROP", []),
         }
-        
+
         return _attach_evidence_markers(finding, "elbow_drop_score", evidence)
 
     return None
@@ -617,11 +618,11 @@ def generate_findings(
     metric_scores = metrics.get("metrics", metrics)
     evidence_data = metrics.get("evidence")  # Extract evidence markers
     logger.info(f"Generating findings for {len(metric_scores)} metrics")
-    
+
     # Extract analysis context for context-aware messaging
     analysis_context = context.get("analysis_context") if context else None
     logger.info(f"Analysis context: {analysis_context}")
-    
+
     # Calculate detection rate for reliability gating
     summary = metrics.get("summary", {})
     total_frames = summary.get("total_frames", 1)

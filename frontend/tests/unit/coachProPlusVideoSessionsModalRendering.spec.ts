@@ -13,16 +13,16 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
   describe('Modal condition logic', () => {
     it('status="done" should NOT match progress UI condition', () => {
       const status = 'done'
-      
+
       // Progress UI condition (after fix):
       // v-else-if="status === 'queued' || status === 'processing' || status === 'quick_running'"
-      const shouldShowProgress = 
+      const shouldShowProgress =
         status === 'queued' ||
         status === 'processing' ||
         status === 'quick_running'
-      
+
       expect(shouldShowProgress).toBe(false)
-      
+
       // Should fall through to results UI (v-else)
       const shouldShowResults = !shouldShowProgress && status !== 'failed'
       expect(shouldShowResults).toBe(true)
@@ -30,71 +30,71 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
 
     it('status="completed" should NOT match progress UI condition', () => {
       const status = 'completed'
-      
-      const shouldShowProgress = 
+
+      const shouldShowProgress =
         status === 'queued' ||
         status === 'processing' ||
         status === 'quick_running'
-      
+
       expect(shouldShowProgress).toBe(false)
-      
+
       const shouldShowResults = !shouldShowProgress && status !== 'failed'
       expect(shouldShowResults).toBe(true)
     })
 
     it('status="deep_running" should NOT match progress UI condition (should show results)', () => {
       const status = 'deep_running'
-      
+
       // After fix: deep_running is removed from progress UI condition
       // This allows quick_results to be displayed while deep analysis continues
-      const shouldShowProgress = 
+      const shouldShowProgress =
         status === 'queued' ||
         status === 'processing' ||
         status === 'quick_running'
-      
+
       expect(shouldShowProgress).toBe(false)
-      
+
       const shouldShowResults = !shouldShowProgress && status !== 'failed'
       expect(shouldShowResults).toBe(true)
     })
 
     it('status="quick_done" should NOT match progress UI condition (should show results)', () => {
       const status = 'quick_done'
-      
+
       // After fix: quick_done is removed from progress UI condition
       // This allows quick results to be displayed immediately
-      const shouldShowProgress = 
+      const shouldShowProgress =
         status === 'queued' ||
         status === 'processing' ||
         status === 'quick_running'
-      
+
       expect(shouldShowProgress).toBe(false)
-      
+
       const shouldShowResults = !shouldShowProgress && status !== 'failed'
       expect(shouldShowResults).toBe(true)
     })
 
     it('status="queued" SHOULD match progress UI condition', () => {
       const status = 'queued'
-      
-      const shouldShowProgress = 
+
+      const shouldShowProgress =
         status === 'queued' ||
         status === 'processing' ||
         status === 'quick_running'
-      
+
       expect(shouldShowProgress).toBe(true)
     })
 
     it('status="failed" should show failed UI (not progress, not results)', () => {
       const status = 'failed'
-      
-      const shouldShowProgress = 
+
+      const shouldShowProgress =
         status === 'queued' ||
         status === 'processing' ||
         status === 'quick_running'
-      
+
       expect(shouldShowProgress).toBe(false)
-      
+
       // Should match the failed condition: v-else-if="status === 'failed'"
       expect(status).toBe('failed')
     })
@@ -167,13 +167,13 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
       // Should NOT show "analysis is running" message
       expect(narrative.summary.coachSummaryText).not.toContain('Analysis is in progress')
       expect(narrative.summary.coachSummaryText).not.toContain('analysis is running')
-      
+
       // Should show actual report summary
       expect(narrative.summary.coachSummaryText).toContain('Your technique requires comprehensive improvement')
-      
+
       // Should have high-risk rating due to high-severity finding
       expect(narrative.summary.rating).toBe('High Risk')
-      
+
       // Should have priorities extracted from findings
       expect(narrative.priorities.length).toBeGreaterThan(0)
       expect(narrative.priorities[0].title).toContain('Head movement')
@@ -222,7 +222,7 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
       // Should use deep_results summary, not quick_results
       expect(narrative.summary.coachSummaryText).toContain('Deep analysis summary')
       expect(narrative.summary.coachSummaryText).not.toContain('Quick analysis summary')
-      
+
       // Should have priorities from deep_results
       expect(narrative.priorities.length).toBeGreaterThan(0)
       expect(narrative.priorities[0].title).toContain('Deep analysis finding')
@@ -262,7 +262,7 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
 
       // Should use quick_results summary
       expect(narrative.summary.coachSummaryText).toContain('Quick analysis complete')
-      
+
       // Should have priorities from quick_results
       expect(narrative.priorities.length).toBeGreaterThan(0)
       expect(narrative.priorities[0].title).toContain('Quick analysis finding')
@@ -274,16 +274,16 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
       // This test documents the expected behavior:
       // When status changes from non-terminal to terminal (done/completed/failed),
       // the pollTimedOut flag should be reset to false so the timeout UI disappears
-      
+
       const pollTimedOut = { value: true } // Simulating a ref
       const status = 'done'
-      
+
       // Polling logic:
       if (status === 'completed' || status === 'done' || status === 'failed') {
         pollTimedOut.value = false // ✅ This is the fix
         // stopUiPolling()
       }
-      
+
       expect(pollTimedOut.value).toBe(false)
     })
   })
@@ -292,29 +292,29 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
     it('isJobStale returns true after 30 seconds', () => {
       const now = Date.now()
       const staleThresholdMs = 30000 // 30 seconds
-      
+
       // lastFetchedAt Map behavior simulation
       const lastFetchedAt = new Map<string, number>()
       const jobId = 'job-123'
-      
+
       // Simulate function logic
       function isJobStale(id: string): boolean {
         const timestamp = lastFetchedAt.get(id)
         if (!timestamp) return true // Never fetched
         return Date.now() - timestamp > staleThresholdMs
       }
-      
+
       // Test: never fetched → stale
       expect(isJobStale(jobId)).toBe(true)
-      
+
       // Test: just fetched → not stale
       lastFetchedAt.set(jobId, now)
       expect(isJobStale(jobId)).toBe(false)
-      
+
       // Test: fetched 29 seconds ago → not stale
       lastFetchedAt.set(jobId, now - 29000)
       expect(isJobStale(jobId)).toBe(false)
-      
+
       // Test: fetched 31 seconds ago → stale
       lastFetchedAt.set(jobId, now - 31000)
       expect(isJobStale(jobId)).toBe(true)
@@ -323,12 +323,12 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
     it('updateJobStatus prevents terminal → non-terminal override', () => {
       const jobStatusMap = new Map<string, VideoAnalysisJob>()
       const jobId = 'job-123'
-      
+
       // Helper to check if status is terminal
       function isJobTerminal(job: VideoAnalysisJob): boolean {
         return job.status === 'done' || job.status === 'completed' || job.status === 'failed'
       }
-      
+
       // Simulate updateJobStatus logic
       function updateJobStatus(job: VideoAnalysisJob): boolean {
         const existing = jobStatusMap.get(job.id)
@@ -339,7 +339,7 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
         jobStatusMap.set(job.id, job)
         return true
       }
-      
+
       // Test: done → deep_running BLOCKED
       const doneJob: VideoAnalysisJob = {
         id: jobId,
@@ -355,14 +355,14 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
         completed_at: null,
         updated_at: new Date().toISOString(),
       }
-      
+
       jobStatusMap.set(jobId, doneJob)
-      
+
       const staleRunningJob: VideoAnalysisJob = {
         ...doneJob,
         status: 'deep_running',
       }
-      
+
       const updated = updateJobStatus(staleRunningJob)
       expect(updated).toBe(false) // Should be blocked
       expect(jobStatusMap.get(jobId)?.status).toBe('done') // Status unchanged
@@ -371,11 +371,11 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
     it('updateJobStatus allows non-terminal → terminal update', () => {
       const jobStatusMap = new Map<string, VideoAnalysisJob>()
       const jobId = 'job-123'
-      
+
       function isJobTerminal(job: VideoAnalysisJob): boolean {
         return job.status === 'done' || job.status === 'completed' || job.status === 'failed'
       }
-      
+
       function updateJobStatus(job: VideoAnalysisJob): boolean {
         const existing = jobStatusMap.get(job.id)
         if (existing && isJobTerminal(existing) && !isJobTerminal(job)) {
@@ -384,7 +384,7 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
         jobStatusMap.set(job.id, job)
         return true
       }
-      
+
       // Test: deep_running → done ALLOWED
       const runningJob: VideoAnalysisJob = {
         id: jobId,
@@ -400,14 +400,14 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
         completed_at: null,
         updated_at: new Date().toISOString(),
       }
-      
+
       jobStatusMap.set(jobId, runningJob)
-      
+
       const doneJob: VideoAnalysisJob = {
         ...runningJob,
         status: 'done',
       }
-      
+
       const updated = updateJobStatus(doneJob)
       expect(updated).toBe(true) // Should be allowed
       expect(jobStatusMap.get(jobId)?.status).toBe('done')
@@ -417,14 +417,14 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
       const jobStatusMap = new Map<string, VideoAnalysisJob>()
       const lastFetchedAt = new Map<string, number>()
       const jobId = 'job-123'
-      
+
       // Simulate forceFetchJob (always updates, no protection)
       async function forceFetchJob(id: string, freshJob: VideoAnalysisJob): Promise<VideoAnalysisJob> {
         jobStatusMap.set(id, freshJob) // Always update, no checks
         lastFetchedAt.set(id, Date.now())
         return freshJob
       }
-      
+
       // Start with done status
       const doneJob: VideoAnalysisJob = {
         id: jobId,
@@ -440,18 +440,18 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
         completed_at: null,
         updated_at: new Date().toISOString(),
       }
-      
+
       jobStatusMap.set(jobId, doneJob)
-      
+
       // User explicitly opens modal, triggering forceFetchJob
       // API returns fresh "done" status (not stale)
       const freshDoneJob: VideoAnalysisJob = {
         ...doneJob,
         updated_at: new Date(Date.now() + 1000).toISOString(), // Newer timestamp
       }
-      
+
       forceFetchJob(jobId, freshDoneJob)
-      
+
       expect(jobStatusMap.get(jobId)?.status).toBe('done')
       expect(jobStatusMap.get(jobId)?.updated_at).toBe(freshDoneJob.updated_at)
       expect(lastFetchedAt.has(jobId)).toBe(true)
@@ -461,7 +461,7 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
       const jobStatusMap = new Map<string, VideoAnalysisJob>()
       const lastFetchedAt = new Map<string, number>()
       const jobId = 'job-123'
-      
+
       // Simulate the complete flow
       const initialJob: VideoAnalysisJob = {
         id: jobId,
@@ -477,13 +477,13 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
-      
+
       // Step 1: Job reaches done, modal shows it
       jobStatusMap.set(jobId, initialJob)
       lastFetchedAt.set(jobId, Date.now() - 60000) // 60 seconds ago (stale)
-      
+
       expect(jobStatusMap.get(jobId)?.status).toBe('done')
-      
+
       // Step 2: User closes modal, time passes
       // (Cache becomes stale - >30 seconds old)
       function isJobStale(id: string): boolean {
@@ -491,9 +491,9 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
         if (!timestamp) return true
         return Date.now() - timestamp > 30000
       }
-      
+
       expect(isJobStale(jobId)).toBe(true)
-      
+
       // Step 3: User clicks session to view results again
       // forceFetchJob is called (bypasses protection)
       async function forceFetchJob(id: string): Promise<VideoAnalysisJob> {
@@ -506,9 +506,9 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
         lastFetchedAt.set(id, Date.now()) // Mark as fresh
         return freshJob
       }
-      
+
       const freshJob = await forceFetchJob(jobId)
-      
+
       // Step 4: Modal opens with FRESH data (not stale cache)
       expect(freshJob.status).toBe('done')
       expect(jobStatusMap.get(jobId)?.status).toBe('done')
@@ -518,7 +518,7 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
     it('exponential backoff behavior', () => {
       let pollBackoffMs = 1000
       const maxBackoffMs = 10000
-      
+
       // Simulate errors causing backoff
       const errorSequence = [
         // Error 1: 1s → 2s
@@ -547,9 +547,9 @@ describe('CoachProPlusVideoSessions - Modal Status Logic', () => {
           expect(pollBackoffMs).toBe(10000)
         },
       ]
-      
+
       errorSequence.forEach(fn => fn())
-      
+
       // Success resets backoff
       pollBackoffMs = 1000
       expect(pollBackoffMs).toBe(1000)

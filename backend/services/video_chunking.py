@@ -78,9 +78,7 @@ async def get_video_duration_from_s3(bucket: str, key: str, local_path: str) -> 
     return get_video_duration(local_path)
 
 
-def create_chunk_specs(
-    duration_seconds: float, chunk_seconds: int = 30
-) -> list[dict[str, Any]]:
+def create_chunk_specs(duration_seconds: float, chunk_seconds: int = 30) -> list[dict[str, Any]]:
     """Create chunk specifications for video processing.
 
     Args:
@@ -102,11 +100,13 @@ def create_chunk_specs(
 
     while current < duration_seconds:
         end = min(current + chunk_seconds, duration_seconds)
-        chunks.append({
-            "index": index,
-            "start_sec": current,
-            "end_sec": end,
-        })
+        chunks.append(
+            {
+                "index": index,
+                "start_sec": current,
+                "end_sec": end,
+            }
+        )
         current = end
         index += 1
 

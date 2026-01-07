@@ -1980,12 +1980,8 @@ class VideoAnalysisChunk(Base):
     chunk_index: Mapped[int] = mapped_column(
         Integer, nullable=False, comment="0-based chunk index for ordering"
     )
-    start_sec: Mapped[float] = mapped_column(
-        Float, nullable=False, comment="Start time in seconds"
-    )
-    end_sec: Mapped[float] = mapped_column(
-        Float, nullable=False, comment="End time in seconds"
-    )
+    start_sec: Mapped[float] = mapped_column(Float, nullable=False, comment="Start time in seconds")
+    end_sec: Mapped[float] = mapped_column(Float, nullable=False, comment="End time in seconds")
 
     # Status tracking
     status: Mapped[VideoAnalysisChunkStatus] = mapped_column(

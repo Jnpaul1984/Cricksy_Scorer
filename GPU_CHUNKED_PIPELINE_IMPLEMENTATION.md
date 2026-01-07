@@ -56,7 +56,7 @@ video_duration_seconds: float
 ### Migration
 **File**: `backend/alembic/versions/g2h3i4j5k6l7_add_video_analysis_chunk_model.py`
 
-**Apply**: 
+**Apply**:
 ```bash
 alembic upgrade head
 ```

@@ -191,11 +191,7 @@ async def _process_chunk(chunk_id: str) -> None:
         # Fetch chunk with job and session
         result = await db.execute(
             select(VideoAnalysisChunk)
-            .options(
-                selectinload(VideoAnalysisChunk.job).selectinload(
-                    VideoAnalysisJob.session
-                )
-            )
+            .options(selectinload(VideoAnalysisChunk.job).selectinload(VideoAnalysisJob.session))
             .where(VideoAnalysisChunk.id == chunk_id)
         )
         chunk = result.scalar_one()
@@ -274,9 +270,7 @@ async def _process_chunk(chunk_id: str) -> None:
                 # Update job progress
                 job.completed_chunks = (job.completed_chunks or 0) + 1
                 if job.total_chunks and job.total_chunks > 0:
-                    job.progress_pct = min(
-                        99, int(100 * job.completed_chunks / job.total_chunks)
-                    )
+                    job.progress_pct = min(99, int(100 * job.completed_chunks / job.total_chunks))
 
                 await db.commit()
 

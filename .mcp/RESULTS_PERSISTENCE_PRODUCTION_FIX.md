@@ -29,7 +29,7 @@ INFO: deep_results_s3_key=.../deep_results.json findings_len=4 report_len=0
 # Before
 f"report_len={len(str(quick_report.get('text', ''))) if quick_report else 0}"
 
-# After  
+# After
 f"report_summary_len={len(str(quick_report.get('summary', ''))) if quick_report else 0} "
 f"report_keys={list(deep_report.keys()) if deep_report else []}"
 ```
@@ -37,7 +37,7 @@ f"report_keys={list(deep_report.keys()) if deep_report else []}"
 **New Logs**:
 ```
 INFO: [PERSISTED] Deep job completed: job_id=...
-  deep_findings='present' 
+  deep_findings='present'
   deep_report='present'
   findings_len=4
   report_summary_len=123
@@ -64,7 +64,7 @@ INFO: [PERSISTED] Deep job completed: job_id=...
            expires_in=settings.S3_STREAM_URL_EXPIRES_SECONDS,
        )
        updates["quick_results_url"] = quick_url
-   
+
    if job.deep_results_s3_key:
        deep_url = s3_service.generate_presigned_get_url(...)
        updates["deep_results_url"] = deep_url
@@ -230,7 +230,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 3. **Database Check**:
 ```sql
-SELECT 
+SELECT
     id,
     status,
     stage,
@@ -244,7 +244,7 @@ WHERE id = 'e39a834b-43c0-4f43-8f27-ba55ef4b6579';
 
 Expected:
 - `has_findings = true`
-- `has_report = true`  
+- `has_report = true`
 - `deep_results_s3_key` populated
 - `status = 'done'`, `stage = 'DONE'`
 
@@ -277,7 +277,7 @@ The frontend uses these keys directly via `buildCoachNarrative()` which extracts
 
 ✅ Worker logs show `deep_findings='present'` and `deep_report='present'`
 ✅ Worker logs show `report_summary_len > 0` and `report_keys=[...]`
-✅ Database has `deep_findings` and `deep_report` populated  
+✅ Database has `deep_findings` and `deep_report` populated
 ✅ API response includes `deep_results_url` presigned URL
 ✅ Frontend continues polling past 5-minute timeout
 ✅ UI displays findings and report even if job takes long

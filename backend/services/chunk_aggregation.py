@@ -76,9 +76,7 @@ def _merge_chunk_poses(chunks_data: list[dict[str, Any]]) -> list[dict[str, Any]
         if isinstance(poses, list):
             all_frames.extend(poses)
 
-    logger.info(
-        f"Merged {len(chunks_data)} chunks into {len(all_frames)} total pose frames"
-    )
+    logger.info(f"Merged {len(chunks_data)} chunks into {len(all_frames)} total pose frames")
     return all_frames
 
 
@@ -129,9 +127,7 @@ def _compute_aggregated_metrics(
     return metrics_result
 
 
-async def aggregate_chunks_and_finalize(
-    db: AsyncSession, job: VideoAnalysisJob
-) -> None:
+async def aggregate_chunks_and_finalize(db: AsyncSession, job: VideoAnalysisJob) -> None:
     """Aggregate completed chunks and finalize job.
 
     Args:
@@ -173,9 +169,7 @@ async def aggregate_chunks_and_finalize(
     all_frames = _merge_chunk_poses(chunks_data)
 
     # Compute aggregated metrics
-    metrics_result = _compute_aggregated_metrics(
-        all_frames, job.video_duration_seconds or 0
-    )
+    metrics_result = _compute_aggregated_metrics(all_frames, job.video_duration_seconds or 0)
 
     # Generate findings and report
     findings_result = generate_findings(metrics_result)

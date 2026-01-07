@@ -51,15 +51,15 @@ session_local = async_sessionmaker(
 @pytest_asyncio.fixture
 async def auth_headers(test_user, db_session):
     from backend.security import create_access_token
-    
+
     # 1. Refresh to preload all attributes
     await db_session.refresh(test_user)
-    
+
     # 2. IMMEDIATELY cache values - don't access test_user later!
     user_id = test_user.id
     user_email = test_user.email
     user_role = test_user.role.value
-    
+
     # 3. Use cached values
     token = create_access_token({
         "sub": user_id,
@@ -75,7 +75,7 @@ async def auth_headers(test_user, db_session):
 async def auth_headers(test_user, db_session):
     # Refresh is good, but...
     await db_session.refresh(test_user)
-    
+
     # ❌ BAD - Still accessing object attributes later
     # Can trigger lazy loading if session context changes!
     token = create_access_token({
@@ -90,7 +90,7 @@ async def auth_headers(test_user, db_session):
 async def test_video_session(db_session, test_user):
     # Refresh first OR cache needed values
     await db_session.refresh(test_user)
-    
+
     session = VideoSession(
         owner_id=test_user.id,  # Safe: attribute is loaded
         title="Test Session"
@@ -105,7 +105,7 @@ async def test_video_session(db_session, test_user):
 async def test_video_session(db_session, test_user):
     # DON'T DO THIS - accessing test_user.id triggers lazy load
     user_id = test_user.id  # ❌ MissingGreenlet error!
-    
+
     session = VideoSession(owner_id=user_id, ...)
     db_session.add(session)
     await db_session.commit()
@@ -120,7 +120,7 @@ When creating test objects that will be used across multiple fixture scopes:
 async def test_something(db_session, test_user):
     # Always refresh at the start of each test
     await db_session.refresh(test_user)
-    
+
     # Now safe to use test_user.id, test_user.email, etc.
     result = await some_function(test_user.id)
 ```
@@ -147,7 +147,7 @@ async def get_user_entitlements(db: AsyncSession, user_id: str) -> dict[str, Any
     row = result.one_or_none()
     if not row:
         return {"role": "unknown", "is_superuser": False}
-    
+
     user_role, is_superuser = row  # Fresh data from current session
     ...
 ```
@@ -164,10 +164,10 @@ async def test_beta_access(db_session):
     user = User(email="test@example.com", role=UserRole.coach_free)
     db_session.add(user)
     await db_session.commit()
-    
+
     # ❌ WRONG - user is expired after commit
     # result = await can_access_feature(db_session, user, "video_upload")
-    
+
     # ✅ CORRECT - refresh before using
     await db_session.refresh(user)
     result = await can_access_feature(db_session, user, "video_upload")
@@ -200,7 +200,7 @@ async def get_user_entitlements(db: AsyncSession, user: User) -> dict[str, Any]:
     stmt = select(User.role).where(User.id == user.id)
     result = await db.execute(stmt)
     user_role = result.scalar_one_or_none()
-    
+
     # Now safe to use user_role
     if user_role:
         plan = IndividualPlan(user_role.value)
@@ -276,7 +276,7 @@ Before pushing code that touches SQLAlchemy async:
 
 ---
 
-**Last Updated**: January 4, 2026  
-**CI Failures Fixed**: 
+**Last Updated**: January 4, 2026
+**CI Failures Fixed**:
 - Round 1: 9 MissingGreenlet errors, 1 mypy typing error
 - Round 2: 11 additional MissingGreenlet errors (auth token + entitlement service)
