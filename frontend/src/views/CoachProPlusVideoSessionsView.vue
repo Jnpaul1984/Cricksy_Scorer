@@ -1118,7 +1118,13 @@ async function deleteSession(sessionId: string) {
 function closeModal() {
   showCreateModal.value = false;
   editingId.value = null;
-  formData.value = { title: '', player_ids: [], notes: '' };
+  formData.value = {
+    title: '',
+    player_ids: [],
+    notes: '',
+    analysis_context: '',
+    camera_view: '',
+  };
   playersText.value = '';
 }
 

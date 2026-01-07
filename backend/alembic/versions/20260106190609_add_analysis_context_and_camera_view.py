@@ -41,13 +41,13 @@ def upgrade() -> None:
             'analysis_context',
             sa.Enum('batting', 'bowling', 'wicketkeeping', 'fielding', 'mixed', name='analysis_context'),
             nullable=True,
-            comment='What aspect is being analyzed: batting, bowling, wicketkeeping, fielding, mixed'
+            comment='What is being analyzed'
         ))
         op.add_column('video_sessions', sa.Column(
             'camera_view',
             sa.Enum('side', 'front', 'behind', 'other', name='camera_view'),
             nullable=True,
-            comment='Camera angle: side, front, behind, other'
+            comment='Camera angle'
         ))
     else:
         # SQLite: Use VARCHAR instead of ENUM

@@ -101,9 +101,7 @@ def download_video_from_s3(bucket: str, key: str, local_path: str) -> None:
 
 
 def run_analysis_pipeline(
-    video_path: str, 
-    sample_fps: int = 10, 
-    session_context: dict[str, Any] | None = None
+    video_path: str, sample_fps: int = 10, session_context: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     """
     Run complete analysis pipeline on video.
