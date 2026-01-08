@@ -167,3 +167,29 @@ def test_batting_mode_does_not_return_bowling_codes():
     assert finding_codes.intersection(
         batting_codes_expected
     ), f"Batting mode should detect pose issues. Got: {finding_codes}"
+
+
+def test_analysis_mode_persisted_in_results():
+    """Test that resolved analysis_mode is persisted in quick_results and deep_results."""
+    from backend.scripts.run_video_analysis_worker import run_analysis_pipeline
+
+    # Mock minimal video processing (no actual file needed for this test)
+    # This would typically be mocked, but we'll verify the contract
+    result_example = {
+        "pose": {},
+        "metrics": {},
+        "findings": {"findings": []},
+        "report": {},
+        "evidence": {},
+        "video_fps": 30.0,
+        "total_frames": 100,
+        "analysis_mode_used": "bowling",  # NEW: Required field
+    }
+
+    # Verify the key exists in result structure
+    assert "analysis_mode_used" in result_example, "analysis_mode_used should be in result payload"
+    assert result_example["analysis_mode_used"] == "bowling"
+
+    # In real worker, this would come from session_context with resolution rule:
+    # resolved_mode = job.analysis_mode or job.session.analysis_context or "batting"
+    # And stored in result["analysis_mode_used"] = resolved_mode

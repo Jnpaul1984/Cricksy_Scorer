@@ -171,8 +171,11 @@ async def aggregate_chunks_and_finalize(db: AsyncSession, job: VideoAnalysisJob)
     # Compute aggregated metrics
     metrics_result = _compute_aggregated_metrics(all_frames, job.video_duration_seconds or 0)
 
+    # Resolve analysis mode with fallback chain
+    resolved_mode = job.analysis_mode or (job.session.analysis_context if job.session else None) or "batting"
+
     # Generate findings and report
-    findings_result = generate_findings(metrics_result)
+    findings_result = generate_findings(metrics_result, context={"analysis_mode": resolved_mode})
     report_result = cast(dict[str, Any], generate_report_text(findings_result, None))
 
     # Build final results payload
@@ -188,6 +191,7 @@ async def aggregate_chunks_and_finalize(db: AsyncSession, job: VideoAnalysisJob)
         "metrics": metrics_result,
         "findings": findings_result,
         "report": report_result,
+        "analysis_mode_used": resolved_mode,  # NEW: Persist resolved mode
         "meta": {
             "processing_mode": "gpu_chunked",
             "total_chunks": job.total_chunks,

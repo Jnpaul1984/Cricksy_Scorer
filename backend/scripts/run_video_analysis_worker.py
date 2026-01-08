@@ -164,6 +164,9 @@ def run_analysis_pipeline(
         report = generate_report_text(findings)
         logger.info(f"  Generated report with {len(report.get('top_issues', []))} issues")
 
+        # Extract resolved analysis mode from session_context
+        analysis_mode_used = session_context.get("analysis_mode", "batting")
+
         result = {
             "pose": pose_data,
             "metrics": metrics,
@@ -175,6 +178,8 @@ def run_analysis_pipeline(
             "total_frames": pose_data.get("total_frames")
             or pose_data.get("pose_summary", {}).get("frame_count")
             or pose_data.get("metrics", {}).get("frame_count"),
+            # NEW: Persist resolved mode for audit trail
+            "analysis_mode_used": analysis_mode_used,
         }
 
         logger.info("Analysis pipeline complete")
@@ -307,9 +312,13 @@ async def process_message(
         s3_bucket = settings.S3_COACH_VIDEOS_BUCKET
         s3_key = job.session.s3_key
 
+        # Resolve analysis mode with fallback chain
+        resolved_mode = job.analysis_mode or job.session.analysis_context or "batting"
+
         # Build session context for findings
         session_context = {
-            "analysis_context": job.session.analysis_context,
+            "analysis_mode": resolved_mode,  # Use explicit analysis_mode key
+            "analysis_context": job.session.analysis_context,  # Keep for backward compat
             "camera_view": job.session.camera_view,
             "session_id": job.session.id,
             "session_title": job.session.title,
