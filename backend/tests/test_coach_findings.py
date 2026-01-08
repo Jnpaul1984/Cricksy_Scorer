@@ -296,7 +296,7 @@ class TestGenerateFindings:
             }
         }
 
-        result = generate_findings(metrics)
+        result = generate_findings(metrics, analysis_mode="batting")
 
         assert result["overall_level"] == "high"
         assert len(result["findings"]) == 0
@@ -313,7 +313,7 @@ class TestGenerateFindings:
             }
         }
 
-        result = generate_findings(metrics)
+        result = generate_findings(metrics, analysis_mode="batting")
 
         assert len(result["findings"]) == 3
         assert result["overall_level"] == "low"
@@ -330,7 +330,7 @@ class TestGenerateFindings:
             }
         }
 
-        result = generate_findings(metrics)
+        result = generate_findings(metrics, analysis_mode="batting")
 
         assert "overall_level" in result
         assert "findings" in result
@@ -359,13 +359,13 @@ class TestGenerateFindings:
         }
         context = {"player_id": 42, "session_type": "net_session"}
 
-        result = generate_findings(metrics, context)
+        result = generate_findings(metrics, context, analysis_mode="batting")
 
         assert "context" in result
         assert result["context"] == context
 
     def test_generate_findings_with_analysis_context_batting(self) -> None:
-        """Analysis context should customize finding titles for batting."""
+        """Analysis mode should customize finding explanations for batting."""
         metrics = {
             "metrics": {
                 "head_stability_score": {"score": 0.50, "num_frames": 100},  # Trigger finding
@@ -377,16 +377,20 @@ class TestGenerateFindings:
         }
         context = {"analysis_context": "batting"}
 
-        result = generate_findings(metrics, context)
+        result = generate_findings(metrics, context, analysis_mode="batting")
 
         assert "findings" in result
         assert len(result["findings"]) > 0
         head_finding = next((f for f in result["findings"] if f["code"] == "HEAD_MOVEMENT"), None)
         assert head_finding is not None
-        assert "batting" in head_finding["title"].lower()
+        # Check for batting-specific language in why_it_matters
+        assert (
+            "visual tracking" in head_finding["why_it_matters"].lower()
+            or "ball" in head_finding["why_it_matters"].lower()
+        )
 
     def test_generate_findings_with_analysis_context_bowling(self) -> None:
-        """Analysis context should customize finding titles for bowling."""
+        """Analysis mode should customize finding explanations for bowling."""
         metrics = {
             "metrics": {
                 "head_stability_score": {"score": 0.50, "num_frames": 100},  # Trigger finding
@@ -398,13 +402,17 @@ class TestGenerateFindings:
         }
         context = {"analysis_context": "bowling"}
 
-        result = generate_findings(metrics, context)
+        result = generate_findings(metrics, context, analysis_mode="bowling")
 
         assert "findings" in result
         assert len(result["findings"]) > 0
         head_finding = next((f for f in result["findings"] if f["code"] == "HEAD_MOVEMENT"), None)
         assert head_finding is not None
-        assert "bowling" in head_finding["title"].lower()
+        # Check for bowling-specific language in why_it_matters
+        assert (
+            "line and length" in head_finding["why_it_matters"].lower()
+            or "delivery" in head_finding["why_it_matters"].lower()
+        )
 
     def test_generate_findings_single_issue_low_severity(self) -> None:
         """Single low severity issue should yield medium overall level."""
@@ -418,7 +426,7 @@ class TestGenerateFindings:
             }
         }
 
-        result = generate_findings(metrics)
+        result = generate_findings(metrics, analysis_mode="batting")
 
         assert len(result["findings"]) == 1
         assert result["findings"][0]["severity"] == "low"
@@ -435,7 +443,7 @@ class TestGenerateFindings:
             }
         }
 
-        result = generate_findings(metrics)
+        result = generate_findings(metrics, analysis_mode="batting")
 
         assert len(result["findings"]) == 1
         assert result["findings"][0]["severity"] == "high"
@@ -462,7 +470,7 @@ class TestFindingsIntegration:
             }
         }
 
-        result = generate_findings(metrics)
+        result = generate_findings(metrics, analysis_mode="batting")
 
         assert result["overall_level"] == "high"
         assert len(result["findings"]) == 0
@@ -479,7 +487,7 @@ class TestFindingsIntegration:
             }
         }
 
-        result = generate_findings(metrics)
+        result = generate_findings(metrics, analysis_mode="batting")
 
         assert result["overall_level"] == "low"
         assert len(result["findings"]) == 5
@@ -497,7 +505,7 @@ class TestFindingsIntegration:
             }
         }
 
-        result = generate_findings(metrics)
+        result = generate_findings(metrics, analysis_mode="batting")
 
         assert result["overall_level"] == "medium"
         assert len(result["findings"]) == 2
@@ -514,7 +522,7 @@ class TestFindingsIntegration:
             }
         }
 
-        result = generate_findings(metrics)
+        result = generate_findings(metrics, analysis_mode="batting")
 
         finding = result["findings"][0]
         assert "evidence" in finding
@@ -533,7 +541,7 @@ class TestFindingsIntegration:
             }
         }
 
-        result = generate_findings(metrics)
+        result = generate_findings(metrics, analysis_mode="batting")
 
         for finding in result["findings"]:
             assert "suggested_drills" in finding
@@ -552,7 +560,7 @@ class TestFindingsIntegration:
             }
         }
 
-        result = generate_findings(metrics)
+        result = generate_findings(metrics, analysis_mode="batting")
 
         finding = result["findings"][0]
         assert finding["severity"] == "medium"

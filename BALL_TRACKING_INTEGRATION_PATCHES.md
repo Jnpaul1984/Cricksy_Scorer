@@ -24,7 +24,7 @@
             )
 
             deep_payload = deep_artifacts.results
-            
+
             # NEW: Add ball tracking for bowling mode
             ball_tracking_payload = None
             if job.analysis_mode == "bowling":
@@ -34,14 +34,14 @@
                         BallTracker,
                         analyze_ball_trajectory,
                     )
-                    
+
                     tracker = BallTracker(ball_color="red")  # TODO: make configurable
                     trajectory = tracker.track_ball_in_video(
                         video_path=local_video_path,
                         sample_fps=deep_fps,
                     )
                     ball_metrics = analyze_ball_trajectory(trajectory)
-                    
+
                     ball_tracking_payload = {
                         "trajectory": {
                             "total_frames": trajectory.total_frames,
@@ -74,12 +74,12 @@
                             "release_consistency": ball_metrics.release_consistency,
                         },
                     }
-                    
+
                     # Upload ball tracking results to S3
                     ball_tracking_s3_key = _derive_output_key(key, "ball_tracking_results.json")
                     await _upload_json_to_s3(
-                        bucket=bucket, 
-                        key=ball_tracking_s3_key, 
+                        bucket=bucket,
+                        key=ball_tracking_s3_key,
                         payload=ball_tracking_payload
                     )
                     logger.info(
@@ -87,11 +87,11 @@
                         f"detection_rate={trajectory.detection_rate:.1f}% "
                         f"s3_key={ball_tracking_s3_key}"
                     )
-                    
+
                     # Add to deep payload
                     deep_payload["ball_tracking"] = ball_tracking_payload
                     deep_payload.setdefault("outputs", {})["ball_tracking_s3_key"] = ball_tracking_s3_key
-                    
+
                 except Exception as e:
                     logger.warning(f"Ball tracking failed: job_id={job.id} error={e}", exc_info=True)
                     # Don't fail the whole job if ball tracking fails
@@ -177,30 +177,30 @@ def generate_bowling_findings(
     metrics: dict[str, Any], context: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     """Generate bowling-specific findings from metrics with ball tracking integration."""
-    
+
     # Check if ball tracking data exists
     ball_tracking = metrics.get("ball_tracking")
-    
+
     # Generate base pose findings
     base_findings = _generate_findings_internal(metrics, context, BOWLING_DRILL_SUGGESTIONS)
-    
+
     # Add ball tracking findings if available
     if ball_tracking:
         ball_findings = _generate_ball_tracking_findings(ball_tracking)
         base_findings["findings"].extend(ball_findings)
-    
+
     return base_findings
 
 
 def _generate_ball_tracking_findings(ball_tracking: dict[str, Any]) -> list[dict[str, Any]]:
     """Generate findings from ball tracking data."""
     findings = []
-    
+
     trajectory = ball_tracking.get("trajectory", {})
     metrics_data = ball_tracking.get("metrics", {})
-    
+
     detection_rate = trajectory.get("detection_rate", 0)
-    
+
     # Gating: Low detection rate
     if detection_rate < 40:
         findings.append({
@@ -217,7 +217,7 @@ def _generate_ball_tracking_findings(ball_tracking: dict[str, Any]) -> list[dict
         })
         # Suppress swing/length claims if detection is poor
         return findings
-    
+
     # Release consistency analysis
     release_consistency = metrics_data.get("release_consistency", 100)
     if release_consistency < 85:
@@ -241,15 +241,15 @@ def _generate_ball_tracking_findings(ball_tracking: dict[str, Any]) -> list[dict
                 "Consistent stride length drills",
             ]),
         })
-    
+
     # Swing analysis (informational)
     trajectory_curve = metrics_data.get("trajectory_curve", "straight")
     swing_deviation = metrics_data.get("swing_deviation", 0)
-    
+
     if detection_rate >= 60:  # Only if tracking is reliable
         swing_def = BOWLING_BALL_TRACKING_FINDINGS["SWING_ANALYSIS"]
         swing_message = swing_def["analysis"].get(
-            trajectory_curve, 
+            trajectory_curve,
             f"Trajectory: {trajectory_curve}"
         )
         findings.append({
@@ -269,7 +269,7 @@ def _generate_ball_tracking_findings(ball_tracking: dict[str, Any]) -> list[dict
                 "Shiny/rough side awareness drills",
             ]),
         })
-    
+
     return findings
 ```
 
@@ -284,22 +284,22 @@ def _generate_notes(
     detection_rate: float | None = None,
 ) -> str:
     """Generate coaching notes from findings with ball tracking awareness."""
-    
+
     notes_parts = []
-    
+
     # Reliability warning
     if detection_rate is not None and detection_rate < 60:
         notes_parts.append(
             f"⚠️ Note: Pose detection rate is {detection_rate:.1f}%. "
             "Results may be less reliable. Consider re-recording with better lighting."
         )
-    
+
     # Check for ball tracking data
     ball_tracking_findings = [
-        f for f in findings.get("findings", []) 
+        f for f in findings.get("findings", [])
         if f.get("code") in ["INSUFFICIENT_BALL_TRACKING", "SWING_ANALYSIS", "INCONSISTENT_RELEASE_POINT"]
     ]
-    
+
     if ball_tracking_findings:
         notes_parts.append("\n📊 Ball Tracking Insights:")
         for finding in ball_tracking_findings:
@@ -321,12 +321,12 @@ def _generate_notes(
                     f"  • Release consistency: {consistency}% "
                     f"({'Excellent' if consistency >= 85 else 'Needs work'})"
                 )
-    
+
     # Standard player context notes
     if player_context:
         level = player_context.get("level", "unknown")
         notes_parts.append(f"\nPlayer level: {level}")
-    
+
     return "\n".join(notes_parts)
 ```
 
@@ -392,18 +392,18 @@ def test_bowling_findings_low_ball_detection_suppresses_swing_analysis():
         },
         "summary": {"total_frames": 100, "frames_with_pose": 90},
     }
-    
+
     result = generate_bowling_findings(metrics)
-    
+
     findings = result["findings"]
     codes = [f["code"] for f in findings]
-    
+
     # Should have insufficient ball tracking warning
     assert "INSUFFICIENT_BALL_TRACKING" in codes
-    
+
     # Should NOT have swing analysis (suppressed due to low detection)
     assert "SWING_ANALYSIS" not in codes
-    
+
     # Check warning message
     insufficient_finding = next(f for f in findings if f["code"] == "INSUFFICIENT_BALL_TRACKING")
     assert insufficient_finding["severity"] == "medium"
@@ -427,18 +427,18 @@ def test_bowling_findings_good_ball_detection_includes_swing_analysis():
         },
         "summary": {"total_frames": 100, "frames_with_pose": 90},
     }
-    
+
     result = generate_bowling_findings(metrics)
-    
+
     findings = result["findings"]
     codes = [f["code"] for f in findings]
-    
+
     # Should have swing analysis
     assert "SWING_ANALYSIS" in codes
-    
+
     # Should NOT have insufficient tracking warning
     assert "INSUFFICIENT_BALL_TRACKING" not in codes
-    
+
     # Check swing analysis content
     swing_finding = next(f for f in findings if f["code"] == "SWING_ANALYSIS")
     assert swing_finding["evidence"]["trajectory_curve"] == "outswing"
@@ -458,15 +458,15 @@ def test_bowling_findings_release_consistency_detection():
         },
         "summary": {"total_frames": 100, "frames_with_pose": 90},
     }
-    
+
     result = generate_bowling_findings(metrics)
-    
+
     findings = result["findings"]
     codes = [f["code"] for f in findings]
-    
+
     # Should have release consistency finding
     assert "INCONSISTENT_RELEASE_POINT" in codes
-    
+
     consistency_finding = next(f for f in findings if f["code"] == "INCONSISTENT_RELEASE_POINT")
     assert consistency_finding["severity"] == "medium"
     assert consistency_finding["evidence"]["release_consistency_score"] == 55.0
@@ -481,10 +481,10 @@ def test_bowling_findings_without_ball_tracking():
         },
         "summary": {"total_frames": 100, "frames_with_pose": 90},
     }
-    
+
     # Should not crash, just return pose-based findings
     result = generate_bowling_findings(metrics)
-    
+
     assert "findings" in result
     assert "overall_level" in result
     # No ball tracking findings
@@ -496,39 +496,39 @@ def test_bowling_findings_without_ball_tracking():
 @pytest.mark.asyncio
 async def test_analysis_worker_integrates_ball_tracking_for_bowling(mock_ball_tracking_good_detection):
     """Integration test: analysis_worker should call ball tracking for bowling mode."""
-    
+
     # This test would mock the worker's deep pass and verify ball tracking is called
     # when analysis_mode == "bowling"
-    
+
     with patch("backend.services.ball_tracking_service.BallTracker") as MockTracker:
         mock_tracker_instance = Mock()
         MockTracker.return_value = mock_tracker_instance
-        
+
         mock_trajectory = Mock()
         mock_trajectory.detection_rate = 85.0
         mock_trajectory.total_frames = 100
         mock_trajectory.detected_frames = 85
         mock_tracker_instance.track_ball_in_video.return_value = mock_trajectory
-        
+
         # Simulate analysis_worker.py deep pass logic
         analysis_mode = "bowling"
-        
+
         if analysis_mode == "bowling":
             tracker = MockTracker(ball_color="red")
             trajectory = tracker.track_ball_in_video(
                 video_path="test.mp4",
                 sample_fps=10.0,
             )
-            
+
             assert trajectory.detection_rate == 85.0
             mock_tracker_instance.track_ball_in_video.assert_called_once()
 ```
 
 ## Summary
 
-**Task 1**: ✅ analysis_worker.py deep pass integration  
-**Task 2**: ✅ S3 persistence (ball_tracking_results.json)  
-**Task 3**: ✅ Bowling findings + report updates with ball metrics  
+**Task 1**: ✅ analysis_worker.py deep pass integration
+**Task 2**: ✅ S3 persistence (ball_tracking_results.json)
+**Task 3**: ✅ Bowling findings + report updates with ball metrics
 **Task 4**: ✅ Gating at <40% detection rate
 
 **Key Changes**:

@@ -183,6 +183,18 @@ async def _process_job(job_id: str) -> None:
             job.progress_pct = 5
             await db.commit()
 
+            # CRITICAL: Enforce analysis_mode is set (fail fast instead of defaulting to batting)
+            if not job.analysis_mode:
+                error_msg = f"analysis_mode is required but missing for job_id={job.id}"
+                logger.error(error_msg)
+                job.status = VideoAnalysisJobStatus.failed
+                job.stage = "FAILED"
+                job.error_message = error_msg
+                job.completed_at = _now_utc()
+                video_session.status = VideoSessionStatus.failed
+                await db.commit()
+                raise ValueError(error_msg)
+
             # Pass analysis_mode from job to analysis pipeline
             quick_artifacts = run_pose_metrics_findings_report(
                 video_path=local_video_path,
@@ -287,6 +299,17 @@ async def _process_job(job_id: str) -> None:
             job.progress_pct = 50
             job.deep_started_at = _now_utc()
             await db.commit()
+
+            # CRITICAL: Re-validate analysis_mode before deep pass (defensive)
+            if not job.analysis_mode:
+                error_msg = f"analysis_mode is required but missing for deep pass job_id={job.id}"
+                logger.error(error_msg)
+                job.status = VideoAnalysisJobStatus.failed
+                job.stage = "FAILED"
+                job.error_message = error_msg
+                job.completed_at = _now_utc()
+                await db.commit()
+                raise ValueError(error_msg)
 
             # Deep pass uses job-configured FPS; keep a sane default
             deep_artifacts = run_pose_metrics_findings_report(

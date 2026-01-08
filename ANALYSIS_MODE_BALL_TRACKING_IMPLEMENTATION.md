@@ -69,14 +69,14 @@ result = {
 ```python
 def generate_bowling_findings(metrics, ball_tracking=None):
     findings = []
-    
+
     # Existing pose-based findings
     findings.extend(_pose_findings(metrics))
-    
+
     # NEW: Ball tracking findings
     if ball_tracking:
         findings.extend(_ball_tracking_findings(ball_tracking))
-    
+
     return {"findings": findings}
 ```
 

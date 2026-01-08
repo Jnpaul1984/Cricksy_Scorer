@@ -152,6 +152,96 @@ WICKETKEEPING_DRILL_SUGGESTIONS = {
 DRILL_SUGGESTIONS = BATTING_DRILL_SUGGESTIONS
 
 # ============================================================================
+# Allowed Finding Codes by Mode (Prevents Cross-Contamination)
+# ============================================================================
+
+ALLOWED_CODES_BY_MODE: dict[str, set[str]] = {
+    "batting": {
+        "HEAD_MOVEMENT",
+        "BALANCE_DRIFT",
+        "KNEE_COLLAPSE",
+        "ROTATION_TIMING",
+        "ELBOW_DROP",
+        "INSUFFICIENT_POSE_VISIBILITY",
+    },
+    "bowling": {
+        "HEAD_MOVEMENT",
+        "BALANCE_DRIFT",
+        "KNEE_COLLAPSE",
+        "ROTATION_TIMING",
+        "ELBOW_DROP",
+        "INSUFFICIENT_POSE_VISIBILITY",
+        # Bowling-specific codes
+        "INSUFFICIENT_BALL_TRACKING",
+        "INCONSISTENT_RELEASE_POINT",
+        "SWING_ANALYSIS",
+    },
+    "wicketkeeping": {
+        "HEAD_MOVEMENT",
+        "BALANCE_DRIFT",
+        "KNEE_COLLAPSE",
+        "ROTATION_TIMING",
+        "ELBOW_DROP",  # For catching hand position
+        "INSUFFICIENT_POSE_VISIBILITY",
+    },
+    "fielding": {
+        "HEAD_MOVEMENT",
+        "BALANCE_DRIFT",
+        "KNEE_COLLAPSE",
+        "ROTATION_TIMING",
+        "ELBOW_DROP",
+        "INSUFFICIENT_POSE_VISIBILITY",
+    },
+}
+
+# ============================================================================
+# Mode-Aware Narratives (Why It Matters)
+# ============================================================================
+
+WHY_IT_MATTERS_BY_MODE: dict[str, dict[str, str]] = {
+    "HEAD_MOVEMENT": {
+        "batting": "A stable head position is crucial for visual tracking and bat control. "
+        "Excessive head movement can cause timing issues and reduced shot accuracy.",
+        "bowling": "Head stability during delivery is critical for consistent line and length. "
+        "Head movement disrupts your sight of the target and reduces accuracy.",
+        "wicketkeeping": "Keeping your head still while tracking the ball ensures clean takes. "
+        "Head movement reduces reaction time and causes fumbles on lateral movements.",
+        "fielding": "Head stability improves hand-eye coordination during catches and pickups. "
+        "Excessive movement reduces tracking accuracy and increases errors.",
+    },
+    "KNEE_COLLAPSE": {
+        "batting": "A braced front knee provides stability and transfers power from the lower body. "
+        "Knee collapse reduces force generation and increases injury risk.",
+        "bowling": "Front leg bracing at delivery is critical for transferring energy to the ball. "
+        "Knee collapse dissipates power and puts excessive stress on the lower back.",
+        "wicketkeeping": "Knee stability in your crouch maintains balance for lateral movements. "
+        "Knee collapse slows your pushoff speed and limits range.",
+        "fielding": "Knee bracing during pickups and throws provides a stable base. "
+        "Collapse reduces throwing velocity and accuracy.",
+    },
+    "ROTATION_TIMING": {
+        "batting": "Hip rotation should initiate before shoulder rotation to generate power through the "
+        "kinetic chain. Poor timing reduces power and increases injury risk.",
+        "bowling": "Hip-shoulder separation creates the 'whip' effect in fast bowling. "
+        "Poor separation limits ball speed and increases shoulder injury risk.",
+        "wicketkeeping": "Hip rotation powers your throws to the stumps. "
+        "Poor timing reduces throwing velocity and accuracy from the crouched position.",
+        "fielding": "Efficient hip-shoulder separation generates throwing power. "
+        "Poor timing reduces throw distance and increases arm strain.",
+    },
+}
+
+# Mode-aware high severity warnings (STOP training messages)
+HIGH_SEVERITY_WARNINGS_BY_MODE: dict[str, dict[str, str]] = {
+    "KNEE_COLLAPSE": {
+        "batting": "Suspend intensive batting until technique improves",
+        "bowling": "Suspend fast bowling until front leg mechanics are corrected",
+        "wicketkeeping": "Limit extended keeping sessions until knee stability improves",
+        "fielding": "Avoid explosive fielding drills until knee bracing is corrected",
+    },
+}
+
+# ============================================================================
 # Finding Definitions
 # ============================================================================
 
@@ -568,9 +658,12 @@ def _attach_evidence_markers(
 
 
 def _check_head_movement(
-    metrics: dict, evidence: dict | None = None, drill_db: dict | None = None
+    metrics: dict,
+    evidence: dict | None = None,
+    drill_db: dict | None = None,
+    analysis_mode: str = "batting",
 ) -> dict | None:
-    """Check head stability metric."""
+    """Check head stability metric with mode-aware narratives."""
     head_score = metrics.get("head_stability_score", {}).get("score")
 
     if head_score is None:
@@ -578,6 +671,11 @@ def _check_head_movement(
 
     if head_score < THRESHOLDS["head_stability_score"]:
         severity = _get_severity(head_score, THRESHOLDS["head_stability_score"])
+
+        # Use mode-specific "why it matters" text
+        why_it_matters = WHY_IT_MATTERS_BY_MODE.get("HEAD_MOVEMENT", {}).get(
+            analysis_mode, FINDING_DEFINITIONS["HEAD_MOVEMENT"]["why_it_matters"]
+        )
 
         finding = {
             "code": "HEAD_MOVEMENT",
@@ -587,7 +685,7 @@ def _check_head_movement(
                 "head_stability_score": round(head_score, 3),
                 "threshold": THRESHOLDS["head_stability_score"],
             },
-            "why_it_matters": FINDING_DEFINITIONS["HEAD_MOVEMENT"]["why_it_matters"],
+            "why_it_matters": why_it_matters,
             "cues": FINDING_DEFINITIONS["HEAD_MOVEMENT"][f"{severity}_severity"]["cues"],
             "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("HEAD_MOVEMENT", []),
         }
@@ -598,9 +696,12 @@ def _check_head_movement(
 
 
 def _check_balance_drift(
-    metrics: dict, evidence: dict | None = None, drill_db: dict | None = None
+    metrics: dict,
+    evidence: dict | None = None,
+    drill_db: dict | None = None,
+    analysis_mode: str = "batting",
 ) -> dict | None:
-    """Check balance drift metric."""
+    """Check balance drift metric with mode-aware narratives."""
     balance_score = metrics.get("balance_drift_score", {}).get("score")
 
     if balance_score is None:
@@ -608,6 +709,11 @@ def _check_balance_drift(
 
     if balance_score < THRESHOLDS["balance_drift_score"]:
         severity = _get_severity(balance_score, THRESHOLDS["balance_drift_score"])
+
+        # Use mode-specific "why it matters" text
+        why_it_matters = WHY_IT_MATTERS_BY_MODE.get("BALANCE_DRIFT", {}).get(
+            analysis_mode, FINDING_DEFINITIONS["BALANCE_DRIFT"]["why_it_matters"]
+        )
 
         finding = {
             "code": "BALANCE_DRIFT",
@@ -617,7 +723,7 @@ def _check_balance_drift(
                 "balance_drift_score": round(balance_score, 3),
                 "threshold": THRESHOLDS["balance_drift_score"],
             },
-            "why_it_matters": FINDING_DEFINITIONS["BALANCE_DRIFT"]["why_it_matters"],
+            "why_it_matters": why_it_matters,
             "cues": FINDING_DEFINITIONS["BALANCE_DRIFT"][f"{severity}_severity"]["cues"],
             "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("BALANCE_DRIFT", []),
         }
@@ -628,9 +734,12 @@ def _check_balance_drift(
 
 
 def _check_knee_collapse(
-    metrics: dict, evidence: dict | None = None, drill_db: dict | None = None
+    metrics: dict,
+    evidence: dict | None = None,
+    drill_db: dict | None = None,
+    analysis_mode: str = "batting",
 ) -> dict | None:
-    """Check knee brace metric."""
+    """Check knee brace metric with mode-aware narratives."""
     knee_score = metrics.get("front_knee_brace_score", {}).get("score")
 
     if knee_score is None:
@@ -638,6 +747,24 @@ def _check_knee_collapse(
 
     if knee_score < THRESHOLDS["front_knee_brace_score"]:
         severity = _get_severity(knee_score, THRESHOLDS["front_knee_brace_score"])
+
+        # Use mode-specific "why it matters" text
+        why_it_matters = WHY_IT_MATTERS_BY_MODE.get("KNEE_COLLAPSE", {}).get(
+            analysis_mode, FINDING_DEFINITIONS["KNEE_COLLAPSE"]["why_it_matters"]
+        )
+
+        # Get base cues from FINDING_DEFINITIONS
+        base_cues = FINDING_DEFINITIONS["KNEE_COLLAPSE"][f"{severity}_severity"]["cues"]
+
+        # Replace mode-specific high severity warning if applicable
+        cues = base_cues.copy() if isinstance(base_cues, list) else list(base_cues)
+        if severity == "high":
+            mode_warning = HIGH_SEVERITY_WARNINGS_BY_MODE.get("KNEE_COLLAPSE", {}).get(
+                analysis_mode
+            )
+            if mode_warning:
+                # Replace batting-specific warning with mode-specific one
+                cues = [mode_warning if "Suspend intensive batting" in c else c for c in cues]
 
         finding = {
             "code": "KNEE_COLLAPSE",
@@ -647,8 +774,8 @@ def _check_knee_collapse(
                 "front_knee_brace_score": round(knee_score, 3),
                 "threshold": THRESHOLDS["front_knee_brace_score"],
             },
-            "why_it_matters": FINDING_DEFINITIONS["KNEE_COLLAPSE"]["why_it_matters"],
-            "cues": FINDING_DEFINITIONS["KNEE_COLLAPSE"][f"{severity}_severity"]["cues"],
+            "why_it_matters": why_it_matters,
+            "cues": cues,
             "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("KNEE_COLLAPSE", []),
         }
 
@@ -658,9 +785,12 @@ def _check_knee_collapse(
 
 
 def _check_rotation_timing(
-    metrics: dict, evidence: dict | None = None, drill_db: dict | None = None
+    metrics: dict,
+    evidence: dict | None = None,
+    drill_db: dict | None = None,
+    analysis_mode: str = "batting",
 ) -> dict | None:
-    """Check hip-shoulder separation timing metric."""
+    """Check hip-shoulder separation timing metric with mode-aware narratives."""
     timing_value = metrics.get("hip_shoulder_separation_timing")
 
     # Handle both direct float and nested dict format
@@ -684,6 +814,11 @@ def _check_rotation_timing(
     else:
         severity = "high"
 
+    # Use mode-specific "why it matters" text
+    why_it_matters = WHY_IT_MATTERS_BY_MODE.get("ROTATION_TIMING", {}).get(
+        analysis_mode, FINDING_DEFINITIONS["ROTATION_TIMING"]["why_it_matters"]
+    )
+
     finding = {
         "code": "ROTATION_TIMING",
         "title": FINDING_DEFINITIONS["ROTATION_TIMING"]["title"],
@@ -692,7 +827,7 @@ def _check_rotation_timing(
             "hip_shoulder_separation_lag_seconds": round(lag, 3),
             "target_lag_seconds": target,
         },
-        "why_it_matters": FINDING_DEFINITIONS["ROTATION_TIMING"]["why_it_matters"],
+        "why_it_matters": why_it_matters,
         "cues": FINDING_DEFINITIONS["ROTATION_TIMING"][f"{severity}_severity"]["cues"],
         "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("ROTATION_TIMING", []),
     }
@@ -701,9 +836,12 @@ def _check_rotation_timing(
 
 
 def _check_elbow_drop(
-    metrics: dict, evidence: dict | None = None, drill_db: dict | None = None
+    metrics: dict,
+    evidence: dict | None = None,
+    drill_db: dict | None = None,
+    analysis_mode: str = "batting",
 ) -> dict | None:
-    """Check elbow drop metric."""
+    """Check elbow drop metric with mode-aware narratives."""
     elbow_score = metrics.get("elbow_drop_score", {}).get("score")
 
     if elbow_score is None:
@@ -711,6 +849,11 @@ def _check_elbow_drop(
 
     if elbow_score < THRESHOLDS["elbow_drop_score"]:
         severity = _get_severity(elbow_score, THRESHOLDS["elbow_drop_score"])
+
+        # Use mode-specific "why it matters" text
+        why_it_matters = WHY_IT_MATTERS_BY_MODE.get("ELBOW_DROP", {}).get(
+            analysis_mode, FINDING_DEFINITIONS["ELBOW_DROP"]["why_it_matters"]
+        )
 
         finding = {
             "code": "ELBOW_DROP",
@@ -720,7 +863,7 @@ def _check_elbow_drop(
                 "elbow_drop_score": round(elbow_score, 3),
                 "threshold": THRESHOLDS["elbow_drop_score"],
             },
-            "why_it_matters": FINDING_DEFINITIONS["ELBOW_DROP"]["why_it_matters"],
+            "why_it_matters": why_it_matters,
             "cues": FINDING_DEFINITIONS["ELBOW_DROP"][f"{severity}_severity"]["cues"],
             "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("ELBOW_DROP", []),
         }
@@ -853,7 +996,7 @@ def generate_findings(
                  Can also include "evidence" dict with worst_frames/bad_segments
         context: Optional context dict for future extensibility
                 (e.g., player level, session type, analysis_context, camera_view)
-        analysis_mode: Optional analysis mode (batting, bowling, wicketkeeping)
+        analysis_mode: REQUIRED analysis mode (batting, bowling, wicketkeeping, fielding)
 
     Returns:
         {
@@ -878,31 +1021,47 @@ def generate_findings(
             "detection_rate": float  # pose detection rate for reliability gating
         }
     """
+    # CRITICAL: Enforce analysis_mode is present (no silent batting fallback)
+    VALID_MODES = {"batting", "bowling", "wicketkeeping", "fielding"}
+    if not analysis_mode or analysis_mode not in VALID_MODES:
+        raise ValueError(
+            f"analysis_mode is required and must be one of {VALID_MODES}. Got: {analysis_mode}"
+        )
+
     # Route to mode-specific generator
     if analysis_mode == "batting":
-        return generate_batting_findings(metrics, context)
+        result = generate_batting_findings(metrics, context, analysis_mode)
     elif analysis_mode == "bowling":
-        return generate_bowling_findings(metrics, context)
+        result = generate_bowling_findings(metrics, context, analysis_mode)
     elif analysis_mode == "wicketkeeping":
-        return generate_wicketkeeping_findings(metrics, context)
+        result = generate_wicketkeeping_findings(metrics, context, analysis_mode)
+    elif analysis_mode == "fielding":
+        result = generate_fielding_findings(metrics, context, analysis_mode)
     else:
-        # Default to batting for backward compatibility
-        return generate_batting_findings(metrics, context)
+        # Should never reach here due to validation above, but defensive
+        raise ValueError(f"Unexpected analysis_mode: {analysis_mode}")
+
+    # Filter findings to only allowed codes for this mode
+    result["findings"] = _filter_findings_by_mode(result["findings"], analysis_mode)
+
+    return result
 
 
 def generate_batting_findings(
-    metrics: dict[str, Any], context: dict[str, Any] | None = None
+    metrics: dict[str, Any], context: dict[str, Any] | None = None, analysis_mode: str = "batting"
 ) -> dict[str, Any]:
     """Generate batting-specific findings from metrics."""
-    return _generate_findings_internal(metrics, context, BATTING_DRILL_SUGGESTIONS)
+    return _generate_findings_internal(metrics, context, BATTING_DRILL_SUGGESTIONS, analysis_mode)
 
 
 def generate_bowling_findings(
-    metrics: dict[str, Any], context: dict[str, Any] | None = None
+    metrics: dict[str, Any], context: dict[str, Any] | None = None, analysis_mode: str = "bowling"
 ) -> dict[str, Any]:
     """Generate bowling-specific findings from metrics with ball tracking integration."""
     # Generate base pose findings
-    base_findings = _generate_findings_internal(metrics, context, BOWLING_DRILL_SUGGESTIONS)
+    base_findings = _generate_findings_internal(
+        metrics, context, BOWLING_DRILL_SUGGESTIONS, analysis_mode
+    )
 
     # Add ball tracking findings if available
     ball_tracking = metrics.get("ball_tracking")
@@ -914,36 +1073,73 @@ def generate_bowling_findings(
 
 
 def generate_wicketkeeping_findings(
-    metrics: dict[str, Any], context: dict[str, Any] | None = None
+    metrics: dict[str, Any],
+    context: dict[str, Any] | None = None,
+    analysis_mode: str = "wicketkeeping",
 ) -> dict[str, Any]:
     """Generate wicketkeeping-specific findings from metrics."""
-    return _generate_findings_internal(metrics, context, WICKETKEEPING_DRILL_SUGGESTIONS)
+    return _generate_findings_internal(
+        metrics, context, WICKETKEEPING_DRILL_SUGGESTIONS, analysis_mode
+    )
+
+
+def generate_fielding_findings(
+    metrics: dict[str, Any], context: dict[str, Any] | None = None, analysis_mode: str = "fielding"
+) -> dict[str, Any]:
+    """Generate fielding-specific findings from metrics."""
+    # Fielding uses same base checks but with fielding-specific drill suggestions
+    # Could be expanded with fielding-specific metrics in the future
+    return _generate_findings_internal(metrics, context, BATTING_DRILL_SUGGESTIONS, analysis_mode)
+
+
+def _filter_findings_by_mode(findings: list[dict[str, Any]], mode: str) -> list[dict[str, Any]]:
+    """
+    Filter findings to only include codes allowed for the given analysis mode.
+
+    Prevents cross-contamination (e.g., bowling codes appearing in batting analysis).
+
+    Args:
+        findings: List of finding dicts with "code" keys
+        mode: Analysis mode (batting, bowling, wicketkeeping, fielding)
+
+    Returns:
+        Filtered list containing only allowed codes for this mode
+    """
+    allowed = ALLOWED_CODES_BY_MODE.get(mode, ALLOWED_CODES_BY_MODE["batting"])
+
+    filtered = []
+    for finding in findings:
+        code = finding.get("code")
+        if code in allowed:
+            filtered.append(finding)
+        else:
+            logger.warning(f"Filtered out finding code '{code}' not allowed for mode '{mode}'")
+
+    return filtered
 
 
 def _generate_findings_internal(
     metrics: dict[str, Any],
     context: dict[str, Any] | None,
     drill_db: dict[str, list[str]],
+    analysis_mode: str,
 ) -> dict[str, Any]:
     """
-    Internal findings generator with mode-specific drill database.
+    Internal findings generator with mode-specific drill database and narratives.
 
     Args:
         metrics: Pose metrics result
         context: Optional context dict
         drill_db: Mode-specific drill suggestions dictionary
+        analysis_mode: Analysis mode (batting, bowling, wicketkeeping, fielding)
 
     Returns:
-        Findings result dictionary
+        Findings result dictionary with mode-aware narratives
     """
     # Extract metrics from nested structure if needed
     metric_scores = metrics.get("metrics", metrics)
     evidence_data = metrics.get("evidence")  # Extract evidence markers
-    logger.info(f"Generating findings for {len(metric_scores)} metrics")
-
-    # Extract analysis context for context-aware messaging
-    analysis_context = context.get("analysis_context") if context else None
-    logger.info(f"Analysis context: {analysis_context}")
+    logger.info(f"Generating findings for {len(metric_scores)} metrics (mode={analysis_mode})")
 
     # Calculate detection rate for reliability gating
     summary = metrics.get("summary", {})
@@ -952,32 +1148,27 @@ def _generate_findings_internal(
     detection_rate = (frames_with_pose / total_frames * 100) if total_frames > 0 else 0
     logger.info(f"Pose detection rate: {detection_rate:.1f}%")
 
-    # Check all conditions (passing evidence and drill_db to each)
+    # Check all conditions (passing evidence, drill_db, and mode to each)
     findings = []
 
-    head_finding = _check_head_movement(metric_scores, evidence_data, drill_db)
+    head_finding = _check_head_movement(metric_scores, evidence_data, drill_db, analysis_mode)
     if head_finding:
-        head_finding = _contextualize_finding(head_finding, analysis_context)
         findings.append(head_finding)
 
-    balance_finding = _check_balance_drift(metric_scores, evidence_data, drill_db)
+    balance_finding = _check_balance_drift(metric_scores, evidence_data, drill_db, analysis_mode)
     if balance_finding:
-        balance_finding = _contextualize_finding(balance_finding, analysis_context)
         findings.append(balance_finding)
 
-    knee_finding = _check_knee_collapse(metric_scores, evidence_data, drill_db)
+    knee_finding = _check_knee_collapse(metric_scores, evidence_data, drill_db, analysis_mode)
     if knee_finding:
-        knee_finding = _contextualize_finding(knee_finding, analysis_context)
         findings.append(knee_finding)
 
-    rotation_finding = _check_rotation_timing(metric_scores, evidence_data, drill_db)
+    rotation_finding = _check_rotation_timing(metric_scores, evidence_data, drill_db, analysis_mode)
     if rotation_finding:
-        rotation_finding = _contextualize_finding(rotation_finding, analysis_context)
         findings.append(rotation_finding)
 
-    elbow_finding = _check_elbow_drop(metric_scores, evidence_data, drill_db)
+    elbow_finding = _check_elbow_drop(metric_scores, evidence_data, drill_db, analysis_mode)
     if elbow_finding:
-        elbow_finding = _contextualize_finding(elbow_finding, analysis_context)
         findings.append(elbow_finding)
 
     # Check for insufficient pose visibility across metrics

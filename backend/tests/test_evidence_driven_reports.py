@@ -201,7 +201,7 @@ def test_generate_findings_with_evidence_and_detection_rate():
         },
     }
 
-    result = coach_findings.generate_findings(metrics, context={})
+    result = coach_findings.generate_findings(metrics, context={}, analysis_mode="batting")
 
     # Check structure
     assert "findings" in result
@@ -235,7 +235,7 @@ def test_generate_findings_low_detection_rate():
         "evidence": {},
     }
 
-    result = coach_findings.generate_findings(metrics, context={})
+    result = coach_findings.generate_findings(metrics, context={}, analysis_mode="batting")
 
     assert result["detection_rate"] == 50.0
     # Low detection rate should be flagged downstream
@@ -253,7 +253,7 @@ def test_generate_findings_missing_evidence():
         # No "evidence" field
     }
 
-    result = coach_findings.generate_findings(metrics, context={})
+    result = coach_findings.generate_findings(metrics, context={}, analysis_mode="batting")
 
     # Should work without crashing
     assert result["detection_rate"] == 96.0
@@ -483,7 +483,9 @@ def test_end_to_end_evidence_flow():
     }
 
     # Step 2: Generate findings
-    findings_result = coach_findings.generate_findings(metrics, context={"name": "Test Player"})
+    findings_result = coach_findings.generate_findings(
+        metrics, context={"name": "Test Player"}, analysis_mode="batting"
+    )
 
     assert findings_result["detection_rate"] == 95.0
     assert len(findings_result["findings"]) >= 2  # Head + balance (and possibly rotation timing)

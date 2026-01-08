@@ -12,7 +12,10 @@ async def test_cannot_export_pdf_when_deep_running(async_client, db_session, tes
 
     # Generate JWT token (test_user fixture already has coach_pro_plus role)
     from backend.security import create_access_token
-    token = create_access_token({"sub": test_user.id, "email": test_user.email, "role": test_user.role.value})
+
+    token = create_access_token(
+        {"sub": test_user.id, "email": test_user.email, "role": test_user.role.value}
+    )
 
     # Create session
     session = VideoSession(
@@ -52,7 +55,9 @@ async def test_cannot_export_pdf_when_deep_running(async_client, db_session, tes
     )
 
     # Should return 409 CONFLICT
-    assert response.status_code == 409, f"Expected 409, got {response.status_code}. Response: {response.text}"
+    assert (
+        response.status_code == 409
+    ), f"Expected 409, got {response.status_code}. Response: {response.text}"
     assert "Cannot export PDF" in response.json()["detail"]
     assert "deep_running" in response.json()["detail"]
 
@@ -64,7 +69,10 @@ async def test_cannot_export_pdf_when_quick_done(async_client, db_session, test_
 
     # Generate JWT token (test_user fixture already has coach_pro_plus role)
     from backend.security import create_access_token
-    token = create_access_token({"sub": test_user.id, "email": test_user.email, "role": test_user.role.value})
+
+    token = create_access_token(
+        {"sub": test_user.id, "email": test_user.email, "role": test_user.role.value}
+    )
 
     # Create session
     session = VideoSession(
@@ -104,7 +112,9 @@ async def test_cannot_export_pdf_when_quick_done(async_client, db_session, test_
     )
 
     # Should return 409 CONFLICT
-    assert response.status_code == 409, f"Expected 409, got {response.status_code}. Response: {response.text}"
+    assert (
+        response.status_code == 409
+    ), f"Expected 409, got {response.status_code}. Response: {response.text}"
     assert "Cannot export PDF" in response.json()["detail"]
 
 
@@ -122,16 +132,16 @@ def test_bowling_mode_does_not_return_batting_codes():
 
     # When called via generate_findings with bowling mode, it should route to generate_bowling_findings
     bowling_context = {"analysis_mode": "bowling"}
-    result_bowling = generate_findings(metrics, bowling_context)
-    
-    # When called via generate_findings with batting mode, it should route to generate_batting_findings  
+    result_bowling = generate_findings(metrics, bowling_context, analysis_mode="bowling")
+
+    # When called via generate_findings with batting mode, it should route to generate_batting_findings
     batting_context = {"analysis_mode": "batting"}
-    result_batting = generate_findings(metrics, batting_context)
+    result_batting = generate_findings(metrics, batting_context, analysis_mode="batting")
 
     # Both should work (routing exists)
     assert "findings" in result_bowling
     assert "findings" in result_batting
-    
+
     # The main verification is that the routing doesn't fail
     # Actual finding differentiation happens when ball_tracking is provided for bowling
     assert result_bowling["findings"] is not None
@@ -153,7 +163,7 @@ def test_batting_mode_does_not_return_bowling_codes():
 
     batting_context = {"analysis_mode": "batting"}
 
-    findings = generate_findings(batting_metrics, batting_context)
+    findings = generate_findings(batting_metrics, batting_context, analysis_mode="batting")
     finding_codes = {f["code"] for f in findings.get("findings", [])}
 
     # Bowling-specific codes should NOT appear (no ball tracking in batting)
@@ -171,7 +181,6 @@ def test_batting_mode_does_not_return_bowling_codes():
 
 def test_analysis_mode_persisted_in_results():
     """Test that resolved analysis_mode is persisted in quick_results and deep_results."""
-    from backend.scripts.run_video_analysis_worker import run_analysis_pipeline
 
     # Mock minimal video processing (no actual file needed for this test)
     # This would typically be mocked, but we'll verify the contract

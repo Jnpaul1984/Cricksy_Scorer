@@ -174,7 +174,7 @@ def generate_analysis_pdf(
 
 def _format_findings(findings: dict[str, Any]) -> str:
     """Format findings dictionary as readable text.
-    
+
     Supports both legacy dict format and new finding object format.
     Finding objects have: code, title, severity, evidence, cues, suggested_drills.
     """
@@ -186,34 +186,34 @@ def _format_findings(findings: dict[str, Any]) -> str:
         for finding in findings_list:
             if not isinstance(finding, dict):
                 continue
-            
+
             # Format finding object
             title = finding.get("title", "Finding")
             severity = finding.get("severity", "unknown").upper()
-            
+
             lines.append(f"<b>{title}</b> [{severity}]")
-            
+
             # Evidence
             evidence = finding.get("evidence", {})
             if evidence and isinstance(evidence, dict):
                 for key, val in evidence.items():
                     label = key.replace("_", " ").title()
                     lines.append(f"  • {label}: {val}")
-            
+
             # Cues
             cues = finding.get("cues", [])
             if cues and isinstance(cues, list):
                 lines.append("  <b>What to look for:</b>")
                 for cue in cues:
                     lines.append(f"    - {cue}")
-            
+
             # Drills
             drills = finding.get("suggested_drills", [])
             if drills and isinstance(drills, list):
                 lines.append("  <b>Suggested drills:</b>")
                 for drill in drills[:3]:  # Limit to first 3 for space
                     lines.append(f"    - {drill}")
-            
+
             lines.append("<br/>")
     else:
         # Legacy format: key-value dict

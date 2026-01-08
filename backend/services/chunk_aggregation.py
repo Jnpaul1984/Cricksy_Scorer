@@ -172,7 +172,9 @@ async def aggregate_chunks_and_finalize(db: AsyncSession, job: VideoAnalysisJob)
     metrics_result = _compute_aggregated_metrics(all_frames, job.video_duration_seconds or 0)
 
     # Resolve analysis mode with fallback chain
-    resolved_mode = job.analysis_mode or (job.session.analysis_context if job.session else None) or "batting"
+    resolved_mode = (
+        job.analysis_mode or (job.session.analysis_context if job.session else None) or "batting"
+    )
 
     # Generate findings and report
     findings_result = generate_findings(metrics_result, context={"analysis_mode": resolved_mode})

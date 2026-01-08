@@ -34,7 +34,7 @@ if job.status not in terminal_success_states:
 - ✅ **DB Field**: `VideoAnalysisJob.analysis_mode` (migration `z1a2b3c4d5e6`)
 - ✅ **API Route**: `/api/coaches/plus/analysis-jobs` accepts `analysis_mode` query param with pattern validation
 - ✅ **Worker**: `analysis_worker.py` threads `analysis_mode` through pipeline
-- ✅ **Findings Split**: 
+- ✅ **Findings Split**:
   - `generate_findings()` dispatches to mode-specific generators
   - `generate_batting_findings()` - Batting-specific findings
   - `generate_bowling_findings()` - Bowling-specific findings (+ ball tracking)
@@ -88,7 +88,7 @@ elements.append(Paragraph(report_title, title_style))
 ```python
 def _format_findings(findings: dict[str, Any]) -> str:
     """Format findings dictionary as readable text.
-    
+
     Supports both legacy dict format and new finding object format.
     Finding objects have: code, title, severity, evidence, cues, suggested_drills.
     """
@@ -100,35 +100,35 @@ def _format_findings(findings: dict[str, Any]) -> str:
         for finding in findings_list:
             if not isinstance(finding, dict):
                 continue
-            
+
             # Format finding object
             title = finding.get("title", "Finding")
             severity = finding.get("severity", "unknown").upper()
             code = finding.get("code", "")
-            
+
             lines.append(f"<b>{title}</b> [{severity}]")
-            
+
             # Evidence
             evidence = finding.get("evidence", {})
             if evidence and isinstance(evidence, dict):
                 for key, val in evidence.items():
                     label = key.replace("_", " ").title()
                     lines.append(f"  • {label}: {val}")
-            
+
             # Cues
             cues = finding.get("cues", [])
             if cues and isinstance(cues, list):
                 lines.append("  <b>What to look for:</b>")
                 for cue in cues:
                     lines.append(f"    - {cue}")
-            
+
             # Drills (first 3 only)
             drills = finding.get("suggested_drills", [])
             if drills and isinstance(drills, list):
                 lines.append("  <b>Suggested drills:</b>")
                 for drill in drills[:3]:
                     lines.append(f"    - {drill}")
-            
+
             lines.append("<br/>")
     else:
         # Legacy format: key-value dict
@@ -157,7 +157,7 @@ async def test_cannot_export_pdf_when_deep_running(async_client, db_session, tes
         analysis_mode="batting",
         ...
     )
-    
+
     # Attempt PDF export
     response = await async_client.post(
         f"/api/coaches/plus/analysis-jobs/{job.id}/export-pdf",
@@ -194,7 +194,7 @@ def test_bowling_mode_does_not_return_batting_codes():
     # Routing test
     bowling_context = {"analysis_mode": "bowling"}
     result_bowling = generate_findings(metrics, bowling_context)
-    
+
     batting_context = {"analysis_mode": "batting"}
     result_batting = generate_findings(metrics, batting_context)
 

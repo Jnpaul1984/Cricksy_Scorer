@@ -122,9 +122,14 @@ def run_pose_metrics_findings_report(
     Returns lightweight results dict plus optional frames payload.
 
     Args:
-        analysis_mode: Optional analysis mode (batting, bowling, wicketkeeping).
+        analysis_mode: REQUIRED analysis mode (batting, bowling, wicketkeeping, fielding).
                       Determines which findings/drills are generated.
     """
+    # Validate analysis_mode is present and valid
+    VALID_MODES = {"batting", "bowling", "wicketkeeping", "fielding"}
+    if not analysis_mode or analysis_mode not in VALID_MODES:
+        raise ValueError(f"Invalid analysis_mode: {analysis_mode}. Must be one of {VALID_MODES}")
+
     from backend.services.pose_service import extract_pose_keypoints_from_video
 
     pose_data = extract_pose_keypoints_from_video(
@@ -197,6 +202,7 @@ def run_pose_metrics_findings_report(
             "sample_fps": float(sample_fps),
             "max_seconds": float(max_seconds) if max_seconds is not None else None,
             "analysis_mode": analysis_mode,
+            "analysis_mode_used": analysis_mode,  # Explicit confirmation for frontend
         },
     }
 

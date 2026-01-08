@@ -311,7 +311,7 @@ class TestVideoAnalysisPipelineIntegration:
         assert metrics["metrics"]
 
         # Step 3: Generate findings
-        findings = generate_findings(metrics)
+        findings = generate_findings(metrics, analysis_mode="batting")
         assert "findings" in findings
         assert "overall_level" in findings
 
@@ -332,7 +332,7 @@ class TestVideoAnalysisPipelineIntegration:
 
         pose_data = _mock_pose_extraction()
         metrics = compute_pose_metrics(pose_data)
-        findings = generate_findings(metrics)
+        findings = generate_findings(metrics, analysis_mode="batting")
         report = generate_report_text(findings, {"name": "Player", "role": "batter"})
 
         # Verify report has meaningful content
@@ -350,7 +350,7 @@ class TestVideoAnalysisPipelineIntegration:
 
         pose_data = _mock_pose_extraction()
         metrics = compute_pose_metrics(pose_data)
-        findings = generate_findings(metrics)
+        findings = generate_findings(metrics, analysis_mode="batting")
         report = generate_report_text(findings)
 
         # All parts should be JSON-serializable
