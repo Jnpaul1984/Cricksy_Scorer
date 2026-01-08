@@ -10,16 +10,9 @@ async def test_cannot_export_pdf_when_deep_running(async_client, db_session, tes
     """Test that PDF export returns 409 when job status is DEEP_RUNNING."""
     from backend.sql_app.models import VideoAnalysisJob, VideoAnalysisJobStatus, VideoSession
 
-    # Grant feature access
-    test_user.role = "coach_pro_plus"
-    test_user.video_analysis_enabled = True
-    db_session.add(test_user)
-    await db_session.commit()
-    await db_session.refresh(test_user)
-
-    # Generate JWT token with updated role
+    # Generate JWT token (test_user fixture already has coach_pro_plus role)
     from backend.security import create_access_token
-    token = create_access_token({"sub": test_user.id, "email": test_user.email, "role": test_user.role})
+    token = create_access_token({"sub": test_user.id, "email": test_user.email, "role": test_user.role.value})
 
     # Create session
     session = VideoSession(
@@ -63,16 +56,9 @@ async def test_cannot_export_pdf_when_quick_done(async_client, db_session, test_
     """Test that PDF export returns 409 when job status is QUICK_DONE (not fully completed)."""
     from backend.sql_app.models import VideoAnalysisJob, VideoAnalysisJobStatus, VideoSession
 
-    # Grant feature access
-    test_user.role = "coach_pro_plus"
-    test_user.video_analysis_enabled = True
-    db_session.add(test_user)
-    await db_session.commit()
-    await db_session.refresh(test_user)
-
-    # Generate JWT token with updated role
+    # Generate JWT token (test_user fixture already has coach_pro_plus role)
     from backend.security import create_access_token
-    token = create_access_token({"sub": test_user.id, "email": test_user.email, "role": test_user.role})
+    token = create_access_token({"sub": test_user.id, "email": test_user.email, "role": test_user.role.value})
 
     # Create session
     session = VideoSession(
