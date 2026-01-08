@@ -190,7 +190,6 @@ def _format_findings(findings: dict[str, Any]) -> str:
             # Format finding object
             title = finding.get("title", "Finding")
             severity = finding.get("severity", "unknown").upper()
-            code = finding.get("code", "")
             
             lines.append(f"<b>{title}</b> [{severity}]")
             

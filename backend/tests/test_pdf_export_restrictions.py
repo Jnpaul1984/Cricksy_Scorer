@@ -10,6 +10,12 @@ async def test_cannot_export_pdf_when_deep_running(async_client, db_session, tes
     """Test that PDF export returns 409 when job status is DEEP_RUNNING."""
     from backend.sql_app.models import VideoAnalysisJob, VideoAnalysisJobStatus, VideoSession
 
+    # Grant feature access
+    test_user.role = "coach_pro_plus"
+    test_user.video_analysis_enabled = True
+    db_session.add(test_user)
+    await db_session.commit()
+
     # Create session
     session = VideoSession(
         id="test-session-deep-running",
@@ -51,6 +57,12 @@ async def test_cannot_export_pdf_when_deep_running(async_client, db_session, tes
 async def test_cannot_export_pdf_when_quick_done(async_client, db_session, test_user):
     """Test that PDF export returns 409 when job status is QUICK_DONE (not fully completed)."""
     from backend.sql_app.models import VideoAnalysisJob, VideoAnalysisJobStatus, VideoSession
+
+    # Grant feature access
+    test_user.role = "coach_pro_plus"
+    test_user.video_analysis_enabled = True
+    db_session.add(test_user)
+    await db_session.commit()
 
     # Create session
     session = VideoSession(
