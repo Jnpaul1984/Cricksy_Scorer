@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # Constants: MVP Thresholds
 # ============================================================================
 
+# Default thresholds (for backward compatibility with tests)
 THRESHOLDS = {
     "head_stability_score": 0.60,
     "balance_drift_score": 0.55,
@@ -28,6 +29,46 @@ THRESHOLDS = {
     "hip_shoulder_separation_timing": 0.12,  # Target lag, ±0.10 tolerance
     "hip_shoulder_separation_tolerance": 0.10,
     "elbow_drop_score": 0.55,
+}
+
+# ============================================================================
+# THRESHOLDS_BY_MODE: Role-Specific Thresholds
+# ============================================================================
+# Different skills have different acceptable ranges
+
+THRESHOLDS_BY_MODE: dict[str, dict[str, float]] = {
+    "batting": {
+        "head_stability_score": 0.60,  # Tight requirement for ball tracking
+        "balance_drift_score": 0.55,
+        "front_knee_brace_score": 0.50,  # Power transfer critical
+        "hip_shoulder_separation_timing": 0.12,
+        "hip_shoulder_separation_tolerance": 0.10,
+        "elbow_drop_score": 0.55,  # Natural arm position
+    },
+    "bowling": {
+        "head_stability_score": 0.65,  # Even more critical for line/length
+        "balance_drift_score": 0.60,  # Gather and delivery stability
+        "front_knee_brace_score": 0.55,  # Critical for injury prevention
+        "hip_shoulder_separation_timing": 0.15,  # Different timing than batting
+        "hip_shoulder_separation_tolerance": 0.12,
+        "elbow_drop_score": 0.60,  # High elbow at release important
+    },
+    "wicketkeeping": {
+        "head_stability_score": 0.58,  # Tracking from bowler to gloves
+        "balance_drift_score": 0.52,  # Lateral movements expected
+        "front_knee_brace_score": 0.45,  # Low crouch position differs
+        "hip_shoulder_separation_timing": 0.10,  # Quick throws to stumps
+        "hip_shoulder_separation_tolerance": 0.08,
+        "elbow_drop_score": 0.50,  # Soft hands, relaxed position
+    },
+    "fielding": {
+        "head_stability_score": 0.55,  # Varied positions and movements
+        "balance_drift_score": 0.50,  # Dynamic balance more important
+        "front_knee_brace_score": 0.48,
+        "hip_shoulder_separation_timing": 0.11,
+        "hip_shoulder_separation_tolerance": 0.09,
+        "elbow_drop_score": 0.52,
+    },
 }
 
 # ============================================================================
@@ -152,6 +193,49 @@ WICKETKEEPING_DRILL_SUGGESTIONS = {
 DRILL_SUGGESTIONS = BATTING_DRILL_SUGGESTIONS
 
 # ============================================================================
+# DRILLS_BY_MODE: Role-Specific Drill Registry
+# ============================================================================
+# NO FALLBACK TO BATTING - Each mode gets its own drill set or empty list
+
+DRILLS_BY_MODE: dict[str, dict[str, list[str]]] = {
+    "batting": BATTING_DRILL_SUGGESTIONS,
+    "bowling": BOWLING_DRILL_SUGGESTIONS,
+    "wicketkeeping": WICKETKEEPING_DRILL_SUGGESTIONS,
+    "fielding": {
+        "HEAD_MOVEMENT": [
+            "Tracking drills following ball from release to hands",
+            "Catching exercises with focus on head stillness",
+            "Ground fielding with head position awareness",
+            "Mirror work to observe head control during pickups",
+        ],
+        "BALANCE_DRIFT": [
+            "Lateral movement drills with controlled stops",
+            "Split-step timing for ready position",
+            "Single-leg balance work for diving stability",
+            "Agility cone drills with emphasis on balance",
+        ],
+        "KNEE_COLLAPSE": [
+            "Squat position drills for low fielding",
+            "Lateral lunge work for range improvement",
+            "Knee tracking during dive mechanics",
+            "Leg strength work for explosive movements",
+        ],
+        "ROTATION_TIMING": [
+            "Hip rotation drills for throwing power",
+            "Medicine ball throws from fielding position",
+            "Rotational power work for quick releases",
+            "Footwork emphasizing hip drive on throws",
+        ],
+        "ELBOW_DROP": [
+            "Catching drills focusing on soft hands",
+            "Hand position exercises for optimal angles",
+            "Resistance work for forearm strength",
+            "High-repetition catching for natural positioning",
+        ],
+    },
+}
+
+# ============================================================================
 # Allowed Finding Codes by Mode (Prevents Cross-Contamination)
 # ============================================================================
 
@@ -209,6 +293,16 @@ WHY_IT_MATTERS_BY_MODE: dict[str, dict[str, str]] = {
         "fielding": "Head stability improves hand-eye coordination during catches and pickups. "
         "Excessive movement reduces tracking accuracy and increases errors.",
     },
+    "BALANCE_DRIFT": {
+        "batting": "Good balance keeps your weight centered over your feet, enabling powerful and "
+        "controlled strikes. Poor balance leads to inconsistent contact.",
+        "bowling": "Balance through your gather and delivery is fundamental to accuracy. "
+        "Drift disrupts your release point and reduces control over line and length.",
+        "wicketkeeping": "Maintaining balance in your crouch allows quick lateral movement. "
+        "Balance drift slows reaction time and reduces range for wider deliveries.",
+        "fielding": "Dynamic balance enables quick changes in direction during fielding. "
+        "Poor balance reduces agility and increases error rates on ground balls.",
+    },
     "KNEE_COLLAPSE": {
         "batting": "A braced front knee provides stability and transfers power from the lower body. "
         "Knee collapse reduces force generation and increases injury risk.",
@@ -218,6 +312,16 @@ WHY_IT_MATTERS_BY_MODE: dict[str, dict[str, str]] = {
         "Knee collapse slows your pushoff speed and limits range.",
         "fielding": "Knee bracing during pickups and throws provides a stable base. "
         "Collapse reduces throwing velocity and accuracy.",
+    },
+    "ELBOW_DROP": {
+        "batting": "Dropped elbows allow for a fuller swing and better bat control. "
+        "High elbows restrict movement and create tension, leading to inconsistent shot execution.",
+        "bowling": "Elbow position at release affects ball delivery and shoulder stress. "
+        "Maintaining proper elbow height through the action ensures consistent release point and reduces injury risk.",
+        "wicketkeeping": "Soft hands with proper elbow positioning enable clean takes. "
+        "Rigid or poorly positioned elbows reduce glove control and increase fumbles on lateral movements.",
+        "fielding": "Relaxed elbows during pickups and catches improve hand-eye coordination. "
+        "Tense or high elbows reduce reaction time and throwing accuracy.",
     },
     "ROTATION_TIMING": {
         "batting": "Hip rotation should initiate before shoulder rotation to generate power through the "
@@ -583,6 +687,154 @@ def _get_overall_level(findings: list[dict]) -> str:
 
 
 # ============================================================================
+# Confidence Scoring
+# ============================================================================
+
+
+def _calculate_job_confidence(
+    metrics: dict[str, Any],
+    context: dict[str, Any] | None,
+    analysis_mode: str,
+) -> dict[str, Any]:
+    """
+    Calculate overall job confidence based on data quality indicators.
+
+    Args:
+        metrics: Pose metrics dict
+        context: Analysis context with camera_view, etc.
+        analysis_mode: Analysis mode (batting, bowling, etc.)
+
+    Returns:
+        Dict with confidence_score (0-1), label, and reasons
+    """
+    confidence_factors = []
+    total_weight = 0.0
+    weighted_sum = 0.0
+
+    # Factor 1: Pose detection rate (weight: 0.4)
+    pose_visibility = metrics.get("overall_pose_visibility", {}).get("score", 0.0)
+    detection_weight = 0.4
+    confidence_factors.append(
+        {"factor": "pose_detection_rate", "score": pose_visibility, "weight": detection_weight}
+    )
+    weighted_sum += pose_visibility * detection_weight
+    total_weight += detection_weight
+
+    # Factor 2: Frame coverage (weight: 0.3)
+    total_frames = metrics.get("meta", {}).get("total_frames", 0)
+    analyzed_frames = metrics.get("meta", {}).get("frames_analyzed", 0)
+    coverage_score = min(1.0, analyzed_frames / max(1, total_frames))
+    coverage_weight = 0.3
+    confidence_factors.append(
+        {"factor": "frame_coverage", "score": coverage_score, "weight": coverage_weight}
+    )
+    weighted_sum += coverage_score * coverage_weight
+    total_weight += coverage_weight
+
+    # Factor 3: Camera view appropriateness (weight: 0.3)
+    camera_view = (context or {}).get("camera_view", "other")
+    view_scores = {
+        "side": 1.0,  # Ideal for most analyses
+        "front": 0.8,  # Good but missing lateral info
+        "behind": 0.7,  # Limited visibility
+        "other": 0.5,  # Unknown quality
+    }
+    view_score = view_scores.get(camera_view, 0.5)
+    view_weight = 0.3
+    confidence_factors.append(
+        {"factor": "camera_view_quality", "score": view_score, "weight": view_weight}
+    )
+    weighted_sum += view_score * view_weight
+    total_weight += view_weight
+
+    # Calculate final score (0-1)
+    confidence_score = weighted_sum / max(0.01, total_weight)
+
+    # Determine label and reasons
+    if confidence_score >= 0.75:
+        label = "high"
+        reasons = ["Excellent pose detection", "Good frame coverage", "Optimal camera angle"]
+    elif confidence_score >= 0.5:
+        label = "medium"
+        reasons = ["Adequate pose detection", "Moderate frame coverage"]
+        if view_score < 0.8:
+            reasons.append("Camera angle could be improved for better analysis")
+    else:
+        label = "low"
+        reasons = ["Poor pose detection - consider better lighting"]
+        if coverage_score < 0.5:
+            reasons.append("Low frame coverage - video may be too short")
+        if view_score < 0.7:
+            reasons.append("Suboptimal camera angle for this analysis mode")
+
+    return {
+        "confidence_score": round(confidence_score, 3),
+        "confidence_label": label,
+        "confidence_reasons": reasons,
+        "confidence_factors": confidence_factors,
+    }
+
+
+def _calculate_finding_confidence(
+    finding: dict[str, Any], metrics: dict[str, Any]
+) -> float:
+    """
+    Calculate per-finding confidence based on metric margin and evidence coverage.
+
+    Args:
+        finding: Finding dict with evidence
+        metrics: Full metrics dict
+
+    Returns:
+        Confidence score 0-1
+    """
+    code = finding.get("code")
+    evidence = finding.get("evidence", {})
+
+    # Metric-specific confidence calculation
+    metric_key_map = {
+        "HEAD_MOVEMENT": "head_stability_score",
+        "BALANCE_DRIFT": "balance_drift_score",
+        "KNEE_COLLAPSE": "front_knee_brace_score",
+        "ELBOW_DROP": "elbow_drop_score",
+    }
+
+    code_str = str(code) if code else ""
+    metric_key = metric_key_map.get(code_str)
+    if not metric_key:
+        return 0.8  # Default for non-metric findings
+
+    # Get score and threshold from evidence
+    score = evidence.get(metric_key)
+    threshold = evidence.get("threshold")
+
+    if score is None or threshold is None:
+        return 0.7  # Moderate confidence if missing data
+
+    # Margin-based confidence: larger deviation = higher confidence
+    margin = abs(threshold - score)
+    if margin >= 0.20:
+        confidence = 0.95  # Very confident
+    elif margin >= 0.10:
+        confidence = 0.85  # Confident
+    elif margin >= 0.05:
+        confidence = 0.75  # Moderately confident
+    else:
+        confidence = 0.60  # Low confidence (borderline)
+
+    # Check if we have video evidence markers
+    video_evidence = finding.get("video_evidence", {})
+    worst_frames = video_evidence.get("worst_frames", [])
+    bad_segments = video_evidence.get("bad_segments", [])
+
+    # Boost confidence if we have specific evidence markers
+    if worst_frames or bad_segments:
+        confidence = min(1.0, confidence + 0.05)
+
+    return round(confidence, 3)
+
+
+# ============================================================================
 # Finding Generation
 # ============================================================================
 
@@ -663,19 +915,27 @@ def _check_head_movement(
     drill_db: dict | None = None,
     analysis_mode: str = "batting",
 ) -> dict | None:
-    """Check head stability metric with mode-aware narratives."""
+    """Check head stability metric with mode-aware narratives and thresholds."""
     head_score = metrics.get("head_stability_score", {}).get("score")
 
     if head_score is None:
         return None
 
-    if head_score < THRESHOLDS["head_stability_score"]:
-        severity = _get_severity(head_score, THRESHOLDS["head_stability_score"])
+    # Use mode-specific threshold
+    mode_thresholds = THRESHOLDS_BY_MODE.get(analysis_mode, THRESHOLDS)
+    threshold = mode_thresholds["head_stability_score"]
+
+    if head_score < threshold:
+        severity = _get_severity(head_score, threshold)
 
         # Use mode-specific "why it matters" text
         why_it_matters = WHY_IT_MATTERS_BY_MODE.get("HEAD_MOVEMENT", {}).get(
             analysis_mode, FINDING_DEFINITIONS["HEAD_MOVEMENT"]["why_it_matters"]
         )
+
+        # Get drills from mode registry (no fallback to batting)
+        mode_drills = drill_db or DRILLS_BY_MODE.get(analysis_mode, {})
+        drills = mode_drills.get("HEAD_MOVEMENT", [])
 
         finding = {
             "code": "HEAD_MOVEMENT",
@@ -683,11 +943,11 @@ def _check_head_movement(
             "severity": severity,
             "evidence": {
                 "head_stability_score": round(head_score, 3),
-                "threshold": THRESHOLDS["head_stability_score"],
+                "threshold": threshold,
             },
             "why_it_matters": why_it_matters,
             "cues": FINDING_DEFINITIONS["HEAD_MOVEMENT"][f"{severity}_severity"]["cues"],
-            "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("HEAD_MOVEMENT", []),
+            "suggested_drills": drills,
         }
 
         return _attach_evidence_markers(finding, "head_stability_score", evidence)
@@ -701,19 +961,27 @@ def _check_balance_drift(
     drill_db: dict | None = None,
     analysis_mode: str = "batting",
 ) -> dict | None:
-    """Check balance drift metric with mode-aware narratives."""
+    """Check balance drift metric with mode-aware narratives and thresholds."""
     balance_score = metrics.get("balance_drift_score", {}).get("score")
 
     if balance_score is None:
         return None
 
-    if balance_score < THRESHOLDS["balance_drift_score"]:
-        severity = _get_severity(balance_score, THRESHOLDS["balance_drift_score"])
+    # Use mode-specific threshold
+    mode_thresholds = THRESHOLDS_BY_MODE.get(analysis_mode, THRESHOLDS)
+    threshold = mode_thresholds["balance_drift_score"]
+
+    if balance_score < threshold:
+        severity = _get_severity(balance_score, threshold)
 
         # Use mode-specific "why it matters" text
         why_it_matters = WHY_IT_MATTERS_BY_MODE.get("BALANCE_DRIFT", {}).get(
             analysis_mode, FINDING_DEFINITIONS["BALANCE_DRIFT"]["why_it_matters"]
         )
+
+        # Get drills from mode registry
+        mode_drills = drill_db or DRILLS_BY_MODE.get(analysis_mode, {})
+        drills = mode_drills.get("BALANCE_DRIFT", [])
 
         finding = {
             "code": "BALANCE_DRIFT",
@@ -721,11 +989,11 @@ def _check_balance_drift(
             "severity": severity,
             "evidence": {
                 "balance_drift_score": round(balance_score, 3),
-                "threshold": THRESHOLDS["balance_drift_score"],
+                "threshold": threshold,
             },
             "why_it_matters": why_it_matters,
             "cues": FINDING_DEFINITIONS["BALANCE_DRIFT"][f"{severity}_severity"]["cues"],
-            "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("BALANCE_DRIFT", []),
+            "suggested_drills": drills,
         }
 
         return _attach_evidence_markers(finding, "balance_drift_score", evidence)
@@ -739,14 +1007,18 @@ def _check_knee_collapse(
     drill_db: dict | None = None,
     analysis_mode: str = "batting",
 ) -> dict | None:
-    """Check knee brace metric with mode-aware narratives."""
+    """Check knee brace metric with mode-aware narratives and thresholds."""
     knee_score = metrics.get("front_knee_brace_score", {}).get("score")
 
     if knee_score is None:
         return None
 
-    if knee_score < THRESHOLDS["front_knee_brace_score"]:
-        severity = _get_severity(knee_score, THRESHOLDS["front_knee_brace_score"])
+    # Use mode-specific threshold
+    mode_thresholds = THRESHOLDS_BY_MODE.get(analysis_mode, THRESHOLDS)
+    threshold = mode_thresholds["front_knee_brace_score"]
+
+    if knee_score < threshold:
+        severity = _get_severity(knee_score, threshold)
 
         # Use mode-specific "why it matters" text
         why_it_matters = WHY_IT_MATTERS_BY_MODE.get("KNEE_COLLAPSE", {}).get(
@@ -766,17 +1038,21 @@ def _check_knee_collapse(
                 # Replace batting-specific warning with mode-specific one
                 cues = [mode_warning if "Suspend intensive batting" in c else c for c in cues]
 
+        # Get drills from mode registry
+        mode_drills = drill_db or DRILLS_BY_MODE.get(analysis_mode, {})
+        drills = mode_drills.get("KNEE_COLLAPSE", [])
+
         finding = {
             "code": "KNEE_COLLAPSE",
             "title": FINDING_DEFINITIONS["KNEE_COLLAPSE"]["title"],
             "severity": severity,
             "evidence": {
                 "front_knee_brace_score": round(knee_score, 3),
-                "threshold": THRESHOLDS["front_knee_brace_score"],
+                "threshold": threshold,
             },
             "why_it_matters": why_it_matters,
             "cues": cues,
-            "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("KNEE_COLLAPSE", []),
+            "suggested_drills": drills,
         }
 
         return _attach_evidence_markers(finding, "front_knee_brace_score", evidence)
@@ -790,7 +1066,7 @@ def _check_rotation_timing(
     drill_db: dict | None = None,
     analysis_mode: str = "batting",
 ) -> dict | None:
-    """Check hip-shoulder separation timing metric with mode-aware narratives."""
+    """Check hip-shoulder separation timing metric with mode-aware narratives and thresholds."""
     timing_value = metrics.get("hip_shoulder_separation_timing")
 
     # Handle both direct float and nested dict format
@@ -799,7 +1075,9 @@ def _check_rotation_timing(
     if lag is None:
         return None
 
-    target = THRESHOLDS["hip_shoulder_separation_timing"]
+    # Use mode-specific threshold
+    mode_thresholds = THRESHOLDS_BY_MODE.get(analysis_mode, THRESHOLDS)
+    target = mode_thresholds["hip_shoulder_separation_timing"]
     diff = abs(lag - target)
 
     # No finding if timing is perfect or very close
@@ -819,6 +1097,10 @@ def _check_rotation_timing(
         analysis_mode, FINDING_DEFINITIONS["ROTATION_TIMING"]["why_it_matters"]
     )
 
+    # Get drills from mode registry
+    mode_drills = drill_db or DRILLS_BY_MODE.get(analysis_mode, {})
+    drills = mode_drills.get("ROTATION_TIMING", [])
+
     finding = {
         "code": "ROTATION_TIMING",
         "title": FINDING_DEFINITIONS["ROTATION_TIMING"]["title"],
@@ -829,7 +1111,7 @@ def _check_rotation_timing(
         },
         "why_it_matters": why_it_matters,
         "cues": FINDING_DEFINITIONS["ROTATION_TIMING"][f"{severity}_severity"]["cues"],
-        "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("ROTATION_TIMING", []),
+        "suggested_drills": drills,
     }
 
     return _attach_evidence_markers(finding, "hip_shoulder_separation_timing", evidence)
@@ -841,19 +1123,27 @@ def _check_elbow_drop(
     drill_db: dict | None = None,
     analysis_mode: str = "batting",
 ) -> dict | None:
-    """Check elbow drop metric with mode-aware narratives."""
+    """Check elbow drop metric with mode-aware narratives and thresholds."""
     elbow_score = metrics.get("elbow_drop_score", {}).get("score")
 
     if elbow_score is None:
         return None
 
-    if elbow_score < THRESHOLDS["elbow_drop_score"]:
-        severity = _get_severity(elbow_score, THRESHOLDS["elbow_drop_score"])
+    # Use mode-specific threshold
+    mode_thresholds = THRESHOLDS_BY_MODE.get(analysis_mode, THRESHOLDS)
+    threshold = mode_thresholds["elbow_drop_score"]
+
+    if elbow_score < threshold:
+        severity = _get_severity(elbow_score, threshold)
 
         # Use mode-specific "why it matters" text
         why_it_matters = WHY_IT_MATTERS_BY_MODE.get("ELBOW_DROP", {}).get(
             analysis_mode, FINDING_DEFINITIONS["ELBOW_DROP"]["why_it_matters"]
         )
+
+        # Get drills from mode registry
+        mode_drills = drill_db or DRILLS_BY_MODE.get(analysis_mode, {})
+        drills = mode_drills.get("ELBOW_DROP", [])
 
         finding = {
             "code": "ELBOW_DROP",
@@ -861,16 +1151,14 @@ def _check_elbow_drop(
             "severity": severity,
             "evidence": {
                 "elbow_drop_score": round(elbow_score, 3),
-                "threshold": THRESHOLDS["elbow_drop_score"],
+                "threshold": threshold,
             },
             "why_it_matters": why_it_matters,
             "cues": FINDING_DEFINITIONS["ELBOW_DROP"][f"{severity}_severity"]["cues"],
-            "suggested_drills": (drill_db or BATTING_DRILL_SUGGESTIONS).get("ELBOW_DROP", []),
+            "suggested_drills": drills,
         }
 
         return _attach_evidence_markers(finding, "elbow_drop_score", evidence)
-
-    return None
 
     return None
 
@@ -1207,12 +1495,26 @@ def _generate_findings_internal(
     # Compute overall level
     overall_level = _get_overall_level(findings)
 
-    logger.info(f"Generated {len(findings)} findings with overall level: {overall_level}")
+    # Calculate job-level confidence
+    job_confidence = _calculate_job_confidence(metrics, context, analysis_mode)
+    
+    # Add per-finding confidence scores
+    for finding in findings:
+        finding["confidence"] = _calculate_finding_confidence(finding, metric_scores)
+
+    logger.info(
+        f"Generated {len(findings)} findings with overall level: {overall_level}, "
+        f"confidence: {job_confidence['confidence_label']} ({job_confidence['confidence_score']:.2f})"
+    )
 
     result: dict[str, Any] = {
         "overall_level": overall_level,
         "findings": findings,
         "detection_rate": round(detection_rate, 1),  # For reliability gating
+        "confidence_score": job_confidence["confidence_score"],
+        "confidence_label": job_confidence["confidence_label"],
+        "confidence_reasons": job_confidence["confidence_reasons"],
+        "confidence_factors": job_confidence["confidence_factors"],
     }
 
     if context:
