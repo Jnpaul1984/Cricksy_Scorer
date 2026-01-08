@@ -15,6 +15,11 @@ async def test_cannot_export_pdf_when_deep_running(async_client, db_session, tes
     test_user.video_analysis_enabled = True
     db_session.add(test_user)
     await db_session.commit()
+    await db_session.refresh(test_user)
+
+    # Generate JWT token with updated role
+    from backend.security import create_access_token
+    token = create_access_token({"sub": test_user.id, "email": test_user.email, "role": test_user.role})
 
     # Create session
     session = VideoSession(
@@ -41,10 +46,10 @@ async def test_cannot_export_pdf_when_deep_running(async_client, db_session, tes
     db_session.add(job)
     await db_session.commit()
 
-    # Attempt PDF export
+    # Attempt PDF export with valid token
     response = await async_client.post(
         f"/api/coaches/plus/analysis-jobs/{job.id}/export-pdf",
-        headers={"Authorization": f"Bearer {test_user.id}"},
+        headers={"Authorization": f"Bearer {token}"},
     )
 
     # Should return 409 CONFLICT
@@ -63,6 +68,11 @@ async def test_cannot_export_pdf_when_quick_done(async_client, db_session, test_
     test_user.video_analysis_enabled = True
     db_session.add(test_user)
     await db_session.commit()
+    await db_session.refresh(test_user)
+
+    # Generate JWT token with updated role
+    from backend.security import create_access_token
+    token = create_access_token({"sub": test_user.id, "email": test_user.email, "role": test_user.role})
 
     # Create session
     session = VideoSession(
@@ -89,10 +99,10 @@ async def test_cannot_export_pdf_when_quick_done(async_client, db_session, test_
     db_session.add(job)
     await db_session.commit()
 
-    # Attempt PDF export
+    # Attempt PDF export with valid token
     response = await async_client.post(
         f"/api/coaches/plus/analysis-jobs/{job.id}/export-pdf",
-        headers={"Authorization": f"Bearer {test_user.id}"},
+        headers={"Authorization": f"Bearer {token}"},
     )
 
     # Should return 409 CONFLICT
