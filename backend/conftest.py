@@ -97,17 +97,33 @@ async def db_session(_setup_db):
 
 
 @pytest_asyncio.fixture
-async def async_client(_setup_db):
-    """Provide an async HTTP client for testing endpoints."""
+async def async_client(_setup_db, db_session):
+    """
+    Provide an async HTTP client for testing endpoints.
+    
+    CRITICAL: Overrides get_db dependency to use the same db_session
+    fixture, ensuring test data created via db_session is visible to
+    route handlers. Without this, SQLite session isolation causes 404s.
+    """
     from httpx import ASGITransport, AsyncClient
-
     from backend.app import create_app
+    from backend.sql_app.database import get_db
 
     # create_app returns (socketio.ASGIApp, FastAPI) - use the FastAPI app for testing
     _, fastapi_app = create_app()
+    
+    # Override get_db dependency to return the test's db_session
+    async def _override_get_db():
+        yield db_session
+    
+    fastapi_app.dependency_overrides[get_db] = _override_get_db
+    
     transport = ASGITransport(app=fastapi_app)
     async with AsyncClient(transport=transport, base_url="http://test", timeout=30.0) as client:
         yield client
+    
+    # Clean up override
+    fastapi_app.dependency_overrides.clear()
 
 
 @pytest_asyncio.fixture
