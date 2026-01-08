@@ -24,6 +24,7 @@ def generate_analysis_pdf(
     deep_results: dict[str, Any] | None,
     created_at: datetime,
     completed_at: datetime | None,
+    analysis_mode: str | None = None,
 ) -> bytes:
     """
     Generate a PDF report from video analysis results.
@@ -38,6 +39,7 @@ def generate_analysis_pdf(
         deep_results: Full deep analysis results
         created_at: Job creation timestamp
         completed_at: Job completion timestamp
+        analysis_mode: Analysis mode (batting, bowling, wicketkeeping)
 
     Returns:
         PDF bytes
@@ -80,8 +82,12 @@ def generate_analysis_pdf(
     )
     body_style = styles["BodyText"]
 
-    # Title
-    elements.append(Paragraph("Video Analysis Report", title_style))
+    # Title with mode-specific labeling
+    report_title = "Video Analysis Report"
+    if analysis_mode:
+        mode_label = analysis_mode.capitalize()
+        report_title = f"{mode_label} Analysis Report"
+    elements.append(Paragraph(report_title, title_style))
     elements.append(Spacer(1, 0.2 * inch))
 
     # Session metadata
@@ -167,24 +173,67 @@ def generate_analysis_pdf(
 
 
 def _format_findings(findings: dict[str, Any]) -> str:
-    """Format findings dictionary as readable text."""
+    """Format findings dictionary as readable text.
+    
+    Supports both legacy dict format and new finding object format.
+    Finding objects have: code, title, severity, evidence, cues, suggested_drills.
+    """
     lines = []
 
-    for key, value in findings.items():
-        # Convert snake_case to Title Case
-        label = key.replace("_", " ").title()
+    # Check if findings is a list of finding objects
+    findings_list = findings.get("findings", [])
+    if isinstance(findings_list, list) and findings_list:
+        for finding in findings_list:
+            if not isinstance(finding, dict):
+                continue
+            
+            # Format finding object
+            title = finding.get("title", "Finding")
+            severity = finding.get("severity", "unknown").upper()
+            code = finding.get("code", "")
+            
+            lines.append(f"<b>{title}</b> [{severity}]")
+            
+            # Evidence
+            evidence = finding.get("evidence", {})
+            if evidence and isinstance(evidence, dict):
+                for key, val in evidence.items():
+                    label = key.replace("_", " ").title()
+                    lines.append(f"  • {label}: {val}")
+            
+            # Cues
+            cues = finding.get("cues", [])
+            if cues and isinstance(cues, list):
+                lines.append("  <b>What to look for:</b>")
+                for cue in cues:
+                    lines.append(f"    - {cue}")
+            
+            # Drills
+            drills = finding.get("suggested_drills", [])
+            if drills and isinstance(drills, list):
+                lines.append("  <b>Suggested drills:</b>")
+                for drill in drills[:3]:  # Limit to first 3 for space
+                    lines.append(f"    - {drill}")
+            
+            lines.append("<br/>")
+    else:
+        # Legacy format: key-value dict
+        for key, value in findings.items():
+            # Convert snake_case to Title Case
+            label = key.replace("_", " ").title()
 
-        if isinstance(value, dict):
-            lines.append(f"<b>{label}:</b>")
-            for sub_key, sub_value in value.items():
-                sub_label = sub_key.replace("_", " ").title()
-                lines.append(f"  • {sub_label}: {sub_value}")
-        elif isinstance(value, list):
-            lines.append(f"<b>{label}:</b>")
-            for item in value:
-                lines.append(f"  • {item}")
-        else:
-            lines.append(f"<b>{label}:</b> {value}")
+            if isinstance(value, dict):
+                lines.append(f"<b>{label}:</b>")
+                for sub_key, sub_value in value.items():
+                    sub_label = sub_key.replace("_", " ").title()
+                    lines.append(f"  • {sub_label}: {sub_value}")
+            elif isinstance(value, list):
+                lines.append(f"<b>{label}:</b>")
+                for item in value:
+                    if isinstance(item, str):
+                        lines.append(f"  • {item}")
+            else:
+                lines.append(f"<b>{label}:</b> {value}")
 
     return "<br/>".join(lines) if lines else "No detailed findings available."
 

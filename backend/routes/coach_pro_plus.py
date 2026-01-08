@@ -639,6 +639,17 @@ async def export_analysis_pdf(
             detail="You don't have access to this job",
         )
 
+    # Block export if job is not completed
+    terminal_success_states = {
+        VideoAnalysisJobStatus.completed,
+        VideoAnalysisJobStatus.done,
+    }
+    if job.status not in terminal_success_states:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot export PDF: job status is {job.status.value}, must be completed",
+        )
+
     # Generate PDF from available data
     try:
         pdf_bytes = generate_analysis_pdf(
@@ -651,6 +662,7 @@ async def export_analysis_pdf(
             deep_results=job.deep_results,
             created_at=job.created_at,
             completed_at=job.completed_at,
+            analysis_mode=job.analysis_mode,
         )
 
         pdf_size_bytes = len(pdf_bytes)
