@@ -38,6 +38,12 @@ async def test_cannot_export_pdf_when_deep_running(async_client, db_session, tes
     )
     db_session.add(job)
     await db_session.commit()
+    await db_session.refresh(session)
+    await db_session.refresh(job)
+
+    # Verify data persisted
+    assert job.id == "test-job-deep-running"
+    assert job.status == VideoAnalysisJobStatus.deep_running
 
     # Attempt PDF export with valid token
     response = await async_client.post(
@@ -46,7 +52,7 @@ async def test_cannot_export_pdf_when_deep_running(async_client, db_session, tes
     )
 
     # Should return 409 CONFLICT
-    assert response.status_code == 409
+    assert response.status_code == 409, f"Expected 409, got {response.status_code}. Response: {response.text}"
     assert "Cannot export PDF" in response.json()["detail"]
     assert "deep_running" in response.json()["detail"]
 
@@ -84,6 +90,12 @@ async def test_cannot_export_pdf_when_quick_done(async_client, db_session, test_
     )
     db_session.add(job)
     await db_session.commit()
+    await db_session.refresh(session)
+    await db_session.refresh(job)
+
+    # Verify data persisted
+    assert job.id == "test-job-quick-done"
+    assert job.status == VideoAnalysisJobStatus.quick_done
 
     # Attempt PDF export with valid token
     response = await async_client.post(
@@ -92,7 +104,7 @@ async def test_cannot_export_pdf_when_quick_done(async_client, db_session, test_
     )
 
     # Should return 409 CONFLICT
-    assert response.status_code == 409
+    assert response.status_code == 409, f"Expected 409, got {response.status_code}. Response: {response.text}"
     assert "Cannot export PDF" in response.json()["detail"]
 
 
