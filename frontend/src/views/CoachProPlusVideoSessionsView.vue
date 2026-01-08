@@ -880,12 +880,17 @@ async function handleVideoUpload() {
   selectedJob.value = null;
 
   try {
+    // Extract analysis mode from session context
+    const session = sessions.value.find((s) => s.id === uploadingSessionId.value);
+    const analysisMode = (session?.analysis_context ?? null) as any;
+
     // Start upload
     const jobId = await videoStore.startUpload(
       selectedFile.value,
       uploadingSessionId.value,
       uploadSettings.value.sampleFps,
       uploadSettings.value.includeFrames,
+      analysisMode,
     );
 
     if (!jobId) {

@@ -288,6 +288,7 @@ export async function initiateVideoUpload(
   sessionId: string,
   sampleFps = 10,
   includeFrames = false,
+  analysisMode: string | null = null,
 ): Promise<UploadInitiateResponse> {
   const res = await fetch(url('/api/coaches/plus/videos/upload/initiate'), {
     method: 'POST',
@@ -299,6 +300,7 @@ export async function initiateVideoUpload(
       session_id: sessionId,
       sample_fps: sampleFps,
       include_frames: includeFrames,
+      analysis_mode: analysisMode,
     }),
   });
 

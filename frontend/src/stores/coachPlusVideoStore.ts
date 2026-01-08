@@ -143,7 +143,8 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
     file: File,
     sessionId: string,
     sampleFps = 10,
-    includeFrames = false
+    includeFrames = false,
+    analysisMode: 'batting' | 'bowling' | 'wicketkeeping' | 'fielding' | 'mixed' | null = null
   ): Promise<string | null> {
     error.value = null
 
@@ -171,7 +172,7 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
         error: null,
       }
 
-      const initiateResp = await initiateVideoUpload(sessionId, sampleFps, includeFrames)
+      const initiateResp = await initiateVideoUpload(sessionId, sampleFps, includeFrames, analysisMode)
       const jobId = initiateResp.job_id
       const presignedUrl = initiateResp.presigned_url
 
