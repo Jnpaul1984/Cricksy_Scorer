@@ -99,6 +99,14 @@
             <button class="btn-primary" @click.stop="openUploadModal(session.id)">
               📹 Upload & Analyze
             </button>
+            <button 
+              v-if="session.s3_key" 
+              class="btn-secondary" 
+              @click.stop="reanalyzeVideo(session.id)"
+              title="Re-analyze this video with different settings"
+            >
+              🔄 Re-analyze
+            </button>
             <button class="btn-secondary" @click.stop="editSession(session.id)">Edit</button>
             <button class="btn-danger" @click.stop="deleteSession(session.id)">Delete</button>
           </div>
@@ -1176,13 +1184,53 @@ async function deleteSession(sessionId: string) {
     const { deleteVideoSession } = await import('@/services/coachPlusVideoService');
     await deleteVideoSession(sessionId);
 
-    // Remove from local state
-    sessions.value = sessions.value.filter(s => s.id !== sessionId);
-
     console.log('Session deleted successfully:', sessionId);
+    
+    // Force refresh from backend to ensure deleted session is gone
+    await fetchSessions();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to delete session';
     console.error('Delete session error:', err);
+  }
+}
+
+async function reanalyzeVideo(sessionId: string) {
+  const analysisMode = prompt(
+    'Select analysis mode for re-analysis:\n\n' +
+    'Enter one of: batting, bowling, wicketkeeping, fielding\n\n' +
+    '(Leave blank to use "batting" as default)',
+    'batting'
+  );
+
+  if (analysisMode === null) return; // User cancelled
+
+  const validModes = ['batting', 'bowling', 'wicketkeeping', 'fielding'];
+  const mode = (analysisMode.trim().toLowerCase() || 'batting') as 'batting' | 'bowling' | 'wicketkeeping' | 'fielding';
+  
+  if (!validModes.includes(mode)) {
+    error.value = `Invalid analysis mode: ${mode}. Must be one of: ${validModes.join(', ')}`;
+    return;
+  }
+
+  if (!confirm(`Re-analyze this video in "${mode}" mode? This will create a new analysis job while keeping the existing video.`)) {
+    return;
+  }
+
+  try {
+    const { reanalyzeSession } = await import('@/services/coachPlusVideoService');
+    const job = await reanalyzeSession(sessionId, {
+      analysisMode: mode,
+      sampleFps: 10,
+      includeFrames: false,
+    });
+
+    alert(`Re-analysis started!\n\nJob ID: ${job.id}\nMode: ${mode}\nStatus: ${job.status}`);
+    
+    // Refresh sessions to show new job
+    await fetchSessions();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to start re-analysis';
+    console.error('Re-analysis error:', err);
   }
 }
 

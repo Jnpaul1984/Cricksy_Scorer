@@ -258,9 +258,16 @@ export async function listVideoSessions(
     params.set('exclude_failed', 'true');
   }
 
+  // Add cache-busting to prevent stale data after deletions
+  const headers = {
+    ...getAuthHeader(),
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+  };
+
   const res = await fetch(url(`/api/coaches/plus/sessions?${params.toString()}`), {
     method: 'GET',
-    headers: getAuthHeader() || {},
+    headers,
   });
 
   if (!res.ok) {
@@ -348,6 +355,46 @@ export async function bulkDeleteSessions(options?: {
     const errorCode = detail?.code || undefined;
     throw new ApiError(
       `Failed to bulk delete sessions: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
+  }
+
+  return res.json();
+}
+
+/**
+ * Re-analyze an existing video session (create new analysis job)
+ * Useful for testing different analysis modes or retrying failed analyses
+ */
+export async function reanalyzeSession(
+  sessionId: string,
+  options: {
+    analysisMode?: 'batting' | 'bowling' | 'wicketkeeping' | 'fielding';
+    sampleFps?: number;
+    includeFrames?: boolean;
+  } = {},
+): Promise<VideoAnalysisJob> {
+  const res = await fetch(url(`/api/coaches/plus/sessions/${sessionId}/analysis-jobs`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeader(),
+    },
+    body: JSON.stringify({
+      analysis_mode: options.analysisMode || 'batting',
+      sample_fps: options.sampleFps || 10,
+      include_frames: options.includeFrames || false,
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to create analysis job: ${res.status}`,
       res.status,
       errorDetail,
       errorCode,
