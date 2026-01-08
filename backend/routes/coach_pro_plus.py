@@ -167,6 +167,11 @@ class VideoUploadInitiateRequest(BaseModel):
     session_id: str
     sample_fps: int = Field(default=10, ge=1, le=30)
     include_frames: bool = Field(default=False)
+    analysis_mode: str | None = Field(
+        default=None,
+        pattern="^(batting|bowling|wicketkeeping|fielding|mixed)$",
+        description="Analysis mode for the video job",
+    )
 
 
 class VideoUploadInitiateResponse(BaseModel):
@@ -858,6 +863,7 @@ async def initiate_video_upload(
         stage="AWAITING_UPLOAD",
         progress_pct=0,
         deep_enabled=bool(settings.COACH_PLUS_DEEP_ANALYSIS_ENABLED),
+        analysis_mode=request.analysis_mode,  # NEW: Store analysis mode from request
         # S3 location will be set after key generation
         s3_bucket=None,
         s3_key=None,
