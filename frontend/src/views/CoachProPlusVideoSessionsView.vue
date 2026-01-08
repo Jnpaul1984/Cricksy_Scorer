@@ -17,8 +17,33 @@
       <header class="sessions-header">
         <h1>Video Sessions</h1>
         <p class="subtitle">Upload, manage, and analyze coaching session videos</p>
-        <button class="btn-primary" @click="showCreateModal = true">+ New Video Session</button>
+        <div class="header-actions">
+          <button class="btn-primary" @click="showCreateModal = true">+ New Video Session</button>
+        </div>
       </header>
+
+      <!-- Filters & Tools -->
+      <div class="toolbar">
+        <div class="filters">
+          <label class="filter-checkbox">
+            <input type="checkbox" v-model="excludeFailed" @change="fetchSessions()" />
+            <span>Hide failed sessions (improves performance)</span>
+          </label>
+          <select v-model="statusFilter" @change="fetchSessions()" class="status-filter">
+            <option :value="null">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="uploaded">Uploaded</option>
+            <option value="processing">Processing</option>
+            <option value="ready">Ready</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+        <div class="bulk-actions">
+          <button class="btn-warning" @click="bulkDeleteOldSessions">
+            🗑️ Clean Up Old Sessions
+          </button>
+        </div>
+      </div>
 
       <!-- Loading State -->
       <div v-if="loading" class="loading">
@@ -581,6 +606,8 @@ const videoDurationSec = ref<number | null>(null);
 
 const offset = ref(0);
 const limit = ref(10);
+const excludeFailed = ref(true); // Performance: hide failed sessions by default
+const statusFilter = ref<string | null>(null);
 
 const formData = ref({
   title: '',
@@ -789,8 +816,11 @@ async function fetchSessions() {
   error.value = null;
 
   try {
-    await videoStore.fetchSessions(limit.value, offset.value);
-    sessions.value = videoStore.sessions;
+    const { listVideoSessions } = await import('@/services/coachPlusVideoService');
+    sessions.value = await listVideoSessions(limit.value, offset.value, {
+      excludeFailed: excludeFailed.value,
+      statusFilter: statusFilter.value || undefined,
+    });
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load sessions';
     console.error(err);
@@ -1105,18 +1135,54 @@ function editSession(sessionId: string) {
   showCreateModal.value = true;
 }
 
+async function bulkDeleteOldSessions() {
+  const confirmed = confirm(
+    'Delete old failed sessions? This will:\n' +
+    '• Delete all FAILED sessions older than 7 days\n' +
+    '• Free up storage space\n' +
+    '• Improve page load performance\n\n' +
+    'This cannot be undone. Continue?'
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const { bulkDeleteSessions } = await import('@/services/coachPlusVideoService');
+    const result = await bulkDeleteSessions({
+      statusFilter: 'failed',
+      olderThanDays: 7,
+    });
+
+    alert(
+      `Cleanup complete!\n\n` +
+      `• Sessions deleted: ${result.deleted_count}\n` +
+      `• Storage freed: ${result.s3_files_deleted} videos removed`
+    );
+
+    // Refresh list
+    await fetchSessions();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to bulk delete sessions';
+    console.error('Bulk delete error:', err);
+  }
+}
+
 async function deleteSession(sessionId: string) {
-  if (!confirm('Are you sure you want to delete this session?')) {
+  if (!confirm('Are you sure you want to delete this session? This will also delete the uploaded video and all analysis data.')) {
     return;
   }
 
   try {
-    console.log('Delete session:', sessionId);
-    // TODO: Delete via API
-    await fetchSessions();
+    const { deleteVideoSession } = await import('@/services/coachPlusVideoService');
+    await deleteVideoSession(sessionId);
+
+    // Remove from local state
+    sessions.value = sessions.value.filter(s => s.id !== sessionId);
+
+    console.log('Session deleted successfully:', sessionId);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to delete session';
-    console.error(err);
+    console.error('Delete session error:', err);
   }
 }
 
@@ -1321,7 +1387,7 @@ onBeforeUnmount(() => {
 }
 
 .sessions-header {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .sessions-header h1 {
@@ -1329,9 +1395,76 @@ onBeforeUnmount(() => {
   margin-bottom: 0.5rem;
 }
 
+.header-actions {
+  margin-top: 1rem;
+}
+
 .subtitle {
   color: #666;
+  margin-bottom: 1rem;
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
   margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.filters {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-checkbox input[type="checkbox"] {
+  width: 1.2rem;
+  height: 1.2rem;
+  cursor: pointer;
+}
+
+.status-filter {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: white;
+  cursor: pointer;
+}
+
+.bulk-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-warning {
+  background: #ff9800;
+  color: white;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-warning:hover {
+  background: #f57c00;
 }
 
 /* Loading & Error */

@@ -1,6 +1,6 @@
 # Analysis Context Propagation Investigation Report
 
-**Date**: 2026-01-08  
+**Date**: 2026-01-08
 **Investigation**: Why preview/quick reports return batting findings for bowling/wicketkeeping jobs
 
 ---
@@ -77,7 +77,7 @@ findings_result = generate_findings(metrics_result)  # Missing context!
 ```python
 # services/coach_findings.py:843
 def generate_findings(
-    metrics: dict[str, Any], 
+    metrics: dict[str, Any],
     context: dict[str, Any] | None = None,  # OLD WAY
     analysis_mode: str | None = None         # NEW WAY
 ) -> dict[str, Any]:
@@ -136,8 +136,8 @@ session_context = {
 }
 ```
 
-**Function reads**: `analysis_context` from context dict  
-**Worker passes**: Both keys for backward compatibility  
+**Function reads**: `analysis_context` from context dict
+**Worker passes**: Both keys for backward compatibility
 **Routing function reads**: `analysis_mode` parameter
 
 **This works** because:
@@ -203,15 +203,15 @@ findings_result = generate_findings(metrics_result, analysis_mode=mode)
 **Fix**:
 ```python
 def generate_findings(
-    metrics: dict[str, Any], 
+    metrics: dict[str, Any],
     analysis_mode: str | None = None,
     context: dict[str, Any] | None = None,  # Keep for other metadata
 ) -> dict[str, Any]:
     """Generate findings with explicit analysis_mode parameter."""
-    
+
     # Resolve mode with fallback (for backward compat)
     mode = analysis_mode or (context.get("analysis_mode") if context else None) or "batting"
-    
+
     # Route to mode-specific generator
     if mode == "batting":
         return generate_batting_findings(metrics, context)
@@ -236,17 +236,17 @@ def generate_findings(
 
 ALLOWED_CODES_BY_MODE = {
     "batting": {
-        "HEAD_MOVEMENT", "BALANCE_DRIFT", "KNEE_COLLAPSE", 
+        "HEAD_MOVEMENT", "BALANCE_DRIFT", "KNEE_COLLAPSE",
         "ROTATION_TIMING", "ELBOW_DROP", "INSUFFICIENT_POSE_VISIBILITY"
     },
     "bowling": {
-        "HEAD_MOVEMENT", "BALANCE_DRIFT", "KNEE_COLLAPSE", 
+        "HEAD_MOVEMENT", "BALANCE_DRIFT", "KNEE_COLLAPSE",
         "ROTATION_TIMING", "ELBOW_DROP", "INSUFFICIENT_POSE_VISIBILITY",
         # Bowling-specific codes
         "INSUFFICIENT_BALL_TRACKING", "INCONSISTENT_RELEASE_POINT", "SWING_ANALYSIS"
     },
     "wicketkeeping": {
-        "HEAD_MOVEMENT", "BALANCE_DRIFT", "KNEE_COLLAPSE", 
+        "HEAD_MOVEMENT", "BALANCE_DRIFT", "KNEE_COLLAPSE",
         "ROTATION_TIMING", "ELBOW_DROP", "INSUFFICIENT_POSE_VISIBILITY"
     },
 }
@@ -254,7 +254,7 @@ ALLOWED_CODES_BY_MODE = {
 def _filter_findings_by_mode(findings: list[dict], mode: str) -> list[dict]:
     """Remove findings not allowed for the given mode."""
     allowed = ALLOWED_CODES_BY_MODE.get(mode, ALLOWED_CODES_BY_MODE["batting"])
-    
+
     filtered = []
     for finding in findings:
         code = finding.get("code")
@@ -264,22 +264,22 @@ def _filter_findings_by_mode(findings: list[dict], mode: str) -> list[dict]:
             logger.warning(
                 f"Filtered out finding code '{code}' not allowed for mode '{mode}'"
             )
-    
+
     return filtered
 
 # Then in generate_findings():
 def generate_findings(metrics, analysis_mode=None, context=None):
     mode = analysis_mode or ...
-    
+
     if mode == "batting":
         result = generate_batting_findings(metrics, context)
     elif mode == "bowling":
         result = generate_bowling_findings(metrics, context)
     # ...
-    
+
     # Validate findings match mode
     result["findings"] = _filter_findings_by_mode(result["findings"], mode)
-    
+
     return result
 ```
 
@@ -295,7 +295,7 @@ def generate_findings(metrics, analysis_mode=None, context=None):
 def test_wicketkeeping_mode_does_not_return_bowling_specific_codes():
     """Test that wicketkeeping mode does not return bowling-specific codes."""
     from backend.services.coach_findings import generate_findings
-    
+
     # Metrics that would trigger ball tracking findings (if we were in bowling mode)
     metrics = {
         "metrics": {
@@ -311,21 +311,21 @@ def test_wicketkeeping_mode_does_not_return_bowling_specific_codes():
         },
         "summary": {"total_frames": 100, "frames_with_pose": 90},
     }
-    
+
     wicketkeeping_context = {"analysis_mode": "wicketkeeping"}
-    
+
     findings = generate_findings(metrics, analysis_mode="wicketkeeping")
     finding_codes = {f["code"] for f in findings.get("findings", [])}
-    
+
     # Bowling-specific codes should NOT appear
     bowling_only_codes = {
-        "INCONSISTENT_RELEASE_POINT", 
-        "SWING_ANALYSIS", 
+        "INCONSISTENT_RELEASE_POINT",
+        "SWING_ANALYSIS",
         "INSUFFICIENT_BALL_TRACKING"
     }
     assert not finding_codes.intersection(bowling_only_codes), \
         f"Wicketkeeping mode returned bowling-only codes: {finding_codes & bowling_only_codes}"
-    
+
     # Should route to wicketkeeping findings (universal codes allowed)
     allowed_codes = {"HEAD_MOVEMENT", "KNEE_COLLAPSE", "INSUFFICIENT_POSE_VISIBILITY"}
     assert finding_codes.issubset(allowed_codes), \
@@ -349,7 +349,7 @@ from backend.workers.analysis_worker import process_video_job
 @pytest.mark.asyncio
 async def test_job_analysis_mode_overrides_session_context(db_session):
     """Test that job.analysis_mode takes precedence over session.analysis_context."""
-    
+
     # Create session with batting context
     session = VideoSession(
         id="test-session-1",
@@ -361,7 +361,7 @@ async def test_job_analysis_mode_overrides_session_context(db_session):
         s3_key="test-key.mp4",
     )
     db_session.add(session)
-    
+
     # Create job with bowling mode (should override session)
     job = VideoAnalysisJob(
         id="test-job-1",
@@ -372,7 +372,7 @@ async def test_job_analysis_mode_overrides_session_context(db_session):
     )
     db_session.add(job)
     await db_session.commit()
-    
+
     # Mock S3 download and analysis
     with patch('backend.workers.analysis_worker._download_from_s3'):
         with patch('backend.workers.analysis_worker.run_pose_metrics_findings_report') as mock_analysis:
@@ -385,15 +385,15 @@ async def test_job_analysis_mode_overrides_session_context(db_session):
                 },
                 frames=None
             )
-            
+
             await process_video_job(job.id, db_session)
-    
+
     # Verify analysis was called with "bowling" mode
     mock_analysis.assert_called_once()
     call_args = mock_analysis.call_args
     assert call_args.kwargs["analysis_mode"] == "bowling", \
         f"Expected analysis_mode='bowling', got {call_args.kwargs['analysis_mode']}"
-    
+
     # Verify persisted result has bowling mode
     await db_session.refresh(job)
     assert job.quick_results.get("meta", {}).get("analysis_mode") == "bowling"
@@ -437,4 +437,3 @@ The finding **codes** (HEAD_MOVEMENT, KNEE_COLLAPSE, etc.) are **universal** acr
 4. ⏳ **TODO**: Add code validation filter
 5. ⏳ **TODO**: Add tests for mode isolation
 6. ⏳ **TODO**: Audit database for jobs with `analysis_mode=NULL` where `session.analysis_context != NULL`
-

@@ -241,8 +241,24 @@ export async function createVideoSession(data: {
 /**
  * List video sessions for current coach (paginated)
  */
-export async function listVideoSessions(limit = 50, offset = 0): Promise<VideoSession[]> {
-  const res = await fetch(url(`/api/coaches/plus/sessions?limit=${limit}&offset=${offset}`), {
+export async function listVideoSessions(
+  limit = 50,
+  offset = 0,
+  options?: {
+    statusFilter?: string;
+    excludeFailed?: boolean;
+  },
+): Promise<VideoSession[]> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+
+  if (options?.statusFilter) {
+    params.set('status_filter', options.statusFilter);
+  }
+  if (options?.excludeFailed) {
+    params.set('exclude_failed', 'true');
+  }
+
+  const res = await fetch(url(`/api/coaches/plus/sessions?${params.toString()}`), {
     method: 'GET',
     headers: getAuthHeader() || {},
   });
@@ -276,6 +292,66 @@ export async function getVideoSession(sessionId: string): Promise<VideoSession> 
     const errorDetail = detail?.detail || res.statusText;
     const errorCode = detail?.code || undefined;
     throw new ApiError(`Failed to get session: ${res.status}`, res.status, errorDetail, errorCode);
+  }
+
+  return res.json();
+}
+
+/**
+ * Delete a video session
+ */
+export async function deleteVideoSession(sessionId: string): Promise<void> {
+  const res = await fetch(url(`/api/coaches/plus/sessions/${sessionId}`), {
+    method: 'DELETE',
+    headers: getAuthHeader() || {},
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to delete session: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
+  }
+
+  // 204 No Content - no response body
+}
+
+/**
+ * Bulk delete old/failed sessions
+ */
+export async function bulkDeleteSessions(options?: {
+  statusFilter?: string;
+  olderThanDays?: number;
+}): Promise<{ deleted_count: number; s3_files_deleted: number; filters_applied: any }> {
+  const params = new URLSearchParams();
+
+  if (options?.statusFilter) {
+    params.set('status_filter', options.statusFilter);
+  }
+  if (options?.olderThanDays) {
+    params.set('older_than_days', String(options.olderThanDays));
+  }
+
+  const res = await fetch(url(`/api/coaches/plus/sessions/bulk?${params.toString()}`), {
+    method: 'DELETE',
+    headers: getAuthHeader() || {},
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to bulk delete sessions: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
   }
 
   return res.json();

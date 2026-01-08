@@ -128,17 +128,17 @@ All finding check functions now accept `analysis_mode` parameter:
 
 ```python
 def _check_head_movement(
-    metrics: dict, 
-    evidence: dict | None = None, 
-    drill_db: dict | None = None, 
+    metrics: dict,
+    evidence: dict | None = None,
+    drill_db: dict | None = None,
     analysis_mode: str = "batting"
 ) -> dict | None:
     # ... scoring logic ...
-    
+
     why_it_matters = WHY_IT_MATTERS_BY_MODE.get("HEAD_MOVEMENT", {}).get(
         analysis_mode, FINDING_DEFINITIONS["HEAD_MOVEMENT"]["why_it_matters"]
     )
-    
+
     finding = {
         ...
         "why_it_matters": why_it_matters,  # Mode-aware
@@ -239,17 +239,17 @@ HIGH_SEVERITY_WARNINGS_BY_MODE = {
 
 ```python
 def _check_new_code(
-    metrics: dict, 
-    evidence: dict | None = None, 
-    drill_db: dict | None = None, 
+    metrics: dict,
+    evidence: dict | None = None,
+    drill_db: dict | None = None,
     analysis_mode: str = "batting"
 ) -> dict | None:
     # ... metric scoring logic ...
-    
+
     why_it_matters = WHY_IT_MATTERS_BY_MODE.get("NEW_CODE", {}).get(
         analysis_mode, FINDING_DEFINITIONS["NEW_CODE"]["why_it_matters"]
     )
-    
+
     finding = {
         "code": "NEW_CODE",
         "severity": severity,
@@ -257,7 +257,7 @@ def _check_new_code(
         "cues": FINDING_DEFINITIONS["NEW_CODE"][f"{severity}_severity"]["cues"],
         "suggested_drills": drill_db.get("NEW_CODE", [])
     }
-    
+
     return finding
 ```
 

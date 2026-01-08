@@ -37,7 +37,7 @@ from backend.sql_app.models import (
     VideoSessionStatus,
 )
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -272,12 +272,22 @@ async def list_video_sessions(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    status_filter: str | None = Query(
+        None,
+        description="Filter by status: pending, uploaded, processing, ready, failed",
+    ),
+    exclude_failed: bool = Query(
+        False,
+        description="Exclude failed sessions to improve performance",
+    ),
 ) -> list[VideoSessionRead]:
     """
     List video sessions for the current user (Coach Pro Plus feature).
 
     Feature-gated: Requires coach_pro_plus role.
     Returns sessions owned by the user or their organization.
+
+    Performance tip: Use exclude_failed=true to hide old failed sessions.
     """
     # Verify feature access
     if not await _check_feature_access(current_user, "video_sessions_enabled"):
@@ -309,6 +319,20 @@ async def list_video_sessions(
     else:
         # Coach users see only their own sessions
         query = select(VideoSession).where(VideoSession.owner_id == current_user.id)
+
+    # Apply status filters (performance optimization)
+    if exclude_failed:
+        query = query.where(VideoSession.status != VideoSessionStatus.failed)
+
+    if status_filter:
+        try:
+            status_enum = VideoSessionStatus(status_filter)
+            query = query.where(VideoSession.status == status_enum)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status: {status_filter}. Valid values: {', '.join(s.value for s in VideoSessionStatus)}",
+            )
 
     # Apply pagination
     query = query.offset(offset).limit(limit).order_by(VideoSession.created_at.desc())
@@ -372,6 +396,168 @@ async def get_video_session(
             )
 
     return VideoSessionRead.model_validate(session)
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_video_session(
+    session_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """
+    Delete a video session and all its associated data (Coach Pro Plus feature).
+
+    This will:
+    - Delete the VideoSession record
+    - Cascade delete all VideoAnalysisJobs
+    - Cascade delete all VideoAnalysisChunks
+    - Optionally delete the S3 video file (if present)
+    """
+    # Verify feature access
+    if not await _check_feature_access(current_user, "video_sessions_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_sessions_enabled",
+        )
+
+    # Verify user is coach_pro_plus, org_pro, or superuser
+    if (
+        current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro)
+        and not current_user.is_superuser
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Coach Pro Plus users can delete video sessions",
+        )
+
+    # Fetch session from database
+    result = await db.execute(select(VideoSession).where(VideoSession.id == session_id))
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Video session not found")
+
+    # Verify ownership (same logic as get_video_session)
+    if current_user.role == RoleEnum.coach_pro_plus:
+        if session.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this session",
+            )
+    elif not current_user.is_superuser:  # org_pro users
+        if session.owner_type == OwnerTypeEnum.org and session.owner_id != current_user.org_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this session",
+            )
+
+    # Delete S3 video file if present (best effort - don't fail if S3 delete fails)
+    if session.s3_bucket and session.s3_key:
+        try:
+            s3_service.delete_object(session.s3_bucket, session.s3_key)
+            logger.info(
+                f"Deleted S3 object: s3://{session.s3_bucket}/{session.s3_key} for session {session_id}"
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to delete S3 object for session {session_id}: {e} (continuing with DB delete)"
+            )
+
+    # Delete from database (cascade will handle analysis_jobs and chunks)
+    await db.delete(session)
+    await db.commit()
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/sessions/bulk", status_code=status.HTTP_200_OK)
+async def bulk_delete_sessions(
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+    status_filter: str | None = Query(
+        None,
+        description="Only delete sessions with this status (failed, pending, etc.)",
+    ),
+    older_than_days: int | None = Query(
+        None,
+        ge=1,
+        description="Only delete sessions older than N days",
+    ),
+) -> dict[str, Any]:
+    """
+    Bulk delete old/failed video sessions to free up storage and improve performance.
+
+    Safety features:
+    - Only deletes YOUR sessions (or your org's)
+    - Supports filtering by status (e.g., failed, pending)
+    - Supports filtering by age (e.g., older than 30 days)
+    - Returns count of deleted sessions
+    """
+    # Verify feature access
+    if not await _check_feature_access(current_user, "video_sessions_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_sessions_enabled",
+        )
+
+    # Build query based on ownership
+    if current_user.is_superuser:
+        query = select(VideoSession)
+    elif current_user.role == RoleEnum.org_pro:
+        query = select(VideoSession).where(
+            (VideoSession.owner_type == OwnerTypeEnum.org)
+            & (VideoSession.owner_id == current_user.org_id)
+        )
+    else:
+        query = select(VideoSession).where(VideoSession.owner_id == current_user.id)
+
+    # Apply filters
+    if status_filter:
+        # Validate status
+        try:
+            status_enum = VideoSessionStatus(status_filter)
+            query = query.where(VideoSession.status == status_enum)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status: {status_filter}. Must be one of: {', '.join(s.value for s in VideoSessionStatus)}",
+            )
+
+    if older_than_days:
+        from datetime import datetime, timedelta, timezone
+
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        query = query.where(VideoSession.created_at < cutoff_date)
+
+    # Fetch sessions to delete
+    result = await db.execute(query)
+    sessions_to_delete = result.scalars().all()
+
+    deleted_count = 0
+    s3_deleted_count = 0
+
+    for session in sessions_to_delete:
+        # Delete S3 file if present (best effort)
+        if session.s3_bucket and session.s3_key:
+            try:
+                s3_service.delete_object(session.s3_bucket, session.s3_key)
+                s3_deleted_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to delete S3 object for session {session.id}: {e}")
+
+        await db.delete(session)
+        deleted_count += 1
+
+    await db.commit()
+
+    return {
+        "deleted_count": deleted_count,
+        "s3_files_deleted": s3_deleted_count,
+        "filters_applied": {
+            "status": status_filter,
+            "older_than_days": older_than_days,
+        },
+    }
 
 
 # ============================================================================
