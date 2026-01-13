@@ -97,11 +97,13 @@ async def get_individual_plan(plan_id: str):
         entitlements = INDIVIDUAL_ENTITLEMENTS[plan]
 
         return {
-            "id": plan.value,
-            "name": pricing["name"],
-            "tagline": pricing["tagline"],
-            "price_monthly_usd": float(pricing["monthly_usd"]),
-            "features": entitlements,
+            "plan_id": plan.value,
+            "pricing": {
+                "name": pricing["name"],
+                "tagline": pricing["tagline"],
+                "monthly_usd": str(pricing["monthly_usd"]),
+            },
+            "entitlements": entitlements,
         }
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Unknown plan: {plan_id}")
@@ -124,14 +126,16 @@ async def get_venue_plan(plan_id: str):
         entitlements = VENUE_ENTITLEMENTS[plan]
 
         return {
-            "id": plan.value,
-            "name": pricing["name"],
-            "tagline": pricing["tagline"],
-            "price_monthly_usd": float(pricing["monthly_usd"])
-            if pricing["monthly_usd"] is not None
-            else None,
+            "plan_id": plan.value,
+            "pricing": {
+                "name": pricing["name"],
+                "tagline": pricing["tagline"],
+                "monthly_usd": str(pricing["monthly_usd"])
+                if pricing["monthly_usd"] is not None
+                else None,
+            },
             "contact_for_pricing": pricing["monthly_usd"] is None,
-            "features": entitlements,
+            "entitlements": entitlements,
         }
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Unknown plan: {plan_id}")

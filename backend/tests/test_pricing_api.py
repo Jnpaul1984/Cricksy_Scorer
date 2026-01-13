@@ -24,10 +24,10 @@ async def test_get_all_pricing(async_client: AsyncClient) -> None:
 
     # Verify Scorers Pro is present
     individual_plans = data["individual_plans"]
-    player_pro = next((p for p in individual_plans if p["id"] == "player_pro"), None)
+    player_pro = next((p for p in individual_plans if p["plan_id"] == "player_pro"), None)
     assert player_pro is not None
-    assert player_pro["name"] == "Scorers Pro"
-    assert player_pro["price_monthly_usd"] == 1.99
+    assert player_pro["pricing"]["name"] == "Scorers Pro"
+    assert player_pro["pricing"]["monthly_usd"] == "1.99"
 
 
 @pytest.mark.asyncio
@@ -37,11 +37,11 @@ async def test_get_individual_plan(async_client: AsyncClient) -> None:
     assert response.status_code == 200
 
     data = response.json()
-    assert data["id"] == "player_pro"
-    assert data["name"] == "Scorers Pro"
-    assert data["price_monthly_usd"] == 1.99
-    assert "tagline" in data
-    assert "features" in data
+    assert data["plan_id"] == "player_pro"
+    assert data["pricing"]["name"] == "Scorers Pro"
+    assert data["pricing"]["monthly_usd"] == "1.99"
+    assert "tagline" in data["pricing"]
+    assert "entitlements" in data
 
 
 @pytest.mark.asyncio
@@ -58,10 +58,10 @@ async def test_get_venue_plan(async_client: AsyncClient) -> None:
     assert response.status_code == 200
 
     data = response.json()
-    assert data["id"] == "venue_scoring_pro"
-    assert "name" in data
-    assert "price_monthly_usd" in data
-    assert "features" in data
+    assert data["plan_id"] == "venue_scoring_pro"
+    assert "name" in data["pricing"]
+    assert "monthly_usd" in data["pricing"]
+    assert "entitlements" in data
 
 
 @pytest.mark.asyncio
@@ -71,11 +71,11 @@ async def test_scorers_pro_pricing(async_client: AsyncClient) -> None:
     assert response.status_code == 200
 
     data = response.json()
-    assert data["name"] == "Scorers Pro"
-    assert data["price_monthly_usd"] == 1.99
-    assert data["tagline"] == "Profile, stats, and exports for social media"
+    assert data["pricing"]["name"] == "Scorers Pro"
+    assert data["pricing"]["monthly_usd"] == "1.99"
+    assert data["pricing"]["tagline"] == "Profile, stats, and exports for social media"
 
     # Verify AI quotas are reduced
-    features = data["features"]
+    features = data["entitlements"]
     assert features["ai_reports_per_month"] == 15
     assert features["tokens_limit"] == 30000
