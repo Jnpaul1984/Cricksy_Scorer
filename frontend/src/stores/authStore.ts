@@ -33,7 +33,7 @@ export const useAuthStore = defineStore('auth', {
     isFreeUser: (state) => !state.user || state.user.role === 'free',
     isPlayerPro: (state) => state.user?.role === 'player_pro',
     isCoachPro: (state) => state.user?.role === 'coach_pro' || state.user?.role === 'coach_pro_plus' || isSuperuser(state),
-    isCoachProPlus: (state) => state.user?.role === 'coach_pro_plus' || isSuperuser(state),
+    isCoachProPlus: (state) => state.user?.role === 'coach_pro_plus' || state.user?.role === 'org_pro' || isSuperuser(state),
     isAnalystPro: (state) => state.user?.role === 'analyst_pro' || isSuperuser(state),
     isOrgPro: (state) => state.user?.role === 'org_pro' || isSuperuser(state),
     isSuperuser,
