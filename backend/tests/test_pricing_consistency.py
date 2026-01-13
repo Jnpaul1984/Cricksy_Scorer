@@ -212,9 +212,10 @@ class TestPricingAPI:
         assert response.status_code == 200
 
         data = response.json()
-        assert data["name"] == "Scorers Pro"
-        assert data["price_monthly_usd"] == 1.99
-        assert data["features"]["scoring_access"] is True
+        assert data["plan_id"] == "player_pro"
+        assert data["pricing"]["name"] == "Scorers Pro"
+        assert data["pricing"]["monthly_usd"] == "1.99"
+        assert data["entitlements"]["scoring_access"] is True
 
     async def test_venue_plan_endpoint(self, async_client):
         """GET /pricing/venue/{plan_id} must work."""
@@ -222,6 +223,7 @@ class TestPricingAPI:
         assert response.status_code == 200
 
         data = response.json()
-        assert data["name"] == "Venue Scoring Pro"
-        assert data["price_monthly_usd"] == 39.00
-        assert data["features"]["branding_removal"] is True
+        assert data["plan_id"] == "venue_scoring_pro"
+        assert data["pricing"]["name"] == "Venue Scoring Pro"
+        assert data["pricing"]["monthly_usd"] == "39.00"
+        assert data["entitlements"]["branding_removal"] is True
