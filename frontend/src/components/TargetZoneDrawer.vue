@@ -2,7 +2,7 @@
   <div class="target-zone-panel">
     <div class="panel-header">
       <h3>🎯 Target Zones</h3>
-      <button @click="toggleDrawMode" :class="{ active: drawMode }" class="draw-toggle">
+      <button :class="{ active: drawMode }" class="draw-toggle" @click="toggleDrawMode">
         {{ drawMode ? '✓ Drawing' : '+ Draw Zone' }}
       </button>
     </div>
@@ -22,7 +22,7 @@
             {{ zoneReports[zone.id].hit_rate.toFixed(1) }}% hit rate
           </span>
         </div>
-        <button @click.stop="deleteZone(zone.id)" class="delete-btn">×</button>
+        <button class="delete-btn" @click.stop="deleteZone(zone.id)">×</button>
       </div>
     </div>
 
@@ -145,8 +145,8 @@
           @keyup.enter="saveNewZone"
         />
         <div class="dialog-actions">
-          <button @click="cancelCreate" class="btn-secondary">Cancel</button>
-          <button @click="saveNewZone" :disabled="!newZoneName.trim()" class="btn-primary">
+          <button class="btn-secondary" @click="cancelCreate">Cancel</button>
+          <button :disabled="!newZoneName.trim()" class="btn-primary" @click="saveNewZone">
             Create Zone
           </button>
         </div>

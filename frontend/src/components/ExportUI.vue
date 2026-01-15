@@ -5,8 +5,8 @@
       size="sm"
       variant="ghost"
       class="export-trigger-btn"
-      @click="showModal = true"
       title="Export data as CSV or JSON"
+      @click="showModal = true"
     >
       📥 Export
     </BaseButton>
@@ -16,7 +16,7 @@
       <BaseCard class="export-modal">
         <div class="export-header">
           <h3 class="export-title">Export Data</h3>
-          <button class="export-close" @click="closeModal" title="Close">✕</button>
+          <button class="export-close" title="Close" @click="closeModal">✕</button>
         </div>
 
         <div class="export-content">
@@ -97,7 +97,7 @@
             </div>
 
             <!-- Reset Filters Button -->
-            <button class="reset-filters-btn" @click="resetFilters" title="Clear all filters">
+            <button class="reset-filters-btn" title="Clear all filters" @click="resetFilters">
               ↺ Reset Filters
             </button>
           </div>
@@ -127,7 +127,7 @@
           <BaseButton variant="ghost" size="sm" @click="closeModal">
             Cancel
           </BaseButton>
-          <BaseButton variant="primary" size="sm" @click="downloadData" :loading="isExporting">
+          <BaseButton variant="primary" size="sm" :loading="isExporting" @click="downloadData">
             <span v-if="isExporting">Preparing…</span>
             <span v-else>📥 Download</span>
           </BaseButton>
@@ -139,6 +139,7 @@
 
 <script setup lang="ts">
 import { defineProps, ref, computed, reactive } from 'vue'
+
 import { BaseButton, BaseCard } from '@/components'
 
 const props = defineProps<{

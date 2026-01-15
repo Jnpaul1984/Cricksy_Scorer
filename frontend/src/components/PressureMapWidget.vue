@@ -3,7 +3,7 @@
     <!-- Header with summary stats -->
     <div class="pressure-header">
       <h3 class="widget-title">⚡ Pressure Map</h3>
-      <div class="summary-stats" v-if="pressureData?.summary">
+      <div v-if="pressureData?.summary" class="summary-stats">
         <div class="stat-item">
           <span class="stat-label">Avg Pressure</span>
           <span class="stat-value" :class="getPressureClass(pressureData.summary.average_pressure)">
@@ -89,7 +89,7 @@
     <div v-else-if="activeView === 'phases'" class="pressure-phases">
       <div class="phases-container">
         <!-- Powerplay phase -->
-        <div class="phase-card" v-if="pressureData.phases">
+        <div v-if="pressureData.phases" class="phase-card">
           <div class="phase-header powerplay">
             <h4>⚡ Powerplay (Overs 1-6)</h4>
             <span class="phase-deliveries">{{ pressureData.phases.powerplay?.length || 0 }} balls</span>
@@ -111,7 +111,7 @@
         </div>
 
         <!-- Middle overs phase -->
-        <div class="phase-card" v-if="pressureData.phases">
+        <div v-if="pressureData.phases" class="phase-card">
           <div class="phase-header middle">
             <h4>🏏 Middle Overs (7-15)</h4>
             <span class="phase-deliveries">{{ pressureData.phases.middle?.length || 0 }} balls</span>
@@ -133,7 +133,7 @@
         </div>
 
         <!-- Death overs phase -->
-        <div class="phase-card" v-if="pressureData.phases">
+        <div v-if="pressureData.phases" class="phase-card">
           <div class="phase-header death">
             <h4>💥 Death Overs (16+)</h4>
             <span class="phase-deliveries">{{ pressureData.phases.death?.length || 0 }} balls</span>
@@ -200,8 +200,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
 import Chart from 'chart.js/auto'
+import { ref, onMounted, watch } from 'vue'
 
 interface PressureData {
   pressure_points: Array<{

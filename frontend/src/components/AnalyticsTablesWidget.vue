@@ -74,9 +74,11 @@
         <svg class="worm-chart" :viewBox="`0 0 ${wormChartWidth} ${wormChartHeight}`">
           <!-- Grid lines -->
           <g class="grid">
-            <line v-for="i in 5" :key="`grid-h-${i}`" :x1="0" :y1="(i / 5) * wormChartHeight"
+            <line
+v-for="i in 5" :key="`grid-h-${i}`" :x1="0" :y1="(i / 5) * wormChartHeight"
                   :x2="wormChartWidth" :y2="(i / 5) * wormChartHeight" stroke="#e5e7eb" stroke-width="1" />
-            <line v-for="i in 10" :key="`grid-v-${i}`" :x1="(i / 10) * wormChartWidth" :y1="0"
+            <line
+v-for="i in 10" :key="`grid-v-${i}`" :x1="(i / 10) * wormChartWidth" :y1="0"
                   :x2="(i / 10) * wormChartWidth" :y2="wormChartHeight" stroke="#e5e7eb" stroke-width="1" />
           </g>
 
@@ -84,7 +86,8 @@
           <polyline :points="wormLinePoints" class="worm-line" />
 
           <!-- Data points -->
-          <circle v-for="(point, idx) in wormPoints" :key="`point-${idx}`" :cx="point.x" :cy="point.y"
+          <circle
+v-for="(point, idx) in wormPoints" :key="`point-${idx}`" :cx="point.x" :cy="point.y"
                   r="3" class="worm-point" :class="{ 'worm-point-wicket': point.isWicket }"
                   :title="`Ball ${idx + 1}: ${point.cumulativeRuns} runs (${point.deliveryType})`"
                   @mouseenter="hoverWormBall = idx"
@@ -92,9 +95,11 @@
 
           <!-- Hover label -->
           <g v-if="hoverWormBall !== null" class="hover-info">
-            <circle :cx="wormPoints[hoverWormBall].x" :cy="wormPoints[hoverWormBall].y" r="5"
+            <circle
+:cx="wormPoints[hoverWormBall].x" :cy="wormPoints[hoverWormBall].y" r="5"
                     fill="none" stroke="#3b82f6" stroke-width="2" />
-            <text :x="wormPoints[hoverWormBall].x" :y="wormPoints[hoverWormBall].y - 15"
+            <text
+:x="wormPoints[hoverWormBall].x" :y="wormPoints[hoverWormBall].y - 15"
                   text-anchor="middle" class="worm-hover-text">
               {{ wormPoints[hoverWormBall].cumulativeRuns }}
             </text>
@@ -135,14 +140,17 @@
         <svg class="scatter-chart" :viewBox="`0 0 ${scatterWidth} ${scatterHeight}`">
           <!-- Grid -->
           <g class="grid">
-            <line v-for="i in 4" :key="`sgrid-h-${i}`" :x1="0" :y1="(i / 4) * scatterHeight"
+            <line
+v-for="i in 4" :key="`sgrid-h-${i}`" :x1="0" :y1="(i / 4) * scatterHeight"
                   :x2="scatterWidth" :y2="(i / 4) * scatterHeight" stroke="#e5e7eb" stroke-width="1" />
-            <line v-for="i in 4" :key="`sgrid-v-${i}`" :x1="(i / 4) * scatterWidth" :y1="0"
+            <line
+v-for="i in 4" :key="`sgrid-v-${i}`" :x1="(i / 4) * scatterWidth" :y1="0"
                   :x2="(i / 4) * scatterWidth" :y2="scatterHeight" stroke="#e5e7eb" stroke-width="1" />
           </g>
 
           <!-- Dots -->
-          <circle v-for="(point, idx) in scatterPoints" :key="`scatter-${idx}`" :cx="point.x"
+          <circle
+v-for="(point, idx) in scatterPoints" :key="`scatter-${idx}`" :cx="point.x"
                   :cy="point.y" :r="4" :class="['scatter-dot', point.colorClass]"
                   :title="`Match ${idx + 1}: ${point.balls} balls, ${point.runs} runs (SR: ${point.sr.toFixed(0)})`"
                   @mouseenter="hoverScatterMatch = idx"
@@ -150,10 +158,12 @@
 
           <!-- Hover info -->
           <g v-if="hoverScatterMatch !== null" class="scatter-hover">
-            <circle :cx="scatterPoints[hoverScatterMatch].x"
+            <circle
+:cx="scatterPoints[hoverScatterMatch].x"
                     :cy="scatterPoints[hoverScatterMatch].y" r="6"
                     fill="none" stroke="#3b82f6" stroke-width="2" />
-            <text :x="scatterPoints[hoverScatterMatch].x" :y="scatterPoints[hoverScatterMatch].y - 15"
+            <text
+:x="scatterPoints[hoverScatterMatch].x" :y="scatterPoints[hoverScatterMatch].y - 15"
                   text-anchor="middle" class="scatter-hover-text">
               SR: {{ scatterPoints[hoverScatterMatch].sr.toFixed(0) }}
             </text>
@@ -184,6 +194,7 @@
 
 <script setup lang="ts">
 import { defineProps, ref, computed } from 'vue'
+
 import type { PlayerProfile } from '@/types/player'
 
 interface DeliveryData {

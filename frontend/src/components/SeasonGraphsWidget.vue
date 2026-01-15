@@ -77,8 +77,6 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, ref, computed } from 'vue'
-import { Line, Bar } from 'vue-chartjs'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -91,6 +89,9 @@ import {
   Legend,
   Filler,
 } from 'chart.js'
+import { defineProps, ref, computed } from 'vue'
+import { Line, Bar } from 'vue-chartjs'
+
 import type { PlayerProfile } from '@/types/player'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler)

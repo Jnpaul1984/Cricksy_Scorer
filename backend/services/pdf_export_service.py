@@ -10,6 +10,7 @@ from backend.services.reports.coach_report_template import (
     render_appendix_evidence,
     render_coach_summary,
     render_consolidated_findings,
+    render_goals_vs_outcomes,
 )
 from backend.services.reports.findings_adapter import (
     consolidate_findings,
@@ -36,6 +37,8 @@ def generate_analysis_pdf(
     created_at: datetime,
     completed_at: datetime | None,
     analysis_mode: str | None = None,
+    coach_goals: dict[str, Any] | None = None,
+    outcomes: dict[str, Any] | None = None,
 ) -> bytes:
     """
     Generate a Coach Report V2 PDF from video analysis results.
@@ -44,7 +47,8 @@ def generate_analysis_pdf(
 
     Layout:
     - Page 1: Coach Summary (Top Priorities + This Week's Focus)
-    - Page 2+: Consolidated Findings (no more Quick/Deep split)
+    - Page 2: Goals vs Outcomes (if goals exist) [Phase 2]
+    - Page 3+: Consolidated Findings (no more Quick/Deep split)
     - Appendix: Evidence & Confidence
 
     Args:
@@ -58,6 +62,8 @@ def generate_analysis_pdf(
         created_at: Job creation timestamp
         completed_at: Job completion timestamp
         analysis_mode: Analysis mode (batting, bowling, wicketkeeping, fielding)
+        coach_goals: Coach-defined goals (Phase 2)
+        outcomes: Calculated outcomes vs goals (Phase 2)
 
     Returns:
         PDF bytes
@@ -111,7 +117,11 @@ def generate_analysis_pdf(
             )
         )
 
-        # Page 2+: Consolidated Findings
+        # Page 2: Goals vs Outcomes (Phase 2 - if goals exist)
+        if coach_goals:
+            elements.extend(render_goals_vs_outcomes(coach_goals, outcomes))
+
+        # Page 3+: Consolidated Findings
         elements.extend(render_consolidated_findings(consolidated))
 
         # Appendix: Evidence & Confidence

@@ -4,7 +4,7 @@
       <h2 class="panel-title">
         <span class="icon">🎯</span> Ball Type Clustering
       </h2>
-      <button v-if="!loading" @click="refreshData" class="refresh-btn">🔄</button>
+      <button v-if="!loading" class="refresh-btn" @click="refreshData">🔄</button>
     </div>
 
     <div v-if="loading" class="loading-state">
@@ -14,7 +14,7 @@
 
     <div v-else-if="error" class="error-state">
       <p>{{ error }}</p>
-      <button @click="clearError" class="retry-btn">Retry</button>
+      <button class="retry-btn" @click="clearError">Retry</button>
     </div>
 
     <div v-else class="content">
@@ -157,6 +157,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
+
 import { useBallClustering } from "../composables/useBallClustering";
 
 interface ClusterData {

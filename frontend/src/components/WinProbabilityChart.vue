@@ -104,8 +104,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -119,9 +117,13 @@ import {
   type ChartData,
   type ChartOptions,
 } from 'chart.js'
+import { storeToRefs } from 'pinia'
+import { computed, ref, watch } from 'vue'
+import { Line } from 'vue-chartjs'
+
 import { BaseCard, BaseBadge } from '@/components'
 import { useGameStore } from '@/stores/gameStore'
-import { storeToRefs } from 'pinia'
+
 
 // Register Chart.js components
 ChartJS.register(

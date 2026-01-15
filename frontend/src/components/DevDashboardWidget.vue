@@ -145,6 +145,7 @@
 <script setup lang="ts">
 import { defineProps, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+
 import { BaseButton } from '@/components'
 import type { PlayerProfile } from '@/types/player'
 

@@ -13,7 +13,7 @@
     <!-- Error State -->
     <div v-else-if="error" class="state-message error">
       <p>{{ error }}</p>
-      <button @click="refresh" class="retry-btn">Retry</button>
+      <button class="retry-btn" @click="refresh">Retry</button>
     </div>
 
     <!-- Empty State -->
@@ -134,7 +134,7 @@
     <div class="footer-info">
       <p class="refresh-info">
         Auto-refreshes every 10 seconds
-        <button @click="refresh" class="refresh-btn">🔄 Refresh Now</button>
+        <button class="refresh-btn" @click="refresh">🔄 Refresh Now</button>
       </p>
     </div>
   </div>
@@ -142,6 +142,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+
 import { useTrainingDrills } from '../composables/useTrainingDrills'
 
 interface Drill {

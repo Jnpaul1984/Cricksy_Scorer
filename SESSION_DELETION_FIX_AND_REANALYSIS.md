@@ -53,12 +53,12 @@ const res = await fetch(url(`/api/coaches/plus/sessions?${params.toString()}`), 
 ```typescript
 async function deleteSession(sessionId: string) {
   // ... confirmation ...
-  
+
   await deleteVideoSession(sessionId);
 
   // Remove from local state
   sessions.value = sessions.value.filter(s => s.id !== sessionId);  // ❌ Manual update
-  
+
   console.log('Session deleted successfully:', sessionId);
 }
 ```
@@ -67,11 +67,11 @@ async function deleteSession(sessionId: string) {
 ```typescript
 async function deleteSession(sessionId: string) {
   // ... confirmation ...
-  
+
   await deleteVideoSession(sessionId);
 
   console.log('Session deleted successfully:', sessionId);
-  
+
   // Force refresh from backend to ensure deleted session is gone
   await fetchSessions();  // ✅ Re-fetch from server
 }
@@ -93,9 +93,9 @@ Users can now **re-analyze existing videos** without re-uploading:
 
 **New Button** (only shown if video exists):
 ```vue
-<button 
-  v-if="session.s3_key" 
-  class="btn-secondary" 
+<button
+  v-if="session.s3_key"
+  class="btn-secondary"
   @click.stop="reanalyzeVideo(session.id)"
   title="Re-analyze this video with different settings"
 >
@@ -127,7 +127,7 @@ async function reanalyzeVideo(sessionId: string) {
   });
 
   alert(`Re-analysis started!\n\nJob ID: ${job.id}\nMode: ${mode}\nStatus: ${job.status}`);
-  
+
   // Refresh to show new job
   await fetchSessions();
 }
@@ -239,9 +239,9 @@ Body: {
 # backend/sql_app/models.py
 class VideoAnalysisJob(Base):
     session_id: Mapped[str] = mapped_column(
-        String, 
+        String,
         ForeignKey("video_sessions.id", ondelete="CASCADE"),  # ← Deletes jobs when session deleted
-        nullable=False, 
+        nullable=False,
         index=True
     )
 ```
@@ -253,7 +253,7 @@ async def delete_video_session(session_id: str, ...):
     # Delete S3 video file (best effort)
     if session.s3_bucket and session.s3_key:
         s3_service.delete_object(session.s3_bucket, session.s3_key)
-    
+
     # Delete from database (cascade deletes jobs)
     await db.delete(session)
     await db.commit()
@@ -355,7 +355,7 @@ npm run build       # Rebuild frontend
 
 ---
 
-**Commit**: `a1cf8f3` - "fix: permanently delete sessions and enable re-analysis feature"  
-**Date**: 2025-01-08  
-**Files Changed**: 2 (frontend service + view)  
+**Commit**: `a1cf8f3` - "fix: permanently delete sessions and enable re-analysis feature"
+**Date**: 2025-01-08
+**Files Changed**: 2 (frontend service + view)
 **Status**: ✅ Tested, Committed, Pushed to GitHub

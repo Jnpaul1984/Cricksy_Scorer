@@ -40,7 +40,7 @@
         <div v-for="(entry, idx) in noteHistory" :key="`history-${idx}`" class="history-entry">
           <div class="history-time">{{ formatFullTime(entry.timestamp) }}</div>
           <div class="history-preview">{{ truncateText(entry.content, 60) }}</div>
-          <button class="restore-btn" @click="restoreVersion(entry.content)" title="Restore this version">
+          <button class="restore-btn" title="Restore this version" @click="restoreVersion(entry.content)">
             ↶
           </button>
         </div>
@@ -51,6 +51,7 @@
 
 <script setup lang="ts">
 import { defineProps, ref, computed, onMounted, onUnmounted, watch } from 'vue'
+
 import type { PlayerProfile } from '@/types/player'
 
 interface HistoryEntry {

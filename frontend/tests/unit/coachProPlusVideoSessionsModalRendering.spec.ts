@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+
 import type { VideoAnalysisJob } from '@/services/coachPlusVideoService'
 import { buildCoachNarrative } from '@/utils/coachVideoAnalysisNarrative'
 

@@ -352,9 +352,9 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseCard, BaseButton, BaseBadge, BaseInput, ImpactBar, MiniSparkline, AiCalloutsPanel } from '@/components'
+import type { AiCallout } from '@/components'
 import AnalyticsTablesWidget from '@/components/AnalyticsTablesWidget.vue'
 import ExportUI from '@/components/ExportUI.vue'
-import type { AiCallout } from '@/components'
 import {
   getAnalystMatches,
   type AnalystMatchListItem,

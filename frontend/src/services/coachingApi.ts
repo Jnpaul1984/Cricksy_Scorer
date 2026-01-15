@@ -18,6 +18,7 @@ import {
   validateCoachNoteRead,
   validateVideoMomentMarkerRead,
 } from '../types/coaching';
+
 import { API_BASE, getStoredToken } from './api';
 
 export class CoachingApiError extends Error {

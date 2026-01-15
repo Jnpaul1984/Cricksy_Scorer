@@ -60,8 +60,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { usePricingStore } from '@/stores/pricingStore'
+
 import { BaseButton, BaseBadge } from '@/components'
+import { usePricingStore } from '@/stores/pricingStore'
 
 // ============================================================================
 // Props
