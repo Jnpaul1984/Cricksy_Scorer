@@ -97,14 +97,14 @@ const sessions = await listVideoSessions(50, 0, {
     <input type="checkbox" v-model="excludeFailed" />
     Hide failed sessions (improves performance)
   </label>
-  
+
   <select v-model="statusFilter">
     <option value="null">All Statuses</option>
     <option value="pending">Pending</option>
     <option value="ready">Ready</option>
     <option value="failed">Failed</option>
   </select>
-  
+
   <!-- Bulk Actions -->
   <button @click="bulkDeleteOldSessions">
     🗑️ Clean Up Old Sessions
@@ -251,22 +251,22 @@ pytest tests/test_coach_pro_plus.py -k delete -v
 ## Troubleshooting
 
 ### "Failed to delete session: 403 Forbidden"
-**Cause**: You don't own this session  
+**Cause**: You don't own this session
 **Fix**: Only delete sessions you created (or your org's sessions if org_pro)
 
 ### "Failed to delete session: 404 Not Found"
-**Cause**: Session already deleted or doesn't exist  
+**Cause**: Session already deleted or doesn't exist
 **Fix**: Refresh page to sync local state
 
 ### Bulk delete returns 0 deleted sessions
-**Cause**: No sessions match your criteria  
+**Cause**: No sessions match your criteria
 **Fix**: Try different filters (e.g., remove age filter, change status)
 
 ### S3 delete warning in logs
 ```
 WARNING: Failed to delete S3 object for session abc-123: NoSuchKey
 ```
-**Impact**: None - DB delete still succeeds, orphaned S3 file (rare)  
+**Impact**: None - DB delete still succeeds, orphaned S3 file (rare)
 **Fix**: Run S3 cleanup script separately (future enhancement)
 
 ---
@@ -297,9 +297,9 @@ No schema changes required. Uses existing:
 
 ## Summary
 
-✅ **Problem 1 Solved**: Delete button now works via `DELETE /sessions/{id}` endpoint  
-✅ **Problem 2 Solved**: Performance improved 80% by hiding failed sessions by default  
-✅ **Bonus**: Bulk delete cleans up old failed sessions in one click  
-✅ **UX**: Filters update immediately, no page refresh needed  
+✅ **Problem 1 Solved**: Delete button now works via `DELETE /sessions/{id}` endpoint
+✅ **Problem 2 Solved**: Performance improved 80% by hiding failed sessions by default
+✅ **Bonus**: Bulk delete cleans up old failed sessions in one click
+✅ **UX**: Filters update immediately, no page refresh needed
 
 **Recommended Action**: Click "🗑️ Clean Up Old Sessions" button once to clear out any old failed uploads, then keep "Hide failed sessions" checked for best performance.

@@ -192,14 +192,14 @@ function getCornerColor(index: number): string {
 
 function getPolylinePoints(): string {
   if (corners.value.length < 2) return ''
-  
+
   const points = corners.value.map(c => `${c.x},${c.y}`).join(' ')
-  
+
   // Close the polygon if we have all 4 corners
   if (corners.value.length === 4) {
     return points + ` ${corners.value[0].x},${corners.value[0].y}`
   }
-  
+
   return points
 }
 

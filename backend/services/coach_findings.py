@@ -775,9 +775,7 @@ def _calculate_job_confidence(
     }
 
 
-def _calculate_finding_confidence(
-    finding: dict[str, Any], metrics: dict[str, Any]
-) -> float:
+def _calculate_finding_confidence(finding: dict[str, Any], metrics: dict[str, Any]) -> float:
     """
     Calculate per-finding confidence based on metric margin and evidence coverage.
 
@@ -1497,7 +1495,7 @@ def _generate_findings_internal(
 
     # Calculate job-level confidence
     job_confidence = _calculate_job_confidence(metrics, context, analysis_mode)
-    
+
     # Add per-finding confidence scores
     for finding in findings:
         finding["confidence"] = _calculate_finding_confidence(finding, metric_scores)

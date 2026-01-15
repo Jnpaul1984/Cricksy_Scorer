@@ -54,16 +54,16 @@
         <g opacity="0.15">
           <rect x="0" y="0" width="100" height="10" fill="#ff6b6b" />
           <text x="50" y="6" text-anchor="middle" font-size="3" fill="white">Yorker (0-10)</text>
-          
+
           <rect x="0" y="10" width="100" height="20" fill="#feca57" />
           <text x="50" y="21" text-anchor="middle" font-size="3" fill="white">Full (10-30)</text>
-          
+
           <rect x="0" y="30" width="100" height="30" fill="#48dbfb" />
           <text x="50" y="46" text-anchor="middle" font-size="3" fill="white">Good Length (30-60)</text>
-          
+
           <rect x="0" y="60" width="100" height="25" fill="#1dd1a1" />
           <text x="50" y="73" text-anchor="middle" font-size="3" fill="white">Short (60-85)</text>
-          
+
           <rect x="0" y="85" width="100" height="15" fill="#ee5a6f" />
           <text x="50" y="93" text-anchor="middle" font-size="3" fill="white">Bouncer (85-100)</text>
         </g>
@@ -233,13 +233,13 @@ const lengthDistribution = computed(() => {
     short: 0,
     bouncer: 0
   }
-  
+
   filteredPoints.value.forEach(point => {
     if (point.length in dist) {
       dist[point.length]++
     }
   })
-  
+
   return dist
 })
 
@@ -251,13 +251,13 @@ const lineDistribution = computed(() => {
     off_stump: 0,
     wide_off: 0
   }
-  
+
   filteredPoints.value.forEach(point => {
     if (point.line in dist) {
       dist[point.line]++
     }
   })
-  
+
   return dist
 })
 
@@ -286,11 +286,11 @@ function getPointStroke(point: PitchPoint): string {
 async function loadPitchMap() {
   try {
     const response = await fetch(`/api/coaches/plus/sessions/${props.sessionId}/pitch-map`)
-    
+
     if (!response.ok) {
       throw new Error('Failed to load pitch map')
     }
-    
+
     const data = await response.json()
     pitchPoints.value = data.points || []
   } catch (err) {

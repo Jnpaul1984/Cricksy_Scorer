@@ -99,9 +99,9 @@
             <button class="btn-primary" @click.stop="openUploadModal(session.id)">
               📹 Upload & Analyze
             </button>
-            <button 
-              v-if="session.s3_key" 
-              class="btn-secondary" 
+            <button
+              v-if="session.s3_key"
+              class="btn-secondary"
               @click.stop="reanalyzeVideo(session.id)"
               title="Re-analyze this video with different settings"
             >
@@ -1185,7 +1185,7 @@ async function deleteSession(sessionId: string) {
     await deleteVideoSession(sessionId);
 
     console.log('Session deleted successfully:', sessionId);
-    
+
     // Force refresh from backend to ensure deleted session is gone
     await fetchSessions();
   } catch (err) {
@@ -1206,7 +1206,7 @@ async function reanalyzeVideo(sessionId: string) {
 
   const validModes = ['batting', 'bowling', 'wicketkeeping', 'fielding'];
   const mode = (analysisMode.trim().toLowerCase() || 'batting') as 'batting' | 'bowling' | 'wicketkeeping' | 'fielding';
-  
+
   if (!validModes.includes(mode)) {
     error.value = `Invalid analysis mode: ${mode}. Must be one of: ${validModes.join(', ')}`;
     return;
@@ -1225,7 +1225,7 @@ async function reanalyzeVideo(sessionId: string) {
     });
 
     alert(`Re-analysis started!\n\nJob ID: ${job.id}\nMode: ${mode}\nStatus: ${job.status}`);
-    
+
     // Refresh sessions to show new job
     await fetchSessions();
   } catch (err) {
