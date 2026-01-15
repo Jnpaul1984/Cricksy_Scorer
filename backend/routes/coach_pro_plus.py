@@ -857,6 +857,8 @@ async def export_analysis_pdf(
             analysis_mode=job.analysis_mode,
             coach_goals=job.coach_goals,
             outcomes=job.outcomes,
+            coach_suggestions=job.coach_suggestions,
+            player_summary=job.player_summary,
         )
 
         pdf_size_bytes = len(pdf_bytes)
@@ -1210,6 +1212,184 @@ async def compare_session_jobs(
     logger.info(f"Compared {len(jobs)} jobs for session {session_id}")
 
     return CompareJobsResponse(**comparison)
+
+
+# ============================================================================
+# Phase 3: AI Coaching Suggestions Endpoints
+# ============================================================================
+
+
+class SuggestionsResponse(BaseModel):
+    """Response schema for coaching suggestions."""
+
+    primary_focus: str
+    secondary_focus: str | None
+    coaching_cues: list[str]
+    drills: list[str]
+    proposed_next_goal: dict[str, Any]
+    rationale: list[str]
+
+
+class PlayerSummaryResponse(BaseModel):
+    """Response schema for player summary."""
+
+    focus: str
+    what_to_practice: list[str]
+    encouragement: str
+
+
+class SuggestionsAndSummaryResponse(BaseModel):
+    """Combined response with both coach suggestions and player summary."""
+
+    coach_suggestions: SuggestionsResponse | None
+    player_summary: PlayerSummaryResponse | None
+
+
+@router.post("/analysis-jobs/{job_id}/generate-suggestions")
+async def generate_coaching_suggestions(
+    job_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SuggestionsResponse:
+    """Generate AI coaching suggestions for a completed analysis job.
+
+    CRITICAL RULES:
+    - AI assists only, never overrides coach intent
+    - Suggestions are traceable to findings and outcomes
+    - One primary focus per session
+    - Drills from existing drill databases only
+    - Coach approval required before using suggestions
+    """
+    from backend.services.coach_suggestions import (
+        generate_coach_suggestions,
+        generate_player_summary,
+    )
+
+    # Verify feature access
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    # Fetch job with session
+    result = await db.execute(
+        select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session))
+        .where(VideoAnalysisJob.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+
+    # Check ownership
+    if current_user.role == RoleEnum.coach_pro_plus and job.session.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this job",
+        )
+
+    # Verify job is completed
+    if job.status != VideoAnalysisJobStatus.completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Job must be completed (current status: {job.status})",
+        )
+
+    # Verify job has deep_findings
+    if not job.deep_findings or not job.deep_findings.get("findings"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Job must have deep findings to generate suggestions",
+        )
+
+    # Optional: Fetch previous jobs from same session for trend analysis
+    previous_jobs_result = await db.execute(
+        select(VideoAnalysisJob)
+        .where(
+            VideoAnalysisJob.session_id == job.session_id,
+            VideoAnalysisJob.id != job_id,
+            VideoAnalysisJob.status == VideoAnalysisJobStatus.completed,
+        )
+        .order_by(VideoAnalysisJob.completed_at.desc())
+        .limit(5)
+    )
+    previous_jobs = previous_jobs_result.scalars().all()
+
+    # Generate suggestions
+    try:
+        suggestions = generate_coach_suggestions(
+            job, list(previous_jobs) if previous_jobs else None
+        )
+        player_summary = generate_player_summary(suggestions)
+    except Exception as e:
+        logger.error(f"Failed to generate suggestions for job {job_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate suggestions: {e!s}",
+        )
+
+    # Save to job
+    job.coach_suggestions = suggestions
+    job.player_summary = player_summary
+
+    db.add(job)
+    await db.commit()
+
+    logger.info(f"Generated coaching suggestions for job {job_id}")
+
+    return SuggestionsResponse(**suggestions)
+
+
+@router.get("/analysis-jobs/{job_id}/suggestions")
+async def get_coaching_suggestions(
+    job_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SuggestionsAndSummaryResponse:
+    """Get coaching suggestions and player summary for a job.
+
+    Returns both coach-facing suggestions and optional player-facing summary.
+    """
+    # Verify feature access
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    # Fetch job with session
+    result = await db.execute(
+        select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session))
+        .where(VideoAnalysisJob.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+
+    # Check ownership
+    if current_user.role == RoleEnum.coach_pro_plus and job.session.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this job",
+        )
+
+    # Return suggestions if available
+    coach_suggestions = None
+    if job.coach_suggestions:
+        coach_suggestions = SuggestionsResponse(**job.coach_suggestions)
+
+    player_summary = None
+    if job.player_summary:
+        player_summary = PlayerSummaryResponse(**job.player_summary)
+
+    return SuggestionsAndSummaryResponse(
+        coach_suggestions=coach_suggestions,
+        player_summary=player_summary,
+    )
 
 
 @router.get("/videos/{session_id}/stream-url", response_model=VideoStreamUrlRead)

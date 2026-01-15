@@ -73,6 +73,9 @@ export interface VideoAnalysisJob {
   coach_goals?: any | null;
   outcomes?: any | null;
   goal_compliance_pct?: number | null;
+  // Phase 3: Coaching Suggestions
+  coach_suggestions?: any | null;
+  player_summary?: any | null;
   // Optional, short-lived playback URL (computed per-request; never persisted)
   video_stream?: VideoStreamUrl | null;
   created_at: string;
@@ -813,6 +816,107 @@ export async function compareJobs(
     const errorCode = detail?.code || undefined;
     throw new ApiError(
       `Failed to compare jobs: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
+  }
+
+  return res.json();
+}
+
+// ========================================
+// Phase 3: Coaching Suggestions API
+// ========================================
+
+/**
+ * Coaching suggestions response
+ */
+export interface CoachSuggestionsResponse {
+  primary_focus: {
+    code: string;
+    title: string;
+    severity: string;
+    rationale: string;
+  };
+  secondary_focus: {
+    code: string;
+    title: string;
+    severity: string;
+    rationale: string;
+  } | null;
+  coaching_cues: string[];
+  drills: Array<{
+    name: string;
+    description: string;
+    equipment: string;
+    focus: string;
+  }>;
+  proposed_next_goal: {
+    zones: Array<{
+      zone_id: string;
+      zone_name: string;
+      target_accuracy: number;
+    }>;
+    metrics: Array<{
+      code: string;
+      target_score: number;
+    }>;
+  };
+  rationale: string;
+}
+
+/**
+ * Player summary response
+ */
+export interface PlayerSummaryResponse {
+  focus_area: string;
+  key_points: string[];
+  encouragement: string;
+  next_steps: string;
+}
+
+/**
+ * Generate coaching suggestions for a job
+ */
+export async function generateCoachSuggestions(jobId: string): Promise<CoachSuggestionsResponse> {
+  const res = await fetch(url(`/api/coaches/plus/jobs/${jobId}/generate-suggestions`), {
+    method: 'POST',
+    headers: getAuthHeader() || {},
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to generate suggestions: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
+  }
+
+  return res.json();
+}
+
+/**
+ * Get coaching suggestions for a job
+ */
+export async function getCoachSuggestions(
+  jobId: string,
+): Promise<{ coach_suggestions: CoachSuggestionsResponse; player_summary: PlayerSummaryResponse }> {
+  const res = await fetch(url(`/api/coaches/plus/jobs/${jobId}/suggestions`), {
+    method: 'GET',
+    headers: getAuthHeader() || {},
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to get suggestions: ${res.status}`,
       res.status,
       errorDetail,
       errorCode,

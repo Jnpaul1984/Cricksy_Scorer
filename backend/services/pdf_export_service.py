@@ -9,6 +9,7 @@ from backend.services.reports.coach_report_template import (
     get_styles,
     render_appendix_evidence,
     render_coach_summary,
+    render_coaching_suggestions,
     render_consolidated_findings,
     render_goals_vs_outcomes,
 )
@@ -39,6 +40,8 @@ def generate_analysis_pdf(
     analysis_mode: str | None = None,
     coach_goals: dict[str, Any] | None = None,
     outcomes: dict[str, Any] | None = None,
+    coach_suggestions: dict[str, Any] | None = None,
+    player_summary: dict[str, Any] | None = None,
 ) -> bytes:
     """
     Generate a Coach Report V2 PDF from video analysis results.
@@ -48,7 +51,8 @@ def generate_analysis_pdf(
     Layout:
     - Page 1: Coach Summary (Top Priorities + This Week's Focus)
     - Page 2: Goals vs Outcomes (if goals exist) [Phase 2]
-    - Page 3+: Consolidated Findings (no more Quick/Deep split)
+    - Page 3: Coaching Suggestions (if suggestions exist) [Phase 3]
+    - Page 3/4+: Consolidated Findings (no more Quick/Deep split)
     - Appendix: Evidence & Confidence
 
     Args:
@@ -64,6 +68,8 @@ def generate_analysis_pdf(
         analysis_mode: Analysis mode (batting, bowling, wicketkeeping, fielding)
         coach_goals: Coach-defined goals (Phase 2)
         outcomes: Calculated outcomes vs goals (Phase 2)
+        coach_suggestions: AI coaching suggestions (Phase 3)
+        player_summary: Player-facing summary (Phase 3)
 
     Returns:
         PDF bytes
@@ -121,7 +127,11 @@ def generate_analysis_pdf(
         if coach_goals:
             elements.extend(render_goals_vs_outcomes(coach_goals, outcomes))
 
-        # Page 3+: Consolidated Findings
+        # Page 3: Coaching Suggestions (Phase 3 - if suggestions exist)
+        if coach_suggestions:
+            elements.extend(render_coaching_suggestions(coach_suggestions, player_summary))
+
+        # Page 3/4+: Consolidated Findings
         elements.extend(render_consolidated_findings(consolidated))
 
         # Appendix: Evidence & Confidence

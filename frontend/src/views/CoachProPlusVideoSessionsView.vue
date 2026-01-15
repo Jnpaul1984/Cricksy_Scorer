@@ -459,6 +459,27 @@
             <OutcomesViewer :outcomes="jobOutcomes" />
           </section>
 
+          <!-- Phase 3: Coaching Suggestions -->
+          <section v-if="jobOutcomes && selectedJob?.status === 'completed'" class="results-section">
+            <CoachSuggestionsPanel
+              :suggestions="coachSuggestions"
+              @generate="handleGenerateSuggestions"
+              @approve-goal="handleApproveGoal"
+            />
+
+            <!-- Player Summary Toggle -->
+            <div v-if="playerSummary" class="player-summary-toggle" style="margin-top: 1rem;">
+              <button @click="togglePlayerSummary" class="btn-toggle-summary">
+                {{ showPlayerSummary ? '🙈 Hide' : '👤 Show' }} Player Summary
+              </button>
+            </div>
+
+            <!-- Player Summary Card -->
+            <div v-if="showPlayerSummary && playerSummary" style="margin-top: 1rem;">
+              <PlayerSummaryCard :summary="playerSummary" @close="showPlayerSummary = false" />
+            </div>
+          </section>
+
           <section v-if="canSeeEvidence" class="results-section">
             <h3>Video</h3>
             <p v-if="!videoPlaybackSrc" class="status-text">
@@ -644,11 +665,21 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import GoalSetter from '@/components/GoalSetter.vue';
 import OutcomesViewer from '@/components/OutcomesViewer.vue';
 import SessionComparison from '@/components/SessionComparison.vue';
-import type { VideoAnalysisJob, OutcomesResponse } from '@/services/coachPlusVideoService';
-import { ApiError ,
+import CoachSuggestionsPanel from '@/components/CoachSuggestionsPanel.vue';
+import PlayerSummaryCard from '@/components/PlayerSummaryCard.vue';
+import type {
+  VideoAnalysisJob,
+  OutcomesResponse,
+  CoachSuggestionsResponse,
+  PlayerSummaryResponse,
+} from '@/services/coachPlusVideoService';
+import {
+  ApiError,
   getVideoStreamUrl,
   calculateCompliance,
-  getJobOutcomes
+  getJobOutcomes,
+  generateCoachSuggestions,
+  getCoachSuggestions,
 } from '@/services/coachPlusVideoService';
 import { useAuthStore } from '@/stores/authStore';
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
@@ -679,6 +710,12 @@ const jobOutcomes = ref<OutcomesResponse | null>(null);
 const showComparisonModal = ref(false);
 const comparisonMode = ref(false);
 const selectedJobsForComparison = ref<string[]>([]);
+
+// Phase 3: Coaching Suggestions state
+const coachSuggestions = ref<CoachSuggestionsResponse | null>(null);
+const playerSummary = ref<PlayerSummaryResponse | null>(null);
+const showPlayerSummary = ref(false);
+const loadingSuggestions = ref(false);
 
 // Session history state
 const selectedSession = ref<any | null>(null);
@@ -1381,6 +1418,55 @@ async function loadJobOutcomes(jobId: string) {
 }
 
 // ============================================================================
+// Phase 3: Coaching Suggestions
+// ============================================================================
+
+async function handleGenerateSuggestions() {
+  const job = selectedJob.value;
+  if (!job) return;
+
+  loadingSuggestions.value = true;
+  try {
+    const suggestions = await generateCoachSuggestions(job.id);
+    coachSuggestions.value = suggestions;
+
+    // Also fetch player summary
+    const data = await getCoachSuggestions(job.id);
+    playerSummary.value = data.player_summary;
+  } catch (err) {
+    console.error('Failed to generate suggestions:', err);
+    alert('Failed to generate coaching suggestions. Please try again.');
+  } finally {
+    loadingSuggestions.value = false;
+  }
+}
+
+async function loadCoachSuggestions(jobId: string) {
+  try {
+    const data = await getCoachSuggestions(jobId);
+    coachSuggestions.value = data.coach_suggestions;
+    playerSummary.value = data.player_summary;
+  } catch (err) {
+    // Suggestions don't exist yet - this is fine
+    coachSuggestions.value = null;
+    playerSummary.value = null;
+  }
+}
+
+async function handleApproveGoal(proposedGoal: CoachSuggestionsResponse['proposed_next_goal']) {
+  // In a real implementation, this would:
+  // 1. Create a new session with these goals pre-populated
+  // 2. Or save to the current session for next analysis
+  console.log('Approved goal:', proposedGoal);
+  alert('Goal approved! In the next session, these goals will be pre-loaded.');
+  // For now, just show confirmation
+}
+
+function togglePlayerSummary() {
+  showPlayerSummary.value = !showPlayerSummary.value;
+}
+
+// ============================================================================
 // Phase 2: Session Comparison
 // ============================================================================
 
@@ -1434,6 +1520,14 @@ function viewJobResults(job: VideoAnalysisJob) {
     loadJobOutcomes(job.id);
   } else {
     jobOutcomes.value = null;
+  }
+
+  // Load coaching suggestions if they exist
+  if (job.coach_suggestions) {
+    loadCoachSuggestions(job.id);
+  } else {
+    coachSuggestions.value = null;
+    playerSummary.value = null;
   }
 
   // Start polling if not terminal
@@ -2490,5 +2584,27 @@ onBeforeUnmount(() => {
 /* Phase 2: Outcomes Section */
 .outcomes-section {
   margin: 2rem 0;
+}
+
+/* Phase 3: Coaching Suggestions */
+.btn-toggle-summary {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-toggle-summary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.player-summary-toggle {
+  text-align: center;
 }
 </style>

@@ -42,6 +42,10 @@ FONT_SMALL = 8
 SPACE_SECTION = 0.3 * inch
 SPACE_SUBSECTION = 0.15 * inch
 SPACE_PARAGRAPH = 0.1 * inch
+SPACE_ITEM = 0.15 * inch  # Space between items
+
+# Table widths
+TABLE_FULL_WIDTH = 7.5 * inch
 
 
 def get_styles() -> dict[str, ParagraphStyle]:
@@ -532,6 +536,152 @@ def render_goals_vs_outcomes(
         elements.append(Spacer(1, SPACE_SECTION))
 
     # Add page break after goals page
+    elements.append(PageBreak())
+
+    return elements
+
+
+# ============================================================================
+# Page 3: Coaching Suggestions (Phase 3)
+# ============================================================================
+
+
+def render_coaching_suggestions(
+    suggestions: dict[str, Any] | None,
+    player_summary: dict[str, Any] | None = None,
+) -> list:
+    """
+    Render Page 3: AI-generated coaching suggestions.
+
+    CRITICAL RULES:
+    - Suggestions are coach-facing (technical)
+    - Player summary is optional and simplified
+    - Do NOT repeat findings or metrics already shown
+    - Focus on actionable next steps
+
+    Args:
+        suggestions: Coach suggestions dict with primary_focus, drills, etc.
+        player_summary: Optional player-facing simplified summary
+
+    Returns:
+        List of ReportLab flowables
+    """
+    from reportlab.platypus.flowables import Flowable
+
+    elements: list[Flowable] = []
+
+    if not suggestions:
+        # Skip page if no suggestions exist
+        return elements
+
+    # Get styles
+    styles = get_styles()
+    heading1_style = styles["heading"]
+    heading2_style = styles["subheading"]
+    body_style = styles["body"]
+
+    # Page title
+    elements.append(Paragraph("<b>Coaching Suggestions</b>", heading1_style))
+    elements.append(Spacer(1, SPACE_SECTION))
+
+    # Primary Focus
+    primary_focus = suggestions.get("primary_focus", "No specific focus identified")
+    elements.append(Paragraph("<b>Primary Focus:</b>", heading2_style))
+    elements.append(Paragraph(primary_focus, body_style))
+    elements.append(Spacer(1, SPACE_ITEM))
+
+    # Secondary Focus (if exists)
+    secondary_focus = suggestions.get("secondary_focus")
+    if secondary_focus:
+        elements.append(Paragraph("<b>Secondary Focus:</b>", heading2_style))
+        elements.append(Paragraph(secondary_focus, body_style))
+        elements.append(Spacer(1, SPACE_ITEM))
+
+    # Coaching Cues
+    coaching_cues = suggestions.get("coaching_cues", [])
+    if coaching_cues:
+        elements.append(Paragraph("<b>Key Coaching Cues:</b>", heading2_style))
+        cues_data = [[f"{i + 1}. {cue}"] for i, cue in enumerate(coaching_cues)]
+        cues_table = Table(cues_data, colWidths=[TABLE_FULL_WIDTH])
+        cues_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        elements.append(cues_table)
+        elements.append(Spacer(1, SPACE_ITEM))
+
+    # Drill Priorities
+    drills = suggestions.get("drills", [])
+    if drills:
+        elements.append(Paragraph("<b>Recommended Drills:</b>", heading2_style))
+        drills_data = [[f"{i + 1}. {drill}"] for i, drill in enumerate(drills)]
+        drills_table = Table(drills_data, colWidths=[TABLE_FULL_WIDTH])
+        drills_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        elements.append(drills_table)
+        elements.append(Spacer(1, SPACE_ITEM))
+
+    # Proposed Next Goal
+    proposed_goal = suggestions.get("proposed_next_goal", {})
+    if proposed_goal:
+        elements.append(Paragraph("<b>Proposed Next Session Goal:</b>", heading2_style))
+        goal_desc = proposed_goal.get("description", "")
+        goal_target = proposed_goal.get("target", 0.0)
+
+        goal_text = f"{goal_desc}"
+        if goal_target > 0:
+            goal_text += f" (target: {goal_target:.0%})"
+
+        elements.append(Paragraph(goal_text, body_style))
+        elements.append(Spacer(1, SPACE_ITEM))
+
+    # Rationale
+    rationale = suggestions.get("rationale", [])
+    if rationale:
+        elements.append(Paragraph("<b>Rationale:</b>", heading2_style))
+        for reason in rationale:
+            elements.append(Paragraph(f"• {reason}", body_style))
+        elements.append(Spacer(1, SPACE_ITEM))
+
+    # Optional: Player Summary (simplified, separate section)
+    if player_summary:
+        elements.append(Spacer(1, SPACE_SECTION))
+        elements.append(Paragraph("<b>Player-Facing Summary</b>", heading2_style))
+        elements.append(Spacer(1, SPACE_ITEM))
+
+        focus = player_summary.get("focus", "")
+        if focus:
+            elements.append(Paragraph(focus, body_style))
+            elements.append(Spacer(1, SPACE_ITEM))
+
+        what_to_practice = player_summary.get("what_to_practice", [])
+        if what_to_practice:
+            elements.append(Paragraph("<b>What to practice:</b>", body_style))
+            for item in what_to_practice:
+                elements.append(Paragraph(f"• {item}", body_style))
+            elements.append(Spacer(1, SPACE_ITEM))
+
+        encouragement = player_summary.get("encouragement", "")
+        if encouragement:
+            elements.append(Paragraph(f"<i>{encouragement}</i>", body_style))
+
+    # Page break after suggestions
     elements.append(PageBreak())
 
     return elements

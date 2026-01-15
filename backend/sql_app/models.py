@@ -1928,12 +1928,30 @@ class VideoAnalysisJob(Base):
         JSON,
         nullable=True,
         comment=(
-            "Calculated outcomes vs goals: "
-            "{zones: [...], metrics: [...], overall_compliance_pct}"
+            "Calculated outcomes vs goals: {zones: [...], metrics: [...], overall_compliance_pct}"
         ),
     )
     goal_compliance_pct: Mapped[float | None] = mapped_column(
         Float, nullable=True, comment="Overall goal compliance percentage (0-100)"
+    )
+
+    # Phase 3: AI coaching suggestions
+    coach_suggestions: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment=(
+            "AI-generated coaching suggestions: "
+            "{primary_focus, secondary_focus, coaching_cues, drills, "
+            "proposed_next_goal, rationale}"
+        ),
+    )
+    player_summary: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Player-facing simplified summary of suggestions: "
+            "{focus, what_to_practice, encouragement}"
+        ),
     )
 
     # Timestamps
