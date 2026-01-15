@@ -1,15 +1,26 @@
-"""PDF export service for video analysis results."""
+"""PDF export service for video analysis results - Coach Report V2."""
 
 import io
 import logging
 from datetime import datetime
 from typing import Any
 
+from backend.services.reports.coach_report_template import (
+    get_styles,
+    render_appendix_evidence,
+    render_coach_summary,
+    render_consolidated_findings,
+)
+from backend.services.reports.findings_adapter import (
+    consolidate_findings,
+    extract_secondary_focus,
+    extract_top_priorities,
+    generate_this_week_actions,
+)
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +38,14 @@ def generate_analysis_pdf(
     analysis_mode: str | None = None,
 ) -> bytes:
     """
-    Generate a PDF report from video analysis results.
+    Generate a Coach Report V2 PDF from video analysis results.
+
+    Universal template for all analysis types (bowling, batting, wicketkeeping, fielding).
+
+    Layout:
+    - Page 1: Coach Summary (Top Priorities + This Week's Focus)
+    - Page 2+: Consolidated Findings (no more Quick/Deep split)
+    - Appendix: Evidence & Confidence
 
     Args:
         job_id: Analysis job ID
@@ -39,12 +57,12 @@ def generate_analysis_pdf(
         deep_results: Full deep analysis results
         created_at: Job creation timestamp
         completed_at: Job completion timestamp
-        analysis_mode: Analysis mode (batting, bowling, wicketkeeping)
+        analysis_mode: Analysis mode (batting, bowling, wicketkeeping, fielding)
 
     Returns:
         PDF bytes
     """
-    logger.info(f"Generating PDF for job {job_id}")
+    logger.info(f"Generating Coach Report V2 PDF for job {job_id} (mode={analysis_mode})")
 
     # Create PDF in memory
     buffer = io.BytesIO()
@@ -55,42 +73,95 @@ def generate_analysis_pdf(
     # Container for PDF elements
     elements = []
 
-    # Styles
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "CustomTitle",
-        parent=styles["Title"],
-        fontSize=24,
-        textColor=colors.HexColor("#2C3E50"),
-        spaceAfter=12,
-    )
-    heading_style = ParagraphStyle(
-        "CustomHeading",
-        parent=styles["Heading1"],
-        fontSize=16,
-        textColor=colors.HexColor("#34495E"),
-        spaceAfter=10,
-        spaceBefore=12,
-    )
-    subheading_style = ParagraphStyle(
-        "CustomSubheading",
-        parent=styles["Heading2"],
-        fontSize=12,
-        textColor=colors.HexColor("#7F8C8D"),
-        spaceAfter=6,
-        spaceBefore=8,
-    )
-    body_style = styles["BodyText"]
+    # Get styles
+    styles = get_styles()
 
-    # Title with mode-specific labeling
-    report_title = "Video Analysis Report"
-    if analysis_mode:
-        mode_label = analysis_mode.capitalize()
-        report_title = f"{mode_label} Analysis Report"
-    elements.append(Paragraph(report_title, title_style))
-    elements.append(Spacer(1, 0.2 * inch))
+    # Session metadata header (before coach summary)
+    elements.extend(
+        _render_metadata_header(
+            session_title, job_id, status, created_at, completed_at, analysis_mode, styles
+        )
+    )
 
-    # Session metadata
+    # Consolidate Quick + Deep findings
+    consolidated = consolidate_findings(quick_findings, deep_findings)
+
+    if not consolidated:
+        # No findings available - render simple message
+        elements.append(Paragraph("No findings to report.", styles["body"]))
+        elements.append(Spacer(1, 0.2 * inch))
+
+        # Add basic metadata if available
+        if quick_results or deep_results:
+            results_data = deep_results or quick_results
+            if results_data:  # Additional safety check for type checker
+                summary_text = _extract_summary_from_results(results_data, "Analysis")
+                elements.append(Paragraph(summary_text, styles["body"]))
+
+    else:
+        # Extract coach summary components
+        top_priorities = extract_top_priorities(consolidated, max_count=3)
+        secondary_focus = extract_secondary_focus(consolidated, top_priorities, max_count=2)
+        this_week_actions = generate_this_week_actions(consolidated)
+
+        # Page 1: Coach Summary
+        elements.extend(
+            render_coach_summary(
+                top_priorities, secondary_focus, this_week_actions, analysis_mode or "cricket"
+            )
+        )
+
+        # Page 2+: Consolidated Findings
+        elements.extend(render_consolidated_findings(consolidated))
+
+        # Appendix: Evidence & Confidence
+        detection_rate = _extract_detection_rate(quick_findings, deep_findings)
+        total_frames, frames_with_pose = _extract_frame_counts(quick_results, deep_results)
+
+        elements.extend(
+            render_appendix_evidence(consolidated, detection_rate, total_frames, frames_with_pose)
+        )
+
+    # Build PDF
+    doc.build(elements)
+
+    # Get PDF bytes
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    pdf_size_kb = len(pdf_bytes) / 1024
+    logger.info(f"Generated Coach Report V2 PDF for job {job_id}: {pdf_size_kb:.2f} KB")
+
+    return pdf_bytes
+
+
+def _render_metadata_header(
+    session_title: str,
+    job_id: str,
+    status: str,
+    created_at: datetime,
+    completed_at: datetime | None,
+    analysis_mode: str | None,
+    styles: dict,
+) -> list:
+    """
+    Render session metadata header (appears above coach summary).
+
+    Args:
+        session_title: Video session title
+        job_id: Job ID
+        status: Job status
+        created_at: Creation timestamp
+        completed_at: Completion timestamp
+        analysis_mode: Analysis mode
+        styles: Style dict
+
+    Returns:
+        List of flowables
+    """
+    elements = []
+
+    # Metadata table
     metadata_data = [
         ["Session:", session_title],
         ["Job ID:", job_id],
@@ -117,63 +188,69 @@ def generate_analysis_pdf(
     elements.append(metadata_table)
     elements.append(Spacer(1, 0.3 * inch))
 
-    # Quick Analysis Section
-    if quick_findings or quick_results:
-        elements.append(Paragraph("Quick Analysis", heading_style))
+    return elements
 
-        if quick_findings:
-            findings_text = _format_findings(quick_findings)
-            elements.append(Paragraph(findings_text, body_style))
 
-            # Add Proof of Work section for quick analysis
-            proof_of_work = _format_proof_of_work(quick_findings, quick_results, "Quick")
-            if proof_of_work:
-                elements.append(Spacer(1, 0.15 * inch))
-                elements.append(Paragraph("Proof of Work: Quick Analysis", subheading_style))
-                elements.append(Paragraph(proof_of_work, body_style))
-        elif quick_results:
-            # Fallback: extract summary from results
-            summary = _extract_summary_from_results(quick_results, "Quick")
-            elements.append(Paragraph(summary, body_style))
+def _extract_detection_rate(
+    quick_findings: dict[str, Any] | None, deep_findings: dict[str, Any] | None
+) -> float:
+    """
+    Extract pose detection rate from findings.
 
-        elements.append(Spacer(1, 0.2 * inch))
+    Args:
+        quick_findings: Quick findings dict
+        deep_findings: Deep findings dict
 
-    # Deep Analysis Section
-    if deep_findings or deep_results:
-        elements.append(Paragraph("Deep Analysis", heading_style))
+    Returns:
+        Detection rate percentage (prefer deep, fallback to quick)
+    """
+    # Prefer deep findings
+    if deep_findings and "detection_rate" in deep_findings:
+        return float(deep_findings["detection_rate"])
 
-        if deep_findings:
-            findings_text = _format_findings(deep_findings)
-            elements.append(Paragraph(findings_text, body_style))
+    if quick_findings and "detection_rate" in quick_findings:
+        return float(quick_findings["detection_rate"])
 
-            # Add Proof of Work section for deep analysis
-            proof_of_work = _format_proof_of_work(deep_findings, deep_results, "Deep")
-            if proof_of_work:
-                elements.append(Spacer(1, 0.15 * inch))
-                elements.append(Paragraph("Proof of Work: Deep Analysis", subheading_style))
-                elements.append(Paragraph(proof_of_work, body_style))
-        elif deep_results:
-            # Fallback: extract summary from results
-            summary = _extract_summary_from_results(deep_results, "Deep")
-            elements.append(Paragraph(summary, body_style))
+    return 0.0
 
-        elements.append(Spacer(1, 0.2 * inch))
 
-    # Build PDF
-    doc.build(elements)
+def _extract_frame_counts(
+    quick_results: dict[str, Any] | None, deep_results: dict[str, Any] | None
+) -> tuple[int, int]:
+    """
+    Extract total frames and frames with pose from results.
 
-    # Get PDF bytes
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
+    Args:
+        quick_results: Quick results dict
+        deep_results: Deep results dict
 
-    pdf_size_kb = len(pdf_bytes) / 1024
-    logger.info(f"Generated PDF for job {job_id}: {pdf_size_kb:.2f} KB")
+    Returns:
+        Tuple of (total_frames, frames_with_pose)
+    """
+    results = deep_results or quick_results
 
-    return pdf_bytes
+    if not results:
+        return 0, 0
+
+    pose_summary = results.get("pose_summary") or results.get("pose", {})
+    if isinstance(pose_summary, dict):
+        total_frames = pose_summary.get("total_frames", 0)
+        frames_with_pose = pose_summary.get("frames_with_pose", 0)
+        return total_frames, frames_with_pose
+
+    return 0, 0
+
+
+# ============================================================================
+# Legacy Helper Functions (kept for backward compatibility with tests)
+# ============================================================================
 
 
 def _format_findings(findings: dict[str, Any]) -> str:
     """Format findings dictionary as readable text.
+
+    DEPRECATED: Legacy function kept for test compatibility.
+    New code should use findings_adapter.consolidate_findings().
 
     Supports both legacy dict format and new finding object format.
     Finding objects have: code, title, severity, evidence, cues, suggested_drills.
@@ -238,18 +315,21 @@ def _format_findings(findings: dict[str, Any]) -> str:
 
 
 def _extract_summary_from_results(results: dict[str, Any], stage: str) -> str:
-    """Extract a summary from raw results JSON."""
+    """
+    Extract a summary from raw results JSON.
+
+    DEPRECATED: Legacy function kept for backward compatibility.
+    """
     lines = [f"<b>{stage} analysis completed.</b><br/><br/>"]
 
     # Try to extract pose summary
     pose_summary = results.get("pose_summary") or results.get("pose", {})
-    if pose_summary:
-        if isinstance(pose_summary, dict):
-            detection_rate = pose_summary.get("detection_rate_percent", "N/A")
-            total_frames = pose_summary.get("total_frames", "N/A")
-            lines.append(
-                f"<b>Pose Detection:</b> {detection_rate}% detection rate across {total_frames} frames"
-            )
+    if pose_summary and isinstance(pose_summary, dict):
+        detection_rate = pose_summary.get("detection_rate_percent", "N/A")
+        total_frames = pose_summary.get("total_frames", "N/A")
+        lines.append(
+            f"<b>Pose Detection:</b> {detection_rate}% detection rate across {total_frames} frames"
+        )
 
     # Try to extract evidence
     evidence = results.get("evidence", {})
@@ -272,6 +352,9 @@ def _format_proof_of_work(
 ) -> str:
     """
     Format proof of work section showing detection rate and video evidence.
+
+    DEPRECATED: Legacy function kept for backward compatibility.
+    New code should use render_appendix_evidence() from coach_report_template.
 
     Args:
         findings: Findings dictionary (output from coach_findings.generate_findings)

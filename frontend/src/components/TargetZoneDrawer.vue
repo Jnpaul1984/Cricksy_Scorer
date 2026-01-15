@@ -42,7 +42,7 @@
         <!-- Pitch markings -->
         <line x1="0" y1="50" x2="100" y2="50" stroke="white" stroke-width="0.3" opacity="0.3" />
         <line x1="50" y1="0" x2="50" y2="100" stroke="white" stroke-width="0.3" opacity="0.3" />
-        
+
         <!-- Stumps -->
         <circle cx="50" cy="5" r="0.8" fill="yellow" />
         <circle cx="50" cy="95" r="0.8" fill="yellow" />
@@ -122,7 +122,7 @@
           <span class="stat-value">{{ zoneReports[selectedZoneId].total_deliveries }}</span>
         </div>
       </div>
-      
+
       <div v-if="zoneReports[selectedZoneId].misses > 0" class="miss-breakdown">
         <h5>Miss Distribution</h5>
         <ul>
@@ -212,20 +212,20 @@ function toggleDrawMode() {
 
 function getSVGCoordinates(event: MouseEvent): { x: number; y: number } | null {
   if (!pitchSvg.value) return null
-  
+
   const svg = pitchSvg.value
   const rect = svg.getBoundingClientRect()
-  
+
   // Convert mouse position to SVG coordinates (0-100 scale)
   const x = ((event.clientX - rect.left) / rect.width) * 100
   const y = ((event.clientY - rect.top) / rect.height) * 100
-  
+
   return { x, y }
 }
 
 function startDrawing(event: MouseEvent) {
   if (!drawMode.value) return
-  
+
   const coords = getSVGCoordinates(event)
   if (coords) {
     drawStart.value = coords
@@ -235,7 +235,7 @@ function startDrawing(event: MouseEvent) {
 
 function updateDrawing(event: MouseEvent) {
   if (!drawMode.value || !drawStart.value) return
-  
+
   const coords = getSVGCoordinates(event)
   if (coords) {
     currentMouse.value = coords
@@ -244,22 +244,22 @@ function updateDrawing(event: MouseEvent) {
 
 function finishDrawing(event: MouseEvent) {
   if (!drawMode.value || !drawStart.value) return
-  
+
   const coords = getSVGCoordinates(event)
   if (!coords) return
-  
+
   const x = Math.min(drawStart.value.x, coords.x)
   const y = Math.min(drawStart.value.y, coords.y)
   const width = Math.abs(coords.x - drawStart.value.x)
   const height = Math.abs(coords.y - drawStart.value.y)
-  
+
   // Minimum zone size
   if (width < 5 || height < 5) {
     drawStart.value = null
     currentMouse.value = null
     return
   }
-  
+
   pendingZone.value = { x, y, width, height }
   showCreateDialog.value = true
   drawMode.value = false
@@ -269,7 +269,7 @@ function finishDrawing(event: MouseEvent) {
 
 async function saveNewZone() {
   if (!newZoneName.value.trim() || !pendingZone.value) return
-  
+
   try {
     const response = await fetch('/api/coaches/plus/target-zones', {
       method: 'POST',
@@ -281,17 +281,17 @@ async function saveNewZone() {
         definition_json: pendingZone.value
       })
     })
-    
+
     if (!response.ok) {
       throw new Error('Failed to create zone')
     }
-    
+
     const zone = await response.json()
     zones.value.push(zone)
-    
+
     // Load report for new zone
     await loadZoneReport(zone.id)
-    
+
     showCreateDialog.value = false
     newZoneName.value = ''
     pendingZone.value = null
@@ -312,11 +312,11 @@ function selectZone(zoneId: string) {
 
 async function deleteZone(zoneId: string) {
   if (!confirm('Delete this target zone?')) return
-  
+
   // TODO: Implement delete endpoint
   zones.value = zones.value.filter(z => z.id !== zoneId)
   delete zoneReports.value[zoneId]
-  
+
   if (selectedZoneId.value === zoneId) {
     selectedZoneId.value = null
   }
@@ -349,7 +349,7 @@ async function loadZones() {
     const response = await fetch(`/api/coaches/plus/target-zones?session_id=${props.sessionId}`)
     const data = await response.json()
     zones.value = data || []
-    
+
     // Load reports for all zones
     for (const zone of zones.value) {
       await loadZoneReport(zone.id)
@@ -369,7 +369,7 @@ async function loadZoneReport(zoneId: string) {
         tolerance: 2.0
       })
     })
-    
+
     const report = await response.json()
     zoneReports.value[zoneId] = report
   } catch (err) {
