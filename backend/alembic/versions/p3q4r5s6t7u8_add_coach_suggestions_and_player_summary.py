@@ -46,8 +46,7 @@ def upgrade() -> None:
             postgresql.JSONB(astext_type=sa.Text()),
             nullable=True,
             comment=(
-                "Player-facing simplified summary: "
-                "{focus, what_to_practice, encouragement}"
+                "Player-facing simplified summary: " "{focus, what_to_practice, encouragement}"
             ),
         ),
     )

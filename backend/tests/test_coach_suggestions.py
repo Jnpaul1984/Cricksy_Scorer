@@ -1,6 +1,6 @@
 """Tests for coach suggestions service."""
 
-import pytest
+from typing import ClassVar
 from backend.services.coach_suggestions import (
     _propose_next_goal,
     _rank_findings,
@@ -264,7 +264,7 @@ class TestGenerateCoachSuggestions:
 
         # Mock job object
         class MockJob:
-            deep_findings = {
+            deep_findings: ClassVar = {
                 "findings": [
                     {
                         "code": "HEAD_MOVEMENT",
@@ -284,7 +284,7 @@ class TestGenerateCoachSuggestions:
                     },
                 ]
             }
-            outcomes = {
+            outcomes: ClassVar = {
                 "metrics": [
                     {
                         "code": "HEAD_MOVEMENT",
@@ -318,7 +318,7 @@ class TestGenerateCoachSuggestions:
         """Test suggestions when no findings exist."""
 
         class MockJob:
-            deep_findings = {"findings": []}
+            deep_findings: ClassVar = {"findings": []}
             outcomes = None
             goal_compliance_pct = None
 
