@@ -129,7 +129,7 @@ class TestCompareJobs:
         delta1 = result["deltas"][0]
         assert delta1["from_job_id"] == "job1"
         assert delta1["to_job_id"] == "job2"
-        
+
         # HEAD_MOVEMENT improved by 0.20 (above 0.05 threshold)
         improvements = [imp for imp in delta1["improvements"] if imp["code"] == "HEAD_MOVEMENT"]
         assert len(improvements) == 1
@@ -141,7 +141,7 @@ class TestCompareJobs:
 
         # First delta: job1 -> job2
         delta1 = result["deltas"][0]
-        
+
         # FRONT_ELBOW regressed slightly (not enough for threshold)
         # But in delta2 (job2 -> job3), it improved
         delta2 = result["deltas"][1]

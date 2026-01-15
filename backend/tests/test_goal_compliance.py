@@ -7,7 +7,6 @@ from backend.services.goal_compliance import (
     calculate_zone_compliance,
     is_point_in_circle,
     is_point_in_rect,
-    is_point_in_zone,
 )
 
 
