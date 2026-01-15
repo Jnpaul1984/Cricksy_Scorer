@@ -1731,6 +1731,13 @@ class VideoSession(Base):
         BigInteger, nullable=True, comment="File size in bytes for quota tracking"
     )
 
+    # Pitch calibration data
+    pitch_corners: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="4 corner points for pitch homography: [{x, y}, {x, y}, {x, y}, {x, y}]"
+    )
+
     # Status tracking
     status: Mapped[VideoSessionStatus] = mapped_column(
         SAEnum(VideoSessionStatus, name="video_session_status"),
@@ -1960,6 +1967,45 @@ class VideoAnalysisChunkStatus(str, enum.Enum):
     processing = "processing"  # Chunk being processed
     completed = "completed"  # Chunk processing complete
     failed = "failed"  # Chunk processing failed
+
+
+class TargetZone(Base):
+    """Coach-defined target zones on the pitch for accuracy analysis."""
+
+    __tablename__ = "target_zones"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    owner_id: Mapped[str] = mapped_column(
+        String, nullable=False, index=True, comment="Coach user_id who created the zone"
+    )
+    session_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("video_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Optional link to specific session"
+    )
+    name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="Zone name (e.g., 'Yorker Line', 'Off Stump')"
+    )
+    shape: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="rect", comment="Shape type: rect, circle, polygon"
+    )
+    definition_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        nullable=False,
+        comment="Shape definition: {x, y, width, height} for rect, {cx, cy, r} for circle, etc."
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_target_zones_owner_id", "owner_id"),
+        Index("ix_target_zones_session_id", "session_id"),
+    )
 
 
 class VideoAnalysisChunk(Base):

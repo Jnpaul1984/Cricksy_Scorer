@@ -28,6 +28,7 @@ from backend.sql_app.database import get_db
 from backend.sql_app.models import (
     OwnerTypeEnum,
     RoleEnum,
+    TargetZone,
     User,
     VideoAnalysisChunk,
     VideoAnalysisChunkStatus,
@@ -1866,3 +1867,571 @@ async def track_ball_in_video(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ball tracking failed: {e!s}",
         )
+
+
+# ============================================================================
+# Pitch Calibration Endpoints
+# ============================================================================
+
+
+class PitchCornerPoint(BaseModel):
+    """Single corner point for pitch calibration."""
+
+    x: float = Field(..., description="X coordinate in pixels")
+    y: float = Field(..., description="Y coordinate in pixels")
+
+
+class PitchCalibrationRequest(BaseModel):
+    """Request schema for pitch calibration."""
+
+    corners: list[PitchCornerPoint] = Field(
+        ...,
+        min_length=4,
+        max_length=4,
+        description="4 corner points: [top_left, top_right, bottom_left, bottom_right]"
+    )
+
+
+class PitchCalibrationResponse(BaseModel):
+    """Response schema for pitch calibration."""
+
+    session_id: str
+    corners: list[PitchCornerPoint]
+    message: str
+
+
+class CalibrationFrameResponse(BaseModel):
+    """Response schema for calibration frame."""
+
+    session_id: str
+    frame_url: str | None = None
+    message: str
+
+
+@router.get("/sessions/{session_id}/calibration-frame", response_model=CalibrationFrameResponse)
+async def get_calibration_frame(
+    session_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CalibrationFrameResponse:
+    """
+    Get a calibration frame from the video for pitch corner selection.
+
+    Returns a presigned S3 GET URL for a JPEG frame extracted from ~1 second into the video.
+    """
+    # Verify access
+    if not await _check_feature_access(current_user, "video_sessions_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_sessions_enabled",
+        )
+
+    # Fetch session
+    result = await db.execute(
+        select(VideoSession).where(VideoSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Video session not found")
+
+    # Verify ownership
+    if session.owner_id != current_user.id and not current_user.is_superuser:
+        if session.owner_type != OwnerTypeEnum.org or session.owner_id != current_user.org_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this session",
+            )
+
+    # Check if video is uploaded
+    if not session.s3_key or not session.s3_bucket:
+        raise HTTPException(
+            status_code=400,
+            detail="Video not uploaded yet. Upload video before calibration."
+        )
+
+    # Generate frame key (frames stored alongside video)
+    # Format: coach_videos/{owner_id}/sessions/{session_id}/calibration_frame.jpg
+    frame_key = session.s3_key.replace("/video.mp4", "/calibration_frame.jpg")
+
+    # Check if frame already exists, otherwise generate it
+    # For now, assume frame extraction happens in worker (TODO: implement)
+    # Return presigned URL for frame
+    try:
+        frame_url = s3_service.generate_presigned_get_url(
+            bucket=session.s3_bucket,
+            key=frame_key,
+            expiration=3600,  # 1 hour
+        )
+        return CalibrationFrameResponse(
+            session_id=session_id,
+            frame_url=frame_url,
+            message="Calibration frame available"
+        )
+    except Exception as e:
+        logger.warning(f"Calibration frame not found: {e}")
+        return CalibrationFrameResponse(
+            session_id=session_id,
+            frame_url=None,
+            message="Calibration frame not yet generated. Please process video first."
+        )
+
+
+@router.post("/sessions/{session_id}/pitch-calibration", response_model=PitchCalibrationResponse)
+async def save_pitch_calibration(
+    session_id: str,
+    request: PitchCalibrationRequest,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> PitchCalibrationResponse:
+    """
+    Save pitch corner calibration for homography transform.
+
+    Corners should be provided in order: [top_left, top_right, bottom_left, bottom_right]
+    where top = bowler's end, bottom = batsman's end.
+    """
+    # Verify access
+    if not await _check_feature_access(current_user, "video_sessions_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_sessions_enabled",
+        )
+
+    # Fetch session
+    result = await db.execute(
+        select(VideoSession).where(VideoSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Video session not found")
+
+    # Verify ownership
+    if session.owner_id != current_user.id and not current_user.is_superuser:
+        if session.owner_type != OwnerTypeEnum.org or session.owner_id != current_user.org_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this session",
+            )
+
+    # Validate corners
+    if len(request.corners) != 4:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Expected exactly 4 corners, got {len(request.corners)}"
+        )
+
+    # Save corners to session
+    corners_data = [{"x": c.x, "y": c.y} for c in request.corners]
+    session.pitch_corners = {"corners": corners_data}
+    await db.commit()
+
+    logger.info(f"Pitch calibration saved for session {session_id}")
+
+    return PitchCalibrationResponse(
+        session_id=session_id,
+        corners=request.corners,
+        message="Pitch calibration saved successfully"
+    )
+
+
+class PitchMapPoint(BaseModel):
+    """Single point on the pitch map."""
+
+    x_coordinate: float = Field(..., description="Normalized X (0-100): 0=leg, 100=off")
+    y_coordinate: float = Field(..., description="Normalized Y (0-100): 0=bowler, 100=batsman")
+    value: float = Field(default=1.0, description="Intensity value (used for heatmap)")
+    timestamp: float | None = Field(None, description="Timestamp in video (seconds)")
+    confidence: float | None = Field(None, description="Detection confidence (0-1)")
+    length: str | None = Field(None, description="Length classification (yorker/full/good/short)")
+    line: str | None = Field(None, description="Line classification (leg/middle/off)")
+
+
+class PitchMapResponse(BaseModel):
+    """Response schema for pitch map data."""
+
+    session_id: str
+    total_points: int
+    points: list[PitchMapPoint]
+    calibrated: bool
+    message: str
+
+
+@router.get("/sessions/{session_id}/pitch-map", response_model=PitchMapResponse)
+async def get_pitch_map(
+    session_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> PitchMapResponse:
+    """
+    Get pitch map data for visualization.
+
+    Returns normalized bounce point coordinates from ball tracking analysis.
+    """
+    # Verify access
+    if not await _check_feature_access(current_user, "video_sessions_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_sessions_enabled",
+        )
+
+    # Fetch session
+    result = await db.execute(
+        select(VideoSession).where(VideoSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Video session not found")
+
+    # Verify ownership
+    if session.owner_id != current_user.id and not current_user.is_superuser:
+        if session.owner_type != OwnerTypeEnum.org or session.owner_id != current_user.org_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this session",
+            )
+
+    # Get latest analysis job
+    job_result = await db.execute(
+        select(VideoAnalysisJob)
+        .where(VideoAnalysisJob.session_id == session_id)
+        .order_by(VideoAnalysisJob.created_at.desc())
+    )
+    job = job_result.scalar_one_or_none()
+
+    if not job:
+        return PitchMapResponse(
+            session_id=session_id,
+            total_points=0,
+            points=[],
+            calibrated=False,
+            message="No analysis job found for this session"
+        )
+
+    # Check if analysis is complete
+    if job.status not in (VideoAnalysisJobStatus.done, VideoAnalysisJobStatus.completed):
+        return PitchMapResponse(
+            session_id=session_id,
+            total_points=0,
+            points=[],
+            calibrated=bool(session.pitch_corners),
+            message=f"Analysis not complete. Current status: {job.status}"
+        )
+
+    # Extract pitch map data from deep_results
+    deep_results = job.deep_results or {}
+    pitch_map_data = deep_results.get("pitch_map", [])
+
+    # Check if calibration was used
+    calibrated = bool(session.pitch_corners)
+
+    if not pitch_map_data:
+        return PitchMapResponse(
+            session_id=session_id,
+            total_points=0,
+            points=[],
+            calibrated=calibrated,
+            message="No pitch map data available. Ensure video contains bowling deliveries."
+        )
+
+    # Convert to response format
+    points = [
+        PitchMapPoint(
+            x_coordinate=p.get("x", 0),
+            y_coordinate=p.get("y", 0),
+            value=p.get("value", 1.0),
+            timestamp=p.get("timestamp"),
+            confidence=p.get("confidence"),
+            length=p.get("length"),
+            line=p.get("line"),
+        )
+        for p in pitch_map_data
+    ]
+
+    return PitchMapResponse(
+        session_id=session_id,
+        total_points=len(points),
+        points=points,
+        calibrated=calibrated,
+        message="Pitch map data retrieved successfully"
+    )
+
+
+# ============================================================================
+# Target Zone Endpoints
+# ============================================================================
+
+
+class TargetZoneCreate(BaseModel):
+    """Request schema for creating a target zone."""
+
+    session_id: str | None = Field(None, description="Optional session ID to link zone")
+    name: str = Field(..., min_length=1, max_length=100, description="Zone name")
+    shape: str = Field(default="rect", description="Shape type: rect, circle, polygon")
+    definition_json: dict[str, Any] = Field(
+        ...,
+        description="Shape definition: {x, y, width, height} for rect"
+    )
+
+
+class TargetZoneRead(BaseModel):
+    """Response schema for target zone."""
+
+    id: str
+    owner_id: str
+    session_id: str | None
+    name: str
+    shape: str
+    definition_json: dict[str, Any]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ZoneReportRequest(BaseModel):
+    """Request schema for zone accuracy report."""
+
+    zone_id: str
+    tolerance: float = Field(default=0.0, ge=0.0, description="Tolerance margin (0-100 scale)")
+
+
+class ZoneReportResponse(BaseModel):
+    """Response schema for zone accuracy report."""
+
+    zone_id: str
+    zone_name: str
+    total_deliveries: int
+    hits: int
+    misses: int
+    hit_rate: float
+    miss_breakdown: dict[str, int]
+    nearest_miss_distance: float | None
+    avg_miss_distance: float | None
+
+
+@router.post("/target-zones", response_model=TargetZoneRead)
+async def create_target_zone(
+    zone_data: TargetZoneCreate,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> TargetZoneRead:
+    """
+    Create a new target zone for pitch mapping analysis.
+    """
+    # Verify access
+    if not await _check_feature_access(current_user, "video_sessions_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_sessions_enabled",
+        )
+
+    # If session_id provided, verify it exists and user has access
+    if zone_data.session_id:
+        session_result = await db.execute(
+            select(VideoSession).where(VideoSession.id == zone_data.session_id)
+        )
+        session = session_result.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if session.owner_id != current_user.id and not current_user.is_superuser:
+            if session.owner_type != OwnerTypeEnum.org or session.owner_id != current_user.org_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have access to this session",
+                )
+
+    # Create zone
+    zone = TargetZone(
+        owner_id=current_user.id,
+        session_id=zone_data.session_id,
+        name=zone_data.name,
+        shape=zone_data.shape,
+        definition_json=zone_data.definition_json,
+    )
+
+    db.add(zone)
+    await db.commit()
+    await db.refresh(zone)
+
+    logger.info(f"Target zone created: {zone.id} by user {current_user.id}")
+
+    return TargetZoneRead.model_validate(zone)
+
+
+@router.get("/target-zones", response_model=list[TargetZoneRead])
+async def list_target_zones(
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    session_id: str | None = Query(None, description="Filter by session ID"),
+    db: AsyncSession = Depends(get_db),
+) -> list[TargetZoneRead]:
+    """
+    List target zones for the current user.
+    """
+    # Verify access
+    if not await _check_feature_access(current_user, "video_sessions_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_sessions_enabled",
+        )
+
+    # Build query
+    query = select(TargetZone).where(TargetZone.owner_id == current_user.id)
+
+    if session_id:
+        query = query.where(TargetZone.session_id == session_id)
+
+    query = query.order_by(TargetZone.created_at.desc())
+
+    result = await db.execute(query)
+    zones = result.scalars().all()
+
+    return [TargetZoneRead.model_validate(z) for z in zones]
+
+
+@router.post("/sessions/{session_id}/zone-report", response_model=ZoneReportResponse)
+async def get_zone_accuracy_report(
+    session_id: str,
+    request: ZoneReportRequest,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ZoneReportResponse:
+    """
+    Calculate accuracy report for a target zone.
+
+    Analyzes how many deliveries landed within the zone vs. outside.
+    """
+    # Verify access
+    if not await _check_feature_access(current_user, "video_sessions_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_sessions_enabled",
+        )
+
+    # Fetch zone
+    zone_result = await db.execute(
+        select(TargetZone).where(TargetZone.id == request.zone_id)
+    )
+    zone = zone_result.scalar_one_or_none()
+
+    if not zone:
+        raise HTTPException(status_code=404, detail="Target zone not found")
+
+    # Verify ownership
+    if zone.owner_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this zone",
+        )
+
+    # Fetch session
+    session_result = await db.execute(
+        select(VideoSession).where(VideoSession.id == session_id)
+    )
+    session = session_result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Get pitch map data
+    job_result = await db.execute(
+        select(VideoAnalysisJob)
+        .where(VideoAnalysisJob.session_id == session_id)
+        .order_by(VideoAnalysisJob.created_at.desc())
+    )
+    job = job_result.scalar_one_or_none()
+
+    if not job or not job.deep_results:
+        raise HTTPException(
+            status_code=400,
+            detail="No analysis data available for this session"
+        )
+
+    pitch_map_data = job.deep_results.get("pitch_map", [])
+
+    if not pitch_map_data:
+        return ZoneReportResponse(
+            zone_id=zone.id,
+            zone_name=zone.name,
+            total_deliveries=0,
+            hits=0,
+            misses=0,
+            hit_rate=0.0,
+            miss_breakdown={},
+            nearest_miss_distance=None,
+            avg_miss_distance=None,
+        )
+
+    # Analyze hits vs misses
+    hits = 0
+    misses = 0
+    miss_distances = []
+    miss_breakdown = {
+        "above": 0,
+        "below": 0,
+        "left": 0,
+        "right": 0,
+    }
+
+    # Extract zone definition (assuming rectangular zone)
+    zone_def = zone.definition_json
+    x_min = zone_def.get("x", 0)
+    y_min = zone_def.get("y", 0)
+    width = zone_def.get("width", 10)
+    height = zone_def.get("height", 10)
+    x_max = x_min + width
+    y_max = y_min + height
+
+    # Apply tolerance
+    x_min -= request.tolerance
+    y_min -= request.tolerance
+    x_max += request.tolerance
+    y_max += request.tolerance
+
+    for point in pitch_map_data:
+        px = point.get("x", 0)
+        py = point.get("y", 0)
+
+        # Check if point is inside zone (with tolerance)
+        if x_min <= px <= x_max and y_min <= py <= y_max:
+            hits += 1
+        else:
+            misses += 1
+
+            # Calculate miss distance (simplified: distance to zone center)
+            zone_center_x = (x_min + x_max) / 2
+            zone_center_y = (y_min + y_max) / 2
+            distance = ((px - zone_center_x) ** 2 + (py - zone_center_y) ** 2) ** 0.5
+            miss_distances.append(distance)
+
+            # Classify miss direction
+            if py < y_min:
+                miss_breakdown["above"] += 1
+            elif py > y_max:
+                miss_breakdown["below"] += 1
+
+            if px < x_min:
+                miss_breakdown["left"] += 1
+            elif px > x_max:
+                miss_breakdown["right"] += 1
+
+    total = hits + misses
+    hit_rate = (hits / total * 100) if total > 0 else 0.0
+
+    nearest_miss = min(miss_distances) if miss_distances else None
+    avg_miss = sum(miss_distances) / len(miss_distances) if miss_distances else None
+
+    return ZoneReportResponse(
+        zone_id=zone.id,
+        zone_name=zone.name,
+        total_deliveries=total,
+        hits=hits,
+        misses=misses,
+        hit_rate=hit_rate,
+        miss_breakdown=miss_breakdown,
+        nearest_miss_distance=nearest_miss,
+        avg_miss_distance=avg_miss,
+    )

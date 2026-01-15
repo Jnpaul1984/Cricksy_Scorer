@@ -541,3 +541,133 @@ def analyze_multiple_deliveries(
         "velocity_variance": velocity_variance,
         "avg_velocity": float(np.mean(velocities)),
     }
+
+
+# ============================================================================
+# Pitch Calibration & Homography
+# ============================================================================
+
+
+def compute_homography(corners_px: list[dict[str, float]]) -> np.ndarray:
+    """
+    Compute homography matrix from pixel corners to normalized pitch coordinates.
+
+    Args:
+        corners_px: List of 4 corner points in pixel space:
+            [{"x": ..., "y": ...}, ...] in order:
+            [top_left, top_right, bottom_left, bottom_right]
+
+    Returns:
+        3x3 homography matrix H that maps pixel coords → normalized pitch (0-100)
+
+    Raises:
+        ValueError: If corners_px is not exactly 4 points
+    """
+    cv2 = _import_cv2()
+
+    if len(corners_px) != 4:
+        raise ValueError(f"Expected exactly 4 corners, got {len(corners_px)}")
+
+    # Extract pixel coordinates
+    src_points = np.float32([
+        [corners_px[0]["x"], corners_px[0]["y"]],  # top-left
+        [corners_px[1]["x"], corners_px[1]["y"]],  # top-right
+        [corners_px[2]["x"], corners_px[2]["y"]],  # bottom-left
+        [corners_px[3]["x"], corners_px[3]["y"]],  # bottom-right
+    ])
+
+    # Define normalized pitch corners (0-100 scale)
+    # Top = bowler's end (0), Bottom = batsman's end (100)
+    # Left = leg side (0), Right = off side (100)
+    dst_points = np.float32([
+        [0, 0],       # top-left
+        [100, 0],     # top-right
+        [0, 100],     # bottom-left
+        [100, 100]    # bottom-right
+    ])
+
+    # Compute perspective transform
+    H = cv2.getPerspectiveTransform(src_points, dst_points)
+
+    logger.info("Computed homography matrix from pixel corners to normalized pitch (0-100)")
+    return H
+
+
+def project_point_to_pitch(
+    point_px: dict[str, float] | BallPosition,
+    H: np.ndarray
+) -> tuple[float, float]:
+    """
+    Project a pixel coordinate to normalized pitch space using homography.
+
+    Args:
+        point_px: Point in pixel space, either {"x": ..., "y": ...} or BallPosition
+        H: 3x3 homography matrix from compute_homography()
+
+    Returns:
+        (x_norm, y_norm) where:
+            x_norm: 0 (leg side) to 100 (off side)
+            y_norm: 0 (bowler's end) to 100 (batsman's end)
+    """
+    cv2 = _import_cv2()
+
+    # Extract x, y coordinates
+    if isinstance(point_px, BallPosition):
+        x, y = point_px.x, point_px.y
+    else:
+        x, y = point_px["x"], point_px["y"]
+
+    # Apply perspective transform
+    pixel_array = np.array([[[x, y]]], dtype=np.float32)
+    pitch_coord = cv2.perspectiveTransform(pixel_array, H)
+
+    x_norm = float(pitch_coord[0][0][0])
+    y_norm = float(pitch_coord[0][0][1])
+
+    return x_norm, y_norm
+
+
+def classify_length(y_norm: float) -> str:
+    """
+    Classify delivery length based on normalized pitch y-coordinate.
+
+    Args:
+        y_norm: Normalized y-coordinate (0-100), where:
+            0 = bowler's end, 100 = batsman's end
+
+    Returns:
+        Length classification: yorker, full, good_length, short, bouncer
+    """
+    if y_norm >= 85:
+        return "yorker"
+    elif y_norm >= 65:
+        return "full"
+    elif y_norm >= 40:
+        return "good_length"
+    elif y_norm >= 20:
+        return "short"
+    else:
+        return "bouncer"
+
+
+def classify_line(x_norm: float) -> str:
+    """
+    Classify delivery line based on normalized pitch x-coordinate.
+
+    Args:
+        x_norm: Normalized x-coordinate (0-100), where:
+            0 = leg side, 100 = off side, 50 = stumps
+
+    Returns:
+        Line classification: wide_leg, leg_stump, middle, off_stump, wide_off
+    """
+    if x_norm < 20:
+        return "wide_leg"
+    elif x_norm < 40:
+        return "leg_stump"
+    elif x_norm >= 40 and x_norm <= 60:
+        return "middle"
+    elif x_norm > 60 and x_norm <= 80:
+        return "off_stump"
+    else:
+        return "wide_off"
