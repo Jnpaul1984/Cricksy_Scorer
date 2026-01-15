@@ -69,6 +69,10 @@ export interface VideoAnalysisJob {
   // PDF export
   pdf_s3_key?: string | null;
   pdf_generated_at?: string | null;
+  // Phase 2: Goals & Outcomes
+  coach_goals?: any | null;
+  outcomes?: any | null;
+  goal_compliance_pct?: number | null;
   // Optional, short-lived playback URL (computed per-request; never persisted)
   video_stream?: VideoStreamUrl | null;
   created_at: string;
@@ -637,6 +641,178 @@ export async function exportAnalysisPdf(jobId: string): Promise<PdfExportRespons
     const errorCode = detail?.code || undefined;
     throw new ApiError(
       `Failed to export PDF: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
+  }
+
+  return res.json();
+}
+
+// ============================================================================
+// Phase 2: Coach Goals and Outcomes API Functions
+// ============================================================================
+
+/**
+ * Set coach-defined goals for an analysis job
+ */
+export interface SetGoalsRequest {
+  zones: Array<{ zone_id: string; target_accuracy: number }>;
+  metrics: Array<{ code: string; target_score: number }>;
+}
+
+export async function setJobGoals(jobId: string, goals: SetGoalsRequest): Promise<any> {
+  const res = await fetch(url(`/api/coaches/plus/analysis-jobs/${jobId}/set-goals`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(getAuthHeader() || {}),
+    },
+    body: JSON.stringify(goals),
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to set goals: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
+  }
+
+  return res.json();
+}
+
+/**
+ * Calculate compliance of analysis results against goals
+ */
+export interface OutcomesResponse {
+  zones: Array<{
+    zone_id: string;
+    zone_name: string;
+    target_accuracy: number;
+    actual_accuracy: number;
+    pass: boolean;
+    delta: number;
+  }>;
+  metrics: Array<{
+    code: string;
+    title: string;
+    target_score: number;
+    actual_score: number;
+    pass: boolean;
+    delta: number;
+  }>;
+  overall_compliance_pct: number;
+}
+
+export async function calculateCompliance(jobId: string): Promise<OutcomesResponse> {
+  const res = await fetch(url(`/api/coaches/plus/analysis-jobs/${jobId}/calculate-compliance`), {
+    method: 'POST',
+    headers: getAuthHeader() || {},
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to calculate compliance: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
+  }
+
+  return res.json();
+}
+
+/**
+ * Get calculated outcomes for a job
+ */
+export async function getJobOutcomes(jobId: string): Promise<OutcomesResponse> {
+  const res = await fetch(url(`/api/coaches/plus/analysis-jobs/${jobId}/outcomes`), {
+    method: 'GET',
+    headers: getAuthHeader() || {},
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to get outcomes: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
+  }
+
+  return res.json();
+}
+
+/**
+ * Compare multiple analysis jobs within a session
+ */
+export interface CompareJobsRequest {
+  job_ids: string[];
+}
+
+export interface CompareJobsResponse {
+  timeline: Array<{
+    timestamp: string | null;
+    job_id: string;
+    analysis_mode: string | null;
+    metric_scores: Record<string, number>;
+  }>;
+  deltas: Array<{
+    from_job_id: string;
+    to_job_id: string;
+    improvements: Array<{
+      code: string;
+      from_score: number;
+      to_score: number;
+      delta: number;
+    }>;
+    regressions: Array<{
+      code: string;
+      from_score: number;
+      to_score: number;
+      delta: number;
+    }>;
+  }>;
+  persistent_issues: Array<{
+    code: string;
+    title: string;
+    avg_score: number;
+    trend: 'declining' | 'stable' | 'improving';
+    occurrences: number;
+  }>;
+}
+
+export async function compareJobs(
+  sessionId: string,
+  jobIds: string[],
+): Promise<CompareJobsResponse> {
+  const res = await fetch(url(`/api/coaches/plus/sessions/${sessionId}/compare-jobs`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(getAuthHeader() || {}),
+    },
+    body: JSON.stringify({ job_ids: jobIds }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to compare jobs: ${res.status}`,
       res.status,
       errorDetail,
       errorCode,

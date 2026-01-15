@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+
 import { API_BASE } from '@/services/api'
 
 export interface BestBowlerSuggestion {

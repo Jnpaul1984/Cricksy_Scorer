@@ -36,7 +36,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+
 import FollowButton from './FollowButton.vue'
+
 import { useFollowSystem } from '@/composables/useFollowSystem'
 
 interface Props {

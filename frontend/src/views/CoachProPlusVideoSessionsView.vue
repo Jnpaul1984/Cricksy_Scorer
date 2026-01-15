@@ -26,10 +26,10 @@
       <div class="toolbar">
         <div class="filters">
           <label class="filter-checkbox">
-            <input type="checkbox" v-model="excludeFailed" @change="fetchSessions()" />
+            <input v-model="excludeFailed" type="checkbox" @change="fetchSessions()" />
             <span>Hide failed sessions (improves performance)</span>
           </label>
-          <select v-model="statusFilter" @change="fetchSessions()" class="status-filter">
+          <select v-model="statusFilter" class="status-filter" @change="fetchSessions()">
             <option :value="null">All Statuses</option>
             <option value="pending">Pending</option>
             <option value="uploaded">Uploaded</option>
@@ -102,8 +102,8 @@
             <button
               v-if="session.s3_key"
               class="btn-secondary"
-              @click.stop="reanalyzeVideo(session.id)"
               title="Re-analyze this video with different settings"
+              @click.stop="reanalyzeVideo(session.id)"
             >
               🔄 Re-analyze
             </button>
@@ -292,9 +292,27 @@
         </div>
 
         <div v-else class="history-list">
+          <!-- Comparison Mode Toggle -->
+          <div class="comparison-toolbar">
+            <button class="btn-secondary" @click="toggleComparisonMode">
+              {{ comparisonMode ? '✕ Exit Comparison' : '📊 Compare Sessions' }}
+            </button>
+            <button
+              v-if="comparisonMode"
+              class="btn-primary"
+              :disabled="selectedJobsForComparison.length < 2"
+              @click="openComparisonModal"
+            >
+              Compare Selected ({{ selectedJobsForComparison.length }})
+            </button>
+          </div>
+
           <table class="history-table">
             <thead>
               <tr>
+                <th v-if="comparisonMode" style="width: 40px">
+                  <input type="checkbox" disabled />
+                </th>
                 <th>Date</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -302,6 +320,14 @@
             </thead>
             <tbody>
               <tr v-for="job in analysisHistory" :key="job.id">
+                <td v-if="comparisonMode">
+                  <input
+                    type="checkbox"
+                    :checked="selectedJobsForComparison.includes(job.id)"
+                    :disabled="job.status !== 'completed' && job.status !== 'done'"
+                    @change="toggleJobSelection(job.id)"
+                  />
+                </td>
                 <td>{{ formatDate(job.created_at) }}</td>
                 <td>
                   <span :class="['status-badge', `status-${job.status}`]">
@@ -311,16 +337,24 @@
                 <td class="history-actions">
                   <button
                     class="btn-small btn-primary"
-                    @click="viewJobResults(job)"
                     :disabled="job.status === 'queued' || job.status === 'processing'"
+                    @click="viewJobResults(job)"
                   >
                     View
                   </button>
                   <button
+                    v-if="isJobCompleted(job)"
+                    class="btn-small btn-secondary"
+                    title="Set goals for this analysis"
+                    @click="openGoalsModal(job.id, selectedSession.id)"
+                  >
+                    🎯 Goals
+                  </button>
+                  <button
                     v-if="canExport"
                     class="btn-small btn-secondary"
-                    @click="exportJobPdf(job.id)"
                     :disabled="exportingPdf || !isJobCompleted(job)"
+                    @click="exportJobPdf(job.id)"
                   >
                     {{ exportingPdf ? '...' : 'Export PDF' }}
                   </button>
@@ -420,6 +454,11 @@
 
         <!-- Completed / other states -->
         <div v-else class="results-loaded">
+          <!-- Phase 2: Goals vs Outcomes -->
+          <section v-if="jobOutcomes" class="results-section">
+            <OutcomesViewer :outcomes="jobOutcomes" />
+          </section>
+
           <section v-if="canSeeEvidence" class="results-section">
             <h3>Video</h3>
             <p v-if="!videoPlaybackSrc" class="status-text">
@@ -570,15 +609,47 @@
         </div>
       </div>
     </div>
+
+    <!-- Phase 2: Goals Modal -->
+    <div v-if="showGoalsModal && goalsJobId && goalsSessionId" class="modal-overlay" @click="closeGoalsModal">
+      <div class="modal-content" @click.stop>
+        <GoalSetter
+          :job-id="goalsJobId"
+          :session-id="goalsSessionId"
+          @close="closeGoalsModal"
+          @goals-saved="handleGoalsSaved"
+        />
+      </div>
+    </div>
+
+    <!-- Phase 2: Comparison Modal -->
+    <div v-if="showComparisonModal && selectedSession" class="modal-overlay" @click="closeComparisonModal">
+      <div class="modal-content modal-large" @click.stop>
+        <button class="modal-close-btn" @click="closeComparisonModal">✕</button>
+        <SessionComparison
+          :session-id="selectedSession.id"
+          :selected-job-ids="selectedJobsForComparison"
+        />
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" @click="closeComparisonModal">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 
-import { ApiError } from '@/services/coachPlusVideoService';
-import type { VideoAnalysisJob } from '@/services/coachPlusVideoService';
-import { getVideoStreamUrl } from '@/services/coachPlusVideoService';
+import GoalSetter from '@/components/GoalSetter.vue';
+import OutcomesViewer from '@/components/OutcomesViewer.vue';
+import SessionComparison from '@/components/SessionComparison.vue';
+import type { VideoAnalysisJob, OutcomesResponse } from '@/services/coachPlusVideoService';
+import { ApiError ,
+  getVideoStreamUrl,
+  calculateCompliance,
+  getJobOutcomes
+} from '@/services/coachPlusVideoService';
 import { useAuthStore } from '@/stores/authStore';
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
 import { buildCoachNarrative } from '@/utils/coachVideoAnalysisNarrative';
@@ -599,6 +670,15 @@ const showResultsModal = ref(false);
 const showHistoryModal = ref(false);
 const editingId = ref<string | null>(null);
 const uploadingSessionId = ref<string | null>(null);
+
+// Phase 2: Goals & Comparison State
+const showGoalsModal = ref(false);
+const goalsJobId = ref<string | null>(null);
+const goalsSessionId = ref<string | null>(null);
+const jobOutcomes = ref<OutcomesResponse | null>(null);
+const showComparisonModal = ref(false);
+const comparisonMode = ref(false);
+const selectedJobsForComparison = ref<string[]>([]);
 
 // Session history state
 const selectedSession = ref<any | null>(null);
@@ -1253,6 +1333,89 @@ function closeHistoryModal() {
   analysisHistory.value = [];
 }
 
+// ============================================================================
+// Phase 2: Goals & Outcomes
+// ============================================================================
+
+function openGoalsModal(jobId: string, sessionId: string) {
+  goalsJobId.value = jobId;
+  goalsSessionId.value = sessionId;
+  showGoalsModal.value = true;
+}
+
+function closeGoalsModal() {
+  showGoalsModal.value = false;
+  goalsJobId.value = null;
+  goalsSessionId.value = null;
+}
+
+async function handleGoalsSaved() {
+  // After goals are saved, calculate compliance and refresh outcomes
+  if (!goalsJobId.value) return;
+
+  try {
+    await calculateCompliance(goalsJobId.value);
+    const outcomes = await getJobOutcomes(goalsJobId.value);
+    jobOutcomes.value = outcomes;
+
+    // Refresh history to show updated job
+    if (selectedSession.value?.id) {
+      await selectSession(selectedSession.value.id);
+    }
+
+    closeGoalsModal();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to calculate compliance';
+    console.error('Calculate compliance error:', err);
+  }
+}
+
+async function loadJobOutcomes(jobId: string) {
+  try {
+    const outcomes = await getJobOutcomes(jobId);
+    jobOutcomes.value = outcomes;
+  } catch (err) {
+    console.error('Failed to load job outcomes:', err);
+    jobOutcomes.value = null;
+  }
+}
+
+// ============================================================================
+// Phase 2: Session Comparison
+// ============================================================================
+
+function toggleComparisonMode() {
+  comparisonMode.value = !comparisonMode.value;
+  if (!comparisonMode.value) {
+    selectedJobsForComparison.value = [];
+  }
+}
+
+function toggleJobSelection(jobId: string) {
+  const index = selectedJobsForComparison.value.indexOf(jobId);
+  if (index >= 0) {
+    selectedJobsForComparison.value.splice(index, 1);
+  } else {
+    selectedJobsForComparison.value.push(jobId);
+  }
+}
+
+function openComparisonModal() {
+  if (selectedJobsForComparison.value.length < 2) {
+    error.value = 'Please select at least 2 jobs to compare';
+    return;
+  }
+  showComparisonModal.value = true;
+}
+
+function closeComparisonModal() {
+  showComparisonModal.value = false;
+}
+
+// ============================================================================
+// Existing Modal Functions (continued)
+// ============================================================================
+
 function closeHistoryModalAndUpload() {
   const sessionId = selectedSession.value?.id;
   closeHistoryModal();
@@ -1265,6 +1428,13 @@ function viewJobResults(job: VideoAnalysisJob) {
   selectedJob.value = job;
   showHistoryModal.value = false;
   showResultsModal.value = true;
+
+  // Load outcomes if goals exist
+  if (job.coach_goals) {
+    loadJobOutcomes(job.id);
+  } else {
+    jobOutcomes.value = null;
+  }
 
   // Start polling if not terminal
   if (!isJobCompleted(job)) {
@@ -2300,5 +2470,25 @@ onBeforeUnmount(() => {
 .btn-small:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Phase 2: Comparison Toolbar */
+.comparison-toolbar {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: #f0f4ff;
+  border-radius: 6px;
+  align-items: center;
+}
+
+.comparison-toolbar .btn-primary {
+  margin-left: auto;
+}
+
+/* Phase 2: Outcomes Section */
+.outcomes-section {
+  margin: 2rem 0;
 }
 </style>

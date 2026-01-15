@@ -7,9 +7,9 @@
       </h2>
       <button
         v-if="!loading && selectedPlayer"
-        @click="refreshData"
         class="refresh-btn"
         title="Refresh heatmap"
+        @click="refreshData"
       >
         🔄
       </button>
@@ -23,7 +23,7 @@
 
     <div v-else-if="error" class="error-state">
       <p>{{ error }}</p>
-      <button @click="clearError" class="retry-btn">Retry</button>
+      <button class="retry-btn" @click="clearError">Retry</button>
     </div>
 
     <div v-else-if="!selectedPlayer && !selectedBowler" class="no-data-state">
@@ -225,6 +225,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
+
 import { useHeatmaps } from "../composables/useHeatmaps";
 
 interface HeatmapPoint {

@@ -12,7 +12,7 @@
 
     <div v-else-if="error" class="error-state">
       <p>{{ error }}</p>
-      <button @click="loadFrame" class="retry-btn">Retry</button>
+      <button class="retry-btn" @click="loadFrame">Retry</button>
     </div>
 
     <div v-else class="calibration-content">
@@ -21,10 +21,10 @@
           v-if="frameUrl"
           ref="frameImage"
           :src="frameUrl"
-          @click="handleImageClick"
-          @load="onImageLoad"
           alt="Calibration frame"
           class="calibration-frame"
+          @click="handleImageClick"
+          @load="onImageLoad"
         />
         <svg
           v-if="imageLoaded"
@@ -75,16 +75,16 @@
           <li v-for="(corner, index) in corners" :key="index" :class="{ active: index === corners.length - 1 }">
             <span class="corner-number" :style="{ backgroundColor: getCornerColor(index) }">{{ index + 1 }}</span>
             {{ getCornerLabel(index) }}: ({{ Math.round(corner.x) }}, {{ Math.round(corner.y) }})
-            <button @click="removeCorner(index)" class="remove-btn">×</button>
+            <button class="remove-btn" @click="removeCorner(index)">×</button>
           </li>
         </ul>
       </div>
 
       <div class="actions">
-        <button @click="resetCorners" :disabled="corners.length === 0" class="btn-secondary">
+        <button :disabled="corners.length === 0" class="btn-secondary" @click="resetCorners">
           Reset
         </button>
-        <button @click="saveCalibration" :disabled="corners.length !== 4 || saving" class="btn-primary">
+        <button :disabled="corners.length !== 4 || saving" class="btn-primary" @click="saveCalibration">
           {{ saving ? 'Saving...' : 'Save Calibration' }}
         </button>
       </div>

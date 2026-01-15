@@ -363,6 +363,181 @@ def _build_metrics_table(metrics: dict[str, Any]) -> Table | None:
 
 
 # ============================================================================
+# Page 2: Goals vs Outcomes (Phase 2)
+# ============================================================================
+
+
+def render_goals_vs_outcomes(
+    goals: dict[str, Any] | None,
+    outcomes: dict[str, Any] | None,
+) -> list:
+    """
+    Render Goals vs Outcomes page (Page 2 in Coach Report V2).
+
+    Shows coach-defined targets alongside actual performance with pass/fail indicators.
+
+    Args:
+        goals: Coach goals dict {zones: [...], metrics: [...]}
+        outcomes: Calculated outcomes dict {zones: [...], metrics: [...], overall_compliance_pct}
+
+    Returns:
+        List of reportlab flowables for this page
+    """
+    styles = get_styles()
+    elements = []
+
+    # Page title
+    elements.append(Paragraph("Your Goals vs Outcomes", styles["title"]))
+    elements.append(Spacer(1, SPACE_SECTION))
+
+    if not goals:
+        elements.append(
+            Paragraph(
+                "No goals were set for this analysis session.",
+                styles["body"],
+            )
+        )
+        return elements
+
+    if not outcomes:
+        elements.append(
+            Paragraph(
+                "<i>Outcomes not yet calculated. Goals defined below:</i>",
+                styles["body"],
+            )
+        )
+        elements.append(Spacer(1, SPACE_SUBSECTION))
+
+    # Overall compliance summary
+    if outcomes:
+        overall_pct = outcomes.get("overall_compliance_pct", 0.0)
+        compliance_color = COLOR_SUCCESS if overall_pct >= 70.0 else COLOR_HIGH
+
+        elements.append(
+            Paragraph(
+                f"<b>Overall Goal Compliance:</b> <font color='{compliance_color.hexval()}'>{overall_pct:.1f}%</font>",
+                styles["heading"],
+            )
+        )
+        elements.append(Spacer(1, SPACE_SECTION))
+
+    # Zone Goals Section
+    zone_goals = goals.get("zones", [])
+    zone_outcomes = outcomes.get("zones", []) if outcomes else []
+
+    if zone_goals:
+        elements.append(Paragraph("Target Zone Accuracy", styles["heading"]))
+        elements.append(Spacer(1, SPACE_SUBSECTION))
+
+        # Build zone table
+        zone_table_data = [["Zone", "Target", "Actual", "Status", "Delta"]]
+
+        # Create lookup for outcomes
+        zone_outcomes_map = {zo["zone_id"]: zo for zo in zone_outcomes}
+
+        for zg in zone_goals:
+            zone_id = zg["zone_id"]
+            zone_name = zg.get("zone_name", "Unknown Zone")
+            target = f"{zg['target_accuracy'] * 100:.0f}%"
+
+            zo = zone_outcomes_map.get(zone_id)
+            if zo:
+                actual = f"{zo['actual_accuracy'] * 100:.0f}%"
+                passed = zo["pass"]
+                delta = zo["delta"]
+                status = "✅ Pass" if passed else "❌ Miss"
+                delta_text = f"{delta * 100:+.0f}%"
+            else:
+                actual = "N/A"
+                status = "⏳ Pending"
+                delta_text = "—"
+
+            zone_table_data.append([zone_name, target, actual, status, delta_text])
+
+        zone_table = Table(
+            zone_table_data, colWidths=[2.5 * inch, 1 * inch, 1 * inch, 1 * inch, 1 * inch]
+        )
+        zone_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), COLOR_HEADING),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), FONT_BODY),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+                    ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                    ("GRID", (0, 0), (-1, -1), 1, COLOR_SUBHEADING),
+                    ("FONTSIZE", (0, 1), (-1, -1), FONT_SMALL),
+                ]
+            )
+        )
+
+        elements.append(zone_table)
+        elements.append(Spacer(1, SPACE_SECTION))
+
+    # Metric Goals Section
+    metric_goals = goals.get("metrics", [])
+    metric_outcomes = outcomes.get("metrics", []) if outcomes else []
+
+    if metric_goals:
+        elements.append(Paragraph("Performance Metric Targets", styles["heading"]))
+        elements.append(Spacer(1, SPACE_SUBSECTION))
+
+        # Build metric table
+        metric_table_data = [["Metric", "Target", "Actual", "Status", "Delta"]]
+
+        # Create lookup for outcomes
+        metric_outcomes_map = {mo["code"]: mo for mo in metric_outcomes}
+
+        for mg in metric_goals:
+            code = mg["code"]
+            title = mg.get("title", code.replace("_", " ").title())
+            target = f"{mg['target_score']:.2f}"
+
+            mo = metric_outcomes_map.get(code)
+            if mo:
+                actual = f"{mo['actual_score']:.2f}"
+                passed = mo["pass"]
+                delta = mo["delta"]
+                status = "✅ Pass" if passed else "❌ Miss"
+                delta_text = f"{delta:+.2f}"
+            else:
+                actual = "N/A"
+                status = "⏳ Pending"
+                delta_text = "—"
+
+            metric_table_data.append([title, target, actual, status, delta_text])
+
+        metric_table = Table(
+            metric_table_data, colWidths=[2.5 * inch, 1 * inch, 1 * inch, 1 * inch, 1 * inch]
+        )
+        metric_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), COLOR_HEADING),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), FONT_BODY),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+                    ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                    ("GRID", (0, 0), (-1, -1), 1, COLOR_SUBHEADING),
+                    ("FONTSIZE", (0, 1), (-1, -1), FONT_SMALL),
+                ]
+            )
+        )
+
+        elements.append(metric_table)
+        elements.append(Spacer(1, SPACE_SECTION))
+
+    # Add page break after goals page
+    elements.append(PageBreak())
+
+    return elements
+
+
+# ============================================================================
 # Appendix: Evidence & Confidence
 # ============================================================================
 

@@ -7,7 +7,7 @@
         <span v-if="currentPhase" class="current-phase-badge" :class="currentPhase">
           Current: {{ formatPhaseName(currentPhase) }}
         </span>
-        <button v-if="onRefresh" @click="onRefresh" class="refresh-btn" :disabled="loading">
+        <button v-if="onRefresh" class="refresh-btn" :disabled="loading" @click="onRefresh">
           ⟳
         </button>
       </div>
@@ -179,6 +179,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+
 import type { PhaseAnalysisData, PhasePredictionData } from '@/composables/usePhaseAnalytics'
 
 interface Props {

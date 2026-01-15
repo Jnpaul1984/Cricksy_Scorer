@@ -96,9 +96,9 @@
             :stroke="hoveredPoint === idx ? 'white' : getPointStroke(point)"
             stroke-width="0.4"
             :opacity="hoveredPoint === idx ? 1 : 0.8"
+            class="pitch-point"
             @mouseenter="hoveredPoint = idx"
             @mouseleave="hoveredPoint = null"
-            class="pitch-point"
           />
         </g>
 

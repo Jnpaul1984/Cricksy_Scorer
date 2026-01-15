@@ -2,9 +2,9 @@
 import { reactive, computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { apiService, getErrorMessage } from '@/services/api'
 import FanFeedWidget from '@/components/FanFeedWidget.vue'
 import FanStatsWidget from '@/components/FanStatsWidget.vue'
+import { apiService, getErrorMessage } from '@/services/api'
 
 type TabName = 'feed' | 'stats' | 'create'
 

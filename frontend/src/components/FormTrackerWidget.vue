@@ -66,6 +66,7 @@
 
 <script setup lang="ts">
 import { defineProps } from 'vue'
+
 import { usePlayerFormTracker } from '@/composables/usePlayerFormTracker'
 import type { PlayerProfile } from '@/types/player'
 

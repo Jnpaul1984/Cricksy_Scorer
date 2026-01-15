@@ -6,6 +6,7 @@
  */
 
 import { computed, ref } from 'vue'
+
 import type { PlayerProfile } from '@/types/player'
 
 export type FormColor = 'good' | 'average' | 'poor'

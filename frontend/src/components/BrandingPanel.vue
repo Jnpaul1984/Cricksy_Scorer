@@ -4,9 +4,9 @@
     <div class="panel-header">
       <h2>Organization Branding</h2>
       <button
-        @click="refreshBranding"
         :disabled="loading"
         class="btn-refresh"
+        @click="refreshBranding"
       >
         {{ loading ? 'Loading...' : 'Refresh' }}
       </button>
@@ -21,7 +21,7 @@
     <!-- Error State -->
     <div v-else-if="error" class="state-error">
       <p class="error-message">{{ error }}</p>
-      <button @click="clearError" class="btn-secondary">Dismiss</button>
+      <button class="btn-secondary" @click="clearError">Dismiss</button>
     </div>
 
     <!-- Main Content -->
@@ -130,15 +130,15 @@
         <h3>Application Scope</h3>
         <div class="scope-checkboxes">
           <label class="checkbox-label">
-            <input type="checkbox" v-model="brandingData.apply_to.viewer" disabled />
+            <input v-model="brandingData.apply_to.viewer" type="checkbox" disabled />
             <span>Apply to Viewer</span>
           </label>
           <label class="checkbox-label">
-            <input type="checkbox" v-model="brandingData.apply_to.scoreboard" disabled />
+            <input v-model="brandingData.apply_to.scoreboard" type="checkbox" disabled />
             <span>Apply to Scoreboard</span>
           </label>
           <label class="checkbox-label">
-            <input type="checkbox" v-model="brandingData.apply_to.admin" disabled />
+            <input v-model="brandingData.apply_to.admin" type="checkbox" disabled />
             <span>Apply to Admin</span>
           </label>
         </div>
@@ -194,6 +194,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+
 import { useBranding } from '@/composables/useBranding'
 
 interface BrandingData {

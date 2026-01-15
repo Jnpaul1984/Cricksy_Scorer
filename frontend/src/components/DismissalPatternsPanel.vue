@@ -13,7 +13,7 @@
     <!-- Error State -->
     <div v-else-if="error" class="state-message error">
       <p>{{ error }}</p>
-      <button @click="refresh" class="retry-btn">Retry</button>
+      <button class="retry-btn" @click="refresh">Retry</button>
     </div>
 
     <!-- No Data State -->
@@ -43,7 +43,7 @@
             <span class="label">Total Dismissals:</span>
             <span class="value">{{ totalDismissals }}</span>
           </div>
-          <div class="detail-row" v-if="primaryVulnerability">
+          <div v-if="primaryVulnerability" class="detail-row">
             <span class="label">Main Weakness:</span>
             <span class="value">{{ primaryVulnerability }}</span>
           </div>
@@ -160,7 +160,7 @@
             </div>
           </div>
 
-          <div class="breakdown-item" v-if="dismissalsByPhase">
+          <div v-if="dismissalsByPhase" class="breakdown-item">
             <h4>By Match Phase</h4>
             <div class="breakdown-list">
               <div
@@ -181,7 +181,7 @@
     <div class="footer-info">
       <p class="refresh-info">
         Last updated: {{ lastUpdated }}
-        <button @click="refresh" class="refresh-btn">🔄 Refresh Now</button>
+        <button class="refresh-btn" @click="refresh">🔄 Refresh Now</button>
       </p>
     </div>
   </div>
@@ -189,6 +189,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+
 import { useDismissalPatterns } from '../composables/useDismissalPatterns'
 
 interface DismissalPattern {

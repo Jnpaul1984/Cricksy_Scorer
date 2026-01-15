@@ -205,7 +205,7 @@ const trendText = computed(() => {
       <div v-if="summary.batting_stats.matches" class="stats-section">
         <div class="stats-header">
           <h3>🏏 Batting Statistics</h3>
-          <button @click="showFullStats = !showFullStats" class="toggle-btn">
+          <button class="toggle-btn" @click="showFullStats = !showFullStats">
             {{ showFullStats ? '▼' : '▶' }}
           </button>
         </div>

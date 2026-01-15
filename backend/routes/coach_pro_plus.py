@@ -855,6 +855,8 @@ async def export_analysis_pdf(
             created_at=job.created_at,
             completed_at=job.completed_at,
             analysis_mode=job.analysis_mode,
+            coach_goals=job.coach_goals,
+            outcomes=job.outcomes,
         )
 
         pdf_size_bytes = len(pdf_bytes)
@@ -911,6 +913,303 @@ async def export_analysis_pdf(
         pdf_s3_key=pdf_s3_key,
         pdf_size_bytes=pdf_size_bytes,
     )
+
+
+# ============================================================================
+# Phase 2: Coach Goals and Outcomes Endpoints
+# ============================================================================
+
+
+class SetGoalsRequest(BaseModel):
+    """Request schema for setting coach goals on a job."""
+
+    zones: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Zone goals: [{zone_id, target_accuracy}, ...]",
+    )
+    metrics: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Metric goals: [{code, target_score}, ...]",
+    )
+
+
+class OutcomesResponse(BaseModel):
+    """Response schema for outcomes."""
+
+    zones: list[dict[str, Any]]
+    metrics: list[dict[str, Any]]
+    overall_compliance_pct: float
+
+
+class CompareJobsRequest(BaseModel):
+    """Request schema for comparing multiple jobs."""
+
+    job_ids: list[str] = Field(description="List of job IDs to compare")
+
+
+class CompareJobsResponse(BaseModel):
+    """Response schema for job comparison."""
+
+    timeline: list[dict[str, Any]]
+    deltas: list[dict[str, Any]]
+    persistent_issues: list[dict[str, Any]]
+
+
+@router.post("/analysis-jobs/{job_id}/set-goals")
+async def set_job_goals(
+    job_id: str,
+    request: SetGoalsRequest,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Set coach-defined goals for an analysis job.
+
+    Goals can be set before or after analysis completion.
+    Includes zone accuracy targets and metric performance thresholds.
+    """
+    # Verify feature access
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    # Fetch job with session
+    result = await db.execute(
+        select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session))
+        .where(VideoAnalysisJob.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+
+    # Check ownership via session
+    session = job.session
+    if current_user.role == RoleEnum.coach_pro_plus and session.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this job",
+        )
+
+    # Save goals
+    coach_goals = {
+        "zones": request.zones,
+        "metrics": request.metrics,
+    }
+    job.coach_goals = coach_goals
+    await db.commit()
+    await db.refresh(job)
+
+    logger.info(
+        f"Set goals for job {job_id}: {len(request.zones)} zones, {len(request.metrics)} metrics"
+    )
+
+    return {
+        "job_id": job_id,
+        "coach_goals": job.coach_goals,
+        "message": "Goals saved successfully",
+    }
+
+
+@router.post("/analysis-jobs/{job_id}/calculate-compliance", response_model=OutcomesResponse)
+async def calculate_job_compliance(
+    job_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> OutcomesResponse:
+    """Calculate compliance of analysis results against coach-defined goals.
+
+    Compares actual zone accuracy and metric scores to target thresholds.
+    Saves outcomes to job for future retrieval.
+    """
+    from backend.services.goal_compliance import calculate_compliance
+
+    # Verify feature access
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    # Fetch job with session
+    result = await db.execute(
+        select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session))
+        .where(VideoAnalysisJob.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+
+    # Check ownership via session
+    session = job.session
+    if current_user.role == RoleEnum.coach_pro_plus and session.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this job",
+        )
+
+    # Validate goals exist
+    if not job.coach_goals:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No goals set for this job. Use /set-goals endpoint first.",
+        )
+
+    # Fetch target zones needed for compliance calculation
+    zone_ids = [zg["zone_id"] for zg in job.coach_goals.get("zones", [])]
+    zones_lookup = {}
+
+    if zone_ids:
+        zones_result = await db.execute(select(TargetZone).where(TargetZone.id.in_(zone_ids)))
+        zones = zones_result.scalars().all()
+        zones_lookup = {
+            z.id: {
+                "id": z.id,
+                "name": z.name,
+                "shape": z.shape,
+                "definition_json": z.definition_json,
+            }
+            for z in zones
+        }
+
+    # Calculate compliance
+    try:
+        outcomes = calculate_compliance(job, zones_lookup)
+    except Exception as e:
+        logger.error(f"Failed to calculate compliance for job {job_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to calculate compliance: {e!s}",
+        )
+
+    # Save outcomes
+    job.outcomes = outcomes
+    job.goal_compliance_pct = outcomes["overall_compliance_pct"]
+    await db.commit()
+    await db.refresh(job)
+
+    logger.info(
+        f"Calculated compliance for job {job_id}: {outcomes['overall_compliance_pct']}% compliant"
+    )
+
+    return OutcomesResponse(**outcomes)
+
+
+@router.get("/analysis-jobs/{job_id}/outcomes", response_model=OutcomesResponse)
+async def get_job_outcomes(
+    job_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> OutcomesResponse:
+    """Get calculated outcomes for a job with goals."""
+    # Verify feature access
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    # Fetch job with session
+    result = await db.execute(
+        select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session))
+        .where(VideoAnalysisJob.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+
+    # Check ownership via session
+    session = job.session
+    if current_user.role == RoleEnum.coach_pro_plus and session.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this job",
+        )
+
+    # Return outcomes if available
+    if not job.outcomes:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No outcomes calculated yet. Use /calculate-compliance endpoint first.",
+        )
+
+    return OutcomesResponse(**job.outcomes)
+
+
+@router.post("/sessions/{session_id}/compare-jobs", response_model=CompareJobsResponse)
+async def compare_session_jobs(
+    session_id: str,
+    request: CompareJobsRequest,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CompareJobsResponse:
+    """Compare multiple analysis jobs within a session.
+
+    Shows timeline of metric scores, improvements/regressions between jobs,
+    and persistent issues across multiple sessions.
+    """
+    from backend.services.session_comparison import compare_jobs
+
+    # Verify feature access
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    # Fetch session
+    result = await db.execute(select(VideoSession).where(VideoSession.id == session_id))
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Check ownership
+    if current_user.role == RoleEnum.coach_pro_plus and session.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this session",
+        )
+
+    # Fetch jobs
+    jobs_result = await db.execute(
+        select(VideoAnalysisJob)
+        .where(
+            VideoAnalysisJob.id.in_(request.job_ids),
+            VideoAnalysisJob.session_id == session_id,
+        )
+        .order_by(VideoAnalysisJob.completed_at.asc(), VideoAnalysisJob.created_at.asc())
+    )
+    jobs = jobs_result.scalars().all()
+
+    if not jobs:
+        raise HTTPException(status_code=404, detail="No matching jobs found for this session")
+
+    if len(jobs) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least 2 jobs required for comparison",
+        )
+
+    # Perform comparison
+    try:
+        comparison = compare_jobs(list(jobs))
+    except Exception as e:
+        logger.error(f"Failed to compare jobs for session {session_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to compare jobs: {e!s}",
+        )
+
+    logger.info(f"Compared {len(jobs)} jobs for session {session_id}")
+
+    return CompareJobsResponse(**comparison)
 
 
 @router.get("/videos/{session_id}/stream-url", response_model=VideoStreamUrlRead)

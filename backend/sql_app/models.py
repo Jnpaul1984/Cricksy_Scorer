@@ -1915,6 +1915,27 @@ class VideoAnalysisJob(Base):
         DateTime(timezone=True), nullable=True, comment="When PDF was generated"
     )
 
+    # Phase 2: Coach goals and outcomes tracking
+    coach_goals: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Coach-defined goals: "
+            "{zones: [{zone_id, target_accuracy}], metrics: [{code, target_score}]}"
+        ),
+    )
+    outcomes: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Calculated outcomes vs goals: "
+            "{zones: [...], metrics: [...], overall_compliance_pct}"
+        ),
+    )
+    goal_compliance_pct: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="Overall goal compliance percentage (0-100)"
+    )
+
     # Timestamps
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -1997,6 +2018,12 @@ class TargetZone(Base):
         JSON,
         nullable=False,
         comment="Shape definition: {x, y, width, height} for rect, {cx, cy, r} for circle, etc.",
+    )
+    target_accuracy: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="Target accuracy percentage (0.0-1.0) for goal compliance"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, comment="Whether zone is active for analysis"
     )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

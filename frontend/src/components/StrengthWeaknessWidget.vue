@@ -71,6 +71,7 @@
 
 <script setup lang="ts">
 import { defineProps, computed } from 'vue'
+
 import type { PlayerProfile } from '@/types/player'
 
 const props = defineProps<{

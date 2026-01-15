@@ -6,10 +6,10 @@
       </h2>
       <button
         v-if="gameId"
-        @click="refreshSuggestions"
         :disabled="loading"
         class="refresh-btn"
         title="Refresh suggestions"
+        @click="refreshSuggestions"
       >
         🔄
       </button>
@@ -123,6 +123,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+
 import { useTacticalSuggestions } from '@/composables/useTacticalSuggestions'
 import type { TacticalSuggestions } from '@/composables/useTacticalSuggestions'
 
