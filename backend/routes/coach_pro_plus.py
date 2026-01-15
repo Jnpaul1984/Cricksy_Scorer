@@ -9,7 +9,7 @@ Feature-gated by role (coach_pro_plus, org_pro).
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import uuid4
 
@@ -525,9 +525,9 @@ async def bulk_delete_sessions(
             )
 
     if older_than_days:
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=older_than_days)
         query = query.where(VideoSession.created_at < cutoff_date)
 
     # Fetch sessions to delete
@@ -1888,7 +1888,7 @@ class PitchCalibrationRequest(BaseModel):
         ...,
         min_length=4,
         max_length=4,
-        description="4 corner points: [top_left, top_right, bottom_left, bottom_right]"
+        description="4 corner points: [top_left, top_right, bottom_left, bottom_right]",
     )
 
 
@@ -1927,9 +1927,7 @@ async def get_calibration_frame(
         )
 
     # Fetch session
-    result = await db.execute(
-        select(VideoSession).where(VideoSession.id == session_id)
-    )
+    result = await db.execute(select(VideoSession).where(VideoSession.id == session_id))
     session = result.scalar_one_or_none()
 
     if not session:
@@ -1946,8 +1944,7 @@ async def get_calibration_frame(
     # Check if video is uploaded
     if not session.s3_key or not session.s3_bucket:
         raise HTTPException(
-            status_code=400,
-            detail="Video not uploaded yet. Upload video before calibration."
+            status_code=400, detail="Video not uploaded yet. Upload video before calibration."
         )
 
     # Generate frame key (frames stored alongside video)
@@ -1964,16 +1961,14 @@ async def get_calibration_frame(
             expiration=3600,  # 1 hour
         )
         return CalibrationFrameResponse(
-            session_id=session_id,
-            frame_url=frame_url,
-            message="Calibration frame available"
+            session_id=session_id, frame_url=frame_url, message="Calibration frame available"
         )
     except Exception as e:
         logger.warning(f"Calibration frame not found: {e}")
         return CalibrationFrameResponse(
             session_id=session_id,
             frame_url=None,
-            message="Calibration frame not yet generated. Please process video first."
+            message="Calibration frame not yet generated. Please process video first.",
         )
 
 
@@ -1998,9 +1993,7 @@ async def save_pitch_calibration(
         )
 
     # Fetch session
-    result = await db.execute(
-        select(VideoSession).where(VideoSession.id == session_id)
-    )
+    result = await db.execute(select(VideoSession).where(VideoSession.id == session_id))
     session = result.scalar_one_or_none()
 
     if not session:
@@ -2017,8 +2010,7 @@ async def save_pitch_calibration(
     # Validate corners
     if len(request.corners) != 4:
         raise HTTPException(
-            status_code=400,
-            detail=f"Expected exactly 4 corners, got {len(request.corners)}"
+            status_code=400, detail=f"Expected exactly 4 corners, got {len(request.corners)}"
         )
 
     # Save corners to session
@@ -2031,7 +2023,7 @@ async def save_pitch_calibration(
     return PitchCalibrationResponse(
         session_id=session_id,
         corners=request.corners,
-        message="Pitch calibration saved successfully"
+        message="Pitch calibration saved successfully",
     )
 
 
@@ -2076,9 +2068,7 @@ async def get_pitch_map(
         )
 
     # Fetch session
-    result = await db.execute(
-        select(VideoSession).where(VideoSession.id == session_id)
-    )
+    result = await db.execute(select(VideoSession).where(VideoSession.id == session_id))
     session = result.scalar_one_or_none()
 
     if not session:
@@ -2106,7 +2096,7 @@ async def get_pitch_map(
             total_points=0,
             points=[],
             calibrated=False,
-            message="No analysis job found for this session"
+            message="No analysis job found for this session",
         )
 
     # Check if analysis is complete
@@ -2116,7 +2106,7 @@ async def get_pitch_map(
             total_points=0,
             points=[],
             calibrated=bool(session.pitch_corners),
-            message=f"Analysis not complete. Current status: {job.status}"
+            message=f"Analysis not complete. Current status: {job.status}",
         )
 
     # Extract pitch map data from deep_results
@@ -2132,7 +2122,7 @@ async def get_pitch_map(
             total_points=0,
             points=[],
             calibrated=calibrated,
-            message="No pitch map data available. Ensure video contains bowling deliveries."
+            message="No pitch map data available. Ensure video contains bowling deliveries.",
         )
 
     # Convert to response format
@@ -2154,7 +2144,7 @@ async def get_pitch_map(
         total_points=len(points),
         points=points,
         calibrated=calibrated,
-        message="Pitch map data retrieved successfully"
+        message="Pitch map data retrieved successfully",
     )
 
 
@@ -2170,8 +2160,7 @@ class TargetZoneCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="Zone name")
     shape: str = Field(default="rect", description="Shape type: rect, circle, polygon")
     definition_json: dict[str, Any] = Field(
-        ...,
-        description="Shape definition: {x, y, width, height} for rect"
+        ..., description="Shape definition: {x, y, width, height} for rect"
     )
 
 
@@ -2312,9 +2301,7 @@ async def get_zone_accuracy_report(
         )
 
     # Fetch zone
-    zone_result = await db.execute(
-        select(TargetZone).where(TargetZone.id == request.zone_id)
-    )
+    zone_result = await db.execute(select(TargetZone).where(TargetZone.id == request.zone_id))
     zone = zone_result.scalar_one_or_none()
 
     if not zone:
@@ -2328,9 +2315,7 @@ async def get_zone_accuracy_report(
         )
 
     # Fetch session
-    session_result = await db.execute(
-        select(VideoSession).where(VideoSession.id == session_id)
-    )
+    session_result = await db.execute(select(VideoSession).where(VideoSession.id == session_id))
     session = session_result.scalar_one_or_none()
 
     if not session:
@@ -2345,10 +2330,7 @@ async def get_zone_accuracy_report(
     job = job_result.scalar_one_or_none()
 
     if not job or not job.deep_results:
-        raise HTTPException(
-            status_code=400,
-            detail="No analysis data available for this session"
-        )
+        raise HTTPException(status_code=400, detail="No analysis data available for this session")
 
     pitch_map_data = job.deep_results.get("pitch_map", [])
 

@@ -569,22 +569,26 @@ def compute_homography(corners_px: list[dict[str, float]]) -> np.ndarray:
         raise ValueError(f"Expected exactly 4 corners, got {len(corners_px)}")
 
     # Extract pixel coordinates
-    src_points = np.float32([
-        [corners_px[0]["x"], corners_px[0]["y"]],  # top-left
-        [corners_px[1]["x"], corners_px[1]["y"]],  # top-right
-        [corners_px[2]["x"], corners_px[2]["y"]],  # bottom-left
-        [corners_px[3]["x"], corners_px[3]["y"]],  # bottom-right
-    ])
+    src_points = np.float32(
+        [
+            [corners_px[0]["x"], corners_px[0]["y"]],  # top-left
+            [corners_px[1]["x"], corners_px[1]["y"]],  # top-right
+            [corners_px[2]["x"], corners_px[2]["y"]],  # bottom-left
+            [corners_px[3]["x"], corners_px[3]["y"]],  # bottom-right
+        ]
+    )
 
     # Define normalized pitch corners (0-100 scale)
     # Top = bowler's end (0), Bottom = batsman's end (100)
     # Left = leg side (0), Right = off side (100)
-    dst_points = np.float32([
-        [0, 0],       # top-left
-        [100, 0],     # top-right
-        [0, 100],     # bottom-left
-        [100, 100]    # bottom-right
-    ])
+    dst_points = np.float32(
+        [
+            [0, 0],  # top-left
+            [100, 0],  # top-right
+            [0, 100],  # bottom-left
+            [100, 100],  # bottom-right
+        ]
+    )
 
     # Compute perspective transform
     H = cv2.getPerspectiveTransform(src_points, dst_points)
@@ -594,8 +598,7 @@ def compute_homography(corners_px: list[dict[str, float]]) -> np.ndarray:
 
 
 def project_point_to_pitch(
-    point_px: dict[str, float] | BallPosition,
-    H: np.ndarray
+    point_px: dict[str, float] | BallPosition, H: np.ndarray
 ) -> tuple[float, float]:
     """
     Project a pixel coordinate to normalized pitch space using homography.

@@ -1735,7 +1735,7 @@ class VideoSession(Base):
     pitch_corners: Mapped[dict[str, Any] | None] = mapped_column(
         JSON,
         nullable=True,
-        comment="4 corner points for pitch homography: [{x, y}, {x, y}, {x, y}, {x, y}]"
+        comment="4 corner points for pitch homography: [{x, y}, {x, y}, {x, y}, {x, y}]",
     )
 
     # Status tracking
@@ -1985,7 +1985,7 @@ class TargetZone(Base):
         ForeignKey("video_sessions.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
-        comment="Optional link to specific session"
+        comment="Optional link to specific session",
     )
     name: Mapped[str] = mapped_column(
         String(100), nullable=False, comment="Zone name (e.g., 'Yorker Line', 'Off Stump')"
@@ -1996,15 +1996,10 @@ class TargetZone(Base):
     definition_json: Mapped[dict[str, Any]] = mapped_column(
         JSON,
         nullable=False,
-        comment="Shape definition: {x, y, width, height} for rect, {cx, cy, r} for circle, etc."
+        comment="Shape definition: {x, y, width, height} for rect, {cx, cy, r} for circle, etc.",
     )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-    __table_args__ = (
-        Index("ix_target_zones_owner_id", "owner_id"),
-        Index("ix_target_zones_session_id", "session_id"),
     )
 
 
