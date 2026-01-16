@@ -1,5 +1,15 @@
 ﻿<script setup lang="ts">
 /* eslint-disable */
+/*
+ * QA CHECKLIST (beta/fix-extras-recentballs-correction-theme):
+ * ✅ Recent Balls: Extras (WD/NB) should persist in last 6 even after next legal ball
+ * ✅ Extras Tab: Totals should match backend snapshot (prefer liveSnapshot.extras_totals)
+ * ✅ Field Map: Tap marker dot should NOT appear on zone clicks
+ * ✅ Dark Theme: Scoring UI should use CSS variables, no hardcoded white/light colors
+ * ✅ Zone Selection: recordZone() should still work for shot tracking
+ * ✅ Ball Number: Clamped to 0-5 range to prevent invalid over states
+ * ✅ Sorting: Timestamp comparison uses Date.parse() for ISO date strings
+ */
 /* --- Vue & Router --- */
 
 /* --- Stores --- */
@@ -12,6 +22,7 @@ import { BaseButton, BaseCard, BaseInput } from '@/components'
 import BattingCard from '@/components/BattingCard.vue'
 import BowlingCard from '@/components/BowlingCard.vue'
 import DeliveryTable from '@/components/DeliveryTable.vue'
+import DeliveryCorrectionModal from '@/components/DeliveryCorrectionModal.vue'
 import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
@@ -24,7 +35,7 @@ import { useRoleBadge } from '@/composables/useRoleBadge'
 import { useInningsGrade } from '@/composables/useInningsGrade'
 import { usePressureAnalytics } from '@/composables/usePressureAnalytics'
 import { usePhaseAnalytics } from '@/composables/usePhaseAnalytics'
-import { apiService } from '@/services/api'
+import { apiService, type DeliveryCorrectionRequest } from '@/services/api'
 import { generateAICommentary, type AICommentaryRequest, fetchMatchAiCommentary, type MatchCommentaryItem } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
@@ -134,6 +145,8 @@ watch(extra, (t) => {
     shotMap.value = null
   }
 })
+
+// [REMOVED tapMarker and handleMapClick - field tap feedback not needed]
 
 
 const route = useRoute()
@@ -271,15 +284,35 @@ watch(gameId, async (id) => {
 
 // --- UI State for UX Improvements ---
 const isSubmitting = ref(false)
-const tapMarker = ref<{ x: number; y: number; visible: boolean }>({ x: 0, y: 0, visible: false })
+// [REMOVED tapMarker] Field tap feedback not needed - zone selection still works via recordZone()
 
-function handleMapClick(e: MouseEvent) {
-  const target = e.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
-  tapMarker.value = {
-    x: e.clientX - rect.left,
-    y: e.clientY - rect.top,
-    visible: true
+// --- Delivery Correction State ---
+const showCorrectionModal = ref(false)
+const correctionDelivery = ref<any>(null)
+
+function openCorrectionModal(delivery: any) {
+  correctionDelivery.value = delivery
+  showCorrectionModal.value = true
+}
+
+function closeCorrectionModal() {
+  showCorrectionModal.value = false
+  correctionDelivery.value = null
+}
+
+async function submitCorrection({ deliveryId, correction }: { deliveryId: number; correction: DeliveryCorrectionRequest }) {
+  if (!gameId.value) return
+
+  try {
+    const snapshot = await apiService.correctDelivery(gameId.value, deliveryId, correction)
+    // Update store with corrected snapshot
+    if (snapshot) {
+      gameStore.liveSnapshot = snapshot as any
+    }
+    closeCorrectionModal()
+  } catch (err: any) {
+    console.error('Failed to correct delivery:', err)
+    alert(err?.message || 'Failed to correct delivery')
   }
 }
 
@@ -410,7 +443,6 @@ async function submitSimple() {
     dismissedName.value = null
     selectedFielderId.value = '' as UUID
     shotMap.value = null
-    tapMarker.value = { x: 0, y: 0, visible: false }
     onScored()
 
     // Generate AI commentary (non-blocking)
@@ -877,67 +909,32 @@ const bowlingEntries = computed(() =>
 
 
 
-// ================== Deliveries (DEDUPE) ==================
-// normalize over/ball before keying
-function obOf(d:any){
-  const overLike = d.over_number ?? d.over
-  const ballLike = d.ball_number ?? d.ball
-  if (typeof ballLike === 'number' && typeof overLike === 'number') {
-    return { over: Math.max(0, Math.floor(overLike)), ball: Math.max(0, ballLike) }
+// ================== Deliveries (CHRONOLOGICAL - NO DEDUP) ==================
+// ✅ FIX: Treat deliveries as event stream - extras are separate events
+// ✅ Order by backend delivery ID (if present), else timestamp, else array order
+// ✅ Do NOT deduplicate by over:ball - wide at 3.0 and legal at 3.1 are DIFFERENT
+
+function parseOverBall(overLike: unknown, ballLike: unknown) {
+  // ✅ HARDENED: Clamp ball to 0-5 for all formats to prevent invalid ball numbers
+  if (typeof ballLike === 'number') {
+    return { over: Math.max(0, Math.floor(Number(overLike) || 0)), ball: Math.max(0, Math.min(5, ballLike)) }
   }
   if (typeof overLike === 'string') {
-    const [o,b] = overLike.split('.')
-    return { over: Number(o)||0, ball: Number(b)||0 }
+    const [o, b] = overLike.split('.')
+    return { over: Number(o) || 0, ball: Math.max(0, Math.min(5, Number(b) || 0)) }
   }
   if (typeof overLike === 'number') {
-    const whole = Math.floor(overLike)
-    const tenth = Math.round((overLike - whole) * 10)
-    return { over: whole, ball: Math.max(0, Math.min(5, tenth)) }
+    const over = Math.floor(overLike)
+    const ball = Math.max(0, Math.min(5, Math.round((overLike - over) * 10)))
+    return { over, ball }
   }
   return { over: 0, ball: 0 }
-}
-
-// âœ… stable identity: innings + over + ball only
-function makeKey(d:any): string {
-  const inn = Number(d.innings ?? d.inning ?? d.inning_no ?? d.innings_no ?? d.inning_number ?? 0)
-  const { over, ball } = obOf(d)
-  return `${inn}:${over}:${ball}`
 }
 
 
 const rawDeliveries = computed<any[]>(() => {
   const g = gameStore.currentGame as any
   return Array.isArray(g?.deliveries) ? g.deliveries : []
-})
-
-const dedupedDeliveries = computed<DeliveryRowForTable[]>(() => {
-  const byKey = new Map<string, any>()
-  for (const d of rawDeliveries.value) byKey.set(makeKey(d), d) // last one wins
-  const parseOverBall = (overLike: unknown, ballLike: unknown) => {
-    if (typeof ballLike === 'number') return { over: Math.max(0, Math.floor(Number(overLike) || 0)), ball: ballLike }
-    if (typeof overLike === 'string') { const [o, b] = overLike.split('.'); return { over: Number(o) || 0, ball: Number(b) || 0 } }
-    if (typeof overLike === 'number') { const over = Math.floor(overLike); const ball = Math.max(0, Math.round((overLike - over) * 10)); return { over, ball } }
-    return { over: 0, ball: 0 }
-  }
-  return Array.from(byKey.values()).map((d: any) => {
-    const { over, ball } = parseOverBall(d.over_number ?? d.over, d.ball_number ?? d.ball)
-    return {
-      over_number: over,
-      ball_number: ball,
-      runs_scored: Number(d.runs_scored ?? d.runs) || 0,
-      striker_id: normId(d.striker_id),
-      non_striker_id: normId(d.non_striker_id),
-      bowler_id: normId(d.bowler_id),
-      extra: (d.extra ?? d.extra_type ?? undefined) as DeliveryRowForTable['extra'] | undefined,
-      extra_runs: Number(d.extra_runs ?? 0),
-      runs_off_bat: Number(d.runs_off_bat ?? d.runs ?? 0),
-      is_wicket: Boolean(d.is_wicket),
-      commentary: d.commentary as string | undefined,
-      dismissed_player_id: (d.dismissed_player_id ? normId(d.dismissed_player_id) : null) as UUID | null,
-      at_utc: d.at_utc as string | undefined,
-      shot_map: typeof d.shot_map === 'string' ? d.shot_map : null,
-    }
-  }).sort((a, b) => (a.over_number - b.over_number) || (a.ball_number - b.ball_number))
 })
 
 // ðŸ”§ NEW: helpers to scope deliveries to the current innings
@@ -963,22 +960,16 @@ const deliveriesThisInningsRaw = computed<any[]>(() => {
 
 
 
-function dedupeByKey(arr:any[]) {
-  const byKey = new Map<string, any>()
-  for (const d of arr) byKey.set(makeKey(d), d)
-  return Array.from(byKey.values())
-}
-
 const deliveriesThisInnings = computed<DeliveryRowForTable[]>(() => {
-  const parseOverBall = (overLike: unknown, ballLike: unknown) => {
-    if (typeof ballLike === 'number') return { over: Math.max(0, Math.floor(Number(overLike) || 0)), ball: ballLike }
-    if (typeof overLike === 'string') { const [o, b] = overLike.split('.'); return { over: Number(o) || 0, ball: Number(b) || 0 } }
-    if (typeof overLike === 'number') { const over = Math.floor(overLike); const ball = Math.max(0, Math.round((overLike - over) * 10)); return { over, ball } }
-    return { over: 0, ball: 0 }
-  }
-  return dedupeByKey(deliveriesThisInningsRaw.value).map((d: any) => {
+  // ✅ NO deduplication - keep ALL delivery events in chronological order
+  // Sort by: 1) delivery.id (backend PK), 2) at_utc timestamp, 3) over/ball
+  const raw = deliveriesThisInningsRaw.value
+  const mapped = raw.map((d: any, index: number) => {
     const { over, ball } = parseOverBall(d.over_number ?? d.over, d.ball_number ?? d.ball)
     return {
+      _delivery_id: d.id ?? d.delivery_id ?? null,
+      _timestamp: d.at_utc ?? d.created_at ?? null,
+      _index: index,
       over_number: over,
       ball_number: ball,
       runs_scored: Number(d.runs_scored ?? d.runs) || 0,
@@ -986,15 +977,38 @@ const deliveriesThisInnings = computed<DeliveryRowForTable[]>(() => {
       non_striker_id: normId(d.non_striker_id),
       bowler_id: normId(d.bowler_id),
       extra: (d.extra ?? d.extra_type ?? undefined) as DeliveryRowForTable['extra'] | undefined,
-      extra_runs: Number(d.extra_runs ?? 0),                       // âœ… added
-      runs_off_bat: Number(d.runs_off_bat ?? d.runs ?? 0),        // âœ… added
+      extra_runs: Number(d.extra_runs ?? 0),
+      runs_off_bat: Number(d.runs_off_bat ?? d.runs ?? 0),
       is_wicket: Boolean(d.is_wicket),
       commentary: d.commentary as string | undefined,
       dismissed_player_id: (d.dismissed_player_id ? normId(d.dismissed_player_id) : null) as UUID | null,
       at_utc: d.at_utc as string | undefined,
       shot_map: typeof d.shot_map === 'string' ? d.shot_map : null,
     }
-  }).sort((a, b) => (a.over_number - b.over_number) || (a.ball_number - b.ball_number))
+  })
+
+  // Sort by delivery ID > timestamp > over/ball > insertion order
+  mapped.sort((a: any, b: any) => {
+    if (a._delivery_id != null && b._delivery_id != null) {
+      return a._delivery_id - b._delivery_id
+    }
+    if (a._timestamp && b._timestamp) {
+      // ✅ HARDENED: Use Date.parse for valid ISO timestamps, fallback to string compare
+      const aTime = Date.parse(a._timestamp)
+      const bTime = Date.parse(b._timestamp)
+      if (!isNaN(aTime) && !isNaN(bTime)) {
+        return aTime - bTime
+      }
+      return a._timestamp < b._timestamp ? -1 : a._timestamp > b._timestamp ? 1 : 0
+    }
+    const overDiff = a.over_number - b.over_number
+    if (overDiff !== 0) return overDiff
+    const ballDiff = a.ball_number - b.ball_number
+    if (ballDiff !== 0) return ballDiff
+    return a._index - b._index
+  })
+
+  return mapped as DeliveryRowForTable[]
 })
 
 // == Derived bowling figures from deliveries in *this innings* ==
@@ -2002,39 +2016,38 @@ async function confirmChangeBowler(): Promise<void> {
              </span>
           </div>
           <div class="recent-balls">
-            <div v-for="(b, i) in recentBallSlots" :key="i" class="ball-badge" :class="b ? getBallClass(b) : 'empty'">
+            <div 
+              v-for="(b, i) in recentBallSlots" 
+              :key="i" 
+              class="ball-badge" 
+              :class="b ? getBallClass(b) : 'empty'"
+              @click="b ? openCorrectionModal(b) : null"
+              :title="b ? 'Click to correct this delivery' : ''"
+              :style="b ? 'cursor: pointer;' : ''"
+            >
               {{ b ? getBallLabel(b) : '•' }}
             </div>
           </div>
         </div>
 
-        <div class="map-container" @click="handleMapClick">
-           <!-- Tap Feedback Marker -->
-           <div
-             v-if="tapMarker.visible"
-             class="tap-marker"
-             :style="{ left: tapMarker.x + 'px', top: tapMarker.y + 'px' }"
-             @animationend="tapMarker.visible = false"
-           ></div>
+        <div class="map-container">
            <!-- Placeholder for Shot Map - In real app this would be canvas/SVG -->
            <div class="wagon-wheel-placeholder">
               <div class="field-oval">
                  <div class="pitch-rect"></div>
                  <!-- Simple 8-zone click overlay -->
                  <div class="zone-overlay">
-                    <div class="zone z1" @click.stop="recordZone(1); handleMapClick($event)"></div>
-                    <div class="zone z2" @click.stop="recordZone(2); handleMapClick($event)"></div>
-                    <div class="zone z3" @click.stop="recordZone(3); handleMapClick($event)"></div>
-                    <div class="zone z4" @click.stop="recordZone(4); handleMapClick($event)"></div>
-                    <div class="zone z5" @click.stop="recordZone(5); handleMapClick($event)"></div>
-                    <div class="zone z6" @click.stop="recordZone(6); handleMapClick($event)"></div>
-                    <div class="zone z7" @click.stop="recordZone(7); handleMapClick($event)"></div>
-                    <div class="zone z8" @click.stop="recordZone(8); handleMapClick($event)"></div>
+                    <div class="zone z1" @click.stop="recordZone(1)"></div>
+                    <div class="zone z2" @click.stop="recordZone(2)"></div>
+                    <div class="zone z3" @click.stop="recordZone(3)"></div>
+                    <div class="zone z4" @click.stop="recordZone(4)"></div>
+                    <div class="zone z5" @click.stop="recordZone(5)"></div>
+                    <div class="zone z6" @click.stop="recordZone(6)"></div>
+                    <div class="zone z7" @click.stop="recordZone(7)"></div>
+                    <div class="zone z8" @click.stop="recordZone(8)"></div>
                  </div>
-                 <!-- Tap Marker -->
-                 <div v-if="tapMarker.visible" class="tap-marker" :style="{ top: tapMarker.y + 'px', left: tapMarker.x + 'px' }"></div>
               </div>
-              <div class="map-label" v-if="!tapMarker.visible">TAP ZONE TO RECORD SHOT</div>
+              <div class="map-label">TAP ZONE TO RECORD SHOT</div>
            </div>
         </div>
       </div>
@@ -2289,6 +2302,16 @@ async function confirmChangeBowler(): Promise<void> {
       </BaseCard>
     </div>
   </div>
+
+  <!-- Delivery Correction Modal -->
+  <DeliveryCorrectionModal
+    :show="showCorrectionModal"
+    :delivery="correctionDelivery"
+    :bowlerName="correctionDelivery ? playerNameById(correctionDelivery.bowler_id) : undefined"
+    :batterName="correctionDelivery ? playerNameById(correctionDelivery.striker_id) : undefined"
+    @close="closeCorrectionModal"
+    @submit="submitCorrection"
+  />
 </template>
 
 <style scoped>
@@ -2654,15 +2677,15 @@ async function confirmChangeBowler(): Promise<void> {
 
 /* FOOTER TABS */
 .broadcast-footer {
-  background: white;
-  border-top: 1px solid #ddd;
+  background: var(--color-bg-secondary, #1e1e1e);
+  border-top: 1px solid var(--color-border, #333);
   display: flex;
   flex-direction: column;
   height: 160px; /* Reduced from 240px to show action buttons */
 }
-.tabs-nav { display: flex; background: #f5f5f5; border-bottom: 1px solid #ddd; }
-.tabs-nav button { flex: 1; padding: 8px 6px; border: none; background: none; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; font-size: 12px; }
-.tabs-nav button.active { color: #1a237e; border-bottom-color: #1a237e; background: white; }
+.tabs-nav { display: flex; background: var(--color-bg-accent, #2a2a2a); border-bottom: 1px solid var(--color-border, #333); }
+.tabs-nav button { flex: 1; padding: 8px 6px; border: none; background: none; font-weight: 600; color: var(--color-text-secondary, #aaa); cursor: pointer; border-bottom: 3px solid transparent; font-size: 12px; }
+.tabs-nav button.active { color: var(--color-primary, #667eea); border-bottom-color: var(--color-primary, #667eea); background: var(--color-bg-secondary, #1e1e1e); }
 
 .tab-content { flex: 1; overflow-y: auto; padding: 0; position: relative; }
 .tab-pane { height: 100%; padding: 12px; }
@@ -2673,18 +2696,15 @@ async function confirmChangeBowler(): Promise<void> {
 :deep(th) { background: #f5f5f5; position: sticky; top: 0; }
 
 /* Extras Grid */
-.extras-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; text-align: center; font-weight: bold; padding: 16px; background: #fafafa; border-radius: 8px; }
-.dls-mini { margin-top: 16px; padding: 12px; background: #e3f2fd; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; }
-
-.extras-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; text-align: center; font-weight: bold; padding: 16px; background: #fafafa; border-radius: 8px; }
-.dls-mini { margin-top: 16px; padding: 12px; background: #e3f2fd; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; }
+.extras-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; text-align: center; font-weight: bold; padding: 16px; background: var(--color-bg-accent, #2a2a2a); border-radius: 8px; color: var(--color-text, #e0e0e0); }
+.dls-mini { margin-top: 16px; padding: 12px; background: var(--color-bg-accent, #2a2a2a); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; color: var(--color-text, #e0e0e0); }
 
 /* Modal overrides */
 .modal-backdrop {
   z-index: 1000;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2699,11 +2719,12 @@ async function confirmChangeBowler(): Promise<void> {
   max-height: calc(100vh - 40px);
   overflow-y: auto;
   overflow-x: hidden;
-  background: white;
+  background: var(--color-bg-secondary, #1e1e1e);
   border-radius: 8px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--color-border, #333);
 }
 
 .modal-card--wide {
@@ -2714,11 +2735,12 @@ async function confirmChangeBowler(): Promise<void> {
   font-size: 18px;
   font-weight: 700;
   margin: 0 0 12px 0;
+  color: var(--color-text, #e0e0e0);
 }
 
 .modal-body-text {
   font-size: 14px;
-  color: #666;
+  color: var(--color-text-secondary, #aaa);
   margin: 0 0 16px 0;
 }
 
@@ -2734,23 +2756,23 @@ async function confirmChangeBowler(): Promise<void> {
 .lbl {
   font-size: 12px;
   font-weight: 600;
-  color: #333;
+  color: var(--color-text, #e0e0e0);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .sel {
   padding: 10px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border, #444);
   border-radius: 6px;
   font-size: 14px;
-  background: white;
-  color: #333;
+  background: var(--color-bg, #121212);
+  color: var(--color-text, #e0e0e0);
   cursor: pointer;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e0e0e0' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 32px;
@@ -2759,18 +2781,18 @@ async function confirmChangeBowler(): Promise<void> {
 }
 
 .sel:hover {
-  border-color: #999;
+  border-color: var(--color-border-hover, #555);
 }
 
 .sel:focus {
   outline: none;
-  border-color: #1a237e;
-  box-shadow: 0 0 0 3px rgba(26, 35, 126, 0.1);
+  border-color: var(--color-primary, #667eea);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
 
 .sel option {
-  background: white;
-  color: #333;
+  background: var(--color-bg, #121212);
+  color: var(--color-text, #e0e0e0);
   padding: 8px;
 }
 
@@ -2781,7 +2803,7 @@ async function confirmChangeBowler(): Promise<void> {
   margin-top: 20px;
   flex-shrink: 0;
   padding-top: 12px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--color-border, #333);
 }
 
 .modal-form-content {
@@ -2812,26 +2834,7 @@ async function confirmChangeBowler(): Promise<void> {
 .btn-extra-wd.active, .btn-extra-nb.active { background: #ff9800; color: white; border-color: #ff9800; }
 .btn-extra-b.active, .btn-extra-lb.active  { background: #fbc02d; color: white; border-color: #fbc02d; }
 
-/* 2. Shot Map Tap Marker */
-.tap-marker {
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  background: rgba(255, 87, 34, 0.8);
-  border: 2px solid #fff;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  box-shadow: 0 0 0 4px rgba(255, 87, 34, 0.3);
-  animation: pulse-ring 1.5s infinite;
-  z-index: 10;
-}
-
-@keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(255, 87, 34, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0); }
-}
+/* 2. [REMOVED] Shot Map Tap Marker - not needed for UX */
 
 /* 3. Last 6 Balls Strip */
 .active-ball-text {

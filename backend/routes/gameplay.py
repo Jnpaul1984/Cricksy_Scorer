@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend import dls as dlsmod
@@ -19,6 +19,7 @@ from backend.services.scoring_service import score_one as _score_one
 from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
 from backend.sql_app import crud, models, schemas
 from backend.sql_app.database import get_db
+from backend.sql_app.schemas import ExtraCode
 
 # Local type alias for JSON dictionaries
 JSONDict = dict[str, Any]
@@ -1441,3 +1442,170 @@ async def undo_last_delivery(
     await emit_state_update(game_id, snapshot)
 
     return snapshot
+
+
+class DeliveryCorrection(BaseModel):
+    """Payload for correcting a delivery after it's been scored."""
+
+    runs_scored: int | None = Field(None, ge=0, le=6)
+    runs_off_bat: int | None = Field(None, ge=0, le=6)
+    extra: ExtraCode | None = None
+    is_wicket: bool | None = None
+    dismissal_type: str | None = None
+    dismissed_player_id: str | None = None
+    fielder_id: str | None = None
+    shot_map: str | None = None
+    shot_angle_deg: float | None = None
+    commentary: str | None = None
+
+
+@router.patch("/{game_id}/deliveries/{delivery_id}")
+async def correct_delivery(
+    game_id: str,
+    delivery_id: int,
+    correction: DeliveryCorrection,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """
+    Correct a delivery by ID. Updates the delivery in the ledger,
+    then rebuilds scorecards and game state from scratch by replaying all deliveries.
+    """
+    db_game = await crud.get_game(db, game_id=game_id)
+    if not db_game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    g: Any = db_game
+
+    if g.status == models.GameStatus.completed:
+        raise HTTPException(status_code=400, detail="Cannot correct deliveries in completed game")
+
+    # Find the delivery by ID
+    deliveries: list[dict[str, Any]] = list(getattr(g, "deliveries", []) or [])
+    target_idx: int | None = None
+    for idx, d in enumerate(deliveries):
+        if int(d.get("id", -1)) == delivery_id:
+            target_idx = idx
+            break
+
+    if target_idx is None:
+        raise HTTPException(status_code=404, detail=f"Delivery {delivery_id} not found")
+
+    target_delivery = deliveries[target_idx]
+
+    # Apply corrections to the delivery dict (only update fields that were provided)
+    if correction.runs_scored is not None:
+        target_delivery["runs_scored"] = correction.runs_scored
+    if correction.runs_off_bat is not None:
+        target_delivery["runs_off_bat"] = correction.runs_off_bat
+    if correction.extra is not None:
+        # Normalize extra code
+        target_delivery["extra_type"] = _gh("_norm_extra", correction.extra) or correction.extra
+    if correction.is_wicket is not None:
+        target_delivery["is_wicket"] = correction.is_wicket
+    if correction.dismissal_type is not None:
+        target_delivery["dismissal_type"] = correction.dismissal_type
+    if correction.dismissed_player_id is not None:
+        target_delivery["dismissed_player_id"] = correction.dismissed_player_id
+    if correction.fielder_id is not None:
+        target_delivery["fielder_id"] = correction.fielder_id
+    if correction.shot_map is not None:
+        target_delivery["shot_map"] = correction.shot_map
+    if correction.shot_angle_deg is not None:
+        target_delivery["shot_angle_deg"] = correction.shot_angle_deg
+    if correction.commentary is not None:
+        target_delivery["commentary"] = correction.commentary
+
+    # Validate the correction follows cricket rules
+    extra_norm = _gh("_norm_extra", target_delivery.get("extra_type"))
+    is_nb = extra_norm == "nb"
+    is_wd = extra_norm == "wd"
+    is_legal = not (is_nb or is_wd)
+
+    # Recalculate runs_scored based on the corrected values
+    if is_nb:
+        # No-ball: 1 penalty + runs_off_bat
+        target_delivery["runs_scored"] = 1 + int(target_delivery.get("runs_off_bat", 0))
+        target_delivery["extra_runs"] = 1
+        target_delivery["is_extra"] = True
+    elif extra_norm in ("wd", "b", "lb"):
+        # Wide/bye/leg-bye: at least 1 run for wd, or the extra_runs specified
+        if extra_norm == "wd":
+            extra_runs = max(1, int(target_delivery.get("runs_scored", 1)))
+            target_delivery["extra_runs"] = extra_runs
+            target_delivery["runs_scored"] = extra_runs
+        else:
+            # Byes/leg-byes: use runs_scored as-is
+            target_delivery["extra_runs"] = int(target_delivery.get("runs_scored", 0))
+        target_delivery["runs_off_bat"] = 0
+        target_delivery["is_extra"] = True
+    else:
+        # Legal ball: runs_off_bat is the total
+        target_delivery["runs_scored"] = int(target_delivery.get("runs_off_bat", 0))
+        target_delivery["extra_runs"] = 0
+        target_delivery["is_extra"] = False
+
+    # Update the deliveries ledger
+    deliveries[target_idx] = target_delivery
+    g.deliveries = deliveries  # type: ignore[assignment]
+
+    # Reset runtime and scorecards, then replay all deliveries
+    def _reset_runtime_and_scorecards(game: Any) -> None:
+        game.total_runs = 0
+        game.total_wickets = 0
+        game.overs_completed = 0
+        game.balls_this_over = 0
+        game.current_striker_id = None
+        game.current_non_striker_id = None
+        game.current_bowler_id = None
+        game.last_ball_bowler_id = None
+        game.mid_over_change_used = False
+        game.pending_new_batter = False
+        game.pending_new_over = False
+        batting_team = game.team_a if game.batting_team_name == game.team_a["name"] else game.team_b
+        bowling_team = game.team_b if batting_team is game.team_a else game.team_a
+        game.batting_scorecard = _gh("_mk_batting_scorecard", batting_team)
+        game.bowling_scorecard = _gh("_mk_bowling_scorecard", bowling_team)
+
+    _reset_runtime_and_scorecards(g)
+
+    # Replay all deliveries using scoring_service.score_one
+    for d_map in g.deliveries:
+        d = cast(dict[str, Any], d_map)
+        x = _gh("_norm_extra", d.get("extra_type"))
+        if x == "nb":
+            rs = int(d.get("runs_off_bat") or 0)
+        elif x in ("wd", "b", "lb"):
+            rs = int(d.get("extra_runs") or 0)
+        else:
+            rs = int(d.get("runs_off_bat") or 0)
+
+        _ = _score_one(
+            g,
+            striker_id=str(d.get("striker_id", "")),
+            non_striker_id=str(d.get("non_striker_id", "")),
+            bowler_id=str(d.get("bowler_id", "")),
+            runs_scored=rs,
+            extra=x,
+            is_wicket=bool(d.get("is_wicket")),
+            dismissal_type=d.get("dismissal_type"),
+            dismissed_player_id=d.get("dismissed_player_id"),
+        )
+
+    # Finalize and persist
+    _gh("_rebuild_scorecards_from_deliveries", g)
+    _gh("_recompute_totals_and_runtime", g)
+    await _maybe_close_innings(g)
+    _gh("_ensure_target_if_chasing", g)
+    _gh("_maybe_finalize_match", g)
+    await crud.update_game(db, game_model=g)
+
+    # Build snapshot
+    last = g.deliveries[-1] if g.deliveries else None
+    snap = _snapshot_from_game(g, last, BASE_DIR)
+
+    # Emit via Socket.IO
+    from backend.services.live_bus import emit_state_update
+
+    await emit_state_update(game_id, snap)
+
+    return snap
