@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from backend.main import app
 from backend.sql_app import models, crud
-from backend.sql_app.schemas import GameCreate, DeliveryCreate
+from backend.sql_app.schemas import GameCreate
 
 
 @pytest.fixture
