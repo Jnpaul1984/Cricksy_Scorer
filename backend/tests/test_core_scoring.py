@@ -853,11 +853,19 @@ async def test_delivery_correction_wide_to_legal(async_client, db_session):
     game_id = game_data.get("id") or game_data.get("gid") or game_data.get("game", {}).get("id")
     assert game_id, f"Could not extract game ID from: {game_data}"
 
+    # Get game details to extract player IDs
+    game_response = await async_client.get(f"/games/{game_id}")
+    assert game_response.status_code == 200
+    game_details = game_response.json()
+    striker_id = game_details["team_a"]["players"][0]["id"]
+    non_striker_id = game_details["team_a"]["players"][1]["id"]
+    bowler_id = game_details["team_b"]["players"][0]["id"]
+
     # Score a wide (WD + 1 run) via API
     wide_payload = {
-        "striker_id": "bat1",
-        "non_striker_id": "bat2",
-        "bowler_id": "bowl1",
+        "striker_id": striker_id,
+        "non_striker_id": non_striker_id,
+        "bowler_id": bowler_id,
         "runs_scored": 1,  # Wide: use runs_scored
         "runs_off_bat": 0,
         "extra": "wd",
@@ -924,11 +932,19 @@ async def test_delivery_correction_runs_update(async_client, db_session):
     game_data = create_response.json()
     game_id = game_data.get("id") or game_data.get("gid") or game_data.get("game", {}).get("id")
 
+    # Get game details to extract player IDs
+    game_response = await async_client.get(f"/games/{game_id}")
+    assert game_response.status_code == 200
+    game_details = game_response.json()
+    striker_id = game_details["team_a"]["players"][0]["id"]
+    non_striker_id = game_details["team_a"]["players"][1]["id"]
+    bowler_id = game_details["team_b"]["players"][0]["id"]
+
     # Score 2 runs via API
     legal_payload = {
-        "striker_id": "bat1",
-        "non_striker_id": "bat2",
-        "bowler_id": "bowl1",
+        "striker_id": striker_id,
+        "non_striker_id": non_striker_id,
+        "bowler_id": bowler_id,
         "runs_scored": 2,  # Legal ball: use runs_scored
         "runs_off_bat": 0,
         "extra": None,

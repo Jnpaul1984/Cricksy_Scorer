@@ -306,6 +306,60 @@ python -m pytest backend/tests/ -v
 
 **Severity**: HIGH - This pattern multiplies all other patterns by causing repeated failures
 
+### Pattern 8: Using String Literals Instead of Generated IDs
+**Error**: 422 Unprocessable Entity when scoring deliveries with player IDs like "bat1", "bowl1"
+
+**Cause**: Game creation generates UUID player IDs, but tests use string literals from `players_a`/`players_b` arrays
+
+**How It Works**:
+- `POST /games` with `players_a: ["bat1", "bat2"]` creates players with UUID IDs (e.g., `"123e4567-e89b-12d3-a456-426614174000"`)
+- The `"bat1"` string is the player **name**, not the **ID**
+- Delivery endpoints require actual player **IDs**, not names
+
+**Fix**:
+```python
+# ❌ WRONG: Using names as IDs
+create_response = await async_client.post("/games", json={
+    "players_a": ["bat1", "bat2"],
+    "players_b": ["bowl1", "bowl2"],
+    ...
+})
+game_id = create_response.json()["id"]
+
+# Using names directly (FAILS)
+await async_client.post(f"/games/{game_id}/deliveries", json={
+    "striker_id": "bat1",  # ❌ This is a NAME, not an ID
+    "bowler_id": "bowl1",   # ❌ This is a NAME, not an ID
+    ...
+})
+
+# ✅ CORRECT: Extract IDs from game details
+create_response = await async_client.post("/games", json={
+    "players_a": ["bat1", "bat2"],
+    "players_b": ["bowl1", "bowl2"],
+    ...
+})
+game_id = create_response.json()["id"]
+
+# Fetch game details
+game_response = await async_client.get(f"/games/{game_id}")
+game_details = game_response.json()
+
+# Extract actual player IDs
+striker_id = game_details["team_a"]["players"][0]["id"]  # UUID
+non_striker_id = game_details["team_a"]["players"][1]["id"]  # UUID
+bowler_id = game_details["team_b"]["players"][0]["id"]  # UUID
+
+# Use extracted IDs
+await async_client.post(f"/games/{game_id}/deliveries", json={
+    "striker_id": striker_id,     # ✅ Actual UUID
+    "bowler_id": bowler_id,       # ✅ Actual UUID
+    ...
+})
+```
+
+**Detection**: Check HTTP logs - if `content_length` is suspiciously small (e.g., 37 bytes) for a delivery payload, the JSON might be incomplete or rejected before full parsing
+
 ## Deployment Workflow (GitHub Actions)
 
 The `deploy-backend.yml` workflow runs these steps:
