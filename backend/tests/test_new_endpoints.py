@@ -7,122 +7,55 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4
 
-from backend.main import app
-from backend.sql_app import models, crud
-from backend.sql_app.schemas import GameCreate
+from backend.sql_app import models
 
 
 @pytest.fixture
-async def test_game(db_session: AsyncSession):
-    """Create a test game with deliveries for testing."""
-    game_id = str(uuid4())
-    
-    game = models.Game(
-        id=game_id,
-        match_type="limited",
-        overs_limit=20,
-        dls_enabled=False,
-        toss_winner_team="Team A",
-        decision="bat",
-        team_a={"name": "Team A", "players": [{"id": "batter_1", "name": "Test Batter 1"}, {"id": "batter_2", "name": "Test Batter 2"}]},
-        team_b={"name": "Team B", "players": [{"id": "bowler_1", "name": "Test Bowler 1"}]},
-        batting_team_name="Team A",
-        bowling_team_name="Team B",
-        status=models.GameStatus.in_progress,
-        current_inning=1,
-        total_runs=125,
-        total_wickets=3,
-        overs_completed=18,
-        balls_this_over=2,
-        batting_scorecard={
-            "batter_1": {
-                "player_id": "batter_1",
-                "player_name": "Test Batter 1",
-                "runs": 45,
-                "balls_faced": 32,
-            },
-            "batter_2": {
-                "player_id": "batter_2",
-                "player_name": "Test Batter 2",
-                "runs": 38,
-                "balls_faced": 28,
-            },
-        },
-        bowling_scorecard={
-            "bowler_1": {
-                "player_id": "bowler_1",
-                "player_name": "Test Bowler 1",
-                "overs_bowled": 4,
-                "runs_conceded": 32,
-                "wickets_taken": 2,
-                "economy": 8.0,
-            },
+async def test_game(async_client: AsyncClient):
+    """Create a test game via API for testing."""
+    # Create game via API (follows DEPLOY_BACKEND_PROTOCOL guidelines)
+    create_response = await async_client.post(
+        "/games",
+        json={
+            "match_type": "limited",
+            "overs_limit": 20,
+            "team_a_name": "Team A",
+            "team_b_name": "Team B",
+            "players_a": ["bat1", "bat2"],
+            "players_b": ["bowl1", "bowl2"],
+            "toss_winner_team": "Team A",
+            "decision": "bat",
         },
     )
+    assert create_response.status_code in (200, 201), f"Failed to create game: {create_response.text}"
+    game_data = create_response.json()
+    game_id = game_data.get("id") or game_data.get("gid") or game_data.get("game", {}).get("id")
     
-    db_session.add(game)
-    await db_session.commit()
-    await db_session.refresh(game)
+    # Get full game details to extract player IDs
+    game_response = await async_client.get(f"/games/{game_id}")
+    assert game_response.status_code == 200
+    game_details = game_response.json()
     
-    # Add some deliveries
-    deliveries = [
-        # Powerplay (overs 1-6)
-        models.Delivery(
-            id=str(uuid4()),
-            game_id=game_id,
-            over_number=1,
-            ball_number=1,
-            bowler_id="bowler_1",
-            striker_id="batter_1",
-            non_striker_id="batter_2",
-            runs_scored=2,
-            runs_off_bat=2,
-            is_wicket=False,
-        ),
-        models.Delivery(
-            id=str(uuid4()),
-            game_id=game_id,
-            over_number=2,
-            ball_number=1,
-            bowler_id="bowler_1",
-            striker_id="batter_1",
-            non_striker_id="batter_2",
-            runs_scored=4,
-            runs_off_bat=4,
-            is_wicket=False,
-        ),
-        # Middle overs (7-16)
-        models.Delivery(
-            id=str(uuid4()),
-            game_id=game_id,
-            over_number=10,
-            ball_number=1,
-            bowler_id="bowler_1",
-            striker_id="batter_1",
-            non_striker_id="batter_2",
-            runs_scored=0,
-            runs_off_bat=0,
-            is_wicket=True,
-        ),
-        # Death overs (17-20)
-        models.Delivery(
-            id=str(uuid4()),
-            game_id=game_id,
-            over_number=18,
-            ball_number=1,
-            bowler_id="bowler_1",
-            striker_id="batter_2",
-            non_striker_id="batter_1",
-            runs_scored=6,
-            runs_off_bat=6,
-            is_wicket=False,
-        ),
-    ]
+    # Extract actual player IDs from response
+    striker_id = game_details["team_a"]["players"][0]["id"]
+    non_striker_id = game_details["team_a"]["players"][1]["id"]
+    bowler_id = game_details["team_b"]["players"][0]["id"]
     
-    for delivery in deliveries:
-        db_session.add(delivery)
-    
-    await db_session.commit()
+    # Score a few deliveries via API
+    for _ in range(6):  # Score 6 legal deliveries
+        score_response = await async_client.post(
+            f"/games/{game_id}/deliveries",
+            json={
+                "striker_id": striker_id,
+                "non_striker_id": non_striker_id,
+                "bowler_id": bowler_id,
+                "runs_scored": 4,
+                "runs_off_bat": 0,
+                "extra": None,
+                "is_wicket": False,
+            },
+        )
+        assert score_response.status_code == 200, f"Failed to score: {score_response.text}"
     
     return game_id
 
