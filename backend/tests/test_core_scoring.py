@@ -832,7 +832,6 @@ def test_no_wicket_credit_for_run_out():
 @pytest.mark.asyncio
 async def test_delivery_correction_wide_to_legal(async_client, db_session):
     """Test correcting a wide to a legal delivery updates totals correctly."""
-    from backend.routes import games as games_impl
 
     # Create test game via API
     create_response = await async_client.post(
@@ -909,9 +908,12 @@ async def test_delivery_correction_wide_to_legal(async_client, db_session):
     assert corrected_snapshot["overs_completed"] == 0
     assert corrected_snapshot["balls_this_over"] == 1  # Now counts as legal ball
 
-    # Verify delivery was corrected
-    assert len(corrected_snapshot["deliveries"]) == 1
-    corrected_delivery = corrected_snapshot["deliveries"][0]
+    # Fetch full game state to verify delivery was corrected (snapshot doesn't include deliveries)
+    final_game_response = await async_client.get(f"/games/{game_id}")
+    assert final_game_response.status_code == 200
+    final_game_state = final_game_response.json()
+    assert len(final_game_state["deliveries"]) == 1
+    corrected_delivery = final_game_state["deliveries"][0]
     assert not corrected_delivery.get("extra_type") or corrected_delivery["extra_type"] == ""
     assert corrected_delivery["runs_scored"] == 1
     assert corrected_delivery["runs_off_bat"] == 1
@@ -987,8 +989,8 @@ async def test_delivery_correction_runs_update(async_client, db_session):
     # Verify totals updated
     assert snapshot["total_runs"] == 4
 
-    # Verify batting scorecard updated
-    bat_card = snapshot.get("batting_scorecard", {}).get("bat1", {})
+    # Verify batting scorecard updated (use striker_id, not player name)
+    bat_card = snapshot.get("batting_scorecard", {}).get(striker_id, {})
     assert bat_card.get("runs") == 4
 
 

@@ -1488,26 +1488,28 @@ async def correct_delivery(
     target_delivery = deliveries[target_idx]
 
     # Apply corrections to the delivery dict (only update fields that were provided)
-    if correction.runs_scored is not None:
+    correction_data = correction.model_dump(exclude_unset=True)
+    
+    if "runs_scored" in correction_data:
         target_delivery["runs_scored"] = correction.runs_scored
-    if correction.runs_off_bat is not None:
+    if "runs_off_bat" in correction_data:
         target_delivery["runs_off_bat"] = correction.runs_off_bat
-    if correction.extra is not None:
-        # Normalize extra code
-        target_delivery["extra_type"] = _gh("_norm_extra", correction.extra) or correction.extra
-    if correction.is_wicket is not None:
+    if "extra" in correction_data:
+        # Normalize extra code (None clears it to legal ball)
+        target_delivery["extra_type"] = _gh("_norm_extra", correction.extra) if correction.extra else None
+    if "is_wicket" in correction_data:
         target_delivery["is_wicket"] = correction.is_wicket
-    if correction.dismissal_type is not None:
+    if "dismissal_type" in correction_data:
         target_delivery["dismissal_type"] = correction.dismissal_type
-    if correction.dismissed_player_id is not None:
+    if "dismissed_player_id" in correction_data:
         target_delivery["dismissed_player_id"] = correction.dismissed_player_id
-    if correction.fielder_id is not None:
+    if "fielder_id" in correction_data:
         target_delivery["fielder_id"] = correction.fielder_id
-    if correction.shot_map is not None:
+    if "shot_map" in correction_data:
         target_delivery["shot_map"] = correction.shot_map
-    if correction.shot_angle_deg is not None:
+    if "shot_angle_deg" in correction_data:
         target_delivery["shot_angle_deg"] = correction.shot_angle_deg
-    if correction.commentary is not None:
+    if "commentary" in correction_data:
         target_delivery["commentary"] = correction.commentary
 
     # Validate the correction follows cricket rules
