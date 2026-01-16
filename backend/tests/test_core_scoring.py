@@ -881,7 +881,13 @@ async def test_delivery_correction_wide_to_legal(async_client, db_session):
     assert score_response.status_code == 200, f"Expected 200, got {score_response.status_code}: {score_response.text}"
     snapshot = score_response.json()
     assert snapshot["total_runs"] == 1
-    delivery_id = snapshot["deliveries"][0]["id"]
+    
+    # Fetch full game state to get delivery ID (snapshot doesn't include deliveries array)
+    game_state_response = await async_client.get(f"/games/{game_id}")
+    assert game_state_response.status_code == 200
+    game_state = game_state_response.json()
+    assert len(game_state["deliveries"]) > 0, "No deliveries found in game state"
+    delivery_id = game_state["deliveries"][0]["id"]
 
     # Correct the wide to a legal 1 run
     response = await async_client.patch(
@@ -960,7 +966,13 @@ async def test_delivery_correction_runs_update(async_client, db_session):
     assert score_response.status_code == 200, f"Expected 200, got {score_response.status_code}: {score_response.text}"
     snapshot_after_score = score_response.json()
     assert snapshot_after_score["total_runs"] == 2
-    delivery_id = snapshot_after_score["deliveries"][0]["id"]
+    
+    # Fetch full game state to get delivery ID (snapshot doesn't include deliveries array)
+    game_state_response = await async_client.get(f"/games/{game_id}")
+    assert game_state_response.status_code == 200
+    game_state = game_state_response.json()
+    assert len(game_state["deliveries"]) > 0, "No deliveries found in game state"
+    delivery_id = game_state["deliveries"][0]["id"]
 
     # Correct to 4 runs
     response = await async_client.patch(

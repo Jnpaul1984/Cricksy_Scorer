@@ -360,6 +360,40 @@ await async_client.post(f"/games/{game_id}/deliveries", json={
 
 **Detection**: Check HTTP logs - if `content_length` is suspiciously small (e.g., 37 bytes) for a delivery payload, the JSON might be incomplete or rejected before full parsing
 
+### Pattern 9: Snapshot vs Full Game State
+**Error**: `KeyError: 'deliveries'` when accessing `snapshot["deliveries"]` after scoring
+
+**Cause**: Snapshot response from `POST /games/{id}/deliveries` doesn't include full `deliveries` array
+
+**Response Schema Difference**:
+- **Snapshot** (`POST /deliveries` response): Contains summary fields like `total_runs`, `score`, `last_delivery`, `batting_scorecard` - optimized for UI updates
+- **Full Game State** (`GET /games/{id}` response): Contains complete `deliveries` array with all delivery records
+
+**Fix**:
+```python
+# ❌ WRONG: Assuming snapshot has deliveries array
+score_response = await async_client.post(f"/games/{game_id}/deliveries", json={...})
+snapshot = score_response.json()
+delivery_id = snapshot["deliveries"][0]["id"]  # KeyError!
+
+# ✅ CORRECT: Fetch full game state to get delivery IDs
+score_response = await async_client.post(f"/games/{game_id}/deliveries", json={...})
+snapshot = score_response.json()
+assert snapshot["total_runs"] == expected_runs  # Use snapshot for validation
+
+# Fetch full game state for delivery IDs
+game_response = await async_client.get(f"/games/{game_id}")
+game_state = game_response.json()
+delivery_id = game_state["deliveries"][0]["id"]  # ✅ Full state has deliveries
+```
+
+**Why This Design?**:
+- Snapshots are sent via Socket.IO for real-time updates → must be lightweight
+- Full game state includes complete history → only fetched when needed (e.g., page load, correction)
+- Tests should mirror real application patterns: use snapshot for UI validation, fetch full state for detailed operations
+
+**Detection**: `KeyError` on `deliveries`, `recent_balls`, or similar array fields in snapshot response
+
 ## Deployment Workflow (GitHub Actions)
 
 The `deploy-backend.yml` workflow runs these steps:
