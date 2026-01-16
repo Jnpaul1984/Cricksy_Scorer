@@ -135,9 +135,9 @@ class TestGameMetricsEndpoint:
     """Tests for GET /games/{gameId}/metrics"""
     
     @pytest.mark.asyncio
-    async def test_get_game_metrics_success(self, async_client: AsyncClient, db_session: AsyncSession):
+    async def test_get_game_metrics_success(self, async_client: AsyncClient, test_game: str):
         """Test successful retrieval of game metrics."""
-        game_id = await test_game(db_session)
+        game_id = test_game
         
         response = await async_client.get(f"/games/{game_id}/metrics")
         
@@ -165,9 +165,9 @@ class TestPhaseAnalysisEndpoint:
     """Tests for GET /games/{gameId}/phase-analysis"""
     
     @pytest.mark.asyncio
-    async def test_get_phase_analysis_success(self, async_client: AsyncClient, db_session: AsyncSession):
+    async def test_get_phase_analysis_success(self, async_client: AsyncClient, test_game: str):
         """Test successful retrieval of phase analysis."""
-        game_id = await test_game(db_session)
+        game_id = test_game
         
         response = await async_client.get(f"/games/{game_id}/phase-analysis")
         

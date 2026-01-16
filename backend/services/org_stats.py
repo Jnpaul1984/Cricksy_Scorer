@@ -31,8 +31,8 @@ async def calculate_org_stats(db: AsyncSession, org_id: str) -> dict:
     }
     """
     
-    # Get all teams for this organization
-    stmt = select(models.Team).where(models.Team.organization_id == org_id)
+    # Get all teams for this organization (org_id is the owner_user_id)
+    stmt = select(models.Team).where(models.Team.owner_user_id == org_id)
     result = await db.execute(stmt)
     org_teams = result.scalars().all()
     
@@ -167,8 +167,8 @@ async def get_org_teams_stats(db: AsyncSession, org_id: str) -> list[dict]:
     ]
     """
     
-    # Get all teams for this organization
-    stmt = select(models.Team).where(models.Team.organization_id == org_id)
+    # Get all teams for this organization (org_id is the owner_user_id)
+    stmt = select(models.Team).where(models.Team.owner_user_id == org_id)
     result = await db.execute(stmt)
     org_teams = result.scalars().all()
     
