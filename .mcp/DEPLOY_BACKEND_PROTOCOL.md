@@ -278,6 +278,34 @@ git push origin main --force
 | `"wd"`, `"b"`, `"lb"` | `runs_scored` | `runs_off_bat: 0` |
 | `"nb"` | `runs_off_bat` | `runs_scored: None` (auto) |
 
+### Pattern 7: Missing Local Validation
+**Error**: CI fails with errors that would have been caught by local validation (ruff, mypy, pytest)
+
+**Cause**: Pushed code without running mandatory pre-push validation checks
+
+**Impact**: 
+- Wastes CI/CD resources and time
+- Pollutes git history with "fix: ..." commits
+- Delays deployment of features
+- Frustrates team members who have to wait for re-runs
+
+**Prevention**:
+```powershell
+# ALWAYS run before push (no exceptions):
+cd backend
+python -m ruff check .
+python -m ruff format --check .
+python -m mypy --config-file pyproject.toml --explicit-package-bases .
+
+# If you added/modified tests:
+cd ..
+python -m pytest backend/tests/ -v
+```
+
+**Fix**: Establish muscle memory to NEVER push without validation. Add git pre-push hook if needed.
+
+**Severity**: HIGH - This pattern multiplies all other patterns by causing repeated failures
+
 ## Deployment Workflow (GitHub Actions)
 
 The `deploy-backend.yml` workflow runs these steps:
