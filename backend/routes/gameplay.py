@@ -1478,16 +1478,12 @@ async def correct_delivery(
     if g.status == models.GameStatus.completed:
         raise HTTPException(status_code=400, detail="Cannot correct deliveries in completed game")
 
-    # Find the delivery by ID
+    # Find the delivery by ID (ID = list index since deliveries JSON doesn't have 'id' field)
     deliveries: list[dict[str, Any]] = list(getattr(g, "deliveries", []) or [])
-    target_idx: int | None = None
-    for idx, d in enumerate(deliveries):
-        if int(d.get("id", -1)) == delivery_id:
-            target_idx = idx
-            break
-
-    if target_idx is None:
+    if delivery_id < 0 or delivery_id >= len(deliveries):
         raise HTTPException(status_code=404, detail=f"Delivery {delivery_id} not found")
+    
+    target_idx = delivery_id
 
     target_delivery = deliveries[target_idx]
 
