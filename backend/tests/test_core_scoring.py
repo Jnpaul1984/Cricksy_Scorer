@@ -830,7 +830,7 @@ def test_no_wicket_credit_for_run_out():
 
 
 @pytest.mark.asyncio
-async def test_delivery_correction_wide_to_legal(client, db):
+async def test_delivery_correction_wide_to_legal(async_client, db_session):
     """Test correcting a wide to a legal delivery updates totals correctly."""
     from backend.sql_app import crud, models, schemas
     from backend.routes import games as games_impl
@@ -855,7 +855,7 @@ async def test_delivery_correction_wide_to_legal(client, db):
         "bowling_team_name": "Team B",
         "current_inning": 1,
     }
-    game = await crud.create_game(db, schemas.GameCreate(**game_dict))
+    game = await crud.create_game(db_session, schemas.GameCreate(**game_dict))
 
     # Score a wide (WD + 1 run)
     delivery1 = {
@@ -874,16 +874,16 @@ async def test_delivery_correction_wide_to_legal(client, db):
         "id": 1,
     }
     await games_impl.append_delivery_and_persist_impl(
-        game, delivery_dict=delivery1, db=db
+        game, delivery_dict=delivery1, db=db_session
     )
 
     # Verify wide was scored
-    refreshed = await crud.get_game(db, game_id=game.id)
+    refreshed = await crud.get_game(db_session, game_id=game.id)
     assert refreshed.total_runs == 1
     assert len(refreshed.deliveries) == 1
 
     # Correct the wide to a legal 1 run
-    response = await client.patch(
+    response = await async_client.patch(
         f"/games/{game.id}/deliveries/1",
         json={
             "runs_scored": 1,
@@ -901,7 +901,7 @@ async def test_delivery_correction_wide_to_legal(client, db):
     assert snapshot["balls_this_over"] == 1  # Now counts as legal ball
 
     # Verify delivery was corrected
-    final_game = await crud.get_game(db, game_id=game.id)
+    final_game = await crud.get_game(db_session, game_id=game.id)
     corrected_delivery = final_game.deliveries[0]
     assert corrected_delivery["extra_type"] is None or corrected_delivery["extra_type"] == ""
     assert corrected_delivery["runs_scored"] == 1
@@ -909,7 +909,7 @@ async def test_delivery_correction_wide_to_legal(client, db):
 
 
 @pytest.mark.asyncio
-async def test_delivery_correction_runs_update(client, db):
+async def test_delivery_correction_runs_update(async_client, db_session):
     """Test correcting runs on a delivery recalculates totals."""
     from backend.sql_app import crud, models, schemas
     from backend.routes import games as games_impl
@@ -931,7 +931,7 @@ async def test_delivery_correction_runs_update(client, db):
         "bowling_team_name": "Team B",
         "current_inning": 1,
     }
-    game = await crud.create_game(db, schemas.GameCreate(**game_dict))
+    game = await crud.create_game(db_session, schemas.GameCreate(**game_dict))
 
     # Score 2 runs
     delivery1 = {
@@ -950,11 +950,11 @@ async def test_delivery_correction_runs_update(client, db):
         "id": 1,
     }
     await games_impl.append_delivery_and_persist_impl(
-        game, delivery_dict=delivery1, db=db
+        game, delivery_dict=delivery1, db=db_session
     )
 
     # Correct to 4 runs
-    response = await client.patch(
+    response = await async_client.patch(
         f"/games/{game.id}/deliveries/1",
         json={"runs_off_bat": 4, "runs_scored": 4},
     )
@@ -965,13 +965,13 @@ async def test_delivery_correction_runs_update(client, db):
     assert snapshot["total_runs"] == 4
 
     # Verify batting scorecard updated
-    final_game = await crud.get_game(db, game_id=game.id)
+    final_game = await crud.get_game(db_session, game_id=game.id)
     bat_card = final_game.batting_scorecard.get("bat1", {})
     assert bat_card.get("runs") == 4
 
 
 @pytest.mark.asyncio
-async def test_delivery_correction_not_found(client, db):
+async def test_delivery_correction_not_found(async_client, db_session):
     """Test correction returns 404 for non-existent delivery."""
     from backend.sql_app import crud, models, schemas
 
@@ -986,10 +986,10 @@ async def test_delivery_correction_not_found(client, db):
         "bowling_team_name": "Team B",
         "current_inning": 1,
     }
-    game = await crud.create_game(db, schemas.GameCreate(**game_dict))
+    game = await crud.create_game(db_session, schemas.GameCreate(**game_dict))
 
     # Try to correct non-existent delivery
-    response = await client.patch(
+    response = await async_client.patch(
         f"/games/{game.id}/deliveries/999",
         json={"runs_scored": 1},
     )

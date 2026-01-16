@@ -1569,8 +1569,8 @@ async def correct_delivery(
     _reset_runtime_and_scorecards(g)
 
     # Replay all deliveries using scoring_service.score_one
-    deliveries_seq: Sequence[Mapping[str, Any]] = cast(Sequence[Mapping[str, Any]], g.deliveries)
-    for d in deliveries_seq:
+    for d_map in g.deliveries:
+        d = cast(dict[str, Any], d_map)
         x = _gh("_norm_extra", d.get("extra_type"))
         if x == "nb":
             rs = int(d.get("runs_off_bat") or 0)
