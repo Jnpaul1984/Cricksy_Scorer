@@ -2,12 +2,20 @@
 
 **Purpose**: Prevent CI/deployment failures by ensuring all changes pass rigorous local validation before pushing to `main` branch.
 
+## ⚠️ CRITICAL RULE ⚠️
+
+**YOU MUST RUN LOCAL VALIDATION BEFORE EVERY COMMIT/PUSH TO MAIN**
+
+This is NOT optional. Running tests in CI after push wastes time and pollutes git history with fix commits. Local validation catches issues before they reach CI.
+
 ## Mandatory Pre-Push Checklist
 
-### 1. Run Local CI Validation (ALWAYS)
+### 1. Run Local CI Validation (ALWAYS REQUIRED)
+
+**Run these commands BEFORE every `git push`:**
 
 ```powershell
-# Set environment variable for in-memory DB mode
+# Set environment variables for in-memory DB mode
 $env:CRICKSY_IN_MEMORY_DB = "1"
 $env:DATABASE_URL = "sqlite+aiosqlite:///:memory:?cache=shared"
 $env:PYTHONPATH = "C:\Users\Hp\Cricksy_Scorer"
@@ -15,22 +23,39 @@ $env:PYTHONPATH = "C:\Users\Hp\Cricksy_Scorer"
 # Backend validation
 cd C:\Users\Hp\Cricksy_Scorer\backend
 
-# Step 1: Ruff lint
+# Step 1: Ruff lint (BLOCKING - must pass)
 python -m ruff check .
 # MUST PASS: "All checks passed!"
+# IF FAILS: Run `python -m ruff check --fix --unsafe-fixes .` then re-check
 
-# Step 2: Ruff format
+# Step 2: Ruff format (BLOCKING - must pass)
 python -m ruff format --check .
 # MUST PASS: "X files already formatted"
+# IF FAILS: Run `python -m ruff format .` then re-check
 
-# Step 3: MyPy type-check
+# Step 3: MyPy type-check (BLOCKING - must pass)
 python -m mypy --config-file pyproject.toml --explicit-package-bases .
 # MUST PASS: "Success: no issues found in X source files"
 
-# Step 4: Run pytest (optional locally if cv2 missing, MUST pass in CI)
-cd ..
-pytest -v
-# Expected: 0 failures (some warnings acceptable)
+# Step 4: Run pytest (CRITICAL - must pass, skip only if cv2 unavailable locally)
+cd C:\Users\Hp\Cricksy_Scorer
+python -m pytest backend/tests/ -v
+# MUST PASS: "X passed" with 0 failures
+# NOTE: If cv2 missing locally, tests will fail - in this case, ensure Steps 1-3 pass
+#       and verify your test additions follow patterns in DEPLOY_BACKEND_PROTOCOL
+```
+
+**If ANY step fails, DO NOT PUSH. Fix the issue first, then re-run all checks.**
+
+### 1b. Quick Validation (For Small Changes)
+
+For trivial changes (docs, comments only), minimum validation:
+
+```powershell
+# Minimum checks (still required)
+cd backend
+python -m ruff check .
+python -m ruff format --check .
 ```
 
 ### 2. Test Creation Guidelines

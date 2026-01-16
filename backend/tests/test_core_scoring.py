@@ -854,19 +854,23 @@ async def test_delivery_correction_wide_to_legal(async_client, db_session):
     assert game_id, f"Could not extract game ID from: {game_data}"
 
     # Score a wide (WD + 1 run) via API
+    wide_payload = {
+        "striker_id": "bat1",
+        "non_striker_id": "bat2",
+        "bowler_id": "bowl1",
+        "runs_scored": 1,  # Wide: use runs_scored
+        "runs_off_bat": 0,
+        "extra": "wd",
+        "is_wicket": False,
+    }
+    print(f"\n[DEBUG] Wide delivery payload: {wide_payload}")
     score_response = await async_client.post(
         f"/games/{game_id}/deliveries",
-        json={
-            "striker_id": "bat1",
-            "non_striker_id": "bat2",
-            "bowler_id": "bowl1",
-            "runs_scored": 1,  # Wide: use runs_scored
-            "runs_off_bat": 0,
-            "extra": "wd",
-            "is_wicket": False,
-        },
+        json=wide_payload,
     )
-    assert score_response.status_code == 200
+    if score_response.status_code != 200:
+        print(f"[DEBUG] Failed with {score_response.status_code}: {score_response.text}")
+    assert score_response.status_code == 200, f"Expected 200, got {score_response.status_code}: {score_response.text}"
     snapshot = score_response.json()
     assert snapshot["total_runs"] == 1
     delivery_id = snapshot["deliveries"][0]["id"]
@@ -921,19 +925,23 @@ async def test_delivery_correction_runs_update(async_client, db_session):
     game_id = game_data.get("id") or game_data.get("gid") or game_data.get("game", {}).get("id")
 
     # Score 2 runs via API
+    legal_payload = {
+        "striker_id": "bat1",
+        "non_striker_id": "bat2",
+        "bowler_id": "bowl1",
+        "runs_scored": 2,  # Legal ball: use runs_scored
+        "runs_off_bat": 0,
+        "extra": None,
+        "is_wicket": False,
+    }
+    print(f"\n[DEBUG] Legal delivery payload: {legal_payload}")
     score_response = await async_client.post(
         f"/games/{game_id}/deliveries",
-        json={
-            "striker_id": "bat1",
-            "non_striker_id": "bat2",
-            "bowler_id": "bowl1",
-            "runs_scored": 2,  # Legal ball: use runs_scored
-            "runs_off_bat": 0,
-            "extra": None,
-            "is_wicket": False,
-        },
+        json=legal_payload,
     )
-    assert score_response.status_code == 200
+    if score_response.status_code != 200:
+        print(f"[DEBUG] Failed with {score_response.status_code}: {score_response.text}")
+    assert score_response.status_code == 200, f"Expected 200, got {score_response.status_code}: {score_response.text}"
     snapshot_after_score = score_response.json()
     assert snapshot_after_score["total_runs"] == 2
     delivery_id = snapshot_after_score["deliveries"][0]["id"]
