@@ -383,8 +383,8 @@ def test_score_one_complete_over():
     g = MockGame()
 
     # Score 6 legal balls
-    for i in range(6):
-        delivery = score_one(
+    for _i in range(6):
+        score_one(
             g,
             striker_id="p1",
             non_striker_id="p2",
@@ -411,7 +411,7 @@ def test_score_one_strike_rotation_odd_runs():
     g.current_non_striker_id = "p2"
 
     # Score 1 run (odd) - strike should rotate
-    delivery = score_one(
+    score_one(
         g,
         striker_id="p1",
         non_striker_id="p2",
@@ -435,7 +435,7 @@ def test_score_one_strike_rotation_even_runs():
     g.current_non_striker_id = "p2"
 
     # Score 2 runs (even) - strike should NOT rotate
-    delivery = score_one(
+    score_one(
         g,
         striker_id="p1",
         non_striker_id="p2",
@@ -457,7 +457,7 @@ def test_undo_single_delivery():
     g = MockGame()
 
     # Score a delivery
-    delivery = score_one(
+    score_one(
         g,
         striker_id="p1",
         non_striker_id="p2",
@@ -538,7 +538,7 @@ def test_undo_wicket_delivery():
     g = MockGame()
 
     # Score a wicket
-    delivery = score_one(
+    score_one(
         g,
         striker_id="p1",
         non_striker_id="p2",
@@ -758,7 +758,7 @@ def test_bowling_scorecard_updates():
     g = MockGame()
 
     # Score multiple deliveries by same bowler
-    for i in range(3):
+    for _i in range(3):
         score_one(
             g,
             striker_id="p1",
@@ -832,28 +832,19 @@ def test_no_wicket_credit_for_run_out():
 @pytest.mark.asyncio
 async def test_delivery_correction_wide_to_legal(async_client, db_session):
     """Test correcting a wide to a legal delivery updates totals correctly."""
-    from backend.sql_app import crud, models, schemas
     from backend.routes import games as games_impl
+    from backend.sql_app import crud, schemas
 
     # Create test game
     game_dict = {
-        "team_a": {
-            "name": "Team A",
-            "players": [
-                {"id": "bat1", "name": "Batter 1"},
-                {"id": "bat2", "name": "Batter 2"},
-            ],
-        },
-        "team_b": {
-            "name": "Team B",
-            "players": [{"id": "bowl1", "name": "Bowler 1"}],
-        },
         "match_type": "limited",
         "overs_limit": 20,
-        "status": models.GameStatus.in_progress,
-        "batting_team_name": "Team A",
-        "bowling_team_name": "Team B",
-        "current_inning": 1,
+        "team_a_name": "Team A",
+        "team_b_name": "Team B",
+        "players_a": ["bat1", "bat2"],
+        "players_b": ["bowl1"],
+        "toss_winner_team": "Team A",
+        "decision": "bat",
     }
     game = await crud.create_game(db_session, schemas.GameCreate(**game_dict))
 
@@ -911,25 +902,19 @@ async def test_delivery_correction_wide_to_legal(async_client, db_session):
 @pytest.mark.asyncio
 async def test_delivery_correction_runs_update(async_client, db_session):
     """Test correcting runs on a delivery recalculates totals."""
-    from backend.sql_app import crud, models, schemas
     from backend.routes import games as games_impl
+    from backend.sql_app import crud, schemas
 
     # Create test game
     game_dict = {
-        "team_a": {
-            "name": "Team A",
-            "players": [{"id": "bat1", "name": "Batter 1"}, {"id": "bat2", "name": "Batter 2"}],
-        },
-        "team_b": {
-            "name": "Team B",
-            "players": [{"id": "bowl1", "name": "Bowler 1"}],
-        },
         "match_type": "limited",
         "overs_limit": 20,
-        "status": models.GameStatus.in_progress,
-        "batting_team_name": "Team A",
-        "bowling_team_name": "Team B",
-        "current_inning": 1,
+        "team_a_name": "Team A",
+        "team_b_name": "Team B",
+        "players_a": ["bat1", "bat2"],
+        "players_b": ["bowl1"],
+        "toss_winner_team": "Team A",
+        "decision": "bat",
     }
     game = await crud.create_game(db_session, schemas.GameCreate(**game_dict))
 
@@ -973,18 +958,18 @@ async def test_delivery_correction_runs_update(async_client, db_session):
 @pytest.mark.asyncio
 async def test_delivery_correction_not_found(async_client, db_session):
     """Test correction returns 404 for non-existent delivery."""
-    from backend.sql_app import crud, models, schemas
+    from backend.sql_app import crud, schemas
 
     # Create test game with no deliveries
     game_dict = {
-        "team_a": {"name": "Team A", "players": [{"id": "bat1", "name": "Batter 1"}]},
-        "team_b": {"name": "Team B", "players": [{"id": "bowl1", "name": "Bowler 1"}]},
         "match_type": "limited",
         "overs_limit": 20,
-        "status": models.GameStatus.in_progress,
-        "batting_team_name": "Team A",
-        "bowling_team_name": "Team B",
-        "current_inning": 1,
+        "team_a_name": "Team A",
+        "team_b_name": "Team B",
+        "players_a": ["bat1"],
+        "players_b": ["bowl1"],
+        "toss_winner_team": "Team A",
+        "decision": "bat",
     }
     game = await crud.create_game(db_session, schemas.GameCreate(**game_dict))
 

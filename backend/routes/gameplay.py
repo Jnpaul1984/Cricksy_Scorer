@@ -5,10 +5,6 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend import dls as dlsmod
 from backend.domain.constants import as_extra_code as norm_extra
 from backend.routes import games as _games_impl
@@ -20,6 +16,9 @@ from backend.services.snapshot_service import build_snapshot as _snapshot_from_g
 from backend.sql_app import crud, models, schemas
 from backend.sql_app.database import get_db
 from backend.sql_app.schemas import ExtraCode
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Local type alias for JSON dictionaries
 JSONDict = dict[str, Any]
@@ -1518,8 +1517,6 @@ async def correct_delivery(
     # Validate the correction follows cricket rules
     extra_norm = _gh("_norm_extra", target_delivery.get("extra_type"))
     is_nb = extra_norm == "nb"
-    is_wd = extra_norm == "wd"
-    is_legal = not (is_nb or is_wd)
 
     # Recalculate runs_scored based on the corrected values
     if is_nb:
