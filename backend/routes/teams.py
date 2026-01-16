@@ -4,7 +4,7 @@ Teams API routes for organization-level team management.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
@@ -14,6 +14,12 @@ from backend.security import get_current_user
 from backend.sql_app.database import get_db
 from backend.sql_app.models import Team, User
 from backend.sql_app.schemas import TeamCreate, TeamRead, TeamUpdate
+from backend.services.org_stats import (
+    calculate_org_stats,
+    get_org_teams_stats,
+    get_tournament_leaderboards,
+)
+
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 
@@ -192,3 +198,36 @@ async def delete_team(
     await db.delete(team)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+# ==============================================================================
+# Organization Statistics Endpoints
+# ==============================================================================
+
+
+@router.get("/organizations/{org_id}/stats")
+async def get_organization_stats(
+    org_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """
+    Get organization-wide statistics including:
+    - Total teams and matches played
+    - Season win rate
+    - Average run rate
+    - Phase-based net run rates
+    """
+    return await calculate_org_stats(db, org_id)
+
+
+@router.get("/organizations/{org_id}/teams")
+async def get_organization_teams(
+    org_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, list[dict[str, Any]]]:
+    """
+    Get statistics for all teams in an organization.
+    
+    Returns team records, win percentages, NRR, and average scores.
+    """
+    teams_stats = await get_org_teams_stats(db, org_id)
+    return {"teams": teams_stats}

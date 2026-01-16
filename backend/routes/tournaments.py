@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend import security
 from backend.sql_app import schemas, tournament_crud
 from backend.sql_app.database import get_db
+from backend.services.org_stats import get_tournament_leaderboards
+
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
 
@@ -174,3 +176,29 @@ async def delete_fixture(
     if not success:
         raise HTTPException(status_code=404, detail="Fixture not found")
     return {"status": "deleted"}
+
+# ==============================================================================
+# Tournament Leaderboards Endpoint
+# ==============================================================================
+
+
+@router.get("/{tournament_id}/leaderboards")
+async def get_tournament_leaderboards_endpoint(
+    tournament_id: str,
+    leaderboard_type: str = "all",  # "batting", "bowling", or "all"
+    limit: int = 10,
+    db: Annotated[AsyncSession, Depends(get_db)] = Depends(get_db),
+) -> dict[str, Any]:
+    """
+    Get player leaderboards for a tournament.
+    
+    Query Parameters:
+    - type: "batting" (default), "bowling", or "all"
+    - limit: Number of top players to return (default: 10)
+    
+    Returns batting and/or bowling statistics ranked by performance.
+    """
+    leaderboards = await get_tournament_leaderboards(
+        db, tournament_id, leaderboard_type, limit
+    )
+    return leaderboards
