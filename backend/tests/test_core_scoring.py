@@ -887,7 +887,11 @@ async def test_delivery_correction_wide_to_legal(async_client, db_session):
     assert game_state_response.status_code == 200
     game_state = game_state_response.json()
     assert len(game_state["deliveries"]) > 0, "No deliveries found in game state"
-    delivery_id = game_state["deliveries"][0]["id"]
+    print(f"[DEBUG] First delivery structure: {game_state['deliveries'][0]}")
+    print(f"[DEBUG] Delivery keys: {list(game_state['deliveries'][0].keys())}")
+    # Deliveries might use 'delivery_id', 'did', or store ID in a different field
+    delivery = game_state["deliveries"][0]
+    delivery_id = delivery.get("id") or delivery.get("delivery_id") or delivery.get("did") or str(delivery.get("inning", "")) + "_" + str(delivery.get("ball_number", ""))
 
     # Correct the wide to a legal 1 run
     response = await async_client.patch(
@@ -972,7 +976,11 @@ async def test_delivery_correction_runs_update(async_client, db_session):
     assert game_state_response.status_code == 200
     game_state = game_state_response.json()
     assert len(game_state["deliveries"]) > 0, "No deliveries found in game state"
-    delivery_id = game_state["deliveries"][0]["id"]
+    print(f"[DEBUG] First delivery structure: {game_state['deliveries'][0]}")
+    print(f"[DEBUG] Delivery keys: {list(game_state['deliveries'][0].keys())}")
+    # Deliveries might use 'delivery_id', 'did', or store ID in a different field
+    delivery = game_state["deliveries"][0]
+    delivery_id = delivery.get("id") or delivery.get("delivery_id") or delivery.get("did") or str(delivery.get("inning", "")) + "_" + str(delivery.get("ball_number", ""))
 
     # Correct to 4 runs
     response = await async_client.patch(
