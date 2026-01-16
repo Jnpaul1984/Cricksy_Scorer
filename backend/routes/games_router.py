@@ -529,7 +529,6 @@ async def get_game_metrics(
         "current_run_rate": current_run_rate,
         "required_run_rate": game.required_run_rate,
         "extras": extras_breakdown,
-        "last_updated": game.updated_at.isoformat() if game.updated_at else None,
     }
 
 
