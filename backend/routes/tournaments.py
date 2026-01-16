@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend import security
@@ -185,9 +185,9 @@ async def delete_fixture(
 @router.get("/{tournament_id}/leaderboards")
 async def get_tournament_leaderboards_endpoint(
     tournament_id: str,
-    leaderboard_type: str = "all",  # "batting", "bowling", or "all"
-    limit: int = 10,
-    db: Annotated[AsyncSession, Depends(get_db)] = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    leaderboard_type: Annotated[str, Query()] = "all",  # "batting", "bowling", or "all"
+    limit: Annotated[int, Query()] = 10,
 ) -> dict[str, Any]:
     """
     Get player leaderboards for a tournament.
