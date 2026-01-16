@@ -3,7 +3,7 @@ Tests for new backend endpoints: metrics, phase analysis, org stats, and tournam
 """
 
 import pytest
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4
 
@@ -135,11 +135,11 @@ class TestGameMetricsEndpoint:
     """Tests for GET /games/{gameId}/metrics"""
     
     @pytest.mark.asyncio
-    async def test_get_game_metrics_success(self, client: TestClient, db: AsyncSession):
+    async def test_get_game_metrics_success(self, async_client: AsyncClient, db: AsyncSession):
         """Test successful retrieval of game metrics."""
         game_id = await test_game(db)
         
-        response = client.get(f"/games/{game_id}/metrics")
+        response = await async_client.get(f"/games/{game_id}/metrics")
         
         assert response.status_code == 200
         data = response.json()
@@ -155,9 +155,9 @@ class TestGameMetricsEndpoint:
         assert isinstance(data["extras"], dict)
     
     @pytest.mark.asyncio
-    async def test_get_game_metrics_not_found(self, client: TestClient):
+    async def test_get_game_metrics_not_found(self, async_client: AsyncClient):
         """Test metrics endpoint with non-existent game."""
-        response = client.get(f"/games/nonexistent/metrics")
+        response = await async_client.get(f"/games/nonexistent/metrics")
         assert response.status_code == 404
 
 
@@ -165,11 +165,11 @@ class TestPhaseAnalysisEndpoint:
     """Tests for GET /games/{gameId}/phase-analysis"""
     
     @pytest.mark.asyncio
-    async def test_get_phase_analysis_success(self, client: TestClient, db: AsyncSession):
+    async def test_get_phase_analysis_success(self, async_client: AsyncClient, db: AsyncSession):
         """Test successful retrieval of phase analysis."""
         game_id = await test_game(db)
         
-        response = client.get(f"/games/{game_id}/phase-analysis")
+        response = await async_client.get(f"/games/{game_id}/phase-analysis")
         
         assert response.status_code == 200
         data = response.json()
@@ -193,9 +193,9 @@ class TestPhaseAnalysisEndpoint:
             assert isinstance(phase["batting_order"], list)
     
     @pytest.mark.asyncio
-    async def test_get_phase_analysis_not_found(self, client: TestClient):
+    async def test_get_phase_analysis_not_found(self, async_client: AsyncClient):
         """Test phase analysis with non-existent game."""
-        response = client.get(f"/games/nonexistent/phase-analysis")
+        response = await async_client.get(f"/games/nonexistent/phase-analysis")
         assert response.status_code == 404
 
 
@@ -203,11 +203,11 @@ class TestOrganizationStatsEndpoint:
     """Tests for GET /organizations/{orgId}/stats"""
     
     @pytest.mark.asyncio
-    async def test_get_org_stats_success(self, client: TestClient, db: AsyncSession):
+    async def test_get_org_stats_success(self, async_client: AsyncClient, db: AsyncSession):
         """Test successful retrieval of organization stats."""
         org_id = str(uuid4())
         
-        response = client.get(f"/api/teams/organizations/{org_id}/stats")
+        response = await async_client.get(f"/api/teams/organizations/{org_id}/stats")
         
         # Endpoint should return data even for non-existent org (empty stats)
         assert response.status_code == 200
@@ -227,11 +227,11 @@ class TestOrganizationTeamsEndpoint:
     """Tests for GET /organizations/{orgId}/teams"""
     
     @pytest.mark.asyncio
-    async def test_get_org_teams_success(self, client: TestClient, db: AsyncSession):
+    async def test_get_org_teams_success(self, async_client: AsyncClient, db: AsyncSession):
         """Test successful retrieval of organization teams."""
         org_id = str(uuid4())
         
-        response = client.get(f"/api/teams/organizations/{org_id}/teams")
+        response = await async_client.get(f"/api/teams/organizations/{org_id}/teams")
         
         assert response.status_code == 200
         data = response.json()
@@ -255,11 +255,11 @@ class TestTournamentLeaderboardsEndpoint:
     """Tests for GET /tournaments/{tournamentId}/leaderboards"""
     
     @pytest.mark.asyncio
-    async def test_get_tournament_leaderboards_success(self, client: TestClient, db: AsyncSession):
+    async def test_get_tournament_leaderboards_success(self, async_client: AsyncClient, db: AsyncSession):
         """Test successful retrieval of tournament leaderboards."""
         tournament_id = str(uuid4())
         
-        response = client.get(
+        response = await async_client.get(
             f"/tournaments/{tournament_id}/leaderboards",
             params={"type": "all", "limit": 10}
         )
@@ -273,11 +273,11 @@ class TestTournamentLeaderboardsEndpoint:
         assert isinstance(data["bowling"], list)
     
     @pytest.mark.asyncio
-    async def test_get_batting_leaderboard_only(self, client: TestClient):
+    async def test_get_batting_leaderboard_only(self, async_client: AsyncClient):
         """Test filtering by batting leaderboard only."""
         tournament_id = str(uuid4())
         
-        response = client.get(
+        response = await async_client.get(
             f"/tournaments/{tournament_id}/leaderboards",
             params={"type": "batting", "limit": 5}
         )
@@ -291,11 +291,11 @@ class TestTournamentLeaderboardsEndpoint:
         assert len(data["bowling"]) == 0
     
     @pytest.mark.asyncio
-    async def test_get_bowling_leaderboard_only(self, client: TestClient):
+    async def test_get_bowling_leaderboard_only(self, async_client: AsyncClient):
         """Test filtering by bowling leaderboard only."""
         tournament_id = str(uuid4())
         
-        response = client.get(
+        response = await async_client.get(
             f"/tournaments/{tournament_id}/leaderboards",
             params={"type": "bowling", "limit": 5}
         )
