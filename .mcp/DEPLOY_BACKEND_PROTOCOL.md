@@ -79,7 +79,8 @@ async def test_my_feature(async_client, db_session):
             "striker_id": "bat1",
             "non_striker_id": "bat2",
             "bowler_id": "bowl1",
-            "runs_scored": 4,
+            "runs_scored": 4,  # Legal ball: use runs_scored
+            "runs_off_bat": 0,  # Must be 0 for legal balls
             "extra": None,
             "is_wicket": False,
         },
@@ -186,6 +187,71 @@ git push origin main --force
 **Error**: `I001 Import block is un-sorted or un-formatted`
 
 **Fix**: Run `python -m ruff check --fix .` to auto-sort imports
+
+### Pattern 6: API Schema Validation (422 Unprocessable Entity)
+**Error**: `assert 422 == 200` when calling `POST /games/{game_id}/deliveries`
+
+**Cause**: Payload doesn't match `ScoreDelivery` Pydantic schema validator rules
+
+**Schema Rules** (`backend/sql_app/schemas.py:ScoreDelivery`):
+- **No-ball (nb)**: MUST provide `runs_off_bat`, `runs_scored` auto-set to None
+- **Wide/Bye/Leg-bye (wd/b/lb)**: MUST provide `runs_scored`, `runs_off_bat` must be 0 or None
+- **Legal ball (extra=None)**: Use `runs_scored`, `runs_off_bat` must be 0 or None
+
+**Fix Examples**:
+```python
+# ✅ CORRECT: Wide delivery
+{
+    "striker_id": "bat1",
+    "non_striker_id": "bat2",
+    "bowler_id": "bowl1",
+    "runs_scored": 1,  # Required for extras
+    "runs_off_bat": 0,  # Must be 0 for non-nb extras
+    "extra": "wd",
+    "is_wicket": False,
+}
+
+# ✅ CORRECT: Legal 4 runs
+{
+    "striker_id": "bat1",
+    "non_striker_id": "bat2",
+    "bowler_id": "bowl1",
+    "runs_scored": 4,  # Required for legal balls
+    "runs_off_bat": 0,  # Must be 0 for legal balls
+    "extra": None,
+    "is_wicket": False,
+}
+
+# ✅ CORRECT: No-ball + 4 runs
+{
+    "striker_id": "bat1",
+    "non_striker_id": "bat2",
+    "bowler_id": "bowl1",
+    "runs_off_bat": 4,  # Required for no-balls
+    "extra": "nb",
+    "is_wicket": False,
+    # runs_scored auto-calculated as 1 + runs_off_bat
+}
+
+# ❌ WRONG: Missing runs_off_bat for wide
+{
+    "runs_scored": 1,
+    "extra": "wd",  # Missing runs_off_bat field
+}
+
+# ❌ WRONG: Using runs_scored for no-ball
+{
+    "runs_scored": 5,  # Should use runs_off_bat
+    "extra": "nb",
+}
+```
+
+**Quick Reference**:
+| Extra Type | Required Field | Other Field |
+|------------|---------------|-------------|
+| `None` (legal) | `runs_scored` | `runs_off_bat: 0` |
+| `"wd"`, `"b"`, `"lb"` | `runs_scored` | `runs_off_bat: 0` |
+| `"nb"` | `runs_off_bat` | `runs_scored: None` (auto) |
 
 ## Deployment Workflow (GitHub Actions)
 

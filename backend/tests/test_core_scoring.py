@@ -860,7 +860,8 @@ async def test_delivery_correction_wide_to_legal(async_client, db_session):
             "striker_id": "bat1",
             "non_striker_id": "bat2",
             "bowler_id": "bowl1",
-            "runs_scored": 1,
+            "runs_scored": 1,  # Wide: use runs_scored
+            "runs_off_bat": 0,
             "extra": "wd",
             "is_wicket": False,
         },
@@ -926,7 +927,8 @@ async def test_delivery_correction_runs_update(async_client, db_session):
             "striker_id": "bat1",
             "non_striker_id": "bat2",
             "bowler_id": "bowl1",
-            "runs_scored": 2,
+            "runs_scored": 2,  # Legal ball: use runs_scored
+            "runs_off_bat": 0,
             "extra": None,
             "is_wicket": False,
         },
