@@ -912,7 +912,7 @@ async def test_delivery_correction_runs_update(async_client, db_session):
         "team_a_name": "Team A",
         "team_b_name": "Team B",
         "players_a": ["bat1", "bat2"],
-        "players_b": ["bowl1"],
+        "players_b": ["bowl1", "bowl2"],
         "toss_winner_team": "Team A",
         "decision": "bat",
     }
@@ -966,8 +966,8 @@ async def test_delivery_correction_not_found(async_client, db_session):
         "overs_limit": 20,
         "team_a_name": "Team A",
         "team_b_name": "Team B",
-        "players_a": ["bat1"],
-        "players_b": ["bowl1"],
+        "players_a": ["bat1", "bat2"],
+        "players_b": ["bowl1", "bowl2"],
         "toss_winner_team": "Team A",
         "decision": "bat",
     }
