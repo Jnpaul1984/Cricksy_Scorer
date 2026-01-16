@@ -57,7 +57,9 @@ const emit = defineEmits<{
 }>()
 
 // Generate unique IDs for accessibility
-const inputId = computed(() => props.id ?? `input-${Math.random().toString(36).slice(2, 9)}`)
+// Use counter instead of Math.random() for deterministic IDs
+let idCounter = 0
+const inputId = computed(() => props.id ?? `input-${++idCounter}`)
 const errorId = computed(() => `${inputId.value}-error`)
 const helpId = computed(() => `${inputId.value}-help`)
 

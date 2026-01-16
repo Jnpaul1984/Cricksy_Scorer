@@ -1,25 +1,37 @@
 <template>
   <div class="fan-stats">
-    <div class="stats-header">
-      <h2 class="stats-title">📊 Cricket Stats Hub</h2>
-      <p class="stats-subtitle">Aggregated statistics from followed teams and players</p>
+    <!-- Unavailable State -->
+    <div v-if="!backendEndpointAvailable" class="stats-unavailable">
+      <div class="unavailable-icon">📊</div>
+      <h3 class="unavailable-title">Tournament Leaderboards Unavailable</h3>
+      <p class="unavailable-message">
+        This widget requires backend endpoint: <code>{{ requiredEndpoint }}</code>
+      </p>
+      <p class="unavailable-hint">Once implemented, real tournament statistics will display here.</p>
     </div>
 
-    <!-- Stat Tabs -->
-    <div class="stats-tabs">
-      <button
-        v-for="tab in statTabs"
-        :key="tab.id"
-        class="stat-tab"
-        :class="{ active: activeStat === tab.id }"
-        @click="activeStat = tab.id"
-      >
-        {{ tab.icon }} {{ tab.label }}
-      </button>
-    </div>
+    <!-- Ready State (when backend available) -->
+    <div v-else>
+      <div class="stats-header">
+        <h2 class="stats-title">📊 Cricket Stats Hub</h2>
+        <p class="stats-subtitle">Aggregated statistics from followed teams and players</p>
+      </div>
 
-    <!-- Stats Content -->
-    <div class="stats-container">
+      <!-- Stat Tabs -->
+      <div class="stats-tabs">
+        <button
+          v-for="tab in statTabs"
+          :key="tab.id"
+          class="stat-tab"
+          :class="{ active: activeStat === tab.id }"
+          @click="activeStat = tab.id"
+        >
+          {{ tab.icon }} {{ tab.label }}
+        </button>
+      </div>
+
+      <!-- Stats Content -->
+      <div class="stats-container">
       <!-- Top Batters -->
       <div v-if="activeStat === 'batters'" class="stat-section">
         <div class="section-header">
@@ -185,6 +197,7 @@
         </div>
       </div>
     </div>
+    </div>
   </div>
 </template>
 
@@ -242,122 +255,16 @@ const statTabs = [
   { id: 'records' as const, icon: '🏆', label: 'Records' },
 ]
 
-// Generate mock batter data
-function generateBatters(): Batter[] {
-  const names = [
-    { name: 'Virat Kohli', team: 'India', initials: 'VK' },
-    { name: 'Babar Azam', team: 'Pakistan', initials: 'BA' },
-    { name: 'Joe Root', team: 'England', initials: 'JR' },
-    { name: 'Steve Smith', team: 'Australia', initials: 'SS' },
-    { name: 'Rohit Sharma', team: 'India', initials: 'RS' },
-    { name: 'Kane Williamson', team: 'New Zealand', initials: 'KW' },
-    { name: 'AB de Villiers', team: 'South Africa', initials: 'ABD' },
-    { name: 'Mitchell Marsh', team: 'Australia', initials: 'MM' },
-  ]
+// Backend endpoint availability
+const backendEndpointAvailable = false
+const requiredEndpoint = 'GET /tournaments/{tournamentId}/leaderboards'
 
-  return names.map((p, i) => ({
-    id: `b${i}`,
-    name: p.name,
-    team: p.team,
-    initials: p.initials,
-    runs: Math.floor(Math.random() * 500) + 200,
-    average: Math.random() * 40 + 30,
-    strikeRate: Math.random() * 60 + 100,
-    matches: Math.floor(Math.random() * 5) + 8,
-  }))
-}
-
-// Generate mock bowler data
-function generateBowlers(): Bowler[] {
-  const names = [
-    { name: 'Jasprit Bumrah', team: 'India', initials: 'JB' },
-    { name: 'Pat Cummins', team: 'Australia', initials: 'PC' },
-    { name: 'Kagiso Rabada', team: 'South Africa', initials: 'KR' },
-    { name: 'Shaheen Afridi', team: 'Pakistan', initials: 'SA' },
-    { name: 'Mitchell Starc', team: 'Australia', initials: 'MS' },
-    { name: 'Mark Wood', team: 'England', initials: 'MW' },
-  ]
-
-  return names.map((p, i) => ({
-    id: `b${i}`,
-    name: p.name,
-    team: p.team,
-    initials: p.initials,
-    wickets: Math.floor(Math.random() * 15) + 5,
-    runs: Math.floor(Math.random() * 300) + 100,
-    economy: Math.random() * 4 + 6,
-    matches: Math.floor(Math.random() * 5) + 8,
-  }))
-}
-
-// Generate mock team data
-function generateTeams(): Team[] {
-  const teams = ['India', 'Australia', 'England', 'Pakistan', 'South Africa', 'New Zealand']
-  return teams.map((name) => ({
-    id: name.toLowerCase(),
-    name,
-    wins: Math.floor(Math.random() * 7) + 3,
-    losses: Math.floor(Math.random() * 5),
-    avgRuns: Math.floor(Math.random() * 50) + 140,
-    form: Array.from({ length: 5 }, () => {
-      const r = Math.random()
-      return r > 0.6 ? 'W' : r > 0.2 ? 'L' : 'N'
-    }),
-  }))
-}
-
-// Generate mock records
-function generateRecords(): Record[] {
-  return [
-    {
-      id: 'r1',
-      icon: '💯',
-      title: 'Highest Individual Score',
-      value: '156*',
-      holder: 'Babar Azam vs Australia',
-    },
-    {
-      id: 'r2',
-      icon: '🔥',
-      title: 'Most Sixes in Tournament',
-      value: '24',
-      holder: 'Rohit Sharma',
-    },
-    {
-      id: 'r3',
-      icon: '⚡',
-      title: 'Fastest Fifty',
-      value: '14 balls',
-      holder: 'AB de Villiers vs India',
-    },
-    {
-      id: 'r4',
-      icon: '🎯',
-      title: 'Best Bowling Figures',
-      value: '5/18',
-      holder: 'Jasprit Bumrah',
-    },
-    {
-      id: 'r5',
-      icon: '🏃',
-      title: 'Most Runs in Tournament',
-      value: '652',
-      holder: 'Virat Kohli',
-    },
-    {
-      id: 'r6',
-      icon: '💪',
-      title: 'Most Wickets in Tournament',
-      value: '22',
-      holder: 'Pat Cummins',
-    },
-  ]
-}
-
-const batters = computed(() => generateBatters())
-const bowlers = computed(() => generateBowlers())
-const teams = computed(() => generateTeams())
-const records = computed(() => generateRecords())
+// All generator functions removed - these created celebrity mock data
+// When backend available, populate from real tournament leaderboard data
+const batters = computed<Batter[]>(() => backendEndpointAvailable ? [] : [])
+const bowlers = computed<Bowler[]>(() => backendEndpointAvailable ? [] : [])
+const teams = computed<Team[]>(() => backendEndpointAvailable ? [] : [])
+const records = computed<Record[]>(() => backendEndpointAvailable ? [] : [])
 
 const sortedBatters = computed(() => {
   const sorted = [...batters.value]
@@ -404,6 +311,55 @@ const sortedTeams = computed(() => {
   flex-direction: column;
   gap: var(--space-6);
   padding: var(--space-4);
+}
+
+/* Unavailable State */
+.stats-unavailable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-secondary);
+}
+
+.unavailable-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+  opacity: 0.5;
+}
+
+.unavailable-title {
+  margin: 0 0 var(--space-3) 0;
+  font-size: var(--h3-size);
+  font-weight: var(--h3-weight);
+  color: var(--color-text);
+}
+
+.unavailable-message {
+  margin: 0 0 var(--space-2) 0;
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+  max-width: 500px;
+}
+
+.unavailable-message code {
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-accent);
+}
+
+.unavailable-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  font-style: italic;
 }
 
 /* Header */

@@ -204,23 +204,60 @@ const matchStatusVariant = computed(() => {
   }
 })
 
-// --- Mock Key Players (TODO: Wire to store/API) ---
-const keyPlayers = ref([
-  { id: '1', name: 'J. Smith', roles: ['C'], runs: 342, wickets: 2, avg: 42.75 },
-  { id: '2', name: 'R. Patel', roles: ['WK'], runs: 287, wickets: 0, avg: 35.88 },
-  { id: '3', name: 'A. Johnson', roles: ['All'], runs: 156, wickets: 14, avg: 26.00 },
-  { id: '4', name: 'M. Williams', roles: [], runs: 198, wickets: 0, avg: 33.00 },
-  { id: '5', name: 'S. Kumar', roles: [], runs: 45, wickets: 18, avg: 15.00 },
-  { id: '6', name: 'T. Brown', roles: [], runs: 89, wickets: 8, avg: 22.25 },
-])
-
-// --- Mock Season Stats (TODO: Wire to store/API) ---
-const seasonStats = ref({
-  matches: 12,
-  wins: 8,
-  losses: 3,
-  nrr: '+0.85',
+// --- Key Players (FIX A5: Use real scorecard data) ---
+const keyPlayers = computed(() => {
+  const battingScorecard = gameStore.currentGame?.batting_scorecard ?? {}
+  const bowlingScorecard = gameStore.currentGame?.bowling_scorecard ?? {}
+  
+  // Combine batting and bowling stats for players
+  const playerStats: Record<string, any> = {}
+  
+  // Add batting stats
+  Object.entries(battingScorecard).forEach(([id, stats]) => {
+    playerStats[id] = {
+      id,
+      name: stats.player_name,
+      runs: stats.runs,
+      ballsFaced: stats.balls_faced,
+      wickets: 0,
+      roles: [] as string[]
+    }
+  })
+  
+  // Add bowling stats
+  Object.entries(bowlingScorecard).forEach(([id, stats]) => {
+    if (playerStats[id]) {
+      playerStats[id].wickets = stats.wickets_taken
+    } else {
+      playerStats[id] = {
+        id,
+        name: stats.player_name,
+        runs: 0,
+        ballsFaced: 0,
+        wickets: stats.wickets_taken,
+        roles: [] as string[]
+      }
+    }
+  })
+  
+  // Calculate average and sort by impact
+  return Object.values(playerStats)
+    .map(p => ({
+      ...p,
+      avg: p.ballsFaced > 0 ? (p.runs / p.ballsFaced * 100) : 0,  // Strike rate
+    }))
+    .sort((a, b) => (b.runs + b.wickets * 20) - (a.runs + a.wickets * 20))  // Simple impact score
+    .slice(0, 6)
 })
+
+// --- Season Stats (TODO: Wire to API when org endpoints ready) ---
+const seasonStats = ref({
+  matches: 0,
+  wins: 0,
+  losses: 0,
+  nrr: '—',
+})
+// Note: Blocked by backend - needs GET /organizations/{orgId}/stats
 
 // --- Coach Notes (local only for now) ---
 const coachNote = ref('')

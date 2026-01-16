@@ -706,108 +706,32 @@ const phaseBreakdown = computed<CaseStudyPhase[]>(() => {
 })
 const keyPlayers = computed<CaseStudyKeyPlayer[]>(() => caseStudy.value?.key_players ?? [])
 
-// TODO: Replace this mock with real ai_summary from backend when available.
-// For now, we derive a rich AI summary structure from existing case study data for UX purposes.
+// FIX A7: Use real ai_summary from backend, show "unavailable" if missing
 const aiSummaryData = computed<MatchAISummary | null>(() => {
   const cs = caseStudy.value
   if (!cs) return null
 
-  // If backend provides ai.match_summary, use it as the overview
-  const backendSummary = cs.ai?.match_summary ?? ''
-
-  // Build a rich mock structure from available data
-  const m = cs.match
-  const phases = (cs.phases ?? []) as CaseStudyPhase[]
-  const players = cs.key_players ?? []
-
-  // Generate overview from backend summary or create a placeholder
-  const overview = backendSummary
-    || `${m?.teams_label ?? 'This match'} was a ${m?.format ?? 'limited-overs'} contest that saw momentum shift across key phases. ${m?.result ?? 'The result was decided by crucial performances in pivotal moments.'}`
-
-  // Derive momentum summary from case study momentum_summary
-  const momentumSummary = cs.momentum_summary
-    ? `${cs.momentum_summary.title}. ${cs.momentum_summary.subtitle}`
-    : null
-
-  // Derive key moments from key phase and high-impact phases
-  const keyMoments: string[] = []
-  if (cs.key_phase) {
-    keyMoments.push(`${cs.key_phase.title}: ${cs.key_phase.detail}`)
+  // Check if backend provides ai_summary structure
+  const backendAiSummary = cs.ai?.match_summary
+  
+  if (backendAiSummary && typeof backendAiSummary === 'object') {
+    // Backend provides full AI summary structure - use it directly
+    return backendAiSummary as MatchAISummary
   }
-  phases
-    .filter((p) => p.impact === 'positive' || p.impact === 'negative')
-    .slice(0, 3)
-    .forEach((p) => {
-      const swing = p.net_swing_vs_par >= 0 ? `+${p.net_swing_vs_par}` : `${p.net_swing_vs_par}`
-      keyMoments.push(`${p.label}: ${p.runs} runs, ${p.wickets} wickets (${swing} vs par)`)
-    })
-
-  // Derive tactical themes from phase impacts
-  const tacticalThemes: string[] = []
-  const positivePhases = phases.filter((p) => p.impact === 'positive')
-  const negativePhases = phases.filter((p) => p.impact === 'negative')
-  if (positivePhases.length > 0) {
-    tacticalThemes.push(
-      `Strong ${positivePhases.map((p) => p.label.toLowerCase()).join(' and ')} phases`
-    )
+  
+  // If only text summary available, wrap it
+  if (backendAiSummary && typeof backendAiSummary === 'string') {
+    return {
+      overview: backendAiSummary,
+      key_moments: [],
+      tactical_themes: [],
+      innings_summaries: [],
+      player_highlights: []
+    }
   }
-  if (negativePhases.length > 0) {
-    tacticalThemes.push(
-      `Pressure during ${negativePhases.map((p) => p.label.toLowerCase()).join(' and ')}`
-    )
-  }
-  if (phases.some((p) => p.wickets >= 3)) {
-    tacticalThemes.push('Significant wicket clusters in key overs')
-  }
-
-  // Derive innings summaries from match innings
-  const inningsSummaries: MatchAISummary['innings_summaries'] = []
-  if (m?.innings && m.innings.length > 0) {
-    m.innings.forEach((inn, idx) => {
-      const innPhases = phases.filter((p) => (p.innings_index ?? 0) === idx)
-      const totalRuns = innPhases.reduce((sum, p) => sum + p.runs, 0) || inn.runs
-      const totalWickets = innPhases.reduce((sum, p) => sum + p.wickets, 0) || inn.wickets
-      inningsSummaries.push({
-        innings: idx + 1,
-        team_name: inn.team ?? `Team ${idx + 1}`,
-        summary: `${inn.team ?? 'The batting side'} scored ${totalRuns} runs for ${totalWickets} wickets. ${innPhases.length > 0 ? `Key contributions came during the ${innPhases[0]?.label?.toLowerCase() ?? 'middle'} overs.` : ''}`
-      })
-    })
-  }
-
-  // Derive player highlights from key players
-  const playerHighlights: MatchAISummary['player_highlights'] = players
-    .filter((p) => p.impact === 'high' || p.impact === 'medium')
-    .slice(0, 4)
-    .map((p) => {
-      let summary = ''
-      if (p.batting && p.batting.runs > 0) {
-        summary += `Scored ${p.batting.runs} runs at a strike rate of ${p.batting.strike_rate?.toFixed(1) ?? '—'}.`
-      }
-      if (p.bowling && p.bowling.wickets > 0) {
-        summary += ` Took ${p.bowling.wickets} wickets at an economy of ${p.bowling.economy?.toFixed(1) ?? '—'}.`
-      }
-      if (!summary) {
-        summary = `Made a ${p.impact} impact contribution to the match.`
-      }
-      return {
-        player_id: p.id,
-        player_name: p.name,
-        team_name: p.team,
-        role: p.role,
-        impact_label: p.impact === 'high' ? 'Match-defining' : p.impact === 'medium' ? 'Key contributor' : null,
-        summary: summary.trim()
-      }
-    })
-
-  return {
-    overview,
-    momentum_summary: momentumSummary,
-    key_moments: keyMoments.length > 0 ? keyMoments : undefined,
-    tactical_themes: tacticalThemes.length > 0 ? tacticalThemes : undefined,
-    innings_summaries: inningsSummaries.length > 0 ? inningsSummaries : undefined,
-    player_highlights: playerHighlights.length > 0 ? playerHighlights : undefined
-  }
+  
+  // No AI summary available - return null to show "unavailable" UI state
+  return null
 })
 
 // Computed helpers for AI summary template - prefer dedicated endpoint, fallback to derived

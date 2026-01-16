@@ -534,12 +534,11 @@ watch([extra, offBat, extraRuns, isWicket], () => {
 // --- Delete last delivery ------------------------------
 const deletingLast = ref(false)
 
-const lastDelivery = computed<any | null>(() =>
-  // Prefer live snapshot (if your store fills it), else fall back to the game object
-  (gameStore as any)?.state?.last_delivery ??
-  (gameStore.currentGame as any)?.last_delivery ??
-  (rawDeliveries.value.length ? rawDeliveries.value[rawDeliveries.value.length - 1] : null)
-)
+const lastDelivery = computed<any | null>(() => {
+  // FIX B7: Use backend last_delivery from liveSnapshot (primary source)
+  // Backend provides correct over/ball numbers, no local calculation needed
+  return gameStore.liveSnapshot?.last_delivery ?? null
+})
 
 // Block when: there is no ball yet, an innings gate is up, or you still have queued actions
 const canDeleteLast = computed<boolean>(() =>
@@ -611,8 +610,9 @@ const oversLimit = computed<number>(() => Number((gameStore.currentGame as any)?
 const currentInnings = computed<1 | 2>(() => Number((gameStore.currentGame as any)?.current_inning ?? 1) as 1 | 2)
 // Balls & overs remaining in the chase (defensive if not a chase or no limit)
 const ballsRemaining = computed<number>(() => {
-  const limit = oversLimit.value ? Number(oversLimit.value) * 6 : 0
-  return Math.max(0, limit - Number(ballsBowledTotal.value || 0))
+  // FIX B4: Use backend-calculated balls_remaining from snapshot
+  // NO local calculation - backend handles extras/illegal balls correctly
+  return gameStore.liveSnapshot?.balls_remaining ?? 0
 })
 const oversRemainingDisplay = computed<string>(() => {
   const balls = ballsRemaining.value
