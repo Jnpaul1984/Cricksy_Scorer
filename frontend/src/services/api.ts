@@ -221,6 +221,20 @@ export interface ScoreDeliveryRequest {
   shot_map?: string | null;
 }
 
+// Delivery correction payload - mirrors backend DeliveryCorrection model
+export interface DeliveryCorrectionRequest {
+  runs_scored?: number;
+  runs_off_bat?: number;
+  extra?: 'wd' | 'nb' | 'b' | 'lb' | null;
+  is_wicket?: boolean;
+  dismissal_type?: string | null;
+  dismissed_player_id?: string | null;
+  fielder_id?: string | null;
+  shot_map?: string | null;
+  shot_angle_deg?: number | null;
+  commentary?: string | null;
+}
+
 // Snapshot  shape can vary; we keep it open but document common fields
 export interface Snapshot {
   id?: string;
@@ -912,6 +926,12 @@ export const apiService = {
   scoreDelivery: (gameId: string, body: ScoreDeliveryRequest) =>
     request<Snapshot>(`/games/${encodeURIComponent(gameId)}/deliveries`, {
       method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  correctDelivery: (gameId: string, deliveryId: number, body: DeliveryCorrectionRequest) =>
+    request<Snapshot>(`/games/${encodeURIComponent(gameId)}/deliveries/${deliveryId}`, {
+      method: 'PATCH',
       body: JSON.stringify(body),
     }),
 

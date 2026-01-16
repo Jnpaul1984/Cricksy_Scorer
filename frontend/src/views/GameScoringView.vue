@@ -22,6 +22,7 @@ import { BaseButton, BaseCard, BaseInput } from '@/components'
 import BattingCard from '@/components/BattingCard.vue'
 import BowlingCard from '@/components/BowlingCard.vue'
 import DeliveryTable from '@/components/DeliveryTable.vue'
+import DeliveryCorrectionModal from '@/components/DeliveryCorrectionModal.vue'
 import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
@@ -34,7 +35,7 @@ import { useRoleBadge } from '@/composables/useRoleBadge'
 import { useInningsGrade } from '@/composables/useInningsGrade'
 import { usePressureAnalytics } from '@/composables/usePressureAnalytics'
 import { usePhaseAnalytics } from '@/composables/usePhaseAnalytics'
-import { apiService } from '@/services/api'
+import { apiService, type DeliveryCorrectionRequest } from '@/services/api'
 import { generateAICommentary, type AICommentaryRequest, fetchMatchAiCommentary, type MatchCommentaryItem } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
@@ -284,6 +285,36 @@ watch(gameId, async (id) => {
 // --- UI State for UX Improvements ---
 const isSubmitting = ref(false)
 // [REMOVED tapMarker] Field tap feedback not needed - zone selection still works via recordZone()
+
+// --- Delivery Correction State ---
+const showCorrectionModal = ref(false)
+const correctionDelivery = ref<any>(null)
+
+function openCorrectionModal(delivery: any) {
+  correctionDelivery.value = delivery
+  showCorrectionModal.value = true
+}
+
+function closeCorrectionModal() {
+  showCorrectionModal.value = false
+  correctionDelivery.value = null
+}
+
+async function submitCorrection({ deliveryId, correction }: { deliveryId: number; correction: DeliveryCorrectionRequest }) {
+  if (!gameId.value) return
+
+  try {
+    const snapshot = await apiService.correctDelivery(gameId.value, deliveryId, correction)
+    // Update store with corrected snapshot
+    if (snapshot) {
+      gameStore.liveSnapshot = snapshot as any
+    }
+    closeCorrectionModal()
+  } catch (err: any) {
+    console.error('Failed to correct delivery:', err)
+    alert(err?.message || 'Failed to correct delivery')
+  }
+}
 
 function getBallClass(b: DeliveryRowForTable) {
   if (b.is_wicket) return 'is-wicket'
@@ -1985,7 +2016,15 @@ async function confirmChangeBowler(): Promise<void> {
              </span>
           </div>
           <div class="recent-balls">
-            <div v-for="(b, i) in recentBallSlots" :key="i" class="ball-badge" :class="b ? getBallClass(b) : 'empty'">
+            <div 
+              v-for="(b, i) in recentBallSlots" 
+              :key="i" 
+              class="ball-badge" 
+              :class="b ? getBallClass(b) : 'empty'"
+              @click="b ? openCorrectionModal(b) : null"
+              :title="b ? 'Click to correct this delivery' : ''"
+              :style="b ? 'cursor: pointer;' : ''"
+            >
               {{ b ? getBallLabel(b) : '•' }}
             </div>
           </div>
@@ -2263,6 +2302,16 @@ async function confirmChangeBowler(): Promise<void> {
       </BaseCard>
     </div>
   </div>
+
+  <!-- Delivery Correction Modal -->
+  <DeliveryCorrectionModal
+    :show="showCorrectionModal"
+    :delivery="correctionDelivery"
+    :bowlerName="correctionDelivery ? playerNameById(correctionDelivery.bowler_id) : undefined"
+    :batterName="correctionDelivery ? playerNameById(correctionDelivery.striker_id) : undefined"
+    @close="closeCorrectionModal"
+    @submit="submitCorrection"
+  />
 </template>
 
 <style scoped>
