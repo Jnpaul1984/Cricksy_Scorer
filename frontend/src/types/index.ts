@@ -12,6 +12,15 @@ export type MatchStatus =
 
 export type ExtraCode = 'wd' | 'nb' | 'b' | 'lb';
 
+/** Extras breakdown for scoreboard display */
+export interface ExtrasBreakdown {
+  total: number
+  wides: number
+  no_balls: number
+  byes: number
+  leg_byes: number
+}
+
 export interface MatchResult {
   winner_team_id?: string | null;
   winner_team_name?: string | null;
@@ -145,6 +154,15 @@ export interface Snapshot {
   batting_scorecard?: Record<string, BattingScorecardEntry>
   bowling_scorecard?: Record<string, BowlingScorecardEntry>
   last_delivery?: Delivery | null
+
+  // Balls remaining (backend-calculated, no local fallback)
+  balls_remaining?: number
+  
+  // Extras breakdown
+  extras?: ExtrasBreakdown
+  
+  // Last update timestamp
+  last_updated?: string  // ISO timestamp
 
   // NEW gate flags
   needs_new_batter?: boolean

@@ -229,26 +229,27 @@ const ballsBowled = computed(
     Number(snapshot.value?.balls_this_over ?? 0),
 )
 const crr = computed(() => {
-  const overs = ballsBowled.value / 6
-  return overs > 0 ? currRuns.value / overs : 0
+  // FIX B2: Use backend-calculated current_run_rate ONLY
+  // NO local calculation allowed - backend handles this
+  return snapshot.value?.current_run_rate ?? 0
 })
 
 const req = computed(() => {
-  const target = snapshot.value?.target
-  if (target == null) {
+  // FIX B3: Use backend-calculated required_run_rate and balls_remaining
+  const s = snapshot.value
+  if (!s?.target) {
     return {
       rrr: null as number | null,
       remainingOvers: null as number | null,
       remainingRuns: null as number | null,
     }
   }
-  const remainingRuns = Math.max(0, Number(target) - currRuns.value)
-  const remainingBalls = Math.max(
-    0,
-    Number(snapshot.value?.overs_limit || 0) * 6 - ballsBowled.value,
-  )
-  const remainingOvers = remainingBalls / 6
-  const rrr = remainingOvers > 0 ? remainingRuns / remainingOvers : null
+  
+  // Use backend values - no local calculation
+  const rrr = s.required_run_rate ?? null
+  const remainingRuns = s.target - (s.total_runs ?? 0)
+  const remainingOvers = (s.balls_remaining ?? 0) / 6
+  
   return { rrr, remainingOvers, remainingRuns }
 })
 

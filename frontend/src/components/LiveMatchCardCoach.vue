@@ -270,22 +270,27 @@ const bowlerOvers = computed(() => {
 const bowlerRuns = computed(() => bowlerBowling.value?.runs_conceded ?? 0)
 const bowlerWkts = computed(() => bowlerBowling.value?.wickets_taken ?? 0)
 const bowlerEcon = computed(() => {
-  const balls = bowlerBowling.value?.overs_bowled ?? 0
-  const runs = bowlerBowling.value?.runs_conceded ?? 0
-  const totalBalls = Math.floor(balls * 6 + ((balls % 1) * 10))
-  if (totalBalls === 0) return '—'
-  return ((runs / totalBalls) * 6).toFixed(2)
+  // FIX B6: Use backend-calculated economy from bowling_scorecard
+  // NO local calculation - backend handles overs→balls conversion correctly
+  const bowlerId = (state.value as any)?.current_bowler_id
+  const bowler = gameStore.liveSnapshot?.bowling_scorecard?.[bowlerId]
+  return bowler?.economy?.toFixed(2) ?? '—'
 })
 
 /* ============================================================================
    Computed: Momentum & Signals (Layer 3)
    ============================================================================ */
 const lastSixBalls = computed(() => {
-  // Simple placeholder: show 6 empty slots or fetch from deliveries if available
-  // For now, return 6 empty strings to show placeholders
-  return Array(6).fill(null).map((_, i) => {
-    // Could populate from liveSnapshot?.deliveries if available
-    return ''
+  // FIX A3: Use actual deliveries from liveSnapshot
+  const deliveries = gameStore.liveSnapshot?.deliveries ?? []
+  const lastSix = deliveries.slice(-6)
+  
+  return lastSix.map((d: any) => {
+    if (d.is_wicket) return 'W'
+    if (d.runs_off_bat === 4) return '4'
+    if (d.runs_off_bat === 6) return '6'
+    if (!d.extra_type && d.runs_scored === 0) return '0'
+    return String(d.runs_scored)
   })
 })
 
@@ -305,17 +310,19 @@ const wicketsInHand = computed(() => {
 })
 
 const parRunRate = computed(() => {
-  const dls = (currentGame.value as any)?.dls
+  // FIX B5: Use liveSnapshot for real-time DLS par value
+  const dls = gameStore.liveSnapshot?.dls
   if (!dls || !dls.par) return null
   return dls.par
 })
 
 const parVsCRR = computed(() => {
-  if (!parRunRate.value) return null
-  const par = parRunRate.value
-  const crr = Number(currentRunRate.value) || 0
-  const diff = (crr - par).toFixed(2)
-  return diff.startsWith('-') ? `${diff}` : `+${diff}`
+  // FIX B5: Calculate par vs CRR using snapshot values only
+  const snapshot = gameStore.liveSnapshot
+  if (!snapshot?.dls?.par || !snapshot?.current_run_rate) return null
+  
+  const diff = snapshot.current_run_rate - snapshot.dls.par
+  return diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)
 })
 
 const parComparison = computed(() => {

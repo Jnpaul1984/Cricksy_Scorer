@@ -5,317 +5,27 @@
       <p class="phase-subtitle">Performance breakdown by match phases</p>
     </div>
 
-    <!-- Phase Selection -->
-    <div class="phase-tabs">
-      <button
-        v-for="phase in phases"
-        :key="phase.id"
-        class="phase-tab"
-        :class="{ active: activePhase === phase.id }"
-        @click="activePhase = phase.id"
-      >
-        {{ phase.icon }} {{ phase.name }}
-        <span class="phase-badge">{{ phase.count }}</span>
-      </button>
-    </div>
-
-    <!-- Phase Metrics -->
-    <div class="phase-metrics">
-      <div class="metric-card">
-        <div class="metric-label">Avg Runs</div>
-        <div class="metric-value">{{ phaseData.avgRuns }}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Strike Rate</div>
-        <div class="metric-value" :class="`sr-${getSRClass(phaseData.strikeRate)}`">
-          {{ phaseData.strikeRate }}
-        </div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Boundaries</div>
-        <div class="metric-value">{{ phaseData.boundaries }}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Wickets Lost</div>
-        <div class="metric-value danger">{{ phaseData.wicketsLost }}</div>
-      </div>
-    </div>
-
-    <!-- Detailed Stats -->
-    <div class="phase-details">
-      <div class="details-section">
-        <h3 class="details-title">Performance Trend</h3>
-        <div class="trend-chart">
-          <svg viewBox="0 0 400 200" class="trend-svg">
-            <!-- Grid lines -->
-            <g class="grid">
-              <line x1="0" y1="50" x2="400" y2="50" class="grid-line" />
-              <line x1="0" y1="100" x2="400" y2="100" class="grid-line" />
-              <line x1="0" y1="150" x2="400" y2="150" class="grid-line" />
-            </g>
-
-            <!-- Trend line -->
-            <polyline :points="getTrendPoints()" class="trend-line" />
-
-            <!-- Data points -->
-            <circle
-              v-for="(point, idx) in phaseData.trend"
-              :key="`point-${idx}`"
-              :cx="20 + idx * 40"
-              :cy="160 - point"
-              r="4"
-              class="trend-point"
-            />
-
-            <!-- Axes -->
-            <line x1="0" y1="160" x2="400" y2="160" class="axis" />
-            <line x1="0" y1="0" x2="0" y2="160" class="axis" />
-          </svg>
-        </div>
-      </div>
-
-      <div class="details-section">
-        <h3 class="details-title">Batting Order Impact</h3>
-        <div class="batting-order">
-          <div v-for="(player, idx) in phaseData.battingOrder" :key="`player-${idx}`" class="order-row">
-            <div class="order-position">{{ idx + 1 }}</div>
-            <div class="order-player">
-              <p class="player-name">{{ player.name }}</p>
-              <p class="player-role">{{ player.role }}</p>
-            </div>
-            <div class="order-stats">
-              <span class="stat">{{ player.runs }} runs</span>
-              <span class="stat">{{ player.sr }} SR</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="details-section">
-        <h3 class="details-title">Key Moments</h3>
-        <div class="key-moments">
-          <div v-for="(moment, idx) in phaseData.keyMoments" :key="`moment-${idx}`" class="moment-item">
-            <div class="moment-icon">{{ moment.icon }}</div>
-            <div class="moment-content">
-              <p class="moment-title">{{ moment.title }}</p>
-              <p class="moment-time">{{ moment.time }}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Phase Comparison -->
-    <div class="phase-comparison">
-      <h3 class="comparison-title">Phase Comparison</h3>
-      <div class="comparison-chart">
-        <div v-for="phase in phases" :key="phase.id" class="comparison-bar">
-          <div class="bar-label">{{ phase.name }}</div>
-          <div class="bar-container">
-            <div
-              class="bar-fill"
-              :style="{ width: `${(phase.avgRuns / 20) * 100}%` }"
-              :class="`phase-${phase.id}`"
-            ></div>
-          </div>
-          <div class="bar-value">{{ phase.avgRuns }}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Statistics Table -->
-    <div class="phase-stats-table">
-      <h3 class="table-title">Detailed Statistics</h3>
-      <div class="table-scroll">
-        <table class="stats-table">
-          <thead>
-            <tr>
-              <th>Metric</th>
-              <th>Powerplay</th>
-              <th>Middle</th>
-              <th>Death</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="label">Total Runs</td>
-              <td>{{ phaseStats.powerplay.totalRuns }}</td>
-              <td>{{ phaseStats.middle.totalRuns }}</td>
-              <td>{{ phaseStats.death.totalRuns }}</td>
-            </tr>
-            <tr>
-              <td class="label">Avg Per Over</td>
-              <td>{{ phaseStats.powerplay.avgPerOver }}</td>
-              <td>{{ phaseStats.middle.avgPerOver }}</td>
-              <td>{{ phaseStats.death.avgPerOver }}</td>
-            </tr>
-            <tr>
-              <td class="label">Fours</td>
-              <td>{{ phaseStats.powerplay.fours }}</td>
-              <td>{{ phaseStats.middle.fours }}</td>
-              <td>{{ phaseStats.death.fours }}</td>
-            </tr>
-            <tr>
-              <td class="label">Sixes</td>
-              <td>{{ phaseStats.powerplay.sixes }}</td>
-              <td>{{ phaseStats.middle.sixes }}</td>
-              <td>{{ phaseStats.death.sixes }}</td>
-            </tr>
-            <tr>
-              <td class="label">Wickets Lost</td>
-              <td>{{ phaseStats.powerplay.wickets }}</td>
-              <td>{{ phaseStats.middle.wickets }}</td>
-              <td>{{ phaseStats.death.wickets }}</td>
-            </tr>
-            <tr>
-              <td class="label">Strike Rate</td>
-              <td>{{ phaseStats.powerplay.sr }}</td>
-              <td>{{ phaseStats.middle.sr }}</td>
-              <td>{{ phaseStats.death.sr }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Insights -->
-    <div class="phase-insights">
-      <h3 class="insights-title">📊 Insights</h3>
-      <div class="insights-grid">
-        <div class="insight-card">
-          <div class="insight-icon">💡</div>
-          <p class="insight-text">Strongest in {{ strongestPhase }}, averaging {{ getPhaseAvg(strongestPhase) }} runs</p>
-        </div>
-        <div class="insight-card">
-          <div class="insight-icon">⚠️</div>
-          <p class="insight-text">Loses wickets frequently in {{ weakestPhase }}, causing momentum loss</p>
-        </div>
-        <div class="insight-card">
-          <div class="insight-icon">🎯</div>
-          <p class="insight-text">Strike rate increases as innings progresses - aggressive playing style</p>
-        </div>
-      </div>
+    <!-- FIX A1: Show unavailable state instead of mock data -->
+    <div class="phase-unavailable">
+      <div class="unavailable-icon">📊</div>
+      <h3 class="unavailable-title">Phase Analysis Unavailable</h3>
+      <p class="unavailable-message">
+        This feature requires backend endpoint: 
+        <code>{{ requiredEndpoint }}</code>
+      </p>
+      <p class="unavailable-detail">
+        Phase analysis will show powerplay, middle, and death overs performance 
+        once the backend analytics service is connected.
+      </p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+// FIX A1: Remove ALL mock phase data, show unavailable state
+// Backend endpoint required: GET /games/{gameId}/phase-analysis
 
-interface PhaseData {
-  avgRuns: number
-  strikeRate: number
-  boundaries: number
-  wicketsLost: number
-  trend: number[]
-  battingOrder: Array<{ name: string; role: string; runs: number; sr: number }>
-  keyMoments: Array<{ icon: string; title: string; time: string }>
-}
-
-interface PhaseStats {
-  totalRuns: number
-  avgPerOver: number
-  fours: number
-  sixes: number
-  wickets: number
-  sr: number
-}
-
-const activePhase = ref<'powerplay' | 'middle' | 'death'>('powerplay')
-
-const phases = [
-  { id: 'powerplay' as const, name: 'Powerplay (0-6)', icon: '⚡', count: '6 overs', avgRuns: 12 },
-  { id: 'middle' as const, name: 'Middle (7-16)', icon: '🎯', count: '10 overs', avgRuns: 9 },
-  { id: 'death' as const, name: 'Death (17-20)', icon: '💥', count: '4 overs', avgRuns: 14 },
-]
-
-const phaseDataMap: Record<'powerplay' | 'middle' | 'death', PhaseData> = {
-  powerplay: {
-    avgRuns: 72,
-    strikeRate: 154.3,
-    boundaries: 8,
-    wicketsLost: 1,
-    trend: [8, 10, 12, 15, 14, 13],
-    battingOrder: [
-      { name: 'Rohit Sharma', role: 'Opener', runs: 28, sr: 162 },
-      { name: 'Virat Kohli', role: 'Batter', runs: 44, sr: 147 },
-    ],
-    keyMoments: [
-      { icon: '🎯', title: 'Boundary over mid-wicket', time: 'Over 1' },
-      { icon: '⚡', title: 'Two sixes in succession', time: 'Over 3' },
-      { icon: '💀', title: 'Opener dismissed', time: 'Over 5' },
-    ],
-  },
-  middle: {
-    avgRuns: 90,
-    strikeRate: 128.6,
-    boundaries: 10,
-    wicketsLost: 2,
-    trend: [9, 8, 9, 10, 9, 8, 9, 10, 9, 8],
-    battingOrder: [
-      { name: 'Virat Kohli', role: 'Batter', runs: 68, sr: 134 },
-      { name: 'KL Rahul', role: 'Batter', runs: 22, sr: 122 },
-    ],
-    keyMoments: [
-      { icon: '🎯', title: 'Partnership 50 run stand', time: 'Over 10' },
-      { icon: '⚠️', title: 'Miscommunication run-out attempt', time: 'Over 14' },
-      { icon: '4️⃣', title: 'Boundary to reach 50', time: 'Over 16' },
-    ],
-  },
-  death: {
-    avgRuns: 56,
-    strikeRate: 186.7,
-    boundaries: 5,
-    wicketsLost: 1,
-    trend: [18, 14, 15, 9],
-    battingOrder: [
-      { name: 'Hardik Pandya', role: 'All-rounder', runs: 27, sr: 225 },
-      { name: 'MS Dhoni', role: 'Finisher', runs: 29, sr: 169 },
-    ],
-    keyMoments: [
-      { icon: '💥', title: 'Two sixes in Death over', time: 'Over 18' },
-      { icon: '4️⃣', title: 'Yorker conceded boundary', time: 'Over 19' },
-      { icon: '🎉', title: 'Winning boundary', time: 'Over 20' },
-    ],
-  },
-}
-
-const phaseData = computed(() => phaseDataMap[activePhase.value])
-
-const phaseStats: Record<'powerplay' | 'middle' | 'death', PhaseStats> = {
-  powerplay: { totalRuns: 72, avgPerOver: 12, fours: 6, sixes: 2, wickets: 1, sr: 154.3 },
-  middle: { totalRuns: 90, avgPerOver: 9, fours: 8, sixes: 2, wickets: 2, sr: 128.6 },
-  death: { totalRuns: 56, avgPerOver: 14, fours: 3, sixes: 4, wickets: 1, sr: 186.7 },
-}
-
-const strongestPhase = computed(() => {
-  const phaseRuns = phases.map((p) => phaseStats[p.id].totalRuns)
-  const maxIdx = phaseRuns.indexOf(Math.max(...phaseRuns))
-  return phases[maxIdx].name.split(' ')[0]
-})
-
-const weakestPhase = computed(() => {
-  const phaseWickets = phases.map((p) => phaseStats[p.id].wickets)
-  const maxIdx = phaseWickets.indexOf(Math.max(...phaseWickets))
-  return phases[maxIdx].name.split(' ')[0]
-})
-
-function getSRClass(sr: number): string {
-  if (sr > 150) return 'sr-high'
-  if (sr > 120) return 'sr-normal'
-  return 'sr-low'
-}
-
-function getTrendPoints(): string {
-  return phaseData.value.trend
-    .map((val, i) => `${20 + i * 40},${160 - val}`)
-    .join(' ')
-}
-
-function getPhaseAvg(phaseName: string): number {
-  const phase = phases.find((p) => p.name.includes(phaseName))
-  return phase ? phaseStats[phase.id].avgPerOver : 0
-}
+const requiredEndpoint = 'GET /games/{gameId}/phase-analysis'
 </script>
 
 <style scoped>
@@ -324,6 +34,54 @@ function getPhaseAvg(phaseName: string): number {
   flex-direction: column;
   gap: var(--space-6);
   padding: var(--space-4);
+}
+
+/* Unavailable State */
+.phase-unavailable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 2px dashed var(--color-border);
+}
+
+.unavailable-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+  opacity: 0.5;
+}
+
+.unavailable-title {
+  margin: 0 0 var(--space-3) 0;
+  font-size: var(--h3-size);
+  font-weight: var(--h3-weight);
+  color: var(--color-text);
+}
+
+.unavailable-message {
+  margin: 0 0 var(--space-2) 0;
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+}
+
+.unavailable-message code {
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+  font-size: var(--text-sm);
+  color: var(--color-primary);
+}
+
+.unavailable-detail {
+  margin: var(--space-4) 0 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 500px;
 }
 
 /* Header */

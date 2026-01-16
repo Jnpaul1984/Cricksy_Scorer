@@ -391,19 +391,16 @@ const wkts = computed(() =>
         currentGame.value?.total_wickets ?? 0)
 )
 
-// Rates now based on backend calculations (fallback to local calculation)
+// Rates now based on backend calculations (NO local fallback allowed)
 const crr = computed(() => {
-  // Prefer backend-calculated current_run_rate
-  const backendCrr = liveSnapshot.value?.current_run_rate ?? currentGame.value?.current_run_rate
-  if (backendCrr != null) {
-    return backendCrr.toFixed(2)
-  }
-  // Fallback to local calculation
-  return totalBallsThisInnings.value ? (runs.value / (totalBallsThisInnings.value / 6)).toFixed(2) : '—'
+  // FIX B1: Use backend-calculated current_run_rate ONLY
+  // Remove local fallback - if backend doesn't send it, show '—'
+  const backendCrr = liveSnapshot.value?.current_run_rate
+  return backendCrr != null ? backendCrr.toFixed(2) : '—'
 })
 
-// Show CRR only when at least one ball has been bowled
-const showCrr = computed(() => totalBallsThisInnings.value > 0)
+// Show CRR only when backend provides it
+const showCrr = computed(() => liveSnapshot.value?.current_run_rate != null)
 
 const parTxt = computed(() => {
   const p = dlsPanel.value as any

@@ -23,6 +23,7 @@ import BattingCard from '@/components/BattingCard.vue'
 import BowlingCard from '@/components/BowlingCard.vue'
 import DeliveryTable from '@/components/DeliveryTable.vue'
 import DeliveryCorrectionModal from '@/components/DeliveryCorrectionModal.vue'
+import EventLogTab from '@/components/EventLogTab.vue'
 import PresenceBar from '@/components/PresenceBar.vue'
 import ScoreboardWidget from '@/components/ScoreboardWidget.vue'
 import ShotMapCanvas from '@/components/scoring/ShotMapCanvas.vue'
@@ -36,7 +37,6 @@ import { useInningsGrade } from '@/composables/useInningsGrade'
 import { usePressureAnalytics } from '@/composables/usePressureAnalytics'
 import { usePhaseAnalytics } from '@/composables/usePhaseAnalytics'
 import { apiService, type DeliveryCorrectionRequest } from '@/services/api'
-import { generateAICommentary, type AICommentaryRequest, fetchMatchAiCommentary, type MatchCommentaryItem } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { isValidUUID } from '@/utils'
@@ -86,37 +86,8 @@ if (import.meta.env?.DEV) {
   console.info('GameScoringView setup refs', { isWicket, extra })
 }
 
-// ================== AI Commentary state ==================
-const aiCommentary = ref<string | null>(null)
-const aiLoading = ref(false)
-const aiError = ref<string | null>(null)
-
-// ================== Match AI Commentary state (toggle & panel) ==================
-const matchAiEnabled = ref(false)
-const matchAiCommentary = ref<MatchCommentaryItem[]>([])
-const matchAiLoading = ref(false)
-const matchAiError = ref<string | null>(null)
-
-async function loadMatchAiCommentary() {
-  if (!gameId.value) return
-  matchAiLoading.value = true
-  matchAiError.value = null
-  try {
-    const resp = await fetchMatchAiCommentary(gameId.value)
-    matchAiCommentary.value = resp.commentary
-  } catch (err: unknown) {
-    matchAiError.value = err instanceof Error ? err.message : 'Failed to load match AI commentary'
-  } finally {
-    matchAiLoading.value = false
-  }
-}
-
-// Watch toggle – fetch when enabled
-watch(matchAiEnabled, (enabled) => {
-  if (enabled) {
-    loadMatchAiCommentary()
-  }
-})
+// ================== Event Log state ==================
+// Events managed in Pinia store via gameStore
 
 // --- Fielder (XI + subs) for wicket events ---
 const selectedFielderId = ref<UUID>('' as UUID)
@@ -445,14 +416,6 @@ async function submitSimple() {
     shotMap.value = null
     onScored()
 
-    // Generate AI commentary (non-blocking)
-    generateCommentary().catch(() => { /* ignore AI errors */ })
-
-    // Refresh match AI commentary if enabled (non-blocking)
-    if (matchAiEnabled.value) {
-      loadMatchAiCommentary().catch(() => { /* ignore match AI errors */ })
-    }
-
     await nextTick()
     maybeRotateFromLastDelivery()
   } catch (e: any) {
@@ -462,84 +425,14 @@ async function submitSimple() {
   }
 }
 
-// ================== AI Commentary ==================
-async function generateCommentary(): Promise<void> {
-  if (!gameId.value) return
-
-  // Gather current delivery context
-  const snap = liveSnapshot.value as any
-  const last = snap?.last_delivery ?? lastDelivery.value
-  if (!last && !selectedStriker.value) return
-
-  // Determine over/ball from last delivery or current state
-  const overNum = last?.over_number ?? Math.floor(legalBallsBowled.value / 6)
-  const ballNum = last?.ball_number ?? (legalBallsBowled.value % 6)
-
-  // Calculate total runs for this delivery
-  let totalRuns = 0
-  if (extra.value === 'wd') {
-    totalRuns = extraRuns.value
-  } else if (extra.value === 'nb') {
-    totalRuns = 1 + offBat.value
-  } else if (extra.value === 'b' || extra.value === 'lb') {
-    totalRuns = extraRuns.value
-  } else {
-    totalRuns = offBat.value
-  }
-
-  // Use last delivery data if available (after submit)
-  if (last) {
-    totalRuns = Number(last.runs_scored ?? last.runs_off_bat ?? 0) +
-                Number(last.extra_runs ?? 0)
-  }
-
-  const payload: AICommentaryRequest = {
-    match_id: gameId.value,
-    over: overNum,
-    ball: ballNum,
-    runs: totalRuns,
-    wicket: last?.is_wicket ?? isWicket.value,
-    batter: selectedStrikerName.value || last?.striker_name || 'Batter',
-    bowler: selectedBowlerName.value || last?.bowler_name || 'Bowler',
-    context: {
-      innings: currentInnings.value,
-      total_runs: inningsScore.value.runs,
-      total_wickets: inningsScore.value.wickets,
-      overs: oversDisplay.value,
-      extra_type: last?.extra_type ?? (extra.value !== 'none' ? extra.value : null),
-      dismissal_type: last?.dismissal_type ?? dismissal.value,
-      batting_team: battingTeamName.value,
-    },
-  }
-
-  aiLoading.value = true
-  aiError.value = null
-
-  try {
-    const response = await generateAICommentary(payload)
-    aiCommentary.value = response.commentary
-  } catch (e: any) {
-    aiError.value = e?.message || 'Failed to generate commentary'
-    console.error('AI Commentary error:', e)
-  } finally {
-    aiLoading.value = false
-  }
-}
-
-// Clear AI state when input changes
-watch([extra, offBat, extraRuns, isWicket], () => {
-  aiError.value = null
-})
-
 // --- Delete last delivery ------------------------------
 const deletingLast = ref(false)
 
-const lastDelivery = computed<any | null>(() =>
-  // Prefer live snapshot (if your store fills it), else fall back to the game object
-  (gameStore as any)?.state?.last_delivery ??
-  (gameStore.currentGame as any)?.last_delivery ??
-  (rawDeliveries.value.length ? rawDeliveries.value[rawDeliveries.value.length - 1] : null)
-)
+const lastDelivery = computed<any | null>(() => {
+  // FIX B7: Use backend last_delivery from liveSnapshot (primary source)
+  // Backend provides correct over/ball numbers, no local calculation needed
+  return gameStore.liveSnapshot?.last_delivery ?? null
+})
 
 // Block when: there is no ball yet, an innings gate is up, or you still have queued actions
 const canDeleteLast = computed<boolean>(() =>
@@ -611,8 +504,9 @@ const oversLimit = computed<number>(() => Number((gameStore.currentGame as any)?
 const currentInnings = computed<1 | 2>(() => Number((gameStore.currentGame as any)?.current_inning ?? 1) as 1 | 2)
 // Balls & overs remaining in the chase (defensive if not a chase or no limit)
 const ballsRemaining = computed<number>(() => {
-  const limit = oversLimit.value ? Number(oversLimit.value) * 6 : 0
-  return Math.max(0, limit - Number(ballsBowledTotal.value || 0))
+  // FIX B4: Use backend-calculated balls_remaining from snapshot
+  // NO local calculation - backend handles extras/illegal balls correctly
+  return gameStore.liveSnapshot?.balls_remaining ?? 0
 })
 const oversRemainingDisplay = computed<string>(() => {
   const balls = ballsRemaining.value
@@ -1696,7 +1590,7 @@ const selectedNextOverBowlerId = ref<UUID>('' as UUID)
 const selectedReplacementBowlerId = ref<UUID>('' as UUID)
 const selectBatterDlgOpen = ref(false)
 const selectedNextBatterId = ref<UUID>('' as UUID)
-const activeTab = ref<'recent' | 'batting' | 'bowling' | 'ai' | 'analytics' | 'extras'>('recent')
+const activeTab = ref<'recent' | 'batting' | 'bowling' | 'events' | 'analytics' | 'extras'>('recent')
 const canStartOverNow = computed(() => needsNewOverLive.value || !currentBowlerId.value)
 const candidateBatters = computed<Player[]>(() => {
   const anyStore = gameStore as any
@@ -1866,9 +1760,6 @@ async function confirmChangeBowler(): Promise<void> {
       </div>
 
       <div class="header-right">
-        <button class="btn-icon" @click="matchAiEnabled = !matchAiEnabled" :class="{active: matchAiEnabled}" title="AI Commentary">
-          🤖
-        </button>
         <button class="btn-ghost-sm" @click="shareOpen = true">
           Share
         </button>
@@ -2061,7 +1952,7 @@ async function confirmChangeBowler(): Promise<void> {
         <button :class="{active: activeTab==='recent'}" @click="activeTab='recent'">RECENT</button>
         <button :class="{active: activeTab==='batting'}" @click="activeTab='batting'">BATTING</button>
         <button :class="{active: activeTab==='bowling'}" @click="activeTab='bowling'">BOWLING</button>
-        <button :class="{active: activeTab==='ai'}" @click="activeTab='ai'">AI COMM</button>
+        <button :class="{active: activeTab==='events'}" @click="activeTab='events'">EVENT LOG</button>
         <button :class="{active: activeTab==='analytics'}" @click="activeTab='analytics'">ANALYTICS</button>
         <button :class="{active: activeTab==='extras'}" @click="activeTab='extras'">EXTRAS</button>
       </div>
@@ -2082,15 +1973,9 @@ async function confirmChangeBowler(): Promise<void> {
            <BowlingCard :entries="bowlingEntries" />
         </div>
 
-        <!-- AI COMMENTARY -->
-        <div v-show="activeTab==='ai'" class="tab-pane">
-            <div class="ai-header">
-                <h4>AI Commentary</h4>
-                <button v-if="!aiLoading && aiCommentary" class="btn-icon" @click="generateCommentary">↻</button>
-            </div>
-            <div v-if="aiLoading">Loading...</div>
-            <p v-else-if="aiCommentary">{{ aiCommentary }}</p>
-            <p v-else>No commentary yet.</p>
+        <!-- EVENT LOG -->
+        <div v-show="activeTab==='events'" class="tab-pane">
+           <EventLogTab :game-id="gameId" />
         </div>
 
         <!-- ANALYTICS: Win Probability, Innings Grade, Pressure Map & Phase Timeline -->

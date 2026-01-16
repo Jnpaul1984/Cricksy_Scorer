@@ -478,3 +478,139 @@ async def list_game_results(
         out.append(item)
 
     return out
+
+# ==============================================================================
+# NEW ENDPOINTS: Metrics, Phase Analysis, and Game Snapshots
+# ==============================================================================
+
+
+@router.get("/{game_id}/metrics")
+async def get_game_metrics(
+    game_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """
+    Get lightweight game metrics snapshot for REST fallback.
+    
+    Returns score, wickets, CRR, RRR, balls remaining, and extras breakdown.
+    Useful when Socket.IO connection is down or page loads without socket.
+    """
+    game = await crud.get_game(db, game_id=game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    # Get current snapshot from game state
+    snapshot = game.current_state or {}
+    
+    # Calculate extras breakdown from deliveries if needed
+    extras_breakdown = {
+        "total": snapshot.get("total_extras", 0),
+        "wides": snapshot.get("wides", 0),
+        "no_balls": snapshot.get("no_balls", 0),
+        "byes": snapshot.get("byes", 0),
+        "leg_byes": snapshot.get("leg_byes", 0),
+    }
+    
+    return {
+        "game_id": str(game.id),
+        "score": snapshot.get("total_runs", 0),
+        "wickets": snapshot.get("total_wickets", 0),
+        "overs": f"{snapshot.get('overs_completed', 0)}.{snapshot.get('balls_this_over', 0)}",
+        "balls_remaining": snapshot.get("balls_remaining", 0),
+        "current_run_rate": snapshot.get("current_run_rate", None),
+        "required_run_rate": snapshot.get("required_run_rate", None),
+        "extras": extras_breakdown,
+        "last_updated": game.updated_at.isoformat() if game.updated_at else None,
+    }
+
+
+@router.get("/{game_id}/phase-analysis")
+async def get_phase_analysis(
+    game_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """
+    Analyze match into three phases: powerplay (0-6), middle (7-16), death (17-20).
+    
+    Returns runs, wickets, strike rate, boundaries, and key batting order for each phase.
+    """
+    game = await crud.get_game(db, game_id=game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    # Get deliveries for current innings
+    stmt = select(models.Delivery).where(
+        models.Delivery.game_id == game.id
+    ).order_by(models.Delivery.created_at)
+    
+    result = await db.execute(stmt)
+    deliveries = result.scalars().all()
+    
+    # Get batting scorecard
+    batting_scorecard = game.current_state.get("batting_scorecard", {}) if game.current_state else {}
+    
+    # Analyze by phase
+    phases = {
+        "powerplay": {"over_range": (1, 6)},
+        "middle": {"over_range": (7, 16)},
+        "death": {"over_range": (17, 20)},
+    }
+    
+    def analyze_phase(phase_name: str, over_range: tuple[int, int]) -> dict[str, Any]:
+        phase_deliveries = [
+            d for d in deliveries
+            if d.over_number >= over_range[0] and d.over_number <= over_range[1]
+        ]
+        
+        total_runs = sum(d.runs_scored or 0 for d in phase_deliveries)
+        total_wickets = sum(1 for d in phase_deliveries if d.is_wicket)
+        total_balls = len(phase_deliveries)
+        fours = sum(1 for d in phase_deliveries if d.runs_off_bat == 4)
+        sixes = sum(1 for d in phase_deliveries if d.runs_off_bat == 6)
+        
+        overs_played = total_balls / 6 if total_balls > 0 else 0
+        avg_per_over = total_runs / overs_played if overs_played > 0 else 0
+        strike_rate = (total_runs / total_balls * 100) if total_balls > 0 else 0
+        
+        # Get top batting performers in this phase
+        player_runs: dict[str, int] = {}
+        player_balls: dict[str, int] = {}
+        for d in phase_deliveries:
+            if d.striker_id:
+                player_runs[d.striker_id] = player_runs.get(d.striker_id, 0) + (d.runs_off_bat or 0)
+                player_balls[d.striker_id] = player_balls.get(d.striker_id, 0) + 1
+        
+        batting_order = []
+        for player_id, runs in sorted(player_runs.items(), key=lambda x: x[1], reverse=True)[:3]:
+            balls = player_balls.get(player_id, 1)
+            # Get player name from batting scorecard
+            player_name = "Unknown"
+            for pid, stats in batting_scorecard.items():
+                if pid == player_id or (isinstance(stats, dict) and stats.get("player_id") == player_id):
+                    player_name = stats.get("player_name", "Unknown") if isinstance(stats, dict) else "Unknown"
+                    break
+            
+            batting_order.append({
+                "player_id": player_id,
+                "player_name": player_name,
+                "runs": runs,
+                "balls": balls,
+                "strike_rate": (runs / balls * 100) if balls > 0 else 0,
+            })
+        
+        return {
+            "total_runs": total_runs,
+            "avg_per_over": round(avg_per_over, 2),
+            "fours": fours,
+            "sixes": sixes,
+            "wickets": total_wickets,
+            "strike_rate": round(strike_rate, 2),
+            "batting_order": batting_order,
+        }
+    
+    return {
+        "game_id": str(game.id),
+        "powerplay": analyze_phase("powerplay", phases["powerplay"]["over_range"]),
+        "middle": analyze_phase("middle", phases["middle"]["over_range"]),
+        "death": analyze_phase("death", phases["death"]["over_range"]),
+    }

@@ -30,25 +30,25 @@
         <section class="org-summary">
           <BaseCard padding="md" class="org-summary-card">
             <p class="org-summary-label">Total Teams</p>
-            <p class="org-summary-value">{{ orgStats.totalTeams }}</p>
+            <p class="org-summary-value">{{ orgStats?.totalTeams ?? '—' }}</p>
             <p class="org-summary-footnote">Active this season</p>
           </BaseCard>
 
           <BaseCard padding="md" class="org-summary-card">
             <p class="org-summary-label">Total Matches</p>
-            <p class="org-summary-value">{{ orgStats.totalMatches }}</p>
+            <p class="org-summary-value">{{ orgStats?.totalMatches ?? '—' }}</p>
             <p class="org-summary-footnote">Played this season</p>
           </BaseCard>
 
           <BaseCard padding="md" class="org-summary-card">
             <p class="org-summary-label">Win Rate</p>
-            <p class="org-summary-value">{{ orgStats.seasonWinRate }}%</p>
+            <p class="org-summary-value">{{ orgStats?.seasonWinRate ?? '—' }}{{ orgStats?.seasonWinRate ? '%' : '' }}</p>
             <p class="org-summary-footnote">Across all teams</p>
           </BaseCard>
 
           <BaseCard padding="md" class="org-summary-card">
             <p class="org-summary-label">Avg Run Rate</p>
-            <p class="org-summary-value">{{ orgStats.avgRunRate }}</p>
+            <p class="org-summary-value">{{ orgStats?.avgRunRate ?? '—' }}</p>
             <p class="org-summary-footnote">Runs per over</p>
           </BaseCard>
         </section>
@@ -144,7 +144,7 @@
         />
 
         <!-- Phase breakdown summary -->
-        <BaseCard padding="md" class="org-phase-summary">
+        <BaseCard v-if="orgStats" padding="md" class="org-phase-summary">
           <h3 class="org-phase-title">Phase Performance</h3>
           <p class="org-phase-subtitle">Average net runs vs par by match phase.</p>
 
@@ -153,34 +153,34 @@
               <span class="org-phase-label">Powerplay</span>
               <span
                 class="org-phase-value"
-                :class="orgStats.powerplayNetRuns >= 0 ? 'org-positive' : 'org-negative'"
+                :class="(orgStats.powerplayNetRuns ?? 0) >= 0 ? 'org-positive' : 'org-negative'"
               >
-                {{ orgStats.powerplayNetRuns >= 0 ? '+' : '' }}{{ orgStats.powerplayNetRuns }}
+                {{ (orgStats.powerplayNetRuns ?? 0) >= 0 ? '+' : '' }}{{ orgStats.powerplayNetRuns ?? 0 }}
               </span>
             </div>
             <div class="org-phase-item">
               <span class="org-phase-label">Middle overs</span>
               <span
                 class="org-phase-value"
-                :class="orgStats.middleNetRuns >= 0 ? 'org-positive' : 'org-negative'"
+                :class="(orgStats.middleNetRuns ?? 0) >= 0 ? 'org-positive' : 'org-negative'"
               >
-                {{ orgStats.middleNetRuns >= 0 ? '+' : '' }}{{ orgStats.middleNetRuns }}
+                {{ (orgStats.middleNetRuns ?? 0) >= 0 ? '+' : '' }}{{ orgStats.middleNetRuns ?? 0 }}
               </span>
             </div>
             <div class="org-phase-item">
               <span class="org-phase-label">Death overs</span>
               <span
                 class="org-phase-value"
-                :class="orgStats.deathNetRuns >= 0 ? 'org-positive' : 'org-negative'"
+                :class="(orgStats.deathNetRuns ?? 0) >= 0 ? 'org-positive' : 'org-negative'"
               >
-                {{ orgStats.deathNetRuns >= 0 ? '+' : '' }}{{ orgStats.deathNetRuns }}
+                {{ (orgStats.deathNetRuns ?? 0) >= 0 ? '+' : '' }}{{ orgStats.deathNetRuns ?? 0 }}
               </span>
             </div>
           </div>
         </BaseCard>
 
         <!-- Standout player -->
-        <BaseCard v-if="orgStats.standoutPlayerName" padding="md" class="org-standout">
+        <BaseCard v-if="orgStats?.standoutPlayerName" padding="md" class="org-standout">
           <h3 class="org-standout-title">Standout Performer</h3>
           <div class="org-standout-player">
             <p class="org-standout-name">{{ orgStats.standoutPlayerName }}</p>
@@ -207,48 +207,52 @@ import type { AiCallout, CalloutSeverity } from '@/components'
 const router = useRouter()
 
 // Loading state
-// TODO: Wire to actual API loading state when backend is integrated
+// FIX A4: Remove ALL mock org data - show unavailable state
 const orgLoading = ref(false)
-const lastSyncLabel = ref('Just now')
+const lastSyncLabel = ref('—')
+const backendEndpointsAvailable = ref(false)
+const requiredEndpoints = [
+  'GET /organizations/{orgId}/stats',
+  'GET /organizations/{orgId}/teams',
+  'GET /organizations/{orgId}/recent-matches'
+]
 
-// TODO: Replace with real API data when backend org endpoints are ready
-const orgStats = computed(() => ({
-  totalTeams: 8,
-  totalMatches: 42,
-  seasonWinRate: 68,
-  avgRunRate: 7.4,
-  powerplayNetRuns: 12,
-  middleNetRuns: -3,
-  deathNetRuns: 8,
-  deathOversCollapseRate: 0.25,
-  standoutPlayerName: 'R. Sharma',
-  standoutPlayerTeam: 'Lions FC',
-  standoutPlayerImpact: 'High Impact',
-}))
+// Define type for org stats structure
+interface OrgStats {
+  totalTeams: number
+  totalMatches: number
+  seasonWinRate: number
+  avgRunRate: number
+  powerplayNetRuns: number
+  middleNetRuns: number
+  deathNetRuns: number
+  standoutPlayerName?: string
+  standoutPlayerTeam?: string
+  standoutPlayerImpact?: string
+}
 
-// TODO: Replace with real API data
-const teams = ref([
-  { id: 't1', name: 'Lions FC', played: 12, won: 9, lost: 3, winPercent: 75, avgScore: 168, nrr: 1.24 },
-  { id: 't2', name: 'Falcons XI', played: 10, won: 7, lost: 3, winPercent: 70, avgScore: 155, nrr: 0.86 },
-  { id: 't3', name: 'Eagles CC', played: 11, won: 6, lost: 5, winPercent: 55, avgScore: 148, nrr: -0.12 },
-  { id: 't4', name: 'Sharks United', played: 9, won: 4, lost: 5, winPercent: 44, avgScore: 142, nrr: -0.45 },
-])
+// NO MOCK DATA - return null when backend unavailable
+const orgStats = computed<OrgStats | null>(() => {
+  if (!backendEndpointsAvailable.value) return null
+  // TODO: Fetch from API when endpoint ready
+  // const data = await apiRequest('/organizations/{orgId}/stats')
+  return null
+})
 
-// TODO: Replace with real API data
-const recentMatches = ref([
-  { id: 'm1', teams: 'Lions FC vs Eagles CC', date: '2025-01-18', result: 'Won by 24 runs', won: true },
-  { id: 'm2', teams: 'Falcons XI vs Sharks United', date: '2025-01-17', result: 'Won by 5 wickets', won: true },
-  { id: 'm3', teams: 'Eagles CC vs Falcons XI', date: '2025-01-15', result: 'Lost by 12 runs', won: false },
-  { id: 'm4', teams: 'Lions FC vs Sharks United', date: '2025-01-14', result: 'Won by 8 wickets', won: true },
-])
+// NO MOCK DATA - empty array when backend unavailable
+const teams = ref<any[]>([])
 
-// TODO: Replace with real AI-driven insights once backend is ready.
-// For now, derive mock callouts from orgStats.
+// NO MOCK DATA - empty array when backend unavailable
+const recentMatches = ref<any[]>([])
+
+// NO MOCK DATA - callouts derived from real data only
 const orgAiCallouts = computed<AiCallout[]>(() => {
   const stats = orgStats.value
+  if (!stats) return []
+  
   const callouts: AiCallout[] = []
 
-  // High win rate
+  // Only generate callouts from REAL data
   if (stats.seasonWinRate >= 65) {
     callouts.push({
       id: 'high-win-rate',
@@ -266,59 +270,14 @@ const orgAiCallouts = computed<AiCallout[]>(() => {
       id: 'powerplay-advantage',
       title: 'Powerplay advantage',
       body: `On average, your sides are ${Math.round(stats.powerplayNetRuns)} runs ahead of par during the powerplay.`,
-      category: 'Batting',
-      severity: 'info' as CalloutSeverity,
-      scope: 'Powerplay',
-    })
-  }
-
-  // Death overs concern
-  if (stats.deathOversCollapseRate > 0.3) {
-    callouts.push({
-      id: 'death-overs-concern',
-      title: 'Death overs vulnerability',
-      body: `In about ${Math.round(stats.deathOversCollapseRate * 100)}% of matches, your teams lose wickets in clusters at the death.`,
-      category: 'Batting',
-      severity: 'warning' as CalloutSeverity,
-      scope: 'Death overs',
-    })
-  }
-
-  // Death overs strength (alternative)
-  if (stats.deathNetRuns > 5) {
-    callouts.push({
-      id: 'death-overs-strength',
-      title: 'Death overs execution',
-      body: `Your teams average +${stats.deathNetRuns} runs vs par in the death, showing strong finishing ability.`,
-      category: 'Batting',
+      category: 'Org',
       severity: 'positive' as CalloutSeverity,
-      scope: 'Death overs',
+      scope: 'All teams',
     })
   }
 
-  // Standout player
-  if (stats.standoutPlayerName) {
-    callouts.push({
-      id: 'standout-player',
-      title: 'Standout performer',
-      body: `${stats.standoutPlayerName} has been one of your key impact players this season.`,
-      category: 'Players',
-      severity: 'positive' as CalloutSeverity,
-      scope: stats.standoutPlayerName,
-    })
-  }
-
-  // Middle overs concern
-  if (stats.middleNetRuns < -5) {
-    callouts.push({
-      id: 'middle-overs-concern',
-      title: 'Middle overs pressure',
-      body: `Teams are averaging ${Math.abs(stats.middleNetRuns)} runs below par in middle overs. Consider rotation strategies.`,
-      category: 'Batting',
-      severity: 'warning' as CalloutSeverity,
-      scope: 'Middle overs',
-    })
-  }
+  // All other callouts removed - they were based on mock data
+  // When backend provides real stats, add callout logic here
 
   return callouts
 })
