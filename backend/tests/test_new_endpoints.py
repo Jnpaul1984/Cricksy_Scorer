@@ -13,7 +13,7 @@ from backend.sql_app.schemas import GameCreate
 
 
 @pytest.fixture
-async def test_game(db: AsyncSession):
+async def test_game(db_session: AsyncSession):
     """Create a test game with deliveries for testing."""
     game_id = str(uuid4())
     
@@ -64,9 +64,9 @@ async def test_game(db: AsyncSession):
         },
     )
     
-    db.add(game)
-    await db.commit()
-    await db.refresh(game)
+    db_session.add(game)
+    await db_session.commit()
+    await db_session.refresh(game)
     
     # Add some deliveries
     deliveries = [
@@ -124,9 +124,9 @@ async def test_game(db: AsyncSession):
     ]
     
     for delivery in deliveries:
-        db.add(delivery)
+        db_session.add(delivery)
     
-    await db.commit()
+    await db_session.commit()
     
     return game_id
 
@@ -135,9 +135,9 @@ class TestGameMetricsEndpoint:
     """Tests for GET /games/{gameId}/metrics"""
     
     @pytest.mark.asyncio
-    async def test_get_game_metrics_success(self, async_client: AsyncClient, db: AsyncSession):
+    async def test_get_game_metrics_success(self, async_client: AsyncClient, db_session: AsyncSession):
         """Test successful retrieval of game metrics."""
-        game_id = await test_game(db)
+        game_id = await test_game(db_session)
         
         response = await async_client.get(f"/games/{game_id}/metrics")
         
@@ -165,9 +165,9 @@ class TestPhaseAnalysisEndpoint:
     """Tests for GET /games/{gameId}/phase-analysis"""
     
     @pytest.mark.asyncio
-    async def test_get_phase_analysis_success(self, async_client: AsyncClient, db: AsyncSession):
+    async def test_get_phase_analysis_success(self, async_client: AsyncClient, db_session: AsyncSession):
         """Test successful retrieval of phase analysis."""
-        game_id = await test_game(db)
+        game_id = await test_game(db_session)
         
         response = await async_client.get(f"/games/{game_id}/phase-analysis")
         
@@ -203,7 +203,7 @@ class TestOrganizationStatsEndpoint:
     """Tests for GET /organizations/{orgId}/stats"""
     
     @pytest.mark.asyncio
-    async def test_get_org_stats_success(self, async_client: AsyncClient, db: AsyncSession):
+    async def test_get_org_stats_success(self, async_client: AsyncClient, db_session: AsyncSession):
         """Test successful retrieval of organization stats."""
         org_id = str(uuid4())
         
@@ -227,7 +227,7 @@ class TestOrganizationTeamsEndpoint:
     """Tests for GET /organizations/{orgId}/teams"""
     
     @pytest.mark.asyncio
-    async def test_get_org_teams_success(self, async_client: AsyncClient, db: AsyncSession):
+    async def test_get_org_teams_success(self, async_client: AsyncClient, db_session: AsyncSession):
         """Test successful retrieval of organization teams."""
         org_id = str(uuid4())
         
@@ -255,7 +255,7 @@ class TestTournamentLeaderboardsEndpoint:
     """Tests for GET /tournaments/{tournamentId}/leaderboards"""
     
     @pytest.mark.asyncio
-    async def test_get_tournament_leaderboards_success(self, async_client: AsyncClient, db: AsyncSession):
+    async def test_get_tournament_leaderboards_success(self, async_client: AsyncClient, db_session: AsyncSession):
         """Test successful retrieval of tournament leaderboards."""
         tournament_id = str(uuid4())
         
