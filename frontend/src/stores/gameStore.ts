@@ -916,6 +916,22 @@ function stabilizeBattersFromLastDelivery(prevGame: GameState, snap: UiSnapshot)
 
 
   const extrasBreakdown = computed(() => {
+    // ✅ FIX: Prefer liveSnapshot.extras_totals (backend source of truth)
+    // Fallback to recompute from deliveries only if snapshot unavailable
+    const snap = liveSnapshot.value as any
+    if (snap?.extras_totals && typeof snap.extras_totals === 'object') {
+      const et = snap.extras_totals
+      const wides = Number(et.wides ?? et.wd ?? 0)
+      const no_balls = Number(et.no_balls ?? et.nb ?? 0)
+      const byes = Number(et.byes ?? et.b ?? 0)
+      const leg_byes = Number(et.leg_byes ?? et.lb ?? 0)
+      const penalty = Number(et.penalty ?? 0)
+      // ✅ HARDENED: Compute total from components if missing
+      const total = et.total != null ? Number(et.total) : (wides + no_balls + byes + leg_byes + penalty)
+      return { wides, no_balls, byes, leg_byes, penalty, total }
+    }
+
+    // Fallback: recompute from deliveries
     type D = {
       extra_type?: 'wd' | 'nb' | 'b' | 'lb' | null
       extra?: 'wd' | 'nb' | 'b' | 'lb' | null
