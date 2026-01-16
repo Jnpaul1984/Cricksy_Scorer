@@ -1,0 +1,240 @@
+# Backend Deployment Protocol
+
+**Purpose**: Prevent CI/deployment failures by ensuring all changes pass rigorous local validation before pushing to `main` branch.
+
+## Mandatory Pre-Push Checklist
+
+### 1. Run Local CI Validation (ALWAYS)
+
+```powershell
+# Set environment variable for in-memory DB mode
+$env:CRICKSY_IN_MEMORY_DB = "1"
+$env:DATABASE_URL = "sqlite+aiosqlite:///:memory:?cache=shared"
+$env:PYTHONPATH = "C:\Users\Hp\Cricksy_Scorer"
+
+# Backend validation
+cd C:\Users\Hp\Cricksy_Scorer\backend
+
+# Step 1: Ruff lint
+python -m ruff check .
+# MUST PASS: "All checks passed!"
+
+# Step 2: Ruff format
+python -m ruff format --check .
+# MUST PASS: "X files already formatted"
+
+# Step 3: MyPy type-check
+python -m mypy --config-file pyproject.toml --explicit-package-bases .
+# MUST PASS: "Success: no issues found in X source files"
+
+# Step 4: Run pytest (optional locally if cv2 missing, MUST pass in CI)
+cd ..
+pytest -v
+# Expected: 0 failures (some warnings acceptable)
+```
+
+### 2. Test Creation Guidelines
+
+**CRITICAL**: When adding new tests that create game instances:
+
+#### ✅ DO:
+- Use `async_client.post("/games", json={...})` to create games via API
+- Include minimum 2 players per team in `players_a` and `players_b`
+- Extract game_id from response: `game_id = game_data.get("id") or game_data.get("gid") or game_data.get("game", {}).get("id")`
+- Score deliveries via `async_client.post(f"/games/{game_id}/deliveries", json={...})`
+- Extract delivery IDs from response snapshots, not hardcoded values
+
+#### ❌ DON'T:
+- Use `crud.create_game(db_session, schema)` directly (incompatible with in-memory CRUD)
+- Create games with only 1 player per team (violates GameCreate schema validation)
+- Hardcode delivery IDs (use IDs from API responses)
+- Use `games_impl.append_delivery_and_persist_impl()` (bypasses API validation)
+
+#### Example Pattern:
+```python
+@pytest.mark.asyncio
+async def test_my_feature(async_client, db_session):
+    # Create game via API
+    create_response = await async_client.post(
+        "/games",
+        json={
+            "match_type": "limited",
+            "overs_limit": 20,
+            "team_a_name": "Team A",
+            "team_b_name": "Team B",
+            "players_a": ["bat1", "bat2"],  # Min 2 players
+            "players_b": ["bowl1", "bowl2"],  # Min 2 players
+            "toss_winner_team": "Team A",
+            "decision": "bat",
+        },
+    )
+    assert create_response.status_code in (200, 201)
+    game_data = create_response.json()
+    game_id = game_data.get("id") or game_data.get("gid") or game_data.get("game", {}).get("id")
+
+    # Score delivery via API
+    score_response = await async_client.post(
+        f"/games/{game_id}/deliveries",
+        json={
+            "striker_id": "bat1",
+            "non_striker_id": "bat2",
+            "bowler_id": "bowl1",
+            "runs_scored": 4,
+            "extra": None,
+            "is_wicket": False,
+        },
+    )
+    assert score_response.status_code == 200
+    snapshot = score_response.json()
+    delivery_id = snapshot["deliveries"][0]["id"]  # Extract from response
+
+    # Use API for all operations
+    patch_response = await async_client.patch(
+        f"/games/{game_id}/deliveries/{delivery_id}",
+        json={"runs_scored": 6},
+    )
+    assert patch_response.status_code == 200
+```
+
+### 3. Pre-Commit Auto-Fixes
+
+If ruff reports fixable errors:
+```powershell
+python -m ruff check --fix --unsafe-fixes .
+python -m ruff format .
+```
+
+Then re-run validation checks to ensure fixes didn't break anything.
+
+### 4. Commit Message Format
+
+```
+<type>: <short description>
+
+<optional body explaining why/what changed>
+```
+
+Types:
+- `fix:` - Bug fixes (CI failures, runtime errors)
+- `feat:` - New features (new endpoints, functionality)
+- `chore:` - Maintenance (deps, config, docs)
+- `test:` - Test-only changes
+- `refactor:` - Code restructuring without behavior change
+
+### 5. Push to Main Workflow
+
+```powershell
+# 1. Ensure all local validation passes
+# 2. Stage changes
+git add <files>
+
+# 3. Commit with descriptive message
+git commit -m "fix: delivery correction tests use API instead of direct CRUD"
+
+# 4. Push to main
+git push origin main
+
+# 5. Monitor GitHub Actions workflow
+# Visit: https://github.com/Jnpaul1984/Cricksy_Scorer/actions
+# Ensure "Run pytest -v" and "Deploy Backend" workflows pass
+```
+
+### 6. Rollback Procedure (If CI Fails After Push)
+
+```powershell
+# Option 1: Fix forward (preferred)
+# Fix the issue locally, validate, commit, push
+
+# Option 2: Revert commit
+git revert HEAD
+git push origin main
+
+# Option 3: Force rollback (use with caution)
+git reset --hard HEAD~1
+git push origin main --force
+```
+
+## Common CI Failure Patterns & Solutions
+
+### Pattern 1: Schema Validation Errors
+**Error**: `pydantic_core._pydantic_core.ValidationError: List should have at least 2 items`
+
+**Cause**: Test creates game with only 1 player per team
+
+**Fix**: Ensure `players_a` and `players_b` each have ≥2 players
+
+### Pattern 2: InMemoryCRUD Signature Mismatch
+**Error**: `InMemoryCrudRepository.create_game() takes 2 positional arguments but 3 were given`
+
+**Cause**: Test calls `crud.create_game(db_session, schema)` instead of using API
+
+**Fix**: Use `async_client.post("/games", json={...})` to create games
+
+### Pattern 3: Ruff F841 Unused Variables
+**Error**: `F841 Local variable 'x' is assigned to but never used`
+
+**Fix**: Either use the variable or remove the assignment
+
+### Pattern 4: MyPy Type Errors
+**Error**: `Incompatible types in assignment`
+
+**Cause**: Type mismatch (e.g., `Mapping` vs `dict`)
+
+**Fix**: Use explicit type casts: `cast(dict[str, Any], value)` or change iteration pattern
+
+### Pattern 5: Import Order
+**Error**: `I001 Import block is un-sorted or un-formatted`
+
+**Fix**: Run `python -m ruff check --fix .` to auto-sort imports
+
+## Deployment Workflow (GitHub Actions)
+
+The `deploy-backend.yml` workflow runs these steps:
+
+1. **Test Backend (Postgres)**: Runs full pytest suite with PostgreSQL service
+2. **Build and Scan ECR Image**: Builds Docker image, pushes to ECR, scans for vulnerabilities
+3. **Deploy**: Runs migrations, updates ECS service, deploys worker service
+
+**Blocking Conditions**:
+- Any pytest failure stops deployment
+- HIGH/CRITICAL vulnerabilities in ECR scan stops deployment
+- Migration task exit code ≠ 0 stops deployment
+
+## Emergency Hotfix Procedure
+
+For critical production fixes that need immediate deployment:
+
+```powershell
+# 1. Create hotfix branch
+git checkout -b hotfix/critical-issue main
+
+# 2. Make minimal fix
+# ... edit files ...
+
+# 3. Run FULL local validation (no shortcuts)
+python -m ruff check .
+python -m mypy --config-file pyproject.toml --explicit-package-bases .
+pytest -v
+
+# 4. Commit with clear description
+git commit -m "hotfix: fix critical production issue XYZ"
+
+# 5. Push to main (or create PR for review if time allows)
+git checkout main
+git merge hotfix/critical-issue --no-ff
+git push origin main
+
+# 6. Monitor deployment
+# Watch GitHub Actions and ECS service health
+```
+
+## Maintenance
+
+Review this protocol quarterly and update based on:
+- New CI tools/checks added to workflow
+- Recurring failure patterns
+- Team feedback on friction points
+
+**Last Updated**: January 15, 2026
+**Owner**: Development Team
+**Related Docs**: `.mcp/CI_CONSISTENCY_ENGINEER.md`, `.github/workflows/deploy-backend.yml`

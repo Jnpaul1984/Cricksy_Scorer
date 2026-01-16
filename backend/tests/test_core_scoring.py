@@ -833,49 +833,46 @@ def test_no_wicket_credit_for_run_out():
 async def test_delivery_correction_wide_to_legal(async_client, db_session):
     """Test correcting a wide to a legal delivery updates totals correctly."""
     from backend.routes import games as games_impl
-    from backend.sql_app import crud, schemas
 
-    # Create test game
-    game_dict = {
-        "match_type": "limited",
-        "overs_limit": 20,
-        "team_a_name": "Team A",
-        "team_b_name": "Team B",
-        "players_a": ["bat1", "bat2"],
-        "players_b": ["bowl1"],
-        "toss_winner_team": "Team A",
-        "decision": "bat",
-    }
-    game = await crud.create_game(db_session, schemas.GameCreate(**game_dict))
-
-    # Score a wide (WD + 1 run)
-    delivery1 = {
-        "over_number": 0,
-        "ball_number": 1,
-        "bowler_id": "bowl1",
-        "striker_id": "bat1",
-        "non_striker_id": "bat2",
-        "runs_off_bat": 0,
-        "extra_type": "wd",
-        "extra_runs": 1,
-        "runs_scored": 1,
-        "is_extra": True,
-        "is_wicket": False,
-        "inning": 1,
-        "id": 1,
-    }
-    await games_impl.append_delivery_and_persist_impl(
-        game, delivery_dict=delivery1, db=db_session
+    # Create test game via API
+    create_response = await async_client.post(
+        "/games",
+        json={
+            "match_type": "limited",
+            "overs_limit": 20,
+            "team_a_name": "Team A",
+            "team_b_name": "Team B",
+            "players_a": ["bat1", "bat2"],
+            "players_b": ["bowl1", "bowl2"],
+            "toss_winner_team": "Team A",
+            "decision": "bat",
+        },
     )
+    assert create_response.status_code in (200, 201)
+    game_data = create_response.json()
+    game_id = game_data.get("id") or game_data.get("gid") or game_data.get("game", {}).get("id")
+    assert game_id, f"Could not extract game ID from: {game_data}"
 
-    # Verify wide was scored
-    refreshed = await crud.get_game(db_session, game_id=game.id)
-    assert refreshed.total_runs == 1
-    assert len(refreshed.deliveries) == 1
+    # Score a wide (WD + 1 run) via API
+    score_response = await async_client.post(
+        f"/games/{game_id}/deliveries",
+        json={
+            "striker_id": "bat1",
+            "non_striker_id": "bat2",
+            "bowler_id": "bowl1",
+            "runs_scored": 1,
+            "extra": "wd",
+            "is_wicket": False,
+        },
+    )
+    assert score_response.status_code == 200
+    snapshot = score_response.json()
+    assert snapshot["total_runs"] == 1
+    delivery_id = snapshot["deliveries"][0]["id"]
 
     # Correct the wide to a legal 1 run
     response = await async_client.patch(
-        f"/games/{game.id}/deliveries/1",
+        f"/games/{game_id}/deliveries/{delivery_id}",
         json={
             "runs_scored": 1,
             "runs_off_bat": 1,
@@ -887,14 +884,15 @@ async def test_delivery_correction_wide_to_legal(async_client, db_session):
     snapshot = response.json()
 
     # Verify totals updated correctly
-    assert snapshot["total_runs"] == 1  # Still 1 run total
-    assert snapshot["overs_completed"] == 0
-    assert snapshot["balls_this_over"] == 1  # Now counts as legal ball
+    corrected_snapshot = response.json()
+    assert corrected_snapshot["total_runs"] == 1  # Still 1 run total
+    assert corrected_snapshot["overs_completed"] == 0
+    assert corrected_snapshot["balls_this_over"] == 1  # Now counts as legal ball
 
     # Verify delivery was corrected
-    final_game = await crud.get_game(db_session, game_id=game.id)
-    corrected_delivery = final_game.deliveries[0]
-    assert corrected_delivery["extra_type"] is None or corrected_delivery["extra_type"] == ""
+    assert len(corrected_snapshot["deliveries"]) == 1
+    corrected_delivery = corrected_snapshot["deliveries"][0]
+    assert not corrected_delivery.get("extra_type") or corrected_delivery["extra_type"] == ""
     assert corrected_delivery["runs_scored"] == 1
     assert corrected_delivery["runs_off_bat"] == 1
 
@@ -902,45 +900,45 @@ async def test_delivery_correction_wide_to_legal(async_client, db_session):
 @pytest.mark.asyncio
 async def test_delivery_correction_runs_update(async_client, db_session):
     """Test correcting runs on a delivery recalculates totals."""
-    from backend.routes import games as games_impl
-    from backend.sql_app import crud, schemas
 
-    # Create test game
-    game_dict = {
-        "match_type": "limited",
-        "overs_limit": 20,
-        "team_a_name": "Team A",
-        "team_b_name": "Team B",
-        "players_a": ["bat1", "bat2"],
-        "players_b": ["bowl1", "bowl2"],
-        "toss_winner_team": "Team A",
-        "decision": "bat",
-    }
-    game = await crud.create_game(db_session, schemas.GameCreate(**game_dict))
-
-    # Score 2 runs
-    delivery1 = {
-        "over_number": 0,
-        "ball_number": 1,
-        "bowler_id": "bowl1",
-        "striker_id": "bat1",
-        "non_striker_id": "bat2",
-        "runs_off_bat": 2,
-        "extra_type": None,
-        "extra_runs": 0,
-        "runs_scored": 2,
-        "is_extra": False,
-        "is_wicket": False,
-        "inning": 1,
-        "id": 1,
-    }
-    await games_impl.append_delivery_and_persist_impl(
-        game, delivery_dict=delivery1, db=db_session
+    # Create test game via API
+    create_response = await async_client.post(
+        "/games",
+        json={
+            "match_type": "limited",
+            "overs_limit": 20,
+            "team_a_name": "Team A",
+            "team_b_name": "Team B",
+            "players_a": ["bat1", "bat2"],
+            "players_b": ["bowl1", "bowl2"],
+            "toss_winner_team": "Team A",
+            "decision": "bat",
+        },
     )
+    assert create_response.status_code in (200, 201)
+    game_data = create_response.json()
+    game_id = game_data.get("id") or game_data.get("gid") or game_data.get("game", {}).get("id")
+
+    # Score 2 runs via API
+    score_response = await async_client.post(
+        f"/games/{game_id}/deliveries",
+        json={
+            "striker_id": "bat1",
+            "non_striker_id": "bat2",
+            "bowler_id": "bowl1",
+            "runs_scored": 2,
+            "extra": None,
+            "is_wicket": False,
+        },
+    )
+    assert score_response.status_code == 200
+    snapshot_after_score = score_response.json()
+    assert snapshot_after_score["total_runs"] == 2
+    delivery_id = snapshot_after_score["deliveries"][0]["id"]
 
     # Correct to 4 runs
     response = await async_client.patch(
-        f"/games/{game.id}/deliveries/1",
+        f"/games/{game_id}/deliveries/{delivery_id}",
         json={"runs_off_bat": 4, "runs_scored": 4},
     )
     assert response.status_code == 200
@@ -950,32 +948,35 @@ async def test_delivery_correction_runs_update(async_client, db_session):
     assert snapshot["total_runs"] == 4
 
     # Verify batting scorecard updated
-    final_game = await crud.get_game(db_session, game_id=game.id)
-    bat_card = final_game.batting_scorecard.get("bat1", {})
+    bat_card = snapshot.get("batting_scorecard", {}).get("bat1", {})
     assert bat_card.get("runs") == 4
 
 
 @pytest.mark.asyncio
 async def test_delivery_correction_not_found(async_client, db_session):
     """Test correction returns 404 for non-existent delivery."""
-    from backend.sql_app import crud, schemas
 
-    # Create test game with no deliveries
-    game_dict = {
-        "match_type": "limited",
-        "overs_limit": 20,
-        "team_a_name": "Team A",
-        "team_b_name": "Team B",
-        "players_a": ["bat1", "bat2"],
-        "players_b": ["bowl1", "bowl2"],
-        "toss_winner_team": "Team A",
-        "decision": "bat",
-    }
-    game = await crud.create_game(db_session, schemas.GameCreate(**game_dict))
+    # Create test game with no deliveries via API
+    create_response = await async_client.post(
+        "/games",
+        json={
+            "match_type": "limited",
+            "overs_limit": 20,
+            "team_a_name": "Team A",
+            "team_b_name": "Team B",
+            "players_a": ["bat1", "bat2"],
+            "players_b": ["bowl1", "bowl2"],
+            "toss_winner_team": "Team A",
+            "decision": "bat",
+        },
+    )
+    assert create_response.status_code in (200, 201)
+    game_data = create_response.json()
+    game_id = game_data.get("id") or game_data.get("gid") or game_data.get("game", {}).get("id")
 
     # Try to correct non-existent delivery
     response = await async_client.patch(
-        f"/games/{game.id}/deliveries/999",
+        f"/games/{game_id}/deliveries/999",
         json={"runs_scored": 1},
     )
     assert response.status_code == 404
