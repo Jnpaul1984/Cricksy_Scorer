@@ -49,6 +49,7 @@ const errorMessage = computed(() => {
 // Production API Warning Detection
 // ============================================================================
 
+const isDevelopment = import.meta.env.DEV
 const isProduction = import.meta.env.PROD
 const isWindowOriginFallback = computed(() => {
   if (!isProduction) return false
@@ -131,7 +132,7 @@ const scoringIsFreeBanner = computed(() => pricingStore.scoringIsFree)
         >
           {{ pricingStore.loading ? 'Retrying...' : '🔄 Retry' }}
         </button>
-        <p v-if="import.meta.env.DEV" style="margin-top: 16px; font-size: 0.85em; color: #666;">
+        <p v-if="isDevelopment" style="margin-top: 16px; font-size: 0.85em; color: #666;">
           Dev Info: Check console for details. Last attempt: {{ pricingStore.lastFetchAttempt }}
         </p>
       </div>
