@@ -272,6 +272,10 @@ const totalDeliveries = computed(() => manhattan.value.length)
 const totalWickets = computed(() => manhattan.value.filter((d) => d.type === 'wicket').length)
 const runRate = computed(() => (totalRuns.value / totalDeliveries.value) * 6)
 
+// Scatter chart dimensions (layout constants, not data)
+const scatterWidth = 500
+const scatterHeight = 300
+
 // Scatter chart data - NO FAKE DATA
 // Required: GET /games/{id}/deliveries aggregated by match
 const scatterPoints = ref<ScatterPoint[]>([])

@@ -229,9 +229,17 @@ const bowlingStats: Record<string, (p: Player) => string | number> = {
   'Best Figures': (p) => p.bowling.bestFigures,
 }
 
+// Head-to-head record type
+interface HeadToHeadRecord {
+  player1: string
+  player2: string
+  p1Wins: number
+  p2Wins: number
+}
+
 // Head-to-head records - NO FAKE DATA
 // Required: GET /players/head-to-head
-const headToHeadRecords = computed(() => {
+const headToHeadRecords = computed((): HeadToHeadRecord[] => {
   // Return empty array - real H2H data must come from backend
   return []
 })
