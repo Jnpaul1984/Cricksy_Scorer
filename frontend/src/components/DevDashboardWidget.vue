@@ -34,7 +34,13 @@
 
     <!-- Players Grid -->
     <div class="dashboard-grid">
-      <div v-if="filteredPlayers.length === 0" class="empty-state">
+      <div v-if="enrichedPlayers.length === 0" class="empty-state-no-players">
+        <div class="empty-icon">👥</div>
+        <p class="empty-message">No Players Assigned</p>
+        <p class="empty-hint">Players will appear here once assigned to you by your coach or organization.</p>
+      </div>
+
+      <div v-else-if="filteredPlayers.length === 0" class="empty-state">
         <p class="empty-message">No players found with selected filters</p>
       </div>
 
@@ -215,90 +221,11 @@ function enrichPlayerData(player: PlayerProfile): PlayerWithMetadata {
 // Generate enriched players list
 const enrichedPlayers = computed((): PlayerWithMetadata[] => {
   if (!props.players || props.players.length === 0) {
-    // Generate sample players if none provided
-    return [
-      {
-        player_id: '1',
-        player_name: 'Virat Kohli',
-        role: 'batter',
-        total_matches: 120,
-        total_runs_scored: 5500,
-        total_wickets: 0,
-        batting_average: 55.2,
-        strike_rate: 142.5,
-        recentMatches: [
-          { performance: 'excellent' },
-          { performance: 'good' },
-          { performance: 'excellent' },
-          { performance: 'average' },
-          { performance: 'good' },
-        ],
-        nextMatch: {
-          opponent: 'India',
-          date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          format: 'T20',
-        },
-        developmentFocus: [
-          { icon: '⚔️', name: 'Strike Rate', priority: 'high' },
-          { icon: '🎯', name: 'Consistency', priority: 'medium' },
-        ],
-      } as PlayerWithMetadata,
-      {
-        player_id: '2',
-        player_name: 'Jasprit Bumrah',
-        role: 'bowler',
-        total_matches: 95,
-        total_runs_scored: 150,
-        total_wickets: 120,
-        batting_average: 2.5,
-        strike_rate: 0,
-        recentMatches: [
-          { performance: 'good' },
-          { performance: 'good' },
-          { performance: 'excellent' },
-          { performance: 'good' },
-          { performance: 'average' },
-        ],
-        nextMatch: {
-          opponent: 'Australia',
-          date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-          format: 'ODI',
-        },
-        developmentFocus: [
-          { icon: '📈', name: 'Yorker Accuracy', priority: 'high' },
-          { icon: '⏱️', name: 'Death Bowling', priority: 'high' },
-        ],
-      } as PlayerWithMetadata,
-      {
-        player_id: '3',
-        player_name: 'MS Dhoni',
-        role: 'all-rounder',
-        total_matches: 135,
-        total_runs_scored: 6200,
-        total_wickets: 50,
-        batting_average: 50.8,
-        strike_rate: 138.2,
-        recentMatches: [
-          { performance: 'excellent' },
-          { performance: 'poor' },
-          { performance: 'good' },
-          { performance: 'excellent' },
-          { performance: 'good' },
-        ],
-        nextMatch: {
-          opponent: 'Pakistan',
-          date: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString(),
-          format: 'T20',
-        },
-        developmentFocus: [
-          { icon: '🎯', name: 'Consistency', priority: 'medium' },
-          { icon: '🛡️', name: 'Defensive Batting', priority: 'low' },
-        ],
-      } as PlayerWithMetadata,
-    ]
+    // Return empty array - parent component should provide real players
+    return []
   }
 
-  return (props.players || []).map(enrichPlayerData) as PlayerWithMetadata[]
+  return props.players.map(enrichPlayerData) as PlayerWithMetadata[]
 })
 
 // Filtered and sorted players
@@ -498,6 +425,34 @@ const totalMatches = computed(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: var(--space-4);
+}
+
+.empty-state-no-players {
+  grid-column: 1 / -1;
+  padding: var(--space-12) var(--space-4);
+  text-align: center;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 2px dashed var(--color-border);
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: var(--space-4);
+  opacity: 0.3;
+}
+
+.empty-state-no-players .empty-message {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.empty-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .empty-state {

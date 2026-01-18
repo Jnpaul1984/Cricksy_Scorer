@@ -6,7 +6,13 @@
     </div>
 
     <!-- Player Selection -->
-    <div class="player-selection">
+    <div v-if="allPlayers.length === 0" class="empty-state-no-players">
+      <div class="empty-icon">📊</div>
+      <p class="empty-message">Player Database Unavailable</p>
+      <p class="empty-hint">Player comparison will be available once the feature is fully implemented</p>
+    </div>
+
+    <div v-else class="player-selection">
       <div v-for="(slot, idx) in 3" :key="idx" class="player-slot">
         <div v-if="selectedPlayers[idx]" class="player-selected">
           <div class="player-header">
@@ -201,42 +207,8 @@ const compTabs = [
   { id: 'h2h' as const, icon: '⚡', label: 'H2H' },
 ]
 
-// Mock player database
-function generatePlayers(): Player[] {
-  const names = [
-    { name: 'Virat Kohli', team: 'India', initials: 'VK' },
-    { name: 'Babar Azam', team: 'Pakistan', initials: 'BA' },
-    { name: 'Joe Root', team: 'England', initials: 'JR' },
-    { name: 'Steve Smith', team: 'Australia', initials: 'SS' },
-    { name: 'Rohit Sharma', team: 'India', initials: 'RS' },
-    { name: 'Kane Williamson', team: 'New Zealand', initials: 'KW' },
-  ]
-
-  return names.map((p, i) => ({
-    id: `p${i}`,
-    name: p.name,
-    team: p.team,
-    initials: p.initials,
-    batting: {
-      runs: Math.floor(Math.random() * 8000) + 2000,
-      average: Math.random() * 15 + 35,
-      strikeRate: Math.random() * 40 + 110,
-      centuries: Math.floor(Math.random() * 25) + 5,
-      fifties: Math.floor(Math.random() * 40) + 15,
-    },
-    bowling: {
-      wickets: Math.floor(Math.random() * 250),
-      economy: Math.random() * 4 + 6,
-      average: Math.random() * 15 + 25,
-      bestFigures: `${Math.floor(Math.random() * 6)}/{{Math.floor(Math.random() * 30)}}`,
-    },
-    form: Array.from({ length: 10 }, () => (Math.random() > 0.4 ? 'W' : 'L')),
-    consistency: Math.random() * 40 + 60,
-    experience: Math.floor(Math.random() * 10) + 5,
-  }))
-}
-
-const allPlayers = computed(() => generatePlayers())
+// Player database (empty - should be provided via API or props)
+const allPlayers = computed<Player[]>(() => [])
 
 const availablePlayers = computed(() =>
   allPlayers.value.filter((p) => !selectedPlayers.value.find((sp) => sp.id === p.id))
@@ -351,6 +323,34 @@ function getRadarPoints(player: Player): string {
 
 .comp-subtitle {
   margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* Empty State */
+.empty-state-no-players {
+  padding: var(--space-12) var(--space-4);
+  text-align: center;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 2px dashed var(--color-border);
+  margin: var(--space-6) 0;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: var(--space-4);
+  opacity: 0.3;
+}
+
+.empty-state-no-players .empty-message {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+
+.empty-hint {
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }

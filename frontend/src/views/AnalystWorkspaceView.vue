@@ -408,7 +408,7 @@ const lastSyncLabel = ref('Just now')
 const summary = reactive({
   avgRunsPerOver: 7.8,
   wicketsInPhase: 12,
-  topBowler: 'J. Smith'
+  topBowler: null as string | null
 })
 
 // Match type with trend data for visualization (extends backend schema)
