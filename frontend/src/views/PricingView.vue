@@ -18,6 +18,33 @@ onMounted(async () => {
   }
 })
 
+// Retry function
+const retryFetch = async () => {
+  await pricingStore.fetchPricing()
+}
+
+// Error message formatting
+const errorMessage = computed(() => {
+  if (!pricingStore.error) return ''
+  
+  const isDev = import.meta.env.DEV
+  const status = pricingStore.httpStatus
+  
+  if (isDev) {
+    // Show technical details in dev
+    return `Error ${status || 'Unknown'}: ${pricingStore.error}`
+  } else {
+    // User-friendly message in production
+    if (status === 404) {
+      return 'Pricing information is currently unavailable.'
+    } else if (status && status >= 500) {
+      return 'Our pricing service is temporarily down. Please try again in a few moments.'
+    } else {
+      return 'Unable to load pricing plans at this time.'
+    }
+  }
+})
+
 // ============================================================================
 // Production API Warning Detection
 // ============================================================================
@@ -94,7 +121,20 @@ const scoringIsFreeBanner = computed(() => pricingStore.scoringIsFree)
 
     <!-- Error State -->
     <div v-else-if="pricingStore.error" class="pricing-error">
-      <p>Unable to load pricing. Please try again later.</p>
+      <div style="max-width: 600px; margin: 40px auto; text-align: center; padding: 20px;">
+        <p style="font-size: 1.1em; color: #dc2626; margin-bottom: 16px;">{{ errorMessage }}</p>
+        <button 
+          @click="retryFetch" 
+          :disabled="pricingStore.loading"
+          style="padding: 10px 24px; font-size: 1em; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;"
+          :style="pricingStore.loading ? 'opacity: 0.6; cursor: not-allowed;' : ''"
+        >
+          {{ pricingStore.loading ? 'Retrying...' : '🔄 Retry' }}
+        </button>
+        <p v-if="import.meta.env.DEV" style="margin-top: 16px; font-size: 0.85em; color: #666;">
+          Dev Info: Check console for details. Last attempt: {{ pricingStore.lastFetchAttempt }}
+        </p>
+      </div>
     </div>
 
     <!-- Pricing Content -->

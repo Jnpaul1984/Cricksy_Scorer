@@ -48,6 +48,8 @@ export const usePricingStore = defineStore('pricing', () => {
   const lastUpdated = ref<string>('');
   const loading = ref<boolean>(false);
   const error = ref<string | null>(null);
+  const lastFetchAttempt = ref<string | null>(null);
+  const httpStatus = ref<number | null>(null);
 
   // ============================================================================
   // Computed - Display Plans
@@ -116,6 +118,8 @@ export const usePricingStore = defineStore('pricing', () => {
   async function fetchPricing() {
     loading.value = true;
     error.value = null;
+    httpStatus.value = null;
+    lastFetchAttempt.value = new Date().toISOString();
 
     try {
       const response: AllPricingResponse = await getAllPricing();
@@ -125,6 +129,7 @@ export const usePricingStore = defineStore('pricing', () => {
       scoringIsFree.value = response.scoring_is_free;
       contractVersion.value = response.contract_version;
       lastUpdated.value = response.last_updated;
+      httpStatus.value = 200;
 
       // Cache in localStorage for offline resilience
       if (typeof window !== 'undefined') {
@@ -132,18 +137,26 @@ export const usePricingStore = defineStore('pricing', () => {
         localStorage.setItem('cricksy_pricing_cached_at', new Date().toISOString());
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch pricing';
+      // Extract HTTP status if available
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch pricing';
+      const statusMatch = errorMessage.match(/returned (\d+)/);
+      if (statusMatch) {
+        httpStatus.value = parseInt(statusMatch[1]);
+      }
+      
+      error.value = errorMessage;
       
       // Production-grade error logging
       console.error('❌ Pricing fetch failed:', err);
       console.error('Attempted endpoint: /pricing');
-      console.error('Check that backend is running and CORS is configured');
+      console.error('API_BASE:', import.meta.env.VITE_API_BASE || 'not set');
+      console.error('Last attempt:', lastFetchAttempt.value);
       
       if (err instanceof Error) {
         console.error('Error details:', {
           message: err.message,
           name: err.name,
-          stack: err.stack?.split('\n').slice(0, 3)
+          stack: import.meta.env.DEV ? err.stack?.split('\n').slice(0, 5) : 'Hidden in production'
         });
       }
 
@@ -151,13 +164,18 @@ export const usePricingStore = defineStore('pricing', () => {
       if (typeof window !== 'undefined') {
         const cached = localStorage.getItem('cricksy_pricing_cache');
         if (cached) {
-          const cachedData: AllPricingResponse = JSON.parse(cached);
-          individualPlans.value = cachedData.individual_plans;
-          venuePlans.value = cachedData.venue_plans;
-          scoringIsFree.value = cachedData.scoring_is_free;
-          contractVersion.value = cachedData.contract_version;
-          lastUpdated.value = cachedData.last_updated;
-          console.warn('✅ Using cached pricing data from:', localStorage.getItem('cricksy_pricing_cached_at'));
+          try {
+            const cachedData: AllPricingResponse = JSON.parse(cached);
+            individualPlans.value = cachedData.individual_plans;
+            venuePlans.value = cachedData.venue_plans;
+            scoringIsFree.value = cachedData.scoring_is_free;
+            contractVersion.value = cachedData.contract_version;
+            lastUpdated.value = cachedData.last_updated;
+            console.warn('✅ Using cached pricing data from:', localStorage.getItem('cricksy_pricing_cached_at'));
+            error.value = null; // Clear error since we have cached data
+          } catch (parseError) {
+            console.error('❌ Failed to parse cached pricing:', parseError);
+          }
         } else {
           console.error('❌ No cached pricing data available. User will see empty state.');
         }
@@ -285,6 +303,8 @@ export const usePricingStore = defineStore('pricing', () => {
     lastUpdated,
     loading,
     error,
+    httpStatus,
+    lastFetchAttempt,
 
     // Computed
     displayPlans,

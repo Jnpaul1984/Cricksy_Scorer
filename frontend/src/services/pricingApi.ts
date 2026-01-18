@@ -88,18 +88,66 @@ export interface AllPricingResponse {
  * @throws Error if API call fails
  */
 export async function getAllPricing(): Promise<AllPricingResponse> {
-  const response = await fetch(`${API_BASE}/pricing`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  const url = `${API_BASE}/pricing`;
+  
+  // Production-grade logging
+  console.log('🔍 Fetching pricing from:', url);
+  
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch pricing: ${response.status} ${response.statusText}`);
+    console.log('📡 Pricing API response status:', response.status, response.statusText);
+
+    if (!response.ok) {
+      // Read response body for debugging
+      const errorText = await response.text().catch(() => 'Unable to read response');
+      const errorPreview = errorText.substring(0, 200);
+      
+      console.error('❌ Pricing API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        url,
+        preview: errorPreview
+      });
+      
+      throw new Error(
+        `Pricing API returned ${response.status}: ${errorPreview}`
+      );
+    }
+
+    const data = await response.json();
+    
+    // Validate response shape
+    if (!data.individual_plans || !Array.isArray(data.individual_plans)) {
+      console.error('❌ Invalid pricing response - missing individual_plans array:', data);
+      throw new Error('Invalid pricing response format');
+    }
+    
+    if (!data.venue_plans || !Array.isArray(data.venue_plans)) {
+      console.error('❌ Invalid pricing response - missing venue_plans array:', data);
+      throw new Error('Invalid pricing response format');
+    }
+    
+    console.log('✅ Pricing loaded:', {
+      individualPlans: data.individual_plans.length,
+      venuePlans: data.venue_plans.length,
+      scoringIsFree: data.scoring_is_free
+    });
+
+    return data;
+  } catch (error) {
+    // Re-throw with context
+    if (error instanceof Error) {
+      console.error('❌ Pricing fetch failed:', error.message);
+      throw error;
+    }
+    throw new Error('Unknown error fetching pricing');
   }
-
-  return response.json();
 }
 
 /**

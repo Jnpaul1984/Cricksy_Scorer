@@ -81,6 +81,7 @@ backend_debug_me.py
 *_COMPLETE.md
 *_DELIVERY.md
 *_SUMMARY*.md
+*_ANALYSIS.md
 *_GUIDE.md
 *_QUICKSTART.md
 *_REFERENCE*.md
@@ -94,6 +95,7 @@ DEPLOYMENT_*.md
 TOURNAMENT_*.md
 FRAME_*.md
 VIDEO_*.md
+PRICING_*.md
 TESTING.md
 DOCS_INDEX.md
 EXECUTIVE_SUMMARY.md
