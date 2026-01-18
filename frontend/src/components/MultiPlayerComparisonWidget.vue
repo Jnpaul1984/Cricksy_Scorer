@@ -229,21 +229,11 @@ const bowlingStats: Record<string, (p: Player) => string | number> = {
   'Best Figures': (p) => p.bowling.bestFigures,
 }
 
+// Head-to-head records - NO FAKE DATA
+// Required: GET /players/head-to-head
 const headToHeadRecords = computed(() => {
-  const records = []
-  for (let i = 0; i < selectedPlayers.value.length; i++) {
-    for (let j = i + 1; j < selectedPlayers.value.length; j++) {
-      const p1 = selectedPlayers.value[i]
-      const p2 = selectedPlayers.value[j]
-      records.push({
-        player1: p1.name,
-        player2: p2.name,
-        p1Wins: Math.floor(Math.random() * 5) + 2,
-        p2Wins: Math.floor(Math.random() * 5) + 2,
-      })
-    }
-  }
-  return records
+  // Return empty array - real H2H data must come from backend
+  return []
 })
 
 function addPlayer(slotIdx: number) {

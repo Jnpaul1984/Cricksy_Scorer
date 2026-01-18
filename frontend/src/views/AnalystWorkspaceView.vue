@@ -405,9 +405,11 @@ const tabs: { value: AnalystTab; label: string }[] = [
 
 const lastSyncLabel = ref('Just now')
 
+// Summary metrics - NO FAKE DATA
+// Required: GET /analyst/summary
 const summary = reactive({
-  avgRunsPerOver: 7.8,
-  wicketsInPhase: 12,
+  avgRunsPerOver: null as number | null,
+  wicketsInPhase: null as number | null,
   topBowler: null as string | null
 })
 
@@ -439,28 +441,9 @@ const matches = ref<AnalystMatch[]>([])
 const matchesLoading = ref(false)
 const matchesError = ref<string | null>(null)
 
-const players = ref([
-  {
-    id: 'p1',
-    name: 'R. Singh',
-    role: 'Batter',
-    innings: 8,
-    runs: 312,
-    strikeRate: 134.2,
-    wickets: 0,
-    economy: '—'
-  },
-  {
-    id: 'p2',
-    name: 'K. Thomas',
-    role: 'All-rounder',
-    innings: 7,
-    runs: 198,
-    strikeRate: 128.5,
-    wickets: 9,
-    economy: 7.2
-  }
-])
+// Players list - NO FAKE DATA
+// Required: GET /analyst/players
+const players = ref<any[]>([])
 
 // Computed
 const filteredMatches = computed(() => {

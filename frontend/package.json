@@ -19,6 +19,8 @@
     "test:e2e:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\run-e2e-dev.ps1",
     "cy:open": "cypress open",
     "cy:run": "cypress run",
+    "guard:fake-data": "node ../scripts/check-fake-data.js",
+    "pre-commit": "npm run guard:fake-data && npm run type-check",
     "checklist:status": "python ../scripts/checklist.py status",
     "checklist:status:week5": "python ../scripts/checklist.py status --week 5",
     "checklist:next": "python ../scripts/checklist.py next",

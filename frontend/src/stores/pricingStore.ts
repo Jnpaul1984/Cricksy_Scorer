@@ -133,7 +133,19 @@ export const usePricingStore = defineStore('pricing', () => {
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch pricing';
-      console.error('Pricing fetch error:', err);
+      
+      // Production-grade error logging
+      console.error('❌ Pricing fetch failed:', err);
+      console.error('Attempted endpoint: /pricing');
+      console.error('Check that backend is running and CORS is configured');
+      
+      if (err instanceof Error) {
+        console.error('Error details:', {
+          message: err.message,
+          name: err.name,
+          stack: err.stack?.split('\n').slice(0, 3)
+        });
+      }
 
       // Fallback to cached data if available
       if (typeof window !== 'undefined') {
@@ -145,7 +157,9 @@ export const usePricingStore = defineStore('pricing', () => {
           scoringIsFree.value = cachedData.scoring_is_free;
           contractVersion.value = cachedData.contract_version;
           lastUpdated.value = cachedData.last_updated;
-          console.warn('Using cached pricing data from:', localStorage.getItem('cricksy_pricing_cached_at'));
+          console.warn('✅ Using cached pricing data from:', localStorage.getItem('cricksy_pricing_cached_at'));
+        } else {
+          console.error('❌ No cached pricing data available. User will see empty state.');
         }
       }
     } finally {

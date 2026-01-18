@@ -30,7 +30,22 @@ function getApiBaseFromUrl(): string {
 const URL_OVERRIDE = getApiBaseFromUrl();
 
 export const API_BASE = (URL_OVERRIDE || VITE_BASE || LEGACY_BASE || RUNTIME_ORIGIN || '').replace(/\/+$/, '');
-console.info('API_BASE', API_BASE, '(URL override:', URL_OVERRIDE || 'none', ')');
+
+// Production-grade logging for API_BASE resolution
+const isProduction = import.meta.env.PROD;
+if (isProduction && API_BASE === RUNTIME_ORIGIN && !URL_OVERRIDE) {
+  console.warn(
+    '⚠️ PRODUCTION WARNING: API_BASE fell back to window.origin.',
+    'This means VITE_API_BASE and VITE_API_BASE_URL are not set.',
+    'Expected: API endpoint URL. Got:', API_BASE
+  );
+}
+console.info('API_BASE resolved to:', API_BASE, '| Source:', 
+  URL_OVERRIDE ? '?apiBase override' : 
+  VITE_BASE ? 'VITE_API_BASE' : 
+  LEGACY_BASE ? 'VITE_API_BASE_URL' : 
+  'window.origin (fallback)'
+);
 
 export const TOKEN_STORAGE_KEY = 'cricksy_token';
 

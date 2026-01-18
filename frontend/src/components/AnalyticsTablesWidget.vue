@@ -235,27 +235,9 @@ const chartTypes = [
   { id: 'scatter' as const, label: '⚡ Scatter', description: 'Strike rate analysis' },
 ]
 
-// Generate mock cricket data
-const generateManhattanData = (): DeliveryData[] => {
-  const types = ['dot', 'single', 'double', 'boundary', 'wicket']
-  const weights = [0.25, 0.35, 0.2, 0.15, 0.05]
-  return Array.from({ length: 120 }, () => {
-    const rand = Math.random()
-    let cumWeight = 0
-    for (let i = 0; i < types.length; i++) {
-      cumWeight += weights[i]
-      if (rand <= cumWeight) {
-        const type = types[i]
-        const runs =
-          type === 'dot' ? 0 : type === 'single' ? 1 : type === 'double' ? 2 : type === 'wicket' ? 0 : Math.random() > 0.5 ? 4 : 6
-        return { runs, type }
-      }
-    }
-    return { runs: 0, type: 'dot' }
-  })
-}
-
-const manhattan = ref(generateManhattanData())
+// Delivery data - NO FAKE DATA
+// Required: GET /games/{id}/deliveries with proper aggregation
+const manhattan = ref<DeliveryData[]>([])
 
 // Worm chart data (cumulative)
 const wormChartWidth = 600
@@ -290,28 +272,9 @@ const totalDeliveries = computed(() => manhattan.value.length)
 const totalWickets = computed(() => manhattan.value.filter((d) => d.type === 'wicket').length)
 const runRate = computed(() => (totalRuns.value / totalDeliveries.value) * 6)
 
-// Scatter chart data (strike rate per match)
-const scatterWidth = 500
-const scatterHeight = 300
-const matches = 20
-
-const generateScatterData = (): ScatterPoint[] => {
-  return Array.from({ length: matches }, () => {
-    const balls = Math.floor(Math.random() * 60) + 20
-    const maxRuns = Math.floor(balls * 1.2)
-    const runs = Math.floor(Math.random() * maxRuns)
-    const sr = (runs / balls) * 100
-
-    const x = (balls / 100) * scatterWidth
-    const y = scatterHeight - (runs / 100) * scatterHeight
-
-    const colorClass = sr > 120 ? 'high' : sr > 90 ? 'normal' : 'low'
-
-    return { x, y, balls, runs, sr, colorClass }
-  })
-}
-
-const scatterPoints = ref(generateScatterData())
+// Scatter chart data - NO FAKE DATA
+// Required: GET /games/{id}/deliveries aggregated by match
+const scatterPoints = ref<ScatterPoint[]>([])
 
 // Color mapping
 function getRunColor(runs: number): string {

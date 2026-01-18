@@ -3,6 +3,7 @@ import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { usePricingStore } from '@/stores/pricingStore'
+import { API_BASE } from '@/services/api'
 
 // ============================================================================
 // Pricing Store - Single Source of Truth
@@ -15,6 +16,19 @@ onMounted(async () => {
   if (pricingStore.displayPlans.length === 0) {
     await pricingStore.fetchPricing()
   }
+})
+
+// ============================================================================
+// Production API Warning Detection
+// ============================================================================
+
+const isProduction = import.meta.env.PROD
+const isWindowOriginFallback = computed(() => {
+  if (!isProduction) return false
+  const windowOrigin = typeof window !== 'undefined' 
+    ? `${window.location.protocol}//${window.location.host}` 
+    : ''
+  return API_BASE === windowOrigin
 })
 
 // ============================================================================
@@ -66,6 +80,13 @@ const scoringIsFreeBanner = computed(() => pricingStore.scoringIsFree)
 
 <template>
   <div class="pricing">
+    <!-- Production API Warning Banner -->
+    <div v-if="isWindowOriginFallback" class="api-warning-banner" style="background: #ff6b6b; color: white; padding: 12px; text-align: center; font-weight: 600; margin-bottom: 16px;">
+      ⚠️ WARNING: API_BASE misconfigured in production. Using window.origin fallback. Pricing may not load correctly.
+      <br>
+      <span style="font-size: 0.85em; font-weight: 400;">Configure VITE_API_BASE in environment variables.</span>
+    </div>
+
     <!-- Loading State -->
     <div v-if="pricingStore.loading" class="pricing-loading">
       <p>Loading pricing plans...</p>

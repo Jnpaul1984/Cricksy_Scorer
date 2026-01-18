@@ -110,30 +110,18 @@ const formatStat = (value: number | null | undefined, decimals = 2): string => {
   return value.toFixed(decimals)
 }
 
-// Generate simulated match data (in production, would fetch from API)
-const generateMatchData = (totalMatches: number) => {
-  const matches: Array<{ matchNum: number; runs: number; wickets: number }> = []
-  let cumulativeRuns = 0
-  let cumulativeWickets = 0
-
-  for (let i = 1; i <= Math.min(totalMatches, 20); i++) {
-    const runs = Math.floor(Math.random() * 80) + 10 // 10-90 runs per match
-    const wickets = Math.random() > 0.7 ? Math.floor(Math.random() * 3) : 0 // Sometimes no wickets
-
-    cumulativeRuns += runs
-    cumulativeWickets += wickets
-
-    matches.push({
-      matchNum: i,
-      runs,
-      wickets,
-    })
-  }
-
-  return matches
+// Match data - NO FAKE DATA
+// Required: GET /players/{id}/match-history
+interface MatchDataPoint {
+  matchNum: number
+  runs: number
+  wickets: number
 }
 
-const matchData = computed(() => generateMatchData(props.profile?.total_matches || 0))
+const matchData = computed((): MatchDataPoint[] => {
+  // Return empty array - data must come from backend
+  return []
+})
 
 // Cumulative runs chart
 const cumulativeRunsChart = computed(() => {

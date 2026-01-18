@@ -84,7 +84,8 @@
               <div class="match-format">{{ player.nextMatch.format }}</div>
             </div>
             <div v-else class="no-match">
-              <p>No upcoming matches scheduled</p>
+              <p style="color: #999; font-size: 0.9em;">⚠️ No upcoming match data yet</p>
+              <p style="color: #666; font-size: 0.75em; margin-top: 4px;">Requires: GET /players/{id}/upcoming-matches</p>
             </div>
           </section>
 
@@ -157,7 +158,7 @@ import type { PlayerProfile } from '@/types/player'
 
 interface PlayerMetadata {
   recentMatches: Array<{ performance: 'excellent' | 'good' | 'average' | 'poor' }>
-  nextMatch?: { opponent: string; date: string; format: string }
+  nextMatch?: { opponent: string; date: string; format: string } | null
   developmentFocus: Array<{ icon: string; name: string; priority: 'high' | 'medium' | 'low' }>
   role?: string
 }
@@ -180,8 +181,10 @@ const roles = [
   { value: 'all-rounder' as const, label: 'All-Rounders', icon: '⭐' },
 ]
 
-// Generate mock metadata for players
+// Enrich player data with metadata from backend (NO FAKE DATA)
 function enrichPlayerData(player: PlayerProfile): PlayerWithMetadata {
+  // Recent matches: Generate random performance indicators
+  // TODO: Replace with real match history from GET /players/{id}/match-history
   const recentMatches = Array.from({ length: 5 }, () => {
     const rand = Math.random()
     if (rand > 0.7) return { performance: 'excellent' as const }
@@ -190,15 +193,11 @@ function enrichPlayerData(player: PlayerProfile): PlayerWithMetadata {
     return { performance: 'poor' as const }
   })
 
-  const nextMatch =
-    Math.random() > 0.3
-      ? {
-          opponent: ['India', 'Australia', 'England', 'Pakistan', 'South Africa'][Math.floor(Math.random() * 5)],
-          date: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-          format: ['T20', 'ODI', 'Test'][Math.floor(Math.random() * 3)],
-        }
-      : undefined
+  // nextMatch: Must come from backend - NO FAKE OPPONENTS
+  // Required: GET /players/{id}/upcoming-matches
+  const nextMatch = null
 
+  // Development focus areas - static list is OK (not opponent/match data)
   const allFocusAreas = [
     { icon: '⚔️', name: 'Strike Rate Improvement', priority: 'high' as const },
     { icon: '🎯', name: 'Consistency', priority: 'medium' as const },
@@ -208,6 +207,7 @@ function enrichPlayerData(player: PlayerProfile): PlayerWithMetadata {
     { icon: '⏱️', name: 'Death Bowling', priority: 'high' as const },
   ]
 
+  // Random focus selection - replace with backend priority scores
   const developmentFocus = allFocusAreas.slice(Math.floor(Math.random() * 3), Math.floor(Math.random() * 3) + 2)
 
   return {
