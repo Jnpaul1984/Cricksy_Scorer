@@ -63,7 +63,13 @@ async def test_emit_state_update():
     live_bus.set_socketio_server(mock_sio)
 
     game_id = "game123"
-    snapshot = {"status": "in_progress", "runs": 42}
+    snapshot = {
+        "status": "in_progress",
+        "runs": 42,
+        "current_striker_id": "striker-1",
+        "current_non_striker_id": "non-striker-1",
+        "current_bowler_id": "bowler-1",
+    }
 
     await live_bus.emit_state_update(game_id, snapshot)
 
@@ -71,6 +77,10 @@ async def test_emit_state_update():
     assert mock_sio.emitted_events[0]["event"] == "state:update"
     assert mock_sio.emitted_events[0]["data"] == {"id": game_id, "snapshot": snapshot}
     assert mock_sio.emitted_events[0]["room"] == game_id
+    emitted_snapshot = mock_sio.emitted_events[0]["data"]["snapshot"]
+    assert "current_striker_id" in emitted_snapshot
+    assert "current_non_striker_id" in emitted_snapshot
+    assert "current_bowler_id" in emitted_snapshot
 
 
 @pytest.mark.asyncio

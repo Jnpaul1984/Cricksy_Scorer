@@ -27,3 +27,13 @@ def test_health(client: TestClient):
         assert str(data["status"]).lower() in {"ok", "healthy", "up"}
     else:
         assert "ok" in resp.text.lower()
+
+
+def test_healthz(client: TestClient):
+    resp = client.get("/healthz")
+    assert resp.status_code == 200
+    data = (
+        resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+    )
+    assert isinstance(data, dict)
+    assert str(data.get("status", "")).lower() == "ok"
