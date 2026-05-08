@@ -27,3 +27,10 @@ def test_health(client: TestClient):
         assert str(data["status"]).lower() in {"ok", "healthy", "up"}
     else:
         assert "ok" in resp.text.lower()
+
+
+def test_healthz(client: TestClient):
+    """Regression: /healthz must be a stable alias of /health with the same locked contract."""
+    resp = client.get("/healthz")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
