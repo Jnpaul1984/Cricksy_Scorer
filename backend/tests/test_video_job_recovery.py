@@ -92,7 +92,9 @@ async def test_get_job_marks_stale_and_exposes_retryable(
 
 
 @pytest.mark.asyncio
-async def test_retry_endpoint_requeues_failed_job(async_client, db_session, auth_headers, test_video_session):
+async def test_retry_endpoint_requeues_failed_job(
+    async_client, db_session, auth_headers, test_video_session
+) -> None:
     test_video_session.s3_bucket = "test-bucket"
     test_video_session.s3_key = "coach_plus/coach/test/session/original.mp4"
     test_video_session.status = VideoSessionStatus.failed
@@ -154,7 +156,7 @@ async def test_retry_endpoint_blocks_completed_jobs(
         headers=auth_headers,
     )
     assert resp.status_code == 409
-    assert "Cannot retry completed job" in resp.json()["detail"]
+    assert "Cannot retry successfully completed job" in resp.json()["detail"]
 
 
 @pytest.mark.asyncio

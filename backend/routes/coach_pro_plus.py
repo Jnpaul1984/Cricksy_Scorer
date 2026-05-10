@@ -747,16 +747,18 @@ async def get_analysis_job(
         "camera_view": session.camera_view,
         "retryable": is_retryable_video_job(job),
     }
+    job_read = job_read.model_copy(update=updates)
 
     # Best-effort: attach presigned URLs for results and video
     try:
+        url_updates: dict[str, Any] = {}
         if job.quick_results_s3_key:
             quick_url = s3_service.generate_presigned_get_url(
                 bucket=settings.S3_COACH_VIDEOS_BUCKET,
                 key=job.quick_results_s3_key,
                 expires_in=settings.S3_STREAM_URL_EXPIRES_SECONDS,
             )
-            updates["quick_results_url"] = quick_url
+            url_updates["quick_results_url"] = quick_url
 
         if job.deep_results_s3_key:
             deep_url = s3_service.generate_presigned_get_url(
@@ -764,7 +766,7 @@ async def get_analysis_job(
                 key=job.deep_results_s3_key,
                 expires_in=settings.S3_STREAM_URL_EXPIRES_SECONDS,
             )
-            updates["deep_results_url"] = deep_url
+            url_updates["deep_results_url"] = deep_url
 
         # Attach video streaming URL for this single job
         if session.s3_bucket and session.s3_key:
@@ -780,13 +782,19 @@ async def get_analysis_job(
                 bucket=session.s3_bucket,
                 key=session.s3_key,
             )
+            url_updates["video_stream"] = VideoStreamUrlRead(
+                video_url=url,
+                expires_in=expires_in,
+                bucket=session.s3_bucket,
+                key=session.s3_key,
+            )
+
+        if url_updates:
+            job_read = job_read.model_copy(update=url_updates)
 
     except Exception:
         # Graceful degradation: preserve existing response shape without URLs
         pass
-
-    if updates:
-        job_read = job_read.model_copy(update=updates)
 
     return job_read
 

@@ -20,8 +20,12 @@ STALE_CANDIDATE_STATUSES = {
     VideoAnalysisJobStatus.deep_running,
 }
 
+# Stale/orphaned jobs are normalized to `failed` with stage=STALE_ORPHANED,
+# so allowing retries from `failed` covers both explicit failures and stale recoveries.
 RETRYABLE_STATUSES = {VideoAnalysisJobStatus.failed}
 SUCCESS_TERMINAL_STATUSES = {VideoAnalysisJobStatus.done, VideoAnalysisJobStatus.completed}
+MAX_STALE_PROGRESS_PCT = 99
+MIN_STALE_THRESHOLD_SECONDS = 60
 
 
 def _now_utc() -> datetime:
@@ -29,7 +33,8 @@ def _now_utc() -> datetime:
 
 
 def get_stale_threshold_seconds() -> int:
-    return max(int(settings.COACH_PLUS_STALE_JOB_THRESHOLD_SECONDS), 60)
+    # Guardrail against accidental too-low values that would mark active jobs stale too quickly.
+    return max(int(settings.COACH_PLUS_STALE_JOB_THRESHOLD_SECONDS), MIN_STALE_THRESHOLD_SECONDS)
 
 
 def is_retryable_video_job(job: VideoAnalysisJob) -> bool:
@@ -49,6 +54,8 @@ def _job_reference_time(job: VideoAnalysisJob) -> datetime:
         or job.updated_at
         or job.created_at
     )
+    if ts is None:
+        return _now_utc()
     if ts.tzinfo is None:
         return ts.replace(tzinfo=UTC)
     return ts
@@ -65,7 +72,7 @@ def _mark_stale(job: VideoAnalysisJob, *, now: datetime, threshold_seconds: int)
     reference_time = _job_reference_time(job).isoformat()
     job.status = VideoAnalysisJobStatus.failed
     job.stage = "STALE_ORPHANED"
-    job.progress_pct = min(int(job.progress_pct or 0), 99)
+    job.progress_pct = min(int(job.progress_pct or 0), MAX_STALE_PROGRESS_PCT)
     job.completed_at = now
     job.error_message = (
         f"Marked stale/orphaned after {threshold_seconds}s in status={previous_status} "
@@ -120,7 +127,7 @@ async def retry_video_analysis_job(
     current_time = now or _now_utc()
 
     if job.status in SUCCESS_TERMINAL_STATUSES:
-        raise ValueError(f"Cannot retry completed job in status={job.status.value}")
+        raise ValueError(f"Cannot retry successfully completed job in status={job.status.value}")
     if job.status not in RETRYABLE_STATUSES:
         raise ValueError(f"Job status {job.status.value} is not retryable")
     if not is_retryable_video_job(job):
