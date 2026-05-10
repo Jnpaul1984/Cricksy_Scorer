@@ -951,6 +951,50 @@ class CoachingSessionRead(CoachingSessionBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class MentalQuestionnaireQuestionRead(BaseModel):
+    id: int
+    category: str
+    question_text: str
+    display_order: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MentalQuestionnaireCategoryTemplateRead(BaseModel):
+    category: str
+    questions: list[MentalQuestionnaireQuestionRead]
+
+
+class MentalQuestionnaireTemplateRead(BaseModel):
+    categories: list[MentalQuestionnaireCategoryTemplateRead]
+
+
+class MentalQuestionnaireAnswerInput(BaseModel):
+    question_id: int
+    score: int = Field(ge=1, le=5)
+
+
+class MentalQuestionnaireSubmitRequest(BaseModel):
+    answers: list[MentalQuestionnaireAnswerInput] = Field(min_length=1)
+
+
+class MentalQuestionnaireCategoryScoreRead(BaseModel):
+    category: str
+    average_score: float
+
+
+class MentalQuestionnaireProfileSummaryRead(BaseModel):
+    session_id: str
+    player_id: str
+    submitted_by_user_id: str
+    overall_average_score: float
+    overall_summary: str
+    strengths: list[str]
+    development_areas: list[str]
+    category_scores: list[MentalQuestionnaireCategoryScoreRead]
+    created_at: dt.datetime
+
+
 class AnalyticsQuery(BaseModel):
     entity: Literal["players", "matches", "form", "sessions"]
     player_id: str | None = None
