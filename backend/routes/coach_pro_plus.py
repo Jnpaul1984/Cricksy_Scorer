@@ -24,6 +24,11 @@ from backend.services.video_chunking import (
     create_chunk_specs,
     get_video_duration_from_s3,
 )
+from backend.services.video_job_recovery import (
+    is_retryable_video_job,
+    mark_stale_video_analysis_jobs,
+    retry_video_analysis_job,
+)
 from backend.sql_app.database import get_db
 from backend.sql_app.models import (
     OwnerTypeEnum,
@@ -120,6 +125,7 @@ class VideoAnalysisJobRead(BaseModel):
     progress_pct: int = 0
     error_message: str | None = None
     sqs_message_id: str | None = None
+    retryable: bool = False
 
     # Session context (denormalized for frontend convenience)
     analysis_context: str | None = None
@@ -654,10 +660,13 @@ async def list_analysis_jobs(
             detail="You don't have access to this session",
         )
 
+    # Opportunistic stale/orphan recovery before returning statuses
+    await mark_stale_video_analysis_jobs(db, session_id=session_id)
+
     # List jobs for this session
     result = await db.execute(
         select(VideoAnalysisJob)
-        .options(selectinload(VideoAnalysisJob.session))
+        .options(selectinload(VideoAnalysisJob.session), selectinload(VideoAnalysisJob.chunks))
         .where(VideoAnalysisJob.session_id == session_id)
         .order_by(VideoAnalysisJob.created_at.desc())
     )
@@ -671,6 +680,7 @@ async def list_analysis_jobs(
             update={
                 "analysis_context": session.analysis_context,
                 "camera_view": session.camera_view,
+                "retryable": is_retryable_video_job(job),
             }
         )
         job_reads.append(job_read)
@@ -709,10 +719,12 @@ async def get_analysis_job(
             detail="Insufficient feature access: video_analysis_enabled",
         )
 
+    await mark_stale_video_analysis_jobs(db, job_id=job_id)
+
     # Fetch job (eager-load session to avoid async lazy-load / MissingGreenlet)
     result = await db.execute(
         select(VideoAnalysisJob)
-        .options(selectinload(VideoAnalysisJob.session))
+        .options(selectinload(VideoAnalysisJob.session), selectinload(VideoAnalysisJob.chunks))
         .where(VideoAnalysisJob.id == job_id)
     )
     job = result.scalar_one_or_none()
@@ -730,15 +742,14 @@ async def get_analysis_job(
 
     job_read = VideoAnalysisJobRead.model_validate(job)
 
+    updates = {
+        "analysis_context": session.analysis_context,
+        "camera_view": session.camera_view,
+        "retryable": is_retryable_video_job(job),
+    }
+
     # Best-effort: attach presigned URLs for results and video
     try:
-        # Generate presigned URLs for S3 results if available
-        updates = {}
-
-        # Add session context to job response
-        updates["analysis_context"] = session.analysis_context
-        updates["camera_view"] = session.camera_view
-
         if job.quick_results_s3_key:
             quick_url = s3_service.generate_presigned_get_url(
                 bucket=settings.S3_COACH_VIDEOS_BUCKET,
@@ -770,15 +781,63 @@ async def get_analysis_job(
                 key=session.s3_key,
             )
 
-        # Apply all updates at once if any
-        if updates:
-            job_read = job_read.model_copy(update=updates)
-
     except Exception:
         # Graceful degradation: preserve existing response shape without URLs
         pass
 
+    if updates:
+        job_read = job_read.model_copy(update=updates)
+
     return job_read
+
+
+@router.post("/analysis-jobs/{job_id}/retry", response_model=VideoAnalysisJobRead)
+async def retry_analysis_job(
+    job_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> VideoAnalysisJobRead:
+    """Retry a failed/stale video analysis job without deleting prior artifacts."""
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    await mark_stale_video_analysis_jobs(db, job_id=job_id)
+
+    result = await db.execute(
+        select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session), selectinload(VideoAnalysisJob.chunks))
+        .where(VideoAnalysisJob.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+
+    session = job.session
+    if current_user.role == RoleEnum.coach_pro_plus and session.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this job",
+        )
+
+    try:
+        job = await retry_video_analysis_job(db, job)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    job_read = VideoAnalysisJobRead.model_validate(job)
+    return job_read.model_copy(
+        update={
+            "analysis_context": session.analysis_context,
+            "camera_view": session.camera_view,
+            "retryable": is_retryable_video_job(job),
+        }
+    )
 
 
 class PdfExportResponse(BaseModel):
