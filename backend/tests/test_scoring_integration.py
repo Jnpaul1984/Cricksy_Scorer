@@ -546,6 +546,31 @@ def test_snapshot_endpoint(client):
     assert "players" in snapshot
 
 
+def test_snapshot_includes_current_player_key_contract_after_delivery(client: TestClient):
+    game_id, batters, bowlers = _bootstrap_game(client)
+    striker_id = batters[0]["id"]
+    non_striker_id = batters[1]["id"]
+    bowler_id = bowlers[0]["id"]
+
+    _post_delivery(
+        client,
+        game_id,
+        {
+            "striker_id": striker_id,
+            "non_striker_id": non_striker_id,
+            "bowler_id": bowler_id,
+            "runs_scored": 1,
+            "runs_off_bat": 0,
+            "is_wicket": False,
+        },
+    )
+
+    snapshot = _snapshot(client, game_id)
+    assert "current_striker_id" in snapshot
+    assert "current_non_striker_id" in snapshot
+    assert "current_bowler_id" in snapshot
+
+
 def test_complete_over_scenario(client):
     """Test scoring a complete over (6 legal balls)."""
     # Create a new game
