@@ -30,10 +30,7 @@ def test_health(client: TestClient):
 
 
 def test_healthz(client: TestClient):
+    """Regression: /healthz must be a stable alias of /health with the same locked contract."""
     resp = client.get("/healthz")
     assert resp.status_code == 200
-    data = (
-        resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-    )
-    assert isinstance(data, dict)
-    assert str(data.get("status", "")).lower() == "ok"
+    assert resp.json() == {"status": "ok"}
