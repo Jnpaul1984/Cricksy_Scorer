@@ -57,10 +57,10 @@ def _is_legal_delivery(delivery: dict[str, Any]) -> bool:
         return False
 
     extras = delivery.get("extras")
-    if isinstance(extras, dict) and (_safe_int(extras.get("wides")) > 0 or _safe_int(extras.get("noballs")) > 0):
-        return False
-
-    return True
+    has_illegal_extras = isinstance(extras, dict) and (
+        _safe_int(extras.get("wides")) > 0 or _safe_int(extras.get("noballs")) > 0
+    )
+    return not has_illegal_extras
 
 
 def _extract_team_names(payload: dict[str, Any]) -> list[str]:
@@ -223,9 +223,7 @@ def _derive_innings_preview(
             wicket_count = 0
             for delivery in normalized_deliveries:
                 wicket = delivery.get("wicket")
-                if isinstance(wicket, dict):
-                    wicket_count += 1
-                elif wicket is True or bool(delivery.get("is_wicket")):
+                if isinstance(wicket, dict) or wicket is True or bool(delivery.get("is_wicket")):
                     wicket_count += 1
             derived_wickets = wicket_count
 
@@ -403,16 +401,20 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
             )
         )
 
-    info = parsed.get("info") if isinstance(parsed.get("info"), dict) else {}
+    info_value = parsed.get("info")
+    info_payload: dict[str, Any] = info_value if isinstance(info_value, dict) else {}
+    result_value = parsed.get("result")
+    result_summary: str | None
+    if isinstance(result_value, dict):
+        result_summary = _as_str(result_value.get("summary"))
+    else:
+        result_summary = _as_str(result_value)
+
     metadata_preview = HistoricalImportMetadataPreview(
-        match_type=_as_str(parsed.get("matchType")) or _as_str(info.get("match_type")),
-        venue=_as_str(parsed.get("venue")) or _as_str(info.get("venue")),
-        date=_as_str(parsed.get("date")) or _first_str(info.get("dates")),
-        result=(
-            _as_str(parsed.get("result", {}).get("summary"))
-            if isinstance(parsed.get("result"), dict)
-            else _as_str(parsed.get("result"))
-        ),
+        match_type=_as_str(parsed.get("matchType")) or _as_str(info_payload.get("match_type")),
+        venue=_as_str(parsed.get("venue")) or _as_str(info_payload.get("venue")),
+        date=_as_str(parsed.get("date")) or _first_str(info_payload.get("dates")),
+        result=result_summary,
     )
 
     player_names = sorted(players_from_teams.union(players_from_innings))
