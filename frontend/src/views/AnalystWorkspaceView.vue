@@ -488,6 +488,123 @@
                       </li>
                     </ul>
                   </section>
+
+                  <!-- Podcast Prep Package -->
+                  <section
+                    v-if="podcastPrepPackage"
+                    id="aw-podcast-prep"
+                    class="aw-podcast-prep"
+                  >
+                    <div class="aw-podcast-prep-header">
+                      <h4 class="aw-detail-section-title">Podcast prep package</h4>
+                      <BaseButton
+                        variant="ghost"
+                        size="sm"
+                        class="aw-podcast-copy-btn"
+                        @click="copyPodcastPrep"
+                      >
+                        {{
+                          podcastCopyStatus === 'copied'
+                            ? 'Copied!'
+                            : podcastCopyStatus === 'error'
+                              ? 'Copy failed — see text below'
+                              : 'Copy package text'
+                        }}
+                      </BaseButton>
+                    </div>
+
+                    <div
+                      v-if="!podcastPrepPackage.hasEnoughData"
+                      class="aw-podcast-insufficient"
+                    >
+                      Add more completed match data to generate this section.
+                    </div>
+
+                    <!-- Episode title -->
+                    <div class="aw-podcast-block">
+                      <p class="aw-podcast-block-label">Episode title</p>
+                      <p class="aw-podcast-block-value">{{ podcastPrepPackage.episodeTitle }}</p>
+                    </div>
+
+                    <!-- Match context -->
+                    <div class="aw-podcast-block">
+                      <p class="aw-podcast-block-label">Match context</p>
+                      <p class="aw-podcast-block-value">
+                        {{ podcastPrepPackage.matchContext ?? 'Not available yet' }}
+                      </p>
+                    </div>
+
+                    <!-- Scoreboard facts -->
+                    <div class="aw-podcast-block">
+                      <p class="aw-podcast-block-label">Scoreboard facts</p>
+                      <ul
+                        v-if="podcastPrepPackage.scoreboardFacts.length > 0"
+                        class="aw-podcast-list"
+                      >
+                        <li
+                          v-for="(fact, i) in podcastPrepPackage.scoreboardFacts"
+                          :key="i"
+                        >
+                          {{ fact }}
+                        </li>
+                      </ul>
+                      <p v-else class="aw-podcast-empty">Not available yet</p>
+                    </div>
+
+                    <!-- Talking points -->
+                    <div class="aw-podcast-block">
+                      <p class="aw-podcast-block-label">Talking points</p>
+                      <ul class="aw-podcast-talking-points">
+                        <li
+                          v-for="tp in podcastPrepPackage.talkingPoints"
+                          :key="tp.id"
+                          class="aw-podcast-tp"
+                        >
+                          <span class="aw-podcast-tp-label">{{ tp.label }}</span>
+                          <span
+                            v-if="tp.text"
+                            class="aw-podcast-tp-text"
+                          >{{ tp.text }}</span>
+                          <span
+                            v-else
+                            class="aw-podcast-tp-empty"
+                          >Insufficient data for this talking point</span>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <!-- Coach discussion prompts -->
+                    <div class="aw-podcast-block">
+                      <p class="aw-podcast-block-label">Coach discussion prompts</p>
+                      <ul class="aw-podcast-list">
+                        <li
+                          v-for="(prompt, i) in podcastPrepPackage.coachPrompts"
+                          :key="i"
+                        >
+                          {{ prompt }}
+                        </li>
+                      </ul>
+                    </div>
+
+                    <!-- Suggested visuals -->
+                    <div class="aw-podcast-block">
+                      <p class="aw-podcast-block-label">Suggested visuals</p>
+                      <ul
+                        v-if="podcastPrepPackage.suggestedVisuals.length > 0"
+                        class="aw-podcast-list"
+                      >
+                        <li
+                          v-for="(visual, i) in podcastPrepPackage.suggestedVisuals"
+                          :key="i"
+                        >
+                          {{ visual }}
+                        </li>
+                      </ul>
+                      <p v-else class="aw-podcast-empty">
+                        Add more completed match data to generate this section
+                      </p>
+                    </div>
+                  </section>
                 </template>
 
                 <!-- No data state -->
@@ -904,6 +1021,201 @@ function getSparklineVariant(match: AnalystMatch): 'positive' | 'negative' | 'ne
   if (impact > 5) return 'positive'
   if (impact < -5) return 'negative'
   return 'default'
+}
+
+// --- Podcast Prep Package ---
+
+interface PodcastTalkingPoint {
+  id: string
+  label: string
+  text: string | null
+}
+
+interface PodcastPrepPackage {
+  episodeTitle: string
+  matchContext: string | null
+  scoreboardFacts: string[]
+  talkingPoints: PodcastTalkingPoint[]
+  coachPrompts: string[]
+  suggestedVisuals: string[]
+  hasEnoughData: boolean
+}
+
+function buildPodcastPrepPackage(detail: MatchCaseStudyResponse): PodcastPrepPackage {
+  const match = detail.match
+
+  // Episode title — derived from real fields only
+  const episodeTitle = match.teams_label
+    ? `${match.teams_label} — ${match.format} (${match.date})`
+    : 'Episode title not available'
+
+  // Match context — result string from real data
+  const matchContext = match.result || null
+
+  // Scoreboard facts — from innings array
+  const scoreboardFacts: string[] = []
+  for (const inns of match.innings) {
+    const rr = inns.run_rate != null ? ` (RR: ${inns.run_rate.toFixed(2)})` : ''
+    scoreboardFacts.push(`${inns.team}: ${inns.runs}/${inns.wickets} in ${inns.overs} overs${rr}`)
+  }
+
+  // Talking points — derived from real loaded fields, null when data is missing
+  const talkingPoints: PodcastTalkingPoint[] = []
+
+  // TP1: Momentum verdict
+  if (detail.momentum_summary?.title && detail.momentum_summary?.subtitle) {
+    talkingPoints.push({
+      id: 'momentum',
+      label: 'Momentum verdict',
+      text: `${detail.momentum_summary.title}. ${detail.momentum_summary.subtitle}`,
+    })
+  } else {
+    talkingPoints.push({ id: 'momentum', label: 'Momentum verdict', text: null })
+  }
+
+  // TP2: Key phase
+  if (detail.key_phase?.title && detail.key_phase?.detail) {
+    talkingPoints.push({
+      id: 'key-phase',
+      label: 'Key phase',
+      text: `${detail.key_phase.title}: ${detail.key_phase.detail}`,
+    })
+  } else {
+    talkingPoints.push({ id: 'key-phase', label: 'Key phase', text: null })
+  }
+
+  // TP3: Best phase by net swing vs par
+  if (detail.phases && detail.phases.length > 0) {
+    const best = [...detail.phases].sort(
+      (a, b) => (b.net_swing_vs_par ?? 0) - (a.net_swing_vs_par ?? 0)
+    )[0]
+    const sign = (best.net_swing_vs_par ?? 0) >= 0 ? '+' : ''
+    const rrStr = best.run_rate != null ? best.run_rate.toFixed(2) : '—'
+    talkingPoints.push({
+      id: 'phase-performance',
+      label: 'Phase performance',
+      text: `The ${best.label} phase yielded ${best.runs}/${best.wickets} at ${rrStr} runs per over (${sign}${best.net_swing_vs_par} vs par). ${best.impact_label}.`,
+    })
+  } else {
+    talkingPoints.push({ id: 'phase-performance', label: 'Phase performance', text: null })
+  }
+
+  // TP4: Player spotlight (top-impact player from real key_players)
+  if (detail.key_players && detail.key_players.length > 0) {
+    const top = detail.key_players[0]
+    const batStr = top.batting
+      ? `${top.batting.runs} runs (SR ${top.batting.strike_rate != null ? top.batting.strike_rate.toFixed(1) : '—'})`
+      : null
+    const bowlStr = top.bowling
+      ? `${top.bowling.wickets}/${top.bowling.runs} (Eco ${top.bowling.economy != null ? top.bowling.economy.toFixed(2) : '—'})`
+      : null
+    const stats = [batStr, bowlStr].filter(Boolean).join(', ')
+    talkingPoints.push({
+      id: 'player-spotlight',
+      label: 'Player spotlight',
+      text: `${top.name} (${top.team}) — ${top.impact_label}${stats ? `. Key figures: ${stats}` : ''}.`,
+    })
+  } else {
+    talkingPoints.push({ id: 'player-spotlight', label: 'Player spotlight', text: null })
+  }
+
+  // Coach discussion prompts — only generated from available fields
+  const coachPrompts: string[] = []
+  if (detail.key_phase?.title) {
+    coachPrompts.push(`What tactical decisions shaped the ${detail.key_phase.title.toLowerCase()}?`)
+  }
+  if (detail.key_players && detail.key_players.length > 0) {
+    coachPrompts.push(
+      `How do you plan for a player like ${detail.key_players[0].name} in future matches?`
+    )
+  }
+  if (detail.phases && detail.phases.length > 0) {
+    const weak = [...detail.phases].sort(
+      (a, b) => (a.net_swing_vs_par ?? 0) - (b.net_swing_vs_par ?? 0)
+    )[0]
+    coachPrompts.push(
+      `What adjustments would improve the ${weak.label.toLowerCase()} performance?`
+    )
+  }
+  if (coachPrompts.length === 0) {
+    coachPrompts.push('Add more completed match data to generate discussion prompts.')
+  }
+
+  // Suggested visuals — only based on sections already rendered in this panel
+  const suggestedVisuals: string[] = []
+  if (match.innings.length > 0) suggestedVisuals.push('Innings scorecard comparison')
+  if (detail.momentum_summary) suggestedVisuals.push('Momentum verdict summary')
+  if (detail.phases && detail.phases.length > 0) suggestedVisuals.push('Phase breakdown table')
+  if (detail.key_players && detail.key_players.length > 0) suggestedVisuals.push('Key player impact cards')
+
+  // Has enough data for a meaningful package?
+  const dataScore =
+    (match.innings.length > 0 ? 1 : 0) +
+    (detail.key_phase ? 1 : 0) +
+    (detail.momentum_summary ? 1 : 0)
+  const hasEnoughData = dataScore >= 2
+
+  return {
+    episodeTitle,
+    matchContext,
+    scoreboardFacts,
+    talkingPoints,
+    coachPrompts,
+    suggestedVisuals,
+    hasEnoughData,
+  }
+}
+
+const podcastPrepPackage = computed<PodcastPrepPackage | null>(() => {
+  if (!matchDetail.value) return null
+  return buildPodcastPrepPackage(matchDetail.value)
+})
+
+const podcastCopyStatus = ref<'idle' | 'copied' | 'error'>('idle')
+
+async function copyPodcastPrep() {
+  if (!podcastPrepPackage.value) return
+  const pkg = podcastPrepPackage.value
+
+  const lines: string[] = [
+    '=== PODCAST PREP PACKAGE ===',
+    `Episode: ${pkg.episodeTitle}`,
+    '',
+    'MATCH CONTEXT',
+    pkg.matchContext ?? 'Not available yet',
+    '',
+    'SCOREBOARD FACTS',
+  ]
+  if (pkg.scoreboardFacts.length > 0) {
+    lines.push(...pkg.scoreboardFacts)
+  } else {
+    lines.push('Not available yet')
+  }
+  lines.push('', 'TALKING POINTS')
+  for (const tp of pkg.talkingPoints) {
+    lines.push(`• ${tp.label}: ${tp.text ?? 'Insufficient data for this talking point'}`)
+  }
+  lines.push('', 'COACH DISCUSSION PROMPTS')
+  for (const prompt of pkg.coachPrompts) {
+    lines.push(`• ${prompt}`)
+  }
+  lines.push('', 'SUGGESTED VISUALS')
+  if (pkg.suggestedVisuals.length > 0) {
+    for (const v of pkg.suggestedVisuals) {
+      lines.push(`• ${v}`)
+    }
+  } else {
+    lines.push('Add more completed match data to generate this section')
+  }
+
+  try {
+    await navigator.clipboard.writeText(lines.join('\n'))
+    podcastCopyStatus.value = 'copied'
+    setTimeout(() => { podcastCopyStatus.value = 'idle' }, 2000)
+  } catch {
+    podcastCopyStatus.value = 'error'
+    setTimeout(() => { podcastCopyStatus.value = 'idle' }, 3000)
+  }
 }
 
 // Lifecycle - load data on mount
@@ -1695,5 +2007,107 @@ onMounted(() => {
   .aw-tabs-nav {
     flex-wrap: wrap;
   }
+}
+
+/* PODCAST PREP PACKAGE */
+.aw-podcast-prep {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised, #f8fafc);
+}
+
+.aw-podcast-prep-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.aw-podcast-copy-btn {
+  white-space: nowrap;
+}
+
+.aw-podcast-insufficient {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: var(--space-2) 0;
+}
+
+.aw-podcast-block {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.aw-podcast-block-label {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.aw-podcast-block-value {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.aw-podcast-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.aw-podcast-empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.aw-podcast-talking-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aw-podcast-tp {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.aw-podcast-tp-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.aw-podcast-tp-text {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.aw-podcast-tp-empty {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 </style>

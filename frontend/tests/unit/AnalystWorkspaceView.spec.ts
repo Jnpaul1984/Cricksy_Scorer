@@ -437,4 +437,266 @@ describe('AnalystWorkspaceView', () => {
     expect(text).not.toContain('Virat')
     expect(text).not.toContain('Kohli')
   })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Phase 4E: Podcast Prep Package tests
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('renders the Podcast Prep Package section when match detail is loaded', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.find('#aw-podcast-prep').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Podcast prep package')
+  })
+
+  it('Podcast Prep episode title reflects real match fields', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    // Episode title derived from real teams_label + format + date
+    expect(text).toContain('Lions vs Falcons')
+    expect(text).toContain('T20')
+    expect(text).toContain('2025-01-10')
+  })
+
+  it('Podcast Prep scoreboard facts reflect real innings data', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    // Scoreboard facts from real innings data: Lions 178/6, Falcons 160/10
+    expect(text).toContain('Lions: 178/6')
+    expect(text).toContain('Falcons: 160/10')
+  })
+
+  it('Podcast Prep talking points cite real loaded fields', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    // Talking points must reflect real momentum_summary and key_phase data
+    expect(text).toContain('Momentum verdict')
+    expect(text).toContain('Lions dominated from ball one')
+    expect(text).toContain('Key phase')
+    expect(text).toContain('Death overs surge')
+    // Phase performance from real phases data
+    expect(text).toContain('Phase performance')
+    // Player spotlight from real key_players (J. Anderson, Lions)
+    expect(text).toContain('Player spotlight')
+    expect(text).toContain('J. Anderson')
+  })
+
+  it('Podcast Prep coach prompts reference real match data', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    // Coach prompts generated from key_phase.title
+    expect(text).toContain('Coach discussion prompts')
+    expect(text).toContain('death overs surge')
+    // Coach prompts reference real key player name
+    expect(text).toContain('J. Anderson')
+  })
+
+  it('Podcast Prep suggested visuals are based only on loaded sections', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Suggested visuals')
+    // Only lists sections that actually exist in the loaded data
+    expect(text).toContain('Innings scorecard comparison')
+    expect(text).toContain('Phase breakdown table')
+    expect(text).toContain('Key player impact cards')
+  })
+
+  it('Podcast Prep shows empty state when match detail has insufficient data', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    // Minimal detail: no innings, no key_phase, no momentum
+    const sparseDetail = {
+      ...mockMatchDetail,
+      match: {
+        ...mockMatchDetail.match,
+        result: '',
+        innings: [],
+      },
+      momentum_summary: null as any,
+      key_phase: null as any,
+      phases: [],
+      key_players: [],
+    }
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(sparseDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Add more completed match data to generate this section')
+    // Talking point empty states
+    expect(text).toContain('Insufficient data for this talking point')
+  })
+
+  it('Podcast Prep talking points show empty state when momentum_summary is null', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    const noMomentum = { ...mockMatchDetail, momentum_summary: null as any }
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(noMomentum)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Insufficient data for this talking point')
+  })
+
+  it('Podcast Prep does not render hardcoded fake player or podcast claims', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const podcastSection = wrapper.find('#aw-podcast-prep')
+    expect(podcastSection.exists()).toBe(true)
+    const text = podcastSection.text()
+
+    // No fabricated names
+    expect(text).not.toContain('R. Singh')
+    expect(text).not.toContain('A. Kumar')
+    expect(text).not.toContain('Virat')
+    expect(text).not.toContain('Kohli')
+    // No hardcoded fake storylines
+    expect(text).not.toContain('brilliant century')
+    expect(text).not.toContain('turning point in the third over')
+    // No AI-generated label
+    expect(text).not.toContain('AI-generated')
+  })
+
+  it('Podcast Prep section does not appear before a match is selected', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    // No match selected → podcast prep should not exist
+    expect(wrapper.find('#aw-podcast-prep').exists()).toBe(false)
+  })
+
+  it('Podcast Prep copy button is rendered in the podcast section', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const podcastSection = wrapper.find('#aw-podcast-prep')
+    const copyBtn = podcastSection.find('.aw-podcast-copy-btn')
+    expect(copyBtn.exists()).toBe(true)
+    expect(copyBtn.text()).toContain('Copy package text')
+  })
+
+  it('existing match selection and detail panel still work after Phase 4E changes', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    // Original behaviour: click match → detail panel appears
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.find('#aw-match-detail').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Match Intelligence')
+    expect(wrapper.text()).toContain('Lions won by 18 runs')
+
+    // Phase 4D sections still intact
+    expect(wrapper.text()).toContain('Phase breakdown')
+    expect(wrapper.text()).toContain('Key players')
+
+    // Phase 4E section also present
+    expect(wrapper.find('#aw-podcast-prep').exists()).toBe(true)
+  })
 })
