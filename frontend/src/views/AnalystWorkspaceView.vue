@@ -1211,10 +1211,10 @@ async function copyPodcastPrep() {
   try {
     await navigator.clipboard.writeText(lines.join('\n'))
     podcastCopyStatus.value = 'copied'
-    window.setTimeout(() => { podcastCopyStatus.value = 'idle' }, 2000)
+    setTimeout(() => { podcastCopyStatus.value = 'idle' }, 2000)
   } catch {
     podcastCopyStatus.value = 'error'
-    window.setTimeout(() => { podcastCopyStatus.value = 'idle' }, 3000)
+    setTimeout(() => { podcastCopyStatus.value = 'idle' }, 3000)
   }
 }
 
