@@ -736,6 +736,104 @@ Coach Pro Plus Video Analysis remains working, is more reliable, private, report
 
 ---
 
+# Phase 4 — Analyst System Blueprint Audit + Spec Lock
+
+## Purpose
+
+Convert the strategic analyst-system documents into a safe, phased, buildable product plan before any analyst-system implementation begins.
+
+This phase governs:
+
+- `docs/CRICKSY_ANALYST_SYSTEM_BLUEPRINT_V1.md`
+- `docs/ANALYST_PRODUCTION_WORKFLOW_V1.md`
+
+This phase is mandatory before building analyst dashboards, analyst workspaces, podcast prep tooling, AI analyst assistants, visualizations, analyst exports, scouting workflows, or Sports Intelligence Institute workflows.
+
+## Primary Areas
+
+Likely affected after audit:
+
+- backend match/query APIs
+- backend analytics services
+- backend export/report services
+- frontend analyst dashboard/workspace components
+- frontend chart/visualization components
+- permissions and organization data boundaries
+- AI insight/summarization services
+- media/export tooling
+- historical match ingestion dependencies
+
+## Pre-Phase Audit
+
+Audit:
+
+- both analyst source documents
+- existing match data access routes
+- existing completed/live match data availability
+- existing scorecard/delivery-level access
+- existing analytics services
+- existing chart/export components
+- existing fake/mock data areas
+- existing role/tier system for analyst/coach/media/scout access
+- existing PDF/PNG/CSV/Markdown export code
+- dependencies on historical match ingestion phases
+- dependencies on AI analytics phases
+
+## Spec Lock
+
+Lock:
+
+- Analyst MVP scope
+- non-MVP/future scope
+- first analyst user persona
+- first workflow target, likely podcast prep
+- first dashboard requirements
+- first visualization requirements
+- backend API/data contracts
+- frontend workspace UX boundaries
+- AI assistance boundaries
+- export formats for MVP
+- role and permission rules
+- data citation/explainability requirements
+- no-fake-data rules
+- approval workflow rules
+- tests and gates
+- smallest safe implementation slice
+
+## Gates
+
+- Do not build analyst-system code before Phase 4 is complete.
+- Existing scoring/match truth must remain untouched.
+- Analyst dashboards must consume existing data safely.
+- No cross-organization data leakage.
+- No unsupported AI claims.
+- Generated insights must cite source data or be marked tentative.
+- Media/podcast outputs must remain reviewable before publishing.
+- Fake/mock data must not be introduced into production paths.
+- Historical ingestion dependencies must be documented before analyst features depend on them.
+- CI passes for any implementation PR after Phase 4.
+
+## Required Tests
+
+Phase 4 itself is docs/spec only.
+
+Future analyst implementation tests must include:
+
+- backend API contract tests
+- permission/isolation tests
+- dashboard empty/loading/error state tests
+- chart data validation tests
+- export generation tests
+- AI insight grounding tests
+- no-fake-data guard checks
+- full existing CI gates when implementation begins
+
+## Completion Criteria
+
+Phase 4 is complete when the analyst system has a repo-grounded MVP spec, implementation sequence, data/API map, visualization list, permission model, AI guardrails, export plan, and first safe implementation issue.
+
+---
+
 # Phase 5 — Historical Match Ingestion: Structured CSV First
 
 ## Purpose
@@ -1141,104 +1239,6 @@ Cricksy can safely create useful media/reporting assets from existing data.
 
 ---
 
-# Phase 4 — Analyst System Blueprint Audit + Spec Lock
-
-## Purpose
-
-Convert the strategic analyst-system documents into a safe, phased, buildable product plan before any analyst-system implementation begins.
-
-This phase governs:
-
-- `docs/CRICKSY_ANALYST_SYSTEM_BLUEPRINT_V1.md`
-- `docs/ANALYST_PRODUCTION_WORKFLOW_V1.md`
-
-This phase is mandatory before building analyst dashboards, analyst workspaces, podcast prep tooling, AI analyst assistants, visualizations, analyst exports, scouting workflows, or Sports Intelligence Institute workflows.
-
-## Primary Areas
-
-Likely affected after audit:
-
-- backend match/query APIs
-- backend analytics services
-- backend export/report services
-- frontend analyst dashboard/workspace components
-- frontend chart/visualization components
-- permissions and organization data boundaries
-- AI insight/summarization services
-- media/export tooling
-- historical match ingestion dependencies
-
-## Pre-Phase Audit
-
-Audit:
-
-- both analyst source documents
-- existing match data access routes
-- existing completed/live match data availability
-- existing scorecard/delivery-level access
-- existing analytics services
-- existing chart/export components
-- existing fake/mock data areas
-- existing role/tier system for analyst/coach/media/scout access
-- existing PDF/PNG/CSV/Markdown export code
-- dependencies on historical match ingestion phases
-- dependencies on AI analytics phases
-
-## Spec Lock
-
-Lock:
-
-- Analyst MVP scope
-- non-MVP/future scope
-- first analyst user persona
-- first workflow target, likely podcast prep
-- first dashboard requirements
-- first visualization requirements
-- backend API/data contracts
-- frontend workspace UX boundaries
-- AI assistance boundaries
-- export formats for MVP
-- role and permission rules
-- data citation/explainability requirements
-- no-fake-data rules
-- approval workflow rules
-- tests and gates
-- smallest safe implementation slice
-
-## Gates
-
-- Do not build analyst-system code before Phase 4 is complete.
-- Existing scoring/match truth must remain untouched.
-- Analyst dashboards must consume existing data safely.
-- No cross-organization data leakage.
-- No unsupported AI claims.
-- Generated insights must cite source data or be marked tentative.
-- Media/podcast outputs must remain reviewable before publishing.
-- Fake/mock data must not be introduced into production paths.
-- Historical ingestion dependencies must be documented before analyst features depend on them.
-- CI passes for any implementation PR after Phase 4.
-
-## Required Tests
-
-Phase 4 itself is docs/spec only.
-
-Future analyst implementation tests must include:
-
-- backend API contract tests
-- permission/isolation tests
-- dashboard empty/loading/error state tests
-- chart data validation tests
-- export generation tests
-- AI insight grounding tests
-- no-fake-data guard checks
-- full existing CI gates when implementation begins
-
-## Completion Criteria
-
-Phase 4 is complete when the analyst system has a repo-grounded MVP spec, implementation sequence, data/API map, visualization list, permission model, AI guardrails, export plan, and first safe implementation issue.
-
----
-
 # Phase 12 — Lightweight Cricket Supervisor Layer
 
 ## Purpose
@@ -1446,8 +1446,8 @@ Check imports, typing, formatting, migrations, tests, and CI impact before final
 
 1. Phase 0 — Repo Baseline + CI/CD Lock
 2. Phase 1 — Existing App Stabilization + Regression Protection
-3. Phase 3 — Coach Pro Plus Video Analysis Hardening + Extension
-4. Phase 2 — Coach + Player Development Enhancements
+3. Phase 2 — Coach + Player Development Enhancements
+4. Phase 3 — Coach Pro Plus Video Analysis Hardening + Extension
 5. Phase 4 — Analyst System Blueprint Audit + Spec Lock
 6. Phase 5 — Historical Match Ingestion: Structured CSV First
 7. Phase 6 — Historical Match Ingestion: PDF/Image/OCR Review Flow
