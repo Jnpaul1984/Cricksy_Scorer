@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -20,7 +20,6 @@ from backend.sql_app.models import (
     PlayerForm,
     PlayerProfile,
     PlayerSummary,
-    User,
 )
 from backend.sql_app.schemas import AnalyticsQuery, AnalyticsResult
 from backend.api.schemas.analyst_matches import (
@@ -29,6 +28,7 @@ from backend.api.schemas.analyst_matches import (
     AnalystMatchInningsSummary,
 )
 from backend.sql_app.match_ai import MatchAiSummaryResponse
+from backend.services.analyst_access import scoped_games_stmt
 from backend.services.match_ai_service import MatchAiService
 from backend.services.match_context_service import (
     generate_match_context_package,
@@ -39,24 +39,6 @@ router = APIRouter(prefix="/api/analyst", tags=["analyst_pro"])
 
 AllowedRoles = ["analyst_pro", "org_pro"]
 UTC = getattr(dt, "UTC", dt.UTC)
-
-
-def _match_access_clause(current_user: Any):
-    role_value = getattr(getattr(current_user, "role", None), "value", getattr(current_user, "role", None))
-    user_id = str(current_user.id)
-    org_id = getattr(current_user, "org_id", None)
-    if org_id:
-        org_clause = and_(Game.created_by_user_id.isnot(None), User.org_id == str(org_id))
-        if role_value == "org_pro":
-            return or_(Game.created_by_user_id == user_id, org_clause)
-        return org_clause
-    return Game.created_by_user_id == user_id
-
-
-def _scoped_games_stmt(current_user: Any):
-    return select(Game).outerjoin(User, User.id == Game.created_by_user_id).where(
-        _match_access_clause(current_user)
-    )
 
 
 def _team_name(team_data: Any, fallback: str) -> str:
@@ -307,7 +289,7 @@ async def get_analyst_match_detail(
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = _scoped_games_stmt(current_user).where(
+    stmt = scoped_games_stmt(current_user).where(
         Game.id == match_id,
         Game.status == GameStatus.completed,
     )
@@ -343,7 +325,7 @@ async def get_analyst_export_data(
     phase: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = _scoped_games_stmt(current_user).where(Game.status == GameStatus.completed)
+    stmt = scoped_games_stmt(current_user).where(Game.status == GameStatus.completed)
     if match_id:
         stmt = stmt.where(Game.id == match_id)
     result = await db.execute(stmt.order_by(Game.id.desc()))
@@ -384,9 +366,9 @@ async def get_analyst_export_data(
                 continue
         filtered_rows.append(row)
 
-    empty_reason = "no_data" if not filtered_rows else None
-    if not filtered_rows and match_id:
-        empty_reason = "no_rows_for_match_or_filters"
+    empty_reason = None
+    if not filtered_rows:
+        empty_reason = "no_rows_for_match_or_filters" if match_id else "no_data"
     meta: dict[str, object] = {
         "match_id": match_id,
         "row_count": len(filtered_rows),

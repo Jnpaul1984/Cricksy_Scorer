@@ -10,17 +10,18 @@ from datetime import date
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import Select, and_, or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend import security
 from backend.sql_app.database import get_db
-from backend.sql_app.models import Game, GameStatus, User
+from backend.sql_app.models import Game, GameStatus
 from backend.api.schemas.analyst_matches import (
     AnalystMatchListItem,
     AnalystMatchListResponse,
 )
 from backend.api.schemas.case_study import MatchCaseStudyResponse
+from backend.services.analyst_access import scoped_games_stmt
 from backend.services.ai_match_summary import MatchAiSummary, build_match_ai_summary
 from backend.services.analytics_case_study import build_match_case_study
 
@@ -30,18 +31,6 @@ router = APIRouter(
 )
 
 AllowedRoles = ["analyst_pro", "org_pro"]
-
-
-def _match_access_clause(current_user: Any):
-    role_value = getattr(getattr(current_user, "role", None), "value", getattr(current_user, "role", None))
-    user_id = str(current_user.id)
-    org_id = getattr(current_user, "org_id", None)
-    if org_id:
-        org_clause = and_(Game.created_by_user_id.isnot(None), User.org_id == str(org_id))
-        if role_value == "org_pro":
-            return or_(Game.created_by_user_id == user_id, org_clause)
-        return org_clause
-    return Game.created_by_user_id == user_id
 
 
 def _team_name(team_data: Any, fallback: str) -> str:
@@ -78,10 +67,6 @@ def _phase_swing(game: Game) -> str:
     return "n/a"
 
 
-def _apply_match_query_scope(stmt: Select[Any], current_user: Any) -> Select[Any]:
-    return stmt.outerjoin(User, User.id == Game.created_by_user_id).where(_match_access_clause(current_user))
-
-
 @router.get("", response_model=AnalystMatchListResponse)
 async def list_analyst_matches(
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
@@ -90,10 +75,7 @@ async def list_analyst_matches(
     """
     Return a list of matches for the Analyst Workspace.
     """
-    stmt = _apply_match_query_scope(
-        select(Game).where(Game.status == GameStatus.completed).order_by(Game.id.desc()),
-        current_user,
-    )
+    stmt = scoped_games_stmt(current_user).where(Game.status == GameStatus.completed).order_by(Game.id.desc())
     result = await db.execute(stmt)
     games = result.scalars().all()
 
@@ -102,7 +84,7 @@ async def list_analyst_matches(
         team_a_name = _team_name(game.team_a, "Team A")
         team_b_name = _team_name(game.team_b, "Team B")
         created_at = getattr(game, "created_at", None)
-        match_date = created_at.date() if created_at else date.today()
+        match_date = created_at.date() if created_at else date(1970, 1, 1)
         status_value = game.status.value if hasattr(game.status, "value") else str(game.status)
         items.append(
             AnalystMatchListItem(
