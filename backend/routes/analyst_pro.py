@@ -86,8 +86,8 @@ def _match_innings_summaries(game: Game) -> list[AnalystMatchInningsSummary]:
     return summaries
 
 
-def _export_rows_for_game(game: Game) -> list[dict[str, object]]:
-    rows: list[dict[str, object]] = []
+def _export_rows_for_game(game: Game) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     deliveries = game.deliveries if isinstance(game.deliveries, list) else []
     team_a_name = _team_name(game.team_a, "Team A")
     team_b_name = _team_name(game.team_b, "Team B")
@@ -334,17 +334,17 @@ async def get_analyst_export_data(
     if match_id and not games:
         raise HTTPException(status_code=404, detail="Match not found")
 
-    rows: list[dict[str, object]] = []
+    all_rows: list[dict[str, Any]] = []
     for game in games:
-        rows.extend(_export_rows_for_game(game))
+        all_rows.extend(_export_rows_for_game(game))
 
-    filtered_rows: list[dict[str, object]] = []
+    filtered_rows: list[dict[str, Any]] = []
     normalized_player = player.lower() if isinstance(player, str) and player.strip() else None
     normalized_dismissal = (
         dismissal_type.lower() if isinstance(dismissal_type, str) and dismissal_type.strip() else None
     )
     normalized_phase = phase.lower() if isinstance(phase, str) and phase.strip() else None
-    for row in rows:
+    for row in all_rows:
         row_date = row.get("match_date")
         if isinstance(row_date, str):
             parsed_date = dt.date.fromisoformat(row_date)
@@ -369,7 +369,7 @@ async def get_analyst_export_data(
     empty_reason = None
     if not filtered_rows:
         empty_reason = "no_rows_for_match_or_filters" if match_id else "no_data"
-    meta: dict[str, object] = {
+    meta: dict[str, Any] = {
         "match_id": match_id,
         "row_count": len(filtered_rows),
         "completed_matches_scanned": len(games),

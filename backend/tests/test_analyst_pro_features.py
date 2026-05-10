@@ -206,7 +206,7 @@ async def set_role(client: TestClient, email: str, role: models.RoleEnum) -> Non
     await _set_user_role(session_maker, email, role)
 
 
-async def set_org_id(client: TestClient, email: str, org_id: str | None) -> None:
+async def set_user_org_id(client: TestClient, email: str, org_id: str | None) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
     await _set_user_org_id(session_maker, email, org_id)
 
@@ -347,12 +347,12 @@ async def test_analytics_query_form_summary(client: TestClient) -> None:
 async def test_analytics_matches_list_is_completed_and_org_scoped(client: TestClient) -> None:
     analyst_org = register_user(client, "analyst-org@example.com")
     await set_role(client, analyst_org["email"], models.RoleEnum.analyst_pro)
-    await set_org_id(client, analyst_org["email"], "org-alpha")
+    await set_user_org_id(client, analyst_org["email"], "org-alpha")
     token = login_user(client, analyst_org["email"])
 
     analyst_other_org = register_user(client, "analyst-other@example.com")
     await set_role(client, analyst_other_org["email"], models.RoleEnum.analyst_pro)
-    await set_org_id(client, analyst_other_org["email"], "org-beta")
+    await set_user_org_id(client, analyst_other_org["email"], "org-beta")
 
     await create_game(
         client,
@@ -432,12 +432,12 @@ async def test_analyst_export_data_real_rows_or_empty_never_fake(client: TestCli
 async def test_analyst_match_detail_and_export_cross_org_blocked(client: TestClient) -> None:
     analyst_owner = register_user(client, "analyst-owner@example.com")
     await set_role(client, analyst_owner["email"], models.RoleEnum.analyst_pro)
-    await set_org_id(client, analyst_owner["email"], "org-owner")
+    await set_user_org_id(client, analyst_owner["email"], "org-owner")
     owner_token = login_user(client, analyst_owner["email"])
 
     analyst_other = register_user(client, "analyst-other-org@example.com")
     await set_role(client, analyst_other["email"], models.RoleEnum.analyst_pro)
-    await set_org_id(client, analyst_other["email"], "org-other")
+    await set_user_org_id(client, analyst_other["email"], "org-other")
     other_token = login_user(client, analyst_other["email"])
 
     await create_game(

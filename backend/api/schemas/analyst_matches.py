@@ -9,6 +9,8 @@ Powers the AnalystWorkspaceView.vue "Matches" tab table.
 
 from datetime import date, datetime
 
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -56,5 +58,5 @@ class AnalystMatchDetailResponse(BaseModel):
 
 
 class AnalystExportDataResponse(BaseModel):
-    rows: list[dict[str, object]]
-    meta: dict[str, object]
+    rows: list[dict[str, Any]]
+    meta: dict[str, Any]
