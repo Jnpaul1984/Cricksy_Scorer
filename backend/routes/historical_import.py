@@ -81,7 +81,7 @@ async def historical_json_dry_run(
 
     # Duplicate detection (always performed when tracking is available)
     dup_by_hash = await find_duplicate_by_hash(db, source_hash, owner_user_id, owner_org_id)
-    dup_by_semantic: object = None
+    dup_by_semantic: models.HistoricalImportBatch | None = None
     if semantic_key:
         dup_by_semantic = await find_duplicate_by_semantic_key(
             db, semantic_key, owner_user_id, owner_org_id
@@ -93,10 +93,10 @@ async def historical_json_dry_run(
 
     if dup_by_hash is not None:
         probable_duplicate = "likely_duplicate"
-        dup_batch_id = dup_by_hash.id  # type: ignore[union-attr]
+        dup_batch_id = dup_by_hash.id
     elif dup_by_semantic is not None:
         probable_duplicate = "likely_duplicate"
-        dup_batch_id = dup_by_semantic.id  # type: ignore[union-attr]
+        dup_batch_id = dup_by_semantic.id
         semantic_dup = True
 
     dup_msg = (
