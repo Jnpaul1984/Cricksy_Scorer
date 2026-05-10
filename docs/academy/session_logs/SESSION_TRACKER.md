@@ -50,7 +50,7 @@ Level: Beginner Cricket Analyst
 Course: Cricket Foundations
 Module: Cricket System Fundamentals
 Module Status: In Progress
-Current Lesson: Introduction to Cricket Formats
+Current Lesson: Understanding Overs & Innings
 
 ---
 
@@ -431,6 +431,150 @@ This was a clear jump from Session 1. You moved from basic analyst thinking into
 
 ---
 
+## Session 2026-05-09 — Understanding Overs & Innings Exercise
+
+### Curriculum Location
+
+- Level: Beginner Cricket Analyst
+- Course: Cricket Foundations
+- Module: Cricket System Fundamentals
+- Lesson: Understanding Overs & Innings
+
+### Session Objectives
+
+- [x] Understand overs, balls, innings state, wickets, run rate, and required run rate.
+- [x] Practice reading cricket score states from an analyst perspective.
+- [x] Understand wickets as batting resources.
+- [x] Understand why Cricksy should store legal balls internally instead of treating overs as decimal numbers.
+
+### Theory Covered
+
+- An innings is a team's turn to bat.
+- An over contains 6 legal balls.
+- Cricket over notation is not normal decimal notation.
+- Run rate is runs scored divided by overs faced.
+- Required run rate is runs needed divided by overs remaining.
+- Wickets change the meaning of the same score because wickets are resources.
+- Legal ball count is the safest internal representation for scoring and analytics systems.
+
+### Real-World Example Discussed
+
+- Score reading: 72/2 after 8 overs in a T20.
+- Chase pressure: 112/4 after 15 overs chasing 168.
+- Resource comparison: two teams both 95 after 10 overs but with different wickets lost.
+- Overs notation: 13.4 overs means 13 overs and 4 legal balls.
+
+### Analyst Workflow Practiced
+
+- Read runs, wickets, and overs.
+- Calculate current run rate.
+- Calculate required run rate in a chase.
+- Compare teams using wickets as resources.
+- Convert cricket over notation into legal balls.
+- Explain match state in simple analyst language.
+
+### AI-Assisted Analysis Connection
+
+- Cricksy can calculate run rate, required run rate, wickets in hand, balls remaining, and pressure levels automatically.
+- Cricksy should use legal balls internally to avoid decimal-over calculation errors.
+- Future AI systems can use these values as base features for momentum, win probability, and tactical recommendations.
+
+### Cricksy Feature Connection
+
+- Future feature: Legal Ball Counter.
+- Future feature: Run Rate Engine.
+- Future feature: Required Run Rate Tracker.
+- Future feature: Wickets-as-Resources Pressure Indicator.
+- Future feature: Match State Summary Generator.
+
+### Exercise / Practical Task
+
+- Task: Complete Understanding Overs & Innings practice exercise.
+- Completion Status: Completed.
+- Evidence: Student uploaded `Practice Exercise.txt` and answered Scenario A, B, C, and D questions.
+
+### Assessment Questions / Task
+
+Scenario A — Basic Score Reading:
+1. How many wickets have they lost?
+2. How many overs remain?
+3. What is their current run rate?
+4. Is this a strong, average, or weak position? Explain.
+
+Scenario B — Chase Pressure:
+1. How many runs do they need?
+2. How many overs remain?
+3. What is the required run rate?
+4. Is the pressure low, medium, or high? Explain.
+
+Scenario C — Wickets as Resources:
+1. Which team is in the stronger position?
+2. Why?
+3. How do wickets change the meaning of the same score?
+
+Scenario D — Overs Notation:
+1. What does 13.4 overs mean?
+2. How many legal balls is 13.4 overs?
+3. Why should Cricksy store balls internally instead of overs as decimals?
+
+### Student Response Summary
+
+- Scenario A: Correctly identified 2 wickets lost, 12 overs remaining, and a run rate of 9 per over. Interpreted the position as above average/strong due to run rate and wickets in hand, while correctly warning that quick wickets before the 10th over could be damaging.
+- Scenario B: Correctly identified 56 runs needed, 5 overs remaining, and a required run rate of 11.2. Correctly assessed pressure as high, though the explanation should say the team needs above 11 runs per over rather than soon needing a run a ball.
+- Scenario C: Correctly identified Team A as stronger because it has lost only 1 wicket. Correctly explained that fewer wickets lost allows more risk, while more wickets lost requires measured risk.
+- Scenario D: Correctly explained that 13.4 overs means 13 overs and 4 balls, and correctly calculated 82 legal balls. Correctly understood that overs notation resets after .5, though future technical explanation should explicitly say this is why decimals are unsafe for storage.
+
+### Grade
+
+| Category | Score | Feedback |
+|---|---:|---|
+| Tactical Understanding | 88 | Strong understanding of wickets as resources and score-state pressure. Good caution around losing wickets before launch phase. |
+| Observation Quality | 90 | Correctly read every score state and identified the important match-state numbers. |
+| Analyst Reasoning | 87 | Good explanations. Scenario B pressure explanation needs a small correction: 11.2 per over is much more than a run a ball, not close to it. |
+| Communication | 84 | Clear and direct. Continue improving sentence structure and report-ready wording. |
+| AI Systems Thinking | 86 | Correctly understood why legal-ball storage matters. Next step is connecting this to model features like balls remaining and required rate. |
+| Cricksy Integration Thinking | 89 | Strong connection to Cricksy scoring accuracy and analytics logic. |
+
+Overall Grade: 87.3 — Strong
+
+### Strengths
+
+- Correct calculations for run rate, required run rate, and legal balls.
+- Strong understanding that wickets are resources.
+- Good match-state interpretation in Scenario A.
+- Strong technical instinct that cricket overs should not be treated as normal decimals.
+- Good caution that the same score can become weaker if wickets fall before the launch phase.
+
+### Weaknesses / Gaps
+
+- Scenario B wording needs correction: 11.2 runs per over is nearly two runs per ball, not one run per ball.
+- Future answers should include balls remaining as well as overs remaining.
+- Future technical explanations should use precise language: store `balls_bowled` and derive/display overs from legal-ball count.
+
+### Teacher Feedback
+
+This was a strong lesson performance. You calculated the core numbers correctly and showed good analyst thinking about wickets as resources. The main correction is your phrase that the batters were soon needing to score at runs a ball. In fact, 11.2 per over is already close to 1.87 runs per ball, which is high pressure. This is exactly why analysts must convert required run rate into balls remaining and runs per ball when explaining pressure clearly.
+
+### Completion Decision
+
+- Lesson Complete: Yes
+- Exercise Complete: Yes
+- Project Updated: No
+- Assessment Passed: Lesson-level assessment passed
+
+### Notion Update Recommendation
+
+- Mark `Understanding Overs & Innings` as Completed or Ready for Review.
+- Add `Practice Exercise.txt` as evidence or note in the lesson page if desired.
+- Keep Module 1 status as In Progress because three lessons remain.
+
+### Next Session Focus
+
+- Session 4: Match Phases Explained.
+- Practical task: identify powerplay, middle overs, death overs, and explain how phase changes affect pressure and tactics.
+
+---
+
 ## 7. Module 1 Progress Snapshot
 
 Module: Cricket System Fundamentals
@@ -440,7 +584,7 @@ Module: Cricket System Fundamentals
 | Lesson | Status | Evidence |
 |---|---|---|
 | Introduction to Cricket Formats | Completed | Session 1 analyst mindset and Session 2 format comparison/practical observation completed. |
-| Understanding Overs & Innings | Not Started |  |
+| Understanding Overs & Innings | Completed | Session 3 understanding overs and innings exercise completed and graded. |
 | Match Phases Explained | Not Started |  |
 | Player Roles & Responsibilities | Not Started |  |
 | Tactical Foundations of Cricket | Not Started |  |
@@ -451,6 +595,7 @@ Module: Cricket System Fundamentals
 |---|---|---|
 | Format comparison exercise | Completed | Session 2 uploaded exercise file and graded response. |
 | Practical observation exercise | Completed | Scenario A/B/C observation exercise completed in Session 2. |
+| Overs and innings exercise | Completed | Session 3 uploaded exercise file and graded response. |
 | Five-over observation exercise | Not Started |  |
 | Match phase identification exercise | Not Started |  |
 | Player role classification exercise | Not Started |  |
@@ -473,6 +618,6 @@ Module: Cricket System Fundamentals
 
 ## 8. Next Planned Session
 
-Session Title: Understanding Overs & Innings
-Curriculum Location: Level 1 → Cricket Foundations → Cricket System Fundamentals → Understanding Overs & Innings
-Primary Goal: Understand overs, balls, innings state, wickets, run rate, and how analysts use these basics to explain match situations.
+Session Title: Match Phases Explained
+Curriculum Location: Level 1 → Cricket Foundations → Cricket System Fundamentals → Match Phases Explained
+Primary Goal: Identify powerplay, middle overs, death overs, and explain how match phases change pressure, tactics, and analyst interpretation.
