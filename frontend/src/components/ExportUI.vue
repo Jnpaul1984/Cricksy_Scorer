@@ -119,6 +119,8 @@
                 <span class="preview-value">{{ formatLabel }}</span>
               </div>
             </div>
+            <p v-if="exportInfo" class="export-message export-message--info">{{ exportInfo }}</p>
+            <p v-if="exportError" class="export-message export-message--error">{{ exportError }}</p>
           </div>
         </div>
 
@@ -141,13 +143,17 @@
 import { defineProps, ref, computed, reactive } from 'vue'
 
 import { BaseButton, BaseCard } from '@/components'
+import { getAnalystExportData } from '@/services/api'
 
 const props = defineProps<{
   data?: any[]
+  matchId?: string | null
 }>()
 
 const showModal = ref(false)
 const isExporting = ref(false)
+const exportError = ref<string | null>(null)
+const exportInfo = ref<string | null>(null)
 
 // Export format options
 const formats = [
@@ -211,13 +217,25 @@ const estimatedFileSize = computed(() => {
 // Download handler
 async function downloadData() {
   isExporting.value = true
+  exportError.value = null
+  exportInfo.value = null
 
   try {
-    // Simulate data preparation
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    // Generate mock data
-    const exportData = generateExportData()
+    const response = await getAnalystExportData(
+      {
+        dateFrom: filters.dateFrom || undefined,
+        dateTo: filters.dateTo || undefined,
+        player: filters.player || undefined,
+        dismissalType: filters.dismissalType || undefined,
+        phase: filters.phase || undefined,
+      },
+      props.matchId ?? undefined,
+    )
+    const exportData = response.rows as Record<string, unknown>[]
+    if (exportData.length === 0) {
+      exportInfo.value = 'No export data available for the current context/filters.'
+      return
+    }
 
     // Create file and download
     if (exportFormat.value === 'csv') {
@@ -229,62 +247,15 @@ async function downloadData() {
     // Close modal
     showModal.value = false
   } catch (error) {
+    exportError.value = error instanceof Error ? error.message : 'Export failed. Please try again.'
     console.error('Export failed:', error)
-    alert('Export failed. Please try again.')
   } finally {
     isExporting.value = false
   }
 }
 
-// Generate mock data based on filters
-function generateExportData(): Record<string, any>[] {
-  const sampleData = [
-    {
-      date: '2025-12-18',
-      player: 'Player A',
-      runs: 45,
-      balls: 32,
-      strikeRate: 140.6,
-      dismissal: 'caught',
-      phase: 'powerplay',
-    },
-    {
-      date: '2025-12-18',
-      player: 'Player B',
-      runs: 28,
-      balls: 21,
-      strikeRate: 133.3,
-      dismissal: 'not_out',
-      phase: 'middle',
-    },
-    {
-      date: '2025-12-17',
-      player: 'Player C',
-      runs: 67,
-      balls: 48,
-      strikeRate: 139.6,
-      dismissal: 'bowled',
-      phase: 'death',
-    },
-  ]
-
-  return sampleData.filter((row) => {
-    if (filters.dateFrom && row.date < filters.dateFrom) return false
-    if (filters.dateTo && row.date > filters.dateTo) return false
-    if (filters.player && !row.player.toLowerCase().includes(filters.player.toLowerCase())) return false
-    if (filters.dismissalType && row.dismissal !== filters.dismissalType) return false
-    if (filters.phase && row.phase !== filters.phase) return false
-    return true
-  })
-}
-
 // CSV download
-function downloadCSV(data: Record<string, any>[]) {
-  if (data.length === 0) {
-    alert('No data to export with current filters')
-    return
-  }
-
+function downloadCSV(data: Record<string, unknown>[]) {
   const headers = Object.keys(data[0])
   const csv = [
     headers.join(','),
@@ -306,12 +277,7 @@ function downloadCSV(data: Record<string, any>[]) {
 }
 
 // JSON download
-function downloadJSON(data: Record<string, any>[]) {
-  if (data.length === 0) {
-    alert('No data to export with current filters')
-    return
-  }
-
+function downloadJSON(data: Record<string, unknown>[]) {
   const json = JSON.stringify(data, null, 2)
   const blob = new Blob([json], { type: 'application/json;charset=utf-8;' })
   downloadBlob(blob, `export-${new Date().toISOString().split('T')[0]}.json`)
@@ -572,6 +538,19 @@ function closeModal() {
   font-size: var(--text-lg);
   font-weight: 700;
   color: var(--color-text);
+}
+
+.export-message {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.export-message--info {
+  color: var(--color-text-muted);
+}
+
+.export-message--error {
+  color: var(--color-danger);
 }
 
 /* Actions */

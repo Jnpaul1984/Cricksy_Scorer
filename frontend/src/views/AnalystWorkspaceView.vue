@@ -14,7 +14,7 @@
 
       <!-- View / context controls -->
       <div class="aw-header-actions">
-        <ExportUI :data="filteredMatches" />
+        <ExportUI :data="filteredMatches" :match-id="exportContextMatchId" />
         <BaseButton variant="ghost" size="sm" @click="refreshData">
           Refresh data
         </BaseButton>
@@ -469,6 +469,8 @@ const filteredPlayers = computed(() => {
     return matchesTerm
   })
 })
+
+const exportContextMatchId = computed(() => filteredMatches.value[0]?.id ?? null)
 
 const currentPhaseLabel = computed(() => {
   const map: Record<string, string> = {

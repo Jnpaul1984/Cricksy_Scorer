@@ -756,6 +756,9 @@ export interface AnalystMatchListItem {
   result: string; // e.g. "Lions won by 18 runs"
   run_rate: number; // overall match run rate
   phase_swing: string; // e.g. "+18 in death", "-12 in powerplay"
+  status: string;
+  venue?: string | null;
+  match_datetime?: string | null;
 }
 
 export interface AnalystMatchListResponse {
@@ -765,6 +768,34 @@ export interface AnalystMatchListResponse {
 
 export async function getAnalystMatches(): Promise<AnalystMatchListResponse> {
   return request<AnalystMatchListResponse>('/analytics/matches');
+}
+
+export interface AnalystExportFilters {
+  dateFrom?: string;
+  dateTo?: string;
+  player?: string;
+  dismissalType?: string;
+  phase?: string;
+}
+
+export interface AnalystExportDataResponse {
+  rows: Record<string, unknown>[];
+  meta: Record<string, unknown>;
+}
+
+export async function getAnalystExportData(
+  filters: AnalystExportFilters = {},
+  matchId?: string | null,
+): Promise<AnalystExportDataResponse> {
+  const params = new URLSearchParams();
+  if (matchId) params.set('match_id', matchId);
+  if (filters.dateFrom) params.set('date_from', filters.dateFrom);
+  if (filters.dateTo) params.set('date_to', filters.dateTo);
+  if (filters.player) params.set('player', filters.player);
+  if (filters.dismissalType) params.set('dismissal_type', filters.dismissalType);
+  if (filters.phase) params.set('phase', filters.phase);
+  const query = params.toString();
+  return request<AnalystExportDataResponse>(`/api/analyst/export-data${query ? `?${query}` : ''}`);
 }
 
 /* ----------------------------- AI Commentary ----------------------------- */

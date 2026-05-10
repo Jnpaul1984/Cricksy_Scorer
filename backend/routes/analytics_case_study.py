@@ -10,13 +10,18 @@ from datetime import date
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend import security
+from backend.sql_app.database import get_db
+from backend.sql_app.models import Game, GameStatus
 from backend.api.schemas.analyst_matches import (
     AnalystMatchListItem,
     AnalystMatchListResponse,
 )
 from backend.api.schemas.case_study import MatchCaseStudyResponse
+from backend.services.analyst_access import scoped_games_stmt
 from backend.services.ai_match_summary import MatchAiSummary, build_match_ai_summary
 from backend.services.analytics_case_study import build_match_case_study
 
@@ -28,36 +33,73 @@ router = APIRouter(
 AllowedRoles = ["analyst_pro", "org_pro"]
 
 
+def _team_name(team_data: Any, fallback: str) -> str:
+    if isinstance(team_data, dict):
+        name = team_data.get("name")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return fallback
+
+
+def _compute_run_rate(game: Game) -> float:
+    first_runs = 0
+    first_overs = 0.0
+    if isinstance(game.first_inning_summary, dict):
+        first_runs = int(game.first_inning_summary.get("runs") or 0)
+        first_overs = float(game.first_inning_summary.get("overs") or 0.0)
+    second_overs = float(game.overs_completed) + (float(game.balls_this_over) / 6.0)
+    total_runs = first_runs + int(game.total_runs)
+    total_overs = first_overs + second_overs
+    if total_overs <= 0:
+        return 0.0
+    return round(total_runs / total_overs, 2)
+
+
+def _phase_swing(game: Game) -> str:
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    for phase_name in ("death", "middle", "powerplay"):
+        phase_data = phases.get(phase_name)
+        if isinstance(phase_data, dict):
+            net = phase_data.get("net_swing_vs_par")
+            if isinstance(net, (int, float)):
+                direction = "+" if net >= 0 else ""
+                return f"{direction}{int(round(net))} in {phase_name}"
+    return "n/a"
+
+
 @router.get("", response_model=AnalystMatchListResponse)
 async def list_analyst_matches(
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Return a list of matches for the Analyst Workspace.
-
-    Currently returns mock data for m1 and m2.
     """
-    # TODO: Replace with actual database query
-    items = [
-        AnalystMatchListItem(
-            id="m1",
-            date=date(2025, 11, 28),
-            format="T20",
-            teams="Lions vs Falcons",
-            result="Lions won by 18 runs",
-            run_rate=8.9,
-            phase_swing="+22 in death",
-        ),
-        AnalystMatchListItem(
-            id="m2",
-            date=date(2025, 11, 25),
-            format="T20",
-            teams="Tigers vs Eagles",
-            result="Eagles won by 4 wickets",
-            run_rate=7.9,
-            phase_swing="-18 in middle",
-        ),
-    ]
+    stmt = scoped_games_stmt(current_user).where(Game.status == GameStatus.completed).order_by(Game.id.desc())
+    result = await db.execute(stmt)
+    games = result.scalars().all()
+
+    items = []
+    for game in games:
+        team_a_name = _team_name(game.team_a, "Team A")
+        team_b_name = _team_name(game.team_b, "Team B")
+        created_at = getattr(game, "created_at", None)
+        match_date = created_at.date() if created_at else date(1970, 1, 1)
+        status_value = game.status.value if hasattr(game.status, "value") else str(game.status)
+        items.append(
+            AnalystMatchListItem(
+                id=game.id,
+                date=match_date,
+                format=(game.match_type or "custom").upper(),
+                teams=f"{team_a_name} vs {team_b_name}",
+                result=game.result or "Completed",
+                run_rate=_compute_run_rate(game),
+                phase_swing=_phase_swing(game),
+                status=status_value,
+                venue=None,
+                match_datetime=created_at,
+            )
+        )
 
     return AnalystMatchListResponse(items=items, total=len(items))
 

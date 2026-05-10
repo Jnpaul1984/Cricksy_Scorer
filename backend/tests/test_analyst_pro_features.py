@@ -36,6 +36,18 @@ async def _set_user_role(
         await session.commit()
 
 
+async def _set_user_org_id(
+    session_maker: async_sessionmaker,
+    email: str,
+    org_id: str | None,
+) -> None:
+    async with session_maker() as session:
+        result = await session.execute(select(models.User).where(models.User.email == email))
+        user = result.scalar_one()
+        user.org_id = org_id
+        await session.commit()
+
+
 async def _ensure_player_bundle(session_maker: async_sessionmaker, player_id: str) -> None:
     async with session_maker() as session:
         profile = await session.get(models.PlayerProfile, player_id)
@@ -118,6 +130,31 @@ async def _ensure_game(session_maker: async_sessionmaker, game_id: str) -> None:
             await session.commit()
 
 
+async def _create_game(
+    session_maker: async_sessionmaker,
+    *,
+    game_id: str,
+    created_by_user_id: str | None,
+    status: models.GameStatus,
+    deliveries: list[dict[str, Any]] | None = None,
+) -> None:
+    async with session_maker() as session:
+        game = await session.get(models.Game, game_id)
+        if game is None:
+            game = models.Game(
+                id=game_id,
+                team_a={"name": f"{game_id} Team A", "players": []},
+                team_b={"name": f"{game_id} Team B", "players": []},
+                match_type="T20",
+            )
+            session.add(game)
+        game.created_by_user_id = created_by_user_id
+        game.status = status
+        game.deliveries = deliveries or []
+        game.result = f"{game_id} result"
+        await session.commit()
+
+
 @pytest.fixture
 def client() -> TestClient:
     # Use the global SessionLocal and engine from backend.sql_app.database
@@ -169,6 +206,11 @@ async def set_role(client: TestClient, email: str, role: models.RoleEnum) -> Non
     await _set_user_role(session_maker, email, role)
 
 
+async def set_user_org_id(client: TestClient, email: str, org_id: str | None) -> None:
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+    await _set_user_org_id(session_maker, email, org_id)
+
+
 async def ensure_player_bundle(client: TestClient, player_id: str) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
     await _ensure_player_bundle(session_maker, player_id)
@@ -184,6 +226,24 @@ async def add_form_entry(
 ) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
     await _add_form_entry(session_maker, player_id, runs=runs, wickets=wickets, offset_days=offset)
+
+
+async def create_game(
+    client: TestClient,
+    *,
+    game_id: str,
+    created_by_user_id: str | None,
+    status: models.GameStatus,
+    deliveries: list[dict[str, Any]] | None = None,
+) -> None:
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+    await _create_game(
+        session_maker,
+        game_id=game_id,
+        created_by_user_id=created_by_user_id,
+        status=status,
+        deliveries=deliveries,
+    )
 
 
 async def test_role_gating_for_analyst_endpoints(client: TestClient) -> None:
@@ -282,3 +342,126 @@ async def test_analytics_query_form_summary(client: TestClient) -> None:
     assert data["summary_stats"]["form_entries"] >= 3
     assert data["summary_stats"]["total_runs"] >= 220
     assert len(data["sample_rows"]) >= 1
+
+
+async def test_analytics_matches_list_is_completed_and_org_scoped(client: TestClient) -> None:
+    analyst_org = register_user(client, "analyst-org@example.com")
+    await set_role(client, analyst_org["email"], models.RoleEnum.analyst_pro)
+    await set_user_org_id(client, analyst_org["email"], "org-alpha")
+    token = login_user(client, analyst_org["email"])
+
+    analyst_other_org = register_user(client, "analyst-other@example.com")
+    await set_role(client, analyst_other_org["email"], models.RoleEnum.analyst_pro)
+    await set_user_org_id(client, analyst_other_org["email"], "org-beta")
+
+    await create_game(
+        client,
+        game_id="completed-alpha",
+        created_by_user_id=analyst_org["id"],
+        status=models.GameStatus.completed,
+    )
+    await create_game(
+        client,
+        game_id="inprogress-alpha",
+        created_by_user_id=analyst_org["id"],
+        status=models.GameStatus.in_progress,
+    )
+    await create_game(
+        client,
+        game_id="completed-beta",
+        created_by_user_id=analyst_other_org["id"],
+        status=models.GameStatus.completed,
+    )
+
+    resp = client.get("/analytics/matches", headers=_auth_headers(token))
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    ids = [item["id"] for item in payload["items"]]
+    assert "completed-alpha" in ids
+    assert "inprogress-alpha" not in ids
+    assert "completed-beta" not in ids
+
+
+async def test_analyst_export_data_real_rows_or_empty_never_fake(client: TestClient) -> None:
+    analyst = register_user(client, "analyst-export-real@example.com")
+    await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
+    token = login_user(client, analyst["email"])
+
+    await create_game(
+        client,
+        game_id="export-real",
+        created_by_user_id=analyst["id"],
+        status=models.GameStatus.completed,
+        deliveries=[
+            {
+                "inning_no": 1,
+                "over_number": 2,
+                "ball_number": 1,
+                "striker_id": "p-1",
+                "bowler_id": "b-1",
+                "runs_scored": 4,
+                "extra_runs": 0,
+                "extra_type": None,
+                "is_wicket": False,
+            }
+        ],
+    )
+
+    resp_rows = client.get(
+        "/api/analyst/export-data?match_id=export-real",
+        headers=_auth_headers(token),
+    )
+    assert resp_rows.status_code == 200, resp_rows.text
+    payload_rows = resp_rows.json()
+    assert payload_rows["meta"]["row_count"] == 1
+    assert payload_rows["rows"][0]["player"] == "p-1"
+    text_dump = str(payload_rows)
+    assert "Player A" not in text_dump and "Player B" not in text_dump and "Player C" not in text_dump
+
+    resp_empty = client.get(
+        "/api/analyst/export-data?match_id=export-real&phase=death",
+        headers=_auth_headers(token),
+    )
+    assert resp_empty.status_code == 200
+    payload_empty = resp_empty.json()
+    assert payload_empty["rows"] == []
+    assert payload_empty["meta"]["row_count"] == 0
+    assert payload_empty["meta"]["empty_reason"] == "no_rows_for_match_or_filters"
+
+
+async def test_analyst_match_detail_and_export_cross_org_blocked(client: TestClient) -> None:
+    analyst_owner = register_user(client, "analyst-owner@example.com")
+    await set_role(client, analyst_owner["email"], models.RoleEnum.analyst_pro)
+    await set_user_org_id(client, analyst_owner["email"], "org-owner")
+    owner_token = login_user(client, analyst_owner["email"])
+
+    analyst_other = register_user(client, "analyst-other-org@example.com")
+    await set_role(client, analyst_other["email"], models.RoleEnum.analyst_pro)
+    await set_user_org_id(client, analyst_other["email"], "org-other")
+    other_token = login_user(client, analyst_other["email"])
+
+    await create_game(
+        client,
+        game_id="org-owner-match",
+        created_by_user_id=analyst_owner["id"],
+        status=models.GameStatus.completed,
+    )
+
+    ok_detail = client.get(
+        "/api/analyst/matches/org-owner-match",
+        headers=_auth_headers(owner_token),
+    )
+    assert ok_detail.status_code == 200
+    assert ok_detail.json()["match_id"] == "org-owner-match"
+
+    blocked_detail = client.get(
+        "/api/analyst/matches/org-owner-match",
+        headers=_auth_headers(other_token),
+    )
+    assert blocked_detail.status_code == 404
+
+    blocked_export = client.get(
+        "/api/analyst/export-data?match_id=org-owner-match",
+        headers=_auth_headers(other_token),
+    )
+    assert blocked_export.status_code == 404
