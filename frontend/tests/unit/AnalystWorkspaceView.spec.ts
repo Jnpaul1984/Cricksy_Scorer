@@ -88,8 +88,82 @@ const mockMatchDetail = {
     overs_range: { start_over: 16, end_over: 20 },
     reason_codes: [],
   },
-  phases: [],
-  key_players: [],
+  phases: [
+    {
+      id: 'powerplay',
+      label: 'Powerplay',
+      start_over: 1,
+      end_over: 6,
+      runs: 52,
+      wickets: 1,
+      run_rate: 8.67,
+      net_swing_vs_par: 10,
+      impact: 'positive',
+      impact_label: 'Strong start',
+    },
+    {
+      id: 'middle',
+      label: 'Middle overs',
+      start_over: 7,
+      end_over: 15,
+      runs: 81,
+      wickets: 3,
+      run_rate: 9.0,
+      net_swing_vs_par: 5,
+      impact: 'neutral',
+      impact_label: 'On par',
+    },
+    {
+      id: 'death',
+      label: 'Death overs',
+      start_over: 16,
+      end_over: 20,
+      runs: 45,
+      wickets: 2,
+      run_rate: 9.0,
+      net_swing_vs_par: 3,
+      impact: 'positive',
+      impact_label: 'Good finish',
+    },
+  ],
+  key_players: [
+    {
+      id: 'player-001',
+      name: 'J. Anderson',
+      team: 'Lions',
+      role: 'Batsman',
+      impact: 'high',
+      impact_label: 'Match winner',
+      impact_score: 8.5,
+      batting: {
+        innings: 1,
+        runs: 72,
+        balls: 48,
+        strike_rate: 150.0,
+        boundaries: { fours: 6, sixes: 3 },
+      },
+      bowling: null,
+      fielding: null,
+    },
+    {
+      id: 'player-002',
+      name: 'M. Clarke',
+      team: 'Falcons',
+      role: 'Bowler',
+      impact: 'medium',
+      impact_label: 'Key wickets',
+      impact_score: 5.2,
+      batting: null,
+      bowling: {
+        overs: 4,
+        maidens: 0,
+        runs: 28,
+        wickets: 3,
+        economy: 7.0,
+      },
+      fielding: null,
+    },
+  ],
   dismissal_patterns: null,
   ai: null,
 }
@@ -256,5 +330,111 @@ describe('AnalystWorkspaceView', () => {
 
     await nextTick()
     expect(wrapper.find('#aw-match-detail').exists()).toBe(false)
+  })
+
+  it('shows phase breakdown from real backend data', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Phase breakdown')
+    expect(text).toContain('Powerplay')
+    expect(text).toContain('Strong start')
+    expect(text).toContain('Middle overs')
+    expect(text).toContain('Death overs')
+    // Shows real run and wicket values from payload
+    expect(text).toContain('52')
+    expect(text).toContain('81')
+  })
+
+  it('shows empty state for phase breakdown when phases array is empty', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    const detailWithNoPhases = { ...mockMatchDetail, phases: [] }
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(detailWithNoPhases)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('No phase data available yet.')
+  })
+
+  it('shows key players from real backend data', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Key players')
+    expect(text).toContain('J. Anderson')
+    expect(text).toContain('Lions')
+    expect(text).toContain('Match winner')
+    expect(text).toContain('M. Clarke')
+    expect(text).toContain('Falcons')
+    expect(text).toContain('Key wickets')
+    // Batting stats from payload
+    expect(text).toContain('72 runs')
+    // Bowling stats from payload
+    expect(text).toContain('3/28')
+  })
+
+  it('shows empty state for key players when key_players array is empty', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    const detailWithNoPlayers = { ...mockMatchDetail, key_players: [] }
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(detailWithNoPlayers)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('No key player data available yet.')
+  })
+
+  it('does not render fabricated player stats in key players section', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    // Ensure no hardcoded fabricated player names
+    expect(text).not.toContain('R. Singh')
+    expect(text).not.toContain('A. Kumar')
+    expect(text).not.toContain('Virat')
+    expect(text).not.toContain('Kohli')
   })
 })
