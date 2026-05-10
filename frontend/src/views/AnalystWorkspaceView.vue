@@ -159,13 +159,14 @@
               </div>
 
               <!-- Loading state -->
-              <div v-if="matchesLoading" class="aw-matches-loading">
-                <p>Loading matches...</p>
+              <div v-if="matchesLoading" class="aw-matches-loading" role="status" aria-live="polite">
+                <p>Loading completed matches…</p>
               </div>
 
               <!-- Error state -->
-              <div v-else-if="matchesError" class="aw-matches-error">
-                <p>{{ matchesError }}</p>
+              <div v-else-if="matchesError" class="aw-matches-error" role="alert">
+                <p>Unable to load completed matches right now.</p>
+                <p class="aw-inline-error-detail">{{ matchesError }}</p>
                 <BaseButton variant="ghost" size="sm" @click="loadMatches">
                   Retry
                 </BaseButton>
@@ -173,9 +174,9 @@
 
               <!-- Empty state -->
               <div v-else-if="filteredMatches.length === 0" class="aw-matches-empty">
-                <p>No matches found for the current filters.</p>
+                <p>No completed matches match the current filters.</p>
                 <p class="aw-matches-empty-hint">
-                  Try adjusting your search or filter criteria.
+                  Try adjusting your search or filter criteria, or refresh data.
                 </p>
               </div>
 
@@ -194,7 +195,13 @@
                   :key="match.id"
                   class="aw-matches-row"
                   :class="{ 'aw-matches-row--selected': selectedMatchId === match.id }"
+                  role="button"
+                  tabindex="0"
+                  :aria-pressed="selectedMatchId === match.id"
+                  :aria-label="`Open match intelligence for ${match.teams}`"
                   @click="selectMatch(match.id)"
+                  @keydown.enter.prevent="selectMatch(match.id)"
+                  @keydown.space.prevent="selectMatch(match.id)"
                 >
                   <!-- Main info column -->
                   <div class="aw-matches-col aw-matches-col--main">
@@ -306,13 +313,14 @@
                 </div>
 
                 <!-- Loading state -->
-                <div v-if="detailLoading" class="aw-detail-loading">
-                  <p>Loading match detail…</p>
+                <div v-if="detailLoading" class="aw-detail-loading" role="status" aria-live="polite">
+                  <p>Loading Match Intelligence…</p>
                 </div>
 
                 <!-- Error state -->
-                <div v-else-if="detailError" class="aw-detail-error">
-                  <p>{{ detailError }}</p>
+                <div v-else-if="detailError" class="aw-detail-error" role="alert">
+                  <p>Unable to load Match Intelligence for this match.</p>
+                  <p class="aw-inline-error-detail">{{ detailError }}</p>
                   <BaseButton
                     variant="ghost"
                     size="sm"
@@ -501,6 +509,8 @@
                         variant="ghost"
                         size="sm"
                         class="aw-podcast-copy-btn"
+                        :disabled="!canCopyPodcastPrep"
+                        :title="canCopyPodcastPrep ? 'Copy package text to clipboard' : 'Copy is unavailable until enough real match data is present'"
                         @click="copyPodcastPrep"
                       >
                         {{
@@ -1171,10 +1181,12 @@ const podcastPrepPackage = computed<PodcastPrepPackage | null>(() => {
   return buildPodcastPrepPackage(matchDetail.value)
 })
 
+const canCopyPodcastPrep = computed(() => Boolean(podcastPrepPackage.value?.hasEnoughData))
+
 const podcastCopyStatus = ref<'idle' | 'copied' | 'error'>('idle')
 
 async function copyPodcastPrep() {
-  if (!podcastPrepPackage.value) return
+  if (!podcastPrepPackage.value || !canCopyPodcastPrep.value) return
   const pkg = podcastPrepPackage.value
 
   const lines: string[] = [
@@ -1276,6 +1288,8 @@ onMounted(() => {
 .aw-header-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space-3);
 }
 
@@ -1556,10 +1570,18 @@ onMounted(() => {
   gap: var(--space-3);
 }
 
+.aw-inline-error-detail {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
 .aw-matches-empty {
-  padding: var(--space-5) 0;
+  padding: var(--space-5);
   font-size: var(--text-sm);
   color: var(--color-text-muted);
+  background: var(--color-surface-raised, #f8fafc);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
 }
 
 .aw-matches-empty-hint {
@@ -1601,6 +1623,11 @@ onMounted(() => {
 
 .aw-matches-row:hover {
   background-color: var(--color-surface-hover);
+}
+
+.aw-matches-row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .aw-matches-row.aw-match--highlight {
@@ -1965,6 +1992,10 @@ onMounted(() => {
 
   .aw-summary {
     grid-template-columns: 1fr;
+  }
+
+  .aw-header-actions {
+    justify-content: flex-start;
   }
 
   .aw-matches-head {

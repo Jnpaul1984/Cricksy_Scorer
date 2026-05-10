@@ -5,14 +5,23 @@
       size="sm"
       variant="ghost"
       class="export-trigger-btn"
-      title="Export data as CSV or JSON"
+      :disabled="!canExportContext"
+      :title="canExportContext ? 'Export data as CSV or JSON' : 'Export is unavailable because there is no completed match data in the current workspace context'"
+      aria-label="Open export options"
       @click="showModal = true"
     >
       📥 Export
     </BaseButton>
 
     <!-- Export Modal -->
-    <div v-if="showModal" class="export-modal-overlay" @click.self="closeModal">
+    <div
+      v-if="showModal"
+      class="export-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Export analyst data"
+      @click.self="closeModal"
+    >
       <BaseCard class="export-modal">
         <div class="export-header">
           <h3 class="export-title">Export Data</h3>
@@ -119,6 +128,12 @@
                 <span class="preview-value">{{ formatLabel }}</span>
               </div>
             </div>
+            <p
+              v-if="!canExportContext"
+              class="export-message export-message--info"
+            >
+              Export is unavailable because there is no completed match data in the current workspace context.
+            </p>
             <p v-if="exportInfo" class="export-message export-message--info">{{ exportInfo }}</p>
             <p v-if="exportError" class="export-message export-message--error">{{ exportError }}</p>
           </div>
@@ -129,7 +144,13 @@
           <BaseButton variant="ghost" size="sm" @click="closeModal">
             Cancel
           </BaseButton>
-          <BaseButton variant="primary" size="sm" :loading="isExporting" @click="downloadData">
+          <BaseButton
+            variant="primary"
+            size="sm"
+            :loading="isExporting"
+            :disabled="!canExportContext || isExporting"
+            @click="downloadData"
+          >
             <span v-if="isExporting">Preparing…</span>
             <span v-else>📥 Download</span>
           </BaseButton>
@@ -140,7 +161,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, ref, computed, reactive } from 'vue'
+import { ref, computed, reactive } from 'vue'
 
 import { BaseButton, BaseCard } from '@/components'
 import { getAnalystExportData } from '@/services/api'
@@ -196,6 +217,8 @@ const formatLabel = computed(() => {
   return fmt?.label || 'Unknown'
 })
 
+const canExportContext = computed(() => Boolean(props.matchId || (props.data?.length ?? 0) > 0))
+
 // Estimate rows and file size based on filters
 const estimatedRows = computed(() => {
   let count = props.data?.length || 0
@@ -216,6 +239,13 @@ const estimatedFileSize = computed(() => {
 
 // Download handler
 async function downloadData() {
+  if (!canExportContext.value) {
+    exportInfo.value =
+      'No export data available for the current context/filters.'
+    exportError.value = null
+    return
+  }
+
   isExporting.value = true
   exportError.value = null
   exportInfo.value = null
