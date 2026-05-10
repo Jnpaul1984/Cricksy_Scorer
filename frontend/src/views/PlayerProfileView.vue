@@ -294,7 +294,7 @@
 
           <!-- Mental Profile Tab -->
           <div v-else-if="activeTab === 'mental'" class="tab-panel">
-            <MentalProfilePanel :player-id="profile.player_id" />
+            <MentalProfilePanel :player-id="profile.player_id" :player-name="profile.player_name" />
           </div>
         </BaseCard>
 
