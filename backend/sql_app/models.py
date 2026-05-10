@@ -1074,9 +1074,7 @@ class MentalQuestionnaireSession(Base):
     overall_average_score: Mapped[float] = mapped_column(Float, nullable=False)
     overall_summary: Mapped[str] = mapped_column(Text, nullable=False)
     strengths: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=_empty_list)
-    development_areas: Mapped[list[Any]] = mapped_column(
-        JSON, nullable=False, default=_empty_list
-    )
+    development_areas: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=_empty_list)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -1126,7 +1124,9 @@ class MentalQuestionnaireCategoryScore(Base):
         index=True,
     )
     category: Mapped[MentalQuestionnaireCategory] = mapped_column(
-        SAEnum(MentalQuestionnaireCategory, name="mental_questionnaire_category", create_type=False),
+        SAEnum(
+            MentalQuestionnaireCategory, name="mental_questionnaire_category", create_type=False
+        ),
         nullable=False,
         index=True,
     )
@@ -2239,4 +2239,90 @@ class VideoAnalysisChunk(Base):
         Index("ix_analysis_chunks_job_id", "job_id"),
         Index("ix_analysis_chunks_status", "status"),
         Index("ix_analysis_chunks_job_chunk_idx", "job_id", "chunk_index", unique=True),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 5C - Historical Import Batch Tracking
+# ---------------------------------------------------------------------------
+
+
+class HistoricalImportBatch(Base):
+    """Tracks metadata for each historical JSON import dry-run preview.
+
+    Persisted only when the caller explicitly requests record_preview=true.
+    This phase never creates Game/Delivery/Player/Team rows.
+    is_finalized stays False until a future phase enables the write path.
+    """
+
+    __tablename__ = "historical_import_batches"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+
+    # Ownership - at least one should be set when available
+    owner_user_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, index=True, comment="User who triggered the import preview"
+    )
+    owner_org_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, index=True, comment="Org scope for duplicate detection"
+    )
+
+    # Source provenance
+    source_filename: Mapped[str | None] = mapped_column(
+        String(512), nullable=True, comment="Original upload filename if supplied"
+    )
+    source_format: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        comment="Detected format: cricksy_fixture, cricsheet_json, unknown",
+    )
+    source_hash_sha256: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        index=True,
+        comment="SHA-256 of canonical JSON bytes for exact dup detection",
+    )
+
+    # Semantic duplicate key - competition|date|team_a|team_b when derivable
+    semantic_key: Mapped[str | None] = mapped_column(
+        String(512), nullable=True, index=True, comment="Semantic match key for fuzzy dup detection"
+    )
+
+    # Validation summary
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, comment="valid | invalid | unsupported"
+    )
+    error_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    warning_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    innings_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    delivery_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Full dry-run summary stored as JSON for auditability
+    dry_run_summary: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, comment="Serialized dry-run response payload for audit"
+    )
+
+    # Write-path gate - always False in Phase 5C; reserved for Phase 5D+
+    is_finalized: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="True only when actual Game rows have been committed (Phase 5D+)",
+    )
+
+    # Timestamps
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_hist_import_hash_user", "source_hash_sha256", "owner_user_id"),
+        Index("ix_hist_import_hash_org", "source_hash_sha256", "owner_org_id"),
+        Index("ix_hist_import_semantic_user", "semantic_key", "owner_user_id"),
+        Index("ix_hist_import_semantic_org", "semantic_key", "owner_org_id"),
     )
