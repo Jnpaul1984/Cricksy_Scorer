@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -16,11 +16,18 @@ from backend.sql_app.database import get_db
 from backend.sql_app.models import (
     CoachingSession,
     Game,
+    GameStatus,
     PlayerForm,
     PlayerProfile,
     PlayerSummary,
+    User,
 )
 from backend.sql_app.schemas import AnalyticsQuery, AnalyticsResult
+from backend.api.schemas.analyst_matches import (
+    AnalystExportDataResponse,
+    AnalystMatchDetailResponse,
+    AnalystMatchInningsSummary,
+)
 from backend.sql_app.match_ai import MatchAiSummaryResponse
 from backend.services.match_ai_service import MatchAiService
 from backend.services.match_context_service import (
@@ -32,6 +39,102 @@ router = APIRouter(prefix="/api/analyst", tags=["analyst_pro"])
 
 AllowedRoles = ["analyst_pro", "org_pro"]
 UTC = getattr(dt, "UTC", dt.UTC)
+
+
+def _match_access_clause(current_user: Any):
+    role_value = getattr(getattr(current_user, "role", None), "value", getattr(current_user, "role", None))
+    user_id = str(current_user.id)
+    org_id = getattr(current_user, "org_id", None)
+    if org_id:
+        org_clause = and_(Game.created_by_user_id.isnot(None), User.org_id == str(org_id))
+        if role_value == "org_pro":
+            return or_(Game.created_by_user_id == user_id, org_clause)
+        return org_clause
+    return Game.created_by_user_id == user_id
+
+
+def _scoped_games_stmt(current_user: Any):
+    return select(Game).outerjoin(User, User.id == Game.created_by_user_id).where(
+        _match_access_clause(current_user)
+    )
+
+
+def _team_name(team_data: Any, fallback: str) -> str:
+    if isinstance(team_data, dict):
+        name = team_data.get("name")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return fallback
+
+
+def _phase_from_over(over_number: Any) -> str:
+    if not isinstance(over_number, int):
+        return "unknown"
+    if over_number <= 6:
+        return "powerplay"
+    if over_number <= 15:
+        return "middle"
+    return "death"
+
+
+def _match_innings_summaries(game: Game) -> list[AnalystMatchInningsSummary]:
+    summaries: list[AnalystMatchInningsSummary] = []
+    team_a_name = _team_name(game.team_a, "Team A")
+    team_b_name = _team_name(game.team_b, "Team B")
+    if isinstance(game.first_inning_summary, dict):
+        summaries.append(
+            AnalystMatchInningsSummary(
+                inning_no=1,
+                team=game.first_inning_summary.get("batting_team") or team_a_name,
+                runs=game.first_inning_summary.get("runs"),
+                wickets=game.first_inning_summary.get("wickets"),
+                overs=float(game.first_inning_summary.get("overs") or 0.0),
+            )
+        )
+    if game.current_inning >= 2 or not summaries:
+        summaries.append(
+            AnalystMatchInningsSummary(
+                inning_no=max(int(game.current_inning), 2 if summaries else 1),
+                team=game.batting_team_name or (team_b_name if summaries else team_a_name),
+                runs=game.total_runs,
+                wickets=game.total_wickets,
+                overs=round(float(game.overs_completed) + (float(game.balls_this_over) / 6.0), 1),
+            )
+        )
+    return summaries
+
+
+def _export_rows_for_game(game: Game) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    deliveries = game.deliveries if isinstance(game.deliveries, list) else []
+    team_a_name = _team_name(game.team_a, "Team A")
+    team_b_name = _team_name(game.team_b, "Team B")
+    created_at = getattr(game, "created_at", None)
+    match_date = created_at.date().isoformat() if created_at else None
+    for delivery in deliveries:
+        if not isinstance(delivery, dict):
+            continue
+        over_number = delivery.get("over_number")
+        wicket_type = delivery.get("wicket_type")
+        is_wicket = bool(delivery.get("is_wicket"))
+        rows.append(
+            {
+                "match_id": game.id,
+                "match_date": match_date,
+                "teams": f"{team_a_name} vs {team_b_name}",
+                "inning_no": delivery.get("inning_no"),
+                "over_number": over_number,
+                "ball_number": delivery.get("ball_number"),
+                "player": delivery.get("striker_id"),
+                "bowler": delivery.get("bowler_id"),
+                "runs": int(delivery.get("runs_scored") or 0),
+                "extra_type": delivery.get("extra_type"),
+                "extra_runs": int(delivery.get("extra_runs") or 0),
+                "dismissal": wicket_type or ("wicket" if is_wicket else None),
+                "phase": _phase_from_over(over_number),
+            }
+        )
+    return rows
 
 
 def _serialize_value(value: Any) -> Any:
@@ -196,6 +299,102 @@ async def export_player_form(
         "form_score",
     ]
     return _format_export(rows, headers, export_format, "player_form_export.csv")
+
+
+@router.get("/matches/{match_id}", response_model=AnalystMatchDetailResponse)
+async def get_analyst_match_detail(
+    match_id: str,
+    current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = _scoped_games_stmt(current_user).where(
+        Game.id == match_id,
+        Game.status == GameStatus.completed,
+    )
+    result = await db.execute(stmt)
+    game = result.scalar_one_or_none()
+    if game is None:
+        raise HTTPException(status_code=404, detail="Match not found")
+    team_a_name = _team_name(game.team_a, "Team A")
+    team_b_name = _team_name(game.team_b, "Team B")
+    status_value = game.status.value if hasattr(game.status, "value") else str(game.status)
+    return AnalystMatchDetailResponse(
+        match_id=game.id,
+        status=status_value,
+        format=(game.match_type or "custom").upper(),
+        teams=f"{team_a_name} vs {team_b_name}",
+        result=game.result,
+        venue=None,
+        match_datetime=getattr(game, "created_at", None),
+        innings=_match_innings_summaries(game),
+        batting_scorecard=game.batting_scorecard if isinstance(game.batting_scorecard, dict) else None,
+        bowling_scorecard=game.bowling_scorecard if isinstance(game.bowling_scorecard, dict) else None,
+    )
+
+
+@router.get("/export-data", response_model=AnalystExportDataResponse)
+async def get_analyst_export_data(
+    current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    match_id: str | None = Query(None),
+    date_from: dt.date | None = Query(None),
+    date_to: dt.date | None = Query(None),
+    player: str | None = Query(None),
+    dismissal_type: str | None = Query(None),
+    phase: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = _scoped_games_stmt(current_user).where(Game.status == GameStatus.completed)
+    if match_id:
+        stmt = stmt.where(Game.id == match_id)
+    result = await db.execute(stmt.order_by(Game.id.desc()))
+    games = result.scalars().all()
+
+    if match_id and not games:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    rows: list[dict[str, object]] = []
+    for game in games:
+        rows.extend(_export_rows_for_game(game))
+
+    filtered_rows: list[dict[str, object]] = []
+    normalized_player = player.lower() if isinstance(player, str) and player.strip() else None
+    normalized_dismissal = (
+        dismissal_type.lower() if isinstance(dismissal_type, str) and dismissal_type.strip() else None
+    )
+    normalized_phase = phase.lower() if isinstance(phase, str) and phase.strip() else None
+    for row in rows:
+        row_date = row.get("match_date")
+        if isinstance(row_date, str):
+            parsed_date = dt.date.fromisoformat(row_date)
+            if date_from and parsed_date < date_from:
+                continue
+            if date_to and parsed_date > date_to:
+                continue
+        if normalized_player:
+            player_value = str(row.get("player") or "").lower()
+            if normalized_player not in player_value:
+                continue
+        if normalized_dismissal:
+            dismissal_value = str(row.get("dismissal") or "").lower()
+            if dismissal_value != normalized_dismissal:
+                continue
+        if normalized_phase:
+            phase_value = str(row.get("phase") or "").lower()
+            if phase_value != normalized_phase:
+                continue
+        filtered_rows.append(row)
+
+    empty_reason = "no_data" if not filtered_rows else None
+    if not filtered_rows and match_id:
+        empty_reason = "no_rows_for_match_or_filters"
+    meta: dict[str, object] = {
+        "match_id": match_id,
+        "row_count": len(filtered_rows),
+        "completed_matches_scanned": len(games),
+        "source": "game.deliveries",
+        "empty_reason": empty_reason,
+    }
+    return AnalystExportDataResponse(rows=filtered_rows, meta=meta)
 
 
 async def _scalar(db: AsyncSession, stmt):
