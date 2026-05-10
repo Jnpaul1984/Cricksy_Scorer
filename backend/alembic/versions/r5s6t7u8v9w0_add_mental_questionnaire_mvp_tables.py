@@ -37,7 +37,12 @@ def upgrade() -> None:
         sa.Column("question_text", sa.Text(), nullable=False),
         sa.Column("display_order", sa.Integer(), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -65,49 +70,65 @@ def upgrade() -> None:
         [
             {
                 "category": "Mental Toughness",
-                "question_text": "I stay focused and bounce back quickly after setbacks in training or matches.",
+                "question_text": (
+                    "I stay focused and bounce back quickly after setbacks in training or matches."
+                ),
                 "display_order": 1,
                 "is_active": True,
             },
             {
                 "category": "Mental Toughness",
-                "question_text": "I keep my effort level strong even when situations become difficult.",
+                "question_text": (
+                    "I keep my effort level strong even when situations become difficult."
+                ),
                 "display_order": 2,
                 "is_active": True,
             },
             {
                 "category": "Pressure Handling",
-                "question_text": "I stay calm and execute my skills when the game pressure rises.",
+                "question_text": (
+                    "I stay calm and execute my skills when the game pressure rises."
+                ),
                 "display_order": 1,
                 "is_active": True,
             },
             {
                 "category": "Pressure Handling",
-                "question_text": "I can improve under pressure by sticking to my process and routines.",
+                "question_text": (
+                    "I can improve under pressure by sticking to my process and routines."
+                ),
                 "display_order": 2,
                 "is_active": True,
             },
             {
                 "category": "Game Awareness / Cricket IQ",
-                "question_text": "I read match situations well and adjust decisions for the team.",
+                "question_text": (
+                    "I read match situations well and adjust decisions for the team."
+                ),
                 "display_order": 1,
                 "is_active": True,
             },
             {
                 "category": "Game Awareness / Cricket IQ",
-                "question_text": "I understand field settings, bowler plans, and scoring options clearly.",
+                "question_text": (
+                    "I understand field settings, bowler plans, and scoring options clearly."
+                ),
                 "display_order": 2,
                 "is_active": True,
             },
             {
                 "category": "Training Habits & Discipline",
-                "question_text": "I follow training plans with discipline and complete key practice tasks.",
+                "question_text": (
+                    "I follow training plans with discipline and complete key practice tasks."
+                ),
                 "display_order": 1,
                 "is_active": True,
             },
             {
                 "category": "Training Habits & Discipline",
-                "question_text": "I prepare consistently with recovery, reflection, and game-readiness habits.",
+                "question_text": (
+                    "I prepare consistently with recovery, reflection, and game-readiness habits."
+                ),
                 "display_order": 2,
                 "is_active": True,
             },
@@ -123,7 +144,12 @@ def upgrade() -> None:
         sa.Column("overall_summary", sa.Text(), nullable=False),
         sa.Column("strengths", sa.JSON(), nullable=False),
         sa.Column("development_areas", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
         sa.ForeignKeyConstraint(["player_id"], ["player_profiles.player_id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["submitted_by_user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -154,8 +180,12 @@ def upgrade() -> None:
         sa.Column("question_id", sa.Integer(), nullable=False),
         sa.Column("score", sa.Integer(), nullable=False),
         sa.CheckConstraint("score >= 1 AND score <= 5", name="ck_mental_questionnaire_score_range"),
-        sa.ForeignKeyConstraint(["question_id"], ["mental_questionnaire_questions.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["session_id"], ["mental_questionnaire_sessions.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["question_id"], ["mental_questionnaire_questions.id"], ondelete="CASCADE"
+        ),
+        sa.ForeignKeyConstraint(
+            ["session_id"], ["mental_questionnaire_sessions.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -183,7 +213,9 @@ def upgrade() -> None:
         sa.Column("session_id", sa.String(), nullable=False),
         sa.Column("category", mental_questionnaire_category, nullable=False),
         sa.Column("average_score", sa.Float(), nullable=False),
-        sa.ForeignKeyConstraint(["session_id"], ["mental_questionnaire_sessions.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["session_id"], ["mental_questionnaire_sessions.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -222,16 +254,28 @@ def downgrade() -> None:
     )
     op.drop_table("mental_questionnaire_category_scores")
 
-    op.drop_index("ix_mental_questionnaire_answers_session_question", table_name="mental_questionnaire_answers")
-    op.drop_index("ix_mental_questionnaire_answers_session_id", table_name="mental_questionnaire_answers")
-    op.drop_index("ix_mental_questionnaire_answers_question_id", table_name="mental_questionnaire_answers")
+    op.drop_index(
+        "ix_mental_questionnaire_answers_session_question",
+        table_name="mental_questionnaire_answers",
+    )
+    op.drop_index(
+        "ix_mental_questionnaire_answers_session_id",
+        table_name="mental_questionnaire_answers",
+    )
+    op.drop_index(
+        "ix_mental_questionnaire_answers_question_id",
+        table_name="mental_questionnaire_answers",
+    )
     op.drop_table("mental_questionnaire_answers")
 
     op.drop_index(
         "ix_mental_questionnaire_sessions_submitted_by_user_id",
         table_name="mental_questionnaire_sessions",
     )
-    op.drop_index("ix_mental_questionnaire_sessions_player_id", table_name="mental_questionnaire_sessions")
+    op.drop_index(
+        "ix_mental_questionnaire_sessions_player_id",
+        table_name="mental_questionnaire_sessions",
+    )
     op.drop_index(
         "ix_mental_questionnaire_sessions_player_created",
         table_name="mental_questionnaire_sessions",
