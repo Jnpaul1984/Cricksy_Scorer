@@ -4,7 +4,6 @@ import hashlib
 import json
 from typing import Any
 
-from backend.domain.constants import norm_extra
 from backend.api.schemas.historical_import import (
     HistoricalImportDetectedSections,
     HistoricalImportDryRunResponse,
@@ -13,6 +12,7 @@ from backend.api.schemas.historical_import import (
     HistoricalImportIssue,
     HistoricalImportMetadataPreview,
 )
+from backend.domain.constants import norm_extra
 
 INNINGS_NODE_KEYS = ("team", "balls", "deliveries", "overs", "runs", "wickets")
 DELIVERY_PLAYER_KEYS = ("batsman", "batter", "striker", "non_striker", "bowler")
@@ -29,12 +29,14 @@ def _hash_payload(payload: bytes) -> str:
 
 
 def _to_canonical_json_bytes(data: Any) -> bytes:
-    return json.dumps(data, separators=(",", ":"), sort_keys=True, ensure_ascii=False).encode("utf-8")
+    return json.dumps(data, separators=(",", ":"), sort_keys=True, ensure_ascii=False).encode(
+        "utf-8"
+    )
 
 
 def _derive_semantic_key(
     parsed: dict[str, Any],
-    metadata_preview: "HistoricalImportMetadataPreview",
+    metadata_preview: HistoricalImportMetadataPreview,
     team_names: list[str],
 ) -> str | None:
     """Derive a stable semantic key for duplicate detection.
@@ -240,7 +242,9 @@ def _derive_innings_preview(
             derived_runs = total
 
         explicit_wickets = innings.get("wickets")
-        derived_wickets: int | None = explicit_wickets if isinstance(explicit_wickets, int) else None
+        derived_wickets: int | None = (
+            explicit_wickets if isinstance(explicit_wickets, int) else None
+        )
         if derived_wickets is None and normalized_deliveries:
             wicket_count = 0
             for delivery in normalized_deliveries:
@@ -250,7 +254,9 @@ def _derive_innings_preview(
             derived_wickets = wicket_count
 
         balls_count = len(normalized_deliveries)
-        legal_balls_count = sum(1 for delivery in normalized_deliveries if _is_legal_delivery(delivery))
+        legal_balls_count = sum(
+            1 for delivery in normalized_deliveries if _is_legal_delivery(delivery)
+        )
         overs_float = None
         if legal_balls_count:
             complete_overs = legal_balls_count // 6

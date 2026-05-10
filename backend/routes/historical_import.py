@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from typing import Annotated, AsyncGenerator
-
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
+from collections.abc import AsyncGenerator
+from typing import Annotated
 
 from backend.api.schemas.historical_import import (
     HistoricalImportBatchRecord,
@@ -20,6 +17,9 @@ from backend.services.historical_import_service import (
 )
 from backend.sql_app import models
 from backend.sql_app.database import get_db as _base_get_db
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/historical-import/json", tags=["historical-import"])
 
@@ -49,9 +49,7 @@ async def historical_json_dry_run(
         ),
     ),
     db: AsyncSession = Depends(_get_import_db),
-    current_user: Annotated[
-        models.User | None, Depends(get_current_user_optional)
-    ] = None,
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
 ) -> HistoricalImportDryRunResponse | JSONResponse:
     payload_bytes: bytes
     source_filename: str | None = None
@@ -113,7 +111,7 @@ async def historical_json_dry_run(
     no_persistence = True
 
     if record_preview:
-        # Persist batch metadata only – no Game/Delivery/Player/Team writes
+        # Persist batch metadata only - no Game/Delivery/Player/Team writes
         batch = await create_import_batch(
             db,
             source_hash_sha256=source_hash,
@@ -163,9 +161,7 @@ async def historical_json_dry_run(
 async def list_historical_import_batches(
     limit: int = Query(default=20, ge=1, le=200, description="Maximum number of records to return"),
     db: AsyncSession = Depends(_get_import_db),
-    current_user: Annotated[
-        models.User | None, Depends(get_current_user_optional)
-    ] = None,
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
 ) -> list[HistoricalImportBatchRecord]:
     """List historical import batch records scoped to the current user or org."""
     owner_user_id: str | None = current_user.id if current_user else None

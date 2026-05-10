@@ -1,10 +1,10 @@
-"""Phase 5C – Historical Import Batch Tracking Service.
+"""Phase 5C - Historical Import Batch Tracking Service.
 
 Provides:
-- ``create_import_batch`` – persist a dry-run preview batch record.
-- ``find_duplicate_by_hash`` – detect exact duplicate by SHA-256.
-- ``find_duplicate_by_semantic_key`` – detect semantic duplicate by match key.
-- ``list_import_batches`` – list batches scoped to a user/org.
+- ``create_import_batch`` - persist a dry-run preview batch record.
+- ``find_duplicate_by_hash`` - detect exact duplicate by SHA-256.
+- ``find_duplicate_by_semantic_key`` - detect semantic duplicate by match key.
+- ``list_import_batches`` - list batches scoped to a user/org.
 
 No Game, Delivery, Player, or Team rows are created by any function here.
 ``is_finalized`` remains False for every batch in this phase.
@@ -15,10 +15,9 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from backend.sql_app.models import HistoricalImportBatch
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from backend.sql_app.models import HistoricalImportBatch
 
 
 async def find_duplicate_by_hash(

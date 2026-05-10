@@ -1074,9 +1074,7 @@ class MentalQuestionnaireSession(Base):
     overall_average_score: Mapped[float] = mapped_column(Float, nullable=False)
     overall_summary: Mapped[str] = mapped_column(Text, nullable=False)
     strengths: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=_empty_list)
-    development_areas: Mapped[list[Any]] = mapped_column(
-        JSON, nullable=False, default=_empty_list
-    )
+    development_areas: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=_empty_list)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -1126,7 +1124,9 @@ class MentalQuestionnaireCategoryScore(Base):
         index=True,
     )
     category: Mapped[MentalQuestionnaireCategory] = mapped_column(
-        SAEnum(MentalQuestionnaireCategory, name="mental_questionnaire_category", create_type=False),
+        SAEnum(
+            MentalQuestionnaireCategory, name="mental_questionnaire_category", create_type=False
+        ),
         nullable=False,
         index=True,
     )
@@ -2243,7 +2243,7 @@ class VideoAnalysisChunk(Base):
 
 
 # ---------------------------------------------------------------------------
-# Phase 5C – Historical Import Batch Tracking
+# Phase 5C - Historical Import Batch Tracking
 # ---------------------------------------------------------------------------
 
 
@@ -2261,7 +2261,7 @@ class HistoricalImportBatch(Base):
         String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
     )
 
-    # Ownership – at least one should be set when available
+    # Ownership - at least one should be set when available
     owner_user_id: Mapped[str | None] = mapped_column(
         String, nullable=True, index=True, comment="User who triggered the import preview"
     )
@@ -2274,13 +2274,18 @@ class HistoricalImportBatch(Base):
         String(512), nullable=True, comment="Original upload filename if supplied"
     )
     source_format: Mapped[str] = mapped_column(
-        String(64), nullable=False, comment="Detected format: cricksy_fixture, cricsheet_json, unknown"
+        String(64),
+        nullable=False,
+        comment="Detected format: cricksy_fixture, cricsheet_json, unknown",
     )
     source_hash_sha256: Mapped[str] = mapped_column(
-        String(64), nullable=False, index=True, comment="SHA-256 of canonical JSON bytes for exact dup detection"
+        String(64),
+        nullable=False,
+        index=True,
+        comment="SHA-256 of canonical JSON bytes for exact dup detection",
     )
 
-    # Semantic duplicate key – competition|date|team_a|team_b when derivable
+    # Semantic duplicate key - competition|date|team_a|team_b when derivable
     semantic_key: Mapped[str | None] = mapped_column(
         String(512), nullable=True, index=True, comment="Semantic match key for fuzzy dup detection"
     )
@@ -2299,10 +2304,12 @@ class HistoricalImportBatch(Base):
         JSON, nullable=True, comment="Serialized dry-run response payload for audit"
     )
 
-    # Write-path gate – always False in Phase 5C; reserved for Phase 5D+
+    # Write-path gate - always False in Phase 5C; reserved for Phase 5D+
     is_finalized: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False,
-        comment="True only when actual Game rows have been committed (Phase 5D+)"
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="True only when actual Game rows have been committed (Phase 5D+)",
     )
 
     # Timestamps

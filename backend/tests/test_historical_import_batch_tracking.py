@@ -1,4 +1,4 @@
-"""Phase 5C – Historical Import Batch Tracking + Duplicate Detection tests.
+"""Phase 5C - Historical Import Batch Tracking + Duplicate Detection tests.
 
 Validates:
 - Default dry-run writes nothing to the DB (no_persistence=True, no record_id)
@@ -9,6 +9,7 @@ Validates:
 - List endpoint returns batches scoped to caller
 - is_finalized is always False in Phase 5C
 """
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,6 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from backend.main import app
-
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
 
@@ -134,7 +134,7 @@ def test_duplicate_by_hash_detected_on_second_call() -> None:
     fixture = _load_fixture()
 
     with TestClient(app) as client:
-        # First preview – records the batch
+        # First preview - records the batch
         r1 = client.post(
             "/api/historical-import/json/dry-run",
             json=fixture,
@@ -143,7 +143,7 @@ def test_duplicate_by_hash_detected_on_second_call() -> None:
         assert r1.status_code == 200
         first_id = r1.json()["record_id"]
 
-        # Second preview with same payload – should detect duplicate
+        # Second preview with same payload - should detect duplicate
         r2 = client.post(
             "/api/historical-import/json/dry-run",
             json=fixture,
@@ -226,7 +226,7 @@ def test_semantic_duplicate_detected() -> None:
         assert r1.status_code == 200
         first_id = r1.json()["record_id"]
 
-        # Dry-run v2 – different hash but same semantic key
+        # Dry-run v2 - different hash but same semantic key
         r2 = client.post("/api/historical-import/json/dry-run", json=fixture_v2)
         assert r2.status_code == 200
 
