@@ -60,7 +60,7 @@ def upgrade() -> None:
 
     questions = sa.table(
         "mental_questionnaire_questions",
-        sa.column("category", sa.String()),
+        sa.column("category", mental_questionnaire_category),
         sa.column("question_text", sa.Text()),
         sa.column("display_order", sa.Integer()),
         sa.column("is_active", sa.Boolean()),
