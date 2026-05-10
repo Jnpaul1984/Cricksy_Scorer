@@ -117,6 +117,7 @@ async def test_job_history_includes_artifact_availability(async_client, db_sessi
 
     job = VideoAnalysisJob(
         session_id=session.id,
+        # Use legacy-complete status explicitly to ensure both completed+done paths stay covered.
         status=VideoAnalysisJobStatus.completed,
         quick_results={"ok": True},
         quick_report={"summary": "ready"},

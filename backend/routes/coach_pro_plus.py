@@ -53,6 +53,19 @@ router = APIRouter(prefix="/api/coaches/plus", tags=["coach_pro_plus"])
 
 logger = logging.getLogger(__name__)
 
+JOB_ARTIFACT_COMPLETE_STATES = frozenset(
+    {VideoAnalysisJobStatus.completed, VideoAnalysisJobStatus.done}
+)
+JOB_RESULT_FIELDS = (
+    "results",
+    "quick_results",
+    "deep_results",
+    "quick_findings",
+    "deep_findings",
+    "quick_results_s3_key",
+    "deep_results_s3_key",
+)
+
 
 # ============================================================================
 # Helper Functions
@@ -304,21 +317,12 @@ def _can_access_video_session(user: User, session: VideoSession) -> bool:
 
 
 def _build_job_artifact_metadata(job: VideoAnalysisJob) -> dict[str, Any]:
-    success_states = {VideoAnalysisJobStatus.completed, VideoAnalysisJobStatus.done}
-    results_available = bool(
-        job.results
-        or job.quick_results
-        or job.deep_results
-        or job.quick_findings
-        or job.deep_findings
-        or job.quick_results_s3_key
-        or job.deep_results_s3_key
-    )
+    results_available = any(getattr(job, field_name, None) for field_name in JOB_RESULT_FIELDS)
     report_available = bool(job.quick_report or job.deep_report)
     pdf_available = bool(job.pdf_s3_key)
 
     missing_artifacts: list[str] = []
-    if job.status in success_states:
+    if job.status in JOB_ARTIFACT_COMPLETE_STATES:
         if not results_available:
             missing_artifacts.append("analysis_results")
         if not report_available:
@@ -335,7 +339,13 @@ def _build_job_artifact_metadata(job: VideoAnalysisJob) -> dict[str, Any]:
 
 
 def _build_session_history_metadata(session: VideoSession) -> dict[str, Any]:
-    latest_job = max(session.analysis_jobs, key=lambda item: item.created_at) if session.analysis_jobs else None
+    jobs_with_created_at = [item for item in session.analysis_jobs if item.created_at]
+    if jobs_with_created_at:
+        latest_job = max(jobs_with_created_at, key=lambda item: item.created_at)
+    elif session.analysis_jobs:
+        latest_job = max(session.analysis_jobs, key=lambda item: item.updated_at)
+    else:
+        latest_job = None
     latest_job_metadata = _build_job_artifact_metadata(latest_job) if latest_job else {}
     return {
         "analysis_job_count": len(session.analysis_jobs),
