@@ -16,10 +16,12 @@ from backend.api.schemas.historical_import import (
 
 INNINGS_NODE_KEYS = ("team", "balls", "deliveries", "overs", "runs", "wickets")
 DELIVERY_PLAYER_KEYS = ("batsman", "batter", "striker", "non_striker", "bowler")
-DUPLICATE_TRACKING_MESSAGE = (
+DUPLICATE_TRACKING_MESSAGE_NO_DB = (
     "Duplicate tracking table is not available in the current schema; "
     "Phase 5C schema work is required for persisted duplicate detection."
 )
+# Keep old name for backwards compat with any external references
+DUPLICATE_TRACKING_MESSAGE = DUPLICATE_TRACKING_MESSAGE_NO_DB
 
 
 def _hash_payload(payload: bytes) -> str:
@@ -28,6 +30,26 @@ def _hash_payload(payload: bytes) -> str:
 
 def _to_canonical_json_bytes(data: Any) -> bytes:
     return json.dumps(data, separators=(",", ":"), sort_keys=True, ensure_ascii=False).encode("utf-8")
+
+
+def _derive_semantic_key(
+    parsed: dict[str, Any],
+    metadata_preview: "HistoricalImportMetadataPreview",
+    team_names: list[str],
+) -> str | None:
+    """Derive a stable semantic key for duplicate detection.
+
+    Key format: ``<match_type>|<date>|<team_a>|<team_b>`` (sorted team names).
+    Returns None if any required component is missing.
+    """
+    match_type = metadata_preview.match_type
+    date = metadata_preview.date
+    if not match_type or not date:
+        return None
+    if len(team_names) < 2:
+        return None
+    sorted_teams = sorted(t.strip().lower() for t in team_names)
+    return "|".join([match_type.strip().lower(), date.strip(), *sorted_teams])
 
 
 def _as_str(value: Any) -> str | None:
@@ -442,6 +464,7 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         status = "valid"
 
     normalized_hash = _hash_payload(_to_canonical_json_bytes(parsed))
+    semantic_key = _derive_semantic_key(parsed, metadata_preview, team_names)
 
     response = HistoricalImportDryRunResponse(
         status=status,
@@ -460,6 +483,8 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
             source_hash_sha256=normalized_hash,
             probable_duplicate="unknown",
             tracking_available=False,
+            semantic_key=semantic_key,
+            semantic_duplicate=False,
             message=DUPLICATE_TRACKING_MESSAGE,
         ),
         no_persistence=True,

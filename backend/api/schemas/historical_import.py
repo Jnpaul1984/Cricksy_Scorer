@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -40,6 +41,9 @@ class HistoricalImportDuplicatePreview(BaseModel):
     source_hash_sha256: str
     probable_duplicate: Literal["unknown", "likely_duplicate", "not_duplicate"] = "unknown"
     tracking_available: bool = False
+    duplicate_batch_id: str | None = None
+    semantic_key: str | None = None
+    semantic_duplicate: bool = False
     message: str
 
 
@@ -58,3 +62,24 @@ class HistoricalImportDryRunResponse(BaseModel):
     errors: list[HistoricalImportIssue] = Field(default_factory=list)
     duplicate_detection: HistoricalImportDuplicatePreview
     no_persistence: bool = True
+    record_id: str | None = None
+
+
+class HistoricalImportBatchRecord(BaseModel):
+    """API response shape for a persisted historical import batch record."""
+
+    id: str
+    owner_user_id: str | None = None
+    owner_org_id: str | None = None
+    source_filename: str | None = None
+    source_format: str
+    source_hash_sha256: str
+    semantic_key: str | None = None
+    status: str
+    error_count: int
+    warning_count: int
+    innings_count: int
+    delivery_count: int
+    is_finalized: bool
+    created_at: dt.datetime
+    updated_at: dt.datetime
