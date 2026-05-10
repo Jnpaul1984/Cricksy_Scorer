@@ -50,7 +50,7 @@ Level: Beginner Cricket Analyst
 Course: Cricket Foundations
 Module: Cricket System Fundamentals
 Module Status: In Progress
-Current Lesson: Understanding Overs & Innings
+Current Lesson: Match Phases Explained
 
 ---
 
@@ -575,6 +575,153 @@ This was a strong lesson performance. You calculated the core numbers correctly 
 
 ---
 
+## Session 2026-05-09 — Match Phases Explained Exercise
+
+### Curriculum Location
+
+- Level: Beginner Cricket Analyst
+- Course: Cricket Foundations
+- Module: Cricket System Fundamentals
+- Lesson: Match Phases Explained
+
+### Session Objectives
+
+- [x] Identify powerplay, middle overs, and death overs in T20 and ODI contexts.
+- [x] Explain how wickets and scoring rate change the meaning of a phase.
+- [x] Calculate phase scoring and death-over run rate.
+- [x] Connect phase changes to Cricksy tactical alerts and dashboards.
+
+### Theory Covered
+
+- T20 phases: powerplay overs 1–6, middle overs 7–15, death overs 16–20.
+- ODI phases: powerplay overs 1–10, middle overs 11–40, death overs 41–50.
+- Same runs can mean different things depending on wickets lost and phase context.
+- Powerplay is about using field restrictions while preserving resources.
+- Middle overs are about control, strike rotation, matchup targeting, and preserving enough wickets for the finish.
+- Death overs are about acceleration, execution, and risk management.
+
+### Real-World Example Discussed
+
+- Scenario A: Two T20 teams both 48 after 6 overs, but Team A is 48/0 and Team B is 48/3.
+- Scenario B: T20 side moves from 54/1 after 6 overs to 102/5 after 15 overs.
+- Scenario C: T20 side moves from 118/3 after 15 overs to 172/6 after 20 overs.
+- Scenario D: ODI side moves from 210/3 after 38 overs to 225/6 after 42 overs.
+
+### Analyst Workflow Practiced
+
+- Identify the phase.
+- Compare expected phase behavior to actual outcome.
+- Calculate phase runs and phase run rate.
+- Explain whether the batting or bowling team controlled the phase.
+- Identify risk created for the next phase.
+- Propose a Cricksy alert or dashboard insight.
+
+### AI-Assisted Analysis Connection
+
+- Cricksy can detect phase labels automatically.
+- Cricksy can compare actual scoring rate to expected phase scoring rate.
+- Cricksy can detect pre-death wicket clusters and acceleration risk.
+- Cricksy can generate tactical advice based on phase context, wickets, and scoring rate.
+
+### Cricksy Feature Connection
+
+- Future feature: Auto Phase Detection.
+- Future feature: Middle-Overs Control Dashboard.
+- Future feature: Death-Overs Performance Dashboard.
+- Future feature: Pre-Death Wicket Cluster Alert.
+- Future feature: Acceleration Risk Warning.
+- Future feature: Phase-Based Player Performance Ratings.
+
+### Exercise / Practical Task
+
+- Task: Complete Match Phases Explained practice exercise.
+- Completion Status: Completed.
+- Evidence: Student uploaded `Practice Exercise_1.txt` and answered Scenario A, B, C, and D questions.
+
+### Assessment Questions / Task
+
+Scenario A — T20 Powerplay:
+1. Which team had the better powerplay?
+2. Why?
+3. What is the analyst summary?
+
+Scenario B — T20 Middle Overs:
+1. What happened in the middle overs?
+2. Did the batting team control the phase?
+3. What problem does this create for the death overs?
+4. What should Cricksy detect?
+
+Scenario C — T20 Death Overs:
+1. How many runs were scored in the death overs?
+2. What was the death-over run rate?
+3. Was this a strong finish?
+4. What helped make it strong or weak?
+
+Scenario D — ODI Phase Shift:
+1. What phase was the batting team entering?
+2. What went wrong?
+3. Why is this damaging?
+4. Write a short analyst report sentence.
+
+### Student Response Summary
+
+- Scenario A: Correctly identified Team A as having the better powerplay because it scored 48 runs without losing a wicket. The student correctly recognized that Team A had a stronger platform for middle-over strike rotation. The answer had a small factual slip by saying Team B lost two wickets instead of three.
+- Scenario B: Correctly calculated that the batting team scored 48 runs in the middle overs while losing 4 wickets at 5.33 runs per over. Correctly identified that the batting team failed to control the phase and created death-over acceleration risk.
+- Scenario C: Correctly calculated 54 death-over runs at 10.8 runs per over and identified this as a strong finish helped by having 7 wickets in hand entering the death phase.
+- Scenario D: Correctly identified a damaging wicket cluster and low scoring phase. The answer should be sharpened: the side was entering the ODI death overs, not already fully in the death phase at over 38. The report sentence correctly captured pre-acceleration damage and forced rebuilding.
+
+### Grade
+
+| Category | Score | Feedback |
+|---|---:|---|
+| Tactical Understanding | 89 | Strong understanding of phase control, wicket preservation, and acceleration risk. Small deductions for minor phase/wicket precision errors. |
+| Observation Quality | 88 | Correct calculations and strong reading of phase outcomes. Watch exact wicket counts and exact phase labels. |
+| Analyst Reasoning | 90 | Strong cause-and-effect reasoning, especially in Scenario B and D. Good understanding that middle-over damage affects death-over options. |
+| Communication | 85 | Clear and direct. Continue improving report precision and proofreading for exact wording. |
+| AI Systems Thinking | 88 | Good Cricksy alert ideas, especially acceleration risk and tactical advice. Next step is defining exact trigger rules. |
+| Cricksy Integration Thinking | 91 | Strong product thinking around dashboards, future games, phase-based ratings, and tactical recommendations. |
+
+Overall Grade: 88.5 — Strong
+
+### Strengths
+
+- Correctly understood that wickets preserved in the powerplay create a stronger platform.
+- Strong middle-over analysis with correct phase scoring and run rate.
+- Correct death-over calculation and strong explanation of wickets in hand enabling risk.
+- Strong Cricksy product thinking: acceleration risk alerts, tactical advice, and death-over dashboards.
+- Good analyst report sentence in Scenario D.
+
+### Weaknesses / Gaps
+
+- Must be more exact with score details: Team B was 48/3, not 48/2.
+- Must label ODI phases precisely: over 38 is pre-death/late middle, while over 41 starts the ODI death overs in this framework.
+- Future reports should separate batting-team alerts from bowling-team alerts more cleanly.
+
+### Teacher Feedback
+
+This was another strong practical session. You are beginning to understand that cricket analysis is not only about total runs; it is about when those runs were scored, how many wickets were lost, and what phase comes next. Your strongest answer was Scenario B because you calculated the middle-over damage and explained how it restricts death-over aggression. The main improvement now is precision: exact wicket counts and exact phase labels matter because analysts and AI systems both depend on clean state interpretation.
+
+### Completion Decision
+
+- Lesson Complete: Yes
+- Match Phase Identification Exercise Complete: Yes
+- Project Updated: No
+- Assessment Passed: Lesson-level assessment passed
+
+### Notion Update Recommendation
+
+- Mark `Match Phases Explained` as Completed or Ready for Review.
+- Mark `Match phase identification exercise` as Completed.
+- Add `Practice Exercise_1.txt` as evidence or note in the lesson page if desired.
+- Keep Module 1 status as In Progress because two lessons remain.
+
+### Next Session Focus
+
+- Session 5: Player Roles & Responsibilities.
+- Practical task: identify batter roles, bowler roles, all-rounder value, wicketkeeper role, and how role clarity affects tactical analysis.
+
+---
+
 ## 7. Module 1 Progress Snapshot
 
 Module: Cricket System Fundamentals
@@ -585,7 +732,7 @@ Module: Cricket System Fundamentals
 |---|---|---|
 | Introduction to Cricket Formats | Completed | Session 1 analyst mindset and Session 2 format comparison/practical observation completed. |
 | Understanding Overs & Innings | Completed | Session 3 understanding overs and innings exercise completed and graded. |
-| Match Phases Explained | Not Started |  |
+| Match Phases Explained | Completed | Session 4 match phases exercise completed and graded. |
 | Player Roles & Responsibilities | Not Started |  |
 | Tactical Foundations of Cricket | Not Started |  |
 
@@ -596,8 +743,8 @@ Module: Cricket System Fundamentals
 | Format comparison exercise | Completed | Session 2 uploaded exercise file and graded response. |
 | Practical observation exercise | Completed | Scenario A/B/C observation exercise completed in Session 2. |
 | Overs and innings exercise | Completed | Session 3 uploaded exercise file and graded response. |
+| Match phase identification exercise | Completed | Session 4 uploaded exercise file and graded response. |
 | Five-over observation exercise | Not Started |  |
-| Match phase identification exercise | Not Started |  |
 | Player role classification exercise | Not Started |  |
 | Tactical shift observation exercise | Not Started |  |
 | Analyst mindset exercise | Completed | Session 1 five-question practical completed. |
@@ -618,6 +765,6 @@ Module: Cricket System Fundamentals
 
 ## 8. Next Planned Session
 
-Session Title: Match Phases Explained
-Curriculum Location: Level 1 → Cricket Foundations → Cricket System Fundamentals → Match Phases Explained
-Primary Goal: Identify powerplay, middle overs, death overs, and explain how match phases change pressure, tactics, and analyst interpretation.
+Session Title: Player Roles & Responsibilities
+Curriculum Location: Level 1 → Cricket Foundations → Cricket System Fundamentals → Player Roles & Responsibilities
+Primary Goal: Identify batter roles, bowler roles, all-rounder value, wicketkeeper role, and how role clarity affects tactical analysis.
