@@ -333,9 +333,9 @@ Because this stream can touch match data, analytics, exports, AI summaries, dash
 
 Before implementation, create:
 
-`Phase A0 — Analyst System Blueprint Audit + Spec Lock`
+`Phase 4 — Analyst System Blueprint Audit + Spec Lock`
 
-Phase A0 must convert the two analyst documents into:
+Phase 4 must convert the two analyst documents into:
 
 - MVP scope
 - non-MVP scope
@@ -353,9 +353,9 @@ Phase A0 must convert the two analyst documents into:
 
 ## Analyst System Gates
 
-No analyst-system code implementation may begin until Phase A0 is complete.
+No analyst-system code implementation may begin until Phase 4 is complete.
 
-Phase A0 must prove:
+Phase 4 must prove:
 
 - existing match/scoring truth remains untouched
 - analyst dashboards consume existing match data safely
@@ -736,7 +736,7 @@ Coach Pro Plus Video Analysis remains working, is more reliable, private, report
 
 ---
 
-# Phase 4 — Historical Match Ingestion: Structured CSV First
+# Phase 5 — Historical Match Ingestion: Structured CSV First
 
 ## Purpose
 
@@ -805,7 +805,7 @@ Structured historical match import works safely and does not corrupt live scorin
 
 ---
 
-# Phase 5 — Historical Match Ingestion: PDF/Image/OCR Review Flow
+# Phase 6 — Historical Match Ingestion: PDF/Image/OCR Review Flow
 
 ## Purpose
 
@@ -861,7 +861,7 @@ Teams can upload scans/photos/PDFs and review extracted match data before saving
 
 ---
 
-# Phase 6 — AI Analytics + Match Intelligence Enhancements
+# Phase 7 — AI Analytics + Match Intelligence Enhancements
 
 ## Purpose
 
@@ -925,7 +925,7 @@ AI insights are more useful and explainable without compromising official cricke
 
 ---
 
-# Phase 7 — Subscription, Pricing + Tier Enforcement Hardening
+# Phase 8 — Subscription, Pricing + Tier Enforcement Hardening
 
 ## Purpose
 
@@ -987,7 +987,7 @@ Paid features are protected correctly and pricing/tier behavior is reliable.
 
 ---
 
-# Phase 8 — Organization Pro + League Operations
+# Phase 9 — Organization Pro + League Operations
 
 ## Purpose
 
@@ -1039,7 +1039,7 @@ Organizations can safely manage teams, tournaments, sponsors, and roles.
 
 ---
 
-# Phase 9 — Live Viewer, Streaming + Sponsor Experience
+# Phase 10 — Live Viewer, Streaming + Sponsor Experience
 
 ## Purpose
 
@@ -1090,7 +1090,7 @@ The live viewing experience is more professional without harming scoring or perf
 
 ---
 
-# Phase 10 — Media, Highlights + Report Content Engine
+# Phase 11 — Media, Highlights + Report Content Engine
 
 ## Purpose
 
@@ -1141,7 +1141,7 @@ Cricksy can safely create useful media/reporting assets from existing data.
 
 ---
 
-# Phase A0 — Analyst System Blueprint Audit + Spec Lock
+# Phase 4 — Analyst System Blueprint Audit + Spec Lock
 
 ## Purpose
 
@@ -1207,7 +1207,7 @@ Lock:
 
 ## Gates
 
-- Do not build analyst-system code before Phase A0 is complete.
+- Do not build analyst-system code before Phase 4 is complete.
 - Existing scoring/match truth must remain untouched.
 - Analyst dashboards must consume existing data safely.
 - No cross-organization data leakage.
@@ -1216,11 +1216,11 @@ Lock:
 - Media/podcast outputs must remain reviewable before publishing.
 - Fake/mock data must not be introduced into production paths.
 - Historical ingestion dependencies must be documented before analyst features depend on them.
-- CI passes for any implementation PR after A0.
+- CI passes for any implementation PR after Phase 4.
 
 ## Required Tests
 
-Phase A0 itself is docs/spec only.
+Phase 4 itself is docs/spec only.
 
 Future analyst implementation tests must include:
 
@@ -1235,11 +1235,11 @@ Future analyst implementation tests must include:
 
 ## Completion Criteria
 
-Phase A0 is complete when the analyst system has a repo-grounded MVP spec, implementation sequence, data/API map, visualization list, permission model, AI guardrails, export plan, and first safe implementation issue.
+Phase 4 is complete when the analyst system has a repo-grounded MVP spec, implementation sequence, data/API map, visualization list, permission model, AI guardrails, export plan, and first safe implementation issue.
 
 ---
 
-# Phase 11 — Lightweight Cricket Supervisor Layer
+# Phase 12 — Lightweight Cricket Supervisor Layer
 
 ## Purpose
 
@@ -1294,7 +1294,7 @@ Cricksy gains safe workflow orchestration without becoming over-agentic or unsta
 
 ---
 
-# Phase 12 — Production Scale, Monitoring + Cost Control
+# Phase 13 — Production Scale, Monitoring + Cost Control
 
 ## Purpose
 
@@ -1448,16 +1448,16 @@ Check imports, typing, formatting, migrations, tests, and CI impact before final
 2. Phase 1 — Existing App Stabilization + Regression Protection
 3. Phase 3 — Coach Pro Plus Video Analysis Hardening + Extension
 4. Phase 2 — Coach + Player Development Enhancements
-5. Phase 4 — Historical Match Ingestion: Structured CSV First
-6. Phase 5 — Historical Match Ingestion: PDF/Image/OCR Review Flow
-7. Phase 6 — AI Analytics + Match Intelligence Enhancements
-8. Phase A0 — Analyst System Blueprint Audit + Spec Lock
-9. Phase 7 — Subscription, Pricing + Tier Enforcement Hardening
-10. Phase 8 — Organization Pro + League Operations
-11. Phase 9 — Live Viewer, Streaming + Sponsor Experience
-12. Phase 10 — Media, Highlights + Report Content Engine
-13. Phase 11 — Lightweight Cricket Supervisor Layer
-14. Phase 12 — Production Scale, Monitoring + Cost Control
+5. Phase 4 — Analyst System Blueprint Audit + Spec Lock
+6. Phase 5 — Historical Match Ingestion: Structured CSV First
+7. Phase 6 — Historical Match Ingestion: PDF/Image/OCR Review Flow
+8. Phase 7 — AI Analytics + Match Intelligence Enhancements
+9. Phase 8 — Subscription, Pricing + Tier Enforcement Hardening
+10. Phase 9 — Organization Pro + League Operations
+11. Phase 10 — Live Viewer, Streaming + Sponsor Experience
+12. Phase 11 — Media, Highlights + Report Content Engine
+13. Phase 12 — Lightweight Cricket Supervisor Layer
+14. Phase 13 — Production Scale, Monitoring + Cost Control
 
 Reason:
 
