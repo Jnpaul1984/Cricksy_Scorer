@@ -765,6 +765,40 @@ Coach Pro Plus Video Analysis remains working, is more reliable, private, report
 
 # Phase 4 — Analyst System Blueprint Audit + Spec Lock
 
+## Phase 4A — Architecture Audit + Spec Lock (COMPLETE)
+
+Phase 4A is the pre-phase audit and spec lock for the Analyst System.
+
+Audit document: `docs/PHASE_4A_ANALYST_SYSTEM_ARCHITECTURE_AUDIT_AND_SPEC_LOCK.md`
+
+Phase 4A deliverables:
+
+- Analyst system vision summary and source document synthesis
+- Existing match/scoring data access audit
+- Existing completed/live match data availability audit
+- Existing delivery-level data access audit
+- Existing analytics/dashboard/frontend audit
+- Existing chart/visualization component audit
+- Existing export/report capability audit
+- Existing AI/LLM capability audit
+- Existing RBAC/tier capability audit
+- Fake/mock data risk catalogue (6 active risks identified)
+- Analyst MVP scope defined
+- Non-MVP/future scope defined
+- First analyst persona and workflow target locked (Podcast Analyst)
+- Recommended first dashboard/workspace slice (Match Intelligence Dashboard)
+- Backend API/data requirements specified
+- Frontend UX requirements specified
+- Visualization requirements specified
+- Export requirements specified
+- AI guardrails and grounding rules locked
+- Permission/isolation requirements locked
+- No-fake-data rules locked
+- Testing/gate requirements locked
+- Protected files/areas confirmed
+- Recommended smallest safe Phase 4B implementation issue
+- Rollback/containment plan for analyst implementation
+
 ## Purpose
 
 Convert the strategic analyst-system documents into a safe, phased, buildable product plan before any analyst-system implementation begins.
