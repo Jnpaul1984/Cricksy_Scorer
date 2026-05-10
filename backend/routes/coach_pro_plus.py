@@ -53,6 +53,19 @@ router = APIRouter(prefix="/api/coaches/plus", tags=["coach_pro_plus"])
 
 logger = logging.getLogger(__name__)
 
+JOB_ARTIFACT_COMPLETE_STATES = frozenset(
+    {VideoAnalysisJobStatus.completed, VideoAnalysisJobStatus.done}
+)
+JOB_RESULT_FIELDS = (
+    "results",
+    "quick_results",
+    "deep_results",
+    "quick_findings",
+    "deep_findings",
+    "quick_results_s3_key",
+    "deep_results_s3_key",
+)
+
 
 # ============================================================================
 # Helper Functions
@@ -99,6 +112,15 @@ class VideoSessionRead(BaseModel):
     s3_key: str | None = None
     created_at: datetime
     updated_at: datetime
+    analysis_job_count: int = 0
+    latest_job_id: str | None = None
+    latest_job_status: str | None = None
+    latest_job_created_at: datetime | None = None
+    latest_job_completed_at: datetime | None = None
+    latest_job_results_available: bool = False
+    latest_job_report_available: bool = False
+    latest_job_pdf_available: bool = False
+    missing_artifacts: list[str] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -163,6 +185,10 @@ class VideoAnalysisJobRead(BaseModel):
 
     # Optional short-lived streaming URL (computed per-request; never persisted)
     video_stream: VideoStreamUrlRead | None = None
+    results_available: bool = False
+    report_available: bool = False
+    pdf_available: bool = False
+    missing_artifacts: list[str] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -273,6 +299,67 @@ async def create_video_session(
     return VideoSessionRead.model_validate(session)
 
 
+def _can_access_video_session(user: User, session: VideoSession) -> bool:
+    """Return True if user can access the session based on owner scoping."""
+    if user.is_superuser:
+        return True
+
+    if user.role == RoleEnum.coach_pro_plus:
+        return session.owner_type == OwnerTypeEnum.coach and session.owner_id == user.id
+
+    if user.role == RoleEnum.org_pro:
+        if session.owner_type == OwnerTypeEnum.org:
+            return bool(user.org_id) and session.owner_id == user.org_id
+        # org_pro without org ownership can still access their own personal sessions
+        return session.owner_type == OwnerTypeEnum.coach and session.owner_id == user.id
+
+    return False
+
+
+def _build_job_artifact_metadata(job: VideoAnalysisJob) -> dict[str, Any]:
+    results_available = any(getattr(job, field_name, None) for field_name in JOB_RESULT_FIELDS)
+    report_available = bool(job.quick_report or job.deep_report)
+    pdf_available = bool(job.pdf_s3_key)
+
+    missing_artifacts: list[str] = []
+    if job.status in JOB_ARTIFACT_COMPLETE_STATES:
+        if not results_available:
+            missing_artifacts.append("analysis_results")
+        if not report_available:
+            missing_artifacts.append("analysis_report")
+        if not pdf_available:
+            missing_artifacts.append("pdf_export")
+
+    return {
+        "results_available": results_available,
+        "report_available": report_available,
+        "pdf_available": pdf_available,
+        "missing_artifacts": missing_artifacts,
+    }
+
+
+def _build_session_history_metadata(session: VideoSession) -> dict[str, Any]:
+    jobs_with_created_at = [item for item in session.analysis_jobs if item.created_at]
+    if jobs_with_created_at:
+        latest_job = max(jobs_with_created_at, key=lambda item: item.created_at)
+    elif session.analysis_jobs:
+        latest_job = max(session.analysis_jobs, key=lambda item: item.updated_at)
+    else:
+        latest_job = None
+    latest_job_metadata = _build_job_artifact_metadata(latest_job) if latest_job else {}
+    return {
+        "analysis_job_count": len(session.analysis_jobs),
+        "latest_job_id": latest_job.id if latest_job else None,
+        "latest_job_status": latest_job.status.value if latest_job else None,
+        "latest_job_created_at": latest_job.created_at if latest_job else None,
+        "latest_job_completed_at": latest_job.completed_at if latest_job else None,
+        "latest_job_results_available": latest_job_metadata.get("results_available", False),
+        "latest_job_report_available": latest_job_metadata.get("report_available", False),
+        "latest_job_pdf_available": latest_job_metadata.get("pdf_available", False),
+        "missing_artifacts": latest_job_metadata.get("missing_artifacts", []),
+    }
+
+
 @router.get("/sessions", response_model=list[VideoSessionRead])
 async def list_video_sessions(
     current_user: Annotated[User, Depends(security.get_current_active_user)],
@@ -316,16 +403,29 @@ async def list_video_sessions(
     # Build query based on user role
     if current_user.is_superuser:
         # Superusers see all sessions
-        query = select(VideoSession)
+        query = select(VideoSession).options(selectinload(VideoSession.analysis_jobs))
     elif current_user.role == RoleEnum.org_pro:
-        # Org users see all sessions for their org
+        # Org users see their org sessions plus personal fallback sessions.
         query = select(VideoSession).where(
-            (VideoSession.owner_type == OwnerTypeEnum.org)
-            & (VideoSession.owner_id == current_user.org_id)
-        )
+            (
+                (VideoSession.owner_type == OwnerTypeEnum.org)
+                & (VideoSession.owner_id == current_user.org_id)
+            )
+            | (
+                (VideoSession.owner_type == OwnerTypeEnum.coach)
+                & (VideoSession.owner_id == current_user.id)
+            )
+        ).options(selectinload(VideoSession.analysis_jobs))
     else:
         # Coach users see only their own sessions
-        query = select(VideoSession).where(VideoSession.owner_id == current_user.id)
+        query = (
+            select(VideoSession)
+            .where(
+                (VideoSession.owner_type == OwnerTypeEnum.coach)
+                & (VideoSession.owner_id == current_user.id)
+            )
+            .options(selectinload(VideoSession.analysis_jobs))
+        )
 
     # Apply status filters (performance optimization)
     if exclude_failed:
@@ -347,7 +447,12 @@ async def list_video_sessions(
     result = await db.execute(query)
     sessions = result.scalars().all()
 
-    return [VideoSessionRead.model_validate(session) for session in sessions]
+    return [
+        VideoSessionRead.model_validate(session).model_copy(
+            update=_build_session_history_metadata(session)
+        )
+        for session in sessions
+    ]
 
 
 @router.get("/sessions/{session_id}", response_model=VideoSessionRead)
@@ -380,29 +485,25 @@ async def get_video_session(
         )
 
     # Fetch session from database
-    result = await db.execute(select(VideoSession).where(VideoSession.id == session_id))
+    result = await db.execute(
+        select(VideoSession)
+        .options(selectinload(VideoSession.analysis_jobs))
+        .where(VideoSession.id == session_id)
+    )
     session = result.scalar_one_or_none()
 
     if not session:
         raise HTTPException(status_code=404, detail="Video session not found")
 
-    # Verify ownership
-    if current_user.role == RoleEnum.coach_pro_plus:
-        # Coach must own the session
-        if session.owner_id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have access to this session",
-            )
-    else:
-        # Org users see org sessions
-        if session.owner_type == OwnerTypeEnum.org and session.owner_id != current_user.org_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have access to this session",
-            )
+    if not _can_access_video_session(current_user, session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this session",
+        )
 
-    return VideoSessionRead.model_validate(session)
+    return VideoSessionRead.model_validate(session).model_copy(
+        update=_build_session_history_metadata(session)
+    )
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -605,7 +706,7 @@ async def create_analysis_job(
         raise HTTPException(status_code=404, detail="Video session not found")
 
     # Check ownership
-    if current_user.role == RoleEnum.coach_pro_plus and session.owner_id != current_user.id:
+    if not _can_access_video_session(current_user, session):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this session",
@@ -654,7 +755,7 @@ async def list_analysis_jobs(
         raise HTTPException(status_code=404, detail="Video session not found")
 
     # Check ownership
-    if current_user.role == RoleEnum.coach_pro_plus and session.owner_id != current_user.id:
+    if not _can_access_video_session(current_user, session):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this session",
@@ -681,6 +782,7 @@ async def list_analysis_jobs(
                 "analysis_context": session.analysis_context,
                 "camera_view": session.camera_view,
                 "retryable": is_retryable_video_job(job),
+                **_build_job_artifact_metadata(job),
             }
         )
         job_reads.append(job_read)
@@ -734,7 +836,7 @@ async def get_analysis_job(
 
     # Check ownership via session
     session = job.session
-    if current_user.role == RoleEnum.coach_pro_plus and session.owner_id != current_user.id:
+    if not _can_access_video_session(current_user, session):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this job",
@@ -747,6 +849,7 @@ async def get_analysis_job(
         "camera_view": session.camera_view,
         "retryable": is_retryable_video_job(job),
     }
+    updates.update(_build_job_artifact_metadata(job))
     job_read = job_read.model_copy(update=updates)
 
     # Best-effort: attach presigned URLs for results and video
