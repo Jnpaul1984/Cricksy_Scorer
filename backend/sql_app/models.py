@@ -1020,6 +1020,128 @@ class CoachingSession(Base):
     )
 
 
+class MentalQuestionnaireCategory(str, enum.Enum):
+    mental_toughness = "Mental Toughness"
+    pressure_handling = "Pressure Handling"
+    game_awareness = "Game Awareness / Cricket IQ"
+    training_habits = "Training Habits & Discipline"
+
+
+class MentalQuestionnaireQuestion(Base):
+    __tablename__ = "mental_questionnaire_questions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    category: Mapped[MentalQuestionnaireCategory] = mapped_column(
+        SAEnum(MentalQuestionnaireCategory, name="mental_questionnaire_category"),
+        nullable=False,
+        index=True,
+    )
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_mental_questionnaire_question_category_order",
+            "category",
+            "display_order",
+            unique=True,
+        ),
+    )
+
+
+class MentalQuestionnaireSession(Base):
+    __tablename__ = "mental_questionnaire_sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    player_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    submitted_by_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    overall_average_score: Mapped[float] = mapped_column(Float, nullable=False)
+    overall_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    strengths: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=_empty_list)
+    development_areas: Mapped[list[Any]] = mapped_column(
+        JSON, nullable=False, default=_empty_list
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_mental_questionnaire_sessions_player_created", "player_id", "created_at"),
+    )
+
+
+class MentalQuestionnaireAnswer(Base):
+    __tablename__ = "mental_questionnaire_answers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("mental_questionnaire_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    question_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("mental_questionnaire_questions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("score >= 1 AND score <= 5", name="ck_mental_questionnaire_score_range"),
+        Index(
+            "ix_mental_questionnaire_answers_session_question",
+            "session_id",
+            "question_id",
+            unique=True,
+        ),
+    )
+
+
+class MentalQuestionnaireCategoryScore(Base):
+    __tablename__ = "mental_questionnaire_category_scores"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("mental_questionnaire_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    category: Mapped[MentalQuestionnaireCategory] = mapped_column(
+        SAEnum(MentalQuestionnaireCategory, name="mental_questionnaire_category", create_type=False),
+        nullable=False,
+        index=True,
+    )
+    average_score: Mapped[float] = mapped_column(Float, nullable=False)
+
+    __table_args__ = (
+        Index(
+            "ix_mental_questionnaire_category_scores_session_category",
+            "session_id",
+            "category",
+            unique=True,
+        ),
+    )
+
+
 class FanFavorite(Base):
     __tablename__ = "fan_favorites"
 
