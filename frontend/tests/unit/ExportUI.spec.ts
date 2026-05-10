@@ -12,8 +12,21 @@ vi.mock('@/services/api', () => ({
 const BaseButtonStub = defineComponent({
   name: 'BaseButtonStub',
   emits: ['click'],
-  setup(_props, { emit, slots }) {
-    return () => h('button', { class: 'base-button-stub', onClick: () => emit('click') }, slots.default?.())
+  setup(_props, { emit, slots, attrs }) {
+    const { class: incomingClass, ...restAttrs } = attrs
+    return () =>
+      h(
+        'button',
+        {
+          ...restAttrs,
+          class: ['base-button-stub', incomingClass],
+          disabled: Boolean(restAttrs.disabled),
+          onClick: () => {
+            if (!restAttrs.disabled) emit('click')
+          },
+        },
+        slots.default?.(),
+      )
   },
 })
 
@@ -66,7 +79,7 @@ describe('ExportUI', () => {
     )
   })
 
-  it('shows a safe empty state message when export data is unavailable', async () => {
+  it('shows a safe empty state message when backend returns no rows', async () => {
     vi.mocked(getAnalystExportData).mockResolvedValue({
       rows: [],
       meta: { row_count: 0, empty_reason: 'no_data' },
@@ -74,8 +87,8 @@ describe('ExportUI', () => {
 
     const wrapper = mount(ExportUI, {
       props: {
-        data: [],
-        matchId: null,
+        data: [{ id: 'm-1' }],
+        matchId: 'm-1',
       },
       global: {
         stubs: {
@@ -91,5 +104,23 @@ describe('ExportUI', () => {
     await actionButtons[1].trigger('click')
 
     expect(wrapper.text()).toContain('No export data available for the current context/filters.')
+  })
+
+  it('disables export trigger when no match context data is available', async () => {
+    const wrapper = mount(ExportUI, {
+      props: {
+        data: [],
+        matchId: null,
+      },
+      global: {
+        stubs: {
+          BaseButton: BaseButtonStub,
+          BaseCard: BaseCardStub,
+        },
+      },
+    })
+
+    const triggerButton = wrapper.find('button.base-button-stub')
+    expect(triggerButton.attributes('disabled')).toBeDefined()
   })
 })

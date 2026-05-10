@@ -194,7 +194,7 @@ describe('AnalystWorkspaceView', () => {
     const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
     await nextTick()
 
-    expect(wrapper.text()).toContain('Loading matches')
+    expect(wrapper.text()).toContain('Loading completed matches')
   })
 
   it('shows empty state when no completed matches exist', async () => {
@@ -204,7 +204,7 @@ describe('AnalystWorkspaceView', () => {
     await nextTick()
     await nextTick()
 
-    expect(wrapper.text()).toContain('No matches found')
+    expect(wrapper.text()).toContain('No completed matches match the current filters.')
   })
 
   it('shows error state when match list fails to load', async () => {
@@ -672,6 +672,37 @@ describe('AnalystWorkspaceView', () => {
     const copyBtn = podcastSection.find('.aw-podcast-copy-btn')
     expect(copyBtn.exists()).toBe(true)
     expect(copyBtn.text()).toContain('Copy package text')
+  })
+
+  it('Podcast Prep copy button is disabled when package has insufficient data', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    const sparseDetail = {
+      ...mockMatchDetail,
+      match: {
+        ...mockMatchDetail.match,
+        result: '',
+        innings: [],
+      },
+      momentum_summary: null as any,
+      key_phase: null as any,
+      phases: [],
+      key_players: [],
+    }
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(sparseDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const podcastSection = wrapper.find('#aw-podcast-prep')
+    const copyBtn = podcastSection.find('.aw-podcast-copy-btn')
+    expect(copyBtn.exists()).toBe(true)
+    expect(copyBtn.attributes('disabled')).toBeDefined()
   })
 
   it('existing match selection and detail panel still work after Phase 4E changes', async () => {
