@@ -304,6 +304,77 @@ Phase 3 must preserve the existing model/pipeline behavior and only harden, test
 
 ---
 
+# 3A. Analyst System Roadmap — Existing Blueprint Assets
+
+The repository contains two strategic analyst-system documents that must be treated as governed roadmap inputs, not immediate implementation instructions:
+
+- `docs/CRICKSY_ANALYST_SYSTEM_BLUEPRINT_V1.md`
+- `docs/ANALYST_PRODUCTION_WORKFLOW_V1.md`
+
+## Analyst System Rule
+
+Do not build the analyst system directly from these documents without a pre-phase audit and spec lock.
+
+These documents define a major future product stream for:
+
+- analyst workspace
+- podcast preparation
+- tactical analysis
+- cricket intelligence dashboards
+- visualizations
+- media production workflows
+- scouting workflows
+- coach-facing interpretation
+- future Sports Intelligence Institute workflows
+
+Because this stream can touch match data, analytics, exports, AI summaries, dashboards, permissions, and media features, it must be handled as a governed phase.
+
+## Required Future Phase
+
+Before implementation, create:
+
+`Phase A0 — Analyst System Blueprint Audit + Spec Lock`
+
+Phase A0 must convert the two analyst documents into:
+
+- MVP scope
+- non-MVP scope
+- backend data requirements
+- frontend dashboard requirements
+- API gaps
+- visualization priorities
+- AI guardrails
+- role/permission matrix
+- export requirements
+- podcast workflow boundaries
+- tests and gates
+- protected files
+- smallest safe implementation slice
+
+## Analyst System Gates
+
+No analyst-system code implementation may begin until Phase A0 is complete.
+
+Phase A0 must prove:
+
+- existing match/scoring truth remains untouched
+- analyst dashboards consume existing match data safely
+- generated insights cite match data or clearly label uncertainty
+- AI cannot invent unsupported claims
+- podcast/media exports require review before publishing
+- analyst workspaces do not expose organization/private team data across boundaries
+- historical match ingestion dependencies are clearly identified
+- fake/mock data usage is either removed, blocked, or explicitly dev-only
+
+## Analyst System Source Documents
+
+All future analyst-system issues must reference both:
+
+- `docs/CRICKSY_ANALYST_SYSTEM_BLUEPRINT_V1.md`
+- `docs/ANALYST_PRODUCTION_WORKFLOW_V1.md`
+
+---
+
 # 4. Phase Structure
 
 Every phase follows this structure:
@@ -1070,6 +1141,104 @@ Cricksy can safely create useful media/reporting assets from existing data.
 
 ---
 
+# Phase A0 — Analyst System Blueprint Audit + Spec Lock
+
+## Purpose
+
+Convert the strategic analyst-system documents into a safe, phased, buildable product plan before any analyst-system implementation begins.
+
+This phase governs:
+
+- `docs/CRICKSY_ANALYST_SYSTEM_BLUEPRINT_V1.md`
+- `docs/ANALYST_PRODUCTION_WORKFLOW_V1.md`
+
+This phase is mandatory before building analyst dashboards, analyst workspaces, podcast prep tooling, AI analyst assistants, visualizations, analyst exports, scouting workflows, or Sports Intelligence Institute workflows.
+
+## Primary Areas
+
+Likely affected after audit:
+
+- backend match/query APIs
+- backend analytics services
+- backend export/report services
+- frontend analyst dashboard/workspace components
+- frontend chart/visualization components
+- permissions and organization data boundaries
+- AI insight/summarization services
+- media/export tooling
+- historical match ingestion dependencies
+
+## Pre-Phase Audit
+
+Audit:
+
+- both analyst source documents
+- existing match data access routes
+- existing completed/live match data availability
+- existing scorecard/delivery-level access
+- existing analytics services
+- existing chart/export components
+- existing fake/mock data areas
+- existing role/tier system for analyst/coach/media/scout access
+- existing PDF/PNG/CSV/Markdown export code
+- dependencies on historical match ingestion phases
+- dependencies on AI analytics phases
+
+## Spec Lock
+
+Lock:
+
+- Analyst MVP scope
+- non-MVP/future scope
+- first analyst user persona
+- first workflow target, likely podcast prep
+- first dashboard requirements
+- first visualization requirements
+- backend API/data contracts
+- frontend workspace UX boundaries
+- AI assistance boundaries
+- export formats for MVP
+- role and permission rules
+- data citation/explainability requirements
+- no-fake-data rules
+- approval workflow rules
+- tests and gates
+- smallest safe implementation slice
+
+## Gates
+
+- Do not build analyst-system code before Phase A0 is complete.
+- Existing scoring/match truth must remain untouched.
+- Analyst dashboards must consume existing data safely.
+- No cross-organization data leakage.
+- No unsupported AI claims.
+- Generated insights must cite source data or be marked tentative.
+- Media/podcast outputs must remain reviewable before publishing.
+- Fake/mock data must not be introduced into production paths.
+- Historical ingestion dependencies must be documented before analyst features depend on them.
+- CI passes for any implementation PR after A0.
+
+## Required Tests
+
+Phase A0 itself is docs/spec only.
+
+Future analyst implementation tests must include:
+
+- backend API contract tests
+- permission/isolation tests
+- dashboard empty/loading/error state tests
+- chart data validation tests
+- export generation tests
+- AI insight grounding tests
+- no-fake-data guard checks
+- full existing CI gates when implementation begins
+
+## Completion Criteria
+
+Phase A0 is complete when the analyst system has a repo-grounded MVP spec, implementation sequence, data/API map, visualization list, permission model, AI guardrails, export plan, and first safe implementation issue.
+
+---
+
 # Phase 11 — Lightweight Cricket Supervisor Layer
 
 ## Purpose
@@ -1282,13 +1451,14 @@ Check imports, typing, formatting, migrations, tests, and CI impact before final
 5. Phase 4 — Historical Match Ingestion: Structured CSV First
 6. Phase 5 — Historical Match Ingestion: PDF/Image/OCR Review Flow
 7. Phase 6 — AI Analytics + Match Intelligence Enhancements
-8. Phase 7 — Subscription, Pricing + Tier Enforcement Hardening
-9. Phase 8 — Organization Pro + League Operations
-10. Phase 9 — Live Viewer, Streaming + Sponsor Experience
-11. Phase 10 — Media, Highlights + Report Content Engine
-12. Phase 11 — Lightweight Cricket Supervisor Layer
-13. Phase 12 — Production Scale, Monitoring + Cost Control
+8. Phase A0 — Analyst System Blueprint Audit + Spec Lock
+9. Phase 7 — Subscription, Pricing + Tier Enforcement Hardening
+10. Phase 8 — Organization Pro + League Operations
+11. Phase 9 — Live Viewer, Streaming + Sponsor Experience
+12. Phase 10 — Media, Highlights + Report Content Engine
+13. Phase 11 — Lightweight Cricket Supervisor Layer
+14. Phase 12 — Production Scale, Monitoring + Cost Control
 
 Reason:
 
-Protect the deployed app and CI/CD first. Then stabilize the already-working Coach Pro Plus Video Analysis system before expanding into player development, historical ingestion, and broader intelligence features.
+Protect the deployed app and CI/CD first. Then stabilize the already-working Coach Pro Plus Video Analysis system before expanding into player development, historical ingestion, broader intelligence features, and the governed analyst-system roadmap.
