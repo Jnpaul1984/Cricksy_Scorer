@@ -615,6 +615,33 @@ Coach accounts can manage mental/player development information safely without d
 
 # Phase 3 — Coach Pro Plus Video Analysis Hardening + Extension
 
+## Phase 3A — Audit + Spec Lock (COMPLETE)
+
+Phase 3A is the pre-phase audit and spec lock for Coach Pro Plus Video Analysis Hardening.
+
+Audit document: `docs/PHASE_3A_COACH_VIDEO_HARDENING_AUDIT_AND_SPEC_LOCK.md`
+
+Phase 3A deliverables:
+
+- Architecture map (frontend, backend, worker, S3, MediaPipe)
+- Backend route/API map
+- Worker/job lifecycle map
+- S3/upload/storage flow map
+- MediaPipe/model-loading flow map
+- Analysis mode routing map
+- PDF/report export flow map
+- Result/session persistence flow map
+- Testing gaps identified
+- Private-beta/access-control behavior documented
+- Failure/timeout/retry behavior documented
+- Known risks catalogued
+- Protected files list
+- Allowed hardening areas
+- Forbidden changes
+- Recommended smallest safe Phase 3B implementation slice
+- Required tests/gates for Phase 3B
+- Rollback plan
+
 ## Purpose
 
 Protect and improve the existing Coach Pro Plus Video Analysis system.
