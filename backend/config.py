@@ -64,6 +64,9 @@ class Settings(BaseSettings):
         default=True, alias="COACH_PLUS_DEEP_ANALYSIS_ENABLED"
     )
     COACH_PLUS_QUICK_MAX_SECONDS: int = Field(default=30, alias="COACH_PLUS_QUICK_MAX_SECONDS")
+    COACH_PLUS_STALE_JOB_THRESHOLD_SECONDS: int = Field(
+        default=1800, alias="COACH_PLUS_STALE_JOB_THRESHOLD_SECONDS"
+    )
 
     # GPU Chunked Processing
     CHUNK_SECONDS: int = Field(default=30, alias="CHUNK_SECONDS")
@@ -145,6 +148,10 @@ class Settings(BaseSettings):
     @property
     def coach_plus_quick_max_seconds(self) -> int:
         return self.COACH_PLUS_QUICK_MAX_SECONDS
+
+    @property
+    def coach_plus_stale_job_threshold_seconds(self) -> int:
+        return self.COACH_PLUS_STALE_JOB_THRESHOLD_SECONDS
 
 
 settings = Settings()
