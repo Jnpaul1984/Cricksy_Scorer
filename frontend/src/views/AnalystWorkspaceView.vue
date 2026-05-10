@@ -405,6 +405,89 @@
                       {{ matchDetail.key_phase.detail }}
                     </p>
                   </section>
+
+                  <!-- Phase breakdown -->
+                  <section class="aw-detail-phases">
+                    <h4 class="aw-detail-section-title">Phase breakdown</h4>
+                    <div
+                      v-if="!matchDetail.phases || matchDetail.phases.length === 0"
+                      class="aw-detail-empty-hint"
+                    >
+                      No phase data available yet.
+                    </div>
+                    <table v-else class="aw-phases-table">
+                      <thead>
+                        <tr>
+                          <th>Phase</th>
+                          <th>Overs</th>
+                          <th>Runs</th>
+                          <th>Wkts</th>
+                          <th>RR</th>
+                          <th>vs Par</th>
+                          <th>Impact</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="phase in matchDetail.phases"
+                          :key="phase.id"
+                          :class="`aw-phase-impact--${phase.impact}`"
+                        >
+                          <td>{{ phase.label }}</td>
+                          <td>{{ phase.start_over }}–{{ phase.end_over }}</td>
+                          <td>{{ phase.runs }}</td>
+                          <td>{{ phase.wickets }}</td>
+                          <td>{{ phase.run_rate.toFixed(2) }}</td>
+                          <td>{{ phase.net_swing_vs_par >= 0 ? '+' : '' }}{{ phase.net_swing_vs_par }}</td>
+                          <td>
+                            <span :class="`aw-phase-badge aw-phase-badge--${phase.impact}`">
+                              {{ phase.impact_label }}
+                            </span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </section>
+
+                  <!-- Key players -->
+                  <section class="aw-detail-keyplayers">
+                    <h4 class="aw-detail-section-title">Key players</h4>
+                    <div
+                      v-if="!matchDetail.key_players || matchDetail.key_players.length === 0"
+                      class="aw-detail-empty-hint"
+                    >
+                      No key player data available yet.
+                    </div>
+                    <ul v-else class="aw-keyplayers-list">
+                      <li
+                        v-for="player in matchDetail.key_players"
+                        :key="player.id"
+                        class="aw-keyplayer-card"
+                      >
+                        <div class="aw-keyplayer-header">
+                          <span class="aw-keyplayer-name">{{ player.name }}</span>
+                          <span class="aw-keyplayer-team">{{ player.team }}</span>
+                          <span :class="`aw-keyplayer-impact aw-keyplayer-impact--${player.impact}`">
+                            {{ player.impact_label }}
+                          </span>
+                        </div>
+                        <div class="aw-keyplayer-stats">
+                          <template v-if="player.batting">
+                            <span class="aw-keyplayer-stat">
+                              {{ player.batting.runs }} runs
+                              (SR {{ player.batting.strike_rate.toFixed(1) }})
+                            </span>
+                          </template>
+                          <template v-if="player.bowling">
+                            <span class="aw-keyplayer-stat">
+                              {{ player.bowling.wickets }}/{{ player.bowling.runs }}
+                              (Eco {{ player.bowling.economy.toFixed(2) }})
+                            </span>
+                          </template>
+                        </div>
+                      </li>
+                    </ul>
+                  </section>
                 </template>
 
                 <!-- No data state -->
@@ -1349,6 +1432,130 @@ onMounted(() => {
 .aw-detail-keyphase-detail {
   margin: 0;
   font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* PHASE BREAKDOWN */
+.aw-detail-phases {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aw-phases-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.aw-phases-table th {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.aw-phases-table td {
+  padding: var(--space-2);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.aw-phase-badge {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+}
+
+.aw-phase-badge--positive {
+  background: var(--color-success-subtle, #dcfce7);
+  color: var(--color-success, #16a34a);
+}
+
+.aw-phase-badge--negative {
+  background: var(--color-danger-subtle, #fee2e2);
+  color: var(--color-danger, #dc2626);
+}
+
+.aw-phase-badge--neutral {
+  background: var(--color-surface-raised, #f1f5f9);
+  color: var(--color-text-muted);
+}
+
+/* KEY PLAYERS */
+.aw-detail-keyplayers {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aw-keyplayers-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aw-keyplayer-card {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised, #f8fafc);
+  display: grid;
+  gap: var(--space-1);
+}
+
+.aw-keyplayer-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.aw-keyplayer-name {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.aw-keyplayer-team {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.aw-keyplayer-impact {
+  margin-left: auto;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+}
+
+.aw-keyplayer-impact--high {
+  background: var(--color-success-subtle, #dcfce7);
+  color: var(--color-success, #16a34a);
+}
+
+.aw-keyplayer-impact--medium {
+  background: var(--color-warning-subtle, #fef9c3);
+  color: var(--color-warning, #ca8a04);
+}
+
+.aw-keyplayer-impact--low {
+  background: var(--color-surface-raised, #f1f5f9);
+  color: var(--color-text-muted);
+}
+
+.aw-keyplayer-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.aw-keyplayer-stat {
+  font-size: var(--text-xs);
   color: var(--color-text-muted);
 }
 
