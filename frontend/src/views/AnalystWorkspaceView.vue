@@ -193,7 +193,8 @@
                   :id="`aw-match-${match.id}`"
                   :key="match.id"
                   class="aw-matches-row"
-                  @click="openMatchCaseStudy(match.id)"
+                  :class="{ 'aw-matches-row--selected': selectedMatchId === match.id }"
+                  @click="selectMatch(match.id)"
                 >
                   <!-- Main info column -->
                   <div class="aw-matches-col aw-matches-col--main">
@@ -272,6 +273,145 @@
                   </div>
                 </div>
               </div>
+
+              <!-- Match Intelligence Panel - shown when a match is selected -->
+              <div
+                v-if="selectedMatchId"
+                id="aw-match-detail"
+                class="aw-match-detail"
+              >
+                <div class="aw-detail-header">
+                  <div>
+                    <h3 class="aw-detail-title">Match Intelligence</h3>
+                    <p class="aw-detail-meta">
+                      {{ matchDetail?.match?.teams_label ?? '—' }}
+                    </p>
+                  </div>
+                  <div class="aw-detail-actions">
+                    <BaseButton
+                      variant="primary"
+                      size="sm"
+                      @click="openFullCaseStudy"
+                    >
+                      View full case study →
+                    </BaseButton>
+                    <BaseButton
+                      variant="ghost"
+                      size="sm"
+                      @click="selectedMatchId = null"
+                    >
+                      Close
+                    </BaseButton>
+                  </div>
+                </div>
+
+                <!-- Loading state -->
+                <div v-if="detailLoading" class="aw-detail-loading">
+                  <p>Loading match detail…</p>
+                </div>
+
+                <!-- Error state -->
+                <div v-else-if="detailError" class="aw-detail-error">
+                  <p>{{ detailError }}</p>
+                  <BaseButton
+                    variant="ghost"
+                    size="sm"
+                    @click="selectedMatchId && loadMatchDetail(selectedMatchId)"
+                  >
+                    Retry
+                  </BaseButton>
+                </div>
+
+                <!-- Detail content -->
+                <template v-else-if="matchDetail">
+                  <!-- Match header -->
+                  <section class="aw-detail-summary">
+                    <div class="aw-detail-row">
+                      <span class="aw-detail-label">Result</span>
+                      <span class="aw-detail-value">{{ matchDetail.match.result || '—' }}</span>
+                    </div>
+                    <div class="aw-detail-row">
+                      <span class="aw-detail-label">Format</span>
+                      <span class="aw-detail-value">{{ matchDetail.match.format }}</span>
+                    </div>
+                    <div class="aw-detail-row">
+                      <span class="aw-detail-label">Date</span>
+                      <span class="aw-detail-value">{{ matchDetail.match.date }}</span>
+                    </div>
+                    <div v-if="matchDetail.match.venue" class="aw-detail-row">
+                      <span class="aw-detail-label">Venue</span>
+                      <span class="aw-detail-value">{{ matchDetail.match.venue }}</span>
+                    </div>
+                  </section>
+
+                  <!-- Innings scorecard -->
+                  <section class="aw-detail-innings">
+                    <h4 class="aw-detail-section-title">Innings</h4>
+                    <div
+                      v-if="matchDetail.match.innings.length === 0"
+                      class="aw-detail-empty-hint"
+                    >
+                      Innings data not available yet.
+                    </div>
+                    <table v-else class="aw-innings-table">
+                      <thead>
+                        <tr>
+                          <th>Team</th>
+                          <th>Runs</th>
+                          <th>Wkts</th>
+                          <th>Overs</th>
+                          <th>RR</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="(inns, idx) in matchDetail.match.innings"
+                          :key="idx"
+                        >
+                          <td>{{ inns.team }}</td>
+                          <td>{{ inns.runs }}</td>
+                          <td>{{ inns.wickets }}</td>
+                          <td>{{ inns.overs }}</td>
+                          <td>{{ inns.run_rate != null ? inns.run_rate.toFixed(2) : '—' }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </section>
+
+                  <!-- Momentum summary -->
+                  <section
+                    v-if="matchDetail.momentum_summary"
+                    class="aw-detail-momentum"
+                  >
+                    <h4 class="aw-detail-section-title">Momentum verdict</h4>
+                    <p class="aw-detail-momentum-title">
+                      {{ matchDetail.momentum_summary.title }}
+                    </p>
+                    <p class="aw-detail-momentum-sub">
+                      {{ matchDetail.momentum_summary.subtitle }}
+                    </p>
+                  </section>
+
+                  <!-- Key phase -->
+                  <section
+                    v-if="matchDetail.key_phase"
+                    class="aw-detail-keyphase"
+                  >
+                    <h4 class="aw-detail-section-title">Key phase</h4>
+                    <p class="aw-detail-keyphase-title">
+                      {{ matchDetail.key_phase.title }}
+                    </p>
+                    <p class="aw-detail-keyphase-detail">
+                      {{ matchDetail.key_phase.detail }}
+                    </p>
+                  </section>
+                </template>
+
+                <!-- No data state -->
+                <div v-else class="aw-detail-empty-hint">
+                  No detail available for this match yet.
+                </div>
+              </div>
             </div>
 
             <!-- Players tab -->
@@ -348,7 +488,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseCard, BaseButton, BaseBadge, BaseInput, ImpactBar, MiniSparkline, AiCalloutsPanel } from '@/components'
@@ -357,7 +497,9 @@ import AnalyticsTablesWidget from '@/components/AnalyticsTablesWidget.vue'
 import ExportUI from '@/components/ExportUI.vue'
 import {
   getAnalystMatches,
+  getMatchCaseStudy,
   type AnalystMatchListItem,
+  type MatchCaseStudyResponse,
 } from '@/services/api'
 
 const router = useRouter()
@@ -440,6 +582,12 @@ interface AnalystMatch {
 const matches = ref<AnalystMatch[]>([])
 const matchesLoading = ref(false)
 const matchesError = ref<string | null>(null)
+
+// Match detail state - loaded when a match is selected
+const selectedMatchId = ref<string | null>(null)
+const matchDetail = ref<MatchCaseStudyResponse | null>(null)
+const detailLoading = ref(false)
+const detailError = ref<string | null>(null)
 
 // Players list - NO FAKE DATA
 // Required: GET /analyst/players
@@ -604,6 +752,33 @@ async function loadMatches() {
   }
 }
 
+async function selectMatch(matchId: string) {
+  selectedMatchId.value = matchId
+  await loadMatchDetail(matchId)
+  await nextTick()
+  document.getElementById('aw-match-detail')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
+async function loadMatchDetail(matchId: string) {
+  detailLoading.value = true
+  detailError.value = null
+  matchDetail.value = null
+  try {
+    matchDetail.value = await getMatchCaseStudy(matchId)
+  } catch (err) {
+    detailError.value = err instanceof Error ? err.message : 'Failed to load match detail'
+    console.error('[AnalystWorkspace] Failed to load match detail:', err)
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function openFullCaseStudy() {
+  if (selectedMatchId.value) {
+    router.push({ name: 'MatchCaseStudy', params: { matchId: selectedMatchId.value } })
+  }
+}
+
 async function refreshData() {
   await loadMatches()
 }
@@ -613,13 +788,6 @@ function resetFilters() {
   filters.format = 'all'
   filters.phase = 'all'
   filters.perspective = 'all'
-}
-
-function openMatchCaseStudy(matchId: string) {
-  router.push({
-    name: 'MatchCaseStudy',
-    params: { matchId }
-  })
 }
 
 function handleCalloutSelect(callout: AiCallout) {
@@ -1045,6 +1213,143 @@ onMounted(() => {
   background-color: var(--color-primary-subtle);
   transition: box-shadow 160ms ease-out, transform 160ms ease-out, background-color 160ms ease-out;
   transform: translateY(-1px);
+}
+
+.aw-matches-row--selected {
+  background-color: var(--color-primary-subtle);
+  border-left: 3px solid var(--color-primary);
+}
+
+/* MATCH INTELLIGENCE PANEL */
+.aw-match-detail {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.aw-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.aw-detail-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.aw-detail-meta {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.aw-detail-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.aw-detail-loading,
+.aw-detail-error {
+  padding: var(--space-3) 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.aw-detail-summary {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aw-detail-row {
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.aw-detail-label {
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  min-width: 72px;
+}
+
+.aw-detail-value {
+  color: var(--color-text);
+}
+
+.aw-detail-section-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.aw-detail-innings {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aw-innings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.aw-innings-table th {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.aw-innings-table td {
+  padding: var(--space-2);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.aw-detail-empty-hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.aw-detail-momentum,
+.aw-detail-keyphase {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.aw-detail-momentum-title,
+.aw-detail-keyphase-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.aw-detail-momentum-sub,
+.aw-detail-keyphase-detail {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .aw-matches-col {
