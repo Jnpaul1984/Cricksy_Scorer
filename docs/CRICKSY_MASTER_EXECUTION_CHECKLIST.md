@@ -240,6 +240,31 @@ Any DB model change must include:
 
 Do not edit existing migrations unless fixing a migration that has not been deployed and the user approves.
 
+### Postgres Migration Validation Gate (Mandatory)
+
+> Any PR touching `backend/alembic/versions/` must run Alembic upgrade against real Postgres before merge. SQLite/in-memory tests are not sufficient for migration validation.
+
+Migration touched?
+- [ ] Run Alembic upgrade against Postgres
+- [ ] Use the same Alembic command as deploy workflow where possible
+- [ ] Confirm no multiple-head issue
+- [ ] Confirm enum columns and enum seed inserts work on Postgres
+- [ ] Confirm JSON/JSONB, UUID, ARRAY, server defaults, indexes, and constraints work on Postgres
+- [ ] Confirm downgrade path or document why downgrade is not safe/applicable
+- [ ] Do not rely only on SQLite/in-memory tests
+- [ ] Include migration validation output in PR body
+
+Required CI/Governance notes:
+
+- Backend tests with `CRICKSY_IN_MEMORY_DB=1` are useful for app regression checks, but they are not migration validation.
+- SQLite/in-memory test execution does not reliably catch PostgreSQL enum and other Postgres-specific type/DDL failures.
+- Any new migration must be validated against real Postgres (for example via Docker Compose/test database or a deploy-compatible migration job) before merge.
+- If deployment migration fails, ship a minimal migration-fix PR first; do not bundle feature refactors into the migration-fix change.
+
+Recommended follow-up (documented only, do not implement in this issue):
+
+- Add a PR workflow job that starts Postgres and runs Alembic upgrade for PRs touching `backend/alembic/versions/**`.
+
 ## Rule 7 — Protected Production Areas
 
 These areas require extra caution:
