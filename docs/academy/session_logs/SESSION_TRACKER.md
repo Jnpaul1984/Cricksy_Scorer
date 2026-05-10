@@ -296,6 +296,141 @@ This was a strong first session. You already understand the core analyst mindset
 
 ---
 
+## Session 2026-05-09 — Format Comparison + Practical Observation Exercise
+
+### Curriculum Location
+
+- Level: Beginner Cricket Analyst
+- Course: Cricket Foundations
+- Module: Cricket System Fundamentals
+- Lesson: Introduction to Cricket Formats
+
+### Session Objectives
+
+- [x] Compare pressure and tactical meaning across T20, ODI, and Test cricket.
+- [x] Practice beginner match observation using format-specific scenarios.
+- [x] Explain tactical cause and effect using match context.
+- [x] Identify Cricksy AI feature opportunities from observed match patterns.
+
+### Theory Covered
+
+- T20 pressure is immediate because balls are limited and required rate pressure rises quickly.
+- ODI pressure often changes through phases, especially when a team shifts from platform-building into acceleration.
+- Test pressure can be created through long-term bowling plans, patience, and repeated line/length discipline.
+- Format changes the meaning of dot balls, wickets, risk, and tactical plans.
+
+### Real-World Example Discussed
+
+- Scenario A: T20 chase requiring 36 runs from 18 balls, with dot balls, boundary, and wicket in the over.
+- Scenario B: ODI team moving from 180/2 after 35 overs to 198/5 after 40 overs.
+- Scenario C: Test bowler using repeated outside-off-stump line before drawing the batter into a drive and edge.
+
+### Analyst Workflow Practiced
+
+- Identify format first.
+- Identify phase and pressure situation.
+- Identify event sequence.
+- Explain whether the key event was caused by pressure, shot selection, or bowling plan.
+- Connect the observed pattern to possible AI and Cricksy system detection.
+
+### AI-Assisted Analysis Connection
+
+- Cricksy could detect dot-ball pressure, win probability movement, required-rate pressure, wicket clusters, tactical shifts, and long-term bowling plans.
+- The student correctly identified that pressure signals should trigger tactical recommendations or counter-pressure ideas for the batting team.
+
+### Cricksy Feature Connection
+
+- Future feature: Dot-Ball Pressure Detector.
+- Future feature: Win Probability and Required Rate Pressure Tracker.
+- Future feature: Wicket Cluster Alert.
+- Future feature: Test Match Bowling Plan Pattern Detector.
+- Future feature: Tactical Counter-Pressure Suggestions.
+
+### Exercise / Practical Task
+
+- Task: Complete 12-question format comparison and practical observation exercise.
+- Completion Status: Completed.
+- Evidence: Student uploaded `Format Comparison + Practical Observation Exercise.txt` and answered all Scenario A, B, and C questions.
+
+### Assessment Questions / Task
+
+Scenario A — T20:
+1. Did pressure increase or decrease during the over?
+2. Which ball changed the pressure most?
+3. Was the wicket more likely caused by pressure, poor shot selection, or good bowling plan?
+4. What should Cricksy detect from this over?
+
+Scenario B — ODI:
+1. What changed in the match situation?
+2. What phase was the batting team likely entering?
+3. How did the wickets affect the innings plan?
+4. What would you write in an analyst report?
+
+Scenario C — Test:
+1. Was this wicket sudden or planned?
+2. What was the bowling strategy?
+3. What did the batter eventually do wrong?
+4. How is this different from a T20 wicket?
+
+### Student Response Summary
+
+- Scenario A: Correctly identified that pressure increased on the batting team, especially after ball 4. Correctly used required-rate context by noting the chase pressure rising to above 14 per over. Identified pressure as the main wicket cause and suggested Cricksy should detect dot-ball pressure, win percentage, and tactical shifts.
+- Scenario B: Correctly identified the bowling team took 3 wickets for 18 runs in 5 overs. Correctly recognized the batting side was entering the death overs and that the wicket cluster disrupted acceleration plans, forcing a rebuild.
+- Scenario C: Correctly identified the wicket as planned. Correctly described the bowler testing patience outside off stump before using a fuller line to draw the drive and edge. Correctly distinguished Test cricket from T20 by explaining that Test cricket allows long-term plans and counter-plans.
+
+### Grade
+
+| Category | Score | Feedback |
+|---|---:|---|
+| Tactical Understanding | 92 | Excellent beginner-level understanding of format-specific pressure, especially the ODI pre-acceleration disruption and Test match bowling plan. |
+| Observation Quality | 90 | Strong observation of event sequence, required-rate pressure, wickets, and planned bowling setup. Next improvement is adding field placement and batter intent when available. |
+| Analyst Reasoning | 93 | Strong cause-and-effect reasoning. The T20 required-rate explanation and Test setup explanation were especially strong. |
+| Communication | 86 | Clear and understandable. Continue improving grammar, punctuation, and report-style polish for future analyst documents. |
+| AI Systems Thinking | 89 | Good identification of dot-ball pressure, win percentage, and tactical shift detection. Next step is naming the exact data inputs Cricksy needs. |
+| Cricksy Integration Thinking | 90 | Strong feature thinking. Tactical counter-pressure suggestions show good product instincts. |
+
+Overall Grade: 90.0 — Excellent
+
+### Strengths
+
+- Strong practical understanding of how pressure differs across T20, ODI, and Test cricket.
+- Excellent ODI analysis: recognized wicket cluster, phase context, and disruption of acceleration plan.
+- Excellent Test analysis: understood bowling patience, outside-off setup, fuller-line bait, and edge creation.
+- Good early AI/product thinking by identifying dot-ball pressure, win percentage, and tactical shifts.
+- Improved measurability by using required-rate context in the T20 scenario.
+
+### Weaknesses / Gaps
+
+- Future answers should include more field setting observations when provided.
+- Future answers should separate cause categories more clearly: pressure, execution, shot selection, and bowling plan can overlap.
+- Written reports should become more formal and structured as the academy progresses.
+
+### Teacher Feedback
+
+This was a clear jump from Session 1. You moved from basic analyst thinking into actual practical observation. Your strongest work was Scenario C because you explained that the wicket was not sudden; it was created through a repeated plan. That is exactly how analysts think. Your Scenario A answer was also strong because you used required-rate context instead of only saying pressure increased. Lesson 1 is now strong enough to be marked complete from a learning standpoint, while future live/video observation will continue building the skill.
+
+### Completion Decision
+
+- Lesson Complete: Yes
+- Format Comparison Exercise Complete: Yes
+- Practical Observation Work Complete: Yes
+- Project Updated: No
+- Assessment Passed: Lesson-level assessment passed
+
+### Notion Update Recommendation
+
+- Mark `Introduction to Cricket Formats` as Completed or Ready for Review.
+- Mark `Format comparison exercise` as Completed.
+- Add the uploaded exercise file as evidence or note in the relevant Lesson/Module page if desired.
+- Keep Module 1 status as In Progress because remaining lessons are not complete.
+
+### Next Session Focus
+
+- Session 3: Understanding Overs & Innings.
+- Practical task: learn how overs, balls, innings state, wickets, and run rate create the basic language of cricket analysis.
+
+---
+
 ## 7. Module 1 Progress Snapshot
 
 Module: Cricket System Fundamentals
@@ -304,7 +439,7 @@ Module: Cricket System Fundamentals
 
 | Lesson | Status | Evidence |
 |---|---|---|
-| Introduction to Cricket Formats | In Progress | Session 1 completed analyst mindset foundation. Format comparison still required. |
+| Introduction to Cricket Formats | Completed | Session 1 analyst mindset and Session 2 format comparison/practical observation completed. |
 | Understanding Overs & Innings | Not Started |  |
 | Match Phases Explained | Not Started |  |
 | Player Roles & Responsibilities | Not Started |  |
@@ -314,7 +449,8 @@ Module: Cricket System Fundamentals
 
 | Exercise | Status | Evidence |
 |---|---|---|
-| Format comparison exercise | Not Started |  |
+| Format comparison exercise | Completed | Session 2 uploaded exercise file and graded response. |
+| Practical observation exercise | Completed | Scenario A/B/C observation exercise completed in Session 2. |
 | Five-over observation exercise | Not Started |  |
 | Match phase identification exercise | Not Started |  |
 | Player role classification exercise | Not Started |  |
@@ -337,6 +473,6 @@ Module: Cricket System Fundamentals
 
 ## 8. Next Planned Session
 
-Session Title: Introduction to Cricket Formats — T20, ODI, and Test
-Curriculum Location: Level 1 → Cricket Foundations → Cricket System Fundamentals → Introduction to Cricket Formats
-Primary Goal: Compare cricket formats from an analyst perspective and understand how pressure, tactics, and data needs change by format.
+Session Title: Understanding Overs & Innings
+Curriculum Location: Level 1 → Cricket Foundations → Cricket System Fundamentals → Understanding Overs & Innings
+Primary Goal: Understand overs, balls, innings state, wickets, run rate, and how analysts use these basics to explain match situations.
