@@ -198,7 +198,7 @@
                   role="button"
                   tabindex="0"
                   :aria-pressed="selectedMatchId === match.id"
-                  :aria-label="`Open match intelligence for ${match.teams}`"
+                  :aria-label="'Open match intelligence for ' + (match.teams || 'this match')"
                   @click="selectMatch(match.id)"
                   @keydown.enter.prevent="selectMatch(match.id)"
                   @keydown.space.prevent="selectMatch(match.id)"
