@@ -920,13 +920,17 @@ Phase 4 is complete when the analyst system has a repo-grounded MVP spec, implem
 
 ---
 
-# Phase 5 — Historical Match Ingestion: Structured CSV First
+# Phase 5 — Historical Match Ingestion: Structured JSON First
 
 ## Purpose
 
 Allow teams/orgs to upload old matches through a safe structured path first.
 
-Start with CSV before OCR/AI parsing.
+Start with structured JSON before OCR/AI parsing.
+
+Phase 5A pre-implementation governance/audit/spec-lock doc:
+
+- `docs/PHASE_5A_HISTORICAL_JSON_IMPORT_AUDIT_AND_SPEC_LOCK.md`
 
 ## Primary Areas
 
@@ -954,7 +958,7 @@ Audit:
 
 Lock:
 
-- CSV template
+- JSON source contract
 - ingest job schema
 - validation errors format
 - preview-before-save workflow
@@ -964,7 +968,7 @@ Lock:
 
 ## Gates
 
-- CSV imports normalize to existing match structure
+- JSON imports normalize to existing match structure
 - No imported match becomes official without validation
 - Bad rows return clear errors
 - Duplicate detection exists
@@ -973,9 +977,9 @@ Lock:
 
 ## Required Tests
 
-- valid CSV import
-- invalid CSV import
-- missing headers
+- valid JSON import
+- invalid JSON import
+- missing required fields
 - innings total mismatch
 - extras mismatch
 - duplicate detection
@@ -1024,7 +1028,7 @@ Lock:
 - human review required before save
 - low-confidence fields visible
 - secure file validation
-- existing CSV import unaffected
+- existing structured JSON import unaffected
 - CI passes
 
 ## Required Tests
@@ -1535,7 +1539,7 @@ Check imports, typing, formatting, migrations, tests, and CI impact before final
 3. Phase 2 — Coach + Player Development Enhancements
 4. Phase 3 — Coach Pro Plus Video Analysis Hardening + Extension
 5. Phase 4 — Analyst System Blueprint Audit + Spec Lock
-6. Phase 5 — Historical Match Ingestion: Structured CSV First
+6. Phase 5 — Historical Match Ingestion: Structured JSON First
 7. Phase 6 — Historical Match Ingestion: PDF/Image/OCR Review Flow
 8. Phase 7 — AI Analytics + Match Intelligence Enhancements
 9. Phase 8 — Subscription, Pricing + Tier Enforcement Hardening
