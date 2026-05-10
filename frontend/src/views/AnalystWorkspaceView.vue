@@ -437,7 +437,7 @@
                           <td>{{ phase.start_over }}–{{ phase.end_over }}</td>
                           <td>{{ phase.runs }}</td>
                           <td>{{ phase.wickets }}</td>
-                          <td>{{ phase.run_rate.toFixed(2) }}</td>
+                          <td>{{ phase.run_rate != null ? phase.run_rate.toFixed(2) : '—' }}</td>
                           <td>{{ phase.net_swing_vs_par >= 0 ? '+' : '' }}{{ phase.net_swing_vs_par }}</td>
                           <td>
                             <span :class="`aw-phase-badge aw-phase-badge--${phase.impact}`">
@@ -475,13 +475,13 @@
                           <template v-if="player.batting">
                             <span class="aw-keyplayer-stat">
                               {{ player.batting.runs }} runs
-                              (SR {{ player.batting.strike_rate.toFixed(1) }})
+                              (SR {{ player.batting.strike_rate != null ? player.batting.strike_rate.toFixed(1) : '—' }})
                             </span>
                           </template>
                           <template v-if="player.bowling">
                             <span class="aw-keyplayer-stat">
                               {{ player.bowling.wickets }}/{{ player.bowling.runs }}
-                              (Eco {{ player.bowling.economy.toFixed(2) }})
+                              (Eco {{ player.bowling.economy != null ? player.bowling.economy.toFixed(2) : '—' }})
                             </span>
                           </template>
                         </div>
