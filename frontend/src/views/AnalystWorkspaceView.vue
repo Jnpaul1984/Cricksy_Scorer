@@ -372,7 +372,7 @@
                           <td>{{ inns.runs }}</td>
                           <td>{{ inns.wickets }}</td>
                           <td>{{ inns.overs }}</td>
-                          <td>{{ inns.run_rate.toFixed(2) }}</td>
+                          <td>{{ inns.run_rate != null ? inns.run_rate.toFixed(2) : '—' }}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -752,12 +752,11 @@ async function loadMatches() {
   }
 }
 
-function selectMatch(matchId: string) {
+async function selectMatch(matchId: string) {
   selectedMatchId.value = matchId
-  void loadMatchDetail(matchId)
-  nextTick(() => {
-    document.getElementById('aw-match-detail')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-  })
+  await loadMatchDetail(matchId)
+  await nextTick()
+  document.getElementById('aw-match-detail')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
 
 async function loadMatchDetail(matchId: string) {

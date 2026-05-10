@@ -113,7 +113,9 @@ describe('AnalystWorkspaceView', () => {
   })
 
   it('shows loading state while fetching matches', async () => {
-    vi.mocked(api.getAnalystMatches).mockImplementation(() => new Promise(() => {}))
+    vi.mocked(api.getAnalystMatches).mockImplementation(
+      () => new Promise((resolve) => { setTimeout(resolve, 10_000) })
+    )
 
     const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
     await nextTick()
