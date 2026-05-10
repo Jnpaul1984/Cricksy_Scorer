@@ -10,15 +10,26 @@
     <section class="profile-summary-section">
       <div class="section-header">
         <h3 class="section-title">🧠 Latest Mental Profile</h3>
-        <BaseButton
-          variant="ghost"
-          size="sm"
-          :disabled="summaryLoading"
-          @click="loadLatestProfile"
-        >
-          <span v-if="summaryLoading">Loading…</span>
-          <span v-else>↻ Refresh</span>
-        </BaseButton>
+        <div class="section-header-actions">
+          <BaseButton
+            v-if="latestProfile"
+            variant="ghost"
+            size="sm"
+            :disabled="summaryLoading"
+            @click="exportMentalReport"
+          >
+            📄 Export Report
+          </BaseButton>
+          <BaseButton
+            variant="ghost"
+            size="sm"
+            :disabled="summaryLoading"
+            @click="loadLatestProfile"
+          >
+            <span v-if="summaryLoading">Loading…</span>
+            <span v-else>↻ Refresh</span>
+          </BaseButton>
+        </div>
       </div>
 
       <!-- Loading -->
@@ -209,6 +220,7 @@ import type { MentalProfileSummary, MentalQuestionnaireTemplate } from '@/types/
 
 const props = defineProps<{
   playerId: string
+  playerName?: string
 }>()
 
 /** Extract a human-readable message from an unknown API error. */
@@ -352,6 +364,117 @@ function formatDate(iso: string): string {
   }
 }
 
+// ── Mental report export ─────────────────────────────────────────────────────
+function exportMentalReport(): void {
+  const profile = latestProfile.value
+  if (!profile) return
+
+  const exportDate = new Date().toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+  const assessmentDate = formatDate(profile.created_at)
+  const displayName = props.playerName || `Player ${props.playerId.slice(0, 8)}`
+
+  const categoryRowsHtml = profile.category_scores
+    .map(
+      (cs) => `
+      <tr>
+        <td>${formatCategory(cs.category)}</td>
+        <td class="score-cell">${cs.average_score.toFixed(1)} / 5</td>
+        <td>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:${(cs.average_score / 5) * 100}%"></div>
+          </div>
+        </td>
+      </tr>`,
+    )
+    .join('')
+
+  const strengthsHtml = profile.strengths.length
+    ? profile.strengths.map((s) => `<li>${s}</li>`).join('')
+    : '<li>No strengths recorded.</li>'
+
+  const developmentHtml = profile.development_areas.length
+    ? profile.development_areas.map((d) => `<li>${d}</li>`).join('')
+    : '<li>No coaching focus areas recorded.</li>'
+
+  const printContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mental Analysis Report – ${displayName}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 32px; color: #333; max-width: 800px; margin: 0 auto; }
+    h1 { color: #1a1a2e; border-bottom: 2px solid #1976d2; padding-bottom: 10px; margin-bottom: 4px; }
+    h2 { color: #1976d2; margin-top: 28px; margin-bottom: 8px; }
+    .meta { font-size: 13px; color: #666; margin-bottom: 24px; }
+    .overall-score { font-size: 28px; font-weight: bold; color: #1976d2; }
+    .summary-text { font-size: 14px; line-height: 1.6; margin: 8px 0 16px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid #ddd; padding: 10px 12px; text-align: left; font-size: 13px; }
+    th { background: #f5f5f5; font-weight: 600; }
+    .score-cell { text-align: center; font-weight: bold; color: #1976d2; }
+    .bar-track { height: 8px; background: #e0e0e0; border-radius: 4px; min-width: 120px; }
+    .bar-fill { height: 100%; background: #1976d2; border-radius: 4px; }
+    ul { margin: 8px 0; padding-left: 20px; }
+    li { font-size: 13px; margin-bottom: 4px; line-height: 1.5; }
+    .disclaimer { margin-top: 40px; padding: 12px 16px; background: #f5f5f5;
+                  border-left: 3px solid #1976d2; font-size: 12px; color: #555;
+                  border-radius: 4px; }
+    .footer { margin-top: 16px; font-size: 11px; color: #999; text-align: center; }
+    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+  <h1>🧠 Mental Analysis Report</h1>
+  <div class="meta">
+    <strong>Player:</strong> ${displayName}<br />
+    <strong>Assessment date:</strong> ${assessmentDate}<br />
+    <strong>Report generated:</strong> ${exportDate}
+  </div>
+
+  <h2>Overall Score</h2>
+  <div class="overall-score">${profile.overall_average_score.toFixed(1)} / 5</div>
+  <p class="summary-text">${profile.overall_summary}</p>
+
+  <h2>Category Scores</h2>
+  <table>
+    <thead>
+      <tr><th>Category</th><th>Score</th><th>Progress</th></tr>
+    </thead>
+    <tbody>
+      ${categoryRowsHtml || '<tr><td colspan="3">No category data.</td></tr>'}
+    </tbody>
+  </table>
+
+  <h2>💪 Coaching Strengths</h2>
+  <ul>${strengthsHtml}</ul>
+
+  <h2>🎯 Growth Opportunities / Coaching Focus</h2>
+  <ul>${developmentHtml}</ul>
+
+  <div class="disclaimer">
+    ℹ️ This report is a coaching development tool and is not a medical or psychological diagnosis.
+  </div>
+
+  <div class="footer">Cricksy Scorer – Mental Analysis Report · ${exportDate}</div>
+</body>
+</html>`
+
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) {
+    alert('Could not open report window. Please allow pop-ups and try again.')
+    return
+  }
+  printWindow.document.write(printContent)
+  printWindow.document.close()
+  printWindow.onload = () => {
+    printWindow.print()
+  }
+}
+
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(async () => {
   await Promise.all([loadLatestProfile(), loadHistory()])
@@ -389,6 +512,12 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--space-md, 1rem);
+}
+
+.section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs, 0.25rem);
 }
 
 .section-title {
