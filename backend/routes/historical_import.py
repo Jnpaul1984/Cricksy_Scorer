@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/historical-import/json", tags=["historical-impor
 @router.post("/dry-run", response_model=HistoricalImportDryRunResponse)
 async def historical_json_dry_run(
     request: Request,
-    file: UploadFile | None = File(default=None),
+    file: UploadFile | None = File(None),
 ) -> HistoricalImportDryRunResponse | JSONResponse:
     payload_bytes: bytes
 

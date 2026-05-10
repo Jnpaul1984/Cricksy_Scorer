@@ -4,6 +4,7 @@ import hashlib
 import json
 from typing import Any
 
+from backend.domain.constants import norm_extra
 from backend.api.schemas.historical_import import (
     HistoricalImportDetectedSections,
     HistoricalImportDryRunResponse,
@@ -11,6 +12,13 @@ from backend.api.schemas.historical_import import (
     HistoricalImportInningsPreview,
     HistoricalImportIssue,
     HistoricalImportMetadataPreview,
+)
+
+INNINGS_NODE_KEYS = ("team", "balls", "deliveries", "overs", "runs", "wickets")
+DELIVERY_PLAYER_KEYS = ("batsman", "batter", "striker", "non_striker", "bowler")
+DUPLICATE_TRACKING_MESSAGE = (
+    "Duplicate tracking table is not available in the current schema; "
+    "Phase 5C schema work is required for persisted duplicate detection."
 )
 
 
@@ -32,6 +40,27 @@ def _first_str(values: Any) -> str | None:
     if isinstance(values, list) and values:
         return _as_str(values[0])
     return None
+
+
+def _safe_int(value: Any) -> int:
+    if value is None:
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _is_legal_delivery(delivery: dict[str, Any]) -> bool:
+    extra_type = norm_extra(_as_str(delivery.get("extra_type")))
+    if extra_type in {"wd", "nb"}:
+        return False
+
+    extras = delivery.get("extras")
+    if isinstance(extras, dict) and (_safe_int(extras.get("wides")) > 0 or _safe_int(extras.get("noballs")) > 0):
+        return False
+
+    return True
 
 
 def _extract_team_names(payload: dict[str, Any]) -> list[str]:
@@ -120,7 +149,7 @@ def _extract_innings_nodes(innings_value: Any) -> list[dict[str, Any]]:
     for inning in innings_value:
         if not isinstance(inning, dict):
             continue
-        if any(k in inning for k in ("team", "balls", "deliveries", "overs", "runs", "wickets")):
+        if any(k in inning for k in INNINGS_NODE_KEYS):
             nodes.append(inning)
             continue
         if len(inning) == 1:
@@ -166,11 +195,8 @@ def _derive_innings_preview(
 
         innings_team = _as_str(innings.get("team"))
 
-        if innings_team:
-            players.add(innings_team)
-
         for delivery in normalized_deliveries:
-            for key in ("batsman", "batter", "striker", "non_striker", "bowler"):
+            for key in DELIVERY_PLAYER_KEYS:
                 maybe = _as_str(delivery.get(key))
                 if maybe:
                     players.add(maybe)
@@ -182,13 +208,13 @@ def _derive_innings_preview(
             for delivery in normalized_deliveries:
                 runs_obj = delivery.get("runs")
                 if isinstance(runs_obj, dict):
-                    total += int(runs_obj.get("total") or 0)
+                    total += _safe_int(runs_obj.get("total"))
                     continue
                 if isinstance(delivery.get("runs"), int):
-                    total += int(delivery.get("runs") or 0)
+                    total += _safe_int(delivery.get("runs"))
                     continue
-                total += int(delivery.get("runs_scored") or 0)
-                total += int(delivery.get("extra_runs") or 0)
+                total += _safe_int(delivery.get("runs_scored"))
+                total += _safe_int(delivery.get("extra_runs"))
             derived_runs = total
 
         explicit_wickets = innings.get("wickets")
@@ -204,7 +230,12 @@ def _derive_innings_preview(
             derived_wickets = wicket_count
 
         balls_count = len(normalized_deliveries)
-        overs_float = round(balls_count / 6.0, 1) if balls_count else None
+        legal_balls_count = sum(1 for delivery in normalized_deliveries if _is_legal_delivery(delivery))
+        overs_float = None
+        if legal_balls_count:
+            complete_overs = legal_balls_count // 6
+            balls_this_over = legal_balls_count % 6
+            overs_float = float(f"{complete_overs}.{balls_this_over}")
 
         if balls_count == 0:
             warnings.append(
@@ -231,16 +262,6 @@ def _derive_innings_preview(
 
 
 def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDryRunResponse]:
-    default_duplicate = HistoricalImportDuplicatePreview(
-        source_hash_sha256=_hash_payload(raw_payload),
-        probable_duplicate="unknown",
-        tracking_available=False,
-        message=(
-            "Duplicate tracking table is not available in the current schema; "
-            "Phase 5C schema work is required for persisted duplicate detection."
-        ),
-    )
-
     try:
         decoded = raw_payload.decode("utf-8")
     except UnicodeDecodeError:
@@ -263,7 +284,12 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
                     severity="error",
                 )
             ],
-            duplicate_detection=default_duplicate,
+            duplicate_detection=HistoricalImportDuplicatePreview(
+                source_hash_sha256=_hash_payload(raw_payload),
+                probable_duplicate="unknown",
+                tracking_available=False,
+                message=DUPLICATE_TRACKING_MESSAGE,
+            ),
         )
         return 400, response
 
@@ -289,7 +315,12 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
                     severity="error",
                 )
             ],
-            duplicate_detection=default_duplicate,
+            duplicate_detection=HistoricalImportDuplicatePreview(
+                source_hash_sha256=_hash_payload(raw_payload),
+                probable_duplicate="unknown",
+                tracking_available=False,
+                message=DUPLICATE_TRACKING_MESSAGE,
+            ),
         )
         return 400, response
 
@@ -314,13 +345,14 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
                 )
             ],
             duplicate_detection=HistoricalImportDuplicatePreview(
-                **default_duplicate.model_dump(),
-                source_hash_sha256=_hash_payload(_to_canonical_json_bytes(parsed)),
+                source_hash_sha256=_hash_payload(raw_payload),
+                probable_duplicate="unknown",
+                tracking_available=False,
+                message=DUPLICATE_TRACKING_MESSAGE,
             ),
         )
         return 400, response
 
-    canonical_hash = _hash_payload(_to_canonical_json_bytes(parsed))
     innings_nodes = _extract_innings_nodes(parsed.get("innings"))
     detected_format = _detect_format(parsed, innings_nodes)
     team_names = _extract_team_names(parsed)
@@ -390,14 +422,24 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         players=bool(player_names),
         innings=bool(innings_nodes),
         deliveries=total_deliveries > 0,
-        metadata=any(metadata_preview.model_dump().values()),
+        metadata=any(
+            [
+                metadata_preview.match_type,
+                metadata_preview.venue,
+                metadata_preview.date,
+                metadata_preview.result,
+            ]
+        ),
     )
 
-    status = "valid"
     if detected_format == "unknown":
-        status = "unsupported"
-    if errors:
-        status = "invalid" if detected_format != "unknown" else "unsupported"
+        status: str = "unsupported"
+    elif errors:
+        status = "invalid"
+    else:
+        status = "valid"
+
+    normalized_hash = _hash_payload(_to_canonical_json_bytes(parsed))
 
     response = HistoricalImportDryRunResponse(
         status=status,
@@ -413,10 +455,10 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         warnings=warnings,
         errors=errors,
         duplicate_detection=HistoricalImportDuplicatePreview(
-            source_hash_sha256=canonical_hash,
+            source_hash_sha256=normalized_hash,
             probable_duplicate="unknown",
             tracking_available=False,
-            message=default_duplicate.message,
+            message=DUPLICATE_TRACKING_MESSAGE,
         ),
         no_persistence=True,
     )
