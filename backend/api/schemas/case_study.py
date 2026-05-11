@@ -10,7 +10,18 @@ Powers the MatchCaseStudyView.vue UI with structured match analysis data.
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def _normalize_source_dates(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        stripped = value.strip()
+        return [stripped] if stripped else []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
 
 
 # -----------------------------------------------------------------------------
@@ -50,6 +61,11 @@ class CaseStudyMatch(BaseModel):
     result: str
     overs_per_side: int | None = None
     innings: list[CaseStudyInningsSummary]
+
+    @field_validator("source_dates", mode="before")
+    @classmethod
+    def validate_source_dates(cls, value: object) -> list[str]:
+        return _normalize_source_dates(value)
 
 
 # -----------------------------------------------------------------------------

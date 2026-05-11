@@ -11,7 +11,18 @@ from datetime import date, datetime
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _normalize_source_dates(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        stripped = value.strip()
+        return [stripped] if stripped else []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
 
 
 class AnalystMatchListItem(BaseModel):
@@ -33,6 +44,11 @@ class AnalystMatchListItem(BaseModel):
     match_datetime: datetime | None = None
     is_historical: bool = False
     source: str = "live"
+
+    @field_validator("source_dates", mode="before")
+    @classmethod
+    def validate_source_dates(cls, value: Any) -> list[str]:
+        return _normalize_source_dates(value)
 
 
 class AnalystMatchListResponse(BaseModel):
@@ -65,6 +81,11 @@ class AnalystMatchDetailResponse(BaseModel):
     innings: list[AnalystMatchInningsSummary]
     batting_scorecard: dict[str, object] | None = None
     bowling_scorecard: dict[str, object] | None = None
+
+    @field_validator("source_dates", mode="before")
+    @classmethod
+    def validate_source_dates(cls, value: Any) -> list[str]:
+        return _normalize_source_dates(value)
 
 
 class AnalystExportDataResponse(BaseModel):
