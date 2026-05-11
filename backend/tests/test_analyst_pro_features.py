@@ -414,6 +414,14 @@ async def test_legacy_historical_match_without_source_dates_still_loads(client: 
         },
     )
 
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        game = await session.get(models.Game, "legacy-historical")
+        assert game is not None
+        hist_meta = (game.phases or {}).get("historical_import")
+        assert isinstance(hist_meta, dict)
+        assert "source_dates" not in hist_meta
+
     list_resp = client.get("/analytics/matches", headers=_auth_headers(token))
     assert list_resp.status_code == 200, list_resp.text
     listed = next((item for item in list_resp.json()["items"] if item["id"] == "legacy-historical"), None)

@@ -8,12 +8,12 @@ Powers the MatchCaseStudyView.vue UI with structured match analysis data.
 """
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-def _normalize_source_dates(value: object) -> list[str]:
+def _normalize_source_dates(value: Any) -> list[str]:
     if value is None:
         return []
     if isinstance(value, str):
@@ -64,7 +64,7 @@ class CaseStudyMatch(BaseModel):
 
     @field_validator("source_dates", mode="before")
     @classmethod
-    def validate_source_dates(cls, value: object) -> list[str]:
+    def validate_source_dates(cls, value: Any) -> list[str]:
         return _normalize_source_dates(value)
 
 
