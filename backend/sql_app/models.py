@@ -2251,8 +2251,8 @@ class HistoricalImportBatch(Base):
     """Tracks metadata for each historical JSON import dry-run preview.
 
     Persisted only when the caller explicitly requests record_preview=true.
-    This phase never creates Game/Delivery/Player/Team rows.
-    is_finalized stays False until a future phase enables the write path.
+    Phase 5C: never creates Game/Delivery/Player/Team rows; is_finalized stays False.
+    Phase 5D: apply path sets is_finalized=True and applied_game_id after a successful write.
     """
 
     __tablename__ = "historical_import_batches"
@@ -2304,12 +2304,20 @@ class HistoricalImportBatch(Base):
         JSON, nullable=True, comment="Serialized dry-run response payload for audit"
     )
 
-    # Write-path gate - always False in Phase 5C; reserved for Phase 5D+
+    # Write-path gate - always False in Phase 5C; set True by Phase 5D apply path
     is_finalized: Mapped[bool] = mapped_column(
         Boolean,
         default=False,
         nullable=False,
         comment="True only when actual Game rows have been committed (Phase 5D+)",
+    )
+
+    # Phase 5D: ID of the Game row created when this batch was applied.
+    # Null until apply succeeds; enables rollback and audit.
+    applied_game_id: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+        comment="Game.id created by Phase 5D apply; null until batch is finalized",
     )
 
     # Timestamps

@@ -4,10 +4,13 @@ from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from backend.api.schemas.historical_import import (
+    HistoricalImportApplyRequest,
+    HistoricalImportApplyResponse,
     HistoricalImportBatchRecord,
     HistoricalImportDryRunResponse,
 )
 from backend.security import get_current_user_optional
+from backend.services.historical_import_apply_service import apply_historical_batch
 from backend.services.historical_import_preview import build_dry_run_response
 from backend.services.historical_import_service import (
     create_import_batch,
@@ -183,8 +186,60 @@ async def list_historical_import_batches(
             innings_count=b.innings_count,
             delivery_count=b.delivery_count,
             is_finalized=b.is_finalized,
+            applied_game_id=b.applied_game_id,
             created_at=b.created_at,
             updated_at=b.updated_at,
         )
         for b in batches
     ]
+
+
+@router.post(
+    "/batches/{batch_id}/apply",
+    response_model=HistoricalImportApplyResponse,
+    summary="Apply a validated historical import batch (Phase 5D)",
+    description=(
+        "Creates a historical Game record from a previously validated dry-run batch. "
+        "Requires explicit confirm=true. "
+        "Refuses already-finalized batches and batches with errors or non-valid status. "
+        "Does NOT import delivery records (Phase 5E follow-up). "
+        "Does NOT mutate live or in-progress matches."
+    ),
+)
+async def apply_historical_import_batch(
+    batch_id: str,
+    body: HistoricalImportApplyRequest,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalImportApplyResponse:
+    """Apply a validated historical import batch and create a historical Game row."""
+    game, warnings, error_msg = await apply_historical_batch(
+        db,
+        batch_id=batch_id,
+        confirm=body.confirm,
+    )
+
+    if error_msg is not None:
+        # Determine appropriate status code from error type
+        if "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        if "confirm must be true" in error_msg.lower():
+            raise HTTPException(status_code=422, detail=error_msg)
+        raise HTTPException(status_code=409, detail=error_msg)
+
+    assert game is not None  # noqa: S101 - guaranteed by non-None error_msg check above
+
+    rollback_info = (
+        f"To rollback: delete Game row with id='{game.id}' and reset "
+        f"HistoricalImportBatch id='{batch_id}' fields "
+        "is_finalized=False, applied_game_id=NULL."
+    )
+
+    return HistoricalImportApplyResponse(
+        batch_id=batch_id,
+        applied_game_id=game.id,
+        records_created=1,
+        status="applied",
+        warnings=warnings,
+        rollback_info=rollback_info,
+    )
