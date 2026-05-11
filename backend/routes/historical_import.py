@@ -9,6 +9,8 @@ from backend.api.schemas.historical_import import (
     HistoricalImportApplyResponse,
     HistoricalImportBatchRecord,
     HistoricalImportDryRunResponse,
+    HistoricalImportRepairRequest,
+    HistoricalImportRepairResponse,
     HistoricalImportRollbackRequest,
     HistoricalImportRollbackResponse,
     HistoricalImportTotalsValidation,
@@ -19,6 +21,9 @@ from backend.services.historical_import_apply_service import (
     apply_historical_batch,
     apply_historical_deliveries,
     rollback_historical_batch,
+)
+from backend.services.historical_import_backfill_service import (
+    repair_legacy_historical_metadata,
 )
 from backend.services.historical_import_preview import build_dry_run_response
 from backend.services.historical_import_service import (
@@ -457,4 +462,84 @@ async def get_historical_import_training_status(
         exclusion_reason=exclusion_reason,
         raw_json_retained=False,
         training_registry_phase="deferred",
+    )
+
+
+@router.post(
+    "/batches/{batch_id}/repair-metadata",
+    response_model=HistoricalImportRepairResponse,
+    summary="Backfill Phase 5J metadata onto a legacy historical import (Phase 5K)",
+    description=(
+        "Phase 5K: Safely repairs a legacy historical Game row that is missing "
+        "Phase 5J metadata fields (event_name, season, match_number, source_dates). "
+        "Requires explicit confirm=true. "
+        "Only repairs completed historical import games. "
+        "Never mutates live or in-progress matches. "
+        "Never overwrites valid Phase 5J metadata already present. "
+        "Refuses repair when the batch dry_run_summary does not contain the missing "
+        "fields — callers must reimport in that case. "
+        "All successful repairs are recorded in an audit log inside "
+        "game.phases['historical_import']['_repair_log']."
+    ),
+)
+async def repair_historical_import_metadata(
+    batch_id: str,
+    body: HistoricalImportRepairRequest,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalImportRepairResponse:
+    """Backfill Phase 5J metadata onto a legacy historical imported Game row."""
+    del current_user  # reserved for ownership scoping in future phases
+
+    result, warnings, error_msg = await repair_legacy_historical_metadata(
+        db,
+        batch_id=batch_id,
+        confirm=body.confirm,
+    )
+
+    if error_msg is not None:
+        # Determine appropriate HTTP status code from error type
+        if "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        if "confirm must be true" in error_msg.lower():
+            raise HTTPException(status_code=422, detail=error_msg)
+        if "reimport" in error_msg.lower():
+            # Repair refused — business logic refusal (409 Conflict is appropriate)
+            raise HTTPException(status_code=409, detail=error_msg)
+        raise HTTPException(status_code=409, detail=error_msg)
+
+    assert result is not None  # noqa: S101 - guaranteed by non-None error_msg check
+
+    status_value = result.get("status", "refused")
+    game_id_value: str | None = result.get("game_id")
+    fields_added: list[str] = result.get("fields_added", [])
+
+    # Validate status_value is a known literal before passing to Pydantic
+    _valid_statuses = {"repaired", "already_complete", "refused"}
+    if status_value not in _valid_statuses:
+        status_value = "refused"
+
+    detail_text: str
+    if status_value == "repaired":
+        detail_text = (
+            f"Legacy metadata repaired for game '{game_id_value}'. "
+            f"Fields added: {', '.join(fields_added) if fields_added else 'none'}."
+        )
+    elif status_value == "already_complete":
+        detail_text = (
+            f"Game '{game_id_value}' already has Phase 5J metadata. No changes were made."
+        )
+    else:
+        detail_text = "Repair was not required."
+
+    from typing import Literal, cast
+
+    valid_status = cast(Literal["repaired", "already_complete", "refused"], status_value)
+    return HistoricalImportRepairResponse(
+        batch_id=batch_id,
+        game_id=game_id_value,
+        status=valid_status,
+        fields_added=fields_added,
+        warnings=warnings,
+        detail=detail_text,
     )
