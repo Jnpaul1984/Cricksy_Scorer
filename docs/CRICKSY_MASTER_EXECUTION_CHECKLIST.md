@@ -1238,8 +1238,7 @@ Structured historical match import works safely and does not corrupt live scorin
 
 - Aggregation runs are blocked for unvalidated, unregistered, or provenance-broken matches.
 - Player/team/venue/competition/phase outputs must include audit metadata for source lineage and compute version.
-- Segment stats (powerplay/middle/death) must follow explicit legal-ball/over definitions aligned with `backend/domain/constants.py` (`norm_extra` canonicalizes wides/no-balls).
-- Segment stats must align with scoring legality rules in `backend/services/scoring_service.py` where wides/no-balls are treated as non-legal deliveries.
+- Segment stats (powerplay/middle/death) must follow explicit legal-ball/over definitions where wides/no-balls are non-legal deliveries (see `backend/domain/constants.py::norm_extra` and `backend/services/scoring_service.py`).
 - Recompute operations must support idempotent rerun behavior and mismatch detection/reporting.
 
 ### Tests
