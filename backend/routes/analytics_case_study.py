@@ -6,7 +6,7 @@ Exposes:
   GET /analytics/matches/{match_id}/case-study
 """
 
-from datetime import date, datetime
+from datetime import date
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -114,15 +114,7 @@ async def list_analyst_matches(
                 phase_swing=_phase_swing(game),
                 status=status_value,
                 venue=hist_meta.get("venue") if hist_meta else None,
-                match_datetime=(
-                    created_at
-                    if created_at
-                    else (
-                        datetime.combine(match_date, datetime.min.time())
-                        if historical_date
-                        else None
-                    )
-                ),
+                match_datetime=created_at,
                 is_historical=bool(hist_meta),
                 source="historical_import" if hist_meta else "live",
             )
