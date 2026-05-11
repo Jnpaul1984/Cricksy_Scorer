@@ -1304,3 +1304,204 @@ dlsParNow: (gameId: string, body: DlsParNowIn) =>
 };
 
 export default apiService;
+
+/* ----------------------------- Phase 5I: Historical Import ----------------------------- */
+
+export interface HistoricalImportIssue {
+  code: string;
+  message: string;
+  severity: 'error' | 'warning';
+  path?: string | null;
+}
+
+export interface HistoricalImportDetectedSections {
+  teams: boolean;
+  players: boolean;
+  innings: boolean;
+  deliveries: boolean;
+  metadata: boolean;
+}
+
+export interface HistoricalImportMetadataPreview {
+  match_type?: string | null;
+  venue?: string | null;
+  date?: string | null;
+  result?: string | null;
+}
+
+export interface HistoricalImportInningsPreview {
+  inning_no: number;
+  team?: string | null;
+  deliveries: number;
+  runs?: number | null;
+  wickets?: number | null;
+  overs?: number | null;
+}
+
+export interface HistoricalImportDuplicatePreview {
+  source_hash_sha256: string;
+  probable_duplicate: 'unknown' | 'likely_duplicate' | 'not_duplicate';
+  tracking_available: boolean;
+  duplicate_batch_id?: string | null;
+  semantic_key?: string | null;
+  semantic_duplicate: boolean;
+  message: string;
+}
+
+export interface HistoricalImportDryRunResponse {
+  status: 'valid' | 'invalid' | 'unsupported';
+  detected_format: string;
+  top_level_keys: string[];
+  detected_sections: HistoricalImportDetectedSections;
+  metadata_preview: HistoricalImportMetadataPreview;
+  teams_preview: string[];
+  innings_count: number;
+  delivery_count: number;
+  player_names_found: string[];
+  innings_preview: HistoricalImportInningsPreview[];
+  warnings: HistoricalImportIssue[];
+  errors: HistoricalImportIssue[];
+  duplicate_detection: HistoricalImportDuplicatePreview;
+  no_persistence: boolean;
+  record_id?: string | null;
+}
+
+export interface HistoricalImportBatchRecord {
+  id: string;
+  owner_user_id?: string | null;
+  owner_org_id?: string | null;
+  source_filename?: string | null;
+  source_format: string;
+  source_hash_sha256: string;
+  semantic_key?: string | null;
+  status: string;
+  error_count: number;
+  warning_count: number;
+  innings_count: number;
+  delivery_count: number;
+  is_finalized: boolean;
+  applied_game_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HistoricalImportApplyResponse {
+  batch_id: string;
+  applied_game_id?: string | null;
+  records_created: number;
+  status: 'applied' | 'skipped' | 'failed';
+  warnings: string[];
+  rollback_info: string;
+}
+
+export interface HistoricalImportTotalsValidation {
+  inning_no: number;
+  team?: string | null;
+  derived_runs: number;
+  expected_runs?: number | null;
+  derived_wickets: number;
+  expected_wickets?: number | null;
+  legal_balls: number;
+  status: 'ok' | 'warning' | 'blocked';
+  notes: string;
+}
+
+export interface HistoricalImportApplyDeliveriesResponse {
+  batch_id: string;
+  applied_game_id: string;
+  deliveries_imported: number;
+  innings_processed: number;
+  status: 'deliveries_applied' | 'already_applied' | 'failed';
+  totals_validation: HistoricalImportTotalsValidation[];
+  warnings: string[];
+  rollback_info: string;
+}
+
+export interface HistoricalImportTrainingStatus {
+  batch_id: string;
+  source_format: string;
+  source_hash_sha256: string;
+  source_filename?: string | null;
+  semantic_key?: string | null;
+  applied_game_id?: string | null;
+  imported_at: string;
+  innings_count: number;
+  delivery_count: number;
+  training_eligible: boolean;
+  exclusion_reason?: string | null;
+  raw_json_retained: boolean;
+  training_registry_phase: string;
+}
+
+/**
+ * POST /api/historical-import/json/dry-run
+ * Accepts a .json File; optionally persists batch metadata when recordPreview=true.
+ * Returns a structured preview without creating any game/delivery rows.
+ */
+export async function historicalImportDryRun(
+  file: File,
+  recordPreview = false,
+): Promise<HistoricalImportDryRunResponse> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  const qs = recordPreview ? '?record_preview=true' : '';
+  return request<HistoricalImportDryRunResponse>(
+    `/api/historical-import/json/dry-run${qs}`,
+    { method: 'POST', body: form },
+  );
+}
+
+/**
+ * GET /api/historical-import/json/batches
+ * Returns import batch records scoped to the current user/org.
+ */
+export async function historicalImportListBatches(
+  limit = 20,
+): Promise<HistoricalImportBatchRecord[]> {
+  return request<HistoricalImportBatchRecord[]>(
+    `/api/historical-import/json/batches?limit=${limit}`,
+  );
+}
+
+/**
+ * POST /api/historical-import/json/batches/{batchId}/apply
+ * Creates a historical Game row from a validated import batch.
+ * Requires explicit confirm=true.
+ */
+export async function historicalImportApply(
+  batchId: string,
+): Promise<HistoricalImportApplyResponse> {
+  return request<HistoricalImportApplyResponse>(
+    `/api/historical-import/json/batches/${encodeURIComponent(batchId)}/apply`,
+    { method: 'POST', body: JSON.stringify({ confirm: true }) },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/batches/{batchId}/apply-deliveries
+ * Imports ball-by-ball delivery data into the historical game.
+ * Requires the same JSON file and explicit confirm=true.
+ */
+export async function historicalImportApplyDeliveries(
+  batchId: string,
+  file: File,
+): Promise<HistoricalImportApplyDeliveriesResponse> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  return request<HistoricalImportApplyDeliveriesResponse>(
+    `/api/historical-import/json/batches/${encodeURIComponent(batchId)}/apply-deliveries?confirm=true`,
+    { method: 'POST', body: form },
+  );
+}
+
+/**
+ * GET /api/historical-import/json/batches/{batchId}/training-status
+ * Returns training dataset readiness metadata for an import batch.
+ */
+export async function historicalImportGetTrainingStatus(
+  batchId: string,
+): Promise<HistoricalImportTrainingStatus> {
+  return request<HistoricalImportTrainingStatus>(
+    `/api/historical-import/json/batches/${encodeURIComponent(batchId)}/training-status`,
+  );
+}

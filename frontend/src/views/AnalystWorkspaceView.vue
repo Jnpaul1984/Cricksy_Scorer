@@ -685,6 +685,18 @@
               <AnalyticsTablesWidget :profile="null" />
             </div>
 
+            <!-- Import JSON Tab -->
+            <div v-else-if="activeTab === 'import'" class="aw-table-wrapper">
+              <div class="aw-table-header">
+                <h3>Import Historical JSON</h3>
+                <p class="aw-table-subtitle">
+                  Upload a match JSON file to add it to the Analyst Workspace.
+                  Files go through a dry-run validation before any data is saved.
+                </p>
+              </div>
+              <HistoricalImportPanel @import-done="onImportDone" />
+            </div>
+
             <!-- Default fallback -->
             <div v-else class="aw-table-wrapper">
               <div class="aw-empty-large">
@@ -709,6 +721,7 @@ import { BaseCard, BaseButton, BaseBadge, BaseInput, ImpactBar, MiniSparkline, A
 import type { AiCallout } from '@/components'
 import AnalyticsTablesWidget from '@/components/AnalyticsTablesWidget.vue'
 import ExportUI from '@/components/ExportUI.vue'
+import HistoricalImportPanel from '@/components/HistoricalImportPanel.vue'
 import {
   getAnalystMatches,
   getMatchCaseStudy,
@@ -719,7 +732,7 @@ import {
 const router = useRouter()
 
 // Types
-type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics'
+type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics' | 'import'
 
 // State
 const activeTab = ref<AnalystTab>('matches')
@@ -756,7 +769,8 @@ const tabs: { value: AnalystTab; label: string }[] = [
   { value: 'players', label: 'Players' },
   { value: 'deliveries', label: 'Deliveries' },
   { value: 'case-studies', label: 'Case studies' },
-  { value: 'analytics', label: 'Analytics' }
+  { value: 'analytics', label: 'Analytics' },
+  { value: 'import', label: 'Import JSON' }
 ]
 
 const lastSyncLabel = ref('Just now')
@@ -1002,6 +1016,12 @@ function openFullCaseStudy() {
 
 async function refreshData() {
   await loadMatches()
+}
+
+function onImportDone(_gameId: string | null) {
+  // Switch to the matches tab and refresh so the newly imported match appears
+  activeTab.value = 'matches'
+  loadMatches()
 }
 
 function resetFilters() {

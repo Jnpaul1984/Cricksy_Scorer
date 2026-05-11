@@ -12,6 +12,7 @@ from backend.api.schemas.historical_import import (
     HistoricalImportRollbackRequest,
     HistoricalImportRollbackResponse,
     HistoricalImportTotalsValidation,
+    HistoricalImportTrainingStatus,
 )
 from backend.security import get_current_user_optional
 from backend.services.historical_import_apply_service import (
@@ -24,6 +25,7 @@ from backend.services.historical_import_service import (
     create_import_batch,
     find_duplicate_by_hash,
     find_duplicate_by_semantic_key,
+    get_import_batch,
     list_import_batches,
 )
 from backend.sql_app import models
@@ -401,4 +403,58 @@ async def apply_historical_import_deliveries(
         totals_validation=totals_validation,
         warnings=warnings,
         rollback_info=rollback_info,
+    )
+
+
+@router.get(
+    "/batches/{batch_id}/training-status",
+    response_model=HistoricalImportTrainingStatus,
+    summary="Get training dataset readiness status for an import batch (Phase 5I)",
+    description=(
+        "Returns training-dataset eligibility metadata for a historical import batch. "
+        "Eligibility is derived from existing batch fields — no DB migration required. "
+        "Raw source JSON is NOT retained in Phase 5I (raw retention is deferred). "
+        "Use this endpoint to check whether a batch can be registered in a future "
+        "ML dataset registry/export phase."
+    ),
+)
+async def get_historical_import_training_status(
+    batch_id: str,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalImportTrainingStatus:
+    """Return training dataset readiness status for an import batch."""
+    del current_user  # reserved for ownership scoping in future phases
+
+    batch = await get_import_batch(db, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=404, detail=f"Import batch '{batch_id}' not found.")
+
+    # Derive training eligibility from existing fields — no migration needed
+    exclusion_reason: str | None = None
+    if not batch.is_finalized:
+        exclusion_reason = "batch_not_finalized"
+    elif batch.applied_game_id is None:
+        exclusion_reason = "no_game_applied"
+    elif batch.status != "valid":
+        exclusion_reason = f"invalid_status:{batch.status}"
+    elif batch.error_count > 0:
+        exclusion_reason = "has_errors"
+
+    training_eligible = exclusion_reason is None
+
+    return HistoricalImportTrainingStatus(
+        batch_id=batch.id,
+        source_format=batch.source_format,
+        source_hash_sha256=batch.source_hash_sha256,
+        source_filename=batch.source_filename,
+        semantic_key=batch.semantic_key,
+        applied_game_id=batch.applied_game_id,
+        imported_at=batch.created_at,
+        innings_count=batch.innings_count,
+        delivery_count=batch.delivery_count,
+        training_eligible=training_eligible,
+        exclusion_reason=exclusion_reason,
+        raw_json_retained=False,
+        training_registry_phase="deferred",
     )
