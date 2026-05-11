@@ -23,6 +23,11 @@ def _load_fixture() -> dict[str, object]:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
+def _generate_test_hash() -> str:
+    """Return a 64-char pseudo SHA-256 string for test batch creation."""
+    return uuid.uuid4().hex + uuid.uuid4().hex
+
+
 def _record_batch(client: TestClient) -> str:
     response = client.post(
         "/api/historical-import/json/dry-run",
@@ -76,7 +81,7 @@ async def _create_valid_batch(
 ) -> HistoricalImportBatch:
     return await create_import_batch(
         db_session,
-        source_hash_sha256=uuid.uuid4().hex + uuid.uuid4().hex,
+        source_hash_sha256=_generate_test_hash(),
         source_format="cricksy_fixture",
         status="valid",
         error_count=0,
