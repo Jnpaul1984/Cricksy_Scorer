@@ -191,8 +191,37 @@ class HistoricalImportApplyDeliveriesResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Phase 5I - Training dataset readiness schemas
+# Phase 5K - Metadata repair schemas
 # ---------------------------------------------------------------------------
+
+
+class HistoricalImportRepairRequest(BaseModel):
+    """Request body for the Phase 5K metadata repair endpoint.
+
+    ``confirm`` must be explicitly ``True``; any other value is rejected.
+    """
+
+    confirm: bool = Field(
+        ...,
+        description=(
+            "Must be true to proceed with the repair. "
+            "Safeguard against accidental writes."
+        ),
+    )
+
+
+class HistoricalImportRepairResponse(BaseModel):
+    """Response body returned by the Phase 5K repair-metadata endpoint."""
+
+    batch_id: str
+    game_id: str | None = None
+    status: Literal["repaired", "already_complete", "refused"]
+    fields_added: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    detail: str = Field(
+        default="",
+        description="Human-readable summary of the repair outcome.",
+    )
 
 
 class HistoricalImportTrainingStatus(BaseModel):
