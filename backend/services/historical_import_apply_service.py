@@ -191,6 +191,18 @@ async def apply_historical_batch(
 
     innings_summary = _extract_innings_summary(dry_run)
 
+    # Derive toss winner from innings summary if possible, otherwise leave as
+    # team_a_name (the first batting side from the preview).  This is a best-effort
+    # heuristic for historical data; toss information is rarely encoded in the JSON.
+    toss_winner: str = team_a_name
+    toss_decision: str = "bat"
+    if innings_summary:
+        first_innings_team = innings_summary[0].get("team")
+        if first_innings_team:
+            # The team that batted first in innings 1 most likely won the toss and chose to bat.
+            toss_winner = first_innings_team
+            toss_decision = "bat"
+
     # Build the historical phases metadata blob.
     # Using Game.phases (existing nullable JSON column) avoids a schema change for
     # the Game table.  The ``historical_import`` sub-key allows downstream code
@@ -227,10 +239,10 @@ async def apply_historical_batch(
         overs_limit=None,
         dls_enabled=False,
         interruptions=[],
-        toss_winner_team=team_a_name,
-        decision="bat",
-        batting_team_name=team_a_name,
-        bowling_team_name=team_b_name,
+        toss_winner_team=toss_winner,
+        decision=toss_decision,
+        batting_team_name=toss_winner,
+        bowling_team_name=(team_b_name if toss_winner == team_a_name else team_a_name),
         batting_scorecard=_build_empty_scorecard(),
         bowling_scorecard=_build_empty_scorecard(),
         current_inning=0,
