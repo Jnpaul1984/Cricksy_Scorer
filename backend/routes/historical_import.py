@@ -514,6 +514,11 @@ async def repair_historical_import_metadata(
     game_id_value: str | None = result.get("game_id")
     fields_added: list[str] = result.get("fields_added", [])
 
+    # Validate status_value is a known literal before passing to Pydantic
+    _valid_statuses = {"repaired", "already_complete", "refused"}
+    if status_value not in _valid_statuses:
+        status_value = "refused"
+
     detail_text: str
     if status_value == "repaired":
         detail_text = (
@@ -527,10 +532,13 @@ async def repair_historical_import_metadata(
     else:
         detail_text = "Repair was not required."
 
+    from typing import Literal, cast
+
+    valid_status = cast(Literal["repaired", "already_complete", "refused"], status_value)
     return HistoricalImportRepairResponse(
         batch_id=batch_id,
         game_id=game_id_value,
-        status=status_value,  # type: ignore[arg-type]
+        status=valid_status,
         fields_added=fields_added,
         warnings=warnings,
         detail=detail_text,
