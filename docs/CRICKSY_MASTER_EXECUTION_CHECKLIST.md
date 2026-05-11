@@ -1227,7 +1227,7 @@ Structured historical match import works safely and does not corrupt live scorin
 
 ### Data Governance Rules
 
-- Imported data is not analytics-ready or model-training-ready until validated, registered, and aggregation-eligible.
+- Imported data is not analytics-ready or model-training-ready until validated, registered, and aggregation-eligible (validation passed, registry linkage complete, provenance intact).
 - Metadata accuracy and registry integrity take priority over aggregate coverage.
 - No fake stats or fabricated aggregate rows; every value must map to governed source/provenance.
 - Aggregations must be deterministic, reproducible, and recomputable from source inputs.
@@ -1238,7 +1238,7 @@ Structured historical match import works safely and does not corrupt live scorin
 
 - Aggregation runs are blocked for unvalidated, unregistered, or provenance-broken matches.
 - Player/team/venue/competition/phase outputs must include audit metadata for source lineage and compute version.
-- Segment stats (powerplay/middle/death) must follow explicit legal-ball/over definitions aligned with cricket rules in `backend/domain/constants.py`.
+- Segment stats (powerplay/middle/death) must follow explicit legal-ball/over definitions aligned with cricket rules in `backend/domain/constants.py` (legal balls exclude wides/no-balls).
 - Recompute operations must support idempotent rerun behavior and mismatch detection/reporting.
 
 ### Tests
@@ -1378,7 +1378,7 @@ Structured historical match import works safely and does not corrupt live scorin
 
 ### Data Governance Rules
 
-- Imported data remains not training-ready until validated, registered, and aggregated under governance.
+- Imported data is not training-ready until validated, registered, and aggregated under governance.
 - Metadata and registry integrity are mandatory prerequisites before any dataset export.
 - No fake model labels, no fabricated feature rows, and no synthetic training samples presented as truth.
 - Dataset lineage must retain source match provenance, aggregation version, and export configuration metadata.
