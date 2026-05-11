@@ -399,6 +399,16 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
             )
         )
 
+    if len(team_names) < 2:
+        errors.append(
+            HistoricalImportIssue(
+                code="MISSING_TEAMS",
+                message="At least two teams are required in historical match metadata.",
+                severity="error",
+                path="teams",
+            )
+        )
+
     total_deliveries = sum(p.deliveries for p in innings_preview)
     if innings_nodes and total_deliveries == 0:
         errors.append(

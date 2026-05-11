@@ -210,6 +210,10 @@
                       <span>{{ match.format }}</span>
                       <span>• {{ match.date }}</span>
                       <span>• {{ match.result }}</span>
+                      <span v-if="match.venue">• {{ match.venue }}</span>
+                      <BaseBadge v-if="match.isHistorical" variant="neutral" :uppercase="false">
+                        Imported
+                      </BaseBadge>
                     </div>
                   </div>
 
@@ -772,6 +776,9 @@ interface AnalystMatch {
   format: string
   teams: string
   result: string
+  venue?: string | null
+  isHistorical?: boolean
+  source?: string
   runRate: number
   phaseSwing: string
   netImpact?: number | null
@@ -810,7 +817,8 @@ const filteredMatches = computed(() => {
     const matchesTerm =
       !term ||
       m.teams.toLowerCase().includes(term) ||
-      m.result.toLowerCase().includes(term)
+      m.result.toLowerCase().includes(term) ||
+      (m.venue || '').toLowerCase().includes(term)
     const matchesFormat =
       filters.format === 'all' ||
       (filters.format === 't20' && m.format === 'T20') ||
@@ -943,6 +951,9 @@ async function loadMatches() {
       format: item.format,
       teams: item.teams,
       result: item.result,
+      venue: item.venue ?? null,
+      isHistorical: Boolean(item.is_historical),
+      source: item.source ?? 'live',
       runRate: item.run_rate,
       phaseSwing: item.phase_swing,
       // These fields are not in the backend yet - derive or leave null

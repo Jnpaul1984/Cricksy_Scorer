@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -18,6 +20,7 @@ from backend.sql_app import models
 from backend.sql_app.database import get_db
 
 UTC = getattr(dt, "UTC", dt.UTC)
+HISTORICAL_FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
 
 
 def _auth_headers(token: str) -> dict[str, str]:
@@ -380,6 +383,61 @@ async def test_analytics_matches_list_is_completed_and_org_scoped(client: TestCl
     assert "completed-alpha" in ids
     assert "inprogress-alpha" not in ids
     assert "completed-beta" not in ids
+
+
+async def test_historical_imported_match_visible_in_analyst_workspace(client: TestClient) -> None:
+    analyst = register_user(client, "analyst-historical@example.com")
+    await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
+    token = login_user(client, analyst["email"])
+
+    fixture_payload = json.loads(HISTORICAL_FIXTURE_PATH.read_text(encoding="utf-8"))
+
+    dry_run_resp = client.post(
+        "/api/historical-import/json/dry-run",
+        headers=_auth_headers(token),
+        params={"record_preview": "true"},
+        json=fixture_payload,
+    )
+    assert dry_run_resp.status_code == 200, dry_run_resp.text
+    batch_id = dry_run_resp.json()["record_id"]
+    assert batch_id
+
+    apply_resp = client.post(
+        f"/api/historical-import/json/batches/{batch_id}/apply",
+        headers=_auth_headers(token),
+        json={"confirm": True},
+    )
+    assert apply_resp.status_code == 200, apply_resp.text
+    game_id = apply_resp.json()["applied_game_id"]
+
+    apply_deliveries_resp = client.post(
+        f"/api/historical-import/json/batches/{batch_id}/apply-deliveries",
+        headers={**_auth_headers(token), "content-type": "application/json"},
+        params={"confirm": "true"},
+        content=HISTORICAL_FIXTURE_PATH.read_bytes(),
+    )
+    assert apply_deliveries_resp.status_code == 200, apply_deliveries_resp.text
+
+    list_resp = client.get("/analytics/matches", headers=_auth_headers(token))
+    assert list_resp.status_code == 200, list_resp.text
+    matches = list_resp.json()["items"]
+    imported = next((item for item in matches if item["id"] == game_id), None)
+    assert imported is not None, "Imported historical match must be listed in Analyst Workspace"
+    assert imported["is_historical"] is True
+    assert imported["source"] == "historical_import"
+    assert imported["venue"] == fixture_payload.get("venue")
+    assert imported["date"] == fixture_payload.get("date")
+
+    case_study_resp = client.get(
+        f"/analytics/matches/{game_id}/case-study",
+        headers=_auth_headers(token),
+    )
+    assert case_study_resp.status_code == 200, case_study_resp.text
+    detail = case_study_resp.json()
+    assert detail["match"]["id"] == game_id
+    assert len(detail["match"]["innings"]) >= 2
+    assert len(detail["phases"]) > 0
+    assert len(detail["key_players"]) > 0
 
 
 async def test_analyst_export_data_real_rows_or_empty_never_fake(client: TestClient) -> None:

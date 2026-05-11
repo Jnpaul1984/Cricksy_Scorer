@@ -95,6 +95,27 @@ def test_dry_run_innings_without_delivery_events_flags_error() -> None:
     assert any(issue["code"] == "MISSING_DELIVERY_EVENTS" for issue in data["errors"])
 
 
+def test_dry_run_requires_two_teams_in_metadata() -> None:
+    payload = {
+        "matchType": "T20",
+        "teams": ["A"],
+        "innings": [
+            {
+                "team": "A",
+                "balls": [{"over": 1, "ball": 1, "runs": 1, "batsman": "A1", "bowler": "B1"}],
+            }
+        ],
+    }
+
+    with TestClient(app) as client:
+        response = client.post("/api/historical-import/json/dry-run", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "invalid"
+    assert any(issue["code"] == "MISSING_TEAMS" for issue in data["errors"])
+
+
 def test_dry_run_does_not_create_games() -> None:
     with TestClient(app) as client:
         before = client.get("/games/results")

@@ -27,6 +27,8 @@ class AnalystMatchListItem(BaseModel):
     status: str
     venue: str | None = None
     match_datetime: datetime | None = None
+    is_historical: bool = False
+    source: str = "live"
 
 
 class AnalystMatchListResponse(BaseModel):

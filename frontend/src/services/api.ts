@@ -759,6 +759,8 @@ export interface AnalystMatchListItem {
   status: string;
   venue?: string | null;
   match_datetime?: string | null;
+  is_historical?: boolean;
+  source?: string;
 }
 
 export interface AnalystMatchListResponse {
