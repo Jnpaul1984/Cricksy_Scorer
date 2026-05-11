@@ -118,7 +118,29 @@ class HistoricalImportApplyResponse(BaseModel):
     rollback_info: str = Field(
         default="",
         description=(
-            "Instructions for manual rollback: delete the Game row identified "
-            "by applied_game_id and set is_finalized=False on this batch."
+            "Instructions for rollback, including the Phase 5E rollback endpoint "
+            "and safety constraints."
         ),
     )
+
+
+class HistoricalImportRollbackRequest(BaseModel):
+    """Request body for the Phase 5E rollback endpoint."""
+
+    confirm: bool = Field(
+        ...,
+        description=(
+            "Must be true to proceed with rollback. "
+            "Safeguard against accidental deletions."
+        ),
+    )
+
+
+class HistoricalImportRollbackResponse(BaseModel):
+    """Response body returned by the Phase 5E rollback endpoint."""
+
+    batch_id: str
+    rolled_back_game_id: str | None = None
+    records_deleted: int = 0
+    status: Literal["rolled_back"]
+    warnings: list[str] = Field(default_factory=list)

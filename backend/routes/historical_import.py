@@ -8,9 +8,14 @@ from backend.api.schemas.historical_import import (
     HistoricalImportApplyResponse,
     HistoricalImportBatchRecord,
     HistoricalImportDryRunResponse,
+    HistoricalImportRollbackRequest,
+    HistoricalImportRollbackResponse,
 )
 from backend.security import get_current_user_optional
-from backend.services.historical_import_apply_service import apply_historical_batch
+from backend.services.historical_import_apply_service import (
+    apply_historical_batch,
+    rollback_historical_batch,
+)
 from backend.services.historical_import_preview import build_dry_run_response
 from backend.services.historical_import_service import (
     create_import_batch,
@@ -230,9 +235,10 @@ async def apply_historical_import_batch(
     assert game is not None  # noqa: S101 - guaranteed by non-None error_msg check above
 
     rollback_info = (
-        f"To rollback: delete Game row with id='{game.id}' and reset "
-        f"HistoricalImportBatch id='{batch_id}' fields "
-        "is_finalized=False, applied_game_id=NULL."
+        "To rollback via API: POST "
+        f"'/api/historical-import/json/batches/{batch_id}/rollback' with "
+        "{'confirm': true}. This deletes only applied_game_id="
+        f"'{game.id}' after safety checks and resets batch finalize markers."
     )
 
     return HistoricalImportApplyResponse(
@@ -242,4 +248,45 @@ async def apply_historical_import_batch(
         status="applied",
         warnings=warnings,
         rollback_info=rollback_info,
+    )
+
+
+@router.post(
+    "/batches/{batch_id}/rollback",
+    response_model=HistoricalImportRollbackResponse,
+    summary="Rollback a finalized historical import batch (Phase 5E)",
+    description=(
+        "Deletes only the historical Game row created by this batch, if and only if "
+        "the game can be verified as a safe imported historical record. "
+        "Requires explicit confirm=true."
+    ),
+)
+async def rollback_historical_import_batch(
+    batch_id: str,
+    body: HistoricalImportRollbackRequest,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalImportRollbackResponse:
+    """Rollback a finalized historical import batch with strict safety checks."""
+    del current_user  # currently unused; reserved for ownership scoping in future phases
+
+    rolled_back_game_id, warnings, error_msg = await rollback_historical_batch(
+        db,
+        batch_id=batch_id,
+        confirm=body.confirm,
+    )
+
+    if error_msg is not None:
+        if "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        if "confirm must be true" in error_msg.lower():
+            raise HTTPException(status_code=422, detail=error_msg)
+        raise HTTPException(status_code=409, detail=error_msg)
+
+    return HistoricalImportRollbackResponse(
+        batch_id=batch_id,
+        rolled_back_game_id=rolled_back_game_id,
+        records_deleted=1,
+        status="rolled_back",
+        warnings=warnings,
     )
