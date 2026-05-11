@@ -290,7 +290,7 @@ async def update_moment_marker(
     )
 
 
-@router.delete("/markers/{marker_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/markers/{marker_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_moment_marker(
     marker_id: str,
     current_user: Annotated[User, Depends(security.get_current_active_user)],

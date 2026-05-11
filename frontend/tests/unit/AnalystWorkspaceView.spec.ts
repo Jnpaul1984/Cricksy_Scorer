@@ -41,8 +41,10 @@ const mockMatchList = {
       run_rate: 8.4,
       phase_swing: '+18 in death',
       status: 'completed',
-      venue: null,
+      venue: 'Generic Cricket Ground',
       match_datetime: null,
+      is_historical: true,
+      source: 'historical_import',
     },
     {
       id: 'match-002',
@@ -55,6 +57,8 @@ const mockMatchList = {
       status: 'completed',
       venue: null,
       match_datetime: null,
+      is_historical: false,
+      source: 'live',
     },
   ],
   total: 2,
@@ -184,6 +188,19 @@ describe('AnalystWorkspaceView', () => {
     expect(wrapper.text()).toContain('Lions vs Falcons')
     expect(wrapper.text()).toContain('Lions won by 18 runs')
     expect(wrapper.text()).toContain('Tigers vs Eagles')
+  })
+
+  it('shows imported historical metadata in match list rows', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Imported')
+    expect(text).toContain('Generic Cricket Ground')
   })
 
   it('shows loading state while fetching matches', async () => {

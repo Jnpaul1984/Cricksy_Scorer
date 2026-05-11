@@ -263,6 +263,7 @@ async def apply_historical_batch(
         current_inning=0,
         status=GameStatus.completed,
         result=result_text,
+        created_by_user_id=batch.owner_user_id,
         phases=phases,
         total_runs=0,
         total_wickets=0,

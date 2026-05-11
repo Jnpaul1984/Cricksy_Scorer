@@ -67,6 +67,14 @@ def _phase_swing(game: Game) -> str:
     return "n/a"
 
 
+def _historical_import_meta(game: Game) -> dict[str, Any] | None:
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    hist = phases.get("historical_import")
+    if isinstance(hist, dict) and bool(hist.get("is_historical")):
+        return hist
+    return None
+
+
 @router.get("", response_model=AnalystMatchListResponse)
 async def list_analyst_matches(
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
@@ -83,8 +91,17 @@ async def list_analyst_matches(
     for game in games:
         team_a_name = _team_name(game.team_a, "Team A")
         team_b_name = _team_name(game.team_b, "Team B")
+        hist_meta = _historical_import_meta(game)
+        historical_date = None
+        if hist_meta:
+            raw_date = hist_meta.get("match_date")
+            if isinstance(raw_date, str) and raw_date.strip():
+                try:
+                    historical_date = date.fromisoformat(raw_date.strip())
+                except ValueError:
+                    historical_date = None
         created_at = getattr(game, "created_at", None)
-        match_date = created_at.date() if created_at else date(1970, 1, 1)
+        match_date = historical_date or (created_at.date() if created_at else date(1970, 1, 1))
         status_value = game.status.value if hasattr(game.status, "value") else str(game.status)
         items.append(
             AnalystMatchListItem(
@@ -96,8 +113,10 @@ async def list_analyst_matches(
                 run_rate=_compute_run_rate(game),
                 phase_swing=_phase_swing(game),
                 status=status_value,
-                venue=None,
+                venue=hist_meta.get("venue") if hist_meta else None,
                 match_datetime=created_at,
+                is_historical=bool(hist_meta),
+                source="historical_import" if hist_meta else "live",
             )
         )
 
