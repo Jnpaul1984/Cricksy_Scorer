@@ -993,6 +993,208 @@ Structured historical match import works safely and does not corrupt live scorin
 
 ---
 
+## Phase 5K — Historical Data Backfill + Analyst UI Theme Fix
+
+### Purpose
+
+- Execute a governed backfill/reprocess pass for legacy historical imports where safe after Phase 5J metadata fixes.
+- Repair historical metadata display regressions for already-imported matches.
+- Fix Analyst Workspace dark-theme contrast issues in Key Players and Podcast Prep cards.
+- Enforce metadata accuracy before any model-training eligibility expansion.
+
+### Pre-Phase Audit Requirements
+
+- Audit legacy imported matches for metadata gaps and backfill safety (no live-truth mutation risk).
+- Audit historical metadata rendering paths to confirm Phase 5J interpretation remains correct for new imports.
+- Audit Analyst Workspace dark-theme CSS/component behavior for Key Players and Podcast Prep cards.
+- Audit rollback readiness for historical import batches that require reprocessing.
+
+### Strict Scope
+
+- Historical import backfill/reprocess logic for legacy imported matches only.
+- Historical metadata display fixes for previously imported historical matches.
+- Analyst Workspace dark-theme visual fixes limited to Key Players and Podcast Prep cards.
+- Required tests, governance checks, and rollback documentation for this scope only.
+
+### Protected Files/Systems
+
+- Live scoring truth paths and deterministic scoring logic.
+- DLS calculations and rules.
+- Live bus/socket semantics.
+- Video-analysis and mental-analysis systems.
+- Unrelated workflows, dependencies, migrations, and non-historical runtime paths.
+
+### Gates
+
+- Historical imports must not mutate live scoring truth.
+- Imported data remains not training-ready until validated and registered.
+- Backfill/reprocess must be auditable, idempotent where possible, and rollback-capable.
+- Metadata fixes must preserve venue/competition/season/match context for future analysis.
+- No runtime behavior outside strict Phase 5K scope is changed.
+
+### Tests
+
+- Legacy historical backfill safety tests (eligible vs blocked cases).
+- Metadata regression tests for historical match list/detail/case-study outputs.
+- Analyst Workspace dark-theme visual/contract checks for Key Players and Podcast Prep cards.
+- Historical rollback/regression tests proving only historical-import artifacts are affected.
+
+### Rollout / Rollback Considerations
+
+- Roll out behind explicit operator confirmation for reprocess operations.
+- Keep per-batch audit logs for every legacy record touched.
+- Provide rollback path to prior import-batch state if regressions appear.
+- Stop rollout if metadata parity or UI contrast checks fail.
+
+### What Must Not Be Done
+
+- Do not alter live scoring, DLS, live bus, video-analysis, or mental-analysis runtime behavior.
+- Do not broaden scope into new registry schema design (reserved for Phase 5M).
+- Do not mark legacy imports as training-ready without validation + registry linkage.
+
+### Completion Criteria
+
+- Legacy backfill/reprocess scope is completed safely with audit trail and rollback coverage.
+- Historical metadata display is correct for both newly imported and legacy imported matches.
+- Analyst Workspace dark-theme issues are resolved for Key Players and Podcast Prep cards.
+- Governance gates and tests pass with strict docs-defined boundaries respected.
+
+---
+
+## Phase 5L — Bulk ZIP Historical Upload
+
+### Purpose
+
+- Support uploading many historical JSON files in a single ZIP through a governed bulk-import flow.
+- Preserve dry-run-first behavior with duplicate protection and explicit apply confirmation.
+- Improve operator visibility with per-file status reporting.
+
+### Pre-Phase Audit Requirements
+
+- Audit current single-file historical dry-run/apply flow and batch lifecycle constraints.
+- Audit ZIP parsing/security controls (file count, size, compression-ratio safety).
+- Audit duplicate-detection behavior for both in-archive duplicates and existing import-batch collisions.
+- Audit rollback behavior for partial/failed bulk operations.
+
+### Strict Scope
+
+- ZIP intake and controlled extraction for historical JSON files only.
+- Dry-run execution per file before any apply stage.
+- Duplicate detection inside ZIP and against existing import batches.
+- Per-file success/error status and explicit confirmation gate before apply.
+
+### Protected Files/Systems
+
+- Live scoring truth and gameplay runtime paths.
+- Existing non-historical upload systems (including unrelated media workflows).
+- DLS/live bus and unrelated Analyst features.
+- Unrelated migrations/workflows/dependencies.
+
+### Gates
+
+- Bulk import cannot bypass dry-run, duplicate detection, explicit confirmation, or rollback.
+- ZIP safety checks must enforce file-size/file-count/compression-ratio limits.
+- Duplicate handling must be explicit (blocked, flagged, or operator-reviewed) and auditable.
+- Apply stage is blocked when critical file-level validation failures remain.
+
+### Tests
+
+- ZIP intake safety tests (oversized ZIP, zip-bomb patterns, invalid file types, file-count limits).
+- Per-file dry-run result tests with mixed valid/invalid JSON inputs.
+- Duplicate detection tests (inside ZIP and against prior batches).
+- Confirmation-gate tests proving apply cannot execute without explicit confirmation.
+- Rollback tests for failed/partial bulk apply scenarios.
+
+### Rollout / Rollback Considerations
+
+- Roll out with conservative ZIP limits first, then widen only after stable telemetry.
+- Store per-file lifecycle state for deterministic recovery.
+- Support rollback that only touches records created by the specific bulk batch.
+- Emit operator-facing post-run reports with file-level outcomes.
+
+### What Must Not Be Done
+
+- Do not auto-apply bulk uploads after dry-run without explicit user confirmation.
+- Do not silently ignore duplicates or overwrite existing imported truth.
+- Do not allow ZIP upload path to mutate live scoring state.
+
+### Completion Criteria
+
+- Users can upload a ZIP of historical JSON files and receive per-file dry-run outcomes.
+- Duplicate files are detected both within the ZIP and against existing batches.
+- Apply requires explicit confirmation and supports safe rollback.
+- ZIP safety limits and governance tests pass.
+
+---
+
+## Phase 5M — Cricket Data Registry Foundation
+
+### Purpose
+
+- Establish registry foundations for competition, season, venue, team, player, match provenance, and import-batch linkage.
+- Prepare reliable metadata infrastructure for venue par score, competition folders, player stats, and model-training datasets.
+- Enforce that imported data is validated/registered before becoming training-eligible.
+
+### Pre-Phase Audit Requirements
+
+- Audit existing metadata preserved through Phase 5J/5K historical import paths.
+- Audit entity-resolution rules for team/player deduplication and canonicalization.
+- Audit provenance requirements linking every imported match to source + batch lineage.
+- Audit migration plan and backward compatibility before schema introduction.
+
+### Strict Scope
+
+- Registry foundation design and implementation for competition, season, venue, team, and player entities.
+- Match provenance model linking imports to source metadata and import batches.
+- Validation/registration gates for training-readiness decisions.
+- Migration governance and Postgres validation for all schema changes in this phase.
+
+### Protected Files/Systems
+
+- Deterministic live scoring and DLS logic.
+- Live bus/event semantics.
+- Historical import runtime behavior not required for registry linkage.
+- Unrelated AI/media systems and unrelated workflow/dependency surfaces.
+
+### Gates
+
+- Metadata accuracy is mandatory before model training usage.
+- Imported data is not training-ready until validated and registered.
+- Player/team registries must not blindly create duplicate entities.
+- Venue and competition metadata must be preserved for future analysis workflows.
+- Real Postgres Alembic validation gate is mandatory for registry migrations.
+
+### Tests
+
+- Registry entity creation/linkage tests for competition/season/venue/team/player.
+- Duplicate-prevention tests for player/team canonical resolution.
+- Match provenance tests verifying source metadata + import batch lineage integrity.
+- Training-readiness gate tests proving unregistered imports remain ineligible.
+- Alembic migration tests validated against real Postgres (upgrade/downgrade where supported).
+
+### Rollout / Rollback Considerations
+
+- Use staged rollout with migration checkpoints and data reconciliation reports.
+- Keep reversible migration strategy and batch-safe rollback guidance.
+- Block downstream training dataset generation if registry integrity checks fail.
+- Provide reconciliation scripts/processes for unresolved or ambiguous registry mappings.
+
+### What Must Not Be Done
+
+- Do not permit unvalidated or unregistered imported rows into model-training datasets.
+- Do not auto-create duplicate player/team entities from weak matching.
+- Do not lose venue/competition/season provenance during canonicalization.
+- Do not mutate live scoring truth while building registry foundations.
+
+### Completion Criteria
+
+- Competition, season, venue, team, and player registry foundations are defined and governed.
+- Match provenance and import-batch linkage are enforced for historical imports.
+- Training-readiness depends on successful validation + registry linkage.
+- Postgres Alembic validation gate passes for registry migrations.
+
+---
+
 # Phase 6 — Historical Match Ingestion: PDF/Image/OCR Review Flow
 
 ## Purpose
