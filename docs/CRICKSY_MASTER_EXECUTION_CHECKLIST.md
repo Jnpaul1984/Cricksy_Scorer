@@ -1200,7 +1200,7 @@ Structured historical match import works safely and does not corrupt live scorin
 ### Purpose
 
 - Calculate and maintain analytics-ready historical aggregates from validated, registered, imported match data.
-- Deliver governed aggregation outputs for player batting stats, player bowling stats, team stats, venue par scores, competition stats, and phase-of-play segments (powerplay, middle overs, death overs).
+- Deliver governed aggregation outputs for player batting stats, player bowling stats, team stats, venue par scores, competition stats, and phase stats (powerplay, middle overs, death overs).
 - Preserve reproducibility so any aggregate can be recomputed from governed source records.
 
 ### Pre-Phase Audit Requirements
@@ -1238,7 +1238,7 @@ Structured historical match import works safely and does not corrupt live scorin
 
 - Aggregation runs are blocked for unvalidated, unregistered, or provenance-broken matches.
 - Player/team/venue/competition/phase outputs must include audit metadata for source lineage and compute version.
-- Segment stats (powerplay/middle/death) must follow explicit legal-ball/over definitions where wides/no-balls are non-legal deliveries (see `backend/domain/constants.py::norm_extra` and `backend/services/scoring_service.py`).
+- Segment stats (powerplay/middle/death) must follow explicit legal-ball/over definitions where wides/no-balls are non-legal deliveries; use `backend/domain/constants.py::norm_extra` for extra-type normalization and `backend/services/scoring_service.py` for legal-delivery counting logic.
 - Recompute operations must support idempotent rerun behavior and mismatch detection/reporting.
 
 ### Tests
