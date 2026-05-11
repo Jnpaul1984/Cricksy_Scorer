@@ -35,7 +35,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
@@ -269,3 +269,88 @@ async def apply_historical_batch(
     await db.refresh(batch)
 
     return game, warnings, None
+
+
+async def rollback_historical_batch(
+    db: AsyncSession,
+    *,
+    batch_id: str,
+    confirm: bool,
+) -> tuple[str | None, list[str], str | None]:
+    """Rollback a finalized historical import batch by deleting its applied Game row.
+
+    Returns:
+        (rolled_back_game_id, warnings, error_message)
+    """
+    warnings: list[str] = []
+
+    if not confirm:
+        return None, warnings, "confirm must be true to rollback a batch."
+
+    batch = await get_batch_by_id(db, batch_id)
+    if batch is None:
+        return None, warnings, f"Batch '{batch_id}' not found."
+
+    if not batch.is_finalized:
+        return (
+            None,
+            warnings,
+            f"Batch '{batch_id}' is not finalized; rollback is only allowed for applied batches.",
+        )
+
+    game_id = batch.applied_game_id
+    if not game_id:
+        return (
+            None,
+            warnings,
+            f"Batch '{batch_id}' is finalized but has no applied_game_id; rollback is blocked.",
+        )
+
+    result = await db.execute(select(Game).where(Game.id == game_id))
+    game = result.scalars().first()
+    if game is None:
+        return (
+            None,
+            warnings,
+            (
+                f"Batch '{batch_id}' points to missing game '{game_id}'. "
+                "Rollback is blocked to preserve audit safety."
+            ),
+        )
+
+    phases = game.phases or {}
+    historical_meta = phases.get("historical_import") if isinstance(phases, dict) else None
+    historical_batch_id = None
+    if isinstance(historical_meta, dict):
+        historical_batch_id = historical_meta.get("batch_id")
+
+    if game.status != GameStatus.completed:
+        return (
+            None,
+            warnings,
+            (
+                f"Game '{game_id}' is not completed (status={game.status.value}); "
+                "rollback only allows completed historical imports."
+            ),
+        )
+
+    if historical_batch_id != batch_id:
+        return (
+            None,
+            warnings,
+            (
+                f"Game '{game_id}' is not a safe historical import for batch '{batch_id}'. "
+                "Rollback refused."
+            ),
+        )
+
+    await db.execute(delete(Game).where(Game.id == game_id))
+
+    batch.is_finalized = False
+    batch.applied_game_id = None
+    db.add(batch)
+
+    await db.commit()
+    await db.refresh(batch)
+
+    return game_id, warnings, None
