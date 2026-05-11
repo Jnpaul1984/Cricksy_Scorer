@@ -143,6 +143,7 @@ async def _create_game(
     created_by_user_id: str | None,
     status: models.GameStatus,
     deliveries: list[dict[str, Any]] | None = None,
+    phases: dict[str, Any] | None = None,
 ) -> None:
     async with session_maker() as session:
         game = await session.get(models.Game, game_id)
@@ -157,6 +158,8 @@ async def _create_game(
         game.created_by_user_id = created_by_user_id
         game.status = status
         game.deliveries = deliveries or []
+        if phases is not None:
+            game.phases = phases
         game.result = f"{game_id} result"
         await session.commit()
 
@@ -241,6 +244,7 @@ async def create_game(
     created_by_user_id: str | None,
     status: models.GameStatus,
     deliveries: list[dict[str, Any]] | None = None,
+    phases: dict[str, Any] | None = None,
 ) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
     await _create_game(
@@ -249,6 +253,7 @@ async def create_game(
         created_by_user_id=created_by_user_id,
         status=status,
         deliveries=deliveries,
+        phases=phases,
     )
 
 
@@ -388,6 +393,58 @@ async def test_analytics_matches_list_is_completed_and_org_scoped(client: TestCl
     assert "completed-beta" not in ids
 
 
+async def test_legacy_historical_match_without_source_dates_still_loads(client: TestClient) -> None:
+    analyst = register_user(client, "analyst-legacy-historical@example.com")
+    await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
+    token = login_user(client, analyst["email"])
+
+    await create_game(
+        client,
+        game_id="legacy-historical",
+        created_by_user_id=analyst["id"],
+        status=models.GameStatus.completed,
+        phases={
+            "historical_import": {
+                "is_historical": True,
+                "match_date": "2024-07-01",
+                "venue": "Legacy Ground",
+                "event_name": "Legacy League",
+                "season": "2024",
+            }
+        },
+    )
+
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        game = await session.get(models.Game, "legacy-historical")
+        assert game is not None
+        hist_meta = (game.phases or {}).get("historical_import")
+        assert isinstance(hist_meta, dict)
+        assert "source_dates" not in hist_meta
+
+    list_resp = client.get("/analytics/matches", headers=_auth_headers(token))
+    assert list_resp.status_code == 200, list_resp.text
+    listed = next((item for item in list_resp.json()["items"] if item["id"] == "legacy-historical"), None)
+    assert listed is not None
+    assert listed["is_historical"] is True
+    assert listed["source"] == "historical_import"
+    assert listed["source_dates"] == []
+
+    analyst_detail_resp = client.get(
+        "/api/analyst/matches/legacy-historical",
+        headers=_auth_headers(token),
+    )
+    assert analyst_detail_resp.status_code == 200, analyst_detail_resp.text
+    assert analyst_detail_resp.json()["source_dates"] == []
+
+    case_study_resp = client.get(
+        "/analytics/matches/legacy-historical/case-study",
+        headers=_auth_headers(token),
+    )
+    assert case_study_resp.status_code == 200, case_study_resp.text
+    assert case_study_resp.json()["match"]["source_dates"] == []
+
+
 @pytest.mark.parametrize(
     ("fixture_path", "expected_teams", "expected_result", "expected_venue", "expected_match_number"),
     [
@@ -470,10 +527,12 @@ async def test_historical_imported_match_visible_in_analyst_workspace(
     assert imported["source"] == "historical_import"
     assert imported["venue"] == expected_venue
     assert imported["result"] == expected_result
+    assert isinstance(imported["source_dates"], list)
     if expected_match_number is not None:
         assert imported["match_number"] == expected_match_number
         assert imported["event_name"] == "Caribbean Premier League"
         assert imported["season"] == "2013"
+        assert len(imported["source_dates"]) == 1
     # date may fall back to epoch when fixture has no explicit date field
     assert isinstance(imported["date"], str) and imported["date"] != ""
 
@@ -490,10 +549,12 @@ async def test_historical_imported_match_visible_in_analyst_workspace(
         assert [inning["overs"] for inning in detail["match"]["innings"][:2]] == [1.0, 1.0]
     assert detail["match"]["result"] == expected_result
     assert detail["match"]["venue"] == expected_venue
+    assert isinstance(detail["match"]["source_dates"], list)
     if expected_match_number is not None:
         assert detail["match"]["event_name"] == "Caribbean Premier League"
         assert detail["match"]["season"] == "2013"
         assert detail["match"]["match_number"] == expected_match_number
+        assert len(detail["match"]["source_dates"]) == 1
     assert len(detail["phases"]) > 0
     assert len(detail["key_players"]) > 0
 
@@ -506,11 +567,13 @@ async def test_historical_imported_match_visible_in_analyst_workspace(
     assert [inning["team"] for inning in analyst_detail["innings"][:2]] == expected_teams
     assert analyst_detail["result"] == expected_result
     assert analyst_detail["venue"] == expected_venue
+    assert isinstance(analyst_detail["source_dates"], list)
     if expected_match_number is not None:
         assert [inning["overs"] for inning in analyst_detail["innings"][:2]] == [1.0, 1.0]
         assert analyst_detail["event_name"] == "Caribbean Premier League"
         assert analyst_detail["season"] == "2013"
         assert analyst_detail["match_number"] == expected_match_number
+        assert len(analyst_detail["source_dates"]) == 1
 
 
 async def test_analyst_export_data_real_rows_or_empty_never_fake(client: TestClient) -> None:
