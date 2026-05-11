@@ -7,6 +7,7 @@ including match metadata, phase breakdowns, key players, and AI summaries.
 
 from __future__ import annotations
 
+import contextlib
 from collections import defaultdict
 from datetime import date, datetime
 from typing import Any, Literal
@@ -700,10 +701,8 @@ async def _build_case_study_from_db(
     if is_historical and isinstance(hist_meta, dict):
         raw_date = hist_meta.get("match_date")
         if raw_date:
-            try:
+            with contextlib.suppress(ValueError, TypeError):
                 match_date = date.fromisoformat(str(raw_date))
-            except (ValueError, TypeError):
-                pass
 
     case_study_match = CaseStudyMatch(
         id=game.id,

@@ -1,4 +1,4 @@
-"""Phase 5F – Historical Import Delivery Service.
+"""Phase 5F - Historical Import Delivery Service.
 
 Provides helpers to:
 - Normalize historical JSON innings/ball data into a format compatible with
@@ -327,7 +327,6 @@ def validate_innings_totals(
 
         # Determine validation status
         runs_diff = abs(derived_runs - expected_runs) if expected_runs is not None else 0
-        wickets_diff = abs(derived_wickets - expected_wickets) if expected_wickets is not None else 0
 
         if expected_runs is not None and runs_diff > _RUNS_TOLERANCE:
             val_status = "blocked"
@@ -382,16 +381,13 @@ def _collect_team_players(
 
     Uses the innings batting order (batsman names) and bowling order (bowler
     names) from delivery events.  Each player entry has ``{"id": name, "name":
-    name}`` – the name is used as a surrogate ID since historical data has no
+    name}`` - the name is used as a surrogate ID since historical data has no
     real player UUIDs.
 
     No ORM Player rows are created.
 
     Returns (team_a_players, team_b_players).
     """
-    team_a_name = teams_preview[0] if len(teams_preview) > 0 else ""
-    team_b_name = teams_preview[1] if len(teams_preview) > 1 else ""
-
     team_a_batters: set[str] = set()
     team_b_batters: set[str] = set()
     team_a_bowlers: set[str] = set()

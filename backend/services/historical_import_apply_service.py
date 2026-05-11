@@ -372,7 +372,7 @@ async def rollback_historical_batch(
 
 
 # ---------------------------------------------------------------------------
-# Phase 5F – Delivery-level import
+# Phase 5F - Delivery-level import
 # ---------------------------------------------------------------------------
 
 
@@ -470,7 +470,7 @@ async def apply_historical_deliveries(
             ),
         )
 
-    # Gate 6: idempotency – deliveries must not already be imported
+    # Gate 6: idempotency - deliveries must not already be imported
     if hist_meta.get("deliveries_imported") is True:
         return (
             None,
@@ -530,7 +530,7 @@ async def apply_historical_deliveries(
         return None, warnings, blocking_error
 
     # -----------------------------------------------------------------------
-    # All gates passed – write delivery data
+    # All gates passed - write delivery data
     # -----------------------------------------------------------------------
 
     teams_preview: list[str] = dry_run.get("teams_preview") or [

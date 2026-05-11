@@ -1,4 +1,4 @@
-"""Phase 5F – Historical JSON Delivery-Level Import MVP tests.
+"""Phase 5F - Historical JSON Delivery-Level Import MVP tests.
 
 Validates:
 - apply-deliveries requires confirm=true
