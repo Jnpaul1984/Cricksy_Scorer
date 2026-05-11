@@ -142,5 +142,5 @@ class HistoricalImportRollbackResponse(BaseModel):
     batch_id: str
     rolled_back_game_id: str | None = None
     records_deleted: int = 0
-    status: Literal["rolled_back", "failed"]
+    status: Literal["rolled_back"]
     warnings: list[str] = Field(default_factory=list)
