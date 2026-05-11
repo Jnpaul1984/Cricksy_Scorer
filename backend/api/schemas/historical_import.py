@@ -81,5 +81,44 @@ class HistoricalImportBatchRecord(BaseModel):
     innings_count: int
     delivery_count: int
     is_finalized: bool
+    applied_game_id: str | None = None
     created_at: dt.datetime
     updated_at: dt.datetime
+
+
+# ---------------------------------------------------------------------------
+# Phase 5D - Apply schemas
+# ---------------------------------------------------------------------------
+
+
+class HistoricalImportApplyRequest(BaseModel):
+    """Request body for the Phase 5D apply endpoint.
+
+    ``confirm`` must be explicitly ``True``; any other value is rejected.
+    This prevents accidental writes.
+    """
+
+    confirm: bool = Field(
+        ...,
+        description=(
+            "Must be true to proceed with the apply. "
+            "Safeguard against accidental writes."
+        ),
+    )
+
+
+class HistoricalImportApplyResponse(BaseModel):
+    """Response body returned by the Phase 5D apply endpoint."""
+
+    batch_id: str
+    applied_game_id: str | None = None
+    records_created: int = 0
+    status: Literal["applied", "skipped", "failed"]
+    warnings: list[str] = Field(default_factory=list)
+    rollback_info: str = Field(
+        default="",
+        description=(
+            "Instructions for manual rollback: delete the Game row identified "
+            "by applied_game_id and set is_finalized=False on this batch."
+        ),
+    )
