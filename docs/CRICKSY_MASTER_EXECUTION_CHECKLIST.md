@@ -1200,7 +1200,7 @@ Structured historical match import works safely and does not corrupt live scorin
 ### Purpose
 
 - Calculate and maintain analytics-ready historical aggregates from validated, registered, imported match data.
-- Deliver governed aggregation outputs for player batting stats, player bowling stats, team stats, venue par scores, competition stats, and phase-over segments (powerplay, middle overs, death overs).
+- Deliver governed aggregation outputs for player batting stats, player bowling stats, team stats, venue par scores, competition stats, and phase-of-play segments (powerplay, middle overs, death overs).
 - Preserve reproducibility so any aggregate can be recomputed from governed source records.
 
 ### Pre-Phase Audit Requirements
@@ -1238,7 +1238,7 @@ Structured historical match import works safely and does not corrupt live scorin
 
 - Aggregation runs are blocked for unvalidated, unregistered, or provenance-broken matches.
 - Player/team/venue/competition/phase outputs must include audit metadata for source lineage and compute version.
-- Segment stats (powerplay/middle/death) must follow explicit legal-ball/over definitions aligned with cricket rules in system constants.
+- Segment stats (powerplay/middle/death) must follow explicit legal-ball/over definitions aligned with cricket rules in `backend/domain/constants.py`.
 - Recompute operations must support idempotent rerun behavior and mismatch detection/reporting.
 
 ### Tests
@@ -1246,7 +1246,7 @@ Structured historical match import works safely and does not corrupt live scorin
 - Aggregation correctness tests for player batting, player bowling, team, venue par score, competition, and phase stats.
 - Edge-case tests for extras/wickets/abandoned or incomplete imported data handling under governed rules.
 - Recompute/idempotency tests proving reproducible outputs from the same source dataset.
-- Postgres Alembic migration validation tests (upgrade/downgrade where supported) when new aggregation tables/views are introduced.
+- Postgres Alembic migration validation tests (required upgrade and required downgrade) when new aggregation tables/views are introduced.
 - Regression tests proving aggregation paths do not mutate live scoring truth.
 
 ### Rollout / Rollback Considerations
@@ -1391,7 +1391,7 @@ Structured historical match import works safely and does not corrupt live scorin
 - Feature extraction and label-generation rules must pass deterministic validation with documented assumptions.
 - Train/validation/test split governance must enforce non-leaky partition policies and reproducible split seeds.
 - Export versioning must generate immutable, traceable dataset versions with checksum/manifest metadata.
-- Direct model retraining remains blocked in this phase unless separately approved by later governed phase.
+- Direct model retraining remains blocked in this phase unless separately approved by a later governed phase.
 
 ### Tests
 
