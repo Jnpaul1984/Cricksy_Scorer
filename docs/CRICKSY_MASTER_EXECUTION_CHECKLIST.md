@@ -1195,6 +1195,236 @@ Structured historical match import works safely and does not corrupt live scorin
 
 ---
 
+## Phase 5N — Historical Stats Aggregation Layer
+
+### Purpose
+
+- Calculate and maintain analytics-ready historical aggregates from validated, registered, imported match data.
+- Deliver governed aggregation outputs for player batting stats, player bowling stats, team stats, venue par scores, competition stats, and phase-over segments (powerplay, middle overs, death overs).
+- Preserve reproducibility so any aggregate can be recomputed from governed source records.
+
+### Pre-Phase Audit Requirements
+
+- Audit registry completeness from Phase 5M (competition/season/venue/team/player/provenance linkage) before aggregation starts.
+- Audit historical import validation status to confirm only validated + registered matches are aggregation-eligible.
+- Audit existing aggregate/stat consumers to confirm no live scoring mutation path is introduced.
+- Audit schema/migration impact and Postgres readiness if new aggregate tables/materialized views are required.
+
+### Strict Scope
+
+- Aggregation logic and governed storage for historical batting/bowling/team/venue/competition/phase statistics only.
+- Controlled recompute/backfill flows for aggregation outputs derived from imported historical matches.
+- Validation and governance gates for stat integrity, provenance linkage, and recomputation behavior.
+- Documentation/test coverage for this aggregation layer only.
+
+### Protected Files/Systems
+
+- Live scoring truth, deterministic scoring logic, and DLS paths.
+- Live bus/socket semantics and real-time scoring flows.
+- Video-analysis and mental-analysis systems.
+- Unrelated historical import runtime ingestion paths outside aggregation linkage.
+- Unrelated workflows, dependencies, and non-aggregation product features.
+
+### Data Governance Rules
+
+- Imported data is not analytics-ready or model-training-ready until validated, registered, and aggregation-eligible.
+- Metadata accuracy and registry integrity take priority over aggregate coverage.
+- No fake stats or fabricated aggregate rows; every value must map to governed source/provenance.
+- Aggregations must be deterministic, reproducible, and recomputable from source inputs.
+- Live scoring truth must never be mutated by aggregation jobs.
+- Any registry/aggregation schema migration must pass real Postgres Alembic validation before rollout.
+
+### Gates
+
+- Aggregation runs are blocked for unvalidated, unregistered, or provenance-broken matches.
+- Player/team/venue/competition/phase outputs must include audit metadata for source lineage and compute version.
+- Segment stats (powerplay/middle/death) must follow explicit legal-ball/over definitions aligned with cricket rules in system constants.
+- Recompute operations must support idempotent rerun behavior and mismatch detection/reporting.
+
+### Tests
+
+- Aggregation correctness tests for player batting, player bowling, team, venue par score, competition, and phase stats.
+- Edge-case tests for extras/wickets/abandoned or incomplete imported data handling under governed rules.
+- Recompute/idempotency tests proving reproducible outputs from the same source dataset.
+- Postgres Alembic migration validation tests (upgrade/downgrade where supported) when new aggregation tables/views are introduced.
+- Regression tests proving aggregation paths do not mutate live scoring truth.
+
+### Rollout / Rollback Considerations
+
+- Roll out aggregation in staged batches with per-run audit logs and reconciliation summaries.
+- Maintain rollback/recompute playbooks to invalidate and rebuild affected aggregate slices safely.
+- Block downstream analytics/model dataset exports when aggregate integrity checks fail.
+- Keep deterministic versioned aggregation configs so historical outputs can be reproduced after rollback.
+
+### What Must Not Be Done
+
+- Do not aggregate from unvalidated or unregistered imported matches.
+- Do not fabricate stats to fill missing records or unknown metadata.
+- Do not alter live scoring truth, DLS behavior, or unrelated runtime flows.
+- Do not bypass real Postgres Alembic validation for aggregation-related schema changes.
+
+### Completion Criteria
+
+- Governed historical aggregation exists for player batting, player bowling, team, venue par, competition, and phase (powerplay/middle/death) stats.
+- Aggregations are reproducible, recomputable, auditable, and blocked on registry/provenance failures.
+- Required tests/gates pass, including Postgres migration validation where schema changes are present.
+- Live scoring truth remains unchanged and protected.
+
+---
+
+## Phase 5O — Analyst Workspace Data Library
+
+### Purpose
+
+- Provide analyst-facing governed data-library browsing over imported historical records.
+- Add consistent folders/filters for competition, season, venue, team, player, match type, and imported batch.
+- Ensure analyst workflows expose real governed records with clear empty-state handling when no data is available.
+
+### Pre-Phase Audit Requirements
+
+- Audit Analyst Workspace data-entry points and navigation components that will host folders/filters.
+- Audit backend query contracts for historical metadata dimensions (competition/season/venue/team/player/match type/batch).
+- Audit permission/visibility boundaries so library views only expose authorized governed data.
+- Audit empty-state and error-state UX rules before implementation lock.
+
+### Strict Scope
+
+- Analyst Workspace data-library structure and filter surfaces for governed imported historical data browsing only.
+- Backend/frontend contract alignment for folder/filter retrieval and filtering behavior.
+- Empty-state, loading-state, and no-results handling tied to governed data availability.
+- Tests and governance checks for this browsing layer only.
+
+### Protected Files/Systems
+
+- Live scoring truth and match-scoring runtime paths.
+- DLS/live bus semantics and non-analyst gameplay APIs.
+- Historical import ingestion logic unrelated to library browsing contracts.
+- Model training pipelines and dataset export runtimes (reserved for later governed phases).
+- Unrelated workflows, dependencies, and non-Analyst Workspace features.
+
+### Data Governance Rules
+
+- Metadata accuracy and registry integrity must be validated before records appear in library folders/filters.
+- No fake folders, fake counts, placeholder data, or fabricated rows in analyst views.
+- Imported data browsing must preserve provenance context (including imported batch lineage).
+- Live scoring truth must not be mutated by library indexing/filtering logic.
+
+### Gates
+
+- Folder/filter outputs must be sourced from validated + registered historical metadata only.
+- Backend/frontend contracts for each filter dimension must be versioned and test-verified.
+- UI must show explicit governed empty states when filtered datasets have no eligible records.
+- Filter combinations must remain deterministic and reproducible for the same governed snapshot.
+
+### Tests
+
+- Backend contract tests for competition, season, venue, team, player, match type, and imported batch filters.
+- Frontend contract/integration tests validating folder/filter rendering and filter-application behavior.
+- UI tests for empty/loading/error/no-results states with no fabricated fallback data.
+- Permission and provenance visibility tests ensuring authorized access and batch-trace display.
+- Regression tests proving no side effects on live scoring/runtime gameplay systems.
+
+### Rollout / Rollback Considerations
+
+- Roll out behind feature flags or phased enablement for analyst cohorts.
+- Keep reversible configuration/state changes for folder/filter definitions and ordering.
+- Provide rollback path to previous Analyst Workspace navigation without data mutation.
+- Require reconciliation checks if filter counts diverge from governed metadata snapshot.
+
+### What Must Not Be Done
+
+- Do not display synthetic/fake folders, fake totals, or fabricated match rows.
+- Do not bypass backend/frontend contract validation for new library filter dimensions.
+- Do not mutate live scoring truth or unrelated analyst/runtime systems.
+- Do not expand scope into model training/retraining execution.
+
+### Completion Criteria
+
+- Analyst Workspace exposes governed folders/filters for competition, season, venue, team, player, match type, and imported batch.
+- Backend/frontend contract tests and UI empty-state rules pass with no fake data behavior.
+- Library outputs are provenance-aware, deterministic, and bounded by validated registry metadata.
+- Protected systems remain unchanged.
+
+---
+
+## Phase 5P — Model Training Dataset Builder
+
+### Purpose
+
+- Build governed dataset export pipelines (not model training) for downstream model-development phases.
+- Produce clean export targets for win prediction, par score prediction, player form, venue adjustment, phase momentum, and matchup prediction use cases.
+- Enforce dataset governance so only validated, registered, and aggregated historical data becomes training-dataset eligible.
+
+### Pre-Phase Audit Requirements
+
+- Audit readiness of Phase 5M registry and Phase 5N aggregation outputs for each export target.
+- Audit feature availability and label definitions for all planned dataset families before schema lock.
+- Audit security/privacy constraints and data-classification handling for exported datasets.
+- Audit versioning/provenance strategy for reproducible export artifacts and lineage tracking.
+
+### Strict Scope
+
+- Dataset extraction/transformation/export governance for approved dataset families only.
+- Eligibility checks, provenance tracking, split governance, and export versioning controls.
+- Validation tooling and tests for feature/label integrity in export outputs.
+- Documentation and gates for export reliability only.
+
+### Protected Files/Systems
+
+- Live scoring truth and deterministic gameplay runtime behavior.
+- DLS/live bus and unrelated analyst/runtime systems.
+- Direct model-training/retraining execution pipelines (out of scope for this phase unless separately approved).
+- Unrelated workflows, dependencies, and non-dataset product areas.
+
+### Data Governance Rules
+
+- Imported data remains not training-ready until validated, registered, and aggregated under governance.
+- Metadata and registry integrity are mandatory prerequisites before any dataset export.
+- No fake model labels, no fabricated feature rows, and no synthetic training samples presented as truth.
+- Dataset lineage must retain source match provenance, aggregation version, and export configuration metadata.
+- Privacy/security controls must prevent unauthorized exposure of sensitive or restricted fields.
+- Live scoring truth must never be mutated by dataset export logic.
+
+### Gates
+
+- Training eligibility gate blocks exports when validation/registry/aggregation prerequisites fail.
+- Feature extraction and label-generation rules must pass deterministic validation with documented assumptions.
+- Train/validation/test split governance must enforce non-leaky partition policies and reproducible split seeds.
+- Export versioning must generate immutable, traceable dataset versions with checksum/manifest metadata.
+- Direct model retraining remains blocked in this phase unless separately approved by later governed phase.
+
+### Tests
+
+- Export correctness tests for each dataset family: win prediction, par score prediction, player form, venue adjustment, phase momentum, matchup prediction.
+- Feature/label integrity tests detecting null/invalid/leaky mappings and fabricated-row attempts.
+- Provenance/manifest tests ensuring lineage, version, and checksum records are complete and queryable.
+- Privacy/security tests confirming restricted fields are excluded or protected per policy.
+- Split-governance tests validating deterministic train/validation/test partition behavior without leakage.
+- Regression tests proving exports do not mutate live scoring truth or unrelated runtime paths.
+
+### Rollout / Rollback Considerations
+
+- Roll out exports in controlled versions with compatibility notes and reproducibility manifests.
+- Maintain rollback/rebuild procedure to deprecate invalid dataset versions and regenerate from governed sources.
+- Suspend downstream consumption when provenance, validation, or privacy checks fail.
+- Keep export history immutable for audit and reproducibility guarantees.
+
+### What Must Not Be Done
+
+- Do not export datasets from unvalidated/unregistered/unaggregated inputs.
+- Do not fabricate labels/features or backfill missing values as synthetic truth without governance approval.
+- Do not run direct model retraining in this phase unless separately approved in a later governed phase.
+- Do not alter live scoring truth or unrelated runtime systems.
+
+### Completion Criteria
+
+- Governed exports exist for win prediction, par score prediction, player form, venue adjustment, phase momentum, and matchup prediction datasets.
+- Eligibility, provenance, privacy/security, feature validation, split governance, and versioning gates are enforced and test-covered.
+- Exports are reproducible, auditable, and blocked when upstream governance requirements fail.
+- Phase scope remains dataset-builder only; model retraining remains deferred.
+
+---
+
 # Phase 6 — Historical Match Ingestion: PDF/Image/OCR Review Flow
 
 ## Purpose
