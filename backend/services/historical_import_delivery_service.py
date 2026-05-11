@@ -129,6 +129,8 @@ def extract_normalized_innings(
             continue
 
         innings_obj = innings
+        # Cricsheet JSON often stores innings as {"<Team Name>": {...}} instead
+        # of a flat innings object. Unwrap that single-key wrapper for import.
         if len(innings_obj) == 1 and not any(k in innings_obj for k in ("balls", "deliveries", "overs")):
             nested = next(iter(innings_obj.values()))
             if isinstance(nested, dict):
@@ -150,6 +152,8 @@ def extract_normalized_innings(
                     if not isinstance(over, dict):
                         continue
                     over_idx_raw = over.get("over")
+                    # Cricsheet over numbers are 0-indexed; internal delivery rows
+                    # use 1-indexed over_number for analytics compatibility.
                     over_number = int(over_idx_raw) + 1 if isinstance(over_idx_raw, int) else None
                     over_deliveries = over.get("deliveries")
                     if not isinstance(over_deliveries, list):
