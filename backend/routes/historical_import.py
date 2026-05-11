@@ -280,12 +280,12 @@ async def rollback_historical_import_batch(
     current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
 ) -> HistoricalImportRollbackResponse:
     """Rollback a finalized historical import batch with strict safety checks."""
-    del current_user  # currently unused; reserved for ownership scoping in future phases
-
     rolled_back_game_id, warnings, error_msg = await rollback_historical_batch(
         db,
         batch_id=batch_id,
         confirm=body.confirm,
+        requester_user_id=(current_user.id if current_user else None),
+        requester_org_id=(current_user.org_id if current_user else None),
     )
 
     if error_msg is not None:
@@ -293,6 +293,8 @@ async def rollback_historical_import_batch(
             raise HTTPException(status_code=404, detail=error_msg)
         if "confirm must be true" in error_msg.lower():
             raise HTTPException(status_code=422, detail=error_msg)
+        if "not authorized" in error_msg.lower():
+            raise HTTPException(status_code=403, detail=error_msg)
         raise HTTPException(status_code=409, detail=error_msg)
 
     return HistoricalImportRollbackResponse(

@@ -37,6 +37,7 @@ Rollback (Phase 5D/5F combined):
 
 from __future__ import annotations
 
+import datetime as dt
 import json as _json
 import uuid
 from typing import Any
@@ -298,6 +299,8 @@ async def rollback_historical_batch(
     *,
     batch_id: str,
     confirm: bool,
+    requester_user_id: str | None = None,
+    requester_org_id: str | None = None,
 ) -> tuple[str | None, list[str], str | None]:
     """Rollback a finalized historical import batch by deleting its applied Game row.
 
@@ -312,6 +315,25 @@ async def rollback_historical_batch(
     batch = await get_batch_by_id(db, batch_id)
     if batch is None:
         return None, warnings, f"Batch '{batch_id}' not found."
+
+    if batch.owner_user_id or batch.owner_org_id:
+        user_authorized = (
+            batch.owner_user_id is None
+            or (requester_user_id is not None and requester_user_id == batch.owner_user_id)
+        )
+        org_authorized = (
+            batch.owner_org_id is None
+            or (requester_org_id is not None and requester_org_id == batch.owner_org_id)
+        )
+        if not (user_authorized and org_authorized):
+            return (
+                None,
+                warnings,
+                (
+                    f"Batch '{batch_id}' is owned by another user/org. "
+                    "Rollback is not authorized."
+                ),
+            )
 
     if not batch.is_finalized:
         return (
@@ -367,6 +389,21 @@ async def rollback_historical_batch(
         )
 
     await db.execute(delete(Game).where(Game.id == game_id))
+
+    dry_run_summary = dict(batch.dry_run_summary) if isinstance(batch.dry_run_summary, dict) else {}
+    rollback_log = dry_run_summary.get("_rollback_log")
+    if not isinstance(rollback_log, list):
+        rollback_log = []
+    rollback_log.append(
+        {
+            "rolled_back_game_id": game_id,
+            "rolled_back_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "by_user_id": requester_user_id,
+            "by_org_id": requester_org_id,
+        }
+    )
+    dry_run_summary["_rollback_log"] = rollback_log
+    batch.dry_run_summary = dry_run_summary
 
     batch.is_finalized = False
     batch.applied_game_id = None

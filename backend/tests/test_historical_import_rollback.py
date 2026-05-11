@@ -78,6 +78,8 @@ async def _create_valid_batch(
     db_session: AsyncSession,
     *,
     match_type: str = "t20",
+    owner_user_id: str | None = None,
+    owner_org_id: str | None = None,
 ) -> HistoricalImportBatch:
     return await create_import_batch(
         db_session,
@@ -101,6 +103,8 @@ async def _create_valid_batch(
                 {"inning_no": 2, "team": "Team B", "deliveries": 120, "runs": 140, "wickets": 8},
             ],
         },
+        owner_user_id=owner_user_id,
+        owner_org_id=owner_org_id,
     )
 
 
@@ -235,3 +239,67 @@ async def test_apply_rollback_roundtrip_preserves_non_game_rows(db_session: Asyn
     assert before_deliveries == after_deliveries
     assert before_players == after_players
     assert before_teams == after_teams
+
+
+@pytest.mark.asyncio
+async def test_rollback_preserves_batch_audit_metadata(db_session: AsyncSession) -> None:
+    batch = await _create_valid_batch(db_session)
+    game, _, apply_error = await apply_historical_batch(db_session, batch_id=batch.id, confirm=True)
+    assert apply_error is None
+    assert game is not None
+
+    rolled_back_id, _, rollback_error = await rollback_historical_batch(
+        db_session,
+        batch_id=batch.id,
+        confirm=True,
+        requester_user_id="cleanup-user",
+        requester_org_id="cleanup-org",
+    )
+    assert rollback_error is None
+    assert rolled_back_id == game.id
+
+    batch_after = (
+        await db_session.execute(select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch.id))
+    ).scalars().first()
+    assert batch_after is not None
+    assert isinstance(batch_after.dry_run_summary, dict)
+    rollback_log = batch_after.dry_run_summary.get("_rollback_log")
+    assert isinstance(rollback_log, list)
+    assert len(rollback_log) == 1
+    entry = rollback_log[0]
+    assert entry["rolled_back_game_id"] == game.id
+    assert entry["by_user_id"] == "cleanup-user"
+    assert entry["by_org_id"] == "cleanup-org"
+    assert isinstance(entry.get("rolled_back_at"), str) and entry["rolled_back_at"] != ""
+
+
+@pytest.mark.asyncio
+async def test_rollback_rejects_unauthorized_owner(db_session: AsyncSession) -> None:
+    batch = await _create_valid_batch(
+        db_session,
+        owner_user_id="owner-user",
+        owner_org_id="owner-org",
+    )
+    game, _, apply_error = await apply_historical_batch(db_session, batch_id=batch.id, confirm=True)
+    assert apply_error is None
+    assert game is not None
+
+    rolled_back_id, _, rollback_error = await rollback_historical_batch(
+        db_session,
+        batch_id=batch.id,
+        confirm=True,
+        requester_user_id="other-user",
+        requester_org_id="other-org",
+    )
+
+    batch_after = (
+        await db_session.execute(select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch.id))
+    ).scalars().first()
+
+    assert rolled_back_id is None
+    assert rollback_error is not None
+    assert "not authorized" in rollback_error.lower()
+    assert batch_after is not None
+    assert batch_after.is_finalized is True
+    assert batch_after.applied_game_id == game.id
+    assert await db_session.get(Game, game.id) is not None

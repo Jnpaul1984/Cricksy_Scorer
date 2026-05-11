@@ -576,6 +576,125 @@ async def test_historical_imported_match_visible_in_analyst_workspace(
         assert len(analyst_detail["source_dates"]) == 1
 
 
+async def test_historical_import_cleanup_removes_match_and_allows_reupload(client: TestClient) -> None:
+    analyst = register_user(client, "analyst-cleanup@example.com")
+    await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
+    token = login_user(client, analyst["email"])
+
+    fixture_payload = json.loads(HISTORICAL_FIXTURE_PATH.read_text(encoding="utf-8"))
+
+    dry_run_resp = client.post(
+        "/api/historical-import/json/dry-run",
+        headers=_auth_headers(token),
+        params={"record_preview": "true"},
+        json=fixture_payload,
+    )
+    assert dry_run_resp.status_code == 200, dry_run_resp.text
+    batch_id = dry_run_resp.json()["record_id"]
+    assert batch_id
+
+    apply_resp = client.post(
+        f"/api/historical-import/json/batches/{batch_id}/apply",
+        headers=_auth_headers(token),
+        json={"confirm": True},
+    )
+    assert apply_resp.status_code == 200, apply_resp.text
+    applied_game_id = apply_resp.json()["applied_game_id"]
+    assert applied_game_id
+
+    list_before = client.get("/analytics/matches", headers=_auth_headers(token))
+    assert list_before.status_code == 200, list_before.text
+    assert any(item["id"] == applied_game_id for item in list_before.json()["items"])
+
+    rollback_resp = client.post(
+        f"/api/historical-import/json/batches/{batch_id}/rollback",
+        headers=_auth_headers(token),
+        json={"confirm": True},
+    )
+    assert rollback_resp.status_code == 200, rollback_resp.text
+    assert rollback_resp.json()["rolled_back_game_id"] == applied_game_id
+
+    list_after = client.get("/analytics/matches", headers=_auth_headers(token))
+    assert list_after.status_code == 200, list_after.text
+    assert not any(item["id"] == applied_game_id for item in list_after.json()["items"])
+
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        batch_row = (
+            await session.execute(select(models.HistoricalImportBatch).where(models.HistoricalImportBatch.id == batch_id))
+        ).scalar_one()
+    rollback_log = (batch_row.dry_run_summary or {}).get("_rollback_log")
+    assert isinstance(rollback_log, list) and len(rollback_log) == 1
+    assert rollback_log[0]["rolled_back_game_id"] == applied_game_id
+
+    rerun_resp = client.post(
+        "/api/historical-import/json/dry-run",
+        headers=_auth_headers(token),
+        params={"record_preview": "true"},
+        json=fixture_payload,
+    )
+    assert rerun_resp.status_code == 200, rerun_resp.text
+    new_batch_id = rerun_resp.json()["record_id"]
+    assert new_batch_id and new_batch_id != batch_id
+
+    reapply_resp = client.post(
+        f"/api/historical-import/json/batches/{new_batch_id}/apply",
+        headers=_auth_headers(token),
+        json={"confirm": True},
+    )
+    assert reapply_resp.status_code == 200, reapply_resp.text
+    assert reapply_resp.json()["applied_game_id"] != applied_game_id
+
+
+async def test_historical_import_cleanup_refuses_unauthorized_user(client: TestClient) -> None:
+    owner = register_user(client, "analyst-cleanup-owner@example.com")
+    intruder = register_user(client, "analyst-cleanup-intruder@example.com")
+    await set_role(client, owner["email"], models.RoleEnum.analyst_pro)
+    await set_role(client, intruder["email"], models.RoleEnum.analyst_pro)
+    owner_token = login_user(client, owner["email"])
+    intruder_token = login_user(client, intruder["email"])
+
+    fixture_payload = json.loads(HISTORICAL_FIXTURE_PATH.read_text(encoding="utf-8"))
+
+    dry_run_resp = client.post(
+        "/api/historical-import/json/dry-run",
+        headers=_auth_headers(owner_token),
+        params={"record_preview": "true"},
+        json=fixture_payload,
+    )
+    assert dry_run_resp.status_code == 200, dry_run_resp.text
+    batch_id = dry_run_resp.json()["record_id"]
+    assert batch_id
+
+    apply_resp = client.post(
+        f"/api/historical-import/json/batches/{batch_id}/apply",
+        headers=_auth_headers(owner_token),
+        json={"confirm": True},
+    )
+    assert apply_resp.status_code == 200, apply_resp.text
+    applied_game_id = apply_resp.json()["applied_game_id"]
+    assert applied_game_id
+
+    rollback_resp = client.post(
+        f"/api/historical-import/json/batches/{batch_id}/rollback",
+        headers=_auth_headers(intruder_token),
+        json={"confirm": True},
+    )
+    assert rollback_resp.status_code == 403, rollback_resp.text
+
+    owner_list = client.get("/analytics/matches", headers=_auth_headers(owner_token))
+    assert owner_list.status_code == 200, owner_list.text
+    assert any(item["id"] == applied_game_id for item in owner_list.json()["items"])
+
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        batch_row = (
+            await session.execute(select(models.HistoricalImportBatch).where(models.HistoricalImportBatch.id == batch_id))
+        ).scalar_one()
+    rollback_log = (batch_row.dry_run_summary or {}).get("_rollback_log")
+    assert rollback_log in (None, [])
+
+
 async def test_analyst_export_data_real_rows_or_empty_never_fake(client: TestClient) -> None:
     analyst = register_user(client, "analyst-export-real@example.com")
     await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
