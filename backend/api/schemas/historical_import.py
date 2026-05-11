@@ -144,3 +144,42 @@ class HistoricalImportRollbackResponse(BaseModel):
     records_deleted: int = 0
     status: Literal["rolled_back"]
     warnings: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Phase 5F - Apply deliveries schemas
+# ---------------------------------------------------------------------------
+
+
+class HistoricalImportTotalsValidation(BaseModel):
+    """Per-innings totals reconciliation result."""
+
+    inning_no: int
+    team: str | None = None
+    derived_runs: int
+    expected_runs: int | None = None
+    derived_wickets: int
+    expected_wickets: int | None = None
+    legal_balls: int
+    status: Literal["ok", "warning", "blocked"]
+    notes: str = ""
+
+
+class HistoricalImportApplyDeliveriesResponse(BaseModel):
+    """Response body returned by the Phase 5F apply-deliveries endpoint."""
+
+    batch_id: str
+    applied_game_id: str
+    deliveries_imported: int
+    innings_processed: int
+    status: Literal["deliveries_applied", "already_applied", "failed"]
+    totals_validation: list[HistoricalImportTotalsValidation] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    rollback_info: str = Field(
+        default="",
+        description=(
+            "Instructions for rollback, including the Phase 5E rollback endpoint. "
+            "Rolling back the batch will delete the entire historical game record "
+            "including any imported deliveries."
+        ),
+    )

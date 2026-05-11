@@ -4,16 +4,19 @@ from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from backend.api.schemas.historical_import import (
+    HistoricalImportApplyDeliveriesResponse,
     HistoricalImportApplyRequest,
     HistoricalImportApplyResponse,
     HistoricalImportBatchRecord,
     HistoricalImportDryRunResponse,
     HistoricalImportRollbackRequest,
     HistoricalImportRollbackResponse,
+    HistoricalImportTotalsValidation,
 )
 from backend.security import get_current_user_optional
 from backend.services.historical_import_apply_service import (
     apply_historical_batch,
+    apply_historical_deliveries,
     rollback_historical_batch,
 )
 from backend.services.historical_import_preview import build_dry_run_response
@@ -258,7 +261,9 @@ async def apply_historical_import_batch(
     description=(
         "Deletes only the historical Game row created by this batch, if and only if "
         "the game can be verified as a safe imported historical record. "
-        "Requires explicit confirm=true."
+        "Requires explicit confirm=true. "
+        "Also removes any delivery-level data imported during Phase 5F, since "
+        "delivery data is stored inside the Game row's JSON columns."
     ),
 )
 async def rollback_historical_import_batch(
@@ -289,4 +294,110 @@ async def rollback_historical_import_batch(
         records_deleted=1,
         status="rolled_back",
         warnings=warnings,
+    )
+
+
+@router.post(
+    "/batches/{batch_id}/apply-deliveries",
+    response_model=HistoricalImportApplyDeliveriesResponse,
+    summary="Import delivery-level data into a historical game (Phase 5F)",
+    description=(
+        "Phase 5F: imports ball-by-ball delivery data from the original JSON payload "
+        "into the historical Game row created by Phase 5D apply. "
+        "Requires explicit confirm=true query parameter. "
+        "Requires the same JSON file that was used for the original dry-run (hash-verified). "
+        "Validates innings totals before any write; blocks if totals are irreconcilable. "
+        "Idempotent: a second call returns 'already_applied' without modifying data. "
+        "Rollback: use the Phase 5E rollback endpoint to remove the entire Game row "
+        "(including all imported delivery data)."
+    ),
+)
+async def apply_historical_import_deliveries(
+    batch_id: str,
+    request: Request,
+    file: UploadFile | None = File(None),
+    confirm: bool = Query(
+        default=False,
+        description="Must be true to proceed with delivery import.",
+    ),
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalImportApplyDeliveriesResponse:
+    """Import delivery-level data into a previously-applied historical Game (Phase 5F)."""
+    del current_user  # reserved for ownership scoping in future phases
+
+    # Read the payload (same as dry-run: accept file upload or raw JSON body)
+    if file is not None:
+        raw_payload: bytes = await file.read()
+    else:
+        content_type = request.headers.get("content-type", "").lower()
+        if "application/json" not in content_type:
+            raise HTTPException(
+                status_code=415,
+                detail=(
+                    "Provide application/json payload or multipart file upload "
+                    "containing the original match JSON."
+                ),
+            )
+        raw_payload = await request.body()
+
+    result_info, warnings, error_msg = await apply_historical_deliveries(
+        db,
+        batch_id=batch_id,
+        confirm=confirm,
+        raw_payload=raw_payload,
+    )
+
+    if error_msg is not None:
+        if "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        if "confirm must be true" in error_msg.lower():
+            raise HTTPException(status_code=422, detail=error_msg)
+        if "already been imported" in error_msg.lower() or "already_applied" in error_msg.lower():
+            raise HTTPException(status_code=409, detail=error_msg)
+        if "does not match" in error_msg.lower() or "hash" in error_msg.lower():
+            raise HTTPException(status_code=422, detail=error_msg)
+        if "totals" in error_msg.lower() or "run total" in error_msg.lower() or "mismatch" in error_msg.lower():
+            raise HTTPException(status_code=422, detail=error_msg)
+        raise HTTPException(status_code=409, detail=error_msg)
+
+    assert result_info is not None  # noqa: S101
+
+    game_id: str = result_info["game_id"]
+    deliveries_imported: int = result_info["deliveries_imported"]
+    innings_processed: int = result_info["innings_processed"]
+    raw_totals = result_info["totals_validation"]
+
+    totals_validation = [
+        HistoricalImportTotalsValidation(
+            inning_no=t["inning_no"],
+            team=t.get("team"),
+            derived_runs=t["derived_runs"],
+            expected_runs=t.get("expected_runs"),
+            derived_wickets=t["derived_wickets"],
+            expected_wickets=t.get("expected_wickets"),
+            legal_balls=t["legal_balls"],
+            status=t["status"],
+            notes=t.get("notes", ""),
+        )
+        for t in raw_totals
+    ]
+
+    rollback_info = (
+        f"To rollback all historical data for batch '{batch_id}': POST "
+        f"'/api/historical-import/json/batches/{batch_id}/rollback' with "
+        "{'confirm': true}. "
+        f"This deletes game '{game_id}' (including all imported deliveries) "
+        "and resets batch finalize markers."
+    )
+
+    return HistoricalImportApplyDeliveriesResponse(
+        batch_id=batch_id,
+        applied_game_id=game_id,
+        deliveries_imported=deliveries_imported,
+        innings_processed=innings_processed,
+        status="deliveries_applied",
+        totals_validation=totals_validation,
+        warnings=warnings,
+        rollback_info=rollback_info,
     )

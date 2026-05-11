@@ -621,11 +621,18 @@ async def _build_case_study_from_db(
     if match_format not in ("T20", "ODI", "TEST"):
         match_format = "CUSTOM"
 
-    # 3) Build innings summaries from first_inning_summary and current state
+    # Detect whether this is a historical import (Phase 5D+)
+    game_phases_blob = game.phases if isinstance(game.phases, dict) else {}
+    hist_meta = game_phases_blob.get("historical_import")
+    is_historical = isinstance(hist_meta, dict) and bool(hist_meta.get("is_historical"))
+    hist_innings = game_phases_blob.get("historical_innings_summary") or []
+    deliveries_imported = isinstance(hist_meta, dict) and bool(hist_meta.get("deliveries_imported"))
+
+    # 3) Build innings summaries
     innings_summaries: list[CaseStudyInningsSummary] = []
 
-    # First innings (from first_inning_summary if completed)
     if game.first_inning_summary:
+        # Live scoring data (Phase 5F imported or real live game)
         fis = game.first_inning_summary
         innings_summaries.append(
             CaseStudyInningsSummary(
@@ -636,24 +643,68 @@ async def _build_case_study_from_db(
                 run_rate=round(fis.get("runs", 0) / max(fis.get("overs", 1), 0.1), 2),
             )
         )
-
-    # Second innings (or current if game in progress)
-    if game.current_inning >= 2 or not innings_summaries:
-        overs_completed = game.overs_completed + (game.balls_this_over / 6)
-        innings_summaries.append(
-            CaseStudyInningsSummary(
-                team=game.batting_team_name or team_b_name,
-                runs=game.total_runs,
-                wickets=game.total_wickets,
-                overs=round(overs_completed, 1),
-                run_rate=round(game.total_runs / max(overs_completed, 0.1), 2),
+    elif is_historical and hist_innings:
+        # Historical import without deliveries yet (Phase 5D only):
+        # use innings summaries stored in phases["historical_innings_summary"]
+        for inn in hist_innings:
+            if not isinstance(inn, dict):
+                continue
+            inn_runs = int(inn.get("runs") or 0)
+            inn_overs = float(inn.get("overs") or 0.0)
+            innings_summaries.append(
+                CaseStudyInningsSummary(
+                    team=inn.get("team") or team_a_name,
+                    runs=inn_runs,
+                    wickets=int(inn.get("wickets") or 0),
+                    overs=inn_overs,
+                    run_rate=round(inn_runs / max(inn_overs, 0.1), 2),
+                )
             )
-        )
+
+    # Second innings (live or historical post-Phase-5F)
+    if not is_historical:
+        if game.current_inning >= 2 or not innings_summaries:
+            overs_completed = game.overs_completed + (game.balls_this_over / 6)
+            innings_summaries.append(
+                CaseStudyInningsSummary(
+                    team=game.batting_team_name or team_b_name,
+                    runs=game.total_runs,
+                    wickets=game.total_wickets,
+                    overs=round(overs_completed, 1),
+                    run_rate=round(game.total_runs / max(overs_completed, 0.1), 2),
+                )
+            )
+    else:
+        # For historical games, second innings is populated by Phase 5F delivery import
+        # or by the historical_innings_summary (already added above in the hist_innings loop)
+        if deliveries_imported and game.first_inning_summary:
+            # Phase 5F imported: second innings stored in game.total_runs etc.
+            overs_completed = game.overs_completed + (game.balls_this_over / 6)
+            if len(innings_summaries) < 2:
+                innings_summaries.append(
+                    CaseStudyInningsSummary(
+                        team=game.batting_team_name or team_b_name,
+                        runs=game.total_runs,
+                        wickets=game.total_wickets,
+                        overs=round(overs_completed, 1),
+                        run_rate=round(game.total_runs / max(overs_completed, 0.1), 2),
+                    )
+                )
 
     # 4) Build CaseStudyMatch
     match_date = date.today()  # Game model doesn't have created_at exposed as date
     if hasattr(game, "created_at") and game.created_at:
         match_date = game.created_at.date()
+
+    # For historical imports, use the match date from metadata if available
+    if is_historical and isinstance(hist_meta, dict):
+        raw_date = hist_meta.get("match_date")
+        if raw_date:
+            try:
+                from datetime import date as _date
+                match_date = _date.fromisoformat(str(raw_date))
+            except (ValueError, TypeError):
+                pass
 
     case_study_match = CaseStudyMatch(
         id=game.id,
@@ -662,7 +713,7 @@ async def _build_case_study_from_db(
         home_team=team_a_name,
         away_team=team_b_name,
         teams_label=f"{team_a_name} vs {team_b_name}",
-        venue=None,  # Not stored in Game model
+        venue=hist_meta.get("venue") if isinstance(hist_meta, dict) else None,
         result=game.result or "In progress",
         overs_per_side=overs_per_side,
         innings=innings_summaries,
@@ -679,38 +730,59 @@ async def _build_case_study_from_db(
         fis = game.first_inning_summary
         total_runs_inn1 = fis.get("runs", 0)
         total_overs_inn1 = float(fis.get("overs", 0)) or sum(1 for _ in per_over_runs)
+    elif is_historical and hist_innings:
+        # Use stored historical innings summary for total calculation
+        first_hist = hist_innings[0] if hist_innings else {}
+        total_runs_inn1 = int(first_hist.get("runs") or 0)
+        total_overs_inn1 = float(first_hist.get("overs") or 0) or max(float(len(per_over_runs)), 1.0)
     else:
         total_runs_inn1 = sum(per_over_runs.values())
         total_overs_inn1 = float(len(per_over_runs)) if per_over_runs else 1.0
 
-    # 6) Compute phase breakdown
+    # 6) Compute phase breakdown (empty if no delivery data)
     phase_ranges = _get_phase_ranges(match_format, overs_per_side)
-    phases = _compute_phase_stats(
-        phase_ranges,
-        per_over_runs,
-        per_over_wickets,
-        total_runs_inn1,
-        total_overs_inn1,
-    )
+    if per_over_runs or deliveries:
+        phases = _compute_phase_stats(
+            phase_ranges,
+            per_over_runs,
+            per_over_wickets,
+            total_runs_inn1,
+            total_overs_inn1,
+        )
+    else:
+        phases = []
 
     # 7) Determine key phase and momentum
-    key_phase_obj, reason_code = _determine_key_phase(phases)
-
-    key_phase = CaseStudyKeyPhase(
-        title=f"{key_phase_obj.label} Analysis",
-        detail=(
-            f"Scored {key_phase_obj.runs} runs with {key_phase_obj.wickets} wickets lost. "
-            f"Run rate: {key_phase_obj.run_rate}, {key_phase_obj.impact_label}."
-        ),
-        overs_range={
-            "start_over": key_phase_obj.start_over,
-            "end_over": key_phase_obj.end_over,
-        },
-        reason_codes=[reason_code],
-    )
-
-    # Total swing for momentum
-    total_swing = sum(p.net_swing_vs_par for p in phases if p.impact == "positive")
+    if phases:
+        key_phase_obj, reason_code = _determine_key_phase(phases)
+        key_phase = CaseStudyKeyPhase(
+            title=f"{key_phase_obj.label} Analysis",
+            detail=(
+                f"Scored {key_phase_obj.runs} runs with {key_phase_obj.wickets} wickets lost. "
+                f"Run rate: {key_phase_obj.run_rate}, {key_phase_obj.impact_label}."
+            ),
+            overs_range={
+                "start_over": key_phase_obj.start_over,
+                "end_over": key_phase_obj.end_over,
+            },
+            reason_codes=[reason_code],
+        )
+        total_swing = sum(p.net_swing_vs_par for p in phases if p.impact == "positive")
+    else:
+        # No delivery data: provide a minimal honest key_phase
+        key_phase_obj = None
+        key_phase = CaseStudyKeyPhase(
+            title="Phase data not yet available",
+            detail=(
+                "Delivery-level data has not been imported yet for this match. "
+                "Use the Phase 5F apply-deliveries endpoint to import ball-by-ball data."
+                if is_historical
+                else "No delivery data available for this match."
+            ),
+            overs_range=None,
+            reason_codes=[],
+        )
+        total_swing = 0
 
     # Determine winner from result
     winning_team = None
@@ -720,7 +792,20 @@ async def _build_case_study_from_db(
         elif team_b_name.lower() in game.result.lower():
             winning_team = team_b_name
 
-    momentum_summary = _build_momentum_summary(key_phase_obj, winning_team, total_swing)
+    if key_phase_obj is not None:
+        momentum_summary = _build_momentum_summary(key_phase_obj, winning_team, total_swing)
+    else:
+        # Minimal honest momentum summary when no phase data
+        momentum_summary = CaseStudyMomentumSummary(
+            title="Momentum data not yet available",
+            subtitle=(
+                "Import delivery-level data via Phase 5F to enable momentum analysis."
+                if is_historical
+                else "No delivery data available."
+            ),
+            winning_side=winning_team,
+            swing_metric=None,
+        )
 
     # 8) Compute key players
     key_players = _compute_player_stats(
