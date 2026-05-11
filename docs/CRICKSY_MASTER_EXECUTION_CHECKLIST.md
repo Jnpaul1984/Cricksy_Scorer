@@ -1238,7 +1238,7 @@ Structured historical match import works safely and does not corrupt live scorin
 
 - Aggregation runs are blocked for unvalidated, unregistered, or provenance-broken matches.
 - Player/team/venue/competition/phase outputs must include audit metadata for source lineage and compute version.
-- Segment stats (powerplay/middle/death) must follow explicit legal-ball/over definitions where wides/no-balls are non-legal deliveries; use `backend/domain/constants.py::norm_extra` for extra-type normalization and `backend/services/scoring_service.py` for legal-delivery counting logic.
+- Segment stats (powerplay/middle/death) must correctly distinguish legal deliveries from extras (including wides/no-balls) under governed cricket rules.
 - Recompute operations must support idempotent rerun behavior and mismatch detection/reporting.
 
 ### Tests
@@ -1373,7 +1373,7 @@ Structured historical match import works safely and does not corrupt live scorin
 
 - Live scoring truth and deterministic gameplay runtime behavior.
 - DLS/live bus and unrelated analyst/runtime systems.
-- Direct model-training/retraining execution pipelines (out of scope for this phase unless separately approved).
+- Direct model-training/retraining execution pipelines (out of scope for this phase; deferred to a later governed model-training phase after separate approval).
 - Unrelated workflows, dependencies, and non-dataset product areas.
 
 ### Data Governance Rules
@@ -1413,7 +1413,7 @@ Structured historical match import works safely and does not corrupt live scorin
 
 - Do not export datasets from unvalidated/unregistered/unaggregated inputs.
 - Do not fabricate labels/features or backfill missing values as synthetic truth without governance approval.
-- Do not run direct model retraining in this phase unless separately approved in a later governed phase.
+- Do not run direct model retraining in this phase; it is deferred to a later governed model-training phase after separate approval.
 - Do not alter live scoring truth or unrelated runtime systems.
 
 ### Completion Criteria
