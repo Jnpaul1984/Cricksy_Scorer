@@ -183,3 +183,56 @@ class HistoricalImportApplyDeliveriesResponse(BaseModel):
             "including any imported deliveries."
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 5I - Training dataset readiness schemas
+# ---------------------------------------------------------------------------
+
+
+class HistoricalImportTrainingStatus(BaseModel):
+    """Training dataset readiness status for a historical import batch.
+
+    Computed from existing batch metadata — no DB migration required.
+    Raw source JSON is NOT retained in Phase 5I (deferred to a later phase).
+    Training eligibility is determined by:
+      - batch is finalized (apply was called)
+      - a game record was created (applied_game_id is set)
+      - batch status is 'valid' (no structural errors)
+      - error_count is 0
+
+    If all conditions are met, training_eligible=True and the batch metadata
+    can be used to register the import in a future ML dataset registry.
+    """
+
+    batch_id: str
+    source_format: str
+    source_hash_sha256: str
+    source_filename: str | None = None
+    semantic_key: str | None = None
+    applied_game_id: str | None = None
+    imported_at: dt.datetime
+    innings_count: int
+    delivery_count: int
+    training_eligible: bool
+    exclusion_reason: str | None = Field(
+        default=None,
+        description=(
+            "Human-readable reason why the batch is not training-eligible. "
+            "None when training_eligible=True."
+        ),
+    )
+    raw_json_retained: bool = Field(
+        default=False,
+        description=(
+            "Whether the raw source JSON bytes are stored server-side. "
+            "False in Phase 5I — raw retention is deferred to a later phase."
+        ),
+    )
+    training_registry_phase: str = Field(
+        default="deferred",
+        description=(
+            "Phase that will implement the full ML dataset registry/export. "
+            "'deferred' in Phase 5I."
+        ),
+    )

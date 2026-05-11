@@ -4,6 +4,7 @@ Provides:
 - ``create_import_batch`` - persist a dry-run preview batch record.
 - ``find_duplicate_by_hash`` - detect exact duplicate by SHA-256.
 - ``find_duplicate_by_semantic_key`` - detect semantic duplicate by match key.
+- ``get_import_batch`` - retrieve a single batch by ID.
 - ``list_import_batches`` - list batches scoped to a user/org.
 
 No Game, Delivery, Player, or Team rows are created by any function here.
@@ -82,6 +83,17 @@ async def find_duplicate_by_semantic_key(
     return result.scalars().first()
 
 
+async def get_import_batch(
+    db: AsyncSession,
+    batch_id: str,
+) -> HistoricalImportBatch | None:
+    """Retrieve a single import batch by its ID."""
+    result = await db.execute(
+        select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_id)
+    )
+    return result.scalars().first()
+
+
 async def create_import_batch(
     db: AsyncSession,
     *,
@@ -155,3 +167,4 @@ async def list_import_batches(
 
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
