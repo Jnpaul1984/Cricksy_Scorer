@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app
@@ -10,6 +11,8 @@ from backend.main import app
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
 CRICSHEET_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_t20.json"
+CRICSHEET_635215_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_635215.json"
+CRICSHEET_635216_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_635216.json"
 
 
 def _load_fixture() -> dict[str, object]:
@@ -18,6 +21,55 @@ def _load_fixture() -> dict[str, object]:
 
 def _load_cricsheet_fixture() -> dict[str, object]:
     return json.loads(CRICSHEET_FIXTURE_PATH.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    ("fixture_path", "expected_teams", "expected_result", "expected_venue", "expected_match_number"),
+    [
+        (
+            CRICSHEET_635215_FIXTURE_PATH,
+            ["Barbados Tridents", "St Lucia Zouks"],
+            "Barbados Tridents won by 17 runs",
+            "Kensington Oval, Bridgetown",
+            1,
+        ),
+        (
+            CRICSHEET_635216_FIXTURE_PATH,
+            ["Guyana Amazon Warriors", "Trinidad & Tobago Red Steel"],
+            "Guyana Amazon Warriors won by 19 runs",
+            "Providence Stadium",
+            2,
+        ),
+    ],
+)
+def test_dry_run_real_structure_metadata_and_innings_team_mapping(
+    fixture_path: Path,
+    expected_teams: list[str],
+    expected_result: str,
+    expected_venue: str,
+    expected_match_number: int,
+) -> None:
+    payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+
+    with TestClient(app) as client:
+        response = client.post("/api/historical-import/json/dry-run", json=payload)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "valid"
+    assert data["detected_format"] == "cricsheet_json"
+    assert data["teams_preview"] == expected_teams
+    assert [inning["team"] for inning in data["innings_preview"]] == expected_teams
+    assert data["metadata_preview"]["result"] == expected_result
+    assert data["metadata_preview"]["venue"] == expected_venue
+    assert data["metadata_preview"]["event_name"] == "Caribbean Premier League"
+    assert data["metadata_preview"]["season"] == "2013"
+    assert data["metadata_preview"]["match_number"] == expected_match_number
+    assert len(data["metadata_preview"]["source_dates"]) == 1
+    assert data["innings_preview"][0]["legal_balls"] == 6
+    assert data["innings_preview"][0]["overs"] == 1.0
+    assert data["innings_preview"][1]["legal_balls"] == 6
+    assert data["innings_preview"][1]["overs"] == 1.0
 
 
 def test_dry_run_json_payload_valid_preview() -> None:
@@ -44,7 +96,7 @@ def test_dry_run_sanitized_cricsheet_fixture_valid_preview() -> None:
     data = response.json()
     assert data["status"] == "valid"
     assert data["detected_format"] == "cricsheet_json"
-    assert data["teams_preview"] == ["Sanitized Royals", "Sanitized Strikers"]
+    assert data["teams_preview"] == ["Sanitized Strikers", "Sanitized Royals"]
     assert data["innings_count"] == 2
     assert data["delivery_count"] == 24
 

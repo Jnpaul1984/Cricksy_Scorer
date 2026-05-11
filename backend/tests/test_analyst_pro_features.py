@@ -22,6 +22,8 @@ from backend.sql_app.database import get_db
 UTC = getattr(dt, "UTC", dt.UTC)
 HISTORICAL_FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
 CRICSHEET_HISTORICAL_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_t20.json"
+CRICSHEET_635215_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_635215.json"
+CRICSHEET_635216_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_635216.json"
 
 
 def _auth_headers(token: str) -> dict[str, str]:
@@ -387,11 +389,45 @@ async def test_analytics_matches_list_is_completed_and_org_scoped(client: TestCl
 
 
 @pytest.mark.parametrize(
-    "fixture_path",
-    [HISTORICAL_FIXTURE_PATH, CRICSHEET_HISTORICAL_FIXTURE_PATH],
+    ("fixture_path", "expected_teams", "expected_result", "expected_venue", "expected_match_number"),
+    [
+        (
+            HISTORICAL_FIXTURE_PATH,
+            ["Team Alpha", "Team Beta"],
+            "Team Alpha won by 15 runs.",
+            "Generic Cricket Ground",
+            None,
+        ),
+        (
+            CRICSHEET_HISTORICAL_FIXTURE_PATH,
+            ["Sanitized Strikers", "Sanitized Royals"],
+            "Sanitized Strikers won by 6 runs",
+            "Sanitized Oval",
+            None,
+        ),
+        (
+            CRICSHEET_635215_FIXTURE_PATH,
+            ["Barbados Tridents", "St Lucia Zouks"],
+            "Barbados Tridents won by 17 runs",
+            "Kensington Oval, Bridgetown",
+            1,
+        ),
+        (
+            CRICSHEET_635216_FIXTURE_PATH,
+            ["Guyana Amazon Warriors", "Trinidad & Tobago Red Steel"],
+            "Guyana Amazon Warriors won by 19 runs",
+            "Providence Stadium",
+            2,
+        ),
+    ],
 )
 async def test_historical_imported_match_visible_in_analyst_workspace(
-    client: TestClient, fixture_path: Path
+    client: TestClient,
+    fixture_path: Path,
+    expected_teams: list[str],
+    expected_result: str,
+    expected_venue: str,
+    expected_match_number: int | None,
 ) -> None:
     analyst = register_user(client, "analyst-historical@example.com")
     await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
@@ -432,10 +468,12 @@ async def test_historical_imported_match_visible_in_analyst_workspace(
     assert imported is not None, "Imported historical match must be listed in Analyst Workspace"
     assert imported["is_historical"] is True
     assert imported["source"] == "historical_import"
-    expected_venue = fixture_payload.get("venue")
-    if expected_venue is None:
-        expected_venue = fixture_payload.get("info", {}).get("venue")
     assert imported["venue"] == expected_venue
+    assert imported["result"] == expected_result
+    if expected_match_number is not None:
+        assert imported["match_number"] == expected_match_number
+        assert imported["event_name"] == "Caribbean Premier League"
+        assert imported["season"] == "2013"
     # date may fall back to epoch when fixture has no explicit date field
     assert isinstance(imported["date"], str) and imported["date"] != ""
 
@@ -447,8 +485,32 @@ async def test_historical_imported_match_visible_in_analyst_workspace(
     detail = case_study_resp.json()
     assert detail["match"]["id"] == game_id
     assert len(detail["match"]["innings"]) >= 2
+    assert [inning["team"] for inning in detail["match"]["innings"][:2]] == expected_teams
+    if expected_match_number is not None:
+        assert [inning["overs"] for inning in detail["match"]["innings"][:2]] == [1.0, 1.0]
+    assert detail["match"]["result"] == expected_result
+    assert detail["match"]["venue"] == expected_venue
+    if expected_match_number is not None:
+        assert detail["match"]["event_name"] == "Caribbean Premier League"
+        assert detail["match"]["season"] == "2013"
+        assert detail["match"]["match_number"] == expected_match_number
     assert len(detail["phases"]) > 0
     assert len(detail["key_players"]) > 0
+
+    analyst_detail_resp = client.get(
+        f"/api/analyst/matches/{game_id}",
+        headers=_auth_headers(token),
+    )
+    assert analyst_detail_resp.status_code == 200, analyst_detail_resp.text
+    analyst_detail = analyst_detail_resp.json()
+    assert [inning["team"] for inning in analyst_detail["innings"][:2]] == expected_teams
+    assert analyst_detail["result"] == expected_result
+    assert analyst_detail["venue"] == expected_venue
+    if expected_match_number is not None:
+        assert [inning["overs"] for inning in analyst_detail["innings"][:2]] == [1.0, 1.0]
+        assert analyst_detail["event_name"] == "Caribbean Premier League"
+        assert analyst_detail["season"] == "2013"
+        assert analyst_detail["match_number"] == expected_match_number
 
 
 async def test_analyst_export_data_real_rows_or_empty_never_fake(client: TestClient) -> None:

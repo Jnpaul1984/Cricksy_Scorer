@@ -1,0 +1,149 @@
+{
+  "meta": {
+    "data_version": "0.92",
+    "created": "2026-05-11",
+    "revision": 1
+  },
+  "info": {
+    "match_type": "T20",
+    "venue": "Providence Stadium",
+    "dates": [
+      "2013-08-04"
+    ],
+    "season": "2013",
+    "event": {
+      "name": "Caribbean Premier League",
+      "match_number": 2
+    },
+    "teams": [
+      "Guyana Amazon Warriors",
+      "Trinidad & Tobago Red Steel"
+    ],
+    "outcome": {
+      "winner": "Guyana Amazon Warriors",
+      "by": {
+        "runs": 19
+      }
+    }
+  },
+  "innings": [
+    {
+      "Guyana Amazon Warriors": {
+        "runs": 20,
+        "wickets": 0,
+        "overs": [
+          {
+            "over": 0,
+            "deliveries": [
+              {
+                "batter": "GAW Batter 1",
+                "non_striker": "GAW Batter 2",
+                "bowler": "TTRS Bowler 1",
+                "runs": { "batter": 1, "extras": 0, "total": 1 }
+              },
+              {
+                "batter": "GAW Batter 2",
+                "non_striker": "GAW Batter 1",
+                "bowler": "TTRS Bowler 1",
+                "runs": { "batter": 1, "extras": 1, "total": 2 },
+                "extras": { "noballs": 1 }
+              },
+              {
+                "batter": "GAW Batter 2",
+                "non_striker": "GAW Batter 1",
+                "bowler": "TTRS Bowler 1",
+                "runs": { "batter": 6, "extras": 0, "total": 6 }
+              },
+              {
+                "batter": "GAW Batter 2",
+                "non_striker": "GAW Batter 1",
+                "bowler": "TTRS Bowler 1",
+                "runs": { "batter": 4, "extras": 0, "total": 4 }
+              },
+              {
+                "batter": "GAW Batter 2",
+                "non_striker": "GAW Batter 1",
+                "bowler": "TTRS Bowler 1",
+                "runs": { "batter": 1, "extras": 0, "total": 1 }
+              },
+              {
+                "batter": "GAW Batter 1",
+                "non_striker": "GAW Batter 2",
+                "bowler": "TTRS Bowler 1",
+                "runs": { "batter": 2, "extras": 0, "total": 2 }
+              },
+              {
+                "batter": "GAW Batter 1",
+                "non_striker": "GAW Batter 2",
+                "bowler": "TTRS Bowler 1",
+                "runs": { "batter": 4, "extras": 0, "total": 4 }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "Trinidad & Tobago Red Steel": {
+        "runs": 1,
+        "wickets": 2,
+        "overs": [
+          {
+            "over": 0,
+            "deliveries": [
+              {
+                "batter": "TTRS Batter 1",
+                "non_striker": "TTRS Batter 2",
+                "bowler": "GAW Bowler 1",
+                "runs": { "batter": 0, "extras": 1, "total": 1 },
+                "extras": { "wides": 1 }
+              },
+              {
+                "batter": "TTRS Batter 1",
+                "non_striker": "TTRS Batter 2",
+                "bowler": "GAW Bowler 1",
+                "runs": { "batter": 0, "extras": 0, "total": 0 }
+              },
+              {
+                "batter": "TTRS Batter 1",
+                "non_striker": "TTRS Batter 2",
+                "bowler": "GAW Bowler 1",
+                "runs": { "batter": 0, "extras": 0, "total": 0 },
+                "wickets": [
+                  { "player_out": "TTRS Batter 1", "kind": "bowled" }
+                ]
+              },
+              {
+                "batter": "TTRS Batter 3",
+                "non_striker": "TTRS Batter 2",
+                "bowler": "GAW Bowler 1",
+                "runs": { "batter": 0, "extras": 0, "total": 0 }
+              },
+              {
+                "batter": "TTRS Batter 3",
+                "non_striker": "TTRS Batter 2",
+                "bowler": "GAW Bowler 1",
+                "runs": { "batter": 0, "extras": 0, "total": 0 }
+              },
+              {
+                "batter": "TTRS Batter 3",
+                "non_striker": "TTRS Batter 2",
+                "bowler": "GAW Bowler 1",
+                "runs": { "batter": 0, "extras": 0, "total": 0 },
+                "wickets": [
+                  { "player_out": "TTRS Batter 3", "kind": "caught" }
+                ]
+              },
+              {
+                "batter": "TTRS Batter 4",
+                "non_striker": "TTRS Batter 2",
+                "bowler": "GAW Bowler 1",
+                "runs": { "batter": 0, "extras": 0, "total": 0 }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

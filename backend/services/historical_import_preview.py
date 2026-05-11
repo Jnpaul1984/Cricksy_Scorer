@@ -75,6 +75,15 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
+def _optional_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _is_legal_delivery(delivery: dict[str, Any]) -> bool:
     extra_type = norm_extra(_as_str(delivery.get("extra_type")))
     if extra_type in {"wd", "nb"}:
@@ -88,47 +97,51 @@ def _is_legal_delivery(delivery: dict[str, Any]) -> bool:
 
 
 def _extract_team_names(payload: dict[str, Any]) -> list[str]:
-    names: set[str] = set()
+    names: list[str] = []
+    seen: set[str] = set()
+
+    def _add_name(value: Any) -> None:
+        maybe = _as_str(value)
+        if maybe is None:
+            return
+        key = maybe.casefold()
+        if key in seen:
+            return
+        seen.add(key)
+        names.append(maybe)
+
     info_payload = payload.get("info")
     if isinstance(info_payload, dict):
         info_teams = info_payload.get("teams")
         if isinstance(info_teams, list):
             for team in info_teams:
                 if isinstance(team, str) and team.strip():
-                    names.add(team.strip())
+                    _add_name(team)
                 elif isinstance(team, dict):
-                    maybe = _as_str(team.get("name"))
-                    if maybe:
-                        names.add(maybe)
+                    _add_name(team.get("name"))
 
     teams = payload.get("teams")
     if isinstance(teams, list):
         for team in teams:
             if isinstance(team, str) and team.strip():
-                names.add(team.strip())
+                _add_name(team)
             elif isinstance(team, dict):
-                maybe = _as_str(team.get("name"))
-                if maybe:
-                    names.add(maybe)
+                _add_name(team.get("name"))
     elif isinstance(teams, dict):
         for value in teams.values():
             if isinstance(value, dict):
-                maybe = _as_str(value.get("name"))
-                if maybe:
-                    names.add(maybe)
+                _add_name(value.get("name"))
             elif isinstance(value, str) and value.strip():
-                names.add(value.strip())
+                _add_name(value)
 
     for key in ("team_a", "team_b", "teamA", "teamB"):
         value = payload.get(key)
         if isinstance(value, dict):
-            maybe = _as_str(value.get("name"))
-            if maybe:
-                names.add(maybe)
+            _add_name(value.get("name"))
         elif isinstance(value, str) and value.strip():
-            names.add(value.strip())
+            _add_name(value)
 
-    return sorted(names)
+    return names
 
 
 def _extract_players_from_teams(payload: dict[str, Any]) -> set[str]:
@@ -175,6 +188,39 @@ def _extract_deliveries_from_overs(overs: Any) -> list[dict[str, Any]]:
         if isinstance(over_deliveries, list):
             deliveries.extend([d for d in over_deliveries if isinstance(d, dict)])
     return deliveries
+
+
+def _derive_result_summary(parsed: dict[str, Any], info_payload: dict[str, Any]) -> str | None:
+    result_value = parsed.get("result")
+    if isinstance(result_value, dict):
+        summary = _as_str(result_value.get("summary"))
+        if summary:
+            return summary
+    else:
+        summary = _as_str(result_value)
+        if summary:
+            return summary
+
+    outcome = info_payload.get("outcome")
+    if not isinstance(outcome, dict):
+        return None
+
+    winner = _as_str(outcome.get("winner"))
+    margin = outcome.get("by")
+    if winner:
+        if isinstance(margin, dict):
+            innings = _optional_int(margin.get("innings"))
+            runs = _optional_int(margin.get("runs"))
+            wickets = _optional_int(margin.get("wickets"))
+            if innings and runs:
+                return f"{winner} won by {innings} innings and {runs} runs"
+            if runs:
+                return f"{winner} won by {runs} runs"
+            if wickets:
+                return f"{winner} won by {wickets} wickets"
+        return f"{winner} won"
+
+    return _as_str(outcome.get("result"))
 
 
 def _extract_innings_nodes(innings_value: Any) -> list[dict[str, Any]]:
@@ -290,6 +336,7 @@ def _derive_innings_preview(
                 inning_no=idx,
                 team=innings_team,
                 deliveries=balls_count,
+                legal_balls=legal_balls_count,
                 runs=derived_runs,
                 wickets=derived_wickets,
                 overs=overs_float,
@@ -453,18 +500,24 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
 
     info_value = parsed.get("info")
     info_payload: dict[str, Any] = info_value if isinstance(info_value, dict) else {}
-    result_value = parsed.get("result")
-    result_summary: str | None
-    if isinstance(result_value, dict):
-        result_summary = _as_str(result_value.get("summary"))
-    else:
-        result_summary = _as_str(result_value)
+    event_payload = info_payload.get("event") if isinstance(info_payload.get("event"), dict) else {}
+    source_dates = [
+        date_value.strip()
+        for date_value in info_payload.get("dates", [])
+        if isinstance(date_value, str) and date_value.strip()
+    ]
+    result_summary = _derive_result_summary(parsed, info_payload)
 
     metadata_preview = HistoricalImportMetadataPreview(
         match_type=_as_str(parsed.get("matchType")) or _as_str(info_payload.get("match_type")),
         venue=_as_str(parsed.get("venue")) or _as_str(info_payload.get("venue")),
         date=_as_str(parsed.get("date")) or _first_str(info_payload.get("dates")),
         result=result_summary,
+        event_name=_as_str(event_payload.get("name")),
+        season=_as_str(info_payload.get("season")) or _as_str(parsed.get("season")),
+        match_number=_optional_int(event_payload.get("match_number"))
+        or _optional_int(parsed.get("match_number")),
+        source_dates=source_dates,
     )
 
     player_names = sorted(players_from_teams.union(players_from_innings))
@@ -480,6 +533,9 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
                 metadata_preview.venue,
                 metadata_preview.date,
                 metadata_preview.result,
+                metadata_preview.event_name,
+                metadata_preview.season,
+                metadata_preview.match_number,
             ]
         ),
     )

@@ -29,6 +29,7 @@ from backend.api.schemas.analyst_matches import (
 )
 from backend.sql_app.match_ai import MatchAiSummaryResponse
 from backend.services.analyst_access import scoped_games_stmt
+from backend.services.historical_import_delivery_service import cricket_overs_from_legal_balls
 from backend.services.match_ai_service import MatchAiService
 from backend.services.match_context_service import (
     generate_match_context_package,
@@ -59,10 +60,73 @@ def _phase_from_over(over_number: Any) -> str:
     return "death"
 
 
+def _historical_import_meta(game: Game) -> dict[str, Any] | None:
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    hist = phases.get("historical_import")
+    if isinstance(hist, dict) and bool(hist.get("is_historical")):
+        return hist
+    return None
+
+
+def _display_overs_from_game(game: Game) -> float:
+    return cricket_overs_from_legal_balls((int(game.overs_completed) * 6) + int(game.balls_this_over))
+
+
+def _resolved_result(game: Game) -> str | None:
+    if isinstance(game.result, str) and game.result.strip():
+        return game.result.strip()
+    status_value = game.status.value if hasattr(game.status, "value") else str(game.status)
+    if status_value == "completed":
+        return "Completed"
+    return None
+
+
 def _match_innings_summaries(game: Game) -> list[AnalystMatchInningsSummary]:
     summaries: list[AnalystMatchInningsSummary] = []
     team_a_name = _team_name(game.team_a, "Team A")
     team_b_name = _team_name(game.team_b, "Team B")
+    hist_meta = _historical_import_meta(game)
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    hist_innings = phases.get("historical_innings_summary") or []
+    deliveries_imported = isinstance(hist_meta, dict) and bool(hist_meta.get("deliveries_imported"))
+
+    if hist_meta and hist_innings:
+        for idx, inning in enumerate(hist_innings, start=1):
+            if not isinstance(inning, dict):
+                continue
+            summaries.append(
+                AnalystMatchInningsSummary(
+                    inning_no=int(inning.get("inning_no") or idx),
+                    team=inning.get("team") or (team_a_name if idx == 1 else team_b_name),
+                    runs=int(inning.get("runs") or 0),
+                    wickets=int(inning.get("wickets") or 0),
+                    overs=float(inning.get("overs") or 0.0),
+                )
+            )
+        if deliveries_imported and game.first_inning_summary:
+            fis = game.first_inning_summary if isinstance(game.first_inning_summary, dict) else {}
+            if summaries:
+                summaries[0] = AnalystMatchInningsSummary(
+                    inning_no=1,
+                    team=fis.get("batting_team") or summaries[0].team,
+                    runs=int(fis.get("runs") or summaries[0].runs or 0),
+                    wickets=int(fis.get("wickets") or summaries[0].wickets or 0),
+                    overs=float(fis.get("overs") or summaries[0].overs or 0.0),
+                )
+            second_summary = AnalystMatchInningsSummary(
+                inning_no=2,
+                team=game.batting_team_name
+                or (hist_innings[1].get("team") if len(hist_innings) > 1 and isinstance(hist_innings[1], dict) else team_b_name),
+                runs=game.total_runs,
+                wickets=game.total_wickets,
+                overs=_display_overs_from_game(game),
+            )
+            if len(summaries) >= 2:
+                summaries[1] = second_summary
+            else:
+                summaries.append(second_summary)
+        return summaries
+
     if isinstance(game.first_inning_summary, dict):
         summaries.append(
             AnalystMatchInningsSummary(
@@ -80,7 +144,7 @@ def _match_innings_summaries(game: Game) -> list[AnalystMatchInningsSummary]:
                 team=game.batting_team_name or (team_b_name if summaries else team_a_name),
                 runs=game.total_runs,
                 wickets=game.total_wickets,
-                overs=round(float(game.overs_completed) + (float(game.balls_this_over) / 6.0), 1),
+                overs=_display_overs_from_game(game),
             )
         )
     return summaries
@@ -299,14 +363,19 @@ async def get_analyst_match_detail(
         raise HTTPException(status_code=404, detail="Match not found")
     team_a_name = _team_name(game.team_a, "Team A")
     team_b_name = _team_name(game.team_b, "Team B")
+    hist_meta = _historical_import_meta(game)
     status_value = game.status.value if hasattr(game.status, "value") else str(game.status)
     return AnalystMatchDetailResponse(
         match_id=game.id,
         status=status_value,
         format=(game.match_type or "custom").upper(),
         teams=f"{team_a_name} vs {team_b_name}",
-        result=game.result,
-        venue=None,
+        result=_resolved_result(game),
+        venue=hist_meta.get("venue") if hist_meta else None,
+        event_name=hist_meta.get("event_name") if hist_meta else None,
+        season=hist_meta.get("season") if hist_meta else None,
+        match_number=hist_meta.get("match_number") if hist_meta else None,
+        source_dates=hist_meta.get("source_dates") if hist_meta else [],
         match_datetime=getattr(game, "created_at", None),
         innings=_match_innings_summaries(game),
         batting_scorecard=game.batting_scorecard if isinstance(game.batting_scorecard, dict) else None,

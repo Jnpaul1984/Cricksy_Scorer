@@ -11,7 +11,7 @@ from datetime import date, datetime
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AnalystMatchListItem(BaseModel):
@@ -26,6 +26,10 @@ class AnalystMatchListItem(BaseModel):
     phase_swing: str  # e.g. "+18 in death", "-12 in powerplay"
     status: str
     venue: str | None = None
+    event_name: str | None = None
+    season: str | None = None
+    match_number: int | None = None
+    source_dates: list[str] = Field(default_factory=list)
     match_datetime: datetime | None = None
     is_historical: bool = False
     source: str = "live"
@@ -53,6 +57,10 @@ class AnalystMatchDetailResponse(BaseModel):
     teams: str
     result: str | None = None
     venue: str | None = None
+    event_name: str | None = None
+    season: str | None = None
+    match_number: int | None = None
+    source_dates: list[str] = Field(default_factory=list)
     match_datetime: datetime | None = None
     innings: list[AnalystMatchInningsSummary]
     batting_scorecard: dict[str, object] | None = None

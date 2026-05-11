@@ -31,7 +31,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.main import app
 from backend.services.historical_import_delivery_service import (
     _hash_payload,
+    cricket_overs_from_legal_balls,
     extract_normalized_innings,
+    is_legal_delivery,
     validate_innings_totals,
     verify_payload_hash,
 )
@@ -39,6 +41,8 @@ from backend.sql_app.models import HistoricalImportBatch
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
 CRICSHEET_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_t20.json"
+CRICSHEET_635215_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_635215.json"
+CRICSHEET_635216_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_635216.json"
 
 
 def _load_fixture() -> dict[str, object]:
@@ -51,6 +55,10 @@ def _fixture_bytes() -> bytes:
 
 def _cricsheet_fixture_bytes() -> bytes:
     return CRICSHEET_FIXTURE_PATH.read_bytes()
+
+
+def _fixture_payload(path: Path) -> dict[str, object]:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _record_batch(client: TestClient) -> str:
@@ -130,6 +138,33 @@ def test_delivery_service_normalize_cricsheet_fixture() -> None:
     assert first_ball["runs_off_bat"] == 1
     assert first_ball["extra_runs"] == 0
     assert wicket_ball["is_wicket"] is True
+
+
+@pytest.mark.parametrize(
+    ("fixture_path", "expected_teams"),
+    [
+        (
+            CRICSHEET_635215_FIXTURE_PATH,
+            ["Barbados Tridents", "St Lucia Zouks"],
+        ),
+        (
+            CRICSHEET_635216_FIXTURE_PATH,
+            ["Guyana Amazon Warriors", "Trinidad & Tobago Red Steel"],
+        ),
+    ],
+)
+def test_delivery_service_uses_actual_innings_teams_and_legal_balls(
+    fixture_path: Path,
+    expected_teams: list[str],
+) -> None:
+    parsed = _fixture_payload(fixture_path)
+    innings = extract_normalized_innings(parsed)
+
+    assert [inn["team"] for inn in innings] == expected_teams
+    assert [len(inn["deliveries"]) for inn in innings] == [7, 7]
+    legal_balls = [sum(1 for delivery in inn["deliveries"] if is_legal_delivery(delivery)) for inn in innings]
+    assert legal_balls == [6, 6]
+    assert [cricket_overs_from_legal_balls(balls) for balls in legal_balls] == [1.0, 1.0]
 
 
 def test_delivery_service_hash_verification() -> None:
@@ -427,6 +462,32 @@ async def _create_batch_with_fixture_hash(db_session: AsyncSession) -> Historica
     )
 
 
+async def _create_batch_from_payload(
+    db_session: AsyncSession,
+    fixture_path: Path,
+) -> HistoricalImportBatch:
+    from backend.services.historical_import_preview import build_dry_run_response
+    from backend.services.historical_import_service import create_import_batch
+
+    payload = fixture_path.read_bytes()
+    status_code, dry_run = build_dry_run_response(payload)
+    assert status_code == 200
+    assert dry_run.status == "valid"
+
+    return await create_import_batch(
+        db_session,
+        source_hash_sha256=dry_run.duplicate_detection.source_hash_sha256,
+        source_format=dry_run.detected_format,
+        status=dry_run.status,
+        error_count=len(dry_run.errors),
+        warning_count=len(dry_run.warnings),
+        innings_count=dry_run.innings_count,
+        delivery_count=dry_run.delivery_count,
+        dry_run_summary=dry_run.model_dump(),
+        semantic_key=dry_run.duplicate_detection.semantic_key,
+    )
+
+
 @pytest.mark.asyncio
 async def test_historical_innings_summary_visible_after_phase5d(db_session: AsyncSession) -> None:
     """After Phase 5D apply, case study must show innings from historical summary.
@@ -508,6 +569,88 @@ async def test_analyst_case_study_after_delivery_import(db_session: AsyncSession
     assert case_study.key_phase.title != "Phase data not yet available", (
         "Key phase must have real data after delivery import"
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    (
+        "fixture_path",
+        "expected_teams",
+        "expected_result",
+        "expected_venue",
+        "expected_match_number",
+    ),
+    [
+        (
+            CRICSHEET_635215_FIXTURE_PATH,
+            ["Barbados Tridents", "St Lucia Zouks"],
+            "Barbados Tridents won by 17 runs",
+            "Kensington Oval, Bridgetown",
+            1,
+        ),
+        (
+            CRICSHEET_635216_FIXTURE_PATH,
+            ["Guyana Amazon Warriors", "Trinidad & Tobago Red Steel"],
+            "Guyana Amazon Warriors won by 19 runs",
+            "Providence Stadium",
+            2,
+        ),
+    ],
+)
+async def test_historical_delivery_import_preserves_real_match_metadata_and_legal_overs(
+    db_session: AsyncSession,
+    fixture_path: Path,
+    expected_teams: list[str],
+    expected_result: str,
+    expected_venue: str,
+    expected_match_number: int,
+) -> None:
+    from backend.services.analytics_case_study import _build_case_study_from_db
+    from backend.services.historical_import_apply_service import (
+        apply_historical_batch,
+        apply_historical_deliveries,
+    )
+
+    batch = await _create_batch_from_payload(db_session, fixture_path)
+    game, _, err = await apply_historical_batch(db_session, batch_id=batch.id, confirm=True)
+    assert err is None
+    assert game is not None
+
+    result_info, _, delivery_err = await apply_historical_deliveries(
+        db_session,
+        batch_id=batch.id,
+        confirm=True,
+        raw_payload=fixture_path.read_bytes(),
+    )
+    assert delivery_err is None
+    assert result_info is not None
+    assert [item["team"] for item in result_info["totals_validation"]] == expected_teams
+    assert [item["legal_balls"] for item in result_info["totals_validation"]] == [6, 6]
+
+    await db_session.refresh(game)
+
+    hist_meta = (game.phases or {}).get("historical_import", {})
+    assert game.team_a["name"] == expected_teams[0]
+    assert game.team_b["name"] == expected_teams[1]
+    assert game.first_inning_summary["batting_team"] == expected_teams[0]
+    assert game.batting_team_name == expected_teams[1]
+    assert game.result == expected_result
+    assert game.overs_completed == 1
+    assert game.balls_this_over == 0
+    assert hist_meta["venue"] == expected_venue
+    assert hist_meta["event_name"] == "Caribbean Premier League"
+    assert hist_meta["season"] == "2013"
+    assert hist_meta["match_number"] == expected_match_number
+    assert len(hist_meta["source_dates"]) == 1
+
+    case_study = await _build_case_study_from_db(db_session, game.id, "test-user")
+    assert [inn.team for inn in case_study.match.innings[:2]] == expected_teams
+    assert [inn.overs for inn in case_study.match.innings[:2]] == [1.0, 1.0]
+    assert case_study.match.result == expected_result
+    assert case_study.match.venue == expected_venue
+    assert case_study.match.event_name == "Caribbean Premier League"
+    assert case_study.match.season == "2013"
+    assert case_study.match.match_number == expected_match_number
 
 
 @pytest.mark.asyncio

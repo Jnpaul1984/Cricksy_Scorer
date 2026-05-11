@@ -50,6 +50,7 @@ from backend.services.historical_import_delivery_service import (
     _derive_bowling_scorecard,
     _derive_first_inning_summary,
     extract_normalized_innings,
+    is_legal_delivery,
     validate_innings_totals,
     verify_payload_hash,
 )
@@ -88,6 +89,7 @@ def _extract_innings_summary(dry_run_summary: dict[str, Any]) -> list[dict[str, 
             "inning_no": inn.get("inning_no"),
             "team": inn.get("team"),
             "deliveries": inn.get("deliveries", 0),
+            "legal_balls": inn.get("legal_balls"),
             "runs": inn.get("runs"),
             "wickets": inn.get("wickets"),
             "overs": inn.get("overs"),
@@ -230,6 +232,10 @@ async def apply_historical_batch(
             "source_format": batch.source_format,
             "match_date": match_date,
             "venue": venue,
+            "event_name": metadata.get("event_name"),
+            "season": metadata.get("season"),
+            "match_number": metadata.get("match_number"),
+            "source_dates": metadata.get("source_dates") or [],
             "is_historical": True,
         },
         "historical_innings_summary": innings_summary,
@@ -574,9 +580,18 @@ async def apply_historical_deliveries(
     second_innings_runs = 0
     second_innings_wickets = 0
     second_innings_legal_balls = 0
+    second_innings_team = game.batting_team_name or (teams_preview[1] if len(teams_preview) > 1 else None)
+    second_innings_bowling_team = (
+        teams_preview[0] if teams_preview else game.bowling_team_name
+    )
     if len(normalized_innings) >= 2:
         inn2 = normalized_innings[1]
         delivs2 = inn2["deliveries"]
+        second_innings_team = inn2.get("team") or second_innings_team
+        second_innings_bowling_team = (
+            normalized_innings[0].get("team")
+            or second_innings_bowling_team
+        )
         second_innings_runs = (
             inn2["runs_explicit"]
             if inn2["runs_explicit"] is not None
@@ -587,7 +602,7 @@ async def apply_historical_deliveries(
             if inn2["wickets_explicit"] is not None
             else sum(1 for d in delivs2 if d.get("is_wicket"))
         )
-        second_innings_legal_balls = len(delivs2)
+        second_innings_legal_balls = sum(1 for d in delivs2 if is_legal_delivery(d))
 
     second_innings_overs_completed = second_innings_legal_balls // 6
     second_innings_balls_this_over = second_innings_legal_balls % 6
@@ -606,6 +621,8 @@ async def apply_historical_deliveries(
     game.team_a = team_a_json
     game.team_b = team_b_json
     game.first_inning_summary = first_inning_summary
+    game.batting_team_name = second_innings_team
+    game.bowling_team_name = second_innings_bowling_team
     game.total_runs = second_innings_runs
     game.total_wickets = second_innings_wickets
     game.overs_completed = second_innings_overs_completed

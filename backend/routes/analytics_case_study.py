@@ -23,6 +23,7 @@ from backend.api.schemas.analyst_matches import (
 from backend.api.schemas.case_study import MatchCaseStudyResponse
 from backend.services.analyst_access import scoped_games_stmt
 from backend.services.ai_match_summary import MatchAiSummary, build_match_ai_summary
+from backend.services.historical_import_delivery_service import cricket_overs_to_legal_balls
 from backend.services.analytics_case_study import build_match_case_study
 
 router = APIRouter(
@@ -46,7 +47,7 @@ def _compute_run_rate(game: Game) -> float:
     first_overs = 0.0
     if isinstance(game.first_inning_summary, dict):
         first_runs = int(game.first_inning_summary.get("runs") or 0)
-        first_overs = float(game.first_inning_summary.get("overs") or 0.0)
+        first_overs = cricket_overs_to_legal_balls(game.first_inning_summary.get("overs")) / 6.0
     second_overs = float(game.overs_completed) + (float(game.balls_this_over) / 6.0)
     total_runs = first_runs + int(game.total_runs)
     total_overs = first_overs + second_overs
@@ -114,6 +115,10 @@ async def list_analyst_matches(
                 phase_swing=_phase_swing(game),
                 status=status_value,
                 venue=hist_meta.get("venue") if hist_meta else None,
+                event_name=hist_meta.get("event_name") if hist_meta else None,
+                season=hist_meta.get("season") if hist_meta else None,
+                match_number=hist_meta.get("match_number") if hist_meta else None,
+                source_dates=hist_meta.get("source_dates") if hist_meta else [],
                 match_datetime=created_at,
                 is_historical=bool(hist_meta),
                 source="historical_import" if hist_meta else "live",
