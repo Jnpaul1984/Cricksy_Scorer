@@ -361,7 +361,8 @@ async def apply_historical_import_deliveries(
             raise HTTPException(status_code=422, detail=error_msg)
         raise HTTPException(status_code=409, detail=error_msg)
 
-    assert result_info is not None  # noqa: S101
+    if result_info is None:
+        raise RuntimeError("apply_historical_deliveries returned no result without an error message")
 
     game_id: str = result_info["game_id"]
     deliveries_imported: int = result_info["deliveries_imported"]

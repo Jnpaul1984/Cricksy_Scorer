@@ -312,13 +312,9 @@ def validate_innings_totals(
             for d in deliveries
         )
         derived_wickets = sum(1 for d in deliveries if d.get("is_wicket"))
-        legal_balls = sum(
-            1
-            for d in deliveries
-            # A wide (extra_runs > 0 and no runs_off_bat from non-wides)
-            # is handled by the fixture - all balls in fixture are legal
-            if True  # simplified: all fixture balls are treated as legal here
-        )
+        # All balls in the fixture format are treated as legal deliveries;
+        # wide/no-ball detection is deferred to Phase 5G with richer formats.
+        legal_balls = len(deliveries)
 
         # Compare against explicit totals in the raw payload
         explicit_runs = inn.get("runs_explicit")

@@ -35,6 +35,7 @@ from backend.services.historical_import_delivery_service import (
     validate_innings_totals,
     verify_payload_hash,
 )
+from backend.sql_app.models import HistoricalImportBatch
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
 
@@ -372,7 +373,7 @@ def test_apply_deliveries_does_not_affect_other_batches() -> None:
 # ===========================================================================
 
 
-async def _create_batch_with_fixture_hash(db_session: AsyncSession) -> "HistoricalImportBatch":
+async def _create_batch_with_fixture_hash(db_session: AsyncSession) -> HistoricalImportBatch:
     """Create a batch with the canonical hash of the fixture payload."""
     from backend.services.historical_import_service import create_import_batch
 

@@ -701,8 +701,7 @@ async def _build_case_study_from_db(
         raw_date = hist_meta.get("match_date")
         if raw_date:
             try:
-                from datetime import date as _date
-                match_date = _date.fromisoformat(str(raw_date))
+                match_date = date.fromisoformat(str(raw_date))
             except (ValueError, TypeError):
                 pass
 

@@ -37,6 +37,7 @@ Rollback (Phase 5D/5F combined):
 
 from __future__ import annotations
 
+import json as _json
 import uuid
 from typing import Any
 
@@ -403,8 +404,6 @@ async def apply_historical_deliveries(
     7. Source hash of ``raw_payload`` must match ``batch.source_hash_sha256``.
     8. Totals validation: derived runs must reconcile with stored preview totals.
     """
-    import json as _json
-
     warnings: list[str] = []
 
     # Gate 1: explicit confirmation
