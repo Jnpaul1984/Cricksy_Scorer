@@ -1239,7 +1239,7 @@ Structured historical match import works safely and does not corrupt live scorin
 - Aggregation runs are blocked for unvalidated, unregistered, or provenance-broken matches.
 - Player/team/venue/competition/phase outputs must include audit metadata for source lineage and compute version.
 - Segment stats (powerplay/middle/death) must follow explicit legal-ball/over definitions aligned with `backend/domain/constants.py` (`norm_extra` canonicalizes wides/no-balls).
-- Segment stats must align with scoring legality rules (`legal = not (is_nb or is_wd)`) in `backend/services/scoring_service.py`.
+- Segment stats must align with scoring legality rules in `backend/services/scoring_service.py` where wides/no-balls are treated as non-legal deliveries.
 - Recompute operations must support idempotent rerun behavior and mismatch detection/reporting.
 
 ### Tests
@@ -1392,8 +1392,7 @@ Structured historical match import works safely and does not corrupt live scorin
 - Feature extraction and label-generation rules must pass deterministic validation with documented assumptions.
 - Train/validation/test split governance must enforce non-leaky partition policies and reproducible split seeds.
 - Export versioning must generate immutable, traceable dataset versions with checksum/manifest metadata.
-- Direct model retraining remains blocked in this phase and requires separate approval in a later governed model-training phase.
-- Model retraining can only proceed after dataset-export reliability gates are complete.
+- Direct model retraining remains blocked in this phase and requires separate approval in a later governed model-training phase, after dataset-export reliability gates are complete.
 
 ### Tests
 
