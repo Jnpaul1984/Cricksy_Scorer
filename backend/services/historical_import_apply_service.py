@@ -1,43 +1,58 @@
-"""Phase 5D - Historical Import Apply Service.
+"""Phase 5D/5E/5F - Historical Import Apply Service.
 
-Provides ``apply_historical_batch`` which, given a validated
-``HistoricalImportBatch`` ID and an explicit confirmation, creates a
-historical Game record and marks the batch as finalized.
+Provides:
+- ``apply_historical_batch`` (Phase 5D): creates the historical Game shell.
+- ``rollback_historical_batch`` (Phase 5E): deletes the Game row safely.
+- ``apply_historical_deliveries`` (Phase 5F): imports delivery-level data into
+  the historical Game row created by Phase 5D.
 
-Conservative design choices:
-- Delivery-level records are NOT imported.  The ``Game.deliveries`` JSON
-  column is the live scoring engine's ledger; injecting historical balls
-  there would be unsafe in Phase 5D.  Match metadata only is imported.
-  Phase 5E will address delivery-level import if the schema supports it.
+Phase 5D conservative design choices:
+- Delivery-level records are NOT imported at Phase 5D time.  The
+  ``Game.deliveries`` JSON column is the live scoring engine's ledger;
+  injecting historical balls there without validation would be unsafe.
+  Phase 5F closes this gap.
 - No Player/Team ORM rows are created; team names from the dry-run preview
-  are stored inline in ``Game.team_a`` / ``Game.team_b`` JSON columns, which
-  is the same pattern used by the live scoring engine.
+  are stored inline in ``Game.team_a`` / ``Game.team_b`` JSON columns.
 - Innings summaries are stored in ``Game.phases`` JSON under the key
-  ``historical_innings_summary`` for auditability without touching the live
-  scoring engine's innings state columns.
+  ``historical_innings_summary`` for auditability.
 - ``Game.status`` is set to ``GameStatus.completed`` to prevent the scoring
   engine from treating this as a live game.
-- ``Game.phases`` receives a ``historical_import`` sub-key with the batch ID
-  so that any scan of the games table can identify imported records even
-  though there is no dedicated ``is_historical`` column in Phase 5D.
+- ``Game.phases`` receives a ``historical_import`` sub-key with the batch ID.
 
-Rollback:
-  To undo a Phase 5D apply:
-    1. Delete the Game row identified by ``HistoricalImportBatch.applied_game_id``.
-    2. Set ``HistoricalImportBatch.is_finalized = False`` and
-       ``HistoricalImportBatch.applied_game_id = None`` on the batch.
-  This can be done manually via the database or via a future Phase 5E
-  rollback endpoint.
+Phase 5F delivery import:
+- Requires the caller to re-provide the raw JSON payload (same file that was
+  dry-run'd).  The canonical SHA-256 hash is verified against the stored
+  batch hash before any write occurs.
+- Totals validation (runs ± 5 tolerance) blocks unsafe imports.
+- Idempotent: a second apply-deliveries on an already-imported game returns
+  "already_applied" without mutating any data.
+- Rollback: the existing Phase 5E rollback endpoint deletes the entire Game
+  row, which also removes all imported delivery data stored in JSON columns.
+  No separate Phase 5F rollback endpoint is required.
+
+Rollback (Phase 5D/5F combined):
+  POST /api/historical-import/json/batches/{batch_id}/rollback with confirm=true
+  Deletes the Game row (including all imported deliveries) and resets batch.
 """
 
 from __future__ import annotations
 
+import json as _json
 import uuid
 from typing import Any
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.services.historical_import_delivery_service import (
+    _collect_team_players,
+    _derive_batting_scorecard,
+    _derive_bowling_scorecard,
+    _derive_first_inning_summary,
+    extract_normalized_innings,
+    validate_innings_totals,
+    verify_payload_hash,
+)
 from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 
 # Batch statuses from which an apply is allowed.
@@ -354,3 +369,257 @@ async def rollback_historical_batch(
     await db.refresh(batch)
 
     return game_id, warnings, None
+
+
+# ---------------------------------------------------------------------------
+# Phase 5F - Delivery-level import
+# ---------------------------------------------------------------------------
+
+
+async def apply_historical_deliveries(
+    db: AsyncSession,
+    *,
+    batch_id: str,
+    confirm: bool,
+    raw_payload: bytes,
+) -> tuple[dict[str, Any] | None, list[str], str | None]:
+    """Import delivery-level data into a previously-applied historical Game.
+
+    This is the Phase 5F write path.  It MUST only be called after Phase 5D
+    has already applied the batch and created the Game shell.
+
+    Returns:
+        (result_info, warnings, error_message)
+        - result_info: dict with import stats on success, None on failure.
+        - warnings: list of non-fatal warning strings.
+        - error_message: reason for failure, or None on success.
+
+    Validation gates:
+    1. ``confirm`` must be True.
+    2. Batch must exist.
+    3. Batch must be finalized (Phase 5D applied).
+    4. ``applied_game_id`` must be set on the batch.
+    5. Game must exist and must be a historical import (safety guard).
+    6. Deliveries must not already be imported (idempotency).
+    7. Source hash of ``raw_payload`` must match ``batch.source_hash_sha256``.
+    8. Totals validation: derived runs must reconcile with stored preview totals.
+    """
+    warnings: list[str] = []
+
+    # Gate 1: explicit confirmation
+    if not confirm:
+        return None, warnings, "confirm must be true to apply deliveries."
+
+    # Gate 2: batch must exist
+    batch = await get_batch_by_id(db, batch_id)
+    if batch is None:
+        return None, warnings, f"Batch '{batch_id}' not found."
+
+    # Gate 3: batch must be finalized (Phase 5D applied first)
+    if not batch.is_finalized:
+        return (
+            None,
+            warnings,
+            (
+                f"Batch '{batch_id}' has not been applied yet (Phase 5D required first). "
+                "Apply the batch to create the historical Game shell before importing deliveries."
+            ),
+        )
+
+    # Gate 4: game must be linked
+    game_id = batch.applied_game_id
+    if not game_id:
+        return (
+            None,
+            warnings,
+            f"Batch '{batch_id}' has no applied_game_id; cannot import deliveries.",
+        )
+
+    # Gate 5: game must exist and be a historical import
+    result = await db.execute(select(Game).where(Game.id == game_id))
+    game = result.scalars().first()
+    if game is None:
+        return (
+            None,
+            warnings,
+            (
+                f"Game '{game_id}' linked by batch '{batch_id}' was not found. "
+                "It may have been rolled back. Re-apply the batch (Phase 5D) before importing deliveries."
+            ),
+        )
+
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    hist_meta = phases.get("historical_import") if isinstance(phases, dict) else None
+    if not isinstance(hist_meta, dict) or not hist_meta.get("is_historical"):
+        return (
+            None,
+            warnings,
+            (
+                f"Game '{game_id}' is not a verified historical import. "
+                "Delivery import refused to protect live match data."
+            ),
+        )
+
+    if game.status != GameStatus.completed:
+        return (
+            None,
+            warnings,
+            (
+                f"Game '{game_id}' is not in completed status (status={game.status.value}). "
+                "Delivery import is only allowed for completed historical games."
+            ),
+        )
+
+    # Gate 6: idempotency - deliveries must not already be imported
+    if hist_meta.get("deliveries_imported") is True:
+        return (
+            None,
+            warnings,
+            (
+                f"Deliveries have already been imported for game '{game_id}' "
+                f"(batch '{batch_id}'). Duplicate delivery import is not allowed."
+            ),
+        )
+
+    # Gate 7: source hash verification
+    try:
+        actual_hash = verify_payload_hash(raw_payload, batch.source_hash_sha256)
+    except (ValueError, _json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return (
+            None,
+            warnings,
+            f"Payload could not be parsed for hash verification: {exc}",
+        )
+    if not actual_hash:
+        return (
+            None,
+            warnings,
+            (
+                "Source payload hash does not match the stored batch hash. "
+                "Ensure you are providing the same JSON file used during the original dry-run."
+            ),
+        )
+
+    # Parse payload
+    try:
+        parsed = _json.loads(raw_payload.decode("utf-8"))
+    except (ValueError, _json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return None, warnings, f"Payload is not valid JSON: {exc}"
+
+    if not isinstance(parsed, dict):
+        return None, warnings, "Payload top-level must be a JSON object."
+
+    normalized_innings = extract_normalized_innings(parsed)
+    if not normalized_innings:
+        return None, warnings, "No innings data found in payload."
+
+    total_deliveries = sum(len(inn["deliveries"]) for inn in normalized_innings)
+    if total_deliveries == 0:
+        return None, warnings, "No delivery/ball events found in innings data."
+
+    # Gate 8: totals validation
+    dry_run: dict[str, Any] = batch.dry_run_summary or {}
+    innings_preview: list[dict[str, Any]] = dry_run.get("innings_preview") or []
+
+    totals_validation, validation_warnings, blocking_error = validate_innings_totals(
+        normalized_innings, innings_preview
+    )
+    warnings.extend(validation_warnings)
+
+    if blocking_error is not None:
+        return None, warnings, blocking_error
+
+    # -----------------------------------------------------------------------
+    # All gates passed - write delivery data
+    # -----------------------------------------------------------------------
+
+    teams_preview: list[str] = dry_run.get("teams_preview") or [
+        (game.team_a or {}).get("name", "Team A"),
+        (game.team_b or {}).get("name", "Team B"),
+    ]
+
+    # 1) Normalize all deliveries into a flat list for game.deliveries
+    all_deliveries: list[dict[str, Any]] = []
+    for inn in normalized_innings:
+        all_deliveries.extend(inn["deliveries"])
+
+    # 2) Derive batting/bowling scorecards per innings and merge
+    merged_batting: dict[str, dict[str, Any]] = {}
+    merged_bowling: dict[str, dict[str, Any]] = {}
+
+    for inn in normalized_innings:
+        inning_no = inn["inning_no"]
+        batting = _derive_batting_scorecard(all_deliveries, inning_no)
+        bowling = _derive_bowling_scorecard(all_deliveries, inning_no)
+        merged_batting.update(batting)
+        merged_bowling.update(bowling)
+
+    # 3) Derive inline player lists (no ORM rows created)
+    team_a_players, team_b_players = _collect_team_players(normalized_innings, teams_preview)
+
+    team_a_json: dict[str, Any] = dict(game.team_a or {})
+    team_a_json["players"] = team_a_players
+    team_b_json: dict[str, Any] = dict(game.team_b or {})
+    team_b_json["players"] = team_b_players
+
+    # 4) First innings summary
+    first_inning_summary = None
+    if normalized_innings:
+        first_inn = normalized_innings[0]
+        first_team = first_inn.get("team") or (teams_preview[0] if teams_preview else "Team A")
+        first_inning_summary = _derive_first_inning_summary(first_inn, first_team)
+
+    # 5) Second innings totals (for game.total_runs etc.)
+    second_innings_runs = 0
+    second_innings_wickets = 0
+    second_innings_legal_balls = 0
+    if len(normalized_innings) >= 2:
+        inn2 = normalized_innings[1]
+        delivs2 = inn2["deliveries"]
+        second_innings_runs = (
+            inn2["runs_explicit"]
+            if inn2["runs_explicit"] is not None
+            else sum(int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0) for d in delivs2)
+        )
+        second_innings_wickets = (
+            inn2["wickets_explicit"]
+            if inn2["wickets_explicit"] is not None
+            else sum(1 for d in delivs2 if d.get("is_wicket"))
+        )
+        second_innings_legal_balls = len(delivs2)
+
+    second_innings_overs_completed = second_innings_legal_balls // 6
+    second_innings_balls_this_over = second_innings_legal_balls % 6
+
+    # 6) Update game phases to mark deliveries as imported (idempotency marker)
+    updated_phases: dict[str, Any] = dict(phases)
+    updated_hist_meta: dict[str, Any] = dict(hist_meta)
+    updated_hist_meta["deliveries_imported"] = True
+    updated_hist_meta["delivery_count"] = total_deliveries
+    updated_phases["historical_import"] = updated_hist_meta
+
+    # 7) Persist all changes in a single transaction
+    game.deliveries = all_deliveries
+    game.batting_scorecard = merged_batting
+    game.bowling_scorecard = merged_bowling
+    game.team_a = team_a_json
+    game.team_b = team_b_json
+    game.first_inning_summary = first_inning_summary
+    game.total_runs = second_innings_runs
+    game.total_wickets = second_innings_wickets
+    game.overs_completed = second_innings_overs_completed
+    game.balls_this_over = second_innings_balls_this_over
+    game.phases = updated_phases
+    db.add(game)
+
+    await db.commit()
+    await db.refresh(game)
+
+    result_info = {
+        "game_id": game_id,
+        "deliveries_imported": total_deliveries,
+        "innings_processed": len(normalized_innings),
+        "totals_validation": totals_validation,
+    }
+
+    return result_info, warnings, None
