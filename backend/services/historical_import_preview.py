@@ -201,9 +201,10 @@ def _derive_result_summary(parsed: dict[str, Any], info_payload: dict[str, Any])
         if summary:
             return summary
 
-    outcome = info_payload.get("outcome")
-    if not isinstance(outcome, dict):
+    outcome_value = info_payload.get("outcome")
+    if not isinstance(outcome_value, dict):
         return None
+    outcome: dict[str, Any] = outcome_value
 
     winner = _as_str(outcome.get("winner"))
     margin = outcome.get("by")
@@ -500,7 +501,8 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
 
     info_value = parsed.get("info")
     info_payload: dict[str, Any] = info_value if isinstance(info_value, dict) else {}
-    event_payload = info_payload.get("event") if isinstance(info_payload.get("event"), dict) else {}
+    event_value = info_payload.get("event")
+    event_payload: dict[str, Any] = event_value if isinstance(event_value, dict) else {}
     source_dates = [
         date_value.strip()
         for date_value in info_payload.get("dates", [])
