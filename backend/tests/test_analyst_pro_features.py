@@ -21,6 +21,7 @@ from backend.sql_app.database import get_db
 
 UTC = getattr(dt, "UTC", dt.UTC)
 HISTORICAL_FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
+CRICSHEET_HISTORICAL_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_t20.json"
 
 
 def _auth_headers(token: str) -> dict[str, str]:
@@ -385,12 +386,18 @@ async def test_analytics_matches_list_is_completed_and_org_scoped(client: TestCl
     assert "completed-beta" not in ids
 
 
-async def test_historical_imported_match_visible_in_analyst_workspace(client: TestClient) -> None:
+@pytest.mark.parametrize(
+    "fixture_path",
+    [HISTORICAL_FIXTURE_PATH, CRICSHEET_HISTORICAL_FIXTURE_PATH],
+)
+async def test_historical_imported_match_visible_in_analyst_workspace(
+    client: TestClient, fixture_path: Path
+) -> None:
     analyst = register_user(client, "analyst-historical@example.com")
     await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
     token = login_user(client, analyst["email"])
 
-    fixture_payload = json.loads(HISTORICAL_FIXTURE_PATH.read_text(encoding="utf-8"))
+    fixture_payload = json.loads(fixture_path.read_text(encoding="utf-8"))
 
     dry_run_resp = client.post(
         "/api/historical-import/json/dry-run",
@@ -414,7 +421,7 @@ async def test_historical_imported_match_visible_in_analyst_workspace(client: Te
         f"/api/historical-import/json/batches/{batch_id}/apply-deliveries",
         headers={**_auth_headers(token), "content-type": "application/json"},
         params={"confirm": "true"},
-        content=HISTORICAL_FIXTURE_PATH.read_bytes(),
+        content=fixture_path.read_bytes(),
     )
     assert apply_deliveries_resp.status_code == 200, apply_deliveries_resp.text
 
@@ -425,7 +432,10 @@ async def test_historical_imported_match_visible_in_analyst_workspace(client: Te
     assert imported is not None, "Imported historical match must be listed in Analyst Workspace"
     assert imported["is_historical"] is True
     assert imported["source"] == "historical_import"
-    assert imported["venue"] == fixture_payload.get("venue")
+    expected_venue = fixture_payload.get("venue")
+    if expected_venue is None:
+        expected_venue = fixture_payload.get("info", {}).get("venue")
+    assert imported["venue"] == expected_venue
     # date may fall back to epoch when fixture has no explicit date field
     assert isinstance(imported["date"], str) and imported["date"] != ""
 

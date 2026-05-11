@@ -38,6 +38,7 @@ from backend.services.historical_import_delivery_service import (
 from backend.sql_app.models import HistoricalImportBatch
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
+CRICSHEET_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_t20.json"
 
 
 def _load_fixture() -> dict[str, object]:
@@ -46,6 +47,10 @@ def _load_fixture() -> dict[str, object]:
 
 def _fixture_bytes() -> bytes:
     return FIXTURE_PATH.read_bytes()
+
+
+def _cricsheet_fixture_bytes() -> bytes:
+    return CRICSHEET_FIXTURE_PATH.read_bytes()
 
 
 def _record_batch(client: TestClient) -> str:
@@ -108,6 +113,23 @@ def test_delivery_service_normalize_fixture() -> None:
     assert "bowler" in ball
     assert ball["_source"] == "historical_import"
     assert ball["inning"] == 1
+
+
+def test_delivery_service_normalize_cricsheet_fixture() -> None:
+    """Cricsheet-style overs/deliveries are normalized into inning+over+ball rows."""
+    parsed = json.loads(_cricsheet_fixture_bytes())
+    innings = extract_normalized_innings(parsed)
+
+    assert len(innings) == 2
+    assert len(innings[0]["deliveries"]) == 12
+    assert len(innings[1]["deliveries"]) == 12
+    first_ball = innings[0]["deliveries"][0]
+    wicket_ball = innings[0]["deliveries"][2]
+    assert first_ball["over_number"] == 1
+    assert first_ball["ball_in_over"] == 1
+    assert first_ball["runs_off_bat"] == 1
+    assert first_ball["extra_runs"] == 0
+    assert wicket_ball["is_wicket"] is True
 
 
 def test_delivery_service_hash_verification() -> None:
@@ -595,4 +617,3 @@ async def test_apply_deliveries_idempotency_service_level(db_session: AsyncSessi
     )
     assert e2 is not None, "Second delivery apply must return an error"
     assert "already" in e2.lower(), f"Expected 'already' in error message, got: {e2}"
-

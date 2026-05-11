@@ -89,6 +89,18 @@ def _is_legal_delivery(delivery: dict[str, Any]) -> bool:
 
 def _extract_team_names(payload: dict[str, Any]) -> list[str]:
     names: set[str] = set()
+    info_payload = payload.get("info")
+    if isinstance(info_payload, dict):
+        info_teams = info_payload.get("teams")
+        if isinstance(info_teams, list):
+            for team in info_teams:
+                if isinstance(team, str) and team.strip():
+                    names.add(team.strip())
+                elif isinstance(team, dict):
+                    maybe = _as_str(team.get("name"))
+                    if maybe:
+                        names.add(maybe)
+
     teams = payload.get("teams")
     if isinstance(teams, list):
         for team in teams:
