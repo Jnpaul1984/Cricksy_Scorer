@@ -21,6 +21,8 @@ import json
 from collections import defaultdict
 from typing import Any
 
+from backend.domain.constants import norm_extra
+
 # Tolerance for run total reconciliation.
 # If ``|derived_runs - expected_runs| <= _RUNS_TOLERANCE``, we issue a warning
 # but do not block the import.  Values outside the tolerance block the import.
@@ -40,6 +42,53 @@ def _hash_payload(raw_payload: bytes) -> str:
 def verify_payload_hash(raw_payload: bytes, expected_hash: str) -> bool:
     """Return True if the canonical hash of ``raw_payload`` matches ``expected_hash``."""
     return _hash_payload(raw_payload) == expected_hash
+
+
+def _safe_int(value: Any) -> int:
+    if value is None:
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def cricket_overs_from_legal_balls(legal_balls: int) -> float:
+    complete_overs = max(int(legal_balls), 0) // 6
+    remaining_balls = max(int(legal_balls), 0) % 6
+    return float(f"{complete_overs}.{remaining_balls}")
+
+
+def legal_balls_to_decimal_overs(legal_balls: int) -> float:
+    return max(int(legal_balls), 0) / 6.0
+
+
+def cricket_overs_to_legal_balls(overs_value: Any) -> int:
+    if overs_value in (None, ""):
+        return 0
+    text = str(overs_value).strip()
+    if not text:
+        return 0
+    whole_part, dot, fractional_part = text.partition(".")
+    whole = _safe_int(whole_part)
+    balls = _safe_int(fractional_part[:1]) if dot else 0
+    return (whole * 6) + balls
+
+
+def is_legal_delivery(delivery: dict[str, Any]) -> bool:
+    explicit = delivery.get("is_legal_delivery")
+    if isinstance(explicit, bool):
+        return explicit
+
+    extra_type = norm_extra(delivery.get("extra_type"))
+    if extra_type in {"wd", "nb"}:
+        return False
+
+    extras = delivery.get("extras")
+    if isinstance(extras, dict):
+        if _safe_int(extras.get("wides")) > 0 or _safe_int(extras.get("noballs")) > 0:
+            return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +123,8 @@ def _normalize_ball(
     - ``batsman``, ``bowler``: str (player names)
     """
     runs_raw = ball.get("runs")
+    extra_type: str | None = None
+    is_legal = True
     if isinstance(runs_raw, dict):
         runs_off_bat = int(runs_raw.get("batter") or runs_raw.get("batsman") or 0)
         extra_runs = int(runs_raw.get("extras") or 0)
@@ -85,6 +136,25 @@ def _normalize_ball(
             extra_runs = sum(int(v or 0) for v in extras_raw.values())
         else:
             extra_runs = int(extras_raw or 0)
+
+    extras_detail = ball.get("extras")
+    if isinstance(extras_detail, dict):
+        if _safe_int(extras_detail.get("wides")) > 0:
+            extra_type = "wd"
+            is_legal = False
+        elif _safe_int(extras_detail.get("noballs")) > 0:
+            extra_type = "nb"
+            is_legal = False
+        elif _safe_int(extras_detail.get("legbyes")) > 0:
+            extra_type = "lb"
+        elif _safe_int(extras_detail.get("byes")) > 0:
+            extra_type = "b"
+    else:
+        normalized_extra_type = norm_extra(ball.get("extra_type"))
+        if normalized_extra_type:
+            extra_type = normalized_extra_type
+            if normalized_extra_type in {"wd", "nb"}:
+                is_legal = False
 
     wicket_raw = ball.get("wicket", False)
     wickets_list_raw = ball.get("wickets")
@@ -99,7 +169,9 @@ def _normalize_ball(
         "ball_in_over": ball_in_over if ball_in_over is not None else int(ball.get("ball") or 1),
         "runs_off_bat": runs_off_bat,
         "extra_runs": extra_runs,
+        "extra_type": extra_type,
         "is_wicket": is_wicket,
+        "is_legal_delivery": is_legal,
         "batsman": str(ball.get("batsman") or ball.get("batter") or ""),
         "bowler": str(ball.get("bowler") or ""),
         "_source": "historical_import",
@@ -282,7 +354,8 @@ def _derive_bowling_scorecard(
         over_num = int(d.get("over_number") or 1)
 
         total_runs = int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0)
-        entry["balls_bowled"] += 1
+        if is_legal_delivery(d):
+            entry["balls_bowled"] += 1
         entry["runs_conceded"] += total_runs
 
         over_runs[bowler][over_num] += total_runs
@@ -293,9 +366,7 @@ def _derive_bowling_scorecard(
     scorecard: dict[str, dict[str, Any]] = {}
     for bowler, stats in bowler_balls.items():
         balls = stats["balls_bowled"]
-        complete_overs = balls // 6
-        remaining_balls = balls % 6
-        overs_float = float(f"{complete_overs}.{remaining_balls}")
+        overs_float = cricket_overs_from_legal_balls(balls)
 
         # Count maiden overs: overs where 0 runs were conceded
         maidens = sum(
@@ -355,9 +426,7 @@ def validate_innings_totals(
             for d in deliveries
         )
         derived_wickets = sum(1 for d in deliveries if d.get("is_wicket"))
-        # All balls in the fixture format are treated as legal deliveries;
-        # wide/no-ball detection is deferred to Phase 5G with richer formats.
-        legal_balls = len(deliveries)
+        legal_balls = sum(1 for d in deliveries if is_legal_delivery(d))
 
         # Compare against explicit totals in the raw payload
         explicit_runs = inn.get("runs_explicit")
@@ -431,6 +500,8 @@ def _collect_team_players(
 
     Returns (team_a_players, team_b_players).
     """
+    team_a_name = teams_preview[0] if teams_preview else None
+    team_b_name = teams_preview[1] if len(teams_preview) > 1 else None
     team_a_batters: set[str] = set()
     team_b_batters: set[str] = set()
     team_a_bowlers: set[str] = set()
@@ -439,9 +510,20 @@ def _collect_team_players(
     for inn in normalized_innings:
         inning_no = inn["inning_no"]
         deliveries = inn["deliveries"]
-        # Innings 1 batters bat for team that bats first (team_a by index)
-        # Innings 1 bowlers bowl for the other team
-        if inning_no == 1:
+        batting_team = inn.get("team")
+        if batting_team and batting_team == team_a_name:
+            for d in deliveries:
+                if d.get("batsman"):
+                    team_a_batters.add(d["batsman"])
+                if d.get("bowler"):
+                    team_b_bowlers.add(d["bowler"])
+        elif batting_team and batting_team == team_b_name:
+            for d in deliveries:
+                if d.get("batsman"):
+                    team_b_batters.add(d["batsman"])
+                if d.get("bowler"):
+                    team_a_bowlers.add(d["bowler"])
+        elif inning_no == 1:
             for d in deliveries:
                 if d.get("batsman"):
                     team_a_batters.add(d["batsman"])
@@ -490,10 +572,8 @@ def _derive_first_inning_summary(
     )
     derived_wickets = sum(1 for d in deliveries if d.get("is_wicket"))
 
-    legal_balls = len(deliveries)  # simplified: all fixture balls treated as legal
-    complete_overs = legal_balls // 6
-    remaining_balls = legal_balls % 6
-    overs_float = float(f"{complete_overs}.{remaining_balls}")
+    legal_balls = sum(1 for d in deliveries if is_legal_delivery(d))
+    overs_float = cricket_overs_from_legal_balls(legal_balls)
 
     return {
         "batting_team": team_name,

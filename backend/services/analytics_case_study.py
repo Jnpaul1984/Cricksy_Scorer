@@ -33,12 +33,36 @@ from backend.api.schemas.case_study import (
     CaseStudySwingMetric,
     MatchCaseStudyResponse,
 )
+from backend.services.historical_import_delivery_service import (
+    cricket_overs_from_legal_balls,
+    cricket_overs_to_legal_balls,
+    legal_balls_to_decimal_overs,
+)
 from backend.sql_app.database import get_session_local
 from backend.sql_app.models import Game
 
 # -----------------------------------------------------------------------------
 # Phase Definitions
 # -----------------------------------------------------------------------------
+
+
+def _display_overs_from_game_state(overs_completed: int, balls_this_over: int) -> float:
+    return cricket_overs_from_legal_balls((int(overs_completed) * 6) + int(balls_this_over))
+
+
+def _display_overs_to_decimal_overs(overs_value: Any, legal_balls: Any = None) -> float:
+    if isinstance(legal_balls, int):
+        return legal_balls_to_decimal_overs(legal_balls)
+    return legal_balls_to_decimal_overs(cricket_overs_to_legal_balls(overs_value))
+
+
+def _resolved_result(game: Game) -> str:
+    if isinstance(game.result, str) and game.result.strip():
+        return game.result.strip()
+    status_value = game.status.value if hasattr(game.status, "value") else str(game.status)
+    if status_value == "completed":
+        return "Completed"
+    return "In progress"
 
 
 def _get_phase_ranges(match_format: str, overs_per_side: int) -> list[tuple[str, str, int, int]]:
@@ -632,65 +656,88 @@ async def _build_case_study_from_db(
     # 3) Build innings summaries
     innings_summaries: list[CaseStudyInningsSummary] = []
 
-    if game.first_inning_summary:
-        # Live scoring data (Phase 5F imported or real live game)
-        fis = game.first_inning_summary
-        innings_summaries.append(
-            CaseStudyInningsSummary(
-                team=fis.get("batting_team", team_a_name),
-                runs=fis.get("runs", 0),
-                wickets=fis.get("wickets", 0),
-                overs=float(fis.get("overs", 0)),
-                run_rate=round(fis.get("runs", 0) / max(fis.get("overs", 1), 0.1), 2),
-            )
-        )
-    elif is_historical and hist_innings:
-        # Historical import without deliveries yet (Phase 5D only):
-        # use innings summaries stored in phases["historical_innings_summary"]
+    if is_historical and hist_innings:
         for inn in hist_innings:
             if not isinstance(inn, dict):
                 continue
             inn_runs = int(inn.get("runs") or 0)
             inn_overs = float(inn.get("overs") or 0.0)
+            decimal_overs = _display_overs_to_decimal_overs(inn_overs, inn.get("legal_balls"))
             innings_summaries.append(
                 CaseStudyInningsSummary(
                     team=inn.get("team") or team_a_name,
                     runs=inn_runs,
                     wickets=int(inn.get("wickets") or 0),
                     overs=inn_overs,
-                    run_rate=round(inn_runs / max(inn_overs, 0.1), 2),
+                    run_rate=round(inn_runs / max(decimal_overs, 0.1), 2),
                 )
             )
+    elif game.first_inning_summary:
+        # Live scoring data (Phase 5F imported or real live game)
+        fis = game.first_inning_summary
+        display_overs = float(fis.get("overs", 0))
+        innings_summaries.append(
+            CaseStudyInningsSummary(
+                team=fis.get("batting_team", team_a_name),
+                runs=fis.get("runs", 0),
+                wickets=fis.get("wickets", 0),
+                overs=display_overs,
+                run_rate=round(
+                    fis.get("runs", 0) / max(_display_overs_to_decimal_overs(display_overs), 0.1),
+                    2,
+                ),
+            )
+        )
 
     # Second innings (live or historical post-Phase-5F)
     if not is_historical:
         if game.current_inning >= 2 or not innings_summaries:
-            overs_completed = game.overs_completed + (game.balls_this_over / 6)
+            overs_display = _display_overs_from_game_state(game.overs_completed, game.balls_this_over)
+            decimal_overs = legal_balls_to_decimal_overs(
+                (game.overs_completed * 6) + game.balls_this_over
+            )
             innings_summaries.append(
                 CaseStudyInningsSummary(
                     team=game.batting_team_name or team_b_name,
                     runs=game.total_runs,
                     wickets=game.total_wickets,
-                    overs=round(overs_completed, 1),
-                    run_rate=round(game.total_runs / max(overs_completed, 0.1), 2),
+                    overs=overs_display,
+                    run_rate=round(game.total_runs / max(decimal_overs, 0.1), 2),
                 )
             )
     else:
         # For historical games, second innings is populated by Phase 5F delivery import
         # or by the historical_innings_summary (already added above in the hist_innings loop)
         if deliveries_imported and game.first_inning_summary:
-            # Phase 5F imported: second innings stored in game.total_runs etc.
-            overs_completed = game.overs_completed + (game.balls_this_over / 6)
-            if len(innings_summaries) < 2:
-                innings_summaries.append(
-                    CaseStudyInningsSummary(
-                        team=game.batting_team_name or team_b_name,
-                        runs=game.total_runs,
-                        wickets=game.total_wickets,
-                        overs=round(overs_completed, 1),
-                        run_rate=round(game.total_runs / max(overs_completed, 0.1), 2),
-                    )
+            first_fis = game.first_inning_summary
+            if innings_summaries:
+                first_overs = float(first_fis.get("overs", 0))
+                innings_summaries[0] = CaseStudyInningsSummary(
+                    team=first_fis.get("batting_team", innings_summaries[0].team),
+                    runs=int(first_fis.get("runs", innings_summaries[0].runs)),
+                    wickets=int(first_fis.get("wickets", innings_summaries[0].wickets)),
+                    overs=first_overs,
+                    run_rate=round(
+                        int(first_fis.get("runs", innings_summaries[0].runs))
+                        / max(_display_overs_to_decimal_overs(first_overs), 0.1),
+                        2,
+                    ),
                 )
+            overs_display = _display_overs_from_game_state(game.overs_completed, game.balls_this_over)
+            decimal_overs = legal_balls_to_decimal_overs(
+                (game.overs_completed * 6) + game.balls_this_over
+            )
+            second_summary = CaseStudyInningsSummary(
+                team=game.batting_team_name or (hist_innings[1].get("team") if len(hist_innings) > 1 else team_b_name),
+                runs=game.total_runs,
+                wickets=game.total_wickets,
+                overs=overs_display,
+                run_rate=round(game.total_runs / max(decimal_overs, 0.1), 2),
+            )
+            if len(innings_summaries) >= 2:
+                innings_summaries[1] = second_summary
+            else:
+                innings_summaries.append(second_summary)
 
     # 4) Build CaseStudyMatch
     match_date = date.today()  # Game model doesn't have created_at exposed as date
@@ -712,7 +759,11 @@ async def _build_case_study_from_db(
         away_team=team_b_name,
         teams_label=f"{team_a_name} vs {team_b_name}",
         venue=hist_meta.get("venue") if isinstance(hist_meta, dict) else None,
-        result=game.result or "In progress",
+        event_name=hist_meta.get("event_name") if isinstance(hist_meta, dict) else None,
+        season=hist_meta.get("season") if isinstance(hist_meta, dict) else None,
+        match_number=hist_meta.get("match_number") if isinstance(hist_meta, dict) else None,
+        source_dates=hist_meta.get("source_dates") if isinstance(hist_meta, dict) else [],
+        result=_resolved_result(game),
         overs_per_side=overs_per_side,
         innings=innings_summaries,
     )
@@ -727,12 +778,17 @@ async def _build_case_study_from_db(
     if game.first_inning_summary:
         fis = game.first_inning_summary
         total_runs_inn1 = fis.get("runs", 0)
-        total_overs_inn1 = float(fis.get("overs", 0)) or sum(1 for _ in per_over_runs)
+        total_overs_inn1 = _display_overs_to_decimal_overs(fis.get("overs", 0)) or sum(
+            1 for _ in per_over_runs
+        )
     elif is_historical and hist_innings:
         # Use stored historical innings summary for total calculation
         first_hist = hist_innings[0] if hist_innings else {}
         total_runs_inn1 = int(first_hist.get("runs") or 0)
-        total_overs_inn1 = float(first_hist.get("overs") or 0) or max(float(len(per_over_runs)), 1.0)
+        total_overs_inn1 = _display_overs_to_decimal_overs(
+            first_hist.get("overs"),
+            first_hist.get("legal_balls"),
+        ) or max(float(len(per_over_runs)), 1.0)
     else:
         total_runs_inn1 = sum(per_over_runs.values())
         total_overs_inn1 = float(len(per_over_runs)) if per_over_runs else 1.0

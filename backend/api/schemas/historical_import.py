@@ -26,12 +26,17 @@ class HistoricalImportMetadataPreview(BaseModel):
     venue: str | None = None
     date: str | None = None
     result: str | None = None
+    event_name: str | None = None
+    season: str | None = None
+    match_number: int | None = None
+    source_dates: list[str] = Field(default_factory=list)
 
 
 class HistoricalImportInningsPreview(BaseModel):
     inning_no: int
     team: str | None = None
     deliveries: int = 0
+    legal_balls: int | None = None
     runs: int | None = None
     wickets: int | None = None
     overs: float | None = None

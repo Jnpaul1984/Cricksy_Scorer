@@ -43,6 +43,10 @@ class CaseStudyMatch(BaseModel):
     away_team: str | None = None
     teams_label: str  # e.g. "Lions vs Falcons"
     venue: str | None = None
+    event_name: str | None = None
+    season: str | None = None
+    match_number: int | None = None
+    source_dates: list[str] = Field(default_factory=list)
     result: str
     overs_per_side: int | None = None
     innings: list[CaseStudyInningsSummary]
