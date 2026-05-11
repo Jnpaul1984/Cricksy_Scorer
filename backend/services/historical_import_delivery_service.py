@@ -50,6 +50,9 @@ def verify_payload_hash(raw_payload: bytes, expected_hash: str) -> bool:
 def _normalize_ball(
     ball: dict[str, Any],
     inning_idx: int,
+    *,
+    over_number: int | None = None,
+    ball_in_over: int | None = None,
 ) -> dict[str, Any]:
     """Normalize a single ball dict from the fixture into analytics format.
 
@@ -70,21 +73,30 @@ def _normalize_ball(
     - ``wicket``: bool or dict (wicket event)
     - ``batsman``, ``bowler``: str (player names)
     """
-    runs_off_bat = int(ball.get("runs") or 0)
-
-    extras_raw = ball.get("extras", 0)
-    if isinstance(extras_raw, dict):
-        extra_runs = sum(int(v or 0) for v in extras_raw.values())
+    runs_raw = ball.get("runs")
+    if isinstance(runs_raw, dict):
+        runs_off_bat = int(runs_raw.get("batter") or runs_raw.get("batsman") or 0)
+        extra_runs = int(runs_raw.get("extras") or 0)
     else:
-        extra_runs = int(extras_raw or 0)
+        runs_off_bat = int(ball.get("runs") or 0)
+
+        extras_raw = ball.get("extras", 0)
+        if isinstance(extras_raw, dict):
+            extra_runs = sum(int(v or 0) for v in extras_raw.values())
+        else:
+            extra_runs = int(extras_raw or 0)
 
     wicket_raw = ball.get("wicket", False)
-    is_wicket = bool(wicket_raw) if not isinstance(wicket_raw, dict) else bool(wicket_raw)
+    wickets_list_raw = ball.get("wickets")
+    has_wickets_list = isinstance(wickets_list_raw, list) and len(wickets_list_raw) > 0
+    is_wicket = has_wickets_list or (
+        bool(wicket_raw) if not isinstance(wicket_raw, dict) else bool(wicket_raw)
+    )
 
     return {
         "inning": inning_idx,
-        "over_number": int(ball.get("over") or 1),
-        "ball_in_over": int(ball.get("ball") or 1),
+        "over_number": over_number if over_number is not None else int(ball.get("over") or 1),
+        "ball_in_over": ball_in_over if ball_in_over is not None else int(ball.get("ball") or 1),
         "runs_off_bat": runs_off_bat,
         "extra_runs": extra_runs,
         "is_wicket": is_wicket,
@@ -116,23 +128,50 @@ def extract_normalized_innings(
         if not isinstance(innings, dict):
             continue
 
-        balls_raw = innings.get("balls") or innings.get("deliveries") or []
+        innings_obj = innings
+        if len(innings_obj) == 1 and not any(k in innings_obj for k in ("balls", "deliveries", "overs")):
+            nested = next(iter(innings_obj.values()))
+            if isinstance(nested, dict):
+                innings_obj = dict(nested)
+                if "team" not in innings_obj:
+                    innings_obj["team"] = next(iter(innings.keys()))
+
+        balls_raw = innings_obj.get("balls") or innings_obj.get("deliveries") or []
+        normalized_deliveries: list[dict[str, Any]]
         if isinstance(balls_raw, list):
-            normalized_deliveries = [
-                _normalize_ball(b, idx)
-                for b in balls_raw
-                if isinstance(b, dict)
-            ]
+            normalized_deliveries = [_normalize_ball(b, idx) for b in balls_raw if isinstance(b, dict)]
         else:
             normalized_deliveries = []
 
-        runs_explicit = innings.get("runs")
-        wickets_explicit = innings.get("wickets")
+        if not normalized_deliveries:
+            overs_raw = innings_obj.get("overs")
+            if isinstance(overs_raw, list):
+                for over in overs_raw:
+                    if not isinstance(over, dict):
+                        continue
+                    over_idx_raw = over.get("over")
+                    over_number = int(over_idx_raw) + 1 if isinstance(over_idx_raw, int) else None
+                    over_deliveries = over.get("deliveries")
+                    if not isinstance(over_deliveries, list):
+                        continue
+                    for ball_idx, ball in enumerate(over_deliveries, start=1):
+                        if isinstance(ball, dict):
+                            normalized_deliveries.append(
+                                _normalize_ball(
+                                    ball,
+                                    idx,
+                                    over_number=over_number,
+                                    ball_in_over=ball_idx,
+                                )
+                            )
+
+        runs_explicit = innings_obj.get("runs")
+        wickets_explicit = innings_obj.get("wickets")
 
         result.append(
             {
                 "inning_no": idx,
-                "team": innings.get("team") or None,
+                "team": innings_obj.get("team") or None,
                 "runs_explicit": int(runs_explicit) if isinstance(runs_explicit, int) else None,
                 "wickets_explicit": (
                     int(wickets_explicit) if isinstance(wickets_explicit, int) else None

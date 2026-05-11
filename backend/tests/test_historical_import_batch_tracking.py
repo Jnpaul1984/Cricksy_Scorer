@@ -177,6 +177,26 @@ def test_no_false_duplicate_for_different_payload() -> None:
     assert dup["probable_duplicate"] == "not_duplicate"
 
 
+def test_unsupported_shape_returns_clear_error_without_persistence() -> None:
+    """Unsupported historical JSON must fail clearly and not persist when record_preview is false."""
+    unsupported_payload = {
+        "info": {"teams": ["A", "B"], "match_type": "T20"},
+        "innings": [{"team": "A", "overs": "not-a-list"}],
+    }
+    with TestClient(app) as client:
+        before_games = client.get("/games/results").json()
+        dry_run = client.post("/api/historical-import/json/dry-run", json=unsupported_payload)
+        batches = client.get("/api/historical-import/json/batches").json()
+        after_games = client.get("/games/results").json()
+
+    assert dry_run.status_code == 200, dry_run.text
+    payload = dry_run.json()
+    assert payload["status"] == "unsupported"
+    assert any(issue["code"] == "UNSUPPORTED_FORMAT" for issue in payload["errors"])
+    assert batches == []
+    assert len(before_games) == len(after_games)
+
+
 # ---------------------------------------------------------------------------
 # Semantic duplicate detection
 # ---------------------------------------------------------------------------

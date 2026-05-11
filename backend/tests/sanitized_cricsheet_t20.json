@@ -1,0 +1,320 @@
+{
+  "meta": {
+    "data_version": "0.92",
+    "created": "2026-05-10",
+    "revision": 1
+  },
+  "info": {
+    "match_type": "T20",
+    "venue": "Sanitized Oval",
+    "dates": [
+      "2021-04-09"
+    ],
+    "teams": [
+      "Sanitized Strikers",
+      "Sanitized Royals"
+    ],
+    "outcome": {
+      "winner": "Sanitized Strikers",
+      "by": {
+        "runs": 6
+      }
+    }
+  },
+  "innings": [
+    {
+      "Sanitized Strikers": {
+        "runs": 19,
+        "wickets": 1,
+        "overs": [
+          {
+            "over": 0,
+            "deliveries": [
+              {
+                "batter": "Striker A",
+                "non_striker": "Striker B",
+                "bowler": "Royal Bowler 1",
+                "runs": {
+                  "batter": 1,
+                  "extras": 0,
+                  "total": 1
+                }
+              },
+              {
+                "batter": "Striker B",
+                "non_striker": "Striker A",
+                "bowler": "Royal Bowler 1",
+                "runs": {
+                  "batter": 4,
+                  "extras": 0,
+                  "total": 4
+                }
+              },
+              {
+                "batter": "Striker B",
+                "non_striker": "Striker A",
+                "bowler": "Royal Bowler 1",
+                "runs": {
+                  "batter": 0,
+                  "extras": 0,
+                  "total": 0
+                },
+                "wickets": [
+                  {
+                    "player_out": "Striker B",
+                    "kind": "bowled"
+                  }
+                ]
+              },
+              {
+                "batter": "Striker C",
+                "non_striker": "Striker A",
+                "bowler": "Royal Bowler 1",
+                "runs": {
+                  "batter": 2,
+                  "extras": 0,
+                  "total": 2
+                }
+              },
+              {
+                "batter": "Striker C",
+                "non_striker": "Striker A",
+                "bowler": "Royal Bowler 1",
+                "runs": {
+                  "batter": 1,
+                  "extras": 0,
+                  "total": 1
+                }
+              },
+              {
+                "batter": "Striker A",
+                "non_striker": "Striker C",
+                "bowler": "Royal Bowler 1",
+                "runs": {
+                  "batter": 0,
+                  "extras": 0,
+                  "total": 0
+                }
+              }
+            ]
+          },
+          {
+            "over": 1,
+            "deliveries": [
+              {
+                "batter": "Striker C",
+                "non_striker": "Striker A",
+                "bowler": "Royal Bowler 2",
+                "runs": {
+                  "batter": 1,
+                  "extras": 0,
+                  "total": 1
+                }
+              },
+              {
+                "batter": "Striker A",
+                "non_striker": "Striker C",
+                "bowler": "Royal Bowler 2",
+                "runs": {
+                  "batter": 6,
+                  "extras": 0,
+                  "total": 6
+                }
+              },
+              {
+                "batter": "Striker A",
+                "non_striker": "Striker C",
+                "bowler": "Royal Bowler 2",
+                "runs": {
+                  "batter": 0,
+                  "extras": 0,
+                  "total": 0
+                }
+              },
+              {
+                "batter": "Striker A",
+                "non_striker": "Striker C",
+                "bowler": "Royal Bowler 2",
+                "runs": {
+                  "batter": 1,
+                  "extras": 1,
+                  "total": 2
+                }
+              },
+              {
+                "batter": "Striker C",
+                "non_striker": "Striker A",
+                "bowler": "Royal Bowler 2",
+                "runs": {
+                  "batter": 1,
+                  "extras": 0,
+                  "total": 1
+                }
+              },
+              {
+                "batter": "Striker A",
+                "non_striker": "Striker C",
+                "bowler": "Royal Bowler 2",
+                "runs": {
+                  "batter": 1,
+                  "extras": 0,
+                  "total": 1
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "Sanitized Royals": {
+        "runs": 13,
+        "wickets": 2,
+        "overs": [
+          {
+            "over": 0,
+            "deliveries": [
+              {
+                "batter": "Royal A",
+                "non_striker": "Royal B",
+                "bowler": "Striker Bowler 1",
+                "runs": {
+                  "batter": 1,
+                  "extras": 0,
+                  "total": 1
+                }
+              },
+              {
+                "batter": "Royal B",
+                "non_striker": "Royal A",
+                "bowler": "Striker Bowler 1",
+                "runs": {
+                  "batter": 0,
+                  "extras": 0,
+                  "total": 0
+                }
+              },
+              {
+                "batter": "Royal B",
+                "non_striker": "Royal A",
+                "bowler": "Striker Bowler 1",
+                "runs": {
+                  "batter": 2,
+                  "extras": 0,
+                  "total": 2
+                }
+              },
+              {
+                "batter": "Royal B",
+                "non_striker": "Royal A",
+                "bowler": "Striker Bowler 1",
+                "runs": {
+                  "batter": 4,
+                  "extras": 0,
+                  "total": 4
+                }
+              },
+              {
+                "batter": "Royal B",
+                "non_striker": "Royal A",
+                "bowler": "Striker Bowler 1",
+                "runs": {
+                  "batter": 1,
+                  "extras": 0,
+                  "total": 1
+                }
+              },
+              {
+                "batter": "Royal A",
+                "non_striker": "Royal B",
+                "bowler": "Striker Bowler 1",
+                "runs": {
+                  "batter": 0,
+                  "extras": 0,
+                  "total": 0
+                },
+                "wickets": [
+                  {
+                    "player_out": "Royal A",
+                    "kind": "caught"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "over": 1,
+            "deliveries": [
+              {
+                "batter": "Royal C",
+                "non_striker": "Royal B",
+                "bowler": "Striker Bowler 2",
+                "runs": {
+                  "batter": 1,
+                  "extras": 0,
+                  "total": 1
+                }
+              },
+              {
+                "batter": "Royal B",
+                "non_striker": "Royal C",
+                "bowler": "Striker Bowler 2",
+                "runs": {
+                  "batter": 1,
+                  "extras": 0,
+                  "total": 1
+                }
+              },
+              {
+                "batter": "Royal C",
+                "non_striker": "Royal B",
+                "bowler": "Striker Bowler 2",
+                "runs": {
+                  "batter": 0,
+                  "extras": 0,
+                  "total": 0
+                }
+              },
+              {
+                "batter": "Royal C",
+                "non_striker": "Royal B",
+                "bowler": "Striker Bowler 2",
+                "runs": {
+                  "batter": 2,
+                  "extras": 0,
+                  "total": 2
+                }
+              },
+              {
+                "batter": "Royal C",
+                "non_striker": "Royal B",
+                "bowler": "Striker Bowler 2",
+                "runs": {
+                  "batter": 0,
+                  "extras": 0,
+                  "total": 0
+                },
+                "wickets": [
+                  {
+                    "player_out": "Royal C",
+                    "kind": "lbw"
+                  }
+                ]
+              },
+              {
+                "batter": "Royal D",
+                "non_striker": "Royal B",
+                "bowler": "Striker Bowler 2",
+                "runs": {
+                  "batter": 1,
+                  "extras": 0,
+                  "total": 1
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

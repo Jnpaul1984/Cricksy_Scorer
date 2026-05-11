@@ -9,10 +9,15 @@ from backend.main import app
 
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
+CRICSHEET_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_t20.json"
 
 
 def _load_fixture() -> dict[str, object]:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+
+
+def _load_cricsheet_fixture() -> dict[str, object]:
+    return json.loads(CRICSHEET_FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
 def test_dry_run_json_payload_valid_preview() -> None:
@@ -29,6 +34,19 @@ def test_dry_run_json_payload_valid_preview() -> None:
     assert data["no_persistence"] is True
     assert len(data["duplicate_detection"]["source_hash_sha256"]) == 64
     assert "Alpha Player 1" in data["player_names_found"]
+
+
+def test_dry_run_sanitized_cricsheet_fixture_valid_preview() -> None:
+    with TestClient(app) as client:
+        response = client.post("/api/historical-import/json/dry-run", json=_load_cricsheet_fixture())
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "valid"
+    assert data["detected_format"] == "cricsheet_json"
+    assert data["teams_preview"] == ["Sanitized Royals", "Sanitized Strikers"]
+    assert data["innings_count"] == 2
+    assert data["delivery_count"] == 24
 
 
 def test_dry_run_accepts_multipart_json_file() -> None:
