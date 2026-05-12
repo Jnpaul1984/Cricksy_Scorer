@@ -68,6 +68,7 @@ PHASE_5L_MAX_FILES = 100
 PHASE_5L_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
 PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES = 20 * 1024 * 1024
 PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES = 20 * 1024 * 1024
+PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR = "::"
 
 
 @dataclass(slots=True)
@@ -82,6 +83,8 @@ class _BulkJsonCandidate:
 
 
 def _is_unsafe_zip_path(entry_name: str) -> bool:
+    if "\x00" in entry_name:
+        return True
     normalized = entry_name.replace("\\", "/")
     if normalized.startswith("/") or normalized.startswith("//"):
         return True
@@ -143,6 +146,12 @@ def _read_zip_entries(payload_bytes: bytes) -> list[tuple[zipfile.ZipInfo, bytes
                             f"ZIP entry '{member.filename}' is unsafe (path traversal or absolute path)."
                         ),
                     )
+                # Symlink entries are disallowed for bulk ZIP safety.
+                if (member.external_attr >> 16) & 0o170000 == 0o120000:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"ZIP entry '{member.filename}' is unsafe (symlink entries are not allowed).",
+                    )
 
                 if member.file_size > PHASE_5L_MAX_FILE_SIZE_BYTES:
                     raise HTTPException(
@@ -173,15 +182,7 @@ def _read_zip_entries(payload_bytes: bytes) -> list[tuple[zipfile.ZipInfo, bytes
                     )
 
                 with archive.open(member, "r") as fp:
-                    content = fp.read(PHASE_5L_MAX_FILE_SIZE_BYTES + 1)
-                if len(content) > PHASE_5L_MAX_FILE_SIZE_BYTES:
-                    raise HTTPException(
-                        status_code=422,
-                        detail=(
-                            f"ZIP entry '{member.filename}' exceeds max size "
-                            f"({PHASE_5L_MAX_FILE_SIZE_BYTES} bytes)."
-                        ),
-                    )
+                    content = fp.read(member.file_size)
                 output.append((member, content))
 
             return output
@@ -558,13 +559,13 @@ async def historical_json_bulk_zip_apply(
                 db, semantic_key, owner_user_id, owner_org_id
             )
         if dup_by_hash is not None or dup_by_semantic is not None:
-            duplicate_batch_id = dup_by_hash.id if dup_by_hash is not None else dup_by_semantic.id
+            duplicate_batch_record = dup_by_hash if dup_by_hash is not None else dup_by_semantic
             results.append(
                 HistoricalImportBulkZipApplyFileResult(
                     file_name=selected_name,
                     status="skipped",
-                    message=f"Skipped duplicate (existing batch: {duplicate_batch_id}).",
-                    batch_id=duplicate_batch_id,
+                    message=f"Skipped duplicate (existing batch: {duplicate_batch_record.id}).",
+                    batch_id=duplicate_batch_record.id,
                 )
             )
             continue
@@ -581,7 +582,11 @@ async def historical_json_bulk_zip_apply(
             dry_run_summary=candidate.dry_run.model_dump(),
             owner_user_id=owner_user_id,
             owner_org_id=owner_org_id,
-            source_filename=f"{file.filename}:{selected_name}" if file.filename else selected_name,
+            source_filename=(
+                f"{file.filename}{PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR}{selected_name}"
+                if file.filename
+                else selected_name
+            ),
             semantic_key=semantic_key,
         )
         game, _, error_msg = await apply_historical_batch(db, batch_id=batch.id, confirm=True)

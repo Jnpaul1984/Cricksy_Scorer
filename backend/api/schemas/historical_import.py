@@ -101,7 +101,13 @@ class HistoricalImportBulkZipFilePreview(BaseModel):
 
     file_name: str
     status: Literal["valid", "invalid", "duplicate", "unsupported", "error"]
-    message: str
+    message: str = Field(
+        ...,
+        description=(
+            "Human-readable per-file outcome details. "
+            "Examples: invalid JSON reason, duplicate explanation, or valid preview confirmation."
+        ),
+    )
     duplicate_within_zip: bool = False
     duplicate_batch_id: str | None = None
     semantic_duplicate: bool = False

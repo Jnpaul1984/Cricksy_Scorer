@@ -200,8 +200,10 @@ def test_bulk_zip_apply_only_applies_selected_valid_files() -> None:
     assert data["skipped_count"] == 1
     result_map = {item["file_name"]: item for item in data["results"]}
     assert result_map["ok.json"]["status"] == "applied"
+    assert result_map["ok.json"]["applied_game_id"] is not None
+    assert result_map["ok.json"]["batch_id"] is not None
     assert result_map["bad.json"]["status"] == "skipped"
     assert len(after_games) == len(before_games), "Bulk apply must not mutate live scoring views."
     assert len(batches) == 1
     assert batches[0]["is_finalized"] is True
-
+    assert batches[0]["applied_game_id"] == result_map["ok.json"]["applied_game_id"]

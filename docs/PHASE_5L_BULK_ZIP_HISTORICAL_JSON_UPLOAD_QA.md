@@ -47,4 +47,5 @@ Apply statuses:
 ## Phase 5M registry readiness notes
 - Raw ZIP bytes and raw JSON are not retained server-side in Phase 5L.
 - Existing batch metadata (`source_hash_sha256`, semantic key, dry-run summary) remains the audit foundation.
+- Applied ZIP entries store `source_filename` as `<zip-name>::<entry-name>` for traceable audit lineage.
 - Phase 5M can build registry/index workflows on finalized batch metadata without schema changes in this phase.
