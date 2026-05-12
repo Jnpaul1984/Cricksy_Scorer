@@ -118,6 +118,8 @@ const loadingStep = ref<'dry-run' | 'apply'>('dry-run')
 const dryRunResult = ref<HistoricalImportBulkZipDryRunResponse | null>(null)
 const applyResult = ref<HistoricalImportBulkZipApplyResponse | null>(null)
 const selectedFileNames = ref<string[]>([])
+let dryRunInFlight = false
+let applyInFlight = false
 
 const validFiles = computed(() =>
   dryRunResult.value?.files.filter((item) => item.status === 'valid') ?? [],
@@ -189,12 +191,9 @@ function onSelectedFileToggle(fileName: string, event: Event) {
 }
 
 async function runDryRun() {
-  if (loading.value) return
+  if (!selectedZipFile.value || dryRunInFlight) return
+  dryRunInFlight = true
   loading.value = true
-  if (!selectedZipFile.value) {
-    loading.value = false
-    return
-  }
   loadingStep.value = 'dry-run'
   error.value = null
   applyResult.value = null
@@ -206,16 +205,14 @@ async function runDryRun() {
     error.value = normalizeErrorMessage(err)
   } finally {
     loading.value = false
+    dryRunInFlight = false
   }
 }
 
 async function applySelected() {
-  if (loading.value) return
+  if (!selectedZipFile.value || selectedFileNames.value.length === 0 || applyInFlight) return
+  applyInFlight = true
   loading.value = true
-  if (!selectedZipFile.value || selectedFileNames.value.length === 0) {
-    loading.value = false
-    return
-  }
   loadingStep.value = 'apply'
   error.value = null
   try {
@@ -227,6 +224,7 @@ async function applySelected() {
     error.value = normalizeErrorMessage(err)
   } finally {
     loading.value = false
+    applyInFlight = false
   }
 }
 </script>
