@@ -50,7 +50,7 @@ Level: Beginner Cricket Analyst
 Course: Cricket Foundations
 Module: Cricket System Fundamentals
 Module Status: In Progress
-Current Lesson: Match Phases Explained
+Current Lesson: Module 1 Closeout Preparation
 
 ---
 
@@ -722,6 +722,246 @@ This was another strong practical session. You are beginning to understand that 
 
 ---
 
+## Session 2026-05-09 — Player Roles & Responsibilities Exercise
+
+### Curriculum Location
+
+- Level: Beginner Cricket Analyst
+- Course: Cricket Foundations
+- Module: Cricket System Fundamentals
+- Lesson: Player Roles & Responsibilities
+
+### Session Objectives
+
+- [x] Identify batter roles, bowler roles, all-rounder value, and role-based player evaluation.
+- [x] Evaluate performance using role + phase + match situation.
+- [x] Connect player roles to Cricksy role-based dashboards and ratings.
+
+### Theory Covered
+
+- Players should be evaluated by role, not only raw runs or wickets.
+- Openers build platforms and protect the middle order.
+- Anchors stabilize after wickets and rebuild innings.
+- Finishers score quickly under death-over pressure.
+- Death bowlers must contain boundary scoring and execute under pressure.
+- All-rounders provide tactical flexibility and team balance.
+
+### Real-World Example Discussed
+
+- Opener scoring 46 off 30 with team 58/1 after 6 overs.
+- Anchor scoring 62 off 78 after team collapses to 42/3.
+- Finisher scoring 28 off 11 from 126/4 after 16 overs.
+- Death bowler bowling overs 17 and 19 for 18 runs.
+- All-rounder scoring 18 off 10 and bowling 3 overs for 21 with 1 wicket.
+
+### Analyst Workflow Practiced
+
+- Identify the player's role.
+- Identify the phase and match situation.
+- Compare role expectation to actual contribution.
+- Explain whether the player fulfilled the tactical job.
+- Identify what Cricksy should track for role-based evaluation.
+
+### AI-Assisted Analysis Connection
+
+- Cricksy can classify player roles based on batting position, phase usage, scoring pattern, bowling phase, and match context.
+- Future AI can compare a player's output against expected role benchmarks.
+
+### Cricksy Feature Connection
+
+- Future feature: Role-Based Player Profiles.
+- Future feature: Powerplay Impact Score.
+- Future feature: Anchor Stabilization Score.
+- Future feature: Finisher Impact Score.
+- Future feature: Death Bowler Execution Score.
+- Future feature: All-Rounder Role Flexibility Rating.
+
+### Exercise / Practical Task
+
+- Task: Complete Player Roles & Responsibilities practice exercise.
+- Completion Status: Completed.
+- Evidence: Student uploaded `Player Roles & Responsibilities-Practise Exercise.txt` and answered Scenario A, B, C, D, and E questions.
+
+### Student Response Summary
+
+- Correctly identified the opener's role as surviving the new ball, building a platform, shielding the middle order, and keeping the score moving.
+- Correctly identified the anchor role after early wickets and explained that the innings helped prevent total collapse.
+- Correctly identified the finisher's role and used run rate/strike rate context to explain value.
+- Correctly identified the death bowler role and judged performance relative to death-over expectations.
+- Correctly explained all-rounder value as flexibility, team balance, and ability to allow an extra batter or bowler.
+
+### Grade
+
+| Category | Score | Feedback |
+|---|---:|---|
+| Tactical Understanding | 91 | Strong understanding of role expectation and tactical value. |
+| Observation Quality | 89 | Good reading of role-based scenarios. Continue checking exact values and context. |
+| Analyst Reasoning | 92 | Strong reasoning, especially around finisher value and all-rounder flexibility. |
+| Communication | 86 | Clear explanations. Future reports should become more polished and concise. |
+| AI Systems Thinking | 88 | Good early role-rating idea. Next step is defining data inputs for each role score. |
+| Cricksy Integration Thinking | 92 | Strong connection to role flexibility rating and role-based player profiles. |
+
+Overall Grade: 89.7 — Strong
+
+### Strengths
+
+- Strong contextual player evaluation.
+- Excellent finisher analysis using strike rate and death-over run-rate context.
+- Good understanding of opener, anchor, death bowler, and all-rounder role value.
+- Strong Cricksy product instinct around role flexibility rating.
+
+### Weaknesses / Gaps
+
+- Continue improving report-style wording and grammar.
+- Future role evaluations should mention phase, score state, and opponent pressure more consistently.
+- Cricksy tracking ideas should gradually become more specific, naming the exact signals needed.
+
+### Teacher Feedback
+
+This was a strong session. You are now judging players by role and match context instead of only raw statistics. Your finisher answer was the strongest because it used the actual run-rate need and strike rate to explain tactical value. This shows a strong foundation for future player profiling, role-based dashboards, and AI-assisted scouting.
+
+### Completion Decision
+
+- Lesson Complete: Yes
+- Player Role Classification Exercise Complete: Yes
+- Project Updated: No
+- Assessment Passed: Lesson-level assessment passed
+
+### Notion Update Recommendation
+
+- Mark `Player Roles & Responsibilities` as Completed or Ready for Review.
+- Mark `Player role classification exercise` as Completed.
+- Add `Player Roles & Responsibilities-Practise Exercise.txt` as evidence or note in the lesson page if desired.
+- Keep Module 1 status as In Progress until tactical foundations, mini project, and assessment are closed.
+
+### Next Session Focus
+
+- Session 6: Tactical Foundations of Cricket.
+
+---
+
+## Session 2026-05-09 — Tactical Foundations of Cricket Exercise
+
+### Curriculum Location
+
+- Level: Beginner Cricket Analyst
+- Course: Cricket Foundations
+- Module: Cricket System Fundamentals
+- Lesson: Tactical Foundations of Cricket
+
+### Session Objectives
+
+- [x] Understand tactical goals: attack, control, and contain.
+- [x] Identify bowling plans, field-supported traps, batter counter-tactics, and matchup decisions.
+- [x] Explain tactical cause-and-effect in match situations.
+- [x] Connect tactical analysis to Cricksy tagging, alerts, and recommendation systems.
+
+### Theory Covered
+
+- Tactical plans connect bowling plan, field placement, batter weakness, and match situation.
+- Tactical goals include attack, control, and containment.
+- Bowling plans must be supported by field placement.
+- Tactical traps invite a batter into a risky option.
+- Batter counter-tactics can disrupt pressure.
+- Matchup decisions use player strengths and weaknesses to create advantage.
+
+### Real-World Example Discussed
+
+- Dot-ball squeeze in T20 middle overs.
+- Short-ball trap against a batter weak on the pull shot.
+- Death-over wide-yorker containment plan.
+- Batter sweep counter-tactic against spin pressure.
+- Off-spinner introduced against a left-hander struggling against off-spin.
+
+### Analyst Workflow Practiced
+
+- Identify the match situation.
+- Identify the tactical goal.
+- Identify the method.
+- Identify the response.
+- Judge whether the plan worked.
+- Translate the tactical pattern into a Cricksy feature opportunity.
+
+### AI-Assisted Analysis Connection
+
+- Cricksy can support plan tagging, field maps, shot maps, pressure alerts, tactical risk scoring, and shot selection tracking.
+- Future systems can detect tactical traps and recommend matchup-based bowling changes.
+
+### Cricksy Feature Connection
+
+- Future feature: Bowling Plan Tagging.
+- Future feature: Field Map and Shot Map Integration.
+- Future feature: Dot-Ball Pressure Alert.
+- Future feature: Tactical Risk Score.
+- Future feature: Matchup Recommendation Engine.
+- Future feature: Shot Selection Tracker.
+
+### Exercise / Practical Task
+
+- Task: Complete Tactical Foundations of Cricket practice exercise.
+- Completion Status: Completed.
+- Evidence: Student uploaded `Session 6 — Tactical Foundations of Cricket.txt` and answered Scenario A, B, C, D, and E questions.
+
+### Student Response Summary
+
+- Correctly identified control as the tactical goal in the middle-overs dot-ball squeeze.
+- Correctly recognized short-ball trap logic and field support with deep square leg and fine leg.
+- Correctly identified death-over containment through wide yorkers and boundary-protecting fielders.
+- Correctly identified sweep/strike rotation as a batter counter-tactic against spinner dot-ball pressure, though wording briefly attributed the sweep to the spinner instead of the batter.
+- Correctly identified a spin matchup decision and Cricksy recommendation opportunity.
+
+### Grade
+
+| Category | Score | Feedback |
+|---|---:|---|
+| Tactical Understanding | 91 | Strong understanding of tactical goals, traps, containment, and matchups. |
+| Observation Quality | 88 | Correctly identified tactical patterns. Continue improving actor precision: who applied which tactic. |
+| Analyst Reasoning | 91 | Strong cause-and-effect logic across all scenarios. |
+| Communication | 85 | Clear enough, but polish wording and grammar for report-style output. |
+| AI Systems Thinking | 90 | Strong feature mapping: plan tagging, pressure alerts, risk score, shot tracking. |
+| Cricksy Integration Thinking | 91 | Strong connection between tactical analysis and platform intelligence features. |
+
+Overall Grade: 89.3 — Strong
+
+### Strengths
+
+- Strong understanding of tactical goal, method, and outcome.
+- Excellent short-ball trap explanation.
+- Strong death-over containment analysis.
+- Good tactical-to-product translation for Cricksy features.
+- Strong matchup recommendation instinct.
+
+### Weaknesses / Gaps
+
+- In Scenario D, the batter, not the spinner, used the sweep shot as a counter-tactic.
+- Future tactical reports should clearly separate bowling plan, field placement, batter response, and outcome.
+- Cricksy recommendations should include both batting and bowling perspectives where relevant.
+
+### Teacher Feedback
+
+This session shows that you understand tactical cricket at a beginner analyst level. You can identify the plan, the method, the field support, and the outcome. Your Scenario B response was report-ready: the field invited the pull shot and the bowler executed the short-ball trap. The next improvement is precision in actor roles and making Cricksy recommendations specific enough to become feature logic.
+
+### Completion Decision
+
+- Lesson Complete: Yes
+- Tactical Shift Observation Exercise Complete: Yes
+- Module 1 Theory Lessons Complete: Yes
+- Project Updated: No
+- Assessment Passed: Lesson-level assessment passed
+
+### Notion Update Recommendation
+
+- Mark `Tactical Foundations of Cricket` as Completed or Ready for Review.
+- Mark `Tactical shift observation exercise` as Completed.
+- Add `Session 6 — Tactical Foundations of Cricket.txt` as evidence or note in the lesson page if desired.
+- Keep Module 1 status as In Progress until mini project and final assessment are complete.
+
+### Next Session Focus
+
+- Module 1 Closeout Preparation: complete Match Structure Breakdown Report and Cricket System Fundamentals Assessment.
+
+---
+
 ## 7. Module 1 Progress Snapshot
 
 Module: Cricket System Fundamentals
@@ -733,8 +973,8 @@ Module: Cricket System Fundamentals
 | Introduction to Cricket Formats | Completed | Session 1 analyst mindset and Session 2 format comparison/practical observation completed. |
 | Understanding Overs & Innings | Completed | Session 3 understanding overs and innings exercise completed and graded. |
 | Match Phases Explained | Completed | Session 4 match phases exercise completed and graded. |
-| Player Roles & Responsibilities | Not Started |  |
-| Tactical Foundations of Cricket | Not Started |  |
+| Player Roles & Responsibilities | Completed | Session 5 player roles exercise completed and graded. |
+| Tactical Foundations of Cricket | Completed | Session 6 tactical foundations exercise completed and graded. |
 
 ### Exercises
 
@@ -744,9 +984,8 @@ Module: Cricket System Fundamentals
 | Practical observation exercise | Completed | Scenario A/B/C observation exercise completed in Session 2. |
 | Overs and innings exercise | Completed | Session 3 uploaded exercise file and graded response. |
 | Match phase identification exercise | Completed | Session 4 uploaded exercise file and graded response. |
-| Five-over observation exercise | Not Started |  |
-| Player role classification exercise | Not Started |  |
-| Tactical shift observation exercise | Not Started |  |
+| Player role classification exercise | Completed | Session 5 uploaded exercise file and graded response. |
+| Tactical shift observation exercise | Completed | Session 6 uploaded exercise file and graded response. |
 | Analyst mindset exercise | Completed | Session 1 five-question practical completed. |
 
 ### Mini Project
@@ -765,6 +1004,6 @@ Module: Cricket System Fundamentals
 
 ## 8. Next Planned Session
 
-Session Title: Player Roles & Responsibilities
-Curriculum Location: Level 1 → Cricket Foundations → Cricket System Fundamentals → Player Roles & Responsibilities
-Primary Goal: Identify batter roles, bowler roles, all-rounder value, wicketkeeper role, and how role clarity affects tactical analysis.
+Session Title: Module 1 Closeout Preparation
+Curriculum Location: Level 1 → Cricket Foundations → Cricket System Fundamentals → Module 1 Closeout
+Primary Goal: Complete Match Structure Breakdown Report and Cricket System Fundamentals Assessment before moving to Module 2.
