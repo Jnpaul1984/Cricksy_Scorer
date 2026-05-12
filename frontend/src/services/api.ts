@@ -761,6 +761,7 @@ export interface AnalystMatchListItem {
   match_datetime?: string | null;
   is_historical?: boolean;
   source?: string;
+  historical_batch_id?: string | null;
 }
 
 export interface AnalystMatchListResponse {
@@ -1417,6 +1418,14 @@ export interface HistoricalImportApplyDeliveriesResponse {
   rollback_info: string;
 }
 
+export interface HistoricalImportRollbackResponse {
+  batch_id: string;
+  rolled_back_game_id?: string | null;
+  records_deleted: number;
+  status: 'rolled_back';
+  warnings: string[];
+}
+
 export interface HistoricalImportTrainingStatus {
   batch_id: string;
   source_format: string;
@@ -1491,6 +1500,20 @@ export async function historicalImportApplyDeliveries(
   return request<HistoricalImportApplyDeliveriesResponse>(
     `/api/historical-import/json/batches/${encodeURIComponent(batchId)}/apply-deliveries?confirm=true`,
     { method: 'POST', body: form },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/batches/{batchId}/rollback
+ * Removes the imported historical game for the batch.
+ * Requires explicit confirm=true.
+ */
+export async function historicalImportRollback(
+  batchId: string,
+): Promise<HistoricalImportRollbackResponse> {
+  return request<HistoricalImportRollbackResponse>(
+    `/api/historical-import/json/batches/${encodeURIComponent(batchId)}/rollback`,
+    { method: 'POST', body: JSON.stringify({ confirm: true }) },
   );
 }
 

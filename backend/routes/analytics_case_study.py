@@ -122,6 +122,7 @@ async def list_analyst_matches(
                 match_datetime=created_at,
                 is_historical=bool(hist_meta),
                 source="historical_import" if hist_meta else "live",
+                historical_batch_id=hist_meta.get("batch_id") if hist_meta else None,
             )
         )
 

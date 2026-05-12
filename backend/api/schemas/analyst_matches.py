@@ -44,6 +44,7 @@ class AnalystMatchListItem(BaseModel):
     match_datetime: datetime | None = None
     is_historical: bool = False
     source: str = "live"
+    historical_batch_id: str | None = None
 
     @field_validator("source_dates", mode="before")
     @classmethod
