@@ -260,7 +260,7 @@ async def get_match_registry(
         elif batch.applied_game_id is None:
             blocking_reason = "no_game_applied"
         elif batch.status != "valid":
-            blocking_reason = f"invalid_status:{batch.status}"
+            blocking_reason = f"invalid_status_{batch.status}"
         elif batch.error_count > 0:
             blocking_reason = "has_errors"
 
@@ -286,6 +286,8 @@ async def get_match_registry(
             source_filename=batch.source_filename,
             source_format=batch.source_format,
             source_type="json",
+            # batch.created_at is when the dry-run/preview batch record was created,
+            # i.e. when the import process was initiated by the user.
             imported_at=batch.created_at,
             validation_status=batch.status,
             registration_status=registration_status,

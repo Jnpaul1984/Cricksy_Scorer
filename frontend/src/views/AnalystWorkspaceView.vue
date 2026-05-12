@@ -1142,9 +1142,10 @@ async function selectMatch(matchId: string) {
   registryData.value = null
   const selectedMatch = matches.value.find(m => m.id === matchId)
   await loadMatchDetail(matchId)
-  // Load registry data for all matches (historical or live) so the panel is always shown
+  // Registry data is loaded independently of match detail to avoid blocking the main detail
+  // load. The "Registry & Provenance" panel reactively updates once this resolves.
   if (selectedMatch) {
-    loadMatchRegistry(matchId)
+    void loadMatchRegistry(matchId)
   }
   await nextTick()
   document.getElementById('aw-match-detail')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
