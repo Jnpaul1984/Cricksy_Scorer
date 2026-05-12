@@ -189,8 +189,12 @@ function onSelectedFileToggle(fileName: string, event: Event) {
 }
 
 async function runDryRun() {
-  if (!selectedZipFile.value || loading.value) return
+  if (loading.value) return
   loading.value = true
+  if (!selectedZipFile.value) {
+    loading.value = false
+    return
+  }
   loadingStep.value = 'dry-run'
   error.value = null
   applyResult.value = null
@@ -206,8 +210,12 @@ async function runDryRun() {
 }
 
 async function applySelected() {
-  if (!selectedZipFile.value || selectedFileNames.value.length === 0 || loading.value) return
+  if (loading.value) return
   loading.value = true
+  if (!selectedZipFile.value || selectedFileNames.value.length === 0) {
+    loading.value = false
+    return
+  }
   loadingStep.value = 'apply'
   error.value = null
   try {
