@@ -703,16 +703,19 @@
               <AnalyticsTablesWidget :profile="null" />
             </div>
 
-            <!-- Import JSON Tab -->
+            <!-- Import Data Tab -->
             <div v-else-if="activeTab === 'import'" class="aw-table-wrapper">
               <div class="aw-table-header">
-                <h3>Import Historical JSON</h3>
+                <h3>Import Historical Data</h3>
                 <p class="aw-table-subtitle">
-                  Upload a match JSON file to add it to the Analyst Workspace.
-                  Files go through a dry-run validation before any data is saved.
+                  Upload either a single historical JSON file or a bulk ZIP bundle.
+                  Imports are validated before match data is saved.
                 </p>
               </div>
-              <HistoricalImportPanel @import-done="onImportDone" />
+              <div class="aw-import-panels">
+                <HistoricalImportPanel @import-done="onImportDone" />
+                <HistoricalImportBulkZipPanel @import-done="onImportDone" />
+              </div>
             </div>
 
             <!-- Default fallback -->
@@ -740,6 +743,7 @@ import type { AiCallout } from '@/components'
 import AnalyticsTablesWidget from '@/components/AnalyticsTablesWidget.vue'
 import ExportUI from '@/components/ExportUI.vue'
 import HistoricalImportPanel from '@/components/HistoricalImportPanel.vue'
+import HistoricalImportBulkZipPanel from '@/components/HistoricalImportBulkZipPanel.vue'
 import {
   getAnalystMatches,
   getMatchCaseStudy,
@@ -789,7 +793,7 @@ const tabs: { value: AnalystTab; label: string }[] = [
   { value: 'deliveries', label: 'Deliveries' },
   { value: 'case-studies', label: 'Case studies' },
   { value: 'analytics', label: 'Analytics' },
-  { value: 'import', label: 'Import JSON' }
+  { value: 'import', label: 'Import Data' }
 ]
 
 const lastSyncLabel = ref('Just now')
@@ -1563,6 +1567,11 @@ onMounted(() => {
   margin: var(--space-1) 0 0;
   font-size: var(--text-sm);
   color: var(--color-text-muted);
+}
+
+.aw-import-panels {
+  display: grid;
+  gap: var(--space-4);
 }
 
 .aw-table-scroll {
