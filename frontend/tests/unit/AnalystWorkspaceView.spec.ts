@@ -29,6 +29,14 @@ const globalStubs = {
   AiCalloutsPanel: { template: '<div class="ai-callouts-stub" />' },
   AnalyticsTablesWidget: { template: '<div class="analytics-tables-stub" />' },
   ExportUI: { template: '<div class="export-ui-stub" />' },
+  HistoricalImportPanel: {
+    template: '<button class="json-import-done-btn" @click="$emit(\'import-done\', \'json-game\')">json import done</button>',
+    emits: ['import-done'],
+  },
+  HistoricalImportBulkZipPanel: {
+    template: '<button class="zip-import-done-btn" @click="$emit(\'import-done\', \'zip-game\')">zip import done</button>',
+    emits: ['import-done'],
+  },
 }
 
 const mockMatchList = {
@@ -314,6 +322,28 @@ describe('AnalystWorkspaceView', () => {
     await nextTick()
 
     expect(wrapper.text()).toContain('Loading completed matches')
+  })
+
+  it('refreshes matches when bulk ZIP import emits import-done', async () => {
+    vi.mocked(api.getAnalystMatches)
+      .mockResolvedValueOnce(mockMatchList)
+      .mockResolvedValueOnce(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const importTab = wrapper.findAll('button.base-button-stub').find((b) => b.text().includes('Import Data'))
+    expect(importTab).toBeDefined()
+    await importTab!.trigger('click')
+    await nextTick()
+
+    await wrapper.find('.zip-import-done-btn').trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(api.getAnalystMatches).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('.zip-import-done-btn').exists()).toBe(false)
   })
 
   it('shows empty state when no completed matches exist', async () => {

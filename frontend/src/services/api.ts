@@ -1442,6 +1442,53 @@ export interface HistoricalImportTrainingStatus {
   training_registry_phase: string;
 }
 
+export interface HistoricalImportBulkZipFilePreview {
+  file_name: string;
+  status: 'valid' | 'invalid' | 'duplicate' | 'unsupported' | 'error';
+  message: string;
+  duplicate_within_zip: boolean;
+  duplicate_batch_id?: string | null;
+  semantic_duplicate: boolean;
+  detected_format?: string | null;
+  warnings: HistoricalImportIssue[];
+  errors: HistoricalImportIssue[];
+  dry_run_preview?: HistoricalImportDryRunResponse | null;
+}
+
+export interface HistoricalImportBulkZipDryRunResponse {
+  status: 'preview_ready' | 'invalid_zip';
+  source_filename?: string | null;
+  total_entries: number;
+  json_entries: number;
+  non_json_entries: number;
+  selected_apply_requires_confirm: boolean;
+  max_files: number;
+  max_file_size_bytes: number;
+  max_total_uncompressed_bytes: number;
+  max_total_compressed_bytes: number;
+  summary: Record<string, number>;
+  files: HistoricalImportBulkZipFilePreview[];
+}
+
+export interface HistoricalImportBulkZipApplyFileResult {
+  file_name: string;
+  status: 'applied' | 'skipped' | 'error';
+  message: string;
+  batch_id?: string | null;
+  applied_game_id?: string | null;
+}
+
+export interface HistoricalImportBulkZipApplyResponse {
+  status: 'applied' | 'partial' | 'failed';
+  source_filename?: string | null;
+  selected_count: number;
+  applied_count: number;
+  skipped_count: number;
+  error_count: number;
+  selected_apply_requires_confirm: boolean;
+  results: HistoricalImportBulkZipApplyFileResult[];
+}
+
 /**
  * POST /api/historical-import/json/dry-run
  * Accepts a .json File; optionally persists batch metadata when recordPreview=true.
@@ -1526,5 +1573,38 @@ export async function historicalImportGetTrainingStatus(
 ): Promise<HistoricalImportTrainingStatus> {
   return request<HistoricalImportTrainingStatus>(
     `/api/historical-import/json/batches/${encodeURIComponent(batchId)}/training-status`,
+  );
+}
+
+/**
+ * POST /api/historical-import/json/bulk-zip/dry-run
+ * Runs dry-run validation for a ZIP containing multiple historical JSON files.
+ */
+export async function historicalImportBulkZipDryRun(
+  file: File,
+): Promise<HistoricalImportBulkZipDryRunResponse> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  return request<HistoricalImportBulkZipDryRunResponse>(
+    '/api/historical-import/json/bulk-zip/dry-run',
+    { method: 'POST', body: form },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/bulk-zip/apply
+ * Applies selected valid entries from a ZIP import dry-run.
+ */
+export async function historicalImportBulkZipApply(
+  file: File,
+  selectedFiles: string[],
+): Promise<HistoricalImportBulkZipApplyResponse> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  form.append('confirm', 'true');
+  form.append('selected_files', JSON.stringify(selectedFiles));
+  return request<HistoricalImportBulkZipApplyResponse>(
+    '/api/historical-import/json/bulk-zip/apply',
+    { method: 'POST', body: form },
   );
 }
