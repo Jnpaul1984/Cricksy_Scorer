@@ -327,7 +327,7 @@
                     <BaseButton
                       variant="ghost"
                       size="sm"
-                      @click="selectedMatchId = null"
+                      @click="selectedMatchId = null; registryData = null"
                     >
                       Close
                     </BaseButton>
@@ -643,6 +643,122 @@
                 <div v-else class="aw-detail-empty-hint">
                   No detail available for this match yet.
                 </div>
+
+                <!-- Registry & Provenance panel (Phase 5M) — always shown when a match is selected -->
+                <section class="aw-detail-registry" aria-label="Registry and Provenance">
+                  <h4 class="aw-detail-section-title">Registry &amp; Provenance</h4>
+
+                  <div v-if="registryLoading" class="aw-registry-loading" role="status">
+                    <p>Loading registry data…</p>
+                  </div>
+
+                  <div v-else-if="registryData" class="aw-registry-grid">
+                    <!-- Competition context -->
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Competition</span>
+                      <span class="aw-registry-value">{{ registryData.competition ?? 'Unknown' }}</span>
+                    </div>
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Season</span>
+                      <span class="aw-registry-value">{{ registryData.season ?? 'Unknown' }}</span>
+                    </div>
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Venue</span>
+                      <span class="aw-registry-value">{{ registryData.venue ?? 'Unknown' }}</span>
+                    </div>
+                    <div v-if="registryData.match_number != null" class="aw-registry-row">
+                      <span class="aw-registry-label">Match no.</span>
+                      <span class="aw-registry-value">{{ registryData.match_number }}</span>
+                    </div>
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Player registry</span>
+                      <span class="aw-registry-value">
+                        {{ registryData.player_count > 0 ? `${registryData.player_count} players found` : 'Not registered yet' }}
+                      </span>
+                    </div>
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Innings imported</span>
+                      <span class="aw-registry-value">{{ registryData.innings_count }}</span>
+                    </div>
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Deliveries imported</span>
+                      <span class="aw-registry-value">{{ registryData.has_deliveries ? 'Yes' : 'No' }}</span>
+                    </div>
+
+                    <!-- Import batch / source provenance -->
+                    <div class="aw-registry-divider" />
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Import batch ID</span>
+                      <span class="aw-registry-value aw-registry-mono">{{ registryData.import_batch_id ?? 'Not available' }}</span>
+                    </div>
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Source file</span>
+                      <span class="aw-registry-value">{{ registryData.source_filename ?? 'Unknown' }}</span>
+                    </div>
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Source type</span>
+                      <span class="aw-registry-value">{{ registryData.source_format ?? registryData.source_type }}</span>
+                    </div>
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Imported at</span>
+                      <span class="aw-registry-value">{{ registryData.imported_at ? new Date(registryData.imported_at).toLocaleString() : 'Unknown' }}</span>
+                    </div>
+
+                    <!-- Validation / registration / training eligibility -->
+                    <div class="aw-registry-divider" />
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Validation status</span>
+                      <span
+                        class="aw-registry-value aw-registry-status"
+                        :class="{
+                          'aw-registry-status--ok': registryData.validation_status === 'valid',
+                          'aw-registry-status--warn': registryData.validation_status === 'unknown',
+                          'aw-registry-status--bad': registryData.validation_status === 'invalid' || registryData.validation_status === 'unsupported',
+                          'aw-registry-status--neutral': registryData.validation_status === 'not_applicable',
+                        }"
+                      >
+                        {{ registryData.validation_status === 'valid' ? 'Valid'
+                          : registryData.validation_status === 'invalid' ? 'Invalid'
+                          : registryData.validation_status === 'unsupported' ? 'Unsupported format'
+                          : registryData.validation_status === 'not_applicable' ? 'Not applicable'
+                          : 'Unknown' }}
+                      </span>
+                    </div>
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Registration status</span>
+                      <span
+                        class="aw-registry-value aw-registry-status"
+                        :class="{
+                          'aw-registry-status--ok': registryData.registration_status === 'registered',
+                          'aw-registry-status--warn': registryData.registration_status === 'not_registered',
+                        }"
+                      >
+                        {{ registryData.registration_status === 'registered' ? 'Registered' : 'Not registered yet' }}
+                      </span>
+                    </div>
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Training eligible</span>
+                      <span
+                        class="aw-registry-value aw-registry-status"
+                        :class="{
+                          'aw-registry-status--ok': registryData.training_eligible,
+                          'aw-registry-status--warn': !registryData.training_eligible,
+                        }"
+                      >
+                        {{ registryData.training_eligible ? 'Eligible' : 'Not eligible' }}
+                      </span>
+                    </div>
+                    <div v-if="registryData.blocking_reason && !registryData.training_eligible" class="aw-registry-row">
+                      <span class="aw-registry-label">Blocking reason</span>
+                      <span class="aw-registry-value aw-registry-blocking">{{ registryData.blocking_reason }}</span>
+                    </div>
+                  </div>
+
+                  <!-- Registry not loaded state -->
+                  <div v-else class="aw-registry-empty">
+                    Registry data unavailable for this match.
+                  </div>
+                </section>
               </div>
             </div>
 
@@ -747,9 +863,11 @@ import HistoricalImportBulkZipPanel from '@/components/HistoricalImportBulkZipPa
 import {
   getAnalystMatches,
   getMatchCaseStudy,
+  getMatchRegistry,
   historicalImportRollback,
   type AnalystMatchListItem,
   type MatchCaseStudyResponse,
+  type MatchRegistryResponse,
 } from '@/services/api'
 
 const router = useRouter()
@@ -846,6 +964,10 @@ const selectedMatchId = ref<string | null>(null)
 const matchDetail = ref<MatchCaseStudyResponse | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
+
+// Registry & Provenance state - loaded for historical matches (Phase 5M)
+const registryData = ref<MatchRegistryResponse | null>(null)
+const registryLoading = ref(false)
 
 // Players list - NO FAKE DATA
 // Required: GET /analyst/players
@@ -1017,7 +1139,14 @@ async function loadMatches() {
 
 async function selectMatch(matchId: string) {
   selectedMatchId.value = matchId
+  registryData.value = null
+  const selectedMatch = matches.value.find(m => m.id === matchId)
   await loadMatchDetail(matchId)
+  // Registry data is loaded independently of match detail to avoid blocking the main detail
+  // load. The "Registry & Provenance" panel reactively updates once this resolves.
+  if (selectedMatch) {
+    void loadMatchRegistry(matchId)
+  }
   await nextTick()
   document.getElementById('aw-match-detail')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
@@ -1033,6 +1162,19 @@ async function loadMatchDetail(matchId: string) {
     console.error('[AnalystWorkspace] Failed to load match detail:', err)
   } finally {
     detailLoading.value = false
+  }
+}
+
+async function loadMatchRegistry(matchId: string) {
+  registryLoading.value = true
+  try {
+    registryData.value = await getMatchRegistry(matchId)
+  } catch (err) {
+    // Registry loading failure is non-fatal; panel will show empty state
+    registryData.value = null
+    console.error('[AnalystWorkspace] Failed to load registry data:', err)
+  } finally {
+    registryLoading.value = false
   }
 }
 
@@ -1073,6 +1215,7 @@ async function cleanupImportedMatch(match: AnalystMatch) {
       selectedMatchId.value = null
       matchDetail.value = null
       detailError.value = null
+      registryData.value = null
     }
     await loadMatches()
   } catch (err) {
@@ -2241,5 +2384,86 @@ onMounted(() => {
   font-size: var(--text-sm);
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+/* ── Registry & Provenance panel (Phase 5M) ─────────────────────────────── */
+
+.aw-detail-registry {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.aw-registry-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.aw-registry-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.aw-registry-label {
+  min-width: 10rem;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.aw-registry-value {
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.aw-registry-mono {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.aw-registry-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-2) 0;
+}
+
+.aw-registry-status--ok {
+  color: var(--color-success, #22c55e);
+  font-weight: var(--font-semibold);
+}
+
+.aw-registry-status--warn {
+  color: var(--color-warning, #f59e0b);
+  font-weight: var(--font-semibold);
+}
+
+.aw-registry-status--bad {
+  color: var(--color-error, #ef4444);
+  font-weight: var(--font-semibold);
+}
+
+.aw-registry-status--neutral {
+  color: var(--color-text-muted);
+}
+
+.aw-registry-blocking {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs);
+  color: var(--color-warning, #f59e0b);
+}
+
+.aw-registry-loading,
+.aw-registry-empty {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: var(--space-2) 0;
 }
 </style>

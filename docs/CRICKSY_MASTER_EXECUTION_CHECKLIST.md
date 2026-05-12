@@ -1191,7 +1191,42 @@ Structured historical match import works safely and does not corrupt live scorin
 - Competition, season, venue, team, and player registry foundations are defined and governed.
 - Match provenance and import-batch linkage are enforced for historical imports.
 - Training-readiness depends on successful validation + registry linkage.
-- Postgres Alembic validation gate passes for registry migrations.
+- Postgres Alembic migration gate not required (no new tables added — provenance is stored in existing `phases.historical_import` JSON and `HistoricalImportBatch` model).
+
+### Phase 5M Implementation Notes (completed)
+
+Phase 5M is implemented as the smallest safe slice that is visible in the frontend:
+
+**Backend (no new migration required):**
+- `MatchRegistryResponse` Pydantic schema added to `backend/api/schemas/analyst_matches.py`.
+- `GET /analytics/matches/{match_id}/registry` endpoint added to `backend/routes/analytics_case_study.py`.
+  - Looks up `HistoricalImportBatch` by `batch_id` stored in `game.phases.historical_import`.
+  - Returns competition, season, venue, teams, player_count, innings_count, has_deliveries,
+    import batch provenance (batch ID, source filename, source format, imported_at),
+    validation_status (from `batch.status`), registration_status, training_eligible, and blocking_reason.
+  - For non-historical matches: returns `validation_status="not_applicable"`, `training_eligible=False`.
+  - Training eligibility requires: `is_finalized=True` + `status="valid"` + `error_count=0`.
+- 4 new backend tests added to `backend/tests/test_analyst_pro_features.py`.
+
+**Frontend:**
+- `MatchRegistryResponse` TypeScript interface and `getMatchRegistry()` function added to `frontend/src/services/api.ts`.
+- "Registry & Provenance" section added to `AnalystWorkspaceView.vue` match detail panel.
+  - Shows competition, season, venue, teams, player registry status, innings/deliveries counts,
+    import batch ID, source file/format, imported_at, validation status, registration status,
+    training eligibility, and blocking reason.
+  - Missing values shown as "Unknown" / "Not registered yet" / "Not available".
+  - No fake/demo data introduced.
+- 7 new frontend tests added to `frontend/tests/unit/AnalystWorkspaceView.spec.ts`.
+
+**Validation evidence:**
+- `pytest backend/tests/test_analyst_pro_features.py` → 18 passed (including 4 new)
+- `pytest backend/tests/test_health.py backend/tests/test_results_endpoint.py` → 9 passed
+- `pytest backend/tests/integration/` → 38 passed
+- `pytest backend/tests/test_dls_calculations.py` → 21 passed
+- `npm run test:unit -- tests/unit/AnalystWorkspaceView.spec.ts` → 48 passed (including 7 new)
+- `npm run type-check` → passes
+- `npm run build-only` → passes
+- `npm run guard:fake-data` → 0 errors
 
 ---
 

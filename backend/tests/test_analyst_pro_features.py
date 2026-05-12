@@ -778,3 +778,133 @@ async def test_analyst_match_detail_and_export_cross_org_blocked(client: TestCli
         headers=_auth_headers(other_token),
     )
     assert blocked_export.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Phase 5M — Registry endpoint tests
+# ---------------------------------------------------------------------------
+
+
+async def test_match_registry_for_live_match_returns_not_historical(client: TestClient) -> None:
+    """A live (non-historical) match returns is_historical=False with not_applicable status."""
+    analyst = register_user(client, "analyst-reg-live@example.com")
+    await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
+    token = login_user(client, analyst["email"])
+
+    await create_game(
+        client,
+        game_id="live-match-reg",
+        created_by_user_id=analyst["id"],
+        status=models.GameStatus.completed,
+    )
+
+    resp = client.get(
+        "/analytics/matches/live-match-reg/registry",
+        headers=_auth_headers(token),
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+
+    assert data["match_id"] == "live-match-reg"
+    assert data["is_historical"] is False
+    assert data["validation_status"] == "not_applicable"
+    assert data["registration_status"] == "not_registered"
+    assert data["training_eligible"] is False
+    assert data["blocking_reason"] == "not_a_historical_import"
+    assert data["import_batch_id"] is None
+    assert data["source_filename"] is None
+
+
+async def test_match_registry_returns_404_for_unknown_match(client: TestClient) -> None:
+    """Registry endpoint returns 404 when the match does not exist or is not accessible."""
+    analyst = register_user(client, "analyst-reg-404@example.com")
+    await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
+    token = login_user(client, analyst["email"])
+
+    resp = client.get(
+        "/analytics/matches/nonexistent-match-id/registry",
+        headers=_auth_headers(token),
+    )
+    assert resp.status_code == 404
+
+
+async def test_match_registry_for_applied_historical_import(client: TestClient) -> None:
+    """An applied historical import returns linked batch provenance and correct eligibility."""
+    analyst = register_user(client, "analyst-reg-hist@example.com")
+    await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
+    token = login_user(client, analyst["email"])
+
+    fixture_payload = json.loads(HISTORICAL_FIXTURE_PATH.read_text(encoding="utf-8"))
+
+    dry_run_resp = client.post(
+        "/api/historical-import/json/dry-run",
+        headers=_auth_headers(token),
+        params={"record_preview": "true"},
+        json=fixture_payload,
+    )
+    assert dry_run_resp.status_code == 200, dry_run_resp.text
+    batch_id = dry_run_resp.json()["record_id"]
+    assert batch_id
+
+    apply_resp = client.post(
+        f"/api/historical-import/json/batches/{batch_id}/apply",
+        headers=_auth_headers(token),
+        json={"confirm": True},
+    )
+    assert apply_resp.status_code == 200, apply_resp.text
+    game_id = apply_resp.json()["applied_game_id"]
+    assert game_id
+
+    registry_resp = client.get(
+        f"/analytics/matches/{game_id}/registry",
+        headers=_auth_headers(token),
+    )
+    assert registry_resp.status_code == 200, registry_resp.text
+    data = registry_resp.json()
+
+    assert data["match_id"] == game_id
+    assert data["is_historical"] is True
+    assert data["import_batch_id"] == batch_id
+    assert data["validation_status"] == "valid"
+    assert data["registration_status"] == "registered"
+    assert data["training_eligible"] is True
+    assert data["blocking_reason"] is None
+    assert data["innings_count"] >= 1
+    # Source provenance fields must be present
+    assert data["source_format"] is not None
+    assert data["imported_at"] is not None
+
+
+async def test_match_registry_cross_org_blocked(client: TestClient) -> None:
+    """Registry endpoint is org-scoped: another org cannot see the match registry."""
+    analyst_owner = register_user(client, "analyst-reg-owner@example.com")
+    await set_role(client, analyst_owner["email"], models.RoleEnum.analyst_pro)
+    await set_user_org_id(client, analyst_owner["email"], "org-reg-owner")
+    owner_token = login_user(client, analyst_owner["email"])
+
+    analyst_other = register_user(client, "analyst-reg-other@example.com")
+    await set_role(client, analyst_other["email"], models.RoleEnum.analyst_pro)
+    await set_user_org_id(client, analyst_other["email"], "org-reg-other")
+    other_token = login_user(client, analyst_other["email"])
+
+    await create_game(
+        client,
+        game_id="reg-owner-match",
+        created_by_user_id=analyst_owner["id"],
+        status=models.GameStatus.completed,
+    )
+
+    # Owner can access
+    ok_resp = client.get(
+        "/analytics/matches/reg-owner-match/registry",
+        headers=_auth_headers(owner_token),
+    )
+    assert ok_resp.status_code == 200
+
+    # Other org is blocked
+    blocked_resp = client.get(
+        "/analytics/matches/reg-owner-match/registry",
+        headers=_auth_headers(other_token),
+    )
+    assert blocked_resp.status_code == 404
+
