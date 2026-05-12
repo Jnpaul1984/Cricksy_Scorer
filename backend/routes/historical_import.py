@@ -558,8 +558,12 @@ async def historical_json_bulk_zip_apply(
             dup_by_semantic = await find_duplicate_by_semantic_key(
                 db, semantic_key, owner_user_id, owner_org_id
             )
-        if dup_by_hash is not None or dup_by_semantic is not None:
-            duplicate_batch_record = dup_by_hash if dup_by_hash is not None else dup_by_semantic
+        duplicate_batch_record: models.HistoricalImportBatch | None = None
+        if dup_by_hash is not None:
+            duplicate_batch_record = dup_by_hash
+        elif dup_by_semantic is not None:
+            duplicate_batch_record = dup_by_semantic
+        if duplicate_batch_record is not None:
             results.append(
                 HistoricalImportBulkZipApplyFileResult(
                     file_name=selected_name,
