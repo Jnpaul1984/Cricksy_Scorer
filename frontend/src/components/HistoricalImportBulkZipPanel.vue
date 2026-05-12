@@ -152,6 +152,7 @@ function onFileChange(event: Event) {
   if (!isZipFile(file)) {
     fileSelectError.value = 'Only .zip files are supported for bulk import.'
     selectedZipFile.value = null
+    if (fileInputRef.value) fileInputRef.value.value = ''
     return
   }
   selectedZipFile.value = file
