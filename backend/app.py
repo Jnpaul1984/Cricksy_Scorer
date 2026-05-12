@@ -154,7 +154,19 @@ class _MemoryExecResult(_FakeResult):
 
     def __init__(self, fetcher: Any):
         # fetcher should be a callable that returns an awaitable returning a list
+        super().__init__(query=None)
         self._fetcher = fetcher
+
+    def scalar_one_or_none(self) -> Any | None:
+        """Return the first item from the fetcher, or None if empty."""
+        try:
+            items = self._fetcher()
+            if hasattr(items, "__iter__"):
+                for item in items:
+                    return item
+        except Exception:
+            pass
+        return None
 
     def all(self) -> Any:
         """Return an object that is both awaitable and iterable/list-like.
