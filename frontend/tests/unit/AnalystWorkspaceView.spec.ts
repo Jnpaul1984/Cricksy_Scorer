@@ -219,6 +219,22 @@ describe('AnalystWorkspaceView', () => {
     expect(cleanupButtons[0].text()).toContain('Remove imported match')
   })
 
+  it('does not open match detail when cleanup button is clicked', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    await wrapper.find('.aw-cleanup-imported-btn').trigger('click')
+    await nextTick()
+
+    expect(api.getMatchCaseStudy).not.toHaveBeenCalled()
+    confirmSpy.mockRestore()
+  })
+
   it('requires explicit confirmation before removing imported match', async () => {
     vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
     vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
