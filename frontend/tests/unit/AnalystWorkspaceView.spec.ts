@@ -15,12 +15,13 @@ vi.mock('@/services/api', () => ({
   getAnalystMatches: vi.fn(),
   getMatchCaseStudy: vi.fn(),
   getAnalystExportData: vi.fn(),
+  historicalImportRollback: vi.fn(),
 }))
 
 // Stub child components that are not under test
 const globalStubs = {
   BaseCard: { template: '<div class="base-card-stub"><slot /></div>' },
-  BaseButton: { template: '<button class="base-button-stub" @click="$emit(\'click\')"><slot /></button>', emits: ['click'] },
+  BaseButton: { template: '<button class="base-button-stub" @click="$emit(\'click\', $event)"><slot /></button>', emits: ['click'] },
   BaseBadge: { template: '<span class="base-badge-stub"><slot /></span>' },
   BaseInput: { template: '<input class="base-input-stub" />' },
   ImpactBar: { template: '<div class="impact-bar-stub" />' },
@@ -45,6 +46,7 @@ const mockMatchList = {
       match_datetime: null,
       is_historical: true,
       source: 'historical_import',
+      historical_batch_id: 'batch-001',
     },
     {
       id: 'match-002',
@@ -59,6 +61,7 @@ const mockMatchList = {
       match_datetime: null,
       is_historical: false,
       source: 'live',
+      historical_batch_id: null,
     },
   ],
   total: 2,
@@ -201,6 +204,89 @@ describe('AnalystWorkspaceView', () => {
     const text = wrapper.text()
     expect(text).toContain('Imported')
     expect(text).toContain('Generic Cricket Ground')
+  })
+
+  it('shows remove imported match action only for imported historical rows', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const cleanupButtons = wrapper.findAll('.aw-cleanup-imported-btn')
+    expect(cleanupButtons).toHaveLength(1)
+    expect(cleanupButtons[0].text()).toContain('Remove imported match')
+  })
+
+  it('requires explicit confirmation before removing imported match', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    await wrapper.find('.aw-cleanup-imported-btn').trigger('click')
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(api.historicalImportRollback).not.toHaveBeenCalled()
+    confirmSpy.mockRestore()
+  })
+
+  it('refreshes matches and clears selected detail after successful imported match cleanup', async () => {
+    vi.mocked(api.getAnalystMatches)
+      .mockResolvedValueOnce(mockMatchList)
+      .mockResolvedValueOnce({ items: [mockMatchList.items[1]], total: 1 })
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.historicalImportRollback).mockResolvedValue({
+      batch_id: 'batch-001',
+      rolled_back_game_id: 'match-001',
+      records_deleted: 1,
+      status: 'rolled_back',
+      warnings: [],
+    })
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    expect(wrapper.find('#aw-match-detail').exists()).toBe(true)
+
+    await wrapper.find('.aw-cleanup-imported-btn').trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(api.historicalImportRollback).toHaveBeenCalledWith('batch-001')
+    expect(api.getAnalystMatches).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('#aw-match-detail').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Imported match removed successfully.')
+    confirmSpy.mockRestore()
+  })
+
+  it('shows cleanup error state when imported match removal fails', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.historicalImportRollback).mockRejectedValue(new Error('Cleanup request failed'))
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    await wrapper.find('.aw-cleanup-imported-btn').trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(api.historicalImportRollback).toHaveBeenCalledWith('batch-001')
+    expect(wrapper.text()).toContain('Cleanup request failed')
+    confirmSpy.mockRestore()
   })
 
   it('shows loading state while fetching matches', async () => {

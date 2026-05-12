@@ -156,6 +156,14 @@
                 <p class="aw-table-subtitle">
                   Recent matches matching your filters. Click a row to open the case study.
                 </p>
+                <p
+                  v-if="cleanupMessage"
+                  class="aw-inline-status"
+                  :class="{ 'aw-inline-status--error': cleanupMessageKind === 'error' }"
+                  :role="cleanupMessageKind === 'error' ? 'alert' : 'status'"
+                >
+                  {{ cleanupMessage }}
+                </p>
               </div>
 
               <!-- Loading state -->
@@ -261,6 +269,16 @@
                         Case Study
                       </BaseBadge>
                     </div>
+                    <BaseButton
+                      v-if="canCleanupImportedMatch(match)"
+                      class="aw-cleanup-imported-btn"
+                      variant="ghost"
+                      size="sm"
+                      :disabled="cleanupPendingMatchId === match.id"
+                      @click.stop="cleanupImportedMatch(match)"
+                    >
+                      {{ cleanupPendingMatchId === match.id ? 'Removing imported match…' : 'Remove imported match' }}
+                    </BaseButton>
                   </div>
 
                   <!-- Analytics row (ImpactBar + MiniSparkline) -->
@@ -725,6 +743,7 @@ import HistoricalImportPanel from '@/components/HistoricalImportPanel.vue'
 import {
   getAnalystMatches,
   getMatchCaseStudy,
+  historicalImportRollback,
   type AnalystMatchListItem,
   type MatchCaseStudyResponse,
 } from '@/services/api'
@@ -793,6 +812,7 @@ interface AnalystMatch {
   venue?: string | null
   isHistorical?: boolean
   source?: string
+  historicalBatchId?: string | null
   runRate: number
   phaseSwing: string
   netImpact?: number | null
@@ -813,6 +833,9 @@ interface AnalystMatch {
 const matches = ref<AnalystMatch[]>([])
 const matchesLoading = ref(false)
 const matchesError = ref<string | null>(null)
+const cleanupMessage = ref<string | null>(null)
+const cleanupMessageKind = ref<'success' | 'error'>('success')
+const cleanupPendingMatchId = ref<string | null>(null)
 
 // Match detail state - loaded when a match is selected
 const selectedMatchId = ref<string | null>(null)
@@ -968,6 +991,7 @@ async function loadMatches() {
       venue: item.venue ?? null,
       isHistorical: Boolean(item.is_historical),
       source: item.source ?? 'live',
+      historicalBatchId: item.historical_batch_id ?? null,
       runRate: item.run_rate,
       phaseSwing: item.phase_swing,
       // These fields are not in the backend yet - derive or leave null
@@ -1016,6 +1040,43 @@ function openFullCaseStudy() {
 
 async function refreshData() {
   await loadMatches()
+}
+
+function canCleanupImportedMatch(match: AnalystMatch): boolean {
+  return Boolean(
+    match.isHistorical &&
+    match.source === 'historical_import' &&
+    match.historicalBatchId,
+  )
+}
+
+async function cleanupImportedMatch(match: AnalystMatch) {
+  if (!canCleanupImportedMatch(match) || !match.historicalBatchId) {
+    return
+  }
+  const confirmed = window.confirm(
+    `Remove imported match "${match.teams}" from Analyst Workspace? This only removes the imported historical match and keeps live/current matches protected.`,
+  )
+  if (!confirmed) return
+
+  cleanupPendingMatchId.value = match.id
+  cleanupMessage.value = null
+  try {
+    await historicalImportRollback(match.historicalBatchId)
+    cleanupMessageKind.value = 'success'
+    cleanupMessage.value = 'Imported match removed successfully.'
+    if (selectedMatchId.value === match.id) {
+      selectedMatchId.value = null
+      matchDetail.value = null
+      detailError.value = null
+    }
+    await loadMatches()
+  } catch (err) {
+    cleanupMessageKind.value = 'error'
+    cleanupMessage.value = err instanceof Error ? err.message : 'Failed to remove imported match'
+  } finally {
+    cleanupPendingMatchId.value = null
+  }
 }
 
 function onImportDone(_gameId: string | null) {
