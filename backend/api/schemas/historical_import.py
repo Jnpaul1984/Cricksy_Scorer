@@ -92,6 +92,66 @@ class HistoricalImportBatchRecord(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Phase 5L - Bulk ZIP historical JSON schemas
+# ---------------------------------------------------------------------------
+
+
+class HistoricalImportBulkZipFilePreview(BaseModel):
+    """Per-file dry-run result inside a ZIP bulk upload."""
+
+    file_name: str
+    status: Literal["valid", "invalid", "duplicate", "unsupported", "error"]
+    message: str
+    duplicate_within_zip: bool = False
+    duplicate_batch_id: str | None = None
+    semantic_duplicate: bool = False
+    detected_format: str | None = None
+    warnings: list[HistoricalImportIssue] = Field(default_factory=list)
+    errors: list[HistoricalImportIssue] = Field(default_factory=list)
+    dry_run_preview: HistoricalImportDryRunResponse | None = None
+
+
+class HistoricalImportBulkZipDryRunResponse(BaseModel):
+    """Dry-run response for a ZIP containing multiple historical JSON files."""
+
+    status: Literal["preview_ready", "invalid_zip"]
+    source_filename: str | None = None
+    total_entries: int = 0
+    json_entries: int = 0
+    non_json_entries: int = 0
+    selected_apply_requires_confirm: bool = True
+    max_files: int
+    max_file_size_bytes: int
+    max_total_uncompressed_bytes: int
+    max_total_compressed_bytes: int
+    summary: dict[str, int] = Field(default_factory=dict)
+    files: list[HistoricalImportBulkZipFilePreview] = Field(default_factory=list)
+
+
+class HistoricalImportBulkZipApplyFileResult(BaseModel):
+    """Per-file result for selected apply from a ZIP bulk upload."""
+
+    file_name: str
+    status: Literal["applied", "skipped", "error"]
+    message: str
+    batch_id: str | None = None
+    applied_game_id: str | None = None
+
+
+class HistoricalImportBulkZipApplyResponse(BaseModel):
+    """Apply response for selected files from ZIP bulk upload."""
+
+    status: Literal["applied", "partial", "failed"]
+    source_filename: str | None = None
+    selected_count: int = 0
+    applied_count: int = 0
+    skipped_count: int = 0
+    error_count: int = 0
+    selected_apply_requires_confirm: bool = True
+    results: list[HistoricalImportBulkZipApplyFileResult] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
 # Phase 5D - Apply schemas
 # ---------------------------------------------------------------------------
 
