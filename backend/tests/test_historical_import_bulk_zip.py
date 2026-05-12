@@ -207,7 +207,7 @@ def test_bulk_zip_apply_only_applies_selected_valid_files() -> None:
     # We use batch-local assertions rather than the global /games/results list to avoid
     # brittleness in the full test suite where /games/results mixes in-memory and real-DB
     # state across tests.
-    assert len(batches) == 1, "Exactly one historical import batch must be created."
+    assert len(batches) == 1, f"Expected exactly 1 batch, got {len(batches)}"
     assert batches[0]["is_finalized"] is True
     assert batches[0]["applied_game_id"] == applied_game_id
     # Confirm the batch corresponds to the expected valid file, not bad.json.
@@ -221,8 +221,9 @@ def test_bulk_zip_apply_only_applies_selected_valid_files() -> None:
         f"{batches[0]['status']!r}. This confirms the game was created via the "
         "historical import path and not through a live-scoring mutation."
     )
-    # bad.json was skipped (not errored), so there must be no apply errors.
+    # bad.json is malformed (invalid JSON syntax), so it is skipped rather than
+    # causing an apply error.  error_count must be zero because the only
+    # non-applied file was handled by the skip path, not the error path.
     assert data["error_count"] == 0, (
-        "Bulk apply must not produce error results when the only non-applied file "
-        "is an invalid JSON that should be skipped."
+        f"Expected error_count=0 (bad.json is skipped, not errored), got {data['error_count']}"
     )
