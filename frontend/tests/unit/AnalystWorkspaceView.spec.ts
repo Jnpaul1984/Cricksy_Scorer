@@ -14,6 +14,7 @@ vi.mock('vue-router', () => ({
 vi.mock('@/services/api', () => ({
   getAnalystMatches: vi.fn(),
   getMatchCaseStudy: vi.fn(),
+  getMatchRegistry: vi.fn(),
   getAnalystExportData: vi.fn(),
   historicalImportRollback: vi.fn(),
 }))
@@ -999,5 +1000,220 @@ describe('AnalystWorkspaceView', () => {
     expect(keyPlayersSection.exists()).toBe(true)
     // Section heading must always render (dark-theme contrast starts with visible heading)
     expect(keyPlayersSection.text()).toContain('Key players')
+  })
+
+  // ── Phase 5M: Registry & Provenance panel ────────────────────────────────
+
+  const mockRegistryHistorical = {
+    match_id: 'match-001',
+    is_historical: true,
+    competition: 'Caribbean Premier League',
+    season: '2013',
+    venue: 'Generic Cricket Ground',
+    teams: 'Lions vs Falcons',
+    match_number: 1,
+    player_count: 22,
+    innings_count: 2,
+    has_deliveries: true,
+    import_batch_id: 'batch-001',
+    source_filename: 'match_001.json',
+    source_format: 'cricsheet_json',
+    source_type: 'json',
+    imported_at: '2025-01-10T12:00:00Z',
+    validation_status: 'valid',
+    registration_status: 'registered',
+    training_eligible: true,
+    blocking_reason: null,
+  }
+
+  const mockRegistryLive = {
+    match_id: 'match-002',
+    is_historical: false,
+    competition: null,
+    season: null,
+    venue: null,
+    teams: 'Tigers vs Eagles',
+    match_number: null,
+    player_count: 0,
+    innings_count: 0,
+    has_deliveries: false,
+    import_batch_id: null,
+    source_filename: null,
+    source_format: null,
+    source_type: 'json',
+    imported_at: null,
+    validation_status: 'not_applicable',
+    registration_status: 'not_registered',
+    training_eligible: false,
+    blocking_reason: 'not_a_historical_import',
+  }
+
+  it('shows Registry & Provenance panel when a match is selected', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue(mockRegistryHistorical)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    const registrySection = wrapper.find('.aw-detail-registry')
+    expect(registrySection.exists()).toBe(true)
+    expect(registrySection.text()).toContain('Registry')
+  })
+
+  it('shows real registry provenance data for historical imports', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue(mockRegistryHistorical)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.find('.aw-detail-registry').text()
+    expect(text).toContain('Caribbean Premier League')
+    expect(text).toContain('2013')
+    expect(text).toContain('Generic Cricket Ground')
+    expect(text).toContain('match_001.json')
+    expect(text).toContain('batch-001')
+    expect(text).toContain('22 players found')
+  })
+
+  it('shows Registered and Eligible status for a valid applied historical import', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue(mockRegistryHistorical)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.find('.aw-detail-registry').text()
+    expect(text).toContain('Valid')
+    expect(text).toContain('Registered')
+    expect(text).toContain('Eligible')
+  })
+
+  it('shows Not applicable and Not eligible for live (non-historical) match', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue(mockRegistryLive)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    // Click second match (live)
+    await rows[1].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.find('.aw-detail-registry').text()
+    expect(text).toContain('Not applicable')
+    expect(text).toContain('Not registered yet')
+    expect(text).toContain('Not eligible')
+  })
+
+  it('shows Not registered yet for missing player count', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue({
+      ...mockRegistryHistorical,
+      player_count: 0,
+    })
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.find('.aw-detail-registry').text()
+    expect(text).toContain('Not registered yet')
+  })
+
+  it('shows blocking reason when training is not eligible', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue({
+      ...mockRegistryHistorical,
+      training_eligible: false,
+      registration_status: 'not_registered',
+      blocking_reason: 'has_errors',
+    })
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.find('.aw-detail-registry').text()
+    expect(text).toContain('Not eligible')
+    expect(text).toContain('has_errors')
+  })
+
+  it('shows empty state when registry data fails to load', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockRejectedValue(new Error('Registry load failed'))
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    const registrySection = wrapper.find('.aw-detail-registry')
+    expect(registrySection.exists()).toBe(true)
+    expect(registrySection.text()).toContain('Registry data unavailable for this match')
+  })
+
+  it('calls getMatchRegistry when a match row is clicked', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue(mockRegistryHistorical)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+
+    expect(api.getMatchRegistry).toHaveBeenCalledWith('match-001')
   })
 })

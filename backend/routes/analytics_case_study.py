@@ -4,6 +4,7 @@ FastAPI router for Match Case Study analytics.
 Exposes:
   GET /analytics/matches
   GET /analytics/matches/{match_id}/case-study
+  GET /analytics/matches/{match_id}/registry
 """
 
 from datetime import date
@@ -15,10 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend import security
 from backend.sql_app.database import get_db
-from backend.sql_app.models import Game, GameStatus
+from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 from backend.api.schemas.analyst_matches import (
     AnalystMatchListItem,
     AnalystMatchListResponse,
+    MatchRegistryResponse,
 )
 from backend.api.schemas.case_study import MatchCaseStudyResponse
 from backend.services.analyst_access import scoped_games_stmt
@@ -188,3 +190,128 @@ async def get_match_ai_summary(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc) or "Match not found",
         ) from None
+
+
+@router.get("/{match_id}/registry", response_model=MatchRegistryResponse)
+async def get_match_registry(
+    match_id: str,
+    current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    db: AsyncSession = Depends(get_db),
+) -> MatchRegistryResponse:
+    """Return registry metadata, source provenance, and training eligibility for a match.
+
+    Phase 5M: exposes the Cricket Data Registry foundation for the Analyst Workspace.
+
+    - For historical imports: returns import-batch linkage, source filename/format,
+      validation status, registration status, and training eligibility gating.
+    - For live matches: returns is_historical=False with not_applicable status.
+    - If the batch record cannot be found: returns partial metadata with
+      validation_status="unknown" and training_eligible=False.
+
+    Training eligibility remains False until the import batch is finalized,
+    the status is "valid", and error_count is 0 (mirrors the existing
+    /api/historical-import/json/batches/{batch_id}/training-status logic).
+    """
+    stmt = scoped_games_stmt(current_user).where(
+        Game.id == match_id,
+        Game.status == GameStatus.completed,
+    )
+    result = await db.execute(stmt)
+    game = result.scalar_one_or_none()
+    if game is None:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    team_a_name = _team_name(game.team_a, "Team A")
+    team_b_name = _team_name(game.team_b, "Team B")
+    hist_meta = _historical_import_meta(game)
+
+    if not hist_meta:
+        return MatchRegistryResponse(
+            match_id=match_id,
+            is_historical=False,
+            teams=f"{team_a_name} vs {team_b_name}",
+            validation_status="not_applicable",
+            registration_status="not_registered",
+            training_eligible=False,
+            blocking_reason="not_a_historical_import",
+        )
+
+    # Extract counts from stored historical metadata
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    hist_innings = phases.get("historical_innings_summary") or []
+    innings_count = len(hist_innings) if isinstance(hist_innings, list) else 0
+    deliveries_imported = bool(hist_meta.get("deliveries_imported"))
+    player_names = hist_meta.get("player_names") or []
+    player_count = len(player_names) if isinstance(player_names, list) else 0
+
+    # Look up the import batch by batch_id stored in hist_meta
+    batch_id: str | None = hist_meta.get("batch_id")
+    batch: HistoricalImportBatch | None = None
+    if batch_id:
+        batch_stmt = select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_id)
+        batch_result = await db.execute(batch_stmt)
+        batch = batch_result.scalar_one_or_none()
+
+    if batch is not None:
+        # Derive training eligibility (mirrors existing training-status endpoint logic)
+        blocking_reason: str | None = None
+        if not batch.is_finalized:
+            blocking_reason = "batch_not_finalized"
+        elif batch.applied_game_id is None:
+            blocking_reason = "no_game_applied"
+        elif batch.status != "valid":
+            blocking_reason = f"invalid_status:{batch.status}"
+        elif batch.error_count > 0:
+            blocking_reason = "has_errors"
+
+        training_eligible = blocking_reason is None
+        registration_status = (
+            "registered"
+            if (batch.is_finalized and batch.status == "valid" and batch.error_count == 0)
+            else "not_registered"
+        )
+
+        return MatchRegistryResponse(
+            match_id=match_id,
+            is_historical=True,
+            competition=hist_meta.get("event_name"),
+            season=hist_meta.get("season"),
+            venue=hist_meta.get("venue"),
+            teams=f"{team_a_name} vs {team_b_name}",
+            match_number=hist_meta.get("match_number"),
+            player_count=player_count,
+            innings_count=innings_count,
+            has_deliveries=deliveries_imported,
+            import_batch_id=batch.id,
+            source_filename=batch.source_filename,
+            source_format=batch.source_format,
+            source_type="json",
+            imported_at=batch.created_at,
+            validation_status=batch.status,
+            registration_status=registration_status,
+            training_eligible=training_eligible,
+            blocking_reason=blocking_reason,
+        )
+
+    # Batch record not found — return partial info from hist_meta only
+    return MatchRegistryResponse(
+        match_id=match_id,
+        is_historical=True,
+        competition=hist_meta.get("event_name"),
+        season=hist_meta.get("season"),
+        venue=hist_meta.get("venue"),
+        teams=f"{team_a_name} vs {team_b_name}",
+        match_number=hist_meta.get("match_number"),
+        player_count=player_count,
+        innings_count=innings_count,
+        has_deliveries=deliveries_imported,
+        import_batch_id=batch_id,
+        source_filename=None,
+        source_format=None,
+        source_type="json",
+        imported_at=None,
+        validation_status="unknown",
+        registration_status="not_registered",
+        training_eligible=False,
+        blocking_reason="batch_record_not_found",
+    )

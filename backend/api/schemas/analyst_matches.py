@@ -1,10 +1,12 @@
 """
 Pydantic schemas for the Analyst Workspace Match List API.
 
-Response model for:
+Response models for:
   GET /analytics/matches
+  GET /analytics/matches/{match_id}/registry
 
-Powers the AnalystWorkspaceView.vue "Matches" tab table.
+Powers the AnalystWorkspaceView.vue "Matches" tab table and the
+"Registry & Provenance" detail panel.
 """
 
 from datetime import date, datetime
@@ -92,3 +94,78 @@ class AnalystMatchDetailResponse(BaseModel):
 class AnalystExportDataResponse(BaseModel):
     rows: list[dict[str, Any]]
     meta: dict[str, Any]
+
+
+class MatchRegistryResponse(BaseModel):
+    """Registry metadata, provenance, and training eligibility for a match.
+
+    Returned by GET /analytics/matches/{match_id}/registry.
+
+    Exposes import-batch linkage, source provenance, validation/registration
+    status, and training-eligibility gating for the Analyst Workspace
+    "Registry & Provenance" panel.
+
+    For non-historical (live) matches:
+      - is_historical=False
+      - validation_status="not_applicable"
+      - registration_status="not_registered"
+      - training_eligible=False
+
+    For historical imports without a traceable batch record:
+      - validation_status="unknown"
+      - registration_status="not_registered"
+      - training_eligible=False
+      - blocking_reason="batch_record_not_found"
+    """
+
+    match_id: str
+    is_historical: bool
+
+    # Competition context from historical metadata
+    competition: str | None = None  # event_name from historical import
+    season: str | None = None
+    venue: str | None = None
+    teams: str | None = None
+    match_number: int | None = None
+    player_count: int = 0
+    innings_count: int = 0
+    has_deliveries: bool = False
+
+    # Import batch / source provenance
+    import_batch_id: str | None = None
+    source_filename: str | None = None
+    source_format: str | None = None
+    source_type: str = "json"
+    imported_at: datetime | None = None
+
+    # Validation / registration / training eligibility
+    validation_status: str = Field(
+        ...,
+        description=(
+            "Structural validation outcome: 'valid', 'invalid', 'unsupported', "
+            "'not_applicable' (live match), or 'unknown' (batch not found)."
+        ),
+    )
+    registration_status: str = Field(
+        ...,
+        description=(
+            "'registered' when batch is finalized, valid, and error-free; "
+            "'not_registered' otherwise."
+        ),
+    )
+    training_eligible: bool = Field(
+        ...,
+        description=(
+            "True only when the import is finalized, registered (valid, 0 errors), "
+            "and the game row was created.  False for all live matches and any import "
+            "that fails validation or registration checks."
+        ),
+    )
+    blocking_reason: str | None = Field(
+        default=None,
+        description=(
+            "Machine-readable reason why training_eligible is False, "
+            "e.g. 'batch_not_finalized', 'has_errors', 'not_a_historical_import'. "
+            "None when training_eligible=True."
+        ),
+    )

@@ -773,6 +773,46 @@ export async function getAnalystMatches(): Promise<AnalystMatchListResponse> {
   return request<AnalystMatchListResponse>('/analytics/matches');
 }
 
+/**
+ * Phase 5M: Registry metadata, provenance, and training eligibility for a match.
+ * Returned by GET /analytics/matches/{matchId}/registry.
+ */
+export interface MatchRegistryResponse {
+  match_id: string;
+  is_historical: boolean;
+  // Competition context
+  competition: string | null;
+  season: string | null;
+  venue: string | null;
+  teams: string | null;
+  match_number: number | null;
+  player_count: number;
+  innings_count: number;
+  has_deliveries: boolean;
+  // Import batch / source provenance
+  import_batch_id: string | null;
+  source_filename: string | null;
+  source_format: string | null;
+  source_type: string;
+  imported_at: string | null;
+  // Validation / registration / training eligibility
+  validation_status: string; // "valid"|"invalid"|"unsupported"|"not_applicable"|"unknown"
+  registration_status: string; // "registered"|"not_registered"
+  training_eligible: boolean;
+  blocking_reason: string | null;
+}
+
+/**
+ * GET /analytics/matches/{matchId}/registry
+ * Returns registry metadata, provenance, and training eligibility for a match.
+ * Phase 5M: Cricket Data Registry Foundation.
+ */
+export async function getMatchRegistry(matchId: string): Promise<MatchRegistryResponse> {
+  return request<MatchRegistryResponse>(
+    `/analytics/matches/${encodeURIComponent(matchId)}/registry`,
+  );
+}
+
 export interface AnalystExportFilters {
   dateFrom?: string;
   dateTo?: string;
