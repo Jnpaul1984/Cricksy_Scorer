@@ -185,13 +185,13 @@ def test_bulk_zip_apply_only_applies_selected_valid_files() -> None:
     )
 
     with TestClient(app) as client:
-        before_games = client.get("/games/results").json()
+        before_result_ids = {g["match_id"] for g in client.get("/games/results").json()}
         response = client.post(
             "/api/historical-import/json/bulk-zip/apply",
             files={"file": ("matches.zip", payload, "application/zip")},
             data={"confirm": "true", "selected_files": json.dumps(["ok.json", "bad.json"])},
         )
-        after_games = client.get("/games/results").json()
+        after_result_ids = {g["match_id"] for g in client.get("/games/results").json()}
         batches = client.get("/api/historical-import/json/batches").json()
 
     assert response.status_code == 200, response.text
@@ -200,10 +200,24 @@ def test_bulk_zip_apply_only_applies_selected_valid_files() -> None:
     assert data["skipped_count"] == 1
     result_map = {item["file_name"]: item for item in data["results"]}
     assert result_map["ok.json"]["status"] == "applied"
-    assert result_map["ok.json"]["applied_game_id"] is not None
+    applied_game_id = result_map["ok.json"]["applied_game_id"]
+    assert applied_game_id is not None
     assert result_map["ok.json"]["batch_id"] is not None
     assert result_map["bad.json"]["status"] == "skipped"
-    assert len(after_games) == len(before_games), "Bulk apply must not mutate live scoring views."
+
+    # Historical bulk import must not create unrelated new live-scoring result rows.
+    # The applied historical game may appear in /games/results because it has a non-null
+    # result text; no OTHER game result rows should be newly present.
+    new_result_ids = after_result_ids - before_result_ids
+    assert new_result_ids <= {applied_game_id}, (
+        "Bulk apply must not create unrelated new live scoring result rows. "
+        f"Unexpected new IDs: {new_result_ids - {applied_game_id}!r}"
+    )
+    # Pre-existing result rows must be undisturbed by the bulk import.
+    assert before_result_ids <= after_result_ids, (
+        "Bulk apply must not remove pre-existing live scoring result rows."
+    )
+
     assert len(batches) == 1
     assert batches[0]["is_finalized"] is True
-    assert batches[0]["applied_game_id"] == result_map["ok.json"]["applied_game_id"]
+    assert batches[0]["applied_game_id"] == applied_game_id
