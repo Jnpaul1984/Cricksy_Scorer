@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import io
+import json
+import re
+import zipfile
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import Annotated
 
 from backend.api.schemas.historical_import import (
@@ -8,6 +14,10 @@ from backend.api.schemas.historical_import import (
     HistoricalImportApplyRequest,
     HistoricalImportApplyResponse,
     HistoricalImportBatchRecord,
+    HistoricalImportBulkZipApplyFileResult,
+    HistoricalImportBulkZipApplyResponse,
+    HistoricalImportBulkZipDryRunResponse,
+    HistoricalImportBulkZipFilePreview,
     HistoricalImportDryRunResponse,
     HistoricalImportRepairRequest,
     HistoricalImportRepairResponse,
@@ -35,7 +45,7 @@ from backend.services.historical_import_service import (
 )
 from backend.sql_app import models
 from backend.sql_app.database import get_db as _base_get_db
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,6 +62,281 @@ async def _get_import_db() -> AsyncGenerator[AsyncSession, None]:
     """
     async for db in _base_get_db():
         yield db
+
+
+PHASE_5L_MAX_FILES = 100
+PHASE_5L_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
+PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES = 20 * 1024 * 1024
+PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES = 20 * 1024 * 1024
+PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR = "::"
+
+
+@dataclass(slots=True)
+class _BulkJsonCandidate:
+    file_name: str
+    payload: bytes
+    dry_run: HistoricalImportDryRunResponse
+    status: str
+    duplicate_within_zip: bool = False
+    duplicate_batch_id: str | None = None
+    semantic_duplicate: bool = False
+
+
+def _is_unsafe_zip_path(entry_name: str) -> bool:
+    if "\x00" in entry_name:
+        return True
+    normalized = entry_name.replace("\\", "/")
+    if normalized.startswith("/") or normalized.startswith("//"):
+        return True
+    if re.match(r"^[a-zA-Z]:/", normalized):
+        return True
+
+    path_obj = PurePosixPath(normalized)
+    return any(part == ".." for part in path_obj.parts)
+
+
+def _parse_selected_file_names(selected_files: str) -> list[str]:
+    try:
+        parsed = json.loads(selected_files)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="selected_files must be a JSON array of ZIP entry names.",
+        ) from exc
+
+    if not isinstance(parsed, list) or any(not isinstance(item, str) for item in parsed):
+        raise HTTPException(
+            status_code=422,
+            detail="selected_files must be a JSON array of ZIP entry names.",
+        )
+
+    unique_names: list[str] = []
+    seen: set[str] = set()
+    for name in parsed:
+        normalized_name = name.strip()
+        if not normalized_name or normalized_name in seen:
+            continue
+        seen.add(normalized_name)
+        unique_names.append(normalized_name)
+    return unique_names
+
+
+def _read_zip_entries(payload_bytes: bytes) -> list[tuple[zipfile.ZipInfo, bytes]]:
+    try:
+        with zipfile.ZipFile(io.BytesIO(payload_bytes)) as archive:
+            members = [m for m in archive.infolist() if not m.is_dir()]
+            if len(members) > PHASE_5L_MAX_FILES:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"ZIP contains too many files ({len(members)}). "
+                        f"Maximum supported is {PHASE_5L_MAX_FILES}."
+                    ),
+                )
+
+            total_uncompressed = 0
+            total_compressed = 0
+            output: list[tuple[zipfile.ZipInfo, bytes]] = []
+
+            for member in members:
+                if _is_unsafe_zip_path(member.filename):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"ZIP entry '{member.filename}' is unsafe (path traversal or absolute path)."
+                        ),
+                    )
+                # Symlink entries are disallowed for bulk ZIP safety.
+                if (member.external_attr >> 16) & 0o170000 == 0o120000:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"ZIP entry '{member.filename}' is unsafe (symlink entries are not allowed).",
+                    )
+
+                if member.file_size > PHASE_5L_MAX_FILE_SIZE_BYTES:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            f"ZIP entry '{member.filename}' exceeds max size "
+                            f"({PHASE_5L_MAX_FILE_SIZE_BYTES} bytes)."
+                        ),
+                    )
+
+                total_uncompressed += member.file_size
+                total_compressed += member.compress_size
+                if total_uncompressed > PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            "ZIP uncompressed payload exceeds limit "
+                            f"({PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES} bytes)."
+                        ),
+                    )
+                if total_compressed > PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            "ZIP compressed payload exceeds limit "
+                            f"({PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES} bytes)."
+                        ),
+                    )
+
+                with archive.open(member, "r") as fp:
+                    content = fp.read(member.file_size)
+                output.append((member, content))
+
+            return output
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=415, detail="Only valid .zip uploads are supported.") from exc
+
+
+async def _build_bulk_zip_preview(
+    *,
+    payload_bytes: bytes,
+    source_filename: str | None,
+    db: AsyncSession,
+    owner_user_id: str | None,
+    owner_org_id: str | None,
+) -> tuple[HistoricalImportBulkZipDryRunResponse, dict[str, _BulkJsonCandidate]]:
+    entries = _read_zip_entries(payload_bytes)
+
+    files: list[HistoricalImportBulkZipFilePreview] = []
+    candidates: dict[str, _BulkJsonCandidate] = {}
+    hash_seen: dict[str, str] = {}
+    semantic_seen: dict[str, str] = {}
+
+    for member, entry_payload in entries:
+        file_name = member.filename
+        if not file_name.lower().endswith(".json"):
+            files.append(
+                HistoricalImportBulkZipFilePreview(
+                    file_name=file_name,
+                    status="unsupported",
+                    message="Ignored: only .json entries are processed from the ZIP.",
+                )
+            )
+            continue
+
+        status_code, dry_run = build_dry_run_response(entry_payload)
+        if status_code >= 400:
+            file_preview = HistoricalImportBulkZipFilePreview(
+                file_name=file_name,
+                status="invalid",
+                message="Invalid JSON payload.",
+                detected_format=dry_run.detected_format,
+                warnings=dry_run.warnings,
+                errors=dry_run.errors,
+                dry_run_preview=dry_run,
+            )
+            files.append(file_preview)
+            candidates[file_name] = _BulkJsonCandidate(
+                file_name=file_name,
+                payload=entry_payload,
+                dry_run=dry_run,
+                status="invalid",
+            )
+            continue
+
+        normalized_hash = dry_run.duplicate_detection.source_hash_sha256
+        semantic_key = dry_run.duplicate_detection.semantic_key
+        duplicate_within_zip = False
+        duplicate_reason = ""
+
+        if normalized_hash in hash_seen:
+            duplicate_within_zip = True
+            duplicate_reason = f"Duplicate inside ZIP: same content as '{hash_seen[normalized_hash]}'."
+        elif semantic_key and semantic_key in semantic_seen:
+            duplicate_within_zip = True
+            duplicate_reason = f"Duplicate inside ZIP: same semantic match key as '{semantic_seen[semantic_key]}'."
+
+        if not duplicate_within_zip:
+            hash_seen[normalized_hash] = file_name
+            if semantic_key:
+                semantic_seen[semantic_key] = file_name
+
+        duplicate_batch_id: str | None = None
+        semantic_duplicate = False
+        if not duplicate_within_zip:
+            dup_by_hash = await find_duplicate_by_hash(
+                db, normalized_hash, owner_user_id, owner_org_id
+            )
+            dup_by_semantic: models.HistoricalImportBatch | None = None
+            if semantic_key:
+                dup_by_semantic = await find_duplicate_by_semantic_key(
+                    db, semantic_key, owner_user_id, owner_org_id
+                )
+            if dup_by_hash is not None:
+                duplicate_batch_id = dup_by_hash.id
+            elif dup_by_semantic is not None:
+                duplicate_batch_id = dup_by_semantic.id
+                semantic_duplicate = True
+
+        status = "valid"
+        message = "Valid JSON preview ready."
+        if dry_run.status == "unsupported":
+            status = "unsupported"
+            message = "Unsupported historical JSON shape."
+        elif dry_run.status != "valid":
+            status = "invalid"
+            message = "JSON preview found validation issues."
+        elif duplicate_within_zip or duplicate_batch_id is not None:
+            status = "duplicate"
+            message = (
+                duplicate_reason
+                if duplicate_within_zip
+                else (
+                    "Duplicate against previously recorded imports (source hash or semantic key)."
+                )
+            )
+
+        files.append(
+            HistoricalImportBulkZipFilePreview(
+                file_name=file_name,
+                status=status,
+                message=message,
+                duplicate_within_zip=duplicate_within_zip,
+                duplicate_batch_id=duplicate_batch_id,
+                semantic_duplicate=semantic_duplicate,
+                detected_format=dry_run.detected_format,
+                warnings=dry_run.warnings,
+                errors=dry_run.errors,
+                dry_run_preview=dry_run,
+            )
+        )
+
+        candidates[file_name] = _BulkJsonCandidate(
+            file_name=file_name,
+            payload=entry_payload,
+            dry_run=dry_run,
+            status=status,
+            duplicate_within_zip=duplicate_within_zip,
+            duplicate_batch_id=duplicate_batch_id,
+            semantic_duplicate=semantic_duplicate,
+        )
+
+    summary = {
+        "valid": sum(1 for f in files if f.status == "valid"),
+        "invalid": sum(1 for f in files if f.status == "invalid"),
+        "duplicate": sum(1 for f in files if f.status == "duplicate"),
+        "unsupported": sum(1 for f in files if f.status == "unsupported"),
+        "error": sum(1 for f in files if f.status == "error"),
+    }
+
+    preview = HistoricalImportBulkZipDryRunResponse(
+        status="preview_ready",
+        source_filename=source_filename,
+        total_entries=len(entries),
+        json_entries=len(candidates),
+        non_json_entries=len([f for f in files if f.status == "unsupported" and f.dry_run_preview is None]),
+        selected_apply_requires_confirm=True,
+        max_files=PHASE_5L_MAX_FILES,
+        max_file_size_bytes=PHASE_5L_MAX_FILE_SIZE_BYTES,
+        max_total_uncompressed_bytes=PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES,
+        max_total_compressed_bytes=PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES,
+        summary=summary,
+        files=files,
+    )
+    return preview, candidates
 
 
 @router.post("/dry-run", response_model=HistoricalImportDryRunResponse)
@@ -172,6 +457,183 @@ async def historical_json_dry_run(
         ),
         no_persistence=no_persistence,
         record_id=record_id,
+    )
+
+
+@router.post("/bulk-zip/dry-run", response_model=HistoricalImportBulkZipDryRunResponse)
+async def historical_json_bulk_zip_dry_run(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalImportBulkZipDryRunResponse:
+    """Phase 5L: safe dry-run preview for a ZIP with multiple historical JSON files."""
+    filename = file.filename or ""
+    content_type = (file.content_type or "").lower()
+    if not filename.lower().endswith(".zip") and content_type not in {
+        "application/zip",
+        "application/x-zip-compressed",
+        "multipart/x-zip",
+    }:
+        raise HTTPException(status_code=415, detail="Only .zip uploads are supported for bulk import.")
+
+    payload_bytes = await file.read()
+    owner_user_id: str | None = current_user.id if current_user else None
+    owner_org_id: str | None = current_user.org_id if current_user else None
+
+    preview, _ = await _build_bulk_zip_preview(
+        payload_bytes=payload_bytes,
+        source_filename=file.filename or None,
+        db=db,
+        owner_user_id=owner_user_id,
+        owner_org_id=owner_org_id,
+    )
+    return preview
+
+
+@router.post("/bulk-zip/apply", response_model=HistoricalImportBulkZipApplyResponse)
+async def historical_json_bulk_zip_apply(
+    file: UploadFile = File(...),
+    confirm: bool = Form(False),
+    selected_files: str = Form(...),
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalImportBulkZipApplyResponse:
+    """Phase 5L: apply selected safe files from a ZIP after explicit confirmation."""
+    if not confirm:
+        raise HTTPException(status_code=422, detail="confirm must be true for bulk apply.")
+
+    filename = file.filename or ""
+    content_type = (file.content_type or "").lower()
+    if not filename.lower().endswith(".zip") and content_type not in {
+        "application/zip",
+        "application/x-zip-compressed",
+        "multipart/x-zip",
+    }:
+        raise HTTPException(status_code=415, detail="Only .zip uploads are supported for bulk import.")
+
+    selected_names = _parse_selected_file_names(selected_files)
+    if not selected_names:
+        raise HTTPException(status_code=422, detail="At least one selected file is required for bulk apply.")
+
+    payload_bytes = await file.read()
+    owner_user_id: str | None = current_user.id if current_user else None
+    owner_org_id: str | None = current_user.org_id if current_user else None
+
+    _, candidates = await _build_bulk_zip_preview(
+        payload_bytes=payload_bytes,
+        source_filename=file.filename or None,
+        db=db,
+        owner_user_id=owner_user_id,
+        owner_org_id=owner_org_id,
+    )
+
+    results: list[HistoricalImportBulkZipApplyFileResult] = []
+    for selected_name in selected_names:
+        candidate = candidates.get(selected_name)
+        if candidate is None:
+            results.append(
+                HistoricalImportBulkZipApplyFileResult(
+                    file_name=selected_name,
+                    status="error",
+                    message="Selected file was not found in ZIP JSON entries.",
+                )
+            )
+            continue
+
+        if candidate.status != "valid":
+            results.append(
+                HistoricalImportBulkZipApplyFileResult(
+                    file_name=selected_name,
+                    status="skipped",
+                    message=f"Skipped because file status is '{candidate.status}' in dry-run preview.",
+                )
+            )
+            continue
+
+        source_hash = candidate.dry_run.duplicate_detection.source_hash_sha256
+        semantic_key = candidate.dry_run.duplicate_detection.semantic_key
+        dup_by_hash = await find_duplicate_by_hash(db, source_hash, owner_user_id, owner_org_id)
+        dup_by_semantic: models.HistoricalImportBatch | None = None
+        if semantic_key:
+            dup_by_semantic = await find_duplicate_by_semantic_key(
+                db, semantic_key, owner_user_id, owner_org_id
+            )
+        duplicate_batch_record: models.HistoricalImportBatch | None = None
+        if dup_by_hash is not None:
+            duplicate_batch_record = dup_by_hash
+        elif dup_by_semantic is not None:
+            duplicate_batch_record = dup_by_semantic
+        if duplicate_batch_record is not None:
+            results.append(
+                HistoricalImportBulkZipApplyFileResult(
+                    file_name=selected_name,
+                    status="skipped",
+                    message=f"Skipped duplicate (existing batch: {duplicate_batch_record.id}).",
+                    batch_id=duplicate_batch_record.id,
+                )
+            )
+            continue
+
+        batch = await create_import_batch(
+            db,
+            source_hash_sha256=source_hash,
+            source_format=candidate.dry_run.detected_format,
+            status=candidate.dry_run.status,
+            error_count=len(candidate.dry_run.errors),
+            warning_count=len(candidate.dry_run.warnings),
+            innings_count=candidate.dry_run.innings_count,
+            delivery_count=candidate.dry_run.delivery_count,
+            dry_run_summary=candidate.dry_run.model_dump(),
+            owner_user_id=owner_user_id,
+            owner_org_id=owner_org_id,
+            source_filename=(
+                f"{file.filename}{PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR}{selected_name}"
+                if file.filename
+                else selected_name
+            ),
+            semantic_key=semantic_key,
+        )
+        game, _, error_msg = await apply_historical_batch(db, batch_id=batch.id, confirm=True)
+        if error_msg is not None or game is None:
+            results.append(
+                HistoricalImportBulkZipApplyFileResult(
+                    file_name=selected_name,
+                    status="error",
+                    message=error_msg or "Apply failed.",
+                    batch_id=batch.id,
+                )
+            )
+            continue
+
+        results.append(
+            HistoricalImportBulkZipApplyFileResult(
+                file_name=selected_name,
+                status="applied",
+                message="Applied successfully.",
+                batch_id=batch.id,
+                applied_game_id=game.id,
+            )
+        )
+
+    applied_count = sum(1 for r in results if r.status == "applied")
+    skipped_count = sum(1 for r in results if r.status == "skipped")
+    error_count = sum(1 for r in results if r.status == "error")
+    if applied_count == len(results):
+        status_value = "applied"
+    elif applied_count == 0:
+        status_value = "failed"
+    else:
+        status_value = "partial"
+
+    return HistoricalImportBulkZipApplyResponse(
+        status=status_value,
+        source_filename=file.filename or None,
+        selected_count=len(selected_names),
+        applied_count=applied_count,
+        skipped_count=skipped_count,
+        error_count=error_count,
+        selected_apply_requires_confirm=True,
+        results=results,
     )
 
 
