@@ -1499,8 +1499,14 @@ export interface HistoricalImportBulkZipDryRunResponse {
   status: 'preview_ready' | 'invalid_zip';
   source_filename?: string | null;
   total_entries: number;
+  files_scanned: number;
   json_entries: number;
   non_json_entries: number;
+  metadata_only_intake_required: boolean;
+  metadata_only_pending_count: number;
+  intake_status: string;
+  cost_control_message?: string | null;
+  full_import_deferred: boolean;
   selected_apply_requires_confirm: boolean;
   max_files: number;
   max_file_size_bytes: number;
@@ -1512,19 +1518,21 @@ export interface HistoricalImportBulkZipDryRunResponse {
 
 export interface HistoricalImportBulkZipApplyFileResult {
   file_name: string;
-  status: 'applied' | 'skipped' | 'error';
+  status: 'applied' | 'metadata_extracted' | 'skipped' | 'error';
   message: string;
   batch_id?: string | null;
   applied_game_id?: string | null;
 }
 
 export interface HistoricalImportBulkZipApplyResponse {
-  status: 'applied' | 'partial' | 'failed';
+  status: 'applied' | 'metadata_recorded' | 'partial' | 'failed';
   source_filename?: string | null;
   selected_count: number;
   applied_count: number;
   skipped_count: number;
   error_count: number;
+  metadata_only_count: number;
+  full_import_deferred: boolean;
   selected_apply_requires_confirm: boolean;
   results: HistoricalImportBulkZipApplyFileResult[];
 }

@@ -8,6 +8,11 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from backend.main import app
+from backend.routes.historical_import import (
+    PHASE_5L_MAX_FILES,
+    PHASE_5L_MAX_FULL_APPLY_FILES,
+    PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES,
+)
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
 
@@ -21,6 +26,16 @@ def _build_zip(entries: dict[str, bytes]) -> bytes:
     with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for name, content in entries.items():
             zf.writestr(name, content)
+    return stream.getvalue()
+
+
+def _build_symlink_zip() -> bytes:
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        info = zipfile.ZipInfo("link.json")
+        info.create_system = 3
+        info.external_attr = 0o120777 << 16
+        zf.writestr(info, "target.json")
     return stream.getvalue()
 
 
@@ -48,6 +63,28 @@ def test_bulk_zip_dry_run_accepts_multiple_valid_json_files() -> None:
     assert data["selected_apply_requires_confirm"] is True
 
 
+def test_bulk_zip_dry_run_accepts_large_zip_in_metadata_only_mode() -> None:
+    fixture = _load_fixture()
+    entries = {
+        f"match_{idx:03d}.json": json.dumps({**fixture, "matchType": f"T20-{idx}"}).encode("utf-8")
+        for idx in range(PHASE_5L_MAX_FULL_APPLY_FILES + 1)
+    }
+    payload = _build_zip(entries)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/historical-import/json/bulk-zip/dry-run",
+            files={"file": ("large.zip", payload, "application/zip")},
+        )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["metadata_only_intake_required"] is True
+    assert data["full_import_deferred"] is True
+    assert data["files_scanned"] == PHASE_5L_MAX_FULL_APPLY_FILES + 1
+    assert data["summary"]["valid"] == PHASE_5L_MAX_FULL_APPLY_FILES + 1
+
+
 def test_bulk_zip_dry_run_rejects_non_zip_upload() -> None:
     with TestClient(app) as client:
         response = client.post(
@@ -71,6 +108,47 @@ def test_bulk_zip_dry_run_rejects_unsafe_zip_paths() -> None:
 
     assert response.status_code == 400, response.text
     assert "unsafe" in response.json()["detail"].lower()
+
+
+def test_bulk_zip_dry_run_rejects_symlink_entries() -> None:
+    payload = _build_symlink_zip()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/historical-import/json/bulk-zip/dry-run",
+            files={"file": ("symlink.zip", payload, "application/zip")},
+        )
+
+    assert response.status_code == 400, response.text
+    assert "symlink" in response.json()["detail"].lower()
+
+
+def test_bulk_zip_dry_run_rejects_zip_over_max_file_count() -> None:
+    payload = _build_zip({f"{idx}.json": b"{}" for idx in range(PHASE_5L_MAX_FILES + 1)})
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/historical-import/json/bulk-zip/dry-run",
+            files={"file": ("too-many.zip", payload, "application/zip")},
+        )
+
+    assert response.status_code == 422, response.text
+    assert "too many files" in response.json()["detail"].lower()
+
+
+def test_bulk_zip_dry_run_rejects_zip_over_total_uncompressed_limit() -> None:
+    per_file = b'{"a":"' + (b"x" * (2 * 1024 * 1024 - 1024)) + b'"}'
+    file_count = (PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES // len(per_file)) + 1
+    payload = _build_zip({f"{idx}.json": per_file for idx in range(file_count)})
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/historical-import/json/bulk-zip/dry-run",
+            files={"file": ("oversize.zip", payload, "application/zip")},
+        )
+
+    assert response.status_code == 422, response.text
+    assert "uncompressed payload exceeds limit" in response.json()["detail"].lower()
 
 
 def test_bulk_zip_dry_run_reports_non_json_entries() -> None:
@@ -227,3 +305,35 @@ def test_bulk_zip_apply_only_applies_selected_valid_files() -> None:
     assert data["error_count"] == 0, (
         f"Expected error_count=0 (bad.json is skipped, not errored), got {data['error_count']}"
     )
+
+
+def test_bulk_zip_apply_large_zip_records_metadata_only_batches_not_training_eligible() -> None:
+    fixture = _load_fixture()
+    entries = {
+        f"match_{idx:03d}.json": json.dumps({**fixture, "matchType": f"T20-{idx}"}).encode("utf-8")
+        for idx in range(PHASE_5L_MAX_FULL_APPLY_FILES + 1)
+    }
+    payload = _build_zip(entries)
+    selected = [f"match_{idx:03d}.json" for idx in range(2)]
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/historical-import/json/bulk-zip/apply",
+            files={"file": ("large.zip", payload, "application/zip")},
+            data={"confirm": "true", "selected_files": json.dumps(selected)},
+        )
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["status"] == "metadata_recorded"
+        assert data["full_import_deferred"] is True
+        assert data["metadata_only_count"] == 2
+
+        first_batch_id = data["results"][0]["batch_id"]
+        training = client.get(
+            f"/api/historical-import/json/batches/{first_batch_id}/training-status"
+        )
+
+    assert training.status_code == 200, training.text
+    training_data = training.json()
+    assert training_data["training_eligible"] is False
+    assert training_data["exclusion_reason"] == "metadata_only_pending_full_import"

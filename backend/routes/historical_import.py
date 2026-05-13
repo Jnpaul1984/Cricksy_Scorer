@@ -3,12 +3,15 @@ from __future__ import annotations
 import io
 import json
 import re
+import tempfile
+import uuid
 import zipfile
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Annotated
 
+from backend.config import settings
 from backend.api.schemas.historical_import import (
     HistoricalImportApplyDeliveriesResponse,
     HistoricalImportApplyRequest,
@@ -26,6 +29,7 @@ from backend.api.schemas.historical_import import (
     HistoricalImportTotalsValidation,
     HistoricalImportTrainingStatus,
 )
+from backend.services.s3_service import s3_service
 from backend.security import get_current_user_optional
 from backend.services.historical_import_apply_service import (
     apply_historical_batch,
@@ -64,17 +68,17 @@ async def _get_import_db() -> AsyncGenerator[AsyncSession, None]:
         yield db
 
 
-PHASE_5L_MAX_FILES = 100
+PHASE_5L_MAX_FILES = 2000
+PHASE_5L_MAX_FULL_APPLY_FILES = 100
 PHASE_5L_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
-PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES = 20 * 1024 * 1024
-PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES = 20 * 1024 * 1024
+PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
+PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES = 100 * 1024 * 1024
 PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR = "::"
 
 
 @dataclass(slots=True)
 class _BulkJsonCandidate:
     file_name: str
-    payload: bytes
     dry_run: HistoricalImportDryRunResponse
     status: str
     duplicate_within_zip: bool = False
@@ -121,7 +125,7 @@ def _parse_selected_file_names(selected_files: str) -> list[str]:
     return unique_names
 
 
-def _read_zip_entries(payload_bytes: bytes) -> list[tuple[zipfile.ZipInfo, bytes]]:
+def _scan_zip_members(payload_bytes: bytes) -> list[zipfile.ZipInfo]:
     try:
         with zipfile.ZipFile(io.BytesIO(payload_bytes)) as archive:
             members = [m for m in archive.infolist() if not m.is_dir()]
@@ -136,8 +140,6 @@ def _read_zip_entries(payload_bytes: bytes) -> list[tuple[zipfile.ZipInfo, bytes
 
             total_uncompressed = 0
             total_compressed = 0
-            output: list[tuple[zipfile.ZipInfo, bytes]] = []
-
             for member in members:
                 if _is_unsafe_zip_path(member.filename):
                     raise HTTPException(
@@ -181,13 +183,41 @@ def _read_zip_entries(payload_bytes: bytes) -> list[tuple[zipfile.ZipInfo, bytes
                         ),
                     )
 
-                with archive.open(member, "r") as fp:
-                    content = fp.read(member.file_size)
-                output.append((member, content))
-
-            return output
+            return members
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=415, detail="Only valid .zip uploads are supported.") from exc
+
+
+def _sanitize_storage_name(file_name: str, source_hash_sha256: str) -> str:
+    normalized = file_name.strip().replace("\\", "/")
+    collapsed = re.sub(r"[^a-zA-Z0-9._-]+", "_", normalized)
+    return f"{collapsed[:120]}_{source_hash_sha256[:12]}.json"
+
+
+def _resolve_intake_owner(owner_user_id: str | None, owner_org_id: str | None) -> str:
+    if owner_org_id:
+        return f"org_{owner_org_id}"
+    if owner_user_id:
+        return f"user_{owner_user_id}"
+    return "anonymous"
+
+
+def _store_bytes_with_fallback(
+    *,
+    key: str,
+    payload: bytes,
+    content_type: str,
+) -> dict[str, str]:
+    bucket = (settings.S3_COACH_VIDEOS_BUCKET or "").strip()
+    if bucket:
+        s3_service.upload_file_obj(payload, bucket=bucket, key=key, content_type=content_type)
+        return {"storage": "s3", "bucket": bucket, "key": key}
+
+    local_base = Path(tempfile.gettempdir()) / "cricksy_historical_imports"
+    target_path = local_base / key
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_bytes(payload)
+    return {"storage": "local", "path": str(target_path)}
 
 
 async def _build_bulk_zip_preview(
@@ -198,121 +228,126 @@ async def _build_bulk_zip_preview(
     owner_user_id: str | None,
     owner_org_id: str | None,
 ) -> tuple[HistoricalImportBulkZipDryRunResponse, dict[str, _BulkJsonCandidate]]:
-    entries = _read_zip_entries(payload_bytes)
+    members = _scan_zip_members(payload_bytes)
+    metadata_only_intake_required = len(members) > PHASE_5L_MAX_FULL_APPLY_FILES
 
     files: list[HistoricalImportBulkZipFilePreview] = []
     candidates: dict[str, _BulkJsonCandidate] = {}
     hash_seen: dict[str, str] = {}
     semantic_seen: dict[str, str] = {}
 
-    for member, entry_payload in entries:
-        file_name = member.filename
-        if not file_name.lower().endswith(".json"):
+    with zipfile.ZipFile(io.BytesIO(payload_bytes)) as archive:
+        for member in members:
+            file_name = member.filename
+            if not file_name.lower().endswith(".json"):
+                files.append(
+                    HistoricalImportBulkZipFilePreview(
+                        file_name=file_name,
+                        status="unsupported",
+                        message="Ignored: only .json entries are processed from the ZIP.",
+                    )
+                )
+                continue
+
+            with archive.open(member, "r") as fp:
+                entry_payload = fp.read(member.file_size)
+
+            status_code, dry_run = build_dry_run_response(entry_payload)
+            if status_code >= 400:
+                file_preview = HistoricalImportBulkZipFilePreview(
+                    file_name=file_name,
+                    status="invalid",
+                    message="Invalid JSON payload.",
+                    detected_format=dry_run.detected_format,
+                    warnings=dry_run.warnings,
+                    errors=dry_run.errors,
+                    dry_run_preview=None if metadata_only_intake_required else dry_run,
+                )
+                files.append(file_preview)
+                candidates[file_name] = _BulkJsonCandidate(
+                    file_name=file_name,
+                    dry_run=dry_run,
+                    status="invalid",
+                )
+                continue
+
+            normalized_hash = dry_run.duplicate_detection.source_hash_sha256
+            semantic_key = dry_run.duplicate_detection.semantic_key
+            duplicate_within_zip = False
+            duplicate_reason = ""
+
+            if normalized_hash in hash_seen:
+                duplicate_within_zip = True
+                duplicate_reason = f"Duplicate inside ZIP: same content as '{hash_seen[normalized_hash]}'."
+            elif semantic_key and semantic_key in semantic_seen:
+                duplicate_within_zip = True
+                duplicate_reason = (
+                    f"Duplicate inside ZIP: same semantic match key as '{semantic_seen[semantic_key]}'."
+                )
+
+            if not duplicate_within_zip:
+                hash_seen[normalized_hash] = file_name
+                if semantic_key:
+                    semantic_seen[semantic_key] = file_name
+
+            duplicate_batch_id: str | None = None
+            semantic_duplicate = False
+            if not duplicate_within_zip:
+                dup_by_hash = await find_duplicate_by_hash(
+                    db, normalized_hash, owner_user_id, owner_org_id
+                )
+                dup_by_semantic: models.HistoricalImportBatch | None = None
+                if semantic_key:
+                    dup_by_semantic = await find_duplicate_by_semantic_key(
+                        db, semantic_key, owner_user_id, owner_org_id
+                    )
+                if dup_by_hash is not None:
+                    duplicate_batch_id = dup_by_hash.id
+                elif dup_by_semantic is not None:
+                    duplicate_batch_id = dup_by_semantic.id
+                    semantic_duplicate = True
+
+            status = "valid"
+            message = "Valid JSON preview ready."
+            if dry_run.status == "unsupported":
+                status = "unsupported"
+                message = "Unsupported historical JSON shape."
+            elif dry_run.status != "valid":
+                status = "invalid"
+                message = "JSON preview found validation issues."
+            elif duplicate_within_zip or duplicate_batch_id is not None:
+                status = "duplicate"
+                message = (
+                    duplicate_reason
+                    if duplicate_within_zip
+                    else (
+                        "Duplicate against previously recorded imports (source hash or semantic key)."
+                    )
+                )
+
             files.append(
                 HistoricalImportBulkZipFilePreview(
                     file_name=file_name,
-                    status="unsupported",
-                    message="Ignored: only .json entries are processed from the ZIP.",
+                    status=status,
+                    message=message,
+                    duplicate_within_zip=duplicate_within_zip,
+                    duplicate_batch_id=duplicate_batch_id,
+                    semantic_duplicate=semantic_duplicate,
+                    detected_format=dry_run.detected_format,
+                    warnings=dry_run.warnings,
+                    errors=dry_run.errors,
+                    dry_run_preview=None if metadata_only_intake_required else dry_run,
                 )
             )
-            continue
 
-        status_code, dry_run = build_dry_run_response(entry_payload)
-        if status_code >= 400:
-            file_preview = HistoricalImportBulkZipFilePreview(
-                file_name=file_name,
-                status="invalid",
-                message="Invalid JSON payload.",
-                detected_format=dry_run.detected_format,
-                warnings=dry_run.warnings,
-                errors=dry_run.errors,
-                dry_run_preview=dry_run,
-            )
-            files.append(file_preview)
             candidates[file_name] = _BulkJsonCandidate(
                 file_name=file_name,
-                payload=entry_payload,
                 dry_run=dry_run,
-                status="invalid",
-            )
-            continue
-
-        normalized_hash = dry_run.duplicate_detection.source_hash_sha256
-        semantic_key = dry_run.duplicate_detection.semantic_key
-        duplicate_within_zip = False
-        duplicate_reason = ""
-
-        if normalized_hash in hash_seen:
-            duplicate_within_zip = True
-            duplicate_reason = f"Duplicate inside ZIP: same content as '{hash_seen[normalized_hash]}'."
-        elif semantic_key and semantic_key in semantic_seen:
-            duplicate_within_zip = True
-            duplicate_reason = f"Duplicate inside ZIP: same semantic match key as '{semantic_seen[semantic_key]}'."
-
-        if not duplicate_within_zip:
-            hash_seen[normalized_hash] = file_name
-            if semantic_key:
-                semantic_seen[semantic_key] = file_name
-
-        duplicate_batch_id: str | None = None
-        semantic_duplicate = False
-        if not duplicate_within_zip:
-            dup_by_hash = await find_duplicate_by_hash(
-                db, normalized_hash, owner_user_id, owner_org_id
-            )
-            dup_by_semantic: models.HistoricalImportBatch | None = None
-            if semantic_key:
-                dup_by_semantic = await find_duplicate_by_semantic_key(
-                    db, semantic_key, owner_user_id, owner_org_id
-                )
-            if dup_by_hash is not None:
-                duplicate_batch_id = dup_by_hash.id
-            elif dup_by_semantic is not None:
-                duplicate_batch_id = dup_by_semantic.id
-                semantic_duplicate = True
-
-        status = "valid"
-        message = "Valid JSON preview ready."
-        if dry_run.status == "unsupported":
-            status = "unsupported"
-            message = "Unsupported historical JSON shape."
-        elif dry_run.status != "valid":
-            status = "invalid"
-            message = "JSON preview found validation issues."
-        elif duplicate_within_zip or duplicate_batch_id is not None:
-            status = "duplicate"
-            message = (
-                duplicate_reason
-                if duplicate_within_zip
-                else (
-                    "Duplicate against previously recorded imports (source hash or semantic key)."
-                )
-            )
-
-        files.append(
-            HistoricalImportBulkZipFilePreview(
-                file_name=file_name,
                 status=status,
-                message=message,
                 duplicate_within_zip=duplicate_within_zip,
                 duplicate_batch_id=duplicate_batch_id,
                 semantic_duplicate=semantic_duplicate,
-                detected_format=dry_run.detected_format,
-                warnings=dry_run.warnings,
-                errors=dry_run.errors,
-                dry_run_preview=dry_run,
             )
-        )
-
-        candidates[file_name] = _BulkJsonCandidate(
-            file_name=file_name,
-            payload=entry_payload,
-            dry_run=dry_run,
-            status=status,
-            duplicate_within_zip=duplicate_within_zip,
-            duplicate_batch_id=duplicate_batch_id,
-            semantic_duplicate=semantic_duplicate,
-        )
 
     summary = {
         "valid": sum(1 for f in files if f.status == "valid"),
@@ -325,9 +360,19 @@ async def _build_bulk_zip_preview(
     preview = HistoricalImportBulkZipDryRunResponse(
         status="preview_ready",
         source_filename=source_filename,
-        total_entries=len(entries),
+        total_entries=len(members),
+        files_scanned=len(members),
         json_entries=len(candidates),
         non_json_entries=len([f for f in files if f.status == "unsupported" and f.dry_run_preview is None]),
+        metadata_only_intake_required=metadata_only_intake_required,
+        metadata_only_pending_count=(summary.get("valid", 0) if metadata_only_intake_required else 0),
+        intake_status="scanned",
+        cost_control_message=(
+            "Large ZIP detected. Stored safely for later processing; full import is deferred."
+            if metadata_only_intake_required
+            else None
+        ),
+        full_import_deferred=metadata_only_intake_required,
         selected_apply_requires_confirm=True,
         max_files=PHASE_5L_MAX_FILES,
         max_file_size_bytes=PHASE_5L_MAX_FILE_SIZE_BYTES,
@@ -519,7 +564,7 @@ async def historical_json_bulk_zip_apply(
     owner_user_id: str | None = current_user.id if current_user else None
     owner_org_id: str | None = current_user.org_id if current_user else None
 
-    _, candidates = await _build_bulk_zip_preview(
+    preview, candidates = await _build_bulk_zip_preview(
         payload_bytes=payload_bytes,
         source_filename=file.filename or None,
         db=db,
@@ -528,99 +573,220 @@ async def historical_json_bulk_zip_apply(
     )
 
     results: list[HistoricalImportBulkZipApplyFileResult] = []
-    for selected_name in selected_names:
-        candidate = candidates.get(selected_name)
-        if candidate is None:
-            results.append(
-                HistoricalImportBulkZipApplyFileResult(
-                    file_name=selected_name,
-                    status="error",
-                    message="Selected file was not found in ZIP JSON entries.",
+    metadata_archive = zipfile.ZipFile(io.BytesIO(payload_bytes)) if preview.metadata_only_intake_required else None
+    try:
+        for selected_name in selected_names:
+            candidate = candidates.get(selected_name)
+            if candidate is None:
+                results.append(
+                    HistoricalImportBulkZipApplyFileResult(
+                        file_name=selected_name,
+                        status="error",
+                        message="Selected file was not found in ZIP JSON entries.",
+                    )
                 )
-            )
-            continue
+                continue
 
-        if candidate.status != "valid":
-            results.append(
-                HistoricalImportBulkZipApplyFileResult(
-                    file_name=selected_name,
-                    status="skipped",
-                    message=f"Skipped because file status is '{candidate.status}' in dry-run preview.",
+            if candidate.status != "valid":
+                results.append(
+                    HistoricalImportBulkZipApplyFileResult(
+                        file_name=selected_name,
+                        status="skipped",
+                        message=f"Skipped because file status is '{candidate.status}' in dry-run preview.",
+                    )
                 )
-            )
-            continue
+                continue
 
-        source_hash = candidate.dry_run.duplicate_detection.source_hash_sha256
-        semantic_key = candidate.dry_run.duplicate_detection.semantic_key
-        dup_by_hash = await find_duplicate_by_hash(db, source_hash, owner_user_id, owner_org_id)
-        dup_by_semantic: models.HistoricalImportBatch | None = None
-        if semantic_key:
-            dup_by_semantic = await find_duplicate_by_semantic_key(
-                db, semantic_key, owner_user_id, owner_org_id
-            )
-        duplicate_batch_record: models.HistoricalImportBatch | None = None
-        if dup_by_hash is not None:
-            duplicate_batch_record = dup_by_hash
-        elif dup_by_semantic is not None:
-            duplicate_batch_record = dup_by_semantic
-        if duplicate_batch_record is not None:
-            results.append(
-                HistoricalImportBulkZipApplyFileResult(
-                    file_name=selected_name,
-                    status="skipped",
-                    message=f"Skipped duplicate (existing batch: {duplicate_batch_record.id}).",
-                    batch_id=duplicate_batch_record.id,
+            if preview.metadata_only_intake_required:
+                source_hash = candidate.dry_run.duplicate_detection.source_hash_sha256
+                semantic_key = candidate.dry_run.duplicate_detection.semantic_key
+                safe_file_name = _sanitize_storage_name(selected_name, source_hash)
+                owner_scope = _resolve_intake_owner(owner_user_id, owner_org_id)
+                provisional_batch_id = str(uuid.uuid4())
+                base_key = f"historical-imports/{owner_scope}/{provisional_batch_id}"
+                raw_key = f"{base_key}/raw/{safe_file_name}"
+                manifest_key = f"{base_key}/manifest.json"
+                validation_report_key = f"{base_key}/validation_report.json"
+
+                assert metadata_archive is not None  # noqa: S101
+                selected_member = metadata_archive.getinfo(selected_name)
+                with metadata_archive.open(selected_member, "r") as fp:
+                    selected_payload = fp.read(selected_member.file_size)
+
+                try:
+                    raw_ref = _store_bytes_with_fallback(
+                        key=raw_key,
+                        payload=selected_payload,
+                        content_type="application/json",
+                    )
+                    manifest_payload = json.dumps(
+                        {
+                            "batch_id": provisional_batch_id,
+                            "source_filename": selected_name,
+                            "source_hash_sha256": source_hash,
+                            "semantic_key": semantic_key,
+                            "intake_status": "pending_full_import",
+                        },
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                    manifest_ref = _store_bytes_with_fallback(
+                        key=manifest_key,
+                        payload=manifest_payload,
+                        content_type="application/json",
+                    )
+                    validation_payload = json.dumps(
+                        {
+                            "status": candidate.status,
+                            "warnings": [w.model_dump() for w in candidate.dry_run.warnings],
+                            "errors": [e.model_dump() for e in candidate.dry_run.errors],
+                        },
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                    validation_ref = _store_bytes_with_fallback(
+                        key=validation_report_key,
+                        payload=validation_payload,
+                        content_type="application/json",
+                    )
+                except Exception as exc:  # pragma: no cover - defensive for storage faults
+                    results.append(
+                        HistoricalImportBulkZipApplyFileResult(
+                            file_name=selected_name,
+                            status="error",
+                            message=f"Failed to store raw metadata artifacts: {exc!s}",
+                        )
+                    )
+                    continue
+
+                dry_run_summary = candidate.dry_run.model_dump()
+                dry_run_summary["large_zip_intake"] = {
+                    "intake_mode": "metadata_only",
+                    "intake_status": "pending_full_import",
+                    "status_history": [
+                        "scanned",
+                        "metadata_extracted",
+                        "pending_full_import",
+                    ],
+                    "training_eligible": False,
+                    "blocking_reason": "metadata_only_pending_full_import",
+                    "storage": {
+                        "raw": raw_ref,
+                        "manifest": manifest_ref,
+                        "validation_report": validation_ref,
+                    },
+                }
+                dry_run_summary["training_eligible"] = False
+                dry_run_summary["blocking_reason"] = "metadata_only_pending_full_import"
+
+                batch = await create_import_batch(
+                    db,
+                    source_hash_sha256=source_hash,
+                    source_format=candidate.dry_run.detected_format,
+                    status="pending_full_import",
+                    error_count=len(candidate.dry_run.errors),
+                    warning_count=len(candidate.dry_run.warnings),
+                    innings_count=candidate.dry_run.innings_count,
+                    delivery_count=candidate.dry_run.delivery_count,
+                    dry_run_summary=dry_run_summary,
+                    owner_user_id=owner_user_id,
+                    owner_org_id=owner_org_id,
+                    source_filename=(
+                        f"{file.filename}{PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR}{selected_name}"
+                        if file.filename
+                        else selected_name
+                    ),
+                    semantic_key=semantic_key,
+                    batch_id=provisional_batch_id,
                 )
-            )
-            continue
+                results.append(
+                    HistoricalImportBulkZipApplyFileResult(
+                        file_name=selected_name,
+                        status="metadata_extracted",
+                        message=(
+                            "Stored safely for later processing. "
+                            "Metadata extracted; full import is pending."
+                        ),
+                        batch_id=batch.id,
+                    )
+                )
+                continue
 
-        batch = await create_import_batch(
-            db,
-            source_hash_sha256=source_hash,
-            source_format=candidate.dry_run.detected_format,
-            status=candidate.dry_run.status,
-            error_count=len(candidate.dry_run.errors),
-            warning_count=len(candidate.dry_run.warnings),
-            innings_count=candidate.dry_run.innings_count,
-            delivery_count=candidate.dry_run.delivery_count,
-            dry_run_summary=candidate.dry_run.model_dump(),
-            owner_user_id=owner_user_id,
-            owner_org_id=owner_org_id,
-            source_filename=(
-                f"{file.filename}{PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR}{selected_name}"
-                if file.filename
-                else selected_name
-            ),
-            semantic_key=semantic_key,
-        )
-        game, _, error_msg = await apply_historical_batch(db, batch_id=batch.id, confirm=True)
-        if error_msg is not None or game is None:
+            source_hash = candidate.dry_run.duplicate_detection.source_hash_sha256
+            semantic_key = candidate.dry_run.duplicate_detection.semantic_key
+            dup_by_hash = await find_duplicate_by_hash(db, source_hash, owner_user_id, owner_org_id)
+            dup_by_semantic: models.HistoricalImportBatch | None = None
+            if semantic_key:
+                dup_by_semantic = await find_duplicate_by_semantic_key(
+                    db, semantic_key, owner_user_id, owner_org_id
+                )
+            duplicate_batch_record: models.HistoricalImportBatch | None = None
+            if dup_by_hash is not None:
+                duplicate_batch_record = dup_by_hash
+            elif dup_by_semantic is not None:
+                duplicate_batch_record = dup_by_semantic
+            if duplicate_batch_record is not None:
+                results.append(
+                    HistoricalImportBulkZipApplyFileResult(
+                        file_name=selected_name,
+                        status="skipped",
+                        message=f"Skipped duplicate (existing batch: {duplicate_batch_record.id}).",
+                        batch_id=duplicate_batch_record.id,
+                    )
+                )
+                continue
+
+            batch = await create_import_batch(
+                db,
+                source_hash_sha256=source_hash,
+                source_format=candidate.dry_run.detected_format,
+                status=candidate.dry_run.status,
+                error_count=len(candidate.dry_run.errors),
+                warning_count=len(candidate.dry_run.warnings),
+                innings_count=candidate.dry_run.innings_count,
+                delivery_count=candidate.dry_run.delivery_count,
+                dry_run_summary=candidate.dry_run.model_dump(),
+                owner_user_id=owner_user_id,
+                owner_org_id=owner_org_id,
+                source_filename=(
+                    f"{file.filename}{PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR}{selected_name}"
+                    if file.filename
+                    else selected_name
+                ),
+                semantic_key=semantic_key,
+            )
+            game, _, error_msg = await apply_historical_batch(db, batch_id=batch.id, confirm=True)
+            if error_msg is not None or game is None:
+                results.append(
+                    HistoricalImportBulkZipApplyFileResult(
+                        file_name=selected_name,
+                        status="error",
+                        message=error_msg or "Apply failed.",
+                        batch_id=batch.id,
+                    )
+                )
+                continue
+
             results.append(
                 HistoricalImportBulkZipApplyFileResult(
                     file_name=selected_name,
-                    status="error",
-                    message=error_msg or "Apply failed.",
+                    status="applied",
+                    message="Applied successfully.",
                     batch_id=batch.id,
+                    applied_game_id=game.id,
                 )
-            )
-            continue
-
-        results.append(
-            HistoricalImportBulkZipApplyFileResult(
-                file_name=selected_name,
-                status="applied",
-                message="Applied successfully.",
-                batch_id=batch.id,
-                applied_game_id=game.id,
-            )
-        )
+                )
+    finally:
+        if metadata_archive is not None:
+            metadata_archive.close()
 
     applied_count = sum(1 for r in results if r.status == "applied")
+    metadata_only_count = sum(1 for r in results if r.status == "metadata_extracted")
     skipped_count = sum(1 for r in results if r.status == "skipped")
     error_count = sum(1 for r in results if r.status == "error")
-    if applied_count == len(results):
+    if metadata_only_count > 0 and applied_count == 0 and error_count == 0:
+        status_value = "metadata_recorded"
+    elif applied_count == len(results):
         status_value = "applied"
-    elif applied_count == 0:
+    elif applied_count == 0 and metadata_only_count == 0:
         status_value = "failed"
     else:
         status_value = "partial"
@@ -632,6 +798,8 @@ async def historical_json_bulk_zip_apply(
         applied_count=applied_count,
         skipped_count=skipped_count,
         error_count=error_count,
+        metadata_only_count=metadata_only_count,
+        full_import_deferred=preview.metadata_only_intake_required,
         selected_apply_requires_confirm=True,
         results=results,
     )
@@ -901,7 +1069,9 @@ async def get_historical_import_training_status(
 
     # Derive training eligibility from existing fields — no migration needed
     exclusion_reason: str | None = None
-    if not batch.is_finalized:
+    if batch.status in {"scanned", "metadata_extracted", "pending_full_import"}:
+        exclusion_reason = "metadata_only_pending_full_import"
+    elif not batch.is_finalized:
         exclusion_reason = "batch_not_finalized"
     elif batch.applied_game_id is None:
         exclusion_reason = "no_game_applied"

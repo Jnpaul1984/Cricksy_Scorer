@@ -33,14 +33,27 @@
 
     <section v-if="dryRunResult" class="hiz-result">
       <h4 class="hiz-section-title">Import preview summary</h4>
+      <p class="hiz-cost-note">
+        Cost-controlled intake keeps large uploads safe. Full match import can be deferred intentionally.
+      </p>
       <ul class="hiz-summary-list">
+        <li>Files scanned: {{ dryRunResult.files_scanned }}</li>
         <li>Files processed: {{ dryRunResult.total_entries }}</li>
         <li>JSON files found: {{ dryRunResult.json_entries }}</li>
         <li>Non-JSON files skipped: {{ dryRunResult.non_json_entries }}</li>
         <li>Valid files: {{ dryRunResult.summary.valid ?? 0 }}</li>
         <li>Duplicate files: {{ dryRunResult.summary.duplicate ?? 0 }}</li>
+        <li>Unsupported files: {{ dryRunResult.summary.unsupported ?? 0 }}</li>
         <li>Invalid/failed files: {{ (dryRunResult.summary.invalid ?? 0) + (dryRunResult.summary.error ?? 0) }}</li>
+        <li>Max files per ZIP: {{ dryRunResult.max_files }}</li>
+        <li>Max file size (bytes): {{ dryRunResult.max_file_size_bytes }}</li>
+        <li>Max total uncompressed (bytes): {{ dryRunResult.max_total_uncompressed_bytes }}</li>
+        <li>Max total compressed (bytes): {{ dryRunResult.max_total_compressed_bytes }}</li>
       </ul>
+
+      <p v-if="dryRunResult.metadata_only_intake_required" class="hiz-warning-note">
+        {{ dryRunResult.cost_control_message || 'Stored safely for later processing. Full import has not occurred yet.' }}
+      </p>
 
       <div v-if="validFiles.length" class="hiz-apply-block">
         <h4 class="hiz-section-title">Select files to import</h4>
@@ -82,9 +95,13 @@
       <h4 class="hiz-section-title">Import result</h4>
       <ul class="hiz-summary-list">
         <li>Matches imported: {{ applyResult.applied_count }}</li>
+        <li>Metadata-only records stored: {{ applyResult.metadata_only_count }}</li>
         <li>Skipped/duplicates: {{ applyResult.skipped_count }}</li>
         <li>Failed records/files: {{ applyResult.error_count }}</li>
       </ul>
+      <p v-if="applyResult.full_import_deferred" class="hiz-warning-note">
+        Stored safely for later processing. Metadata-only records are pending full import and are not training-ready.
+      </p>
 
       <ul v-if="applyIssues.length" class="hiz-errors-list">
         <li v-for="issue in applyIssues" :key="issue.file_name">
@@ -284,6 +301,18 @@ async function applySelected() {
 .hiz-loading {
   margin: 0;
   color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.hiz-cost-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.hiz-warning-note {
+  margin: 0;
+  color: var(--color-warning, #92400e);
   font-size: var(--text-sm);
 }
 

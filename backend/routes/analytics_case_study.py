@@ -255,7 +255,9 @@ async def get_match_registry(
     if batch is not None:
         # Derive training eligibility (mirrors existing training-status endpoint logic)
         blocking_reason: str | None = None
-        if not batch.is_finalized:
+        if batch.status in {"scanned", "metadata_extracted", "pending_full_import"}:
+            blocking_reason = "metadata_only_pending_full_import"
+        elif not batch.is_finalized:
             blocking_reason = "batch_not_finalized"
         elif batch.applied_game_id is None:
             blocking_reason = "no_game_applied"
