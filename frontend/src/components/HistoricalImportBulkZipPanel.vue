@@ -100,7 +100,8 @@
         <li>Failed records/files: {{ applyResult.error_count }}</li>
       </ul>
       <p v-if="applyResult.full_import_deferred" class="hiz-warning-note">
-        Stored safely for later processing. Metadata-only records are pending full import and are not training-ready.
+        Stored safely for later processing. Metadata-only records are pending full import, not training-ready yet, and
+        must go through a later full-import step.
       </p>
 
       <ul v-if="applyIssues.length" class="hiz-errors-list">

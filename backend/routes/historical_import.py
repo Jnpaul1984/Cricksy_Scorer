@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import hashlib
 import re
 import tempfile
 import uuid
@@ -191,14 +192,16 @@ def _scan_zip_members(payload_bytes: bytes) -> list[zipfile.ZipInfo]:
 def _sanitize_storage_name(file_name: str, source_hash_sha256: str) -> str:
     normalized = file_name.strip().replace("\\", "/")
     collapsed = re.sub(r"[^a-zA-Z0-9._-]+", "_", normalized)
-    return f"{collapsed[:120]}_{source_hash_sha256[:12]}.json"
+    collapsed = collapsed.lstrip(".").replace("..", "_")
+    safe_prefix = collapsed[:120] or "entry"
+    return f"{safe_prefix}_{source_hash_sha256[:12]}.json"
 
 
 def _resolve_intake_owner(owner_user_id: str | None, owner_org_id: str | None) -> str:
     if owner_org_id:
-        return f"org_{owner_org_id}"
+        return f"org_{re.sub(r'[^a-zA-Z0-9._-]+', '_', owner_org_id)}"
     if owner_user_id:
-        return f"user_{owner_user_id}"
+        return f"user_{re.sub(r'[^a-zA-Z0-9._-]+', '_', owner_user_id)}"
     return "anonymous"
 
 
@@ -208,16 +211,21 @@ def _store_bytes_with_fallback(
     payload: bytes,
     content_type: str,
 ) -> dict[str, str]:
+    normalized_key = key.strip().replace("\\", "/")
+    if _is_unsafe_zip_path(normalized_key):
+        raise RuntimeError("Unsafe storage key path.")
+
     bucket = (settings.S3_COACH_VIDEOS_BUCKET or "").strip()
     if bucket:
-        s3_service.upload_file_obj(payload, bucket=bucket, key=key, content_type=content_type)
-        return {"storage": "s3", "bucket": bucket, "key": key}
+        s3_service.upload_file_obj(payload, bucket=bucket, key=normalized_key, content_type=content_type)
+        return {"storage": "s3", "bucket": bucket, "key": normalized_key}
 
     local_base = Path(tempfile.gettempdir()) / "cricksy_historical_imports"
-    target_path = local_base / key
+    digest = hashlib.sha256(normalized_key.encode("utf-8")).hexdigest()
+    target_path = local_base / digest[:2] / digest
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_bytes(payload)
-    return {"storage": "local", "path": str(target_path)}
+    return {"storage": "local", "path": str(target_path), "logical_key": normalized_key}
 
 
 async def _build_bulk_zip_preview(
@@ -608,7 +616,15 @@ async def historical_json_bulk_zip_apply(
                 manifest_key = f"{base_key}/manifest.json"
                 validation_report_key = f"{base_key}/validation_report.json"
 
-                assert metadata_archive is not None  # noqa: S101
+                if metadata_archive is None:
+                    results.append(
+                        HistoricalImportBulkZipApplyFileResult(
+                            file_name=selected_name,
+                            status="error",
+                            message="Metadata intake archive was not available.",
+                        )
+                    )
+                    continue
                 selected_member = metadata_archive.getinfo(selected_name)
                 with metadata_archive.open(selected_member, "r") as fp:
                     selected_payload = fp.read(selected_member.file_size)
@@ -647,7 +663,7 @@ async def historical_json_bulk_zip_apply(
                         payload=validation_payload,
                         content_type="application/json",
                     )
-                except Exception as exc:  # pragma: no cover - defensive for storage faults
+                except (RuntimeError, OSError, ValueError) as exc:
                     results.append(
                         HistoricalImportBulkZipApplyFileResult(
                             file_name=selected_name,

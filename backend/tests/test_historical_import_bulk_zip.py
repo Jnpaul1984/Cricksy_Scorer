@@ -137,6 +137,7 @@ def test_bulk_zip_dry_run_rejects_zip_over_max_file_count() -> None:
 
 
 def test_bulk_zip_dry_run_rejects_zip_over_total_uncompressed_limit() -> None:
+    # Keep each member slightly below the per-file max so aggregate-size validation is exercised.
     per_file = b'{"a":"' + (b"x" * (2 * 1024 * 1024 - 1024)) + b'"}'
     file_count = (PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES // len(per_file)) + 1
     payload = _build_zip({f"{idx}.json": per_file for idx in range(file_count)})
