@@ -38,7 +38,7 @@ function resolveSpec() {
     if (!suiteName || !SUITES[suiteName]) {
       const valid = Object.keys(SUITES).join(', ')
       throw new Error(
-        `Unknown --suite "${suiteName ?? ''}". Valid suites: ${valid}`,
+        `Unknown --suite "${suiteName}". Valid suites: ${valid}`,
       )
     }
     return SUITES[suiteName]

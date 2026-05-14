@@ -64,7 +64,7 @@ This rule applies to all workspaces listed above.
 
 The following areas have no E2E coverage and should each have a dedicated follow-up issue:
 
-- [ ] **FE-E2E-001** — Auth/Login smoke E2E gate (`/login` form renders, submit behaviour)
+- [ ] **FE-E2E-001** — Auth/Login smoke E2E gate (`/login` form renders, submit behavior)
 - [ ] **FE-E2E-002** — Coach Pro Plus Video Sessions smoke E2E gate (`/coaches/video-sessions`)
 - [ ] **FE-E2E-003** — Historical Import / Upload flow smoke E2E gate (via `HistoricalImportPanel.vue`)
 - [ ] **FE-E2E-004** — Player Profile smoke E2E gate (`/player/:playerId`)
