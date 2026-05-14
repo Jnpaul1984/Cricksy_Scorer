@@ -206,27 +206,60 @@ Spec Lock must include:
 - Rollback plan
 - Acceptance criteria
 
-## Rule 5 — Deterministic Cricket Truth Protection
+## Rule 5 — Intelligence System Rule + Deterministic Cricket Truth Protection
 
-AI must never directly own or mutate:
+Cricksy must not become AI everywhere.
 
-- official score
+All intelligence features must follow:
+
+1. Deterministic systems calculate facts.
+2. AI systems explain, summarize, recommend, or communicate.
+3. Skills must be reusable, versioned, testable, and governed.
+4. AI outputs must be grounded in approved data.
+5. Confidence and limitations must be visible.
+6. Expensive AI must be event-triggered, not always running.
+7. Sensitive outputs require validation and review.
+8. User-facing intelligence must respect role, organization, youth-safety, and data-boundary rules.
+
+Hard gate:
+
+- No LLM may calculate, overwrite, or mutate official cricket truth.
+
+Deterministic systems own:
+
+- scoring
+- runs
 - balls
 - overs
 - wickets
 - innings state
 - match result
-- official scorecard
+- scorecards
 - official player stats
+- DLS
+- validations
+- filters
+- metrics
+- venue par calculations
+- win probability model outputs where applicable
 
-AI may:
+AI systems may only:
 
-- analyze
-- recommend
+- explain
 - summarize
-- generate coach reports
-- explain patterns
-- assist with review
+- interpret
+- recommend
+- communicate
+- generate reviewable reports
+- answer questions grounded in approved data
+
+Additional intelligence governance rules:
+
+- Do not load all available cricket data into AI context. Load only the minimum relevant match/player/team/phase/video data required for the user’s question.
+- AI-generated intelligence must expose confidence and limitations. Low-confidence insights must never be presented as certain.
+- Continuous intelligence should be mostly deterministic and cheap. Expensive AI should only run on explicit triggers.
+- No always-running LLM loops without explicit user approval, cost guardrails, and governance approval.
+- Sensitive or high-impact outputs require validation and review before becoming official or coach-facing.
 
 ## Rule 6 — Migrations Are Controlled
 
@@ -1480,7 +1513,224 @@ Phase 5M is implemented as the smallest safe slice that is visible in the fronte
 
 ---
 
-# Phase 6 — Historical Match Ingestion: PDF/Image/OCR Review Flow
+# Phase 6 — Cricksy Intelligence Operating System Governance
+
+## Purpose
+
+- Add a governed architecture stream for Cricksy as a sports intelligence operating system.
+- Keep future intelligence work cost-controlled, testable, reviewable, and safely separated from deterministic cricket truth.
+- Treat Phase 6A as documentation/audit/spec-lock only; no runtime intelligence implementation is allowed in this phase.
+
+## Governed Future Architecture (Spec Only)
+
+This is future governed architecture, not current implementation unless a later audit proves a component already exists and it is explicitly approved.
+
+```text
+User / Coach / Analyst
+        ↓
+Cricksy Supervisor
+        ↓
+Intent Router
+        ↓
+Skill Router
+        ↓
+Specialist Agents
+        ↓
+Validation Agents
+        ↓
+Governance Layer
+        ↓
+Review Queue
+        ↓
+Approved Intelligence Output
+```
+
+## Phase 6A — Intelligence OS Audit + Spec Lock
+
+### Purpose
+
+- Audit the current repo surfaces that will constrain or support future intelligence work.
+- Lock governance, protected boundaries, validation gates, and future subphase sequencing before any agent/router/skill implementation begins.
+- Publish the audit/spec-lock in `docs/PHASE_6A_CRICKSY_INTELLIGENCE_OS_AUDIT_AND_SPEC_LOCK.md`.
+
+### Pre-Phase Audit Requirements
+
+Audit and summarize:
+
+- Existing Analyst Workspace files/components/routes.
+- Existing historical import and registry work from Phase 5.
+- Existing deterministic scoring/result/DLS systems.
+- Existing analytics/match intelligence endpoints.
+- Existing model/prediction code, if any.
+- Existing video analysis / Coach Pro Plus architecture.
+- Existing auth/RBAC/tier/organization boundary rules.
+- Existing fake-data guard behavior.
+- Existing report/export capability.
+- Existing AI/LLM-related code, if any.
+- Existing places where AI could accidentally calculate or mutate cricket truth.
+- Existing CI/test gates relevant to future intelligence work.
+
+### Strict Scope
+
+- Update this Master Execution Checklist with the governed Phase 6 architecture stream.
+- Add the dedicated Phase 6A audit/spec-lock document.
+- Define future Phase 6B–6H subphases, rules, gates, and protected systems.
+- Map current Phase 5 historical registry work as the data foundation for future intelligence.
+
+### What Must Not Be Done
+
+- Do not build a Supervisor implementation.
+- Do not build Intent Router code.
+- Do not build Skill Router code.
+- Do not build agent code.
+- Do not build LLM workflows.
+- Do not call external AI providers.
+- Do not add new runtime dependencies.
+- Do not add migrations.
+- Do not modify backend/frontend runtime behavior.
+
+### Data Foundation Link
+
+Current Phase 5 work is the governed data foundation for future intelligence:
+
+```text
+Historical JSON import
+↓
+Metadata registry
+↓
+Training eligibility gates
+↓
+Analyst Workspace visibility
+↓
+Skills + intelligence pipeline later
+```
+
+Phase 5L.1 provides cost-controlled large ZIP intake and Phase 5M provides registry/provenance/training-eligibility foundations that future intelligence must consume rather than bypass.
+
+### Deterministic vs AI Boundary
+
+Deterministic systems own:
+
+- scoring
+- runs
+- balls
+- overs
+- wickets
+- innings state
+- match result
+- scorecards
+- official player stats
+- DLS
+- validations
+- filters
+- metrics
+- venue par calculations
+- win probability model outputs where applicable
+
+AI systems may only:
+
+- explain
+- summarize
+- interpret
+- recommend
+- communicate
+- generate reviewable reports
+- answer questions grounded in approved data
+
+Hard gate:
+
+- No LLM may calculate, overwrite, or mutate official cricket truth.
+
+### Phase 6 Governance Rules
+
+- Do not load all available cricket data into AI context. Load only the minimum relevant match/player/team/phase/video/context required for the user’s question.
+- AI-generated intelligence must expose confidence and limitations, including limited-sample caveats when appropriate.
+- Low-confidence insights must never be presented as certain.
+- Continuous intelligence should be mostly deterministic and cheap; expensive AI should only run on explicit triggers.
+- No always-running LLM loops without explicit user approval, cost guardrails, and governance approval.
+- Sensitive or high-impact outputs require validation and review before becoming official or coach-facing.
+- High-impact outputs include youth player feedback, mental-analysis recommendations, coach reports, scouting reports, public/podcast content, model-derived recommendations, and performance criticism.
+
+### Future Phase 6 Roadmap
+
+#### Phase 6B — Deterministic vs AI Boundary Enforcement
+
+Lock code and test boundaries that prevent AI from mutating cricket truth.
+
+#### Phase 6C — Cricksy Skills Architecture Spec
+
+Define reusable intelligence skills before agent implementation.
+Each future skill must define: purpose, inputs, outputs, deterministic dependencies, confidence rules, allowed users/roles, validation tests, safety rules, sample outputs, and no-fake-data rules.
+
+#### Phase 6D — Intent Router + Skill Router Spec
+
+Define how approved user intents map to approved skills and safe data retrieval.
+
+#### Phase 6E — Progressive Disclosure + Context Loading Rules
+
+Define strict rules to load only relevant match/player/team/video/context data for each intelligence request.
+
+#### Phase 6F — Confidence + Uncertainty System Spec
+
+Define confidence metadata for generated intelligence, including data quality, sample size, tactical confidence, video confidence, recommendation confidence, overall confidence, and limitations.
+
+#### Phase 6G — Event-Triggered Intelligence Spec
+
+Define cheap always-on deterministic intelligence vs expensive triggered AI, with triggers such as coach questions, report requests, collapse detection, confidence drops, video uploads, or analyst-requested outputs.
+
+#### Phase 6H — Validation Agents + Review Queue Spec
+
+Define the review flow:
+
+```text
+Generated insight
+↓
+Data validation
+↓
+Cricket correctness validation
+↓
+Safety/language validation
+↓
+Confidence validation
+↓
+Coach/admin review queue
+↓
+Approved output
+```
+
+### Protected Files/Systems
+
+- Live scoring truth and official score/balls/overs/wickets/innings/result/scorecard/player-stat paths.
+- DLS calculation logic and related regression tests.
+- Live bus/socket behavior.
+- Historical import safety gates, registry linkage, and training-eligibility gates.
+- Analyst Workspace provenance visibility rules.
+- Coach Pro Plus video analysis, mental-analysis, and youth-facing report systems.
+- Auth/RBAC/tier/organization boundaries.
+- Fake-data guard behavior.
+- CI/CD gates.
+
+### Required Validation
+
+Because Phase 6A is docs/spec-lock only:
+
+- Verify Markdown formatting.
+- Verify checklist phase ordering remains clear.
+- Verify no existing phases are removed or marked complete without evidence.
+- Verify no implementation code changed.
+- Verify checklist structure is not accidentally corrupted.
+
+### Completion Criteria
+
+- Master Execution Checklist includes the governed Phase 6 intelligence architecture stream.
+- Global intelligence rules, deterministic/AI boundaries, progressive disclosure, confidence, event-triggered compute, and review-queue rules are documented.
+- Future Phase 6B–6H roadmap is documented.
+- Phase 5 registry/import work is connected to the future intelligence foundation.
+- No runtime app behavior changes.
+
+---
+
+# Phase 7 — Historical Match Ingestion: PDF/Image/OCR Review Flow
 
 ## Purpose
 
@@ -1536,7 +1786,7 @@ Teams can upload scans/photos/PDFs and review extracted match data before saving
 
 ---
 
-# Phase 7 — AI Analytics + Match Intelligence Enhancements
+# Phase 8 — AI Analytics + Match Intelligence Enhancements
 
 ## Purpose
 
@@ -1600,7 +1850,7 @@ AI insights are more useful and explainable without compromising official cricke
 
 ---
 
-# Phase 8 — Subscription, Pricing + Tier Enforcement Hardening
+# Phase 9 — Subscription, Pricing + Tier Enforcement Hardening
 
 ## Purpose
 
@@ -1662,7 +1912,7 @@ Paid features are protected correctly and pricing/tier behavior is reliable.
 
 ---
 
-# Phase 9 — Organization Pro + League Operations
+# Phase 10 — Organization Pro + League Operations
 
 ## Purpose
 
@@ -1714,7 +1964,7 @@ Organizations can safely manage teams, tournaments, sponsors, and roles.
 
 ---
 
-# Phase 10 — Live Viewer, Streaming + Sponsor Experience
+# Phase 11 — Live Viewer, Streaming + Sponsor Experience
 
 ## Purpose
 
@@ -1765,7 +2015,7 @@ The live viewing experience is more professional without harming scoring or perf
 
 ---
 
-# Phase 11 — Media, Highlights + Report Content Engine
+# Phase 12 — Media, Highlights + Report Content Engine
 
 ## Purpose
 
@@ -1816,7 +2066,7 @@ Cricksy can safely create useful media/reporting assets from existing data.
 
 ---
 
-# Phase 12 — Lightweight Cricket Supervisor Layer
+# Phase 13 — Lightweight Cricket Supervisor Layer
 
 ## Purpose
 
@@ -1871,7 +2121,7 @@ Cricksy gains safe workflow orchestration without becoming over-agentic or unsta
 
 ---
 
-# Phase 13 — Production Scale, Monitoring + Cost Control
+# Phase 14 — Production Scale, Monitoring + Cost Control
 
 ## Purpose
 
@@ -2027,15 +2277,16 @@ Check imports, typing, formatting, migrations, tests, and CI impact before final
 4. Phase 3 — Coach Pro Plus Video Analysis Hardening + Extension
 5. Phase 4 — Analyst System Blueprint Audit + Spec Lock
 6. Phase 5 — Historical Match Ingestion: Structured JSON First
-7. Phase 6 — Historical Match Ingestion: PDF/Image/OCR Review Flow
-8. Phase 7 — AI Analytics + Match Intelligence Enhancements
-9. Phase 8 — Subscription, Pricing + Tier Enforcement Hardening
-10. Phase 9 — Organization Pro + League Operations
-11. Phase 10 — Live Viewer, Streaming + Sponsor Experience
-12. Phase 11 — Media, Highlights + Report Content Engine
-13. Phase 12 — Lightweight Cricket Supervisor Layer
-14. Phase 13 — Production Scale, Monitoring + Cost Control
+7. Phase 6 — Cricksy Intelligence Operating System Governance
+8. Phase 7 — Historical Match Ingestion: PDF/Image/OCR Review Flow
+9. Phase 8 — AI Analytics + Match Intelligence Enhancements
+10. Phase 9 — Subscription, Pricing + Tier Enforcement Hardening
+11. Phase 10 — Organization Pro + League Operations
+12. Phase 11 — Live Viewer, Streaming + Sponsor Experience
+13. Phase 12 — Media, Highlights + Report Content Engine
+14. Phase 13 — Lightweight Cricket Supervisor Layer
+15. Phase 14 — Production Scale, Monitoring + Cost Control
 
 Reason:
 
-Protect the deployed app and CI/CD first. Then stabilize the already-working Coach Pro Plus Video Analysis system before expanding into player development, historical ingestion, broader intelligence features, and the governed analyst-system roadmap.
+Protect the deployed app and CI/CD first. Then stabilize the already-working Coach Pro Plus Video Analysis system before expanding into player development, historical ingestion, governed intelligence architecture, and broader intelligence features.
