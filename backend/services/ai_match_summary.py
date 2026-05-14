@@ -7,6 +7,11 @@ including headline, narrative, tactical themes, and player highlights.
 Uses the existing MatchCaseStudy data as the foundation and generates
 rule-based text for V1.
 
+Phase 6B — Non-authoritative boundary:
+    All outputs from this service are SUMMARY outputs. They are not
+    official cricket truth and must not be treated as authoritative score,
+    result, DLS, innings-state, or player-stat data.
+
 TODO: Replace rule-based generation with actual LLM integration.
 """
 
@@ -14,15 +19,15 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from pydantic import BaseModel
-
 from backend.api.schemas.case_study import (
     CaseStudyKeyPlayer,
     CaseStudyMatch,
     CaseStudyPhase,
     MatchCaseStudyResponse,
 )
+from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType
 from backend.services.analytics_case_study import build_match_case_study
+from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
 # Pydantic Schema
@@ -30,7 +35,11 @@ from backend.services.analytics_case_study import build_match_case_study
 
 
 class MatchAiSummary(BaseModel):
-    """Rich AI-generated narrative summary for a match."""
+    """Rich AI-generated narrative summary for a match.
+
+    Phase 6B — Non-authoritative: SUMMARY output only.
+    ``ai_metadata.is_official_truth`` is always False.
+    """
 
     match_id: str
     headline: str
@@ -39,6 +48,7 @@ class MatchAiSummary(BaseModel):
     player_highlights: list[str]
     tags: list[str]
     generated_at: datetime
+    ai_metadata: AiOutputMetadata = AiOutputMetadata(output_type=AiOutputType.SUMMARY)
 
 
 # ---------------------------------------------------------------------------
