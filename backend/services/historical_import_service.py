@@ -97,6 +97,7 @@ async def get_import_batch(
 async def create_import_batch(
     db: AsyncSession,
     *,
+    batch_id: str | None = None,
     source_hash_sha256: str,
     source_format: str,
     status: str,
@@ -116,7 +117,7 @@ async def create_import_batch(
     No Game/Delivery/Player/Team rows are created.
     """
     batch = HistoricalImportBatch(
-        id=str(uuid.uuid4()),
+        id=batch_id or str(uuid.uuid4()),
         owner_user_id=owner_user_id,
         owner_org_id=owner_org_id,
         source_filename=source_filename,
@@ -167,4 +168,3 @@ async def list_import_batches(
 
     result = await db.execute(stmt)
     return list(result.scalars().all())
-

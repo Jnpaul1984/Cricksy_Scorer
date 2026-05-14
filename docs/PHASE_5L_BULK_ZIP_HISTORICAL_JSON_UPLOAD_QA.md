@@ -4,10 +4,11 @@
 - Endpoint accepts `.zip` only (`POST /api/historical-import/json/bulk-zip/dry-run` and `/bulk-zip/apply`).
 - Unsafe ZIP entry paths are rejected (absolute paths, `..` traversal, Windows drive paths).
 - Limits enforced:
-  - max files: `100`
+  - max files: `2000`
   - max per-file size: `2 MB`
-  - max total uncompressed size: `20 MB`
-  - max total compressed size: `20 MB`
+  - max total uncompressed size: `100 MB`
+  - max total compressed size: `100 MB`
+  - full apply threshold before metadata-only mode: `100 files`
 
 ## File handling behavior
 - Only `.json` entries are processed.
@@ -29,6 +30,7 @@
 
 Apply statuses:
 - `applied`: selected file recorded + applied through existing single-file pipeline.
+- `metadata_extracted`: metadata-only intake stored safely for later processing; full import deferred.
 - `skipped`: selected file not valid/safe for apply.
 - `error`: selected file apply failed.
 
@@ -45,7 +47,13 @@ Apply statuses:
 - [ ] Verify Analyst/live scoring truth remains untouched (no live/in-progress mutation).
 
 ## Phase 5M registry readiness notes
-- Raw ZIP bytes and raw JSON are not retained server-side in Phase 5L.
+- Large ZIP metadata-only intake stores raw artifacts via existing storage interface:
+  - S3 when `S3_COACH_VIDEOS_BUCKET` is configured
+  - local/dev fallback under `/tmp/cricksy_historical_imports/...` when bucket is unset
+- Storage key pattern for metadata-only intake:
+  - `historical-imports/{org_or_user_scope}/{batch_id}/raw/{filename}_{hash}.json`
+  - `historical-imports/{org_or_user_scope}/{batch_id}/manifest.json`
+  - `historical-imports/{org_or_user_scope}/{batch_id}/validation_report.json`
 - Existing batch metadata (`source_hash_sha256`, semantic key, dry-run summary) remains the audit foundation.
 - Applied ZIP entries store `source_filename` as `<zip-name>::<entry-name>` for traceable audit lineage.
 - Phase 5M can build registry/index workflows on finalized batch metadata without schema changes in this phase.

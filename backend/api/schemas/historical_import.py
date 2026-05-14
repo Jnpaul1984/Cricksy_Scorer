@@ -123,8 +123,14 @@ class HistoricalImportBulkZipDryRunResponse(BaseModel):
     status: Literal["preview_ready", "invalid_zip"]
     source_filename: str | None = None
     total_entries: int = 0
+    files_scanned: int = 0
     json_entries: int = 0
     non_json_entries: int = 0
+    metadata_only_intake_required: bool = False
+    metadata_only_pending_count: int = 0
+    intake_status: str = "scanned"
+    cost_control_message: str | None = None
+    full_import_deferred: bool = False
     selected_apply_requires_confirm: bool = True
     max_files: int
     max_file_size_bytes: int
@@ -138,7 +144,7 @@ class HistoricalImportBulkZipApplyFileResult(BaseModel):
     """Per-file result for selected apply from a ZIP bulk upload."""
 
     file_name: str
-    status: Literal["applied", "skipped", "error"]
+    status: Literal["applied", "metadata_extracted", "skipped", "error"]
     message: str
     batch_id: str | None = None
     applied_game_id: str | None = None
@@ -147,12 +153,14 @@ class HistoricalImportBulkZipApplyFileResult(BaseModel):
 class HistoricalImportBulkZipApplyResponse(BaseModel):
     """Apply response for selected files from ZIP bulk upload."""
 
-    status: Literal["applied", "partial", "failed"]
+    status: Literal["applied", "metadata_recorded", "partial", "failed"]
     source_filename: str | None = None
     selected_count: int = 0
     applied_count: int = 0
     skipped_count: int = 0
     error_count: int = 0
+    metadata_only_count: int = 0
+    full_import_deferred: bool = False
     selected_apply_requires_confirm: bool = True
     results: list[HistoricalImportBulkZipApplyFileResult] = Field(default_factory=list)
 
