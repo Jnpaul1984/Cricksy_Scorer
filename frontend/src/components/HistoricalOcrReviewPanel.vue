@@ -228,7 +228,6 @@ async function rejectCandidate() {
   }
 }
 
-void fileInputRef
 </script>
 
 <style scoped>

@@ -244,7 +244,7 @@ def _as_ocr_issue_list(raw_issues: object) -> list[HistoricalImportIssue]:
             continue
         code = str(item.get("code") or "").strip()
         message = str(item.get("message") or "").strip()
-        severity = str(item.get("severity") or "error").strip() or "error"
+        severity = str(item.get("severity", "error")).strip() or "error"
         if not code or not message:
             continue
         issues.append(
@@ -1395,7 +1395,11 @@ async def apply_historical_import_batch(
             raise HTTPException(status_code=422, detail=error_msg)
         raise HTTPException(status_code=409, detail=error_msg)
 
-    assert game is not None
+    if game is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Historical import apply failed unexpectedly after validation checks.",
+        )
 
     rollback_info = (
         "To rollback via API: POST "
@@ -1665,7 +1669,11 @@ async def repair_historical_import_metadata(
             raise HTTPException(status_code=409, detail=error_msg)
         raise HTTPException(status_code=409, detail=error_msg)
 
-    assert result is not None
+    if result is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Historical metadata repair failed unexpectedly after validation checks.",
+        )
 
     status_value = result.get("status", "refused")
     game_id_value: str | None = result.get("game_id")

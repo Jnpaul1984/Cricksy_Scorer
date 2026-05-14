@@ -65,6 +65,21 @@ def test_ocr_review_candidate_rejects_oversized_payload() -> None:
     assert response.status_code == 413, response.text
 
 
+def test_ocr_review_candidate_rejects_malformed_uncertainty_flags() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/historical-import/json/ocr-review/candidates",
+            files={"file": ("scorecard.pdf", _pdf_bytes(), "application/pdf")},
+            data={
+                "candidate_json": json.dumps(_fixture_payload()),
+                "uncertainty_flags": "{not-json",
+            },
+        )
+
+    assert response.status_code == 422, response.text
+    assert "uncertainty_flags" in response.json()["detail"]
+
+
 def test_ocr_review_candidate_create_does_not_create_official_match_data() -> None:
     with TestClient(app) as client:
         before = client.get("/games/results")
