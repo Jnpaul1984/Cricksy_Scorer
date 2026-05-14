@@ -1,0 +1,701 @@
+"""Phase 5N — Historical Stats Aggregation Layer: deterministic aggregation service.
+
+Computes on-demand aggregate statistics from validated, fully-imported historical
+cricket match data stored in the ``Game`` table.
+
+Strict eligibility gates (all must pass before a game is included):
+  1. ``Game.phases['historical_import']['is_historical'] == True``
+  2. Linked ``HistoricalImportBatch.is_finalized == True``
+  3. ``batch.applied_game_id`` is set
+  4. ``batch.status == "valid"``
+  5. ``batch.error_count == 0``
+  6. ``batch.status`` is NOT in the metadata-only set:
+     {scanned, metadata_extracted, pending_full_import}
+
+Metadata-only records are counted and excluded — they are NEVER aggregated
+as full historical data and are never marked training-eligible here.
+
+All aggregation is deterministic Python logic. No AI/LLM services are used.
+No official truth fields (scores, wickets, DLS outputs, innings state,
+match result, official player stats) are mutated.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+from collections import defaultdict
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.api.schemas.historical_stats import (
+    CompetitionAggregate,
+    HistoricalMatchAggregateResponse,
+    HistoricalStatsSummaryResponse,
+    InningsAggregate,
+    MatchAggregate,
+    PlayerAggregate,
+    SeasonAggregate,
+    TeamAggregate,
+    VenueAggregate,
+)
+from backend.services.analyst_access import scoped_games_stmt
+from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
+
+# Batch statuses that indicate the record is metadata-only (not fully imported).
+_METADATA_ONLY_STATUSES: frozenset[str] = frozenset(
+    {"scanned", "metadata_extracted", "pending_full_import"}
+)
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _hist_meta(game: Game) -> dict[str, Any] | None:
+    """Return the historical_import sub-dict from Game.phases, or None."""
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    meta = phases.get("historical_import")
+    if isinstance(meta, dict) and meta.get("is_historical"):
+        return meta
+    return None
+
+
+def _innings_summary(game: Game) -> list[dict[str, Any]]:
+    """Return the historical_innings_summary list from Game.phases."""
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    raw = phases.get("historical_innings_summary")
+    if isinstance(raw, list):
+        return [inn for inn in raw if isinstance(inn, dict)]
+    return []
+
+
+def _is_metadata_only(batch: HistoricalImportBatch) -> bool:
+    """Return True if the batch is metadata-only (pending full import)."""
+    return batch.status in _METADATA_ONLY_STATUSES
+
+
+def _is_eligible_for_aggregation(batch: HistoricalImportBatch) -> bool:
+    """Return True only when the batch satisfies all eligibility gates.
+
+    Must be:
+    - Not metadata-only
+    - Finalized (Phase 5D applied)
+    - Has an applied game
+    - Status is 'valid'
+    - Zero errors
+    """
+    if _is_metadata_only(batch):
+        return False
+    if not batch.is_finalized:
+        return False
+    if not batch.applied_game_id:
+        return False
+    if batch.status != "valid":
+        return False
+    if batch.error_count > 0:
+        return False
+    return True
+
+
+def _build_innings_aggregates(
+    innings_list: list[dict[str, Any]],
+) -> list[InningsAggregate]:
+    """Build InningsAggregate objects from historical_innings_summary entries.
+
+    Reads from existing stored data — does not mutate any source fields.
+    """
+    result: list[InningsAggregate] = []
+    for inn in innings_list:
+        runs = int(inn.get("runs") or 0)
+        wickets = int(inn.get("wickets") or 0)
+        overs_raw = inn.get("overs")
+        overs = float(overs_raw) if overs_raw is not None else 0.0
+        inning_no = int(inn.get("inning_no") or 0)
+        team = inn.get("team")
+        result.append(
+            InningsAggregate(
+                inning_no=inning_no,
+                team=str(team) if team else None,
+                runs=runs,
+                wickets=wickets,
+                overs=overs,
+            )
+        )
+    return result
+
+
+def _build_match_aggregate(
+    game: Game,
+    batch: HistoricalImportBatch,
+    meta: dict[str, Any],
+) -> MatchAggregate:
+    """Build a MatchAggregate from a single eligible historical Game.
+
+    Reads Game.phases, Game.team_a, Game.team_b, and Game.deliveries.
+    Does not write or mutate any Game fields.
+    """
+    team_a_data = game.team_a if isinstance(game.team_a, dict) else {}
+    team_b_data = game.team_b if isinstance(game.team_b, dict) else {}
+    team_a_name = team_a_data.get("name") or "Team A"
+    team_b_name = team_b_data.get("name") or "Team B"
+
+    innings_list = _innings_summary(game)
+    innings_aggregates = _build_innings_aggregates(innings_list)
+
+    total_runs = sum(i.runs for i in innings_aggregates)
+    total_wickets = sum(i.wickets for i in innings_aggregates)
+
+    has_delivery_data = bool(meta.get("deliveries_imported"))
+
+    return MatchAggregate(
+        match_id=game.id,
+        teams=f"{team_a_name} vs {team_b_name}",
+        team_a=team_a_name,
+        team_b=team_b_name,
+        import_batch_id=batch.id,
+        source_filename=batch.source_filename,
+        source_format=batch.source_format,
+        competition=meta.get("event_name"),
+        season=meta.get("season"),
+        venue=meta.get("venue"),
+        match_date=meta.get("match_date"),
+        match_type=game.match_type,
+        innings_count=len(innings_aggregates),
+        total_runs=total_runs,
+        total_wickets=total_wickets,
+        innings_totals=innings_aggregates,
+        has_delivery_data=has_delivery_data,
+    )
+
+
+def _aggregate_batting(
+    batting_scorecard: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """Extract batting stats from a single game's batting_scorecard.
+
+    Reads existing scorecard data — does not mutate any Game fields.
+    Returns a dict keyed by player name.
+    """
+    result: dict[str, dict[str, Any]] = {}
+    if not isinstance(batting_scorecard, dict):
+        return result
+    for player_name, stats in batting_scorecard.items():
+        if not isinstance(stats, dict):
+            continue
+        result[str(player_name)] = {
+            "runs": int(stats.get("runs") or 0),
+            "balls_faced": int(stats.get("balls_faced") or 0),
+            "fours": int(stats.get("fours") or 0),
+            "sixes": int(stats.get("sixes") or 0),
+            "is_out": bool(stats.get("is_out", False)),
+        }
+    return result
+
+
+def _aggregate_bowling(
+    bowling_scorecard: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """Extract bowling stats from a single game's bowling_scorecard.
+
+    Reads existing scorecard data — does not mutate any Game fields.
+    Returns a dict keyed by bowler name.
+    """
+    result: dict[str, dict[str, Any]] = {}
+    if not isinstance(bowling_scorecard, dict):
+        return result
+    for player_name, stats in bowling_scorecard.items():
+        if not isinstance(stats, dict):
+            continue
+        result[str(player_name)] = {
+            "overs_bowled": float(stats.get("overs_bowled") or 0.0),
+            "balls_bowled": int(stats.get("balls_bowled") or 0),
+            "runs_conceded": int(stats.get("runs_conceded") or 0),
+            "wickets_taken": int(stats.get("wickets_taken") or 0),
+            "maidens": int(stats.get("maidens") or 0),
+        }
+    return result
+
+
+def _build_player_aggregates(
+    eligible_games: list[tuple[Game, HistoricalImportBatch, dict[str, Any]]],
+) -> list[PlayerAggregate]:
+    """Aggregate batting and bowling stats across all eligible games with delivery data.
+
+    Only games where Phase 5F delivery import has been completed are included,
+    since batting_scorecard and bowling_scorecard are populated by Phase 5F.
+    """
+    # Accumulate per-player stats across matches
+    batting_acc: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"runs": 0, "balls_faced": 0, "fours": 0, "sixes": 0, "dismissals": 0, "matches": 0}
+    )
+    bowling_acc: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {
+            "overs_bowled": 0.0,
+            "balls_bowled": 0,
+            "runs_conceded": 0,
+            "wickets_taken": 0,
+            "maidens": 0,
+            "matches": 0,
+        }
+    )
+
+    for game, _batch, meta in eligible_games:
+        # Only include scorecard data when deliveries have been imported
+        if not meta.get("deliveries_imported"):
+            continue
+
+        batting_stats = _aggregate_batting(game.batting_scorecard or {})
+        for player, bstats in batting_stats.items():
+            acc = batting_acc[player]
+            acc["runs"] += bstats["runs"]
+            acc["balls_faced"] += bstats["balls_faced"]
+            acc["fours"] += bstats["fours"]
+            acc["sixes"] += bstats["sixes"]
+            if bstats["is_out"]:
+                acc["dismissals"] += 1
+            acc["matches"] += 1
+
+        bowling_stats = _aggregate_bowling(game.bowling_scorecard or {})
+        for player, bwstats in bowling_stats.items():
+            acc = bowling_acc[player]
+            acc["overs_bowled"] += bwstats["overs_bowled"]
+            acc["balls_bowled"] += bwstats["balls_bowled"]
+            acc["runs_conceded"] += bwstats["runs_conceded"]
+            acc["wickets_taken"] += bwstats["wickets_taken"]
+            acc["maidens"] += bwstats["maidens"]
+            acc["matches"] += 1
+
+    all_players = set(batting_acc) | set(bowling_acc)
+    result: list[PlayerAggregate] = []
+
+    for player_name in sorted(all_players):
+        bstats = batting_acc.get(player_name, {})
+        bwstats = bowling_acc.get(player_name, {})
+
+        balls_faced = bstats.get("balls_faced", 0)
+        runs_scored = bstats.get("runs", 0)
+        strike_rate = round(runs_scored / balls_faced * 100, 2) if balls_faced > 0 else 0.0
+
+        overs_bowled = bwstats.get("overs_bowled", 0.0)
+        runs_conceded = bwstats.get("runs_conceded", 0)
+        economy_rate = round(runs_conceded / overs_bowled, 2) if overs_bowled > 0 else 0.0
+
+        matches_contributed = max(
+            bstats.get("matches", 0), bwstats.get("matches", 0)
+        )
+
+        result.append(
+            PlayerAggregate(
+                player_name=player_name,
+                matches_contributed=matches_contributed,
+                runs_scored=runs_scored,
+                balls_faced=balls_faced,
+                strike_rate=strike_rate,
+                fours=bstats.get("fours", 0),
+                sixes=bstats.get("sixes", 0),
+                dismissals=bstats.get("dismissals", 0),
+                overs_bowled=round(overs_bowled, 1),
+                runs_conceded=runs_conceded,
+                wickets=bwstats.get("wickets_taken", 0),
+                economy_rate=economy_rate,
+                maidens=bwstats.get("maidens", 0),
+            )
+        )
+
+    return result
+
+
+def _build_team_aggregates(
+    eligible_games: list[tuple[Game, HistoricalImportBatch, dict[str, Any]]],
+) -> list[TeamAggregate]:
+    """Aggregate team stats across eligible historical matches.
+
+    Uses historical_innings_summary to count runs, wickets per innings by team.
+    """
+    team_acc: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"matches": set(), "innings": 0, "total_runs": 0, "total_wickets": 0}
+    )
+
+    for game, _batch, _meta in eligible_games:
+        innings_list = _innings_summary(game)
+        team_a_data = game.team_a if isinstance(game.team_a, dict) else {}
+        team_b_data = game.team_b if isinstance(game.team_b, dict) else {}
+        team_names = {
+            team_a_data.get("name") or "Team A",
+            team_b_data.get("name") or "Team B",
+        }
+        # Count match for both teams
+        for team_name in team_names:
+            team_acc[team_name]["matches"].add(game.id)
+
+        for inn in innings_list:
+            team = str(inn.get("team") or "")
+            if not team:
+                continue
+            runs = int(inn.get("runs") or 0)
+            wickets = int(inn.get("wickets") or 0)
+            team_acc[team]["innings"] += 1
+            team_acc[team]["total_runs"] += runs
+            team_acc[team]["total_wickets"] += wickets
+
+    result: list[TeamAggregate] = []
+    for team_name, acc in sorted(team_acc.items()):
+        matches_played = len(acc["matches"])
+        innings_batted = acc["innings"]
+        total_runs = acc["total_runs"]
+        total_wickets = acc["total_wickets"]
+        avg_score = round(total_runs / innings_batted, 2) if innings_batted > 0 else 0.0
+        avg_wickets = round(total_wickets / innings_batted, 2) if innings_batted > 0 else 0.0
+
+        result.append(
+            TeamAggregate(
+                team_name=team_name,
+                matches_played=matches_played,
+                innings_batted=innings_batted,
+                avg_score=avg_score,
+                avg_wickets=avg_wickets,
+                total_runs=total_runs,
+                total_wickets=total_wickets,
+            )
+        )
+
+    return result
+
+
+def _build_venue_aggregates(
+    eligible_games: list[tuple[Game, HistoricalImportBatch, dict[str, Any]]],
+) -> list[VenueAggregate]:
+    """Aggregate stats by venue across eligible historical matches."""
+    venue_acc: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {
+            "match_count": 0,
+            "first_innings_runs": [],
+            "second_innings_runs": [],
+            "total_runs": [],
+            "total_wickets": [],
+        }
+    )
+
+    for _game, _batch, meta in eligible_games:
+        venue = meta.get("venue")
+        if not venue or not str(venue).strip():
+            continue
+        venue_key = str(venue).strip()
+
+        innings_list = _innings_summary(_game)
+        acc = venue_acc[venue_key]
+        acc["match_count"] += 1
+
+        match_runs = 0
+        match_wickets = 0
+        for inn in innings_list:
+            runs = int(inn.get("runs") or 0)
+            wickets = int(inn.get("wickets") or 0)
+            inning_no = int(inn.get("inning_no") or 0)
+            match_runs += runs
+            match_wickets += wickets
+            if inning_no == 1:
+                acc["first_innings_runs"].append(runs)
+            elif inning_no == 2:
+                acc["second_innings_runs"].append(runs)
+
+        if innings_list:
+            acc["total_runs"].append(match_runs)
+            acc["total_wickets"].append(match_wickets)
+
+    result: list[VenueAggregate] = []
+    for venue_name, acc in sorted(venue_acc.items()):
+        match_count = acc["match_count"]
+        first_inn = acc["first_innings_runs"]
+        second_inn = acc["second_innings_runs"]
+        total_runs_list = acc["total_runs"]
+        total_wickets_list = acc["total_wickets"]
+
+        avg_first = round(sum(first_inn) / len(first_inn), 2) if first_inn else 0.0
+        avg_second = round(sum(second_inn) / len(second_inn), 2) if second_inn else None
+        avg_total = round(sum(total_runs_list) / len(total_runs_list), 2) if total_runs_list else 0.0
+        avg_wickets = (
+            round(sum(total_wickets_list) / len(total_wickets_list), 2)
+            if total_wickets_list
+            else 0.0
+        )
+
+        result.append(
+            VenueAggregate(
+                venue=venue_name,
+                match_count=match_count,
+                avg_first_innings_score=avg_first,
+                avg_second_innings_score=avg_second,
+                avg_total_runs=avg_total,
+                avg_wickets=avg_wickets,
+            )
+        )
+
+    return result
+
+
+def _build_competition_aggregates(
+    eligible_games: list[tuple[Game, HistoricalImportBatch, dict[str, Any]]],
+) -> list[CompetitionAggregate]:
+    """Aggregate stats by competition (event) across eligible historical matches."""
+    comp_acc: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"match_count": 0, "total_runs": [], "total_wickets": []}
+    )
+
+    for game, _batch, meta in eligible_games:
+        comp = meta.get("event_name")
+        if not comp or not str(comp).strip():
+            continue
+        comp_key = str(comp).strip()
+
+        innings_list = _innings_summary(game)
+        acc = comp_acc[comp_key]
+        acc["match_count"] += 1
+
+        match_runs = sum(int(inn.get("runs") or 0) for inn in innings_list)
+        match_wickets = sum(int(inn.get("wickets") or 0) for inn in innings_list)
+        if innings_list:
+            acc["total_runs"].append(match_runs)
+            acc["total_wickets"].append(match_wickets)
+
+    result: list[CompetitionAggregate] = []
+    for comp_name, acc in sorted(comp_acc.items()):
+        total_runs_list = acc["total_runs"]
+        total_wickets_list = acc["total_wickets"]
+        avg_total = round(sum(total_runs_list) / len(total_runs_list), 2) if total_runs_list else 0.0
+        avg_wickets = (
+            round(sum(total_wickets_list) / len(total_wickets_list), 2)
+            if total_wickets_list
+            else 0.0
+        )
+
+        result.append(
+            CompetitionAggregate(
+                competition=comp_name,
+                match_count=acc["match_count"],
+                avg_total_runs=avg_total,
+                avg_wickets=avg_wickets,
+            )
+        )
+
+    return result
+
+
+def _build_season_aggregates(
+    eligible_games: list[tuple[Game, HistoricalImportBatch, dict[str, Any]]],
+) -> list[SeasonAggregate]:
+    """Aggregate stats by season across eligible historical matches."""
+    season_acc: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"match_count": 0, "total_runs": [], "total_wickets": []}
+    )
+
+    for game, _batch, meta in eligible_games:
+        season = meta.get("season")
+        if not season or not str(season).strip():
+            continue
+        season_key = str(season).strip()
+
+        innings_list = _innings_summary(game)
+        acc = season_acc[season_key]
+        acc["match_count"] += 1
+
+        match_runs = sum(int(inn.get("runs") or 0) for inn in innings_list)
+        match_wickets = sum(int(inn.get("wickets") or 0) for inn in innings_list)
+        if innings_list:
+            acc["total_runs"].append(match_runs)
+            acc["total_wickets"].append(match_wickets)
+
+    result: list[SeasonAggregate] = []
+    for season_name, acc in sorted(season_acc.items()):
+        total_runs_list = acc["total_runs"]
+        total_wickets_list = acc["total_wickets"]
+        avg_total = round(sum(total_runs_list) / len(total_runs_list), 2) if total_runs_list else 0.0
+        avg_wickets = (
+            round(sum(total_wickets_list) / len(total_wickets_list), 2)
+            if total_wickets_list
+            else 0.0
+        )
+
+        result.append(
+            SeasonAggregate(
+                season=season_name,
+                match_count=acc["match_count"],
+                avg_total_runs=avg_total,
+                avg_wickets=avg_wickets,
+            )
+        )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+async def get_historical_stats_summary(
+    db: AsyncSession,
+    current_user: Any,
+) -> HistoricalStatsSummaryResponse:
+    """Build a full deterministic historical stats summary for the requesting user.
+
+    - Applies org-scoping via ``scoped_games_stmt`` (mirrors Analyst Workspace).
+    - Fetches all ``completed`` games accessible to the user.
+    - Filters to historical imports with valid, finalized, fully-imported batches.
+    - Excludes metadata-only records and tracks their count separately.
+    - Aggregates match, player, team, venue, competition, and season statistics.
+
+    No live scoring or official truth fields are mutated.
+    No LLM/AI services are invoked — all logic is deterministic Python.
+    """
+    stmt = (
+        scoped_games_stmt(current_user)
+        .where(Game.status == GameStatus.completed)
+        .order_by(Game.id.desc())
+    )
+    result = await db.execute(stmt)
+    all_completed = result.scalars().all()
+
+    # Collect batch IDs we need to fetch
+    batch_id_to_game: dict[str, tuple[Game, dict[str, Any]]] = {}
+    non_historical = 0
+
+    for game in all_completed:
+        meta = _hist_meta(game)
+        if not isinstance(meta, dict):
+            continue
+        batch_id = meta.get("batch_id")
+        if not batch_id:
+            continue
+        batch_id_to_game[str(batch_id)] = (game, meta)
+
+    # Fetch all referenced batches in one query
+    batches: dict[str, HistoricalImportBatch] = {}
+    if batch_id_to_game:
+        batch_stmt = select(HistoricalImportBatch).where(
+            HistoricalImportBatch.id.in_(list(batch_id_to_game.keys()))
+        )
+        batch_result = await db.execute(batch_stmt)
+        for batch in batch_result.scalars().all():
+            batches[batch.id] = batch
+
+    eligible_games: list[tuple[Game, HistoricalImportBatch, dict[str, Any]]] = []
+    metadata_only_count = 0
+    invalid_count = 0
+
+    for batch_id, (game, meta) in batch_id_to_game.items():
+        batch = batches.get(batch_id)
+        if batch is None:
+            invalid_count += 1
+            continue
+
+        if _is_metadata_only(batch):
+            metadata_only_count += 1
+            continue
+
+        if not _is_eligible_for_aggregation(batch):
+            invalid_count += 1
+            continue
+
+        eligible_games.append((game, batch, meta))
+
+    # Build aggregate outputs
+    match_aggregates = [
+        _build_match_aggregate(game, batch, meta)
+        for game, batch, meta in eligible_games
+    ]
+    player_aggregates = _build_player_aggregates(eligible_games)
+    team_aggregates = _build_team_aggregates(eligible_games)
+    venue_aggregates = _build_venue_aggregates(eligible_games)
+    competition_aggregates = _build_competition_aggregates(eligible_games)
+    season_aggregates = _build_season_aggregates(eligible_games)
+
+    return HistoricalStatsSummaryResponse(
+        total_eligible_matches=len(eligible_games),
+        excluded_metadata_only_count=metadata_only_count,
+        excluded_invalid_count=invalid_count,
+        matches=match_aggregates,
+        players=player_aggregates,
+        teams=team_aggregates,
+        venues=venue_aggregates,
+        competitions=competition_aggregates,
+        seasons=season_aggregates,
+        generated_at=dt.datetime.now(dt.timezone.utc),
+    )
+
+
+async def get_single_match_aggregate(
+    db: AsyncSession,
+    current_user: Any,
+    match_id: str,
+) -> HistoricalMatchAggregateResponse | None:
+    """Build a single-match aggregate for a specific historical game.
+
+    Returns None if the match is not found, not historical, or not eligible.
+
+    The caller is responsible for raising HTTP 404 / 403 as appropriate.
+    Reads existing data only — no official truth fields are mutated.
+    """
+    stmt = (
+        scoped_games_stmt(current_user)
+        .where(Game.id == match_id, Game.status == GameStatus.completed)
+    )
+    result = await db.execute(stmt)
+    game = result.scalar_one_or_none()
+    if game is None:
+        return None
+
+    meta = _hist_meta(game)
+    if not isinstance(meta, dict):
+        return None
+
+    batch_id = meta.get("batch_id")
+    if not batch_id:
+        return None
+
+    batch_result = await db.execute(
+        select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_id)
+    )
+    batch = batch_result.scalar_one_or_none()
+    if batch is None:
+        return None
+
+    if _is_metadata_only(batch):
+        return None
+
+    if not _is_eligible_for_aggregation(batch):
+        return None
+
+    match_agg = _build_match_aggregate(game, batch, meta)
+
+    # Per-match player aggregates (only when delivery data exists)
+    player_aggregates = _build_player_aggregates([(game, batch, meta)])
+
+    provenance: dict[str, Any] = {
+        "match_id": game.id,
+        "import_batch_id": batch.id,
+        "source_filename": batch.source_filename,
+        "source_format": batch.source_format,
+        "source_hash_sha256": batch.source_hash_sha256,
+        "source_type": "json",
+        "validation_status": batch.status,
+        "registration_status": (
+            "registered"
+            if (batch.is_finalized and batch.status == "valid" and batch.error_count == 0)
+            else "not_registered"
+        ),
+        "imported_at": batch.created_at.isoformat() if batch.created_at else None,
+        "competition": meta.get("event_name"),
+        "season": meta.get("season"),
+        "venue": meta.get("venue"),
+        "match_date": meta.get("match_date"),
+    }
+
+    return HistoricalMatchAggregateResponse(
+        match=match_agg,
+        players=player_aggregates,
+        provenance=provenance,
+    )
