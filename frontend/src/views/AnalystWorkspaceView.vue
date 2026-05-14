@@ -814,6 +814,171 @@
               </div>
             </div>
 
+            <!-- Data Library Tab -->
+            <div v-else-if="activeTab === 'data-library'" class="aw-table-wrapper">
+              <div class="aw-table-header">
+                <h3>Data Library</h3>
+                <p class="aw-table-subtitle">
+                  Browse available match datasets for analysis. Historical imports are clearly
+                  identified. Select a match to open the analyst match detail view.
+                </p>
+              </div>
+
+              <!-- Data Library controls: search + filters + sort -->
+              <div class="aw-dl-controls">
+                <BaseInput
+                  v-model="dlSearch"
+                  placeholder="Search by team, competition, venue, season…"
+                  aria-label="Search data library"
+                  class="aw-dl-search"
+                />
+                <div class="aw-dl-filter-row">
+                  <span class="aw-filter-label">Source</span>
+                  <div class="aw-chip-row">
+                    <button
+                      v-for="opt in [
+                        { label: 'All', value: 'all' },
+                        { label: 'Imported', value: 'imported' },
+                        { label: 'Live', value: 'live' },
+                      ]"
+                      :key="opt.value"
+                      class="aw-chip"
+                      :class="{ 'aw-chip--active': dlSourceFilter === opt.value }"
+                      :aria-pressed="dlSourceFilter === opt.value"
+                      @click="dlSourceFilter = (opt.value as 'all' | 'imported' | 'live')"
+                    >
+                      {{ opt.label }}
+                    </button>
+                  </div>
+                  <span class="aw-filter-label">Format</span>
+                  <div class="aw-chip-row">
+                    <button
+                      v-for="opt in [
+                        { label: 'All', value: 'all' },
+                        { label: 'T20', value: 't20' },
+                        { label: 'ODI', value: 'odi' },
+                        { label: 'Custom', value: 'custom' },
+                      ]"
+                      :key="opt.value"
+                      class="aw-chip"
+                      :class="{ 'aw-chip--active': dlFormatFilter === opt.value }"
+                      :aria-pressed="dlFormatFilter === opt.value"
+                      @click="dlFormatFilter = (opt.value as 'all' | 't20' | 'odi' | 'custom')"
+                    >
+                      {{ opt.label }}
+                    </button>
+                  </div>
+                  <span class="aw-filter-label">Sort</span>
+                  <div class="aw-chip-row">
+                    <button
+                      class="aw-chip"
+                      :class="{ 'aw-chip--active': dlSortOrder === 'recent' }"
+                      :aria-pressed="dlSortOrder === 'recent'"
+                      @click="dlSortOrder = 'recent'"
+                    >
+                      Most recent
+                    </button>
+                    <button
+                      class="aw-chip"
+                      :class="{ 'aw-chip--active': dlSortOrder === 'date-asc' }"
+                      :aria-pressed="dlSortOrder === 'date-asc'"
+                      @click="dlSortOrder = 'date-asc'"
+                    >
+                      Oldest first
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Loading state -->
+              <div v-if="matchesLoading" class="aw-matches-loading" role="status" aria-live="polite">
+                <p>Loading data library…</p>
+              </div>
+
+              <!-- Error state -->
+              <div v-else-if="matchesError" class="aw-matches-error" role="alert">
+                <p>Unable to load match data right now.</p>
+                <p class="aw-inline-error-detail">{{ matchesError }}</p>
+                <BaseButton variant="ghost" size="sm" @click="loadMatches">
+                  Retry
+                </BaseButton>
+              </div>
+
+              <!-- Empty state -->
+              <div v-else-if="libraryMatches.length === 0" class="aw-matches-empty">
+                <p>No analyst-ready match data is available yet.</p>
+                <p class="aw-matches-empty-hint">
+                  Import historical matches from the Import Data tab, or adjust
+                  your search and filter criteria.
+                </p>
+              </div>
+
+              <!-- Data Library table -->
+              <div v-else class="aw-dl-table-wrap">
+                <table class="aw-dl-table" aria-label="Data Library match list">
+                  <thead>
+                    <tr>
+                      <th>Match</th>
+                      <th>Date</th>
+                      <th>Format</th>
+                      <th>Venue</th>
+                      <th>Competition</th>
+                      <th>Season</th>
+                      <th>Source</th>
+                      <th class="aw-dl-col-action">Open</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="match in libraryMatches"
+                      :key="match.id"
+                      class="aw-dl-row"
+                      role="button"
+                      tabindex="0"
+                      :aria-label="'Open analyst detail for ' + match.teams"
+                      @click="selectMatch(match.id)"
+                      @keydown.enter.prevent="selectMatch(match.id)"
+                      @keydown.space.prevent="selectMatch(match.id)"
+                    >
+                      <td class="aw-dl-cell-main">
+                        <span class="aw-dl-teams">{{ match.teams }}</span>
+                        <span
+                          v-if="match.isHistorical"
+                          class="aw-dl-badge aw-dl-badge--imported"
+                        >Imported</span>
+                      </td>
+                      <td>{{ match.date }}</td>
+                      <td>{{ match.format }}</td>
+                      <td class="aw-dl-muted">{{ match.venue || '—' }}</td>
+                      <td class="aw-dl-muted">{{ match.eventName || '—' }}</td>
+                      <td class="aw-dl-muted">{{ match.season || '—' }}</td>
+                      <td>
+                        <span
+                          class="aw-dl-badge"
+                          :class="match.isHistorical ? 'aw-dl-badge--imported' : 'aw-dl-badge--live'"
+                        >
+                          {{ match.isHistorical ? 'Historical import' : 'Live scored' }}
+                        </span>
+                      </td>
+                      <td class="aw-dl-col-action">
+                        <BaseButton
+                          variant="ghost"
+                          size="sm"
+                          :aria-label="'Open ' + match.teams"
+                          @click.stop="selectMatch(match.id)"
+                        >
+                          View
+                        </BaseButton>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p class="aw-dl-count">
+                  Showing {{ libraryMatches.length }} of {{ matches.length }} match{{ matches.length === 1 ? '' : 'es' }}
+                </p>
+              </div>
+            </div>
+
             <!-- Analytics Tab -->
             <div v-else-if="activeTab === 'analytics'" class="aw-table-wrapper">
               <AnalyticsTablesWidget :profile="null" />
@@ -873,7 +1038,7 @@ import {
 const router = useRouter()
 
 // Types
-type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics' | 'import'
+type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics' | 'import' | 'data-library'
 
 // State
 const activeTab = ref<AnalystTab>('matches')
@@ -907,6 +1072,7 @@ const perspectiveOptions = [
 
 const tabs: { value: AnalystTab; label: string }[] = [
   { value: 'matches', label: 'Matches' },
+  { value: 'data-library', label: 'Data Library' },
   { value: 'players', label: 'Players' },
   { value: 'deliveries', label: 'Deliveries' },
   { value: 'case-studies', label: 'Case studies' },
@@ -932,6 +1098,10 @@ interface AnalystMatch {
   teams: string
   result: string
   venue?: string | null
+  eventName?: string | null
+  season?: string | null
+  matchNumber?: number | null
+  sourceDates?: string[]
   isHistorical?: boolean
   source?: string
   historicalBatchId?: string | null
@@ -958,6 +1128,12 @@ const matchesError = ref<string | null>(null)
 const cleanupMessage = ref<string | null>(null)
 const cleanupMessageKind = ref<'success' | 'error'>('success')
 const cleanupPendingMatchId = ref<string | null>(null)
+
+// Data Library state — search/filter/sort controls
+const dlSearch = ref('')
+const dlSourceFilter = ref<'all' | 'imported' | 'live'>('all')
+const dlFormatFilter = ref<'all' | 't20' | 'odi' | 'custom'>('all')
+const dlSortOrder = ref<'recent' | 'date-asc'>('recent')
 
 // Match detail state - loaded when a match is selected
 const selectedMatchId = ref<string | null>(null)
@@ -997,6 +1173,39 @@ const filteredPlayers = computed(() => {
       !term || p.name.toLowerCase().includes(term) || p.role.toLowerCase().includes(term)
     return matchesTerm
   })
+})
+
+// Data Library: filtered and sorted match list derived from the shared `matches` list.
+const libraryMatches = computed(() => {
+  const term = dlSearch.value.toLowerCase().trim()
+  let result = matches.value.filter((m) => {
+    // Source filter
+    if (dlSourceFilter.value === 'imported' && !m.isHistorical) return false
+    if (dlSourceFilter.value === 'live' && m.isHistorical) return false
+    // Format filter
+    if (dlFormatFilter.value === 't20' && m.format !== 'T20') return false
+    if (dlFormatFilter.value === 'odi' && m.format !== 'ODI') return false
+    if (dlFormatFilter.value === 'custom' && m.format !== 'CUSTOM') return false
+    // Search term — match against teams, venue, competition, season, result
+    if (term) {
+      const haystack = [
+        m.teams,
+        m.venue ?? '',
+        m.eventName ?? '',
+        m.season ?? '',
+        m.result,
+      ].join(' ').toLowerCase()
+      if (!haystack.includes(term)) return false
+    }
+    return true
+  })
+  // Sort
+  result = [...result].sort((a, b) => {
+    const da = new Date(a.date).getTime()
+    const db = new Date(b.date).getTime()
+    return dlSortOrder.value === 'date-asc' ? da - db : db - da
+  })
+  return result
 })
 
 const exportContextMatchId = computed(() => filteredMatches.value[0]?.id ?? null)
@@ -1115,6 +1324,10 @@ async function loadMatches() {
       teams: item.teams,
       result: item.result,
       venue: item.venue ?? null,
+      eventName: item.event_name ?? null,
+      season: item.season ?? null,
+      matchNumber: item.match_number ?? null,
+      sourceDates: item.source_dates ?? [],
       isHistorical: Boolean(item.is_historical),
       source: item.source ?? 'live',
       historicalBatchId: item.historical_batch_id ?? null,
@@ -2465,5 +2678,114 @@ onMounted(() => {
   color: var(--color-text-muted);
   font-style: italic;
   padding: var(--space-2) 0;
+}
+
+/* =====================================================
+   DATA LIBRARY TAB
+   ===================================================== */
+
+.aw-dl-controls {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.aw-dl-search {
+  max-width: 480px;
+}
+
+.aw-dl-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.aw-dl-table-wrap {
+  display: grid;
+  gap: var(--space-2);
+  overflow-x: auto;
+}
+
+.aw-dl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.aw-dl-table th,
+.aw-dl-table td {
+  padding: var(--space-3) var(--space-2);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.aw-dl-table th {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--color-surface-hover);
+}
+
+.aw-dl-row {
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.aw-dl-row:hover {
+  background: var(--color-surface-hover);
+}
+
+.aw-dl-row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.aw-dl-cell-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.aw-dl-teams {
+  font-weight: var(--font-medium);
+  color: var(--color-text);
+}
+
+.aw-dl-muted {
+  color: var(--color-text-muted);
+}
+
+.aw-dl-badge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+}
+
+.aw-dl-badge--imported {
+  background: var(--color-primary-soft, rgba(99, 102, 241, 0.12));
+  color: var(--color-primary, #6366f1);
+}
+
+.aw-dl-badge--live {
+  background: var(--color-success-soft, rgba(34, 197, 94, 0.12));
+  color: var(--color-success, #22c55e);
+}
+
+.aw-dl-col-action {
+  width: 80px;
+  text-align: center;
+}
+
+.aw-dl-count {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-align: right;
 }
 </style>
