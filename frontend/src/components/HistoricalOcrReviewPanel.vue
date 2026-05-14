@@ -144,20 +144,28 @@ const message = ref('')
 const error = ref('')
 
 const canSaveReview = computed(
-  () => Boolean(candidate.value) && !loading.value && candidate.value?.status !== 'rejected',
+  () => {
+    const currentCandidate = candidate.value
+    if (!currentCandidate) return false
+    return !loading.value && currentCandidate.status !== 'rejected'
+  },
 )
 const canRunDryRun = computed(
-  () =>
-    Boolean(candidate.value)
-    && !loading.value
-    && ['ready_for_dry_run', 'dry_run_failed', 'dry_run_passed'].includes(candidate.value?.status ?? ''),
+  () => {
+    const currentCandidate = candidate.value
+    if (!currentCandidate) return false
+    return (
+      !loading.value
+      && ['ready_for_dry_run', 'dry_run_failed', 'dry_run_passed'].includes(currentCandidate.status)
+    )
+  },
 )
 const canRejectCandidate = computed(
-  () =>
-    Boolean(candidate.value)
-    && !loading.value
-    && candidate.value?.status !== 'rejected'
-    && Boolean(rejectReason.value.trim()),
+  () => {
+    const currentCandidate = candidate.value
+    if (!currentCandidate) return false
+    return !loading.value && currentCandidate.status !== 'rejected' && Boolean(rejectReason.value.trim())
+  },
 )
 
 function onFileChange(event: Event) {
