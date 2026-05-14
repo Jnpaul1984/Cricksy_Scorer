@@ -1,0 +1,123 @@
+# Cricksy Confidence Score Package — Example Template
+#
+# This file is a NON-RUNTIME documentation template only.
+# It defines the required shape of a future confidence score package
+# as specified in docs/PHASE_6F_CONFIDENCE_AND_UNCERTAINTY_SYSTEM_SPEC.md.
+#
+# No runtime engine, validation agent, or skill should be built from
+# this file alone. This template is for governance, spec review, and
+# future implementation guidance only.
+#
+# All fields below are REQUIRED unless marked optional.
+# Numeric confidence fields must be a float 0.0–1.0 or the string "not_applicable".
+# ---
+
+confidence_package_id: "<unique-id-for-this-confidence-evaluation>"
+
+# Traceability links
+intent_id: "<intent_id from Phase 6D routing contract>"
+skill_id: "<skill_id from Phase 6C skill contract>"
+context_package_id: "<context_package_id from Phase 6E context package>"
+output_type: "<AiOutputType: commentary | insight | recommendation | report | summary | draft>"
+
+# --- Confidence Dimensions ---
+
+# Reflects whether source data is validated, complete, and accurate.
+# Factors: validation status, finalization, delivery data presence, registry linkage.
+data_quality_confidence: 0.0  # float 0.0–1.0 | "not_applicable"
+
+# Reflects whether enough observations exist to support a reliable insight.
+# Factors: deliveries faced, innings, matches, historical lookback depth.
+sample_size_confidence: 0.0  # float 0.0–1.0 | "not_applicable"
+
+# Reflects whether tactical interpretation is supported by clear deterministic signals.
+# Factors: phase/momentum/dismissal pattern strength, signal-to-noise ratio.
+tactical_confidence: 0.0  # float 0.0–1.0 | "not_applicable"
+
+# Applies only when video data is used.
+# Factors: clip completeness, camera angle quality, tagged event coverage.
+# Set to "not_applicable" when no video data is used.
+video_confidence: "not_applicable"  # float 0.0–1.0 | "not_applicable"
+
+# Applies only when a model output is used.
+# Factors: calibration status, recency of training data, probability spread.
+# Set to "not_applicable" when no model output is used.
+model_confidence: "not_applicable"  # float 0.0–1.0 | "not_applicable"
+
+# Reflects how confidently a coaching/selection/tactical recommendation can be made.
+# Derived from combined signal strength across all applicable dimensions.
+recommendation_confidence: 0.0  # float 0.0–1.0 | "not_applicable"
+
+# Aggregate confidence across all applicable dimensions.
+# Must be the lowest of all applicable dimension scores unless skill rules specify otherwise.
+overall_confidence: 0.0  # float 0.0–1.0
+
+# --- Confidence Band ---
+# One of: high_confidence | medium_confidence | low_confidence | insufficient_data | not_applicable
+# Thresholds:
+#   high_confidence:    overall_confidence >= 0.80
+#   medium_confidence:  0.60 <= overall_confidence < 0.80
+#   low_confidence:     0.40 <= overall_confidence < 0.60
+#   insufficient_data:  overall_confidence < 0.40 OR required context is missing
+#   not_applicable:     confidence dimension does not apply to this output type
+confidence_band: "insufficient_data"
+
+# --- Limitations ---
+# Plain-language list of known limitations affecting this output.
+# Required whenever confidence_band is below high_confidence.
+limitations:
+  - "<limitation statement 1>"
+  # - "<limitation statement 2>"
+
+# --- Uncertainty Reasons ---
+# Structured list of standard uncertainty reason codes.
+# Valid codes (use all that apply):
+#   small_sample_size
+#   missing_delivery_data
+#   metadata_only_pending_full_import
+#   video_context_unavailable
+#   low_data_quality
+#   conflicting_signals
+#   model_not_calibrated
+#   insufficient_historical_context
+#   not_authorized_to_access_context
+#   youth_safety_review_required
+#   manual_review_required
+uncertainty_reasons:
+  - "<uncertainty_reason_code>"
+
+# --- Required Disclaimers ---
+# User-facing disclaimer strings that must accompany this output.
+required_disclaimers:
+  - "<disclaimer string 1>"
+
+# --- Review Fields ---
+# review_required: true if human review is required before output delivery.
+# review_reason: plain-language explanation of the triggering condition (null if false).
+review_required: true
+review_reason: "<reason review is required | null>"
+
+# --- Fallback Behavior ---
+# Safe fallback outcome code when output cannot be delivered.
+# Valid codes:
+#   insufficient_data
+#   low_confidence_review_required
+#   needs_more_context
+#   sample_size_too_small
+#   model_uncalibrated
+#   video_context_unavailable
+#   blocked_by_youth_safety
+#   not_authorized
+#   metadata_only_pending_full_import
+#   null (if output is deliverable with caveats)
+fallback_behavior: null
+
+# --- Data Integrity ---
+# MUST be true. If false, output delivery is blocked.
+no_fake_data_confirmation: true
+
+# --- Provenance References ---
+# Data sources and registry references used to build this confidence package.
+provenance_references:
+  - "<source reference 1>"
+  # - "<source reference 2>"
