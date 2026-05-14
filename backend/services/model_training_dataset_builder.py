@@ -10,7 +10,7 @@ import datetime as dt
 import hashlib
 import json
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from backend.services.analyst_access import scoped_games_stmt
@@ -38,7 +38,7 @@ class DatasetBuildFilters:
 class DatasetBuildRequest:
     """Read-only request for deterministic dataset assembly."""
 
-    filters: DatasetBuildFilters = DatasetBuildFilters()
+    filters: DatasetBuildFilters = field(default_factory=DatasetBuildFilters)
     generated_at: dt.datetime | None = None
 
 

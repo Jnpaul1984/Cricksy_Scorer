@@ -86,7 +86,9 @@ async def _run(args: argparse.Namespace) -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Build deterministic model-training dataset artifacts from governed historical imports"
+        description=(
+            "Build deterministic model-training dataset artifacts from governed historical imports"
+        )
     )
     parser.add_argument("--format", choices=["json", "csv"], default="json")
     parser.add_argument("--output-dir", type=str, default=None)
