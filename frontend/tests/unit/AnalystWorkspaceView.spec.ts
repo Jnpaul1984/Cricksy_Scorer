@@ -40,6 +40,7 @@ const globalStubs = {
     template: '<button class="zip-import-done-btn" @click="$emit(\'import-done\', \'zip-game\')">zip import done</button>',
     emits: ['import-done'],
   },
+  HistoricalOcrReviewPanel: { template: '<div class="ocr-review-panel-stub" />' },
 }
 
 const mockMatchList = {

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
-import hashlib
 import re
 import tempfile
 import uuid
@@ -10,9 +10,13 @@ import zipfile
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Annotated
+from typing import Annotated, cast
 
-from backend.config import settings
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import JSONResponse
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.api.schemas.historical_import import (
     HistoricalImportApplyDeliveriesResponse,
     HistoricalImportApplyRequest,
@@ -23,14 +27,23 @@ from backend.api.schemas.historical_import import (
     HistoricalImportBulkZipDryRunResponse,
     HistoricalImportBulkZipFilePreview,
     HistoricalImportDryRunResponse,
+    HistoricalImportIssue,
     HistoricalImportRepairRequest,
     HistoricalImportRepairResponse,
     HistoricalImportRollbackRequest,
     HistoricalImportRollbackResponse,
     HistoricalImportTotalsValidation,
     HistoricalImportTrainingStatus,
+    HistoricalOcrDryRunRequest,
+    HistoricalOcrDryRunResponse,
+    HistoricalOcrExtractionMetadata,
+    HistoricalOcrRejectRequest,
+    HistoricalOcrReviewCandidateResponse,
+    HistoricalOcrReviewStatus,
+    HistoricalOcrReviewUpdateRequest,
+    HistoricalOcrSourceDocument,
 )
-from backend.services.s3_service import s3_service
+from backend.config import settings
 from backend.security import get_current_user_optional
 from backend.services.historical_import_apply_service import (
     apply_historical_batch,
@@ -48,11 +61,9 @@ from backend.services.historical_import_service import (
     get_import_batch,
     list_import_batches,
 )
+from backend.services.s3_service import s3_service
 from backend.sql_app import models
 from backend.sql_app.database import get_db as _base_get_db
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/historical-import/json", tags=["historical-import"])
 
@@ -75,6 +86,17 @@ PHASE_5L_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
 PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
 PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES = 100 * 1024 * 1024
 PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR = "::"
+PHASE_7_MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+PHASE_7_ALLOWED_DOCUMENT_CONTENT_TYPES = frozenset(
+    {
+        "application/pdf",
+        "image/png",
+        "image/jpeg",
+        "image/jpg",
+        "image/webp",
+    }
+)
+PHASE_7_ALLOWED_DOCUMENT_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg", ".webp"})
 
 
 @dataclass(slots=True)
@@ -91,7 +113,7 @@ def _is_unsafe_zip_path(entry_name: str) -> bool:
     if "\x00" in entry_name:
         return True
     normalized = entry_name.replace("\\", "/")
-    if normalized.startswith("/") or normalized.startswith("//"):
+    if normalized.startswith(("/", "//")):
         return True
     if re.match(r"^[a-zA-Z]:/", normalized):
         return True
@@ -195,6 +217,139 @@ def _sanitize_storage_name(file_name: str, source_hash_sha256: str) -> str:
     collapsed = collapsed.lstrip(".").replace("..", "_")
     safe_prefix = collapsed[:120] or "entry"
     return f"{safe_prefix}_{source_hash_sha256[:12]}.json"
+
+
+def _sanitize_document_name(file_name: str, source_hash_sha256: str) -> str:
+    normalized = file_name.strip().replace("\\", "/")
+    suffix = Path(normalized).suffix.lower()
+    ext = suffix if suffix in PHASE_7_ALLOWED_DOCUMENT_EXTENSIONS else ".bin"
+    collapsed = re.sub(r"[^a-zA-Z0-9._-]+", "_", normalized)
+    collapsed = collapsed.lstrip(".").replace("..", "_")
+    base_name = Path(collapsed).stem[:100] or "source_document"
+    return f"{base_name}_{source_hash_sha256[:12]}{ext}"
+
+
+def _get_ocr_review_payload(batch: models.HistoricalImportBatch) -> dict:
+    dry_run_summary = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
+    review_payload = dry_run_summary.get("ocr_review")
+    return review_payload if isinstance(review_payload, dict) else {}
+
+
+def _as_ocr_issue_list(raw_issues: object) -> list[HistoricalImportIssue]:
+    if not isinstance(raw_issues, list):
+        return []
+    issues: list[HistoricalImportIssue] = []
+    for item in raw_issues:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code") or "").strip()
+        message = str(item.get("message") or "").strip()
+        severity = str(item.get("severity", "error")).strip() or "error"
+        if not code or not message:
+            continue
+        issues.append(
+            HistoricalImportIssue(
+                code=code,
+                message=message,
+                severity=severity if severity in {"error", "warning"} else "error",
+                path=str(item.get("path") or "") or None,
+            )
+        )
+    return issues
+
+
+def _ocr_candidate_response(
+    *,
+    batch: models.HistoricalImportBatch,
+    review_payload: dict,
+) -> HistoricalOcrReviewCandidateResponse:
+    source_document = review_payload.get("source_document")
+    if not isinstance(source_document, dict):
+        source_document = {}
+    extraction = review_payload.get("extraction")
+    if not isinstance(extraction, dict):
+        extraction = {}
+    raw_status = str(review_payload.get("status") or batch.status or "uploaded")
+    allowed_statuses: set[str] = {
+        "uploaded",
+        "extracted",
+        "needs_review",
+        "reviewed",
+        "rejected",
+        "ready_for_dry_run",
+        "dry_run_failed",
+        "dry_run_passed",
+        "applied_via_structured_import_only",
+    }
+    status_value: HistoricalOcrReviewStatus = cast(
+        HistoricalOcrReviewStatus,
+        raw_status if raw_status in allowed_statuses else "uploaded",
+    )
+    status_history = review_payload.get("status_history")
+    if not isinstance(status_history, list):
+        status_history = [status_value]
+    status_history_values: list[HistoricalOcrReviewStatus] = []
+    for item in status_history:
+        text = str(item)
+        if text in allowed_statuses:
+            status_history_values.append(cast(HistoricalOcrReviewStatus, text))
+    if not status_history_values:
+        status_history_values = [status_value]
+    validation_errors = _as_ocr_issue_list(review_payload.get("validation_errors"))
+    dry_run_result = review_payload.get("dry_run_result")
+    dry_run_preview = (
+        HistoricalImportDryRunResponse.model_validate(dry_run_result)
+        if isinstance(dry_run_result, dict)
+        else None
+    )
+
+    return HistoricalOcrReviewCandidateResponse(
+        candidate_id=batch.id,
+        batch_id=batch.id,
+        status=status_value,
+        status_history=status_history_values,
+        source_document=HistoricalOcrSourceDocument.model_validate(
+            {
+                "filename": str(source_document.get("filename") or batch.source_filename or "unknown"),
+                "content_type": str(source_document.get("content_type") or "application/octet-stream"),
+                "size_bytes": int(source_document.get("size_bytes") or 0),
+                "storage": source_document.get("storage") or {},
+            }
+        ),
+        extraction=HistoricalOcrExtractionMetadata.model_validate(
+            {
+                "method": str(extraction.get("method") or "manual_candidate_json"),
+                "confidence": extraction.get("confidence"),
+                "uncertainty_flags": extraction.get("uncertainty_flags") or [],
+                "ocr_text": extraction.get("ocr_text"),
+                "non_authoritative_notice": extraction.get("non_authoritative_notice")
+                or "OCR/AI extraction is non-authoritative and must be reviewed before historical import.",
+            }
+        ),
+        candidate_json=review_payload.get("candidate_json")
+        if isinstance(review_payload.get("candidate_json"), dict)
+        else None,
+        reviewed_json=review_payload.get("reviewed_json")
+        if isinstance(review_payload.get("reviewed_json"), dict)
+        else None,
+        reviewer_notes=(
+            str(review_payload.get("reviewer_notes"))
+            if isinstance(review_payload.get("reviewer_notes"), str)
+            else None
+        ),
+        rejection_reason=(
+            str(review_payload.get("rejection_reason"))
+            if isinstance(review_payload.get("rejection_reason"), str)
+            else None
+        ),
+        validation_errors=validation_errors,
+        dry_run_result=dry_run_preview,
+        dry_run_batch_id=(
+            str(review_payload.get("dry_run_batch_id"))
+            if review_payload.get("dry_run_batch_id") is not None
+            else None
+        ),
+    )
 
 
 def _resolve_intake_owner(owner_user_id: str | None, owner_org_id: str | None) -> str:
@@ -510,6 +665,358 @@ async def historical_json_dry_run(
         ),
         no_persistence=no_persistence,
         record_id=record_id,
+    )
+
+
+async def _get_ocr_candidate_batch_or_404(
+    db: AsyncSession,
+    candidate_id: str,
+) -> models.HistoricalImportBatch:
+    batch = await get_import_batch(db, candidate_id)
+    if batch is None or batch.source_format != "ocr_review_candidate":
+        raise HTTPException(status_code=404, detail="OCR review candidate not found.")
+    return batch
+
+
+@router.post("/ocr-review/candidates", response_model=HistoricalOcrReviewCandidateResponse)
+async def create_historical_ocr_review_candidate(
+    file: UploadFile = File(...),
+    extraction_method: str = Form("manual_candidate_json"),
+    extraction_confidence: float | None = Form(None),
+    uncertainty_flags: str | None = Form(None),
+    candidate_json: str | None = Form(None),
+    ocr_text: str | None = Form(None),
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalOcrReviewCandidateResponse:
+    filename = file.filename or "document"
+    content_type = (file.content_type or "").lower()
+    ext = Path(filename).suffix.lower()
+    if content_type not in PHASE_7_ALLOWED_DOCUMENT_CONTENT_TYPES and ext not in (
+        PHASE_7_ALLOWED_DOCUMENT_EXTENSIONS
+    ):
+        raise HTTPException(
+            status_code=415,
+            detail="Only PDF/PNG/JPEG/WEBP scorecard documents are supported.",
+        )
+
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=422, detail="Uploaded document is empty.")
+    if len(payload) > PHASE_7_MAX_DOCUMENT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Document exceeds max size ({PHASE_7_MAX_DOCUMENT_BYTES} bytes).",
+        )
+
+    if extraction_confidence is not None and not (0 <= extraction_confidence <= 1):
+        raise HTTPException(status_code=422, detail="extraction_confidence must be between 0 and 1.")
+
+    parsed_uncertainty_flags: list[str] = []
+    if uncertainty_flags:
+        try:
+            parsed = json.loads(uncertainty_flags)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="uncertainty_flags must be a JSON array of strings.",
+            ) from exc
+        if not isinstance(parsed, list) or any(not isinstance(item, str) for item in parsed):
+            raise HTTPException(
+                status_code=422,
+                detail="uncertainty_flags must be a JSON array of strings.",
+            )
+        parsed_uncertainty_flags = [item.strip() for item in parsed if item.strip()]
+
+    parsed_candidate_json: dict | None = None
+    if candidate_json:
+        try:
+            parsed_candidate = json.loads(candidate_json)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=422, detail="candidate_json must be valid JSON.") from exc
+        if not isinstance(parsed_candidate, dict):
+            raise HTTPException(status_code=422, detail="candidate_json must be a JSON object.")
+        parsed_candidate_json = parsed_candidate
+
+    source_hash = hashlib.sha256(payload).hexdigest()
+    owner_scope = _resolve_intake_owner(
+        current_user.id if current_user else None,
+        current_user.org_id if current_user else None,
+    )
+    candidate_id = str(uuid.uuid4())
+    safe_document_name = _sanitize_document_name(filename, source_hash)
+    base_key = f"historical-imports/{owner_scope}/{candidate_id}/ocr-review"
+    source_doc_key = f"{base_key}/source/{safe_document_name}"
+    source_doc_storage = _store_bytes_with_fallback(
+        key=source_doc_key,
+        payload=payload,
+        content_type=content_type or "application/octet-stream",
+    )
+
+    initial_status: HistoricalOcrReviewStatus = "uploaded"
+    status_history: list[HistoricalOcrReviewStatus] = ["uploaded"]
+    if parsed_candidate_json is not None or (ocr_text or "").strip():
+        initial_status = "needs_review"
+        status_history.extend(["extracted", "needs_review"])
+
+    review_payload = {
+        "status": initial_status,
+        "status_history": status_history,
+        "source_document": {
+            "filename": filename,
+            "content_type": content_type or "application/octet-stream",
+            "size_bytes": len(payload),
+            "storage": source_doc_storage,
+        },
+        "extraction": {
+            "method": extraction_method.strip() or "manual_candidate_json",
+            "confidence": extraction_confidence,
+            "uncertainty_flags": parsed_uncertainty_flags,
+            "ocr_text": (ocr_text or None),
+            "non_authoritative_notice": (
+                "OCR/AI extraction is non-authoritative and must be reviewed before historical import."
+            ),
+        },
+        "candidate_json": parsed_candidate_json,
+        "reviewed_json": None,
+        "reviewer_notes": None,
+        "rejection_reason": None,
+        "validation_errors": [],
+        "dry_run_result": None,
+        "dry_run_batch_id": None,
+    }
+
+    batch = await create_import_batch(
+        db,
+        batch_id=candidate_id,
+        source_hash_sha256=source_hash,
+        source_format="ocr_review_candidate",
+        status=initial_status,
+        error_count=0,
+        warning_count=0,
+        innings_count=0,
+        delivery_count=0,
+        dry_run_summary={"ocr_review": review_payload},
+        owner_user_id=current_user.id if current_user else None,
+        owner_org_id=current_user.org_id if current_user else None,
+        source_filename=filename,
+        semantic_key=None,
+    )
+    return _ocr_candidate_response(batch=batch, review_payload=review_payload)
+
+
+@router.get("/ocr-review/candidates/{candidate_id}", response_model=HistoricalOcrReviewCandidateResponse)
+async def get_historical_ocr_review_candidate(
+    candidate_id: str,
+    db: AsyncSession = Depends(_get_import_db),
+) -> HistoricalOcrReviewCandidateResponse:
+    batch = await _get_ocr_candidate_batch_or_404(db, candidate_id)
+    review_payload = _get_ocr_review_payload(batch)
+    return _ocr_candidate_response(batch=batch, review_payload=review_payload)
+
+
+@router.patch("/ocr-review/candidates/{candidate_id}/review", response_model=HistoricalOcrReviewCandidateResponse)
+async def review_historical_ocr_candidate(
+    candidate_id: str,
+    body: HistoricalOcrReviewUpdateRequest,
+    db: AsyncSession = Depends(_get_import_db),
+) -> HistoricalOcrReviewCandidateResponse:
+    batch = await _get_ocr_candidate_batch_or_404(db, candidate_id)
+    review_payload = _get_ocr_review_payload(batch)
+    current_status = str(review_payload.get("status") or batch.status or "uploaded")
+    if current_status == "rejected":
+        raise HTTPException(status_code=409, detail="Rejected OCR review candidates cannot be reviewed.")
+
+    extraction_payload = review_payload.get("extraction")
+    if not isinstance(extraction_payload, dict):
+        extraction_payload = {}
+    extraction_payload["uncertainty_flags"] = [
+        item.strip() for item in body.uncertainty_flags if item.strip()
+    ]
+    review_payload["extraction"] = extraction_payload
+    review_payload["reviewed_json"] = body.reviewed_json
+    review_payload["reviewer_notes"] = body.reviewer_notes
+    review_payload["status"] = "ready_for_dry_run"
+
+    history = review_payload.get("status_history")
+    if not isinstance(history, list):
+        history = []
+    for marker in ("reviewed", "ready_for_dry_run"):
+        if marker not in history:
+            history.append(marker)
+    review_payload["status_history"] = history
+
+    dry_summary = dict(batch.dry_run_summary) if isinstance(batch.dry_run_summary, dict) else {}
+    dry_summary["ocr_review"] = review_payload
+    await db.execute(
+        update(models.HistoricalImportBatch)
+        .where(models.HistoricalImportBatch.id == batch.id)
+        .values(
+            dry_run_summary=dry_summary,
+            status="ready_for_dry_run",
+        )
+    )
+    await db.commit()
+    batch = await _get_ocr_candidate_batch_or_404(db, candidate_id)
+    return _ocr_candidate_response(batch=batch, review_payload=review_payload)
+
+
+@router.post("/ocr-review/candidates/{candidate_id}/reject", response_model=HistoricalOcrReviewCandidateResponse)
+async def reject_historical_ocr_candidate(
+    candidate_id: str,
+    body: HistoricalOcrRejectRequest,
+    db: AsyncSession = Depends(_get_import_db),
+) -> HistoricalOcrReviewCandidateResponse:
+    batch = await _get_ocr_candidate_batch_or_404(db, candidate_id)
+    review_payload = _get_ocr_review_payload(batch)
+    review_payload["status"] = "rejected"
+    review_payload["rejection_reason"] = body.reason.strip()
+    history = review_payload.get("status_history")
+    if not isinstance(history, list):
+        history = []
+    if "rejected" not in history:
+        history.append("rejected")
+    review_payload["status_history"] = history
+
+    dry_summary = dict(batch.dry_run_summary) if isinstance(batch.dry_run_summary, dict) else {}
+    dry_summary["ocr_review"] = review_payload
+    await db.execute(
+        update(models.HistoricalImportBatch)
+        .where(models.HistoricalImportBatch.id == batch.id)
+        .values(
+            dry_run_summary=dry_summary,
+            status="rejected",
+        )
+    )
+    await db.commit()
+    batch = await _get_ocr_candidate_batch_or_404(db, candidate_id)
+    return _ocr_candidate_response(batch=batch, review_payload=review_payload)
+
+
+@router.post(
+    "/ocr-review/candidates/{candidate_id}/dry-run",
+    response_model=HistoricalOcrDryRunResponse,
+)
+async def dry_run_historical_ocr_candidate(
+    candidate_id: str,
+    body: HistoricalOcrDryRunRequest,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalOcrDryRunResponse:
+    candidate_batch = await _get_ocr_candidate_batch_or_404(db, candidate_id)
+    review_payload = _get_ocr_review_payload(candidate_batch)
+    candidate_status = str(review_payload.get("status") or candidate_batch.status or "uploaded")
+    rejection_reason = review_payload.get("rejection_reason")
+    if candidate_status == "rejected" or (
+        isinstance(rejection_reason, str) and rejection_reason.strip()
+    ):
+        raise HTTPException(status_code=409, detail="Rejected OCR review candidates cannot be dry-run applied.")
+
+    reviewed_json = review_payload.get("reviewed_json")
+    candidate_json = review_payload.get("candidate_json")
+    payload_obj = reviewed_json if isinstance(reviewed_json, dict) else candidate_json
+    if not isinstance(payload_obj, dict):
+        raise HTTPException(
+            status_code=422,
+            detail="No reviewed structured JSON is available. Submit review corrections first.",
+        )
+
+    payload_bytes = json.dumps(payload_obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    status_code, dry_run_result = build_dry_run_response(payload_bytes)
+    review_payload["dry_run_result"] = dry_run_result.model_dump()
+    review_payload["validation_errors"] = [item.model_dump() for item in dry_run_result.errors]
+
+    if status_code >= 400 or dry_run_result.status != "valid":
+        review_payload["status"] = "dry_run_failed"
+        history = review_payload.get("status_history")
+        if not isinstance(history, list):
+            history = []
+        if "dry_run_failed" not in history:
+            history.append("dry_run_failed")
+        review_payload["status_history"] = history
+
+        dry_summary = (
+            dict(candidate_batch.dry_run_summary)
+            if isinstance(candidate_batch.dry_run_summary, dict)
+            else {}
+        )
+        dry_summary["ocr_review"] = review_payload
+        await db.execute(
+            update(models.HistoricalImportBatch)
+            .where(models.HistoricalImportBatch.id == candidate_batch.id)
+            .values(
+                dry_run_summary=dry_summary,
+                status="dry_run_failed",
+            )
+        )
+        await db.commit()
+        return HistoricalOcrDryRunResponse(
+            candidate_id=candidate_id,
+            status="dry_run_failed",
+            dry_run_result=dry_run_result,
+            dry_run_batch_id=None,
+            message="Dry-run failed. Fix review corrections and retry.",
+        )
+
+    handoff_batch_id: str | None = None
+    if body.record_preview:
+        handoff_summary = dry_run_result.model_dump()
+        handoff_summary["ocr_review_handoff"] = {
+            "candidate_id": candidate_id,
+            "source_batch_id": candidate_batch.id,
+            "extraction_non_authoritative": True,
+            "requires_human_review": True,
+        }
+        handoff_batch = await create_import_batch(
+            db,
+            source_hash_sha256=dry_run_result.duplicate_detection.source_hash_sha256,
+            source_format=dry_run_result.detected_format,
+            status=dry_run_result.status,
+            error_count=len(dry_run_result.errors),
+            warning_count=len(dry_run_result.warnings),
+            innings_count=dry_run_result.innings_count,
+            delivery_count=dry_run_result.delivery_count,
+            dry_run_summary=handoff_summary,
+            owner_user_id=current_user.id if current_user else None,
+            owner_org_id=current_user.org_id if current_user else None,
+            source_filename=f"ocr-review::{candidate_batch.source_filename or candidate_id}",
+            semantic_key=dry_run_result.duplicate_detection.semantic_key,
+        )
+        handoff_batch_id = handoff_batch.id
+
+    review_payload["status"] = "dry_run_passed"
+    review_payload["dry_run_batch_id"] = handoff_batch_id
+    history = review_payload.get("status_history")
+    if not isinstance(history, list):
+        history = []
+    if "dry_run_passed" not in history:
+        history.append("dry_run_passed")
+    review_payload["status_history"] = history
+
+    dry_summary = (
+        dict(candidate_batch.dry_run_summary) if isinstance(candidate_batch.dry_run_summary, dict) else {}
+    )
+    dry_summary["ocr_review"] = review_payload
+    await db.execute(
+        update(models.HistoricalImportBatch)
+        .where(models.HistoricalImportBatch.id == candidate_batch.id)
+        .values(
+            dry_run_summary=dry_summary,
+            status="dry_run_passed",
+        )
+    )
+    await db.commit()
+
+    return HistoricalOcrDryRunResponse(
+        candidate_id=candidate_id,
+        status="dry_run_passed",
+        dry_run_result=dry_run_result,
+        dry_run_batch_id=handoff_batch_id,
+        message=(
+            "Dry-run passed. Use /api/historical-import/json/batches/{batch_id}/apply for explicit import apply."
+            if handoff_batch_id
+            else "Dry-run passed."
+        ),
     )
 
 
@@ -888,7 +1395,11 @@ async def apply_historical_import_batch(
             raise HTTPException(status_code=422, detail=error_msg)
         raise HTTPException(status_code=409, detail=error_msg)
 
-    assert game is not None  # noqa: S101 - guaranteed by non-None error_msg check above
+    if game is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Historical import apply failed unexpectedly after validation checks.",
+        )
 
     rollback_info = (
         "To rollback via API: POST "
@@ -1158,7 +1669,11 @@ async def repair_historical_import_metadata(
             raise HTTPException(status_code=409, detail=error_msg)
         raise HTTPException(status_code=409, detail=error_msg)
 
-    assert result is not None  # noqa: S101 - guaranteed by non-None error_msg check
+    if result is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Historical metadata repair failed unexpectedly after validation checks.",
+        )
 
     status_value = result.get("status", "refused")
     game_id_value: str | None = result.get("game_id")

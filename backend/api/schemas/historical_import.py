@@ -166,6 +166,79 @@ class HistoricalImportBulkZipApplyResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Phase 7 - OCR/PDF/Image review-only candidate flow schemas
+# ---------------------------------------------------------------------------
+
+
+HistoricalOcrReviewStatus = Literal[
+    "uploaded",
+    "extracted",
+    "needs_review",
+    "reviewed",
+    "rejected",
+    "ready_for_dry_run",
+    "dry_run_failed",
+    "dry_run_passed",
+    "applied_via_structured_import_only",
+]
+
+
+class HistoricalOcrSourceDocument(BaseModel):
+    filename: str
+    content_type: str
+    size_bytes: int
+    storage: dict[str, str]
+
+
+class HistoricalOcrExtractionMetadata(BaseModel):
+    method: str
+    confidence: float | None = None
+    uncertainty_flags: list[str] = Field(default_factory=list)
+    ocr_text: str | None = None
+    non_authoritative_notice: str = (
+        "OCR/AI extraction is non-authoritative and must be reviewed before historical import."
+    )
+
+
+class HistoricalOcrReviewCandidateResponse(BaseModel):
+    candidate_id: str
+    batch_id: str
+    status: HistoricalOcrReviewStatus
+    status_history: list[HistoricalOcrReviewStatus] = Field(default_factory=list)
+    source_document: HistoricalOcrSourceDocument
+    extraction: HistoricalOcrExtractionMetadata
+    candidate_json: dict | None = None
+    reviewed_json: dict | None = None
+    reviewer_notes: str | None = None
+    rejection_reason: str | None = None
+    validation_errors: list[HistoricalImportIssue] = Field(default_factory=list)
+    dry_run_result: HistoricalImportDryRunResponse | None = None
+    dry_run_batch_id: str | None = None
+
+
+class HistoricalOcrReviewUpdateRequest(BaseModel):
+    reviewed_json: dict
+    reviewer_notes: str | None = None
+    uncertainty_flags: list[str] = Field(default_factory=list)
+
+
+class HistoricalOcrRejectRequest(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=500)
+
+
+class HistoricalOcrDryRunRequest(BaseModel):
+    record_preview: bool = True
+
+
+class HistoricalOcrDryRunResponse(BaseModel):
+    candidate_id: str
+    status: HistoricalOcrReviewStatus
+    dry_run_result: HistoricalImportDryRunResponse
+    dry_run_batch_id: str | None = None
+    message: str
+
+
+# ---------------------------------------------------------------------------
 # Phase 5D - Apply schemas
 # ---------------------------------------------------------------------------
 
