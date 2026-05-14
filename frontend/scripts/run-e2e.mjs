@@ -5,7 +5,48 @@ const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx'
 const previewUrl = process.env.E2E_BASE_URL || 'http://localhost:3000'
 const apiBase = process.env.API_BASE || 'http://127.0.0.1:8000'
-const cypressSpec = process.env.CYPRESS_SPEC || 'cypress/e2e/analyst_workspace_data_library.cy.ts'
+
+// ---------------------------------------------------------------------------
+// Suite → spec mapping
+// A "suite" groups one or more specs that share CI eligibility requirements.
+// CI-safe suites (analyst, coach, smoke) use intercepts only and need no
+// live backend.  The scoring suite requires a seeded backend and should only
+// be run in full-stack environments.
+// ---------------------------------------------------------------------------
+const SUITES = {
+  analyst: 'cypress/e2e/analyst_workspace_data_library.cy.ts',
+  coach: 'cypress/e2e/coach_workspace_smoke.cy.ts',
+  smoke: 'cypress/e2e/analyst_workspace_data_library.cy.ts,cypress/e2e/coach_workspace_smoke.cy.ts',
+  scoring: [
+    'cypress/e2e/scoring_gate_smoke.cy.ts',
+    'cypress/e2e/match_creation_flow.cy.ts',
+    'cypress/e2e/next_over_flow.cy.ts',
+    'cypress/e2e/wicket_new_batter_flow.cy.ts',
+    'cypress/e2e/innings_flip_flow.cy.ts',
+    'cypress/e2e/weather_interruption_flow.cy.ts',
+  ].join(','),
+}
+
+// Resolve the spec(s) to run:
+//  1. --suite <name>  flag on the CLI
+//  2. CYPRESS_SPEC env var (legacy override)
+//  3. Default: analyst workspace (backwards-compatible)
+function resolveSpec() {
+  const suiteArgIdx = process.argv.indexOf('--suite')
+  if (suiteArgIdx !== -1) {
+    const suiteName = process.argv[suiteArgIdx + 1]
+    if (!suiteName || !SUITES[suiteName]) {
+      const valid = Object.keys(SUITES).join(', ')
+      throw new Error(
+        `Unknown --suite "${suiteName}". Valid suites: ${valid}`,
+      )
+    }
+    return SUITES[suiteName]
+  }
+  return process.env.CYPRESS_SPEC || 'cypress/e2e/analyst_workspace_data_library.cy.ts'
+}
+
+const cypressSpec = resolveSpec()
 
 const env = {
   ...process.env,
