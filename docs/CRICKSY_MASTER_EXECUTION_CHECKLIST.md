@@ -1817,9 +1817,75 @@ Validation notes:
   dependencies, or external AI provider workflows were added in this phase.
 - No production behavior changed.
 
-#### Phase 6F — Confidence + Uncertainty System Spec
+#### Phase 6F — Confidence + Uncertainty System Spec (COMPLETE)
 
-Define confidence metadata for generated intelligence, including data quality, sample size, tactical confidence, video confidence, recommendation confidence, overall confidence, and limitations.
+Spec-lock document: `docs/PHASE_6F_CONFIDENCE_AND_UNCERTAINTY_SYSTEM_SPEC.md`
+
+Phase 6F deliverables (architecture/spec only — no runtime confidence engine, validation
+agents, routers, skills, LLM calls, migrations, dependencies, or production behavior changes):
+
+- Pre-phase audit captured for Phase 6A–6E governance docs, `AiOutputMetadata` and
+  non-authoritative AI output behavior, Phase 6C skill contract confidence fields,
+  Phase 6E context package sufficiency and `confidence_inputs` fields, prediction/model
+  probability outputs, Analyst Workspace case-study/key-player/momentum/report surfaces,
+  Coach Pro Plus/video-analysis outputs and confidence-like fields, historical import
+  validation/registry/provenance/training-eligibility, fake-data guard, auth/RBAC/org
+  boundaries, CI gates, and current risky patterns where insights are presented without
+  limitations.
+- Required future confidence architecture locked:
+  Context Package → Data Quality Check → Sample Size Check →
+  Skill-Specific Confidence Inputs → Uncertainty Classification →
+  Confidence Score Package → Output Framing Rules → Review / Fallback Decision.
+- Required confidence dimensions locked:
+  `data_quality_confidence`, `sample_size_confidence`, `tactical_confidence`,
+  `video_confidence`, `model_confidence`, `recommendation_confidence`,
+  `overall_confidence`, `limitations`, `uncertainty_reasons`, `review_required`.
+- Mandatory confidence package contract locked with all required fields:
+  `confidence_package_id`, `intent_id`, `skill_id`, `context_package_id`,
+  `output_type`, all confidence dimension scores, `confidence_band`, `limitations`,
+  `uncertainty_reasons`, `required_disclaimers`, `review_required`, `review_reason`,
+  `fallback_behavior`, `no_fake_data_confirmation`, `provenance_references`.
+- Standard confidence bands locked with conceptual thresholds (governance defaults only):
+  `high_confidence` (>= 0.80), `medium_confidence` (0.60–0.79),
+  `low_confidence` (0.40–0.59), `insufficient_data` (< 0.40 or missing required context),
+  `not_applicable` (dimension does not apply).
+- Standard uncertainty reason codes locked:
+  `small_sample_size`, `missing_delivery_data`, `metadata_only_pending_full_import`,
+  `video_context_unavailable`, `low_data_quality`, `conflicting_signals`,
+  `model_not_calibrated`, `insufficient_historical_context`,
+  `not_authorized_to_access_context`, `youth_safety_review_required`,
+  `manual_review_required`.
+- User-facing language rules locked: low-confidence must never be written as certain;
+  insufficient-data must not produce recommendations; small-sample insights labelled as
+  early signals; model outputs not presented as guarantees; video-derived insights expose
+  visibility limitations; youth/player feedback uses safe developmental language.
+- Review trigger rules locked: youth player feedback, mental/performance criticism,
+  public/podcast content, scouting reports, low/medium recommendation confidence,
+  low sample size confidence, low/uncalibrated model confidence, low video certainty,
+  conflicting signals, and outputs affecting training/selection/development decisions.
+- Safe fallback outcomes locked:
+  `insufficient_data`, `low_confidence_review_required`, `needs_more_context`,
+  `sample_size_too_small`, `model_uncalibrated`, `video_context_unavailable`,
+  `blocked_by_youth_safety`, `not_authorized`, `metadata_only_pending_full_import`.
+- Five example confidence packages included:
+  high-confidence match momentum insight, low-sample spin weakness insight,
+  video-analysis insight with medium video certainty,
+  metadata-only historical import training eligibility review,
+  podcast/analyst media output requiring review.
+- Phase separation explicitly preserved:
+  - Phase 6G = event-triggered compute rules
+  - Phase 6H = validation agent/review queue mechanics
+- Docs-only template added: `docs/confidence_templates/confidence_score_package.example.yaml`.
+
+Validation notes:
+
+- Markdown formatting reviewed.
+- Phase ordering remains clear.
+- Phase 6G–6H remain separate future phases and are not marked complete.
+- No runtime confidence engine, validation agents, runtime skills, runtime routers, agents,
+  Supervisor logic, LLM workflows, migrations, dependencies, or external AI provider
+  workflows were added in this phase.
+- No production behavior changed.
 
 #### Phase 6G — Event-Triggered Intelligence Spec
 
