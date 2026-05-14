@@ -4,164 +4,91 @@ This document describes the end-to-end (E2E) tests for the Cricksy Scorer fronte
 
 ## Overview
 
-- **Framework**: Cypress 13.15.2
-- **Test Count**: 2 tests
+- **Framework**: Cypress 15.x
+- **Primary CI gate**: `npm run test:e2e`
 - **Location**: `cypress/e2e/`
 
 ## Test Files
 
-### 1. `ci_match_simulator.cy.ts`
+### 1. `analyst_workspace_data_library.cy.ts`
+
+**Purpose**: Browser-level validation gate for the Analyst Workspace Data Library from Phase 5O.
+
+**Test Flow**:
+1. Loads `/analyst/workspace`
+2. Opens the **Data Library** tab
+3. Verifies controlled historical/imported rows render
+4. Verifies search, source filter, format filter, and sort behavior
+5. Verifies opening a match triggers the analyst detail flow
+6. Verifies empty and error states
+
+**Data strategy**:
+- Uses Cypress intercepts only inside the test file
+- Uses contract-shaped responses for `/auth/me`, `/analytics/matches`, `/analytics/matches/:id/case-study`, and `/analytics/matches/:id/registry`
+- Does **not** add fake data to production runtime code paths
+
+### 2. `ci_match_simulator.cy.ts`
 
 **Purpose**: Comprehensive test of the scoreboard, scoring, and analytics views for a seeded match.
 
-**Test Flow**:
-1. Seeds a complete T20 match using the `seed:match` Cypress task
-2. Visits the scoreboard view and verifies:
-   - Result banner shows "Team Alpha won by 15 runs"
-   - First innings score shows "157/6 in 20 ov"
-   - Batting and bowling tables are populated
-   - Target information is displayed
-   - Bowler figures are shown
-   - Ball-by-ball display has at least 6 balls
-3. Visits the scoring view and verifies:
-   - Delivery table has over 100 rows
-   - Extras card shows wides and leg-byes
-   - DLS card is present
-   - Batting and bowling scorecards are visible
-4. Visits the analytics view and verifies:
-   - Can search for and select the match
-   - Run rate chart is displayed
-   - Manhattan and Worm charts are rendered
-   - Extras/Dot/Boundary statistics are shown
-   - Batting and bowling tables are populated
-   - DLS panel is present
-   - Phase splits show powerplay information
-
-**Dependencies**:
-- Backend API running on `http://localhost:8000`
-- Frontend app running on `http://localhost:3000`
-- `matchSimulator.js` helper for seeding match data
-
-### 2. `simulated_t20_match.cy.ts`
+### 3. `simulated_t20_match.cy.ts`
 
 **Purpose**: Test using a simulated T20 match fixture.
 
-**Test Flow**:
-- Uses `simulated_t20_match.json` fixture
-- Tests basic match simulation functionality
-
 ## Running E2E Tests
 
-### Prerequisites
+### Install dependencies
 
-1. **Start the backend server**:
-   ```bash
-   cd backend
-   CRICKSY_IN_MEMORY_DB=1 uvicorn main:_fastapi --host 0.0.0.0 --port 8000
-   ```
+```bash
+cd frontend
+npm ci
+```
 
-2. **Start the frontend dev server**:
-   ```bash
-   cd frontend
-   npm run dev
-   ```
+If you are in a restricted environment where `download.cypress.io` is blocked during `npm ci`, use:
 
-3. **Run the E2E tests**:
-   ```bash
-   cd frontend
-   npx cypress run
-   ```
+```bash
+cd frontend
+CYPRESS_INSTALL_BINARY=0 npm ci
+```
 
-   Or open Cypress in interactive mode:
-   ```bash
-   npx cypress open
-   ```
+The `npm run test:e2e` command installs the Cypress binary explicitly before running the gate.
 
-### Environment Variables
+### Run the Analyst Workspace validation gate
 
-- `API_BASE`: Backend API URL (default: `http://localhost:8000`)
+```bash
+cd frontend
+npm run test:e2e
+```
+
+This command:
+- installs the Cypress binary if needed
+- builds the frontend
+- starts `vite preview` on port 3000
+- runs `cypress/e2e/analyst_workspace_data_library.cy.ts`
+
+### Optional: run all Cypress specs directly
+
+```bash
+cd frontend
+npx cypress run --config-file cypress.config.mjs
+```
+
+## Environment Variables
+
+- `API_BASE`: Backend API URL passed through to Cypress/the preview build (default: `http://localhost:8000`)
 - `baseUrl`: Frontend URL (default: `http://localhost:3000`)
 
 ## CI/CD Integration
 
-To run E2E tests in GitHub Actions, add the following job to `.github/workflows/ci.yml`:
+The main CI workflow includes a dedicated **Frontend (analyst workspace E2E)** job.
 
-\`\`\`yaml
-frontend-e2e-tests:
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-node@v3
-      with:
-        node-version: '20'
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+Reliability details:
+- CI installs frontend packages with `CYPRESS_INSTALL_BINARY=0 npm ci`
+- the validation command then runs `npx cypress install` explicitly
+- the Cypress binary cache is stored at `~/.cache/Cypress`
 
-    - name: Install backend dependencies
-      run: cd backend && pip install -r requirements.txt
-
-    - name: Start backend server
-      run: |
-        cd backend
-        CRICKSY_IN_MEMORY_DB=1 uvicorn main:_fastapi --host 0.0.0.0 --port 8000 &
-        sleep 5
-
-    - name: Install frontend dependencies
-      run: cd frontend && npm ci
-
-    - name: Build frontend
-      run: cd frontend && npm run build
-
-    - name: Start frontend server
-      run: |
-        cd frontend
-        npm run preview -- --port 3000 &
-        sleep 5
-
-    - name: Run Cypress tests
-      run: cd frontend && npx cypress run
-\`\`\`
-
-## Test Expansion Recommendations
-
-### Additional E2E Scenarios to Add
-
-1. **Complete Match Flow**
-   - Create a new game
-   - Set openers
-   - Post deliveries for a full match
-   - Verify final result
-
-2. **DLS Rain Interruption**
-   - Start a match
-   - Simulate rain interruption
-   - Verify revised target calculation
-
-3. **Multi-Day Match**
-   - Create a Test match
-   - Play multiple innings
-   - Verify state persistence across days
-
-4. **Error Handling**
-   - Test invalid API responses
-   - Test network failures
-   - Test user input validation
-
-5. **Live Updates**
-   - Test WebSocket live scoring
-   - Verify real-time score updates
-   - Test multiple concurrent viewers
+This keeps the binary install step explicit and avoids coupling `npm ci` success to the Cypress download step in restricted environments.
 
 ## Known Issues
 
-- E2E tests use PowerShell scripts (`run-e2e.ps1`) which are Windows-specific
-- Need cross-platform alternatives for Linux/macOS
-- Tests require manual server startup (not automated)
-
-## Future Improvements
-
-- Add visual regression testing with Cypress plugins
-- Implement test data factories for easier test setup
-- Add performance testing with Cypress
-- Create reusable Cypress commands for common operations
+- Some restricted sandboxes block `download.cypress.io`, so agents may need `CYPRESS_INSTALL_BINARY=0 npm ci` before running `npm run test:e2e`

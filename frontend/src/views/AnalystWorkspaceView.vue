@@ -936,9 +936,9 @@
                       role="button"
                       tabindex="0"
                       :aria-label="'Open analyst detail for ' + match.teams"
-                      @click="selectMatch(match.id)"
-                      @keydown.enter.prevent="selectMatch(match.id)"
-                      @keydown.space.prevent="selectMatch(match.id)"
+                      @click="openLibraryMatch(match.id)"
+                      @keydown.enter.prevent="openLibraryMatch(match.id)"
+                      @keydown.space.prevent="openLibraryMatch(match.id)"
                     >
                       <td class="aw-dl-cell-main">
                         <span class="aw-dl-teams">{{ match.teams }}</span>
@@ -965,7 +965,7 @@
                           variant="ghost"
                           size="sm"
                           :aria-label="'Open ' + match.teams"
-                          @click.stop="selectMatch(match.id)"
+                          @click.stop="openLibraryMatch(match.id)"
                         >
                           View
                         </BaseButton>
@@ -1362,6 +1362,10 @@ async function selectMatch(matchId: string) {
   }
   await nextTick()
   document.getElementById('aw-match-detail')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
+function openLibraryMatch(matchId: string) {
+  router.push({ name: 'MatchCaseStudy', params: { matchId } })
 }
 
 async function loadMatchDetail(matchId: string) {

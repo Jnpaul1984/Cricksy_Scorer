@@ -1,5 +1,5 @@
 <template>
-  <div class="case-study">
+  <div class="case-study" data-testid="match-case-study-page">
     <!-- Loading skeleton state -->
     <template v-if="loading">
       <!-- Skeleton header -->
