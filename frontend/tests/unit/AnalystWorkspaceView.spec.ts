@@ -5,9 +5,11 @@ import { nextTick } from 'vue'
 import * as api from '@/services/api'
 import AnalystWorkspaceView from '@/views/AnalystWorkspaceView.vue'
 
+const pushMock = vi.fn()
+
 // Mock vue-router
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: pushMock, back: vi.fn() }),
 }))
 
 // Mock the api module
@@ -195,6 +197,7 @@ const mockMatchDetail = {
 describe('AnalystWorkspaceView', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    pushMock.mockReset()
   })
 
   it('renders real API match list data', async () => {
@@ -1377,9 +1380,8 @@ describe('AnalystWorkspaceView', () => {
     expect(text).not.toContain('Tigers vs Eagles')
   })
 
-  it('Data Library clicking a match row triggers selectMatch', async () => {
+  it('Data Library clicking a match row routes to the match case study view', async () => {
     vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
-    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
 
     const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
     await nextTick()
@@ -1395,10 +1397,11 @@ describe('AnalystWorkspaceView', () => {
     // Default sort is 'most recent'; match-002 (2025-01-15) appears first
     await dlRows[0].trigger('click')
     await nextTick()
-    await nextTick()
 
-    // Any match case-study was called — either match-001 or match-002
-    expect(api.getMatchCaseStudy).toHaveBeenCalledTimes(1)
+    expect(pushMock).toHaveBeenCalledWith({
+      name: 'MatchCaseStudy',
+      params: { matchId: 'match-002' },
+    })
   })
 
   it('Data Library does not show fake or placeholder match data', async () => {

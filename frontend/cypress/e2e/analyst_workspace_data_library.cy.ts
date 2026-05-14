@@ -177,6 +177,37 @@ const matchRegistries = {
   },
 }
 
+const aiSummary = {
+  match_id: 'match-001',
+  format: 'T20',
+  teams: [
+    {
+      team_id: 'lions',
+      team_name: 'Lions',
+      result: 'won',
+      total_runs: 178,
+      wickets_lost: 6,
+      overs_faced: 20,
+      key_stats: ['45 runs in the last 4 overs'],
+    },
+    {
+      team_id: 'falcons',
+      team_name: 'Falcons',
+      result: 'lost',
+      total_runs: 160,
+      wickets_lost: 10,
+      overs_faced: 19.4,
+      key_stats: ['Bowled out in the chase'],
+    },
+  ],
+  key_themes: ['Death-overs acceleration decided the match'],
+  decisive_phases: [],
+  momentum_shifts: [],
+  player_highlights: [],
+  overall_summary: 'Lions controlled the key moments and finished strongly.',
+  created_at: '2025-01-10T12:05:00Z',
+}
+
 const authMe = {
   id: 'cypress-user',
   email: 'cypress@example.com',
@@ -216,6 +247,7 @@ function stubSuccessfulLibrary() {
       blocking_reason: 'not_a_historical_import',
     })
   }).as('getMatchRegistry')
+  cy.intercept('GET', '**/analyst/matches/*/ai-summary', aiSummary).as('getMatchAiSummary')
 }
 
 describe('Analyst Workspace data library gate', () => {
@@ -260,10 +292,12 @@ describe('Analyst Workspace data library gate', () => {
     })
 
     cy.wait('@getMatchCaseStudy')
-    cy.wait('@getMatchRegistry')
+    cy.wait('@getMatchAiSummary')
 
-    cy.get('#aw-match-detail').should('be.visible').and('contain.text', 'Lions vs Falcons')
-    cy.get('.aw-detail-registry').should('contain.text', 'Premier League 2025')
+    cy.location('pathname').should('eq', '/analyst/match/match-001')
+    cy.get('[data-testid="match-case-study-page"]').should('be.visible')
+    cy.contains('h1', 'Match case study').should('be.visible')
+    cy.get('[data-testid="match-case-study-page"]').should('contain.text', 'Lions vs Falcons')
   })
 
   it('shows an empty state when the matches API returns no analyst data', () => {
