@@ -1,0 +1,131 @@
+# Cricksy Event-Triggered Compute Contract — Example Template
+#
+# This file is a NON-RUNTIME documentation template only.
+# It defines the required shape of a future compute budget package
+# as specified in docs/PHASE_6G_EVENT_TRIGGERED_COMPUTE_AND_COST_CONTROL_SPEC.md.
+#
+# No runtime event bus, queue, worker, scheduler, agent, skill, or router should
+# be built from this file alone. This template is for governance, spec review, and
+# future implementation guidance only.
+#
+# All fields below are REQUIRED unless marked optional.
+# ---
+
+compute_request_id: "<unique-id-for-this-compute-request>"
+
+# --- Trigger Traceability ---
+
+# ID of the originating trigger event
+trigger_id: "<trigger-event-id>"
+
+# Trigger taxonomy code (from Phase 6G Section 6).
+# Valid values:
+#   User-initiated:
+#     user.coach_question
+#     user.analyst_report_request
+#     user.podcast_breakdown_request
+#     user.match_player_analysis_request
+#     user.coach_development_notes_request
+#   Match-state:
+#     match.collapse_detected
+#     match.momentum_swing_detected
+#     match.phase_transition
+#     match.win_probability_swing
+#     match.death_overs_reached
+#     match.unusual_run_rate_drop
+#   Data/Event:
+#     data.historical_import_completed
+#     data.metadata_only_promoted_to_full
+#     data.video_uploaded
+#     data.video_analysis_completed
+#     data.new_player_team_competition_registered
+#     data.model_output_generated
+#   Confidence/Validation:
+#     confidence.low_confidence_detected
+#     confidence.conflicting_signals_detected
+#     confidence.sample_size_below_threshold
+#     confidence.missing_data_blocks_recommendation
+#     safety.youth_safety_review_required
+trigger_type: "<trigger_taxonomy_code>"
+
+# --- Routing Links ---
+
+# Intent ID from Phase 6D routing contract
+intent_id: "<intent_id>"
+
+# Skill ID from Phase 6C skill contract
+skill_id: "<skill_id>"
+
+# Context package ID from Phase 6E
+context_package_id: "<context_package_id>"
+
+# Confidence package ID from Phase 6F (null if not yet assembled)
+confidence_package_id: "<confidence_package_id>"  # null if not available
+
+# --- Authorization ---
+
+# Authenticated user ID initiating or confirming the request
+requested_by_user_id: "<user_id>"
+
+# Organisation boundary for this compute request
+org_scope: "<org_id>"
+
+# --- Compute Class ---
+
+# Compute class for this request.
+# Valid values:
+#   free_deterministic         — always-on cheap deterministic; no model calls
+#   low_cost_local             — lightweight rule-based; no LLM
+#   moderate_model_compute     — bounded context; single model call
+#   high_cost_ai_generation    — long-form; chained skills; multiple model calls
+#   blocked_without_approval   — must not run without administrator approval
+compute_class: "<compute_class>"
+
+# Estimated cost class (same vocabulary as compute_class; may differ if estimate differs)
+estimated_cost_class: "<cost_class>"
+
+# --- Budget Constraints ---
+
+# Maximum allowed wall-clock runtime in seconds
+max_runtime_seconds: 30  # integer
+
+# Maximum number of context items loaded from Phase 6E context package
+max_context_items: 20  # integer
+
+# Maximum number of model/LLM calls permitted for this request
+max_model_calls: 1  # integer
+
+# Rate limit key pattern: "<org_id>:<skill_or_intent>:<user_id_or_scope>"
+rate_limit_key: "<org_id>:<skill_id>:<user_id>"
+
+# --- Governance Flags ---
+
+# True if user must explicitly confirm before compute runs
+# Required for: high_cost_ai_generation, blocked_without_approval, match-state triggers
+requires_user_confirmation: true  # boolean
+
+# True if output must enter Phase 6H review queue before delivery to end user.
+# Required for: youth player outputs, public/media content, scouting reports,
+# low-confidence outputs, outputs affecting selection/training/development decisions
+requires_review: false  # boolean
+
+# Safe fallback outcome code if compute cannot proceed.
+# Valid codes:
+#   deterministic_summary_only
+#   requires_user_confirmation
+#   compute_budget_exceeded
+#   rate_limited
+#   insufficient_context
+#   metadata_only_pending_full_import
+#   not_authorized
+#   review_required_before_generation
+#   blocked_by_cost_policy
+#   unsupported_trigger
+fallback_behavior: "deterministic_summary_only"
+
+# Audit log entry MUST be written on start, completion, and failure.
+# Always true for triggered expensive compute.
+audit_log_required: true  # boolean; must be true for all non-free_deterministic classes
+
+# Data integrity confirmation. MUST be true. If false, compute is blocked immediately.
+no_fake_data_confirmation: true  # boolean; must be true
