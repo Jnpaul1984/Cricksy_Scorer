@@ -2,6 +2,11 @@
 Pydantic schemas for Match AI Commentary endpoint.
 
 Path: GET /matches/{match_id}/ai-commentary
+
+Phase 6B — Non-authoritative boundary:
+    All schemas in this module produce COMMENTARY or SUMMARY outputs.
+    They are never official cricket truth.  ``is_official_truth`` is always
+    False in the embedded AiOutputMetadata.
 """
 
 from __future__ import annotations
@@ -10,6 +15,8 @@ import datetime as dt
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType
 
 UTC = getattr(dt, "UTC", dt.UTC)
 
@@ -42,13 +49,19 @@ class CommentaryItem(BaseModel):
 
 
 class MatchAiCommentaryResponse(BaseModel):
-    """Response schema for GET /matches/{match_id}/ai-commentary."""
+    """
+    Response schema for GET /matches/{match_id}/ai-commentary.
+
+    Phase 6B — Non-authoritative: COMMENTARY output only.
+    Do not persist this as official match truth.
+    """
 
     match_id: str = Field(description="The match/game ID")
     commentary: list[CommentaryItem] = Field(
         default_factory=list,
         description="List of AI commentary entries for the match",
     )
+    ai_metadata: AiOutputMetadata = AiOutputMetadata(output_type=AiOutputType.COMMENTARY)
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +120,14 @@ class PlayerHighlightSummary(BaseModel):
 
 
 class MatchAiSummaryResponse(BaseModel):
-    """Response schema for GET /analyst/matches/{match_id}/ai-summary."""
+    """
+    Response schema for GET /analyst/matches/{match_id}/ai-summary.
+
+    Phase 6B — Non-authoritative: SUMMARY output only.
+    ``ai_metadata.is_official_truth`` is always False.
+    Do not treat fields in this response as official scoring, DLS, or result
+    data.  The authoritative match record lives in the Game model.
+    """
 
     match_id: str = Field(description="The match/game ID")
     format: Literal["T20", "ODI", "Custom"] = Field(description="Match format")
@@ -133,3 +153,4 @@ class MatchAiSummaryResponse(BaseModel):
         default_factory=lambda: dt.datetime.now(UTC),
         description="When this summary was generated",
     )
+    ai_metadata: AiOutputMetadata = AiOutputMetadata(output_type=AiOutputType.SUMMARY)

@@ -1653,9 +1653,37 @@ Hard gate:
 
 ### Future Phase 6 Roadmap
 
-#### Phase 6B — Deterministic vs AI Boundary Enforcement
+#### Phase 6B — Deterministic vs AI Boundary Enforcement (COMPLETE)
 
 Lock code and test boundaries that prevent AI from mutating cricket truth.
+
+Spec-lock document: `docs/PHASE_6B_DETERMINISTIC_AI_BOUNDARY_ENFORCEMENT.md`
+
+Phase 6B deliverables (boundary enforcement only — no agents/skills/routers built):
+
+- `backend/domain/ai_boundary.py` — new boundary guard module with `AiOutputType` enum,
+  `OFFICIAL_TRUTH_FIELDS` frozenset, `AiOutputMetadata` Pydantic model (embeds
+  `is_official_truth=False` in every AI response), and `validate_no_official_truth_mutation`
+  guard function that raises `ValueError` if AI code attempts to set official truth fields.
+- AI response schemas updated with `ai_metadata` field: `AiCommentaryResponse`,
+  `MatchAiCommentaryResponse`, `MatchAiSummaryResponse`, `PlayerAiInsights`.
+- Non-authoritative Phase 6B boundary docstrings added to: `ai_commentary.py`,
+  `match_ai_service.py`, `ai_player_insights.py`, `coach_ai_pipeline.py`, `agent_budget.py`.
+- `backend/tests/test_phase_6b_ai_boundary.py` — 37 tests proving:
+  - Guard rejects AI payloads containing runs/wickets/result/dls_target/training_eligible/etc.
+  - AI schemas carry `is_official_truth=False` and correct `output_type`.
+  - `scoring_service`, `dls_service`, and `domain/constants` do not import AI modules.
+  - Training-eligibility fields are blocked from AI mutation.
+
+Validation evidence:
+
+- `pytest tests/test_health.py tests/test_results_endpoint.py` → 9 passed
+- `pytest tests/test_dls_calculations.py` → 21 passed
+- `pytest tests/test_analyst_pro_features.py` → 18 passed
+- `pytest tests/test_match_ai_summary.py` → 5 passed
+- `pytest tests/test_phase_6b_ai_boundary.py` → 37 passed
+- No frontend files touched; frontend CI unaffected.
+- No migrations, no new runtime dependencies, no scoring/DLS/historical import behavior changed.
 
 #### Phase 6C — Cricksy Skills Architecture Spec
 
