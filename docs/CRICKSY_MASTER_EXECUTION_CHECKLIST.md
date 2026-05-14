@@ -1765,9 +1765,57 @@ Validation notes:
 - No runtime implementation code, migrations, dependencies, routers, agents, or
   external AI provider workflows were added in this phase.
 
-#### Phase 6E — Progressive Disclosure + Context Loading Rules
+#### Phase 6E — Progressive Disclosure + Context Loading Rules (COMPLETE)
 
-Define strict rules to load only relevant match/player/team/video/context data for each intelligence request.
+Spec-lock document: `docs/PHASE_6E_PROGRESSIVE_DISCLOSURE_AND_CONTEXT_LOADING_RULES.md`
+
+Phase 6E deliverables (architecture/spec only — no runtime loaders/routers/skills/agents built):
+
+- Required future context-loading architecture is locked:
+  Intent + Skill Mapping → Context Requirement Contract →
+  Permission + Org Boundary Check → Minimum Relevant Data Selection →
+  Context Budget Check → Confidence/Sufficiency Check →
+  Skill Execution Context Package → Fallback if insufficient/unsafe/too large.
+- Pre-phase audit captured for Phase 6A–6D governance docs, 6D context fields
+  (`required_context`, `forbidden_context`), Analyst Workspace and case-study surfaces,
+  historical import/registry/provenance/training-eligibility surfaces,
+  Coach Pro Plus/video-analysis surfaces, player/team/match/delivery/stat surfaces,
+  auth/RBAC/org boundaries, fake-data guard, AI-adjacent context patterns, `agent_budget.py`,
+  CI gates, and current risky broad-context patterns.
+- Required principles are locked:
+  minimum necessary context, deterministic-data-first context selection,
+  permission-before-context, explicit context budgets, sufficiency checks with
+  `insufficient_data`, staged progressive loading, and strict no-fake-data behavior.
+- Mandatory future context package contract is documented with required fields including:
+  `context_package_id`, `intent_id`, `skill_id`, `user_role`, `org_scope`,
+  `selected_entities`, `required_context`, `optional_context`, `forbidden_context`,
+  `data_sources`, `permission_checks`, `context_budget`,
+  `loaded_context_summary`, `omitted_context_summary`, `sufficiency_status`,
+  `insufficient_data_reasons`, `confidence_inputs`, `privacy_boundary_notes`,
+  `provenance_references`, `no_fake_data_confirmation`.
+- Safe fallback outcomes are explicitly locked:
+  `insufficient_data`, `needs_narrower_scope`, `not_authorized`,
+  `context_budget_exceeded`, `metadata_only_pending_full_import`,
+  `missing_selected_match`, `missing_selected_player`,
+  `video_context_unavailable`, `blocked_by_youth_safety`,
+  `blocked_by_org_boundary`.
+- Required example context contracts are included for:
+  spin weakness (one player, one match), match momentum (one selected match),
+  coach notes (one selected player), podcast breakdown (one selected historical match),
+  and training eligibility review (metadata-only historical import).
+- Phase separation explicitly preserved:
+  - Phase 6F = confidence/uncertainty mechanics
+  - Phase 6G = event-triggered compute rules
+  - Phase 6H = validation/review queue mechanics
+
+Validation notes:
+
+- Markdown formatting reviewed.
+- Phase ordering remains clear.
+- Phase 6F–6H remain separate future phases and are not marked complete.
+- No runtime context loader, routers, skills, agents, Supervisor logic, migrations,
+  dependencies, or external AI provider workflows were added in this phase.
+- No production behavior changed.
 
 #### Phase 6F — Confidence + Uncertainty System Spec
 
