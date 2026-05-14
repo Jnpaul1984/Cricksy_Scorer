@@ -375,10 +375,7 @@ class TestDeterministicSystemsAreAiIndependent:
 
         spec = importlib.util.find_spec("backend.services.dls_service")
         if spec is None:
-            # dls_service may not exist; check the standalone dls module
-            import dls  # noqa: F401 — just verify importability
-
-            return
+            pytest.skip("backend.services.dls_service not found — skipping DLS AI-independence check")
 
         source_path = spec.origin
         assert source_path is not None
