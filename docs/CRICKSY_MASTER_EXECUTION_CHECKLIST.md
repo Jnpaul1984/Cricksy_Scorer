@@ -1685,10 +1685,41 @@ Validation evidence:
 - No frontend files touched; frontend CI unaffected.
 - No migrations, no new runtime dependencies, no scoring/DLS/historical import behavior changed.
 
-#### Phase 6C — Cricksy Skills Architecture Spec
+#### Phase 6C — Cricksy Skills Architecture Spec (COMPLETE)
 
-Define reusable intelligence skills before agent implementation.
-Each future skill must define: purpose, inputs, outputs, deterministic dependencies, confidence rules, allowed users/roles, validation tests, safety rules, sample outputs, and no-fake-data rules.
+Spec-lock document: `docs/PHASE_6C_CRICKSY_SKILLS_ARCHITECTURE_SPEC.md`
+
+Phase 6C deliverables (architecture only — no runtime skills/routers/agents built):
+
+- Pre-phase audit captured for Phase 6A/6B governance, `backend/domain/ai_boundary.py`,
+  AI response schemas carrying `ai_metadata`, deterministic analytics surfaces,
+  historical import/registry/provenance/training eligibility, Analyst Workspace,
+  Coach Pro Plus outputs, fake-data guard, auth/RBAC/org boundaries, CI gates,
+  and existing skill-like modules already in repo.
+- Mandatory formal Cricksy Skill contract locked, including required fields:
+  `skill_id`, `name`, `version`, `category`, `purpose`, `supported_intents`,
+  `allowed_roles`, `required_inputs`, `optional_inputs`,
+  `deterministic_data_dependencies`, `forbidden_inputs`, `output_type`,
+  `ai_boundary_metadata`, confidence/limitations fields, validation/safety rules,
+  youth/org/no-fake-data rules, review requirement, sample output shape,
+  tests required, and rollback/disable strategy.
+- Future skill categories locked across Match Analysis, Player Analysis,
+  Team/Opposition, Coach/Communication, and Data/Validation skills.
+- Required architecture rules locked:
+  deterministic-data-first, no official truth mutation, progressive disclosure,
+  confidence + limitations labeling, review gating for high-impact outputs,
+  no fake data, and strict role/org/youth-safety boundaries.
+- Three fully written sample skills locked:
+  Match Momentum Skill, Spin Weakness Skill, Coach Communication Skill.
+- Protected deterministic systems and Phase 6B AI boundary explicitly preserved.
+
+Validation notes:
+
+- Markdown formatting reviewed.
+- Phase ordering remains clear.
+- Phase 6D–6H remain separate future phases and are not marked complete.
+- No runtime implementation code, migrations, dependencies, routers, agents, or
+  external AI provider workflows were added in this phase.
 
 #### Phase 6D — Intent Router + Skill Router Spec
 
