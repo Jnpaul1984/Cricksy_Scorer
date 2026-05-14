@@ -69,7 +69,9 @@ async def _run(args: argparse.Namespace) -> int:
 
     if args.format == "csv":
         csv_path = output_dir / f"{output_base}.csv"
-        _write_csv(csv_path, list(artifact.get("rows", [])))
+        rows_obj = artifact.get("rows", [])
+        rows = rows_obj if isinstance(rows_obj, list) else []
+        _write_csv(csv_path, rows)
 
     print(f"Dataset schema: {artifact['dataset_schema_version']}")
     print(f"Included matches: {artifact['included_match_count']}")

@@ -18,7 +18,7 @@ from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-_METADATA_ONLY_STATUSES: frozenset[str] = frozenset(
+_INCOMPLETE_IMPORT_STATUSES: frozenset[str] = frozenset(
     {"scanned", "metadata_extracted", "pending_full_import"}
 )
 _DATASET_SCHEMA_VERSION = "training_dataset_v1"
@@ -94,7 +94,8 @@ def _normalize_innings_summary(game: Game) -> list[dict[str, Any]]:
             return []
 
         overs_raw = inn.get("overs")
-        overs = _to_float(overs_raw, default=legal_balls / 6.0)
+        default_overs = (legal_balls / 6) if legal_balls > 0 else 0.0
+        overs = _to_float(overs_raw, default=default_overs)
 
         normalized.append(
             {
@@ -141,7 +142,7 @@ def _is_match_eligible(
     hist_meta: dict[str, Any],
     innings_summary: list[dict[str, Any]],
 ) -> str | None:
-    if batch.status in _METADATA_ONLY_STATUSES:
+    if batch.status in _INCOMPLETE_IMPORT_STATUSES:
         return "metadata_only_pending_full_import"
     if not batch.is_finalized:
         return "batch_not_finalized"
@@ -155,7 +156,8 @@ def _is_match_eligible(
         return "has_errors"
     if hist_meta.get("source_unsafe") is True:
         return "source_marked_unsafe"
-    if isinstance(hist_meta.get("_repair_log"), list) and hist_meta.get("_repair_log"):
+    repair_log = hist_meta.get("_repair_log")
+    if isinstance(repair_log, list) and repair_log:
         return "repaired_not_revalidated"
     if not innings_summary:
         return "missing_required_innings_data"
@@ -174,9 +176,7 @@ def _apply_filters(
         return False
     if filters.season and str(hist_meta.get("season") or "") != filters.season:
         return False
-    return not (
-        filters.competition and str(hist_meta.get("event_name") or "") != filters.competition
-    )
+    return filters.competition is None or str(hist_meta.get("event_name") or "") == filters.competition
 
 
 def _team_name(team_blob: Any) -> str | None:

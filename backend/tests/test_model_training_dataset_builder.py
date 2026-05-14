@@ -29,6 +29,10 @@ from backend.sql_app.database import get_db
 FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
 
 
+def _run_async(coro: Any) -> Any:
+    return asyncio.run(coro)
+
+
 def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
@@ -97,9 +101,7 @@ def _register_analyst(client: TestClient) -> str:
 
     email = f"phase5p-analyst-{_uuid.uuid4().hex[:8]}@example.com"
     user = register_user(client, email)
-    asyncio.get_event_loop().run_until_complete(
-        set_role(client, user["email"], models.RoleEnum.analyst_pro)
-    )
+    _run_async(set_role(client, user["email"], models.RoleEnum.analyst_pro))
     return login_user(client, email)
 
 
@@ -185,7 +187,7 @@ def test_includes_eligible_validated_match(client: TestClient) -> None:
     token = _register_analyst(client)
     _batch_id, game_id = _apply_historical_fixture(client, token)
 
-    artifact = asyncio.get_event_loop().run_until_complete(_build(client.session_maker))  # type: ignore[attr-defined]
+    artifact = _run_async(_build(client.session_maker))  # type: ignore[attr-defined]
 
     assert artifact["dataset_schema_version"] == "training_dataset_v1"
     assert artifact["included_match_count"] == 1
@@ -201,10 +203,10 @@ def test_excludes_invalid_and_duplicate_and_missing_innings(client: TestClient) 
     _dup_batch_b, dup_game_b = _apply_historical_fixture(client, token)
     _missing_batch, missing_game = _apply_historical_fixture(client, token)
 
-    asyncio.get_event_loop().run_until_complete(
+    _run_async(
         _update_batch_status(client.session_maker, invalid_batch, status="invalid", error_count=1)  # type: ignore[attr-defined]
     )
-    asyncio.get_event_loop().run_until_complete(
+    _run_async(
         _update_batch_status(
             client.session_maker,  # type: ignore[attr-defined]
             _missing_batch,
@@ -213,11 +215,11 @@ def test_excludes_invalid_and_duplicate_and_missing_innings(client: TestClient) 
             semantic_key="phase5p-missing-innings",
         )
     )
-    asyncio.get_event_loop().run_until_complete(
+    _run_async(
         _clear_innings_summary(client.session_maker, missing_game)  # type: ignore[attr-defined]
     )
 
-    artifact = asyncio.get_event_loop().run_until_complete(_build(client.session_maker))  # type: ignore[attr-defined]
+    artifact = _run_async(_build(client.session_maker))  # type: ignore[attr-defined]
 
     assert artifact["included_match_count"] == 1
     assert dup_game_a in artifact["included_match_ids"] or dup_game_b in artifact["included_match_ids"]
@@ -233,10 +235,10 @@ def test_output_is_deterministic_for_same_inputs(client: TestClient) -> None:
     _apply_historical_fixture(client, token)
 
     fixed_time = dt.datetime(2026, 5, 14, 12, 0, 0, tzinfo=dt.UTC)
-    artifact_one = asyncio.get_event_loop().run_until_complete(
+    artifact_one = _run_async(
         _build(client.session_maker, generated_at=fixed_time)  # type: ignore[attr-defined]
     )
-    artifact_two = asyncio.get_event_loop().run_until_complete(
+    artifact_two = _run_async(
         _build(client.session_maker, generated_at=fixed_time)  # type: ignore[attr-defined]
     )
 
@@ -247,7 +249,7 @@ def test_metadata_and_provenance_present(client: TestClient) -> None:
     token = _register_analyst(client)
     _apply_historical_fixture(client, token)
 
-    artifact = asyncio.get_event_loop().run_until_complete(_build(client.session_maker))  # type: ignore[attr-defined]
+    artifact = _run_async(_build(client.session_maker))  # type: ignore[attr-defined]
 
     assert artifact["dataset_schema_version"] == "training_dataset_v1"
     assert "generated_at" in artifact
@@ -261,13 +263,13 @@ def test_builder_does_not_mutate_official_match_truth(client: TestClient) -> Non
     token = _register_analyst(client)
     _batch_id, game_id = _apply_historical_fixture(client, token)
 
-    before = asyncio.get_event_loop().run_until_complete(
+    before = _run_async(
         _snapshot_truth(client.session_maker, game_id)  # type: ignore[attr-defined]
     )
 
-    _ = asyncio.get_event_loop().run_until_complete(_build(client.session_maker))  # type: ignore[attr-defined]
+    _ = _run_async(_build(client.session_maker))  # type: ignore[attr-defined]
 
-    after = asyncio.get_event_loop().run_until_complete(
+    after = _run_async(
         _snapshot_truth(client.session_maker, game_id)  # type: ignore[attr-defined]
     )
 
@@ -275,7 +277,7 @@ def test_builder_does_not_mutate_official_match_truth(client: TestClient) -> Non
 
 
 def test_empty_case_returns_valid_empty_artifact(client: TestClient) -> None:
-    artifact = asyncio.get_event_loop().run_until_complete(_build(client.session_maker))  # type: ignore[attr-defined]
+    artifact = _run_async(_build(client.session_maker))  # type: ignore[attr-defined]
 
     assert artifact["dataset_schema_version"] == "training_dataset_v1"
     assert artifact["included_match_count"] == 0
