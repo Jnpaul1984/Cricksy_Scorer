@@ -151,6 +151,8 @@ async def test_match_ai_summary_returns_200_with_valid_match(client: TestClient)
     assert isinstance(data["overall_summary"], str)
     assert len(data["overall_summary"]) > 0
     assert "created_at" in data
+    assert data["ai_metadata"]["is_official_truth"] is False
+    assert data["ai_metadata"]["output_type"] == "summary"
 
 
 @pytest.mark.asyncio
@@ -209,7 +211,7 @@ async def test_match_ai_summary_team_structure(client: TestClient):
         assert team["result"] in ["won", "lost", "tied", "no_result"]
         assert isinstance(team["total_runs"], int)
         assert isinstance(team["wickets_lost"], int)
-        assert isinstance(team["overs_faced"], (int, float))
+        assert isinstance(team["overs_faced"], int | float)
         assert isinstance(team["key_stats"], list)
 
 
@@ -241,6 +243,6 @@ async def test_match_ai_summary_phase_structure(client: TestClient):
         assert "label" in phase
         assert isinstance(phase["over_range"], list)
         assert len(phase["over_range"]) == 2
-        assert isinstance(phase["impact_score"], (int, float))
+        assert isinstance(phase["impact_score"], int | float)
         assert -100 <= phase["impact_score"] <= 100
         assert isinstance(phase["narrative"], str)

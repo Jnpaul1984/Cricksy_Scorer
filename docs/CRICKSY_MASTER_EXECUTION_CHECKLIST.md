@@ -2052,11 +2052,12 @@ LLM calls, or production behavior changes):
 - Phase 6A–6H completion summary: Phase 6 governance stream is now complete as
   spec architecture. The next checklist-defined phase is
   **Phase 7 — Historical Match Ingestion: PDF/Image/OCR Review Flow**.
-  However, Phase 5N (Historical Stats Aggregation), Phase 5O (Analyst Workspace
-  Data Library), and Phase 5P (Model Training Dataset Builder) remain incomplete.
-  These Phase 5 sub-phases should be evaluated before Phase 7 begins; see
-  `docs/POST_PHASE_6_ORDERING_AND_PHASE_5_AUDIT.md` for the full analysis and
-  recommended next action.
+  The earlier post-Phase-6 governance snapshot in
+  `docs/POST_PHASE_6_ORDERING_AND_PHASE_5_AUDIT.md` identified Phase 5N, 5O, and
+  5P as incomplete at that time. Since then, the repo has added implemented
+  Phase 5N, 5O, and 5P foundations. See
+  `docs/PHASE_6F_INTELLIGENCE_OS_CLOSURE_AND_PHASE_7_READINESS.md` for the
+  current closure audit and Phase 7 entry recommendation.
 
 > **Governance correction (Issue #190)**: A previous draft of this section
 > referenced "Phase 7A — Intelligence Runtime Readiness Audit + First
@@ -2647,7 +2648,7 @@ Protect the deployed app and CI/CD first. Then stabilize the already-working Coa
 Phase 6A–6H governance is complete. The following ordering clarifications are added here for
 alignment. Full audit in `docs/POST_PHASE_6_ORDERING_AND_PHASE_5_AUDIT.md`.
 
-### Phase 5 Completion Status (as of 2026-05-14)
+### Phase 5 Completion Status (closure-audit snapshot)
 
 | Sub-Phase | Status |
 |---|---|
@@ -2660,26 +2661,18 @@ alignment. Full audit in `docs/POST_PHASE_6_ORDERING_AND_PHASE_5_AUDIT.md`.
 | Phase 5L (Bulk ZIP upload — backend + tests) | Implementation complete; manual QA sign-off pending |
 | Phase 5L.1 (Cost-controlled large ZIP intake) | Complete |
 | Phase 5M (Cricket Data Registry Foundation) | Complete |
-| Phase 5N (Historical Stats Aggregation Layer) | **Not started** |
-| Phase 5O (Analyst Workspace Data Library) | **Not started** |
-| Phase 5P (Model Training Dataset Builder) | **Not started** |
+| Phase 5N (Historical Stats Aggregation Layer) | Complete |
+| Phase 5O (Analyst Workspace Data Library) | Complete |
+| Phase 5P (Model Training Dataset Builder) | Complete |
 
 ### Recommended Next Step
 
-The checklist-grounded recommendation is to continue Phase 5 incomplete work before starting
-Phase 7. The recommended next phase is:
+With Phase 5N, 5O, and 5P now implemented, the checklist-defined next phase is:
 
-**Phase 5N — Historical Stats Aggregation Layer**
+**Phase 7 — Historical Match Ingestion: PDF/Image/OCR Review Flow**
 
-Phase 5N is the next incomplete Phase 5 sub-phase in checklist order. It provides the
-governed aggregation layer that Phase 5O (data library) and Phase 5P (dataset builder)
-depend on. The Phase 6 intelligence architecture (Skills, Context Loading, Confidence,
-Event-Triggered Compute, Validation Agents) is designed to consume validated + registered +
-aggregated historical data. Starting Phase 7 (OCR ingestion) before these analytical
-readiness phases are complete would expand the import surface while the aggregation,
-library, and training-dataset layers remain unbuilt.
-
-After Phase 5N → 5O → 5P are complete, proceed to Phase 7 as defined in this checklist.
+Current readiness evidence and remaining non-blocking follow-up items are tracked in
+`docs/PHASE_6F_INTELLIGENCE_OS_CLOSURE_AND_PHASE_7_READINESS.md`.
 
 ### Phase Naming Governance Reminder
 
@@ -2688,4 +2681,3 @@ plans unless it already exists in this document or is first added through a
 checklist-governance PR. The only valid names for the phases after Phase 6 are those listed
 above (Phase 5N, 5O, 5P, Phase 7, Phase 8, etc.). "Phase 7A" is not a valid phase name —
 it does not exist in this checklist.
-
