@@ -1954,62 +1954,87 @@ Validation notes:
 
 - Markdown formatting reviewed.
 - Phase ordering remains clear.
-- Phase 6H remains a separate future phase and is not marked complete.
+- Phase 6H remains separated from Phase 6G scope and is completed in the section below.
 - No runtime event bus, queue, worker, scheduler, agent, runtime skill, runtime router,
   Supervisor logic, LLM workflow, migration, dependency, or external AI provider workflow
   was added in this phase.
 - No production behavior changed.
 - `backend/services/agent_budget.py` runtime logic unchanged.
 
-#### Phase 6H — Validation Agents + Review Queue Spec
+#### Phase 6H — Validation Agents + Review Queue Spec (COMPLETE)
 
-Define the review flow:
+Spec-lock document: `docs/PHASE_6H_VALIDATION_AGENTS_AND_REVIEW_QUEUE_SPEC.md`
 
-```text
-Generated insight
-↓
-Data validation
-↓
-Cricket correctness validation
-↓
-Safety/language validation
-↓
-Confidence validation
-↓
-Coach/admin review queue
-↓
-Approved output
-```
+Phase 6H deliverables (architecture/spec only — no runtime validation agents,
+review queue backend/UI, approval workflow code, notifications, migrations,
+dependencies, infrastructure, routers, skills, agents, Supervisor logic,
+LLM calls, or production behavior changes):
 
-### Protected Files/Systems
+- Pre-phase audit captured for Phase 6A–6G governance/contracts, AI boundary metadata,
+  context/confidence/compute contract foundations, Analyst Workspace and case-study
+  report surfaces, Coach Pro Plus/video-analysis/PDF surfaces, mental/performance
+  output surfaces, auth/RBAC/org boundaries, youth-safety and language governance,
+  fake-data/provenance guardrails, audit/logging patterns, CI gates, and current risky
+  pattern where route-triggered output can become user-facing without standardized review.
+- Required future validation architecture locked:
+  Generated Insight/Report/Recommendation → Data Validation →
+  Cricket Correctness Validation → Confidence + Uncertainty Validation →
+  Safety + Language Validation → Role + Org Boundary Validation →
+  Review Queue → Coach/Admin/Analyst Approval →
+  Approved Output or Rejected/Escalated Output.
+- Required validation agent/check categories locked:
+  Data Validation Agent, Cricket Correctness Validator,
+  Confidence + Uncertainty Validator, Safety + Language Validator,
+  Role + Org Boundary Validator.
+- Review queue states locked:
+  `draft_generated`, `validation_pending`, `validation_failed`, `review_required`,
+  `in_review`, `changes_requested`, `approved_internal`, `approved_coach_facing`,
+  `approved_public`, `rejected`, `escalated`, `archived`.
+- Mandatory review queue item contract locked with required fields including:
+  `review_item_id`, `source_output_id`, `output_type`, `intent_id`, `skill_id`,
+  `compute_request_id`, `context_package_id`, `confidence_package_id`,
+  `created_by_system_component`, `requested_by_user_id`, scope fields,
+  `review_state`, `validation_results`, `confidence_band`, risk/review assignment fields,
+  approval/publication fields, audit/no-fake-data/provenance fields.
+- Output-type review requirements locked for youth feedback, mental/performance criticism,
+  coach reports, scouting reports, podcast/public content, training recommendations,
+  workload/injury-sensitive recommendations, low-confidence outputs,
+  AI tactical recommendations, model-derived recommendations, video-analysis summaries,
+  and opposition reports.
+- Reviewer roles and approval levels locked:
+  roles (`coach`, `analyst`, `admin`, `organization_admin`, `safety_reviewer`,
+  `media_reviewer`, `system_validator`) and publication levels
+  (`internal_only`, `coach_facing`, `team_facing`, `player_facing`,
+  `organization_facing`, `public_media`) with stricter `public_media` controls.
+- Validation outcomes and fallback behaviors locked:
+  outcomes (`passed`, `failed`, `warning`, `needs_review`, `blocked`,
+  `insufficient_data`, `not_authorized`, `low_confidence`, `unsafe_language`,
+  `unsupported_claim`) and safe fallbacks (`hold_for_review`, `request_more_context`,
+  `request_human_revision`, `block_publication`, `return_insufficient_data`,
+  `downgrade_to_internal_only`, `strip_unsupported_claims`, `escalate_to_admin`).
+- Required audit trail rules locked for requester/context/intent-skill/confidence,
+  validators/outcomes, reviewer decisions, timestamps, publication target,
+  and approval/rejection/escalation reasoning.
+- Five required example review queue items included:
+  youth feedback requiring coach/safety review,
+  podcast breakdown requiring analyst/media review,
+  low-confidence spin weakness recommendation requiring review,
+  coach report approved for coach-facing use,
+  unsupported claim blocked by cricket correctness validator.
+- Future runtime validation tests defined for state transitions, permission gates,
+  public-media stricter approval, fallback enforcement, provenance/no-fake-data checks,
+  audit completeness, and preserved Phase 6B official-truth boundaries.
+- Phase 6A–6H completion summary added and next-phase recommendation locked:
+  pause for `Phase 7A — Intelligence Runtime Readiness Audit + First Implementation Slice Selection`
+  unless explicit approval is given to jump directly to a first runtime MVP slice.
 
-- Live scoring truth and official score/balls/overs/wickets/innings/result/scorecard/player-stat paths.
-- DLS calculation logic and related regression tests.
-- Live bus/socket behavior.
-- Historical import safety gates, registry linkage, and training-eligibility gates.
-- Analyst Workspace provenance visibility rules.
-- Coach Pro Plus video analysis, mental-analysis, and youth-facing report systems.
-- Auth/RBAC/tier/organization boundaries.
-- Fake-data guard behavior.
-- CI/CD gates.
+Validation notes:
 
-### Required Validation
-
-Because Phase 6A is docs/spec-lock only:
-
-- Verify Markdown formatting.
-- Verify checklist phase ordering remains clear.
-- Verify no existing phases are removed or marked complete without evidence.
-- Verify no implementation code changed.
-- Verify checklist structure is not accidentally corrupted.
-
-### Completion Criteria
-
-- Master Execution Checklist includes the governed Phase 6 intelligence architecture stream.
-- Global intelligence rules, deterministic/AI boundaries, progressive disclosure, confidence, event-triggered compute, and review-queue rules are documented.
-- Future Phase 6B–6H roadmap is documented.
-- Phase 5 registry/import work is connected to the future intelligence foundation.
-- No runtime app behavior changes.
+- Markdown formatting reviewed.
+- Phase ordering remains clear.
+- Phase 6 governance stream (6A–6H) is now complete as spec architecture.
+- No runtime implementation code, migrations, dependencies, infrastructure,
+  or production behavior changes were added.
 
 ---
 
