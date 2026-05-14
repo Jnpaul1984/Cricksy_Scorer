@@ -1721,9 +1721,49 @@ Validation notes:
 - No runtime implementation code, migrations, dependencies, routers, agents, or
   external AI provider workflows were added in this phase.
 
-#### Phase 6D — Intent Router + Skill Router Spec
+#### Phase 6D — Intent Router + Skill Router Spec (COMPLETE)
 
-Define how approved user intents map to approved skills and safe data retrieval.
+Spec-lock document: `docs/PHASE_6D_INTENT_ROUTER_AND_SKILL_ROUTER_SPEC.md`
+
+Phase 6D deliverables (architecture/spec only — no runtime routers/skills/agents built):
+
+- Future router architecture documented:
+  User/Coach/Analyst Request → Intent Classifier → Intent Safety Gate →
+  Skill Eligibility Resolver → Context Requirement Planner →
+  Progressive Disclosure Loader → Skill Execution Request →
+  Validation/Review Routing.
+- Pre-phase audit captured for Phase 6A/6B/6C governance, Phase 6C skill contract,
+  `backend/domain/ai_boundary.py` + `AiOutputMetadata`, Analyst Workspace data surfaces,
+  historical import/registry/provenance/training-eligibility surfaces, Coach Pro Plus
+  surfaces, AI-adjacent prompt-entry routes/services, auth/RBAC/org boundaries,
+  fake-data guard, CI gates, and current ad-hoc intent-like behavior.
+- Initial intent taxonomy locked across Match Analysis, Player Analysis,
+  Team/Opposition, Coach/Communication, Analyst/Media, and Data/Validation intents.
+- Blocked/deterministic-only intents explicitly locked (score/wicket/over/result/DLS/stat
+  mutations, training-eligibility bypass attempts, validation bypass attempts).
+- Mandatory intent-to-skill routing contract locked with required fields:
+  `intent_id`, `intent_category`, `supported_user_phrases`, `required_role`,
+  `allowed_skill_ids`, `required_context`, `forbidden_context`,
+  `clarifying_questions`, `confidence_requirements`, `review_requirements`,
+  `blocked_conditions`, `fallback_behavior`, `output_type`, `ai_boundary_metadata`.
+- Required clarification, blocking, fallback, role/org boundary, youth-safety,
+  and no-fake-data routing rules are documented.
+- Required example mappings included (momentum analysis, spin weakness analysis,
+  coaching notes generation, podcast breakdown with review requirement,
+  deterministic-only score update request).
+- Phase separation explicitly preserved:
+  - Phase 6E = progressive disclosure mechanics
+  - Phase 6F = confidence/uncertainty mechanics
+  - Phase 6G = event-triggered compute rules
+  - Phase 6H = validation agent/review queue mechanics
+
+Validation notes:
+
+- Markdown formatting reviewed.
+- Phase ordering remains clear.
+- Phase 6E–6H remain separate future phases and are not marked complete.
+- No runtime implementation code, migrations, dependencies, routers, agents, or
+  external AI provider workflows were added in this phase.
 
 #### Phase 6E — Progressive Disclosure + Context Loading Rules
 
