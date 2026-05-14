@@ -405,8 +405,9 @@ def test_metadata_only_batch_excluded_from_summary(client: TestClient) -> None:
 
     async def _create_metadata_only_batch() -> None:
         async with session_maker() as session:
-            from backend.sql_app.models import HistoricalImportBatch
             import uuid as _uuid
+
+            from backend.sql_app.models import HistoricalImportBatch
 
             batch = HistoricalImportBatch(
                 id=str(_uuid.uuid4()),

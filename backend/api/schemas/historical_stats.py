@@ -150,9 +150,7 @@ class HistoricalStatsSummaryResponse(BaseModel):
     competitions: list[CompetitionAggregate] = Field(default_factory=list)
     seasons: list[SeasonAggregate] = Field(default_factory=list)
 
-    generated_at: dt.datetime = Field(
-        default_factory=lambda: dt.datetime.now(dt.timezone.utc)
-    )
+    generated_at: dt.datetime = Field(default_factory=lambda: dt.datetime.now(dt.UTC))
     note: str = (
         "Deterministic on-demand aggregation from validated historical match data only. "
         "Metadata-only imports are excluded. No official cricket truth is mutated."

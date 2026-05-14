@@ -26,9 +26,6 @@ import datetime as dt
 from collections import defaultdict
 from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.api.schemas.historical_stats import (
     CompetitionAggregate,
     HistoricalMatchAggregateResponse,
@@ -42,6 +39,8 @@ from backend.api.schemas.historical_stats import (
 )
 from backend.services.analyst_access import scoped_games_stmt
 from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Batch statuses that indicate the record is metadata-only (not fully imported).
 _METADATA_ONLY_STATUSES: frozenset[str] = frozenset(
@@ -95,9 +94,7 @@ def _is_eligible_for_aggregation(batch: HistoricalImportBatch) -> bool:
         return False
     if batch.status != "valid":
         return False
-    if batch.error_count > 0:
-        return False
-    return True
+    return batch.error_count == 0
 
 
 def _build_innings_aggregates(
@@ -283,9 +280,7 @@ def _build_player_aggregates(
         runs_conceded = bwstats.get("runs_conceded", 0)
         economy_rate = round(runs_conceded / overs_bowled, 2) if overs_bowled > 0 else 0.0
 
-        matches_contributed = max(
-            bstats.get("matches", 0), bwstats.get("matches", 0)
-        )
+        matches_contributed = max(bstats.get("matches", 0), bwstats.get("matches", 0))
 
         result.append(
             PlayerAggregate(
@@ -416,7 +411,9 @@ def _build_venue_aggregates(
 
         avg_first = round(sum(first_inn) / len(first_inn), 2) if first_inn else 0.0
         avg_second = round(sum(second_inn) / len(second_inn), 2) if second_inn else None
-        avg_total = round(sum(total_runs_list) / len(total_runs_list), 2) if total_runs_list else 0.0
+        avg_total = (
+            round(sum(total_runs_list) / len(total_runs_list), 2) if total_runs_list else 0.0
+        )
         avg_wickets = (
             round(sum(total_wickets_list) / len(total_wickets_list), 2)
             if total_wickets_list
@@ -465,7 +462,9 @@ def _build_competition_aggregates(
     for comp_name, acc in sorted(comp_acc.items()):
         total_runs_list = acc["total_runs"]
         total_wickets_list = acc["total_wickets"]
-        avg_total = round(sum(total_runs_list) / len(total_runs_list), 2) if total_runs_list else 0.0
+        avg_total = (
+            round(sum(total_runs_list) / len(total_runs_list), 2) if total_runs_list else 0.0
+        )
         avg_wickets = (
             round(sum(total_wickets_list) / len(total_wickets_list), 2)
             if total_wickets_list
@@ -512,7 +511,9 @@ def _build_season_aggregates(
     for season_name, acc in sorted(season_acc.items()):
         total_runs_list = acc["total_runs"]
         total_wickets_list = acc["total_wickets"]
-        avg_total = round(sum(total_runs_list) / len(total_runs_list), 2) if total_runs_list else 0.0
+        avg_total = (
+            round(sum(total_runs_list) / len(total_runs_list), 2) if total_runs_list else 0.0
+        )
         avg_wickets = (
             round(sum(total_wickets_list) / len(total_wickets_list), 2)
             if total_wickets_list
@@ -603,8 +604,7 @@ async def get_historical_stats_summary(
 
     # Build aggregate outputs
     match_aggregates = [
-        _build_match_aggregate(game, batch, meta)
-        for game, batch, meta in eligible_games
+        _build_match_aggregate(game, batch, meta) for game, batch, meta in eligible_games
     ]
     player_aggregates = _build_player_aggregates(eligible_games)
     team_aggregates = _build_team_aggregates(eligible_games)
@@ -622,7 +622,7 @@ async def get_historical_stats_summary(
         venues=venue_aggregates,
         competitions=competition_aggregates,
         seasons=season_aggregates,
-        generated_at=dt.datetime.now(dt.timezone.utc),
+        generated_at=dt.datetime.now(dt.UTC),
     )
 
 
@@ -638,9 +638,8 @@ async def get_single_match_aggregate(
     The caller is responsible for raising HTTP 404 / 403 as appropriate.
     Reads existing data only — no official truth fields are mutated.
     """
-    stmt = (
-        scoped_games_stmt(current_user)
-        .where(Game.id == match_id, Game.status == GameStatus.completed)
+    stmt = scoped_games_stmt(current_user).where(
+        Game.id == match_id, Game.status == GameStatus.completed
     )
     result = await db.execute(stmt)
     game = result.scalar_one_or_none()

@@ -22,9 +22,6 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend import security
 from backend.api.schemas.historical_stats import (
     HistoricalMatchAggregateResponse,
@@ -35,6 +32,8 @@ from backend.services.historical_stats_aggregation_service import (
     get_single_match_aggregate,
 )
 from backend.sql_app.database import get_db as _base_get_db
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(
     prefix="/analytics/historical-stats",
