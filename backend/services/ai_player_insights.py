@@ -4,6 +4,12 @@ AI Player Insights Service.
 This module provides AI-style insights for player performance based on
 their profile stats and recent form entries.
 
+Phase 6B — Non-authoritative boundary:
+    All outputs from this service are INSIGHT outputs — they explain or
+    describe a player's performance trends.  They are NOT official player
+    stats.  They must not be stored as official batting/bowling averages,
+    career totals, or any official match record.
+
 TODO: Replace rule-based logic with actual LLM integration for richer insights.
 """
 
@@ -11,12 +17,12 @@ from __future__ import annotations
 
 from typing import Literal
 
+from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType
+from backend.sql_app.models import PlayerForm, PlayerProfile
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
-from backend.sql_app.models import PlayerForm, PlayerProfile
 
 # ---------------------------------------------------------------------------
 # Pydantic Schemas
@@ -37,7 +43,15 @@ class RecentForm(BaseModel):
 
 
 class PlayerAiInsights(BaseModel):
-    """AI-generated insights for a player."""
+    """
+    AI-generated insights for a player.
+
+    Phase 6B — Non-authoritative: INSIGHT output only.
+    ``ai_metadata.is_official_truth`` is always False.
+    Do not store any field from this response as an official player stat,
+    career total, or eligibility decision.  The authoritative player record
+    lives in the PlayerProfile and PlayerForm models.
+    """
 
     player_id: str = Field(description="The player ID")
     summary: str = Field(
@@ -60,6 +74,7 @@ class PlayerAiInsights(BaseModel):
         default_factory=list,
         description="AI-generated recommendations for improvement or strategy",
     )
+    ai_metadata: AiOutputMetadata = AiOutputMetadata(output_type=AiOutputType.INSIGHT)
 
 
 # ---------------------------------------------------------------------------

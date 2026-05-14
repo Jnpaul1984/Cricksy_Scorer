@@ -1,4 +1,10 @@
 # Agent run budget config and enforcement
+#
+# Phase 6B — Non-authoritative boundary:
+#   Agent runs are advisory AI operations (commentary, insights, reports).
+#   They must never update official cricket truth (Game score/result/DLS).
+#   Budget enforcement is an operational guard; it does not grant permission
+#   for AI agents to mutate official scoring or player stat fields.
 from datetime import datetime
 
 AGENT_BUDGETS = {

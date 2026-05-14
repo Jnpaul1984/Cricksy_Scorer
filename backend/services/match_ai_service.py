@@ -4,6 +4,13 @@ Match AI Commentary Service.
 Generates mock AI commentary for a match based on match metadata
 (powerplay swings, wickets, boundaries). No real LLM call yet.
 
+Phase 6B — Non-authoritative boundary:
+    All outputs from this service are COMMENTARY or SUMMARY outputs.
+    They are NOT official cricket truth.  They must not be stored as
+    official score, result, innings state, player stats, or DLS data.
+    The authoritative match record lives in the Game model and is
+    managed exclusively by deterministic scoring and results systems.
+
 TODO: Replace mock implementation with actual LLM call.
 """
 
@@ -11,9 +18,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
 from backend.sql_app import models
 from backend.sql_app.match_ai import (
@@ -25,10 +29,20 @@ from backend.sql_app.match_ai import (
     MomentumShiftSummary,
     PlayerHighlightSummary,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 
 class MatchAiService:
-    """Service for generating AI commentary for cricket matches."""
+    """
+    Service for generating AI commentary and match summaries for cricket matches.
+
+    Phase 6B — Non-authoritative:
+        All methods in this service produce COMMENTARY or SUMMARY outputs.
+        They are non-authoritative and must never write to, or be stored as,
+        official Game score/result/innings/DLS fields.
+        The official match record is owned by scoring_service and gameplay routes.
+    """
 
     def __init__(self, db: AsyncSession):
         self.db = db

@@ -3,6 +3,12 @@ Coach Pro Plus AI Pipeline - Pose & Ball Tracking Analysis
 
 Orchestrates pose extraction, ball tracking, and rule-based analysis.
 Extensible for future ML metrics and LLM integration (not implemented in MVP).
+
+Phase 6B — Non-authoritative boundary:
+    All outputs from this pipeline are REPORT or INSIGHT outputs derived from
+    video analysis.  They are NOT official cricket truth.  They must not be
+    stored as official player stats, match results, or scoring data.
+    Video analysis findings are reviewable coaching outputs only.
 """
 
 from __future__ import annotations

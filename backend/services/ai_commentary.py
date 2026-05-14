@@ -5,6 +5,11 @@ This module provides rule-based commentary generation for individual deliveries.
 It analyzes the delivery context (runs, wickets, phase, players) and generates
 short AI-style commentary strings.
 
+Phase 6B — Non-authoritative boundary:
+    All outputs from this service are COMMENTARY — they explain or describe
+    events.  They are NOT official cricket truth.  They must not be stored as
+    official score, result, player stat, innings state, or DLS data.
+
 TODO: Replace rule-based templates with actual LLM call using match/delivery context.
 """
 
@@ -13,6 +18,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
@@ -30,7 +36,13 @@ class DeliveryContextRequest(BaseModel):
 
 
 class AiCommentaryResponse(BaseModel):
-    """Response payload with generated AI commentary."""
+    """
+    Response payload with generated AI commentary.
+
+    Phase 6B — Non-authoritative: this is a COMMENTARY output.
+    ``ai_metadata.is_official_truth`` is always False.
+    Do not treat this response as official scoring or match truth.
+    """
 
     game_id: str
     over_number: int
@@ -39,6 +51,7 @@ class AiCommentaryResponse(BaseModel):
     tone: str
     tags: list[str]
     generated_at: datetime
+    ai_metadata: AiOutputMetadata = AiOutputMetadata(output_type=AiOutputType.COMMENTARY)
 
 
 # ---------------------------------------------------------------------------
