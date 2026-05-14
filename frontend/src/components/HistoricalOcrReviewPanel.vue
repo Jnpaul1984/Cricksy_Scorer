@@ -66,10 +66,10 @@
       <button class="hocr-btn hocr-btn--primary" data-testid="ocr-create-candidate" :disabled="loading || !selectedFile" @click="createCandidate">
         Create review candidate
       </button>
-      <button class="hocr-btn" data-testid="ocr-save-review" :disabled="loading || !candidate" @click="submitReview">
+      <button class="hocr-btn" data-testid="ocr-save-review" :disabled="!canSaveReview" @click="submitReview">
         Save reviewed JSON
       </button>
-      <button class="hocr-btn" data-testid="ocr-run-dry-run" :disabled="loading || !candidate" @click="runDryRun">
+      <button class="hocr-btn" data-testid="ocr-run-dry-run" :disabled="!canRunDryRun" @click="runDryRun">
         Dry-run reviewed JSON
       </button>
     </div>
@@ -80,11 +80,12 @@
     </label>
 
     <div class="hocr-actions">
-      <button class="hocr-btn hocr-btn--danger" data-testid="ocr-reject-candidate" :disabled="loading || !candidate || !rejectReason.trim()" @click="rejectCandidate">
+      <button class="hocr-btn hocr-btn--danger" data-testid="ocr-reject-candidate" :disabled="!canRejectCandidate" @click="rejectCandidate">
         Reject candidate
       </button>
     </div>
 
+    <p v-if="loading" class="hocr-loading" role="status" data-testid="ocr-loading-state">{{ currentActionLabel }}</p>
     <p v-if="error" class="hocr-error" role="alert">{{ error }}</p>
     <p v-if="message" class="hocr-message" role="status" data-testid="ocr-flow-message">{{ message }}</p>
 
@@ -108,11 +109,15 @@
         </li>
       </ul>
     </div>
+
+    <p v-else class="hocr-empty" data-testid="ocr-empty-state">
+      No OCR review candidate yet. Upload a PDF/image scorecard to create a non-authoritative draft for operator review.
+    </p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import {
   historicalOcrCreateCandidate,
@@ -134,8 +139,26 @@ const rejectReason = ref('')
 const candidate = ref<HistoricalOcrReviewCandidateResponse | null>(null)
 const dryRunResult = ref<HistoricalOcrReviewDryRunResponse | null>(null)
 const loading = ref(false)
+const currentActionLabel = ref('')
 const message = ref('')
 const error = ref('')
+
+const canSaveReview = computed(
+  () => Boolean(candidate.value) && !loading.value && candidate.value?.status !== 'rejected',
+)
+const canRunDryRun = computed(
+  () =>
+    Boolean(candidate.value)
+    && !loading.value
+    && ['ready_for_dry_run', 'dry_run_failed', 'dry_run_passed'].includes(candidate.value?.status ?? ''),
+)
+const canRejectCandidate = computed(
+  () =>
+    Boolean(candidate.value)
+    && !loading.value
+    && candidate.value?.status !== 'rejected'
+    && Boolean(rejectReason.value.trim()),
+)
 
 function onFileChange(event: Event) {
   const input = event.target as HTMLInputElement
@@ -144,12 +167,18 @@ function onFileChange(event: Event) {
 
 function parseCandidateJson(): Record<string, unknown> | undefined {
   if (!candidateJsonText.value.trim()) return undefined
-  return JSON.parse(candidateJsonText.value) as Record<string, unknown>
+  try {
+    return JSON.parse(candidateJsonText.value) as Record<string, unknown>
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'Unknown JSON parse error'
+    throw new Error(`Invalid structured JSON: ${reason}`)
+  }
 }
 
 async function createCandidate() {
   if (!selectedFile.value) return
   loading.value = true
+  currentActionLabel.value = 'Creating OCR review candidate...'
   error.value = ''
   message.value = ''
   dryRunResult.value = null
@@ -170,6 +199,7 @@ async function createCandidate() {
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to create OCR review candidate'
   } finally {
+    currentActionLabel.value = ''
     loading.value = false
   }
 }
@@ -177,6 +207,7 @@ async function createCandidate() {
 async function submitReview() {
   if (!candidate.value) return
   loading.value = true
+  currentActionLabel.value = 'Saving reviewed JSON...'
   error.value = ''
   message.value = ''
   try {
@@ -194,6 +225,7 @@ async function submitReview() {
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to save review'
   } finally {
+    currentActionLabel.value = ''
     loading.value = false
   }
 }
@@ -201,6 +233,7 @@ async function submitReview() {
 async function runDryRun() {
   if (!candidate.value) return
   loading.value = true
+  currentActionLabel.value = 'Running structured dry-run validation...'
   error.value = ''
   message.value = ''
   try {
@@ -209,6 +242,7 @@ async function runDryRun() {
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Dry-run failed'
   } finally {
+    currentActionLabel.value = ''
     loading.value = false
   }
 }
@@ -216,6 +250,7 @@ async function runDryRun() {
 async function rejectCandidate() {
   if (!candidate.value || !rejectReason.value.trim()) return
   loading.value = true
+  currentActionLabel.value = 'Rejecting OCR review candidate...'
   error.value = ''
   message.value = ''
   try {
@@ -224,6 +259,7 @@ async function rejectCandidate() {
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to reject candidate'
   } finally {
+    currentActionLabel.value = ''
     loading.value = false
   }
 }
@@ -243,8 +279,10 @@ async function rejectCandidate() {
 .hocr-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .hocr-btn--primary { background: #0d6efd; color: #fff; border-color: #0d6efd; }
 .hocr-btn--danger { background: #b42318; color: #fff; border-color: #b42318; }
+.hocr-loading { color: #1d4ed8; margin: 0.25rem 0; }
 .hocr-error { color: #b42318; margin: 0.25rem 0; }
 .hocr-message { color: #065f46; margin: 0.25rem 0; }
 .hocr-summary, .hocr-dryrun { margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px dashed #d7dbe6; font-size: 0.88rem; }
+.hocr-empty { margin-top: 0.8rem; color: #4b5563; font-size: 0.88rem; }
 .hocr-notice { font-size: 0.82rem; color: #374151; }
 </style>
