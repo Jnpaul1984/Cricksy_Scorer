@@ -758,6 +758,10 @@ export interface AnalystMatchListItem {
   phase_swing: string; // e.g. "+18 in death", "-12 in powerplay"
   status: string;
   venue?: string | null;
+  event_name?: string | null; // competition/event name from historical import
+  season?: string | null; // season identifier from historical import
+  match_number?: number | null; // match number within event
+  source_dates?: string[]; // original source date strings from historical import
   match_datetime?: string | null;
   is_historical?: boolean;
   source?: string;

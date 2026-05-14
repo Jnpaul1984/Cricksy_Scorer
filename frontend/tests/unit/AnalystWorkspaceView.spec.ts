@@ -52,6 +52,10 @@ const mockMatchList = {
       phase_swing: '+18 in death',
       status: 'completed',
       venue: 'Generic Cricket Ground',
+      event_name: 'Premier League 2025',
+      season: '2025',
+      match_number: 3,
+      source_dates: ['2025-01-10'],
       match_datetime: null,
       is_historical: true,
       source: 'historical_import',
@@ -67,6 +71,10 @@ const mockMatchList = {
       phase_swing: '-12 in powerplay',
       status: 'completed',
       venue: null,
+      event_name: null,
+      season: null,
+      match_number: null,
+      source_dates: [],
       match_datetime: null,
       is_historical: false,
       source: 'live',
@@ -1215,5 +1223,200 @@ describe('AnalystWorkspaceView', () => {
     await rows[0].trigger('click')
 
     expect(api.getMatchRegistry).toHaveBeenCalledWith('match-001')
+  })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Phase 5O: Data Library tab tests
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('has a Data Library tab button', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const dlTab = tabButtons.find((b) => b.text().includes('Data Library'))
+    expect(dlTab).toBeDefined()
+  })
+
+  it('shows Data Library tab panel when Data Library tab is clicked', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const dlTab = tabButtons.find((b) => b.text().includes('Data Library'))
+    expect(dlTab).toBeDefined()
+    await dlTab!.trigger('click')
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Data Library')
+    expect(wrapper.text()).toContain('Browse available match datasets')
+  })
+
+  it('Data Library shows both matches in the table', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const dlTab = tabButtons.find((b) => b.text().includes('Data Library'))
+    await dlTab!.trigger('click')
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Lions vs Falcons')
+    expect(text).toContain('Tigers vs Eagles')
+  })
+
+  it('Data Library shows Imported badge for historical match', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const dlTab = tabButtons.find((b) => b.text().includes('Data Library'))
+    await dlTab!.trigger('click')
+    await nextTick()
+
+    const dlBadges = wrapper.findAll('.aw-dl-badge--imported')
+    expect(dlBadges.length).toBeGreaterThan(0)
+  })
+
+  it('Data Library shows competition and season metadata for imported match', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const dlTab = tabButtons.find((b) => b.text().includes('Data Library'))
+    await dlTab!.trigger('click')
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Premier League 2025')
+    expect(text).toContain('2025')
+  })
+
+  it('Data Library shows empty state when no matches are available', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue({ items: [], total: 0 })
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const dlTab = tabButtons.find((b) => b.text().includes('Data Library'))
+    await dlTab!.trigger('click')
+    await nextTick()
+
+    expect(wrapper.text()).toContain('No analyst-ready match data is available yet.')
+  })
+
+  it('Data Library shows loading state while fetching matches', async () => {
+    vi.mocked(api.getAnalystMatches).mockImplementation(
+      () => new Promise((resolve) => { setTimeout(resolve, 200) })
+    )
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const dlTab = tabButtons.find((b) => b.text().includes('Data Library'))
+    await dlTab!.trigger('click')
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Loading data library')
+  })
+
+  it('Data Library shows error state when match list fails to load', async () => {
+    vi.mocked(api.getAnalystMatches).mockRejectedValue(new Error('Library fetch failed'))
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const dlTab = tabButtons.find((b) => b.text().includes('Data Library'))
+    await dlTab!.trigger('click')
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Library fetch failed')
+  })
+
+  it('Data Library filters to imported-only when source filter is set to Imported', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const dlTab = tabButtons.find((b) => b.text().includes('Data Library'))
+    await dlTab!.trigger('click')
+    await nextTick()
+
+    // Click the 'Imported' source filter chip
+    const importedChip = wrapper.findAll('button.aw-chip').find((b) => b.text() === 'Imported')
+    expect(importedChip).toBeDefined()
+    await importedChip!.trigger('click')
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Lions vs Falcons')
+    expect(text).not.toContain('Tigers vs Eagles')
+  })
+
+  it('Data Library clicking a match row triggers selectMatch', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const dlTab = tabButtons.find((b) => b.text().includes('Data Library'))
+    await dlTab!.trigger('click')
+    await nextTick()
+
+    const dlRows = wrapper.findAll('.aw-dl-row')
+    expect(dlRows.length).toBeGreaterThan(0)
+    // Default sort is 'most recent'; match-002 (2025-01-15) appears first
+    await dlRows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    // Any match case-study was called — either match-001 or match-002
+    expect(api.getMatchCaseStudy).toHaveBeenCalledTimes(1)
+  })
+
+  it('Data Library does not show fake or placeholder match data', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue({ items: [], total: 0 })
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const dlTab = tabButtons.find((b) => b.text().includes('Data Library'))
+    await dlTab!.trigger('click')
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).not.toContain('R. Singh')
+    expect(text).not.toContain('A. Kumar')
+    expect(text).not.toContain('Mock Match')
+    expect(text).not.toContain('Demo')
   })
 })
