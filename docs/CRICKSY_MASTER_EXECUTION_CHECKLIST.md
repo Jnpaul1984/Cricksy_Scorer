@@ -1887,9 +1887,79 @@ Validation notes:
   workflows were added in this phase.
 - No production behavior changed.
 
-#### Phase 6G — Event-Triggered Intelligence Spec
+#### Phase 6G — Event-Triggered Compute + Cost Control Spec (COMPLETE)
 
-Define cheap always-on deterministic intelligence vs expensive triggered AI, with triggers such as coach questions, report requests, collapse detection, confidence drops, video uploads, or analyst-requested outputs.
+Spec-lock document: `docs/PHASE_6G_EVENT_TRIGGERED_COMPUTE_AND_COST_CONTROL_SPEC.md`
+
+Phase 6G deliverables (architecture/spec only — no runtime event bus, queues, workers,
+schedulers, agents, runtime skills, runtime routers, Supervisor logic, LLM calls,
+migrations, dependencies, or production behavior changes):
+
+- Pre-phase audit captured for Phase 6A–6F governance docs, existing always-on deterministic
+  systems (score engine, match state, statistical engine, metadata registry, prediction
+  outputs, player metrics, phase tags, validation/training-eligibility status), existing
+  AI-adjacent services and their current trigger models, `backend/services/agent_budget.py`
+  operational budget guard, Coach Pro Plus/video-analysis worker patterns, Phase 5L.1
+  historical import metadata-only and full import gating, auth/RBAC/org/youth-safety
+  boundaries, CI/CD constraints, fake-data guard behavior, and current risky patterns where
+  route-triggered AI outputs run without explicit user approval or budget governance.
+- Required future event-triggered compute architecture locked:
+  Event/User Action/System Signal → Trigger Eligibility Check → Role + Org + Safety Check →
+  Context Budget Check → Compute Budget Check → Confidence/Necessity Check →
+  Approved Compute Request → Output + Cost/Audit Metadata → Review Queue if required.
+- Always-on vs triggered compute split locked:
+  always-on deterministic systems listed; triggered/expensive/governed systems listed with
+  explicit requirement for approved trigger, compute budget package, and audit metadata.
+- Trigger taxonomy locked:
+  `user.coach_question`, `user.analyst_report_request`, `user.podcast_breakdown_request`,
+  `user.match_player_analysis_request`, `user.coach_development_notes_request`,
+  `match.collapse_detected`, `match.momentum_swing_detected`, `match.phase_transition`,
+  `match.win_probability_swing`, `match.death_overs_reached`, `match.unusual_run_rate_drop`,
+  `data.historical_import_completed`, `data.metadata_only_promoted_to_full`,
+  `data.video_uploaded`, `data.video_analysis_completed`,
+  `data.new_player_team_competition_registered`, `data.model_output_generated`,
+  `confidence.low_confidence_detected`, `confidence.conflicting_signals_detected`,
+  `confidence.sample_size_below_threshold`, `confidence.missing_data_blocks_recommendation`,
+  `safety.youth_safety_review_required`.
+- Blocked triggers locked: every ball, every score update, every page load, every dashboard
+  refresh, every historical import file, every video frame, every player profile visit.
+- Mandatory compute budget package contract locked with all required fields:
+  `compute_request_id`, `trigger_id`, `trigger_type`, `intent_id`, `skill_id`,
+  `context_package_id`, `confidence_package_id`, `requested_by_user_id`, `org_scope`,
+  `compute_class`, `estimated_cost_class`, `max_runtime_seconds`, `max_context_items`,
+  `max_model_calls`, `rate_limit_key`, `requires_user_confirmation`, `requires_review`,
+  `fallback_behavior`, `audit_log_required`, `no_fake_data_confirmation`.
+- Cost classes locked: `free_deterministic`, `low_cost_local`, `moderate_model_compute`,
+  `high_cost_ai_generation`, `blocked_without_approval`.
+- Guardrails locked: no page-load compute, no per-ball compute, rate limiting required,
+  role/org authorization required, sufficient context required, metadata-only gate,
+  youth/safety review gate, audit metadata required.
+- Safe fallback outcomes locked:
+  `deterministic_summary_only`, `requires_user_confirmation`, `compute_budget_exceeded`,
+  `rate_limited`, `insufficient_context`, `metadata_only_pending_full_import`,
+  `not_authorized`, `review_required_before_generation`, `blocked_by_cost_policy`,
+  `unsupported_trigger`.
+- Five example compute contracts included:
+  coach spin-weakness question (moderate_model_compute, 1 model call),
+  analyst podcast breakdown (high_cost_ai_generation, review required),
+  collapse detected during live match (deferred until coach confirms),
+  video uploaded and completed then coach requests technical summary (review required),
+  metadata-only ZIP import blocks cross-match AI analysis until full import.
+- Trigger eligibility check flow documented (8-step governance sequence).
+- Phase separation explicitly preserved:
+  - Phase 6H = validation agent/review queue mechanics
+- Docs-only template added: `docs/compute_templates/event_trigger_compute_contract.example.yaml`.
+
+Validation notes:
+
+- Markdown formatting reviewed.
+- Phase ordering remains clear.
+- Phase 6H remains a separate future phase and is not marked complete.
+- No runtime event bus, queue, worker, scheduler, agent, runtime skill, runtime router,
+  Supervisor logic, LLM workflow, migration, dependency, or external AI provider workflow
+  was added in this phase.
+- No production behavior changed.
+- `backend/services/agent_budget.py` runtime logic unchanged.
 
 #### Phase 6H — Validation Agents + Review Queue Spec
 
