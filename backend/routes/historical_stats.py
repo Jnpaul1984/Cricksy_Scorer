@@ -47,9 +47,13 @@ AllowedRoles = ["analyst_pro", "org_pro"]
 async def _get_stats_db() -> AsyncGenerator[AsyncSession, None]:
     """Real DB dependency for historical stats aggregation.
 
-    Uses a local wrapper to ensure the real SQLite/Postgres session is used
-    even in CRICKSY_IN_MEMORY_DB=1 test mode.  Historical batch and game
-    records require real persistence; the _FakeSession cannot serve them.
+    Defined as a local dependency (not ``get_db`` directly) so that FastAPI's
+    ``dependency_overrides[get_db] = _FakeSession`` installed by
+    ``create_app()`` in ``CRICKSY_IN_MEMORY_DB=1`` mode does NOT replace this
+    dependency.  Historical stats aggregation requires real SQLite/Postgres
+    Game and HistoricalImportBatch rows — the fake session cannot serve them.
+
+    This mirrors the ``_get_import_db`` pattern in ``routes/historical_import.py``.
     """
     async for db in _base_get_db():
         yield db

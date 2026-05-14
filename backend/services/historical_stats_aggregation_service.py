@@ -277,7 +277,7 @@ def _build_player_aggregates(
 
         balls_faced = bstats.get("balls_faced", 0)
         runs_scored = bstats.get("runs", 0)
-        strike_rate = round(runs_scored / balls_faced * 100, 2) if balls_faced > 0 else 0.0
+        strike_rate = round((runs_scored / balls_faced) * 100, 2) if balls_faced > 0 else 0.0
 
         overs_bowled = bwstats.get("overs_bowled", 0.0)
         runs_conceded = bwstats.get("runs_conceded", 0)
@@ -561,7 +561,6 @@ async def get_historical_stats_summary(
 
     # Collect batch IDs we need to fetch
     batch_id_to_game: dict[str, tuple[Game, dict[str, Any]]] = {}
-    non_historical = 0
 
     for game in all_completed:
         meta = _hist_meta(game)

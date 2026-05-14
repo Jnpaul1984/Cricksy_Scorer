@@ -130,11 +130,10 @@ def _apply_historical_fixture(client: TestClient, token: str) -> tuple[str, str]
 
 def _register_analyst(client: TestClient) -> str:
     """Register an analyst_pro user and return their token."""
-    import time
+    import uuid as _uuid
 
-    email = f"phase5n-analyst-{int(time.time() * 1000)}@example.com"
+    email = f"phase5n-analyst-{_uuid.uuid4().hex[:8]}@example.com"
     user = register_user(client, email)
-    # set_role is async — run it synchronously via the event loop
     import asyncio
     asyncio.get_event_loop().run_until_complete(
         set_role(client, user["email"], models.RoleEnum.analyst_pro)
