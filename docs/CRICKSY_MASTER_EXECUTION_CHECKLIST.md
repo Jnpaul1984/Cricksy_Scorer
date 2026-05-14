@@ -318,6 +318,20 @@ These areas require extra caution:
 
 Protected does not mean untouchable. It means audit first, spec lock, targeted edits only, and regression tests required.
 
+## Rule 8 — Phase Naming Governance
+
+No new phase name may be used for GitHub issues, PRs, commit messages, or implementation plans unless it already exists in the Master Execution Checklist or is first added through a checklist-governance PR.
+
+Inventing a phase name outside the checklist is a governance violation.
+
+If a new phase is needed:
+
+1. Open a checklist-governance PR that adds the new phase to this document.
+2. Get the PR reviewed and merged.
+3. Only then reference the new phase name in issues, PRs, or implementation work.
+
+This rule prevents phase-name drift where assistant/Copilot recommendations use invented names that do not match the governed phase sequence.
+
 ---
 
 # 3. Current Video Analysis System — Existing Assets
@@ -1026,7 +1040,12 @@ Structured historical match import works safely and does not corrupt live scorin
 
 ---
 
-## Phase 5K — Historical Data Backfill + Analyst UI Theme Fix
+## Phase 5K — Historical Data Backfill + Analyst UI Theme Fix (COMPLETE)
+
+> **Completion evidence**: `docs/PHASE_5K_HISTORICAL_BACKFILL_AND_ANALYST_THEME_QA.md` status = "Complete".
+> Backend: `backend/services/historical_import_backfill_service.py`, `POST .../repair-metadata` endpoint, `backend/tests/test_historical_import_backfill.py` all exist and pass.
+> Frontend: `--color-surface-raised` CSS variable added to `designSystem.css`; Key Players and Podcast Prep dark-theme cards fixed.
+
 
 ### Purpose
 
@@ -1094,7 +1113,13 @@ Structured historical match import works safely and does not corrupt live scorin
 
 ---
 
-## Phase 5L — Bulk ZIP Historical Upload
+## Phase 5L — Bulk ZIP Historical Upload (Implementation Complete; Manual QA Pending)
+
+> **Status note**: Backend implementation and automated tests are complete.
+> `backend/tests/test_historical_import_bulk_zip.py` exists and passes; `POST /api/historical-import/json/bulk-zip/dry-run` and `/bulk-zip/apply` endpoints are implemented.
+> Phase 5L.1 cost-control limits are validated (see Phase 5L.1 Validation Evidence section below).
+> **Follow-up required**: The operator-level manual QA checklist in `docs/PHASE_5L_BULK_ZIP_HISTORICAL_JSON_UPLOAD_QA.md` has unchecked items. A manual QA pass and sign-off is needed before Phase 5L is fully closed for production readiness.
+
 
 ### Purpose
 
@@ -2024,9 +2049,25 @@ LLM calls, or production behavior changes):
 - Future runtime validation tests defined for state transitions, permission gates,
   public-media stricter approval, fallback enforcement, provenance/no-fake-data checks,
   audit completeness, and preserved Phase 6B official-truth boundaries.
-- Phase 6A–6H completion summary added and next-phase recommendation locked:
-  pause for `Phase 7A — Intelligence Runtime Readiness Audit + First Implementation Slice Selection`
-  unless explicit approval is given to jump directly to a first runtime MVP slice.
+- Phase 6A–6H completion summary: Phase 6 governance stream is now complete as
+  spec architecture. The next checklist-defined phase is
+  **Phase 7 — Historical Match Ingestion: PDF/Image/OCR Review Flow**.
+  However, Phase 5N (Historical Stats Aggregation), Phase 5O (Analyst Workspace
+  Data Library), and Phase 5P (Model Training Dataset Builder) remain incomplete.
+  These Phase 5 sub-phases should be evaluated before Phase 7 begins; see
+  `docs/POST_PHASE_6_ORDERING_AND_PHASE_5_AUDIT.md` for the full analysis and
+  recommended next action.
+
+> **Governance correction (Issue #190)**: A previous draft of this section
+> referenced "Phase 7A — Intelligence Runtime Readiness Audit + First
+> Implementation Slice Selection." That name does not exist in the Master
+> Execution Checklist and was an invented phase name. Per Rule 8 (Phase Naming
+> Governance), no phase name may be used unless it is already in the checklist
+> or is added through a checklist-governance PR. The correct next phase, per the
+> checklist, is **Phase 7 — Historical Match Ingestion: PDF/Image/OCR Review
+> Flow**. The invented "Phase 7A" name is not valid and must not be used in
+> issues, PRs, or implementation plans.
+
 
 Validation notes:
 
@@ -2598,3 +2639,53 @@ Check imports, typing, formatting, migrations, tests, and CI impact before final
 Reason:
 
 Protect the deployed app and CI/CD first. Then stabilize the already-working Coach Pro Plus Video Analysis system before expanding into player development, historical ingestion, governed intelligence architecture, and broader intelligence features.
+
+---
+
+## Post-Phase-6 Alignment Note (Issue #190 — 2026-05-14)
+
+Phase 6A–6H governance is complete. The following ordering clarifications are added here for
+alignment. Full audit in `docs/POST_PHASE_6_ORDERING_AND_PHASE_5_AUDIT.md`.
+
+### Phase 5 Completion Status (as of 2026-05-14)
+
+| Sub-Phase | Status |
+|---|---|
+| Phase 5A (Audit/Spec Lock) | Complete |
+| Phase 5B–5G (Core import: dry-run, apply, rollback, apply-deliveries) | Complete |
+| Phase 5H (Real-dataset validation QA) | Complete |
+| Phase 5I (Upload UI + training retention) | Complete |
+| Phase 5J (Metadata accuracy + Cricsheet fixes) | Complete |
+| Phase 5K (Legacy backfill + Analyst dark-theme fix) | Complete |
+| Phase 5L (Bulk ZIP upload — backend + tests) | Implementation complete; manual QA sign-off pending |
+| Phase 5L.1 (Cost-controlled large ZIP intake) | Complete |
+| Phase 5M (Cricket Data Registry Foundation) | Complete |
+| Phase 5N (Historical Stats Aggregation Layer) | **Not started** |
+| Phase 5O (Analyst Workspace Data Library) | **Not started** |
+| Phase 5P (Model Training Dataset Builder) | **Not started** |
+
+### Recommended Next Step
+
+The checklist-grounded recommendation is to continue Phase 5 incomplete work before starting
+Phase 7. The recommended next phase is:
+
+**Phase 5N — Historical Stats Aggregation Layer**
+
+Phase 5N is the next incomplete Phase 5 sub-phase in checklist order. It provides the
+governed aggregation layer that Phase 5O (data library) and Phase 5P (dataset builder)
+depend on. The Phase 6 intelligence architecture (Skills, Context Loading, Confidence,
+Event-Triggered Compute, Validation Agents) is designed to consume validated + registered +
+aggregated historical data. Starting Phase 7 (OCR ingestion) before these analytical
+readiness phases are complete would expand the import surface while the aggregation,
+library, and training-dataset layers remain unbuilt.
+
+After Phase 5N → 5O → 5P are complete, proceed to Phase 7 as defined in this checklist.
+
+### Phase Naming Governance Reminder
+
+Per Rule 8 of this checklist: no phase name may be used in issues, PRs, or implementation
+plans unless it already exists in this document or is first added through a
+checklist-governance PR. The only valid names for the phases after Phase 6 are those listed
+above (Phase 5N, 5O, 5P, Phase 7, Phase 8, etc.). "Phase 7A" is not a valid phase name —
+it does not exist in this checklist.
+
