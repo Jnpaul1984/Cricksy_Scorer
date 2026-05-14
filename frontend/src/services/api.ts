@@ -1541,6 +1541,56 @@ export interface HistoricalImportBulkZipApplyResponse {
   results: HistoricalImportBulkZipApplyFileResult[];
 }
 
+export type HistoricalOcrReviewStatus =
+  | 'uploaded'
+  | 'extracted'
+  | 'needs_review'
+  | 'reviewed'
+  | 'rejected'
+  | 'ready_for_dry_run'
+  | 'dry_run_failed'
+  | 'dry_run_passed'
+  | 'applied_via_structured_import_only';
+
+export interface HistoricalOcrSourceDocument {
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  storage: Record<string, string>;
+}
+
+export interface HistoricalOcrExtractionMetadata {
+  method: string;
+  confidence?: number | null;
+  uncertainty_flags: string[];
+  ocr_text?: string | null;
+  non_authoritative_notice: string;
+}
+
+export interface HistoricalOcrReviewCandidateResponse {
+  candidate_id: string;
+  batch_id: string;
+  status: HistoricalOcrReviewStatus;
+  status_history: HistoricalOcrReviewStatus[];
+  source_document: HistoricalOcrSourceDocument;
+  extraction: HistoricalOcrExtractionMetadata;
+  candidate_json?: Record<string, unknown> | null;
+  reviewed_json?: Record<string, unknown> | null;
+  reviewer_notes?: string | null;
+  rejection_reason?: string | null;
+  validation_errors: HistoricalImportIssue[];
+  dry_run_result?: HistoricalImportDryRunResponse | null;
+  dry_run_batch_id?: string | null;
+}
+
+export interface HistoricalOcrReviewDryRunResponse {
+  candidate_id: string;
+  status: HistoricalOcrReviewStatus;
+  dry_run_result: HistoricalImportDryRunResponse;
+  dry_run_batch_id?: string | null;
+  message: string;
+}
+
 /**
  * POST /api/historical-import/json/dry-run
  * Accepts a .json File; optionally persists batch metadata when recordPreview=true.
@@ -1658,5 +1708,101 @@ export async function historicalImportBulkZipApply(
   return request<HistoricalImportBulkZipApplyResponse>(
     '/api/historical-import/json/bulk-zip/apply',
     { method: 'POST', body: form },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/ocr-review/candidates
+ * Upload PDF/image source document and create OCR review candidate.
+ */
+export async function historicalOcrCreateCandidate(params: {
+  file: File;
+  candidateJson?: string;
+  extractionMethod?: string;
+  extractionConfidence?: number | null;
+  uncertaintyFlags?: string[];
+  ocrText?: string;
+}): Promise<HistoricalOcrReviewCandidateResponse> {
+  const form = new FormData();
+  form.append('file', params.file, params.file.name);
+  form.append('extraction_method', params.extractionMethod ?? 'manual_candidate_json');
+  if (params.extractionConfidence !== undefined && params.extractionConfidence !== null) {
+    form.append('extraction_confidence', String(params.extractionConfidence));
+  }
+  if (params.uncertaintyFlags?.length) {
+    form.append('uncertainty_flags', JSON.stringify(params.uncertaintyFlags));
+  }
+  if (params.candidateJson) {
+    form.append('candidate_json', params.candidateJson);
+  }
+  if (params.ocrText) {
+    form.append('ocr_text', params.ocrText);
+  }
+  return request<HistoricalOcrReviewCandidateResponse>(
+    '/api/historical-import/json/ocr-review/candidates',
+    { method: 'POST', body: form },
+  );
+}
+
+/**
+ * GET /api/historical-import/json/ocr-review/candidates/{candidateId}
+ * Fetch OCR review candidate details.
+ */
+export async function historicalOcrGetCandidate(
+  candidateId: string,
+): Promise<HistoricalOcrReviewCandidateResponse> {
+  return request<HistoricalOcrReviewCandidateResponse>(
+    `/api/historical-import/json/ocr-review/candidates/${encodeURIComponent(candidateId)}`,
+  );
+}
+
+/**
+ * PATCH /api/historical-import/json/ocr-review/candidates/{candidateId}/review
+ * Submit reviewed/corrected structured JSON.
+ */
+export async function historicalOcrSubmitReview(
+  candidateId: string,
+  reviewedJson: Record<string, unknown>,
+  reviewerNotes?: string,
+  uncertaintyFlags: string[] = [],
+): Promise<HistoricalOcrReviewCandidateResponse> {
+  return request<HistoricalOcrReviewCandidateResponse>(
+    `/api/historical-import/json/ocr-review/candidates/${encodeURIComponent(candidateId)}/review`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        reviewed_json: reviewedJson,
+        reviewer_notes: reviewerNotes ?? null,
+        uncertainty_flags: uncertaintyFlags,
+      }),
+    },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/ocr-review/candidates/{candidateId}/dry-run
+ * Validate reviewed OCR candidate via existing historical JSON dry-run contract.
+ */
+export async function historicalOcrDryRunCandidate(
+  candidateId: string,
+  recordPreview = true,
+): Promise<HistoricalOcrReviewDryRunResponse> {
+  return request<HistoricalOcrReviewDryRunResponse>(
+    `/api/historical-import/json/ocr-review/candidates/${encodeURIComponent(candidateId)}/dry-run`,
+    { method: 'POST', body: JSON.stringify({ record_preview: recordPreview }) },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/ocr-review/candidates/{candidateId}/reject
+ * Mark OCR candidate as rejected/unusable.
+ */
+export async function historicalOcrRejectCandidate(
+  candidateId: string,
+  reason: string,
+): Promise<HistoricalOcrReviewCandidateResponse> {
+  return request<HistoricalOcrReviewCandidateResponse>(
+    `/api/historical-import/json/ocr-review/candidates/${encodeURIComponent(candidateId)}/reject`,
+    { method: 'POST', body: JSON.stringify({ reason }) },
   );
 }

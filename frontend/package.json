@@ -19,6 +19,7 @@
     "test:e2e:analyst": "node ./scripts/run-e2e.mjs --suite analyst",
     "test:e2e:coach": "node ./scripts/run-e2e.mjs --suite coach",
     "test:e2e:smoke": "node ./scripts/run-e2e.mjs --suite smoke",
+    "test:e2e:import": "node ./scripts/run-e2e.mjs --suite import",
     "test:e2e:scoring": "node ./scripts/run-e2e.mjs --suite scoring",
     "test:e2e:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\run-e2e-dev.ps1",
     "cy:open": "cypress open",

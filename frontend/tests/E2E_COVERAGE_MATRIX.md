@@ -15,7 +15,7 @@ Maintained as part of the frontend testing standard introduced in Phase 5O.1 and
 | **Live Scoreboard / Viewer** | `/view/:gameId`, `/embed/:gameId` | ⚠️ Partial — `ci_match_simulator.cy.ts` exercises viewer but requires a live backend | Add intercept-only smoke: scoreboard renders result banner, score, overs | Add: live update, embed iframe render | `test:e2e:viewer` | **P1** |
 | **Coach Workspace / Coach Dashboard** | `/coaches`, `/coach/dashboard` | ✅ `coach_workspace_smoke.cy.ts` — covers page load, header, no-match state, quick links | ✅ In place | Add: active match card render, video sessions link | `test:e2e:coach` | **P1 — Done** |
 | **Coach Pro Plus Video Sessions** | `/coaches/video-sessions` | ❌ No E2E coverage | Add intercept-only smoke: page loads, session list renders | Add: session detail, playback controls | `test:e2e:coach` | **P2** |
-| **Historical Import / Upload flows** | Via `HistoricalImportPanel.vue` component (embedded in Analyst Workspace) | ❌ No dedicated E2E coverage | Add intercept-only smoke: upload panel opens, dry-run response renders | Add: apply flow, rollback, error states | `test:e2e:import` | **P2** |
+| **Historical Import / Upload flows** | Via `HistoricalImportPanel.vue` and `HistoricalOcrReviewPanel.vue` (embedded in Analyst Workspace) | ✅ `historical_import_review_flow.cy.ts` — intercept-only review candidate + dry-run handoff smoke | ✅ In place | Add: reject path and invalid dry-run error states | `test:e2e:import` | **P2 — Done** |
 | **Match Case Study / Analyst Detail** | `/analyst/match/:matchId` | ⚠️ Partial — covered via analyst workspace Data Library "View" navigation in `analyst_workspace_data_library.cy.ts` | Full standalone smoke: page load with stubbed case study data | Add: phase breakdown, key players, AI summary panel | `test:e2e:analyst` | **P2** |
 | **Player Profile** | `/player/:playerId`, `/players/:playerId/profile` | ❌ No E2E coverage | Add intercept-only smoke: page loads, player header renders | Add: batting/bowling stats, career summary | `test:e2e:admin` | **P2** |
 | **Admin / Org / Team Management** | `/admin/beta-users`, `/org-management`, `/teams` | ❌ No E2E coverage | Add intercept-only smoke: admin page loads, user list renders | Add: add/remove user, team CRUD | `test:e2e:admin` | **P2** |
@@ -43,7 +43,7 @@ Suites map to `npm run test:e2e:<suite>` or `node ./scripts/run-e2e.mjs --suite 
 | `coach` | `coach_workspace_smoke.cy.ts` | No — intercepts only | ✅ Yes (`frontend-coach-e2e` job) |
 | `smoke` | `analyst_workspace_data_library.cy.ts`, `coach_workspace_smoke.cy.ts` | No — intercepts only | ✅ Yes (runs both gates) |
 | `scoring` | `scoring_gate_smoke.cy.ts`, `match_creation_flow.cy.ts`, `next_over_flow.cy.ts`, `wicket_new_batter_flow.cy.ts`, `innings_flip_flow.cy.ts`, `weather_interruption_flow.cy.ts` | **Yes** — requires seeded backend | Run on demand / full-stack CI only |
-| `import` | _(not yet implemented)_ | No — intercepts only | Follow-up |
+| `import` | `historical_import_review_flow.cy.ts` | No — intercepts only | On demand / optional CI |
 | `admin` | _(not yet implemented)_ | No — intercepts only | Follow-up |
 
 ---
@@ -66,7 +66,7 @@ The following areas have no E2E coverage and should each have a dedicated follow
 
 - [ ] **FE-E2E-001** — Auth/Login smoke E2E gate (`/login` form renders, submit behavior)
 - [ ] **FE-E2E-002** — Coach Pro Plus Video Sessions smoke E2E gate (`/coaches/video-sessions`)
-- [ ] **FE-E2E-003** — Historical Import / Upload flow smoke E2E gate (via `HistoricalImportPanel.vue`)
+- [x] **FE-E2E-003** — Historical Import / Upload flow smoke E2E gate (via `HistoricalImportPanel.vue`)
 - [ ] **FE-E2E-004** — Player Profile smoke E2E gate (`/player/:playerId`)
 - [ ] **FE-E2E-005** — Admin / Org / Team Management smoke E2E gate (`/admin/beta-users`, `/org-management`, `/teams`)
 - [ ] **FE-E2E-006** — Convert scoring and viewer specs to use intercept-only mode so they can run without a live backend in CI

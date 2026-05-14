@@ -17,6 +17,7 @@ const SUITES = {
   analyst: 'cypress/e2e/analyst_workspace_data_library.cy.ts',
   coach: 'cypress/e2e/coach_workspace_smoke.cy.ts',
   smoke: 'cypress/e2e/analyst_workspace_data_library.cy.ts,cypress/e2e/coach_workspace_smoke.cy.ts',
+  import: 'cypress/e2e/historical_import_review_flow.cy.ts',
   scoring: [
     'cypress/e2e/scoring_gate_smoke.cy.ts',
     'cypress/e2e/match_creation_flow.cy.ts',

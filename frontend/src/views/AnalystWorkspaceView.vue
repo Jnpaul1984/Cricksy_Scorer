@@ -996,6 +996,7 @@
               <div class="aw-import-panels">
                 <HistoricalImportPanel @import-done="onImportDone" />
                 <HistoricalImportBulkZipPanel @import-done="onImportDone" />
+                <HistoricalOcrReviewPanel />
               </div>
             </div>
 
@@ -1025,6 +1026,7 @@ import AnalyticsTablesWidget from '@/components/AnalyticsTablesWidget.vue'
 import ExportUI from '@/components/ExportUI.vue'
 import HistoricalImportPanel from '@/components/HistoricalImportPanel.vue'
 import HistoricalImportBulkZipPanel from '@/components/HistoricalImportBulkZipPanel.vue'
+import HistoricalOcrReviewPanel from '@/components/HistoricalOcrReviewPanel.vue'
 import {
   getAnalystMatches,
   getMatchCaseStudy,
