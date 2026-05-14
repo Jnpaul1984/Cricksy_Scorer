@@ -1125,6 +1125,26 @@ Structured historical match import works safely and does not corrupt live scorin
 - Apply requires explicit confirmation and supports safe rollback.
 - ZIP safety limits and governance tests pass.
 
+### Phase 5L.1 Validation Evidence (Cost-Controlled Large ZIP Intake)
+
+- Final configured limits:
+  - `PHASE_5L_MAX_FILES = 2000`
+  - `PHASE_5L_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024`
+  - `PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES = 100 * 1024 * 1024`
+  - `PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES = 100 * 1024 * 1024`
+- Cost-control path:
+  - ZIPs above `PHASE_5L_MAX_FULL_APPLY_FILES = 100` are accepted in metadata-only mode.
+  - Metadata-only records are persisted with `status="pending_full_import"` and full import is deferred.
+  - Training gate is enforced: `training_eligible=false`, `blocking_reason="metadata_only_pending_full_import"`.
+- Storage behavior:
+  - Uses existing S3 configuration (`S3_COACH_VIDEOS_BUCKET`) when present.
+  - Uses local/dev fallback only behind the same storage interface when S3 bucket is unset.
+  - No new storage system or AWS service introduced.
+- Metadata-only storage reference pattern:
+  - `historical-imports/{org_or_user_scope}/{batch_id}/raw/{filename}_{hash}.json`
+  - `historical-imports/{org_or_user_scope}/{batch_id}/manifest.json`
+  - `historical-imports/{org_or_user_scope}/{batch_id}/validation_report.json`
+
 ---
 
 ## Phase 5M — Cricket Data Registry Foundation
