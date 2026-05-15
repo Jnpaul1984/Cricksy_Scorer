@@ -26,6 +26,7 @@ from backend.middleware.observability import (  # NEW
 )
 from backend.routes.admin import router as admin_router
 from backend.routes.ai import router as ai_router
+from backend.routes.ai_insight_review import router as ai_insight_review_router
 from backend.routes.ai_usage import router as ai_usage_router
 from backend.routes.analytics import router as analytics_router
 from backend.routes.player_analytics import router as player_analytics_router
@@ -487,6 +488,7 @@ def create_app(
     fastapi_app.include_router(coach_notes_router)
     fastapi_app.include_router(moment_markers_router)
     fastapi_app.include_router(admin_agents.router)  # Added admin_agents router
+    fastapi_app.include_router(ai_insight_review_router)  # Phase 8C
 
     # Honor both settings.IN_MEMORY_DB and CRICKSY_IN_MEMORY_DB=1
     use_in_memory = bool(getattr(settings, "IN_MEMORY_DB", False)) or (

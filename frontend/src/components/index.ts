@@ -19,6 +19,9 @@ export { default as MiniSparkline } from './MiniSparkline.vue'
 export { default as AiCalloutsPanel } from './AiCalloutsPanel.vue'
 export type { CalloutSeverity, AiCallout } from './AiCalloutsPanel.vue'
 
+// Phase 8C: AI Insight Review
+export { default as AiInsightReviewCard } from './AiInsightReviewCard.vue'
+
 // Re-export types for consumers
 export type { ButtonVariant, ButtonSize, ButtonType } from './BaseButton.vue'
 export type { CardPadding } from './BaseCard.vue'
