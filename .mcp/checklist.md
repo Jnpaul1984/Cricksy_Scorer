@@ -372,3 +372,40 @@ See [`.mcp/README.md`](.mcp/README.md) for detailed DoD templates.
 
 **Last verified:** 2025-12-18
 **Next review:** After Week 5 checkpoint
+
+
+---
+
+## 🧭 MASTER ROADMAP GOVERNANCE (Phase 9 Insertion)
+
+- [ ] **roadmap-phase9a-audit-spec-lock** - Phase 9A — Pre-Phase Audit + Spec Lock
+  - Acceptance: document existing partial foundations; lock AI boundaries, coach approval rules, youth-safe wording, and org/player access boundaries
+  - Verify: `python scripts/checklist.py status`
+
+- [ ] **roadmap-phase9b-data-model** - Phase 9B — Player Development Data Model
+  - Acceptance: define future entities/fields + permission boundaries; require migrations/models/schemas/tests in implementation phase
+  - Verify: `python scripts/checklist.py status`
+
+- [ ] **roadmap-phase9c-plan-engine** - Phase 9C — Development Plan Service + Recommendation Engine
+  - Acceptance: real-data-only draft plans, no fake claims, drill mapping, measurable goals, coach approval before activation
+  - Verify: `python scripts/checklist.py status`
+
+- [ ] **roadmap-phase9d-coach-workspace-ui** - Phase 9D — Coach Workspace Player Development UI
+  - Acceptance: assigned players + plan visibility, approval actions, drill assignment, session outcomes, constructive indicators
+  - Verify: `python scripts/checklist.py status`
+
+- [ ] **roadmap-phase9e-team-dashboard** - Phase 9E — School / Team Development Dashboard
+  - Acceptance: team development overview, constructive support framing, progress visibility, youth-safe language, scoped access
+  - Verify: `python scripts/checklist.py status`
+
+- [ ] **roadmap-phase9f-development-reports** - Phase 9F — Player Development Reports
+  - Acceptance: individual/team/before-after/session/drill reports, recommendation labeling, youth-safe wording
+  - Verify: `python scripts/checklist.py status`
+
+- [ ] **roadmap-phase9g-skill-contract** - Phase 9G — Player Development Skill Contract
+  - Acceptance: governed skill contracts with safety/youth-safety/review rules; no mutation of official cricket truth
+  - Verify: `python scripts/checklist.py status`
+
+Notes:
+- Reuse partial foundations in `backend/routes/coach_pro.py`, `backend/services/ai_player_insights.py`, drill generation, monthly improvement tracking, Coach Pro Plus video analysis, Phase 6C skills governance, and Phase 8C review workflows.
+- This section is planning-only; no runtime feature implementation belongs here.
