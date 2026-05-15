@@ -410,6 +410,9 @@
               <small v-if="aiSummary?.created_at" class="cs-ai-timestamp">
                 Updated {{ new Date(aiSummary.created_at).toLocaleString() }}
               </small>
+              <small v-else-if="aiSummaryStatusLabel" class="cs-ai-timestamp">
+                {{ aiSummaryStatusLabel }}
+              </small>
             </div>
               <BaseBadge variant="neutral" :uppercase="false" class="cs-ai-badge">
                 Experimental
@@ -445,6 +448,18 @@
           <p v-else-if="aiSummaryError" class="cs-ai-error-text">
             {{ aiSummaryError }}
           </p>
+
+          <div v-else-if="aiSummaryFallback" class="cs-ai-empty">
+            <p>AI insight unavailable. Showing deterministic match summary.</p>
+            <p class="cs-ai-overall">{{ aiSummaryFallback.summary }}</p>
+            <ul v-if="aiSummaryFallback.bullets.length" class="cs-ai-theme-list">
+              <li v-for="(item, idx) in aiSummaryFallback.bullets" :key="`fallback-${idx}`">• {{ item }}</li>
+            </ul>
+          </div>
+
+          <div v-else-if="aiSummaryInsufficientData" class="cs-ai-empty">
+            <p>Insufficient match data for AI or deterministic summary.</p>
+          </div>
 
           <!-- When no AI summary yet -->
           <div v-else-if="!hasAISummary" class="cs-ai-empty">
@@ -623,7 +638,7 @@
           </div>
 
           <!-- Regenerate action -->
-          <div v-if="hasAISummary" class="cs-ai-actions">
+          <div v-if="caseStudy" class="cs-ai-actions">
             <BaseButton
               variant="ghost"
               size="sm"
@@ -669,6 +684,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { BaseCard, BaseButton, BaseBadge, ImpactBar, MiniSparkline, AiCalloutsPanel, AiInsightReviewCard, MatchInsightEvidence } from '@/components'
 import type { AiCallout, CalloutSeverity } from '@/components'
+import { readAiInsightCache, writeAiInsightCache } from '@/services/aiInsightCache'
 import { useAuthStore } from '@/stores/authStore'
 import {
   getMatchCaseStudy,
@@ -728,6 +744,9 @@ const caseStudy = ref<MatchCaseStudyResponse | null>(null)
 const aiSummary = ref<MatchAiSummary | null>(null)
 const aiSummaryLoading = ref(false)
 const aiSummaryError = ref<string | null>(null)
+const aiSummaryFallback = ref<{ summary: string; bullets: string[] } | null>(null)
+const aiSummaryInsufficientData = ref(false)
+const aiSummaryCacheStatus = ref<'none' | 'live' | 'cached' | 'stale' | 'fallback' | 'insufficient'>('none')
 
 // Derived view-model bindings from caseStudy
 const match = computed(() => caseStudy.value?.match ?? null)
@@ -792,6 +811,13 @@ const aiGroundingSummary = computed(() => {
   return typeof summary === 'string' ? summary.trim() : ''
 })
 const canReviewAiInsights = computed(() => authStore.canAnalyze)
+const aiSummaryStatusLabel = computed(() => {
+  if (aiSummaryCacheStatus.value === 'cached') return 'Cached insight'
+  if (aiSummaryCacheStatus.value === 'stale') return 'Stale cache'
+  if (aiSummaryCacheStatus.value === 'fallback') return 'Deterministic fallback'
+  if (aiSummaryCacheStatus.value === 'insufficient') return 'Insufficient data'
+  return null
+})
 
 // Per-match AI callouts derived from case study data
 const matchAiLoading = computed(() => loading.value)
@@ -1088,32 +1114,99 @@ async function loadCaseStudy() {
 }
 
 // Fetch AI summary from dedicated endpoint
-async function loadAiSummary() {
+const AI_SUMMARY_STALE_AFTER_MS = 5 * 60 * 1000
+
+function buildDeterministicMatchFallback() {
+  const matchData = caseStudy.value?.match
+  if (!matchData) {
+    return null
+  }
+  const innings = matchData.innings ?? []
+  const hasResult = Boolean(matchData.result?.trim())
+  if (!hasResult && innings.length === 0) {
+    return null
+  }
+  const inningsSummary = innings
+    .map((inn) => `${inn.team}: ${inn.runs}/${inn.wickets} in ${inn.overs} overs`)
+    .slice(0, 2)
+  const bullets: string[] = []
+  if (caseStudy.value?.momentum_summary?.title) {
+    bullets.push(caseStudy.value.momentum_summary.title)
+  }
+  if (caseStudy.value?.key_phase?.title) {
+    bullets.push(caseStudy.value.key_phase.title)
+  }
+  return {
+    summary: `${matchData.teams_label}: ${matchData.result || 'Result unavailable'}`,
+    bullets: [...inningsSummary, ...bullets].slice(0, 4),
+  }
+}
+
+async function loadAiSummary(forceRefresh = false) {
   if (!matchId.value) return
+
+  const contextHash = `match:${matchId.value}`
+  if (!forceRefresh) {
+    const cached = readAiInsightCache<MatchAiSummary>({
+      scope: 'match-summary',
+      key: matchId.value,
+      contextHash,
+      staleAfterMs: AI_SUMMARY_STALE_AFTER_MS,
+    })
+    if (cached.entry) {
+      aiSummary.value = cached.entry.value
+      aiSummaryError.value = null
+      aiSummaryFallback.value = null
+      aiSummaryInsufficientData.value = false
+      aiSummaryCacheStatus.value = cached.status === 'stale' ? 'stale' : 'cached'
+      return
+    }
+  }
 
   aiSummaryLoading.value = true
   aiSummaryError.value = null
 
   try {
-    aiSummary.value = await getMatchAiSummary(matchId.value)
+    const summary = await getMatchAiSummary(matchId.value)
+    aiSummary.value = summary
+    aiSummaryFallback.value = null
+    aiSummaryInsufficientData.value = false
+    aiSummaryCacheStatus.value = 'live'
+    writeAiInsightCache({
+      scope: 'match-summary',
+      key: matchId.value,
+      contextHash,
+      value: summary,
+    })
   } catch (e: any) {
     console.error('Failed to load AI summary:', e)
-    aiSummaryError.value = 'AI summary not available yet.'
     aiSummary.value = null
+    const fallback = buildDeterministicMatchFallback()
+    if (fallback) {
+      aiSummaryFallback.value = fallback
+      aiSummaryInsufficientData.value = false
+      aiSummaryCacheStatus.value = 'fallback'
+      aiSummaryError.value = null
+    } else {
+      aiSummaryFallback.value = null
+      aiSummaryInsufficientData.value = true
+      aiSummaryCacheStatus.value = 'insufficient'
+      aiSummaryError.value = null
+    }
   } finally {
     aiSummaryLoading.value = false
   }
 }
 
 // Load on mount and when matchId changes
-onMounted(() => {
-  loadCaseStudy()
-  loadAiSummary()
+onMounted(async () => {
+  await loadCaseStudy()
+  await loadAiSummary()
 })
 
-watch(matchId, () => {
-  loadCaseStudy()
-  loadAiSummary()
+watch(matchId, async () => {
+  await loadCaseStudy()
+  await loadAiSummary()
 })
 
 // Actions
@@ -1135,7 +1228,7 @@ function goToPlayerProfile(playerId: string) {
 
 function regenerateSummary() {
   // Reload the AI summary from the backend
-  loadAiSummary()
+  loadAiSummary(true)
 }
 
 // Helper functions for phase display

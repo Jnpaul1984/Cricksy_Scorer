@@ -311,11 +311,18 @@
                 >
                   {{ aiRecentForm.label }}
                 </BaseBadge>
+                <BaseBadge
+                  v-if="aiInsightsStatusLabel"
+                  variant="neutral"
+                  class="trend-badge"
+                >
+                  {{ aiInsightsStatusLabel }}
+                </BaseBadge>
                 <BaseButton
                   size="sm"
                   variant="ghost"
                   :disabled="aiInsightsLoading"
-                  @click="loadAIInsights"
+                  @click="loadAIInsights(true)"
                 >
                   <span v-if="aiInsightsLoading">Refreshing…</span>
                   <span v-else>↻ Refresh</span>
@@ -329,6 +336,18 @@
               :loading="aiInsightsLoading"
               :error="aiInsightsError"
             />
+            <div v-if="aiInsightsFallback" class="player-ai-fallback">
+              <p>AI insight unavailable. Showing deterministic player summary.</p>
+              <p>{{ aiInsightsFallback.summary }}</p>
+              <ul>
+                <li v-for="(item, idx) in aiInsightsFallback.bullets" :key="`player-fallback-${idx}`">
+                  {{ item }}
+                </li>
+              </ul>
+            </div>
+            <p v-else-if="aiInsightsInsufficientData" class="player-ai-fallback">
+              Insufficient player data for AI or deterministic summary.
+            </p>
           </BaseCard>
         </section>
       </div>
@@ -347,6 +366,7 @@ import MentalProfilePanel from '@/components/MentalProfilePanel.vue'
 import PlayerDevelopmentInsightCard from '@/components/PlayerDevelopmentInsightCard.vue'
 import SeasonGraphsWidget from '@/components/SeasonGraphsWidget.vue'
 import StrengthWeaknessWidget from '@/components/StrengthWeaknessWidget.vue'
+import { readAiInsightCache, writeAiInsightCache } from '@/services/aiInsightCache'
 import { apiService, getErrorMessage, getPlayerAIInsights } from '@/services/api'
 import type { FanFavoriteRead, PlayerAIInsights } from '@/services/api'
 import { getPlayerProfile } from '@/services/playerApi'
@@ -370,6 +390,9 @@ const favoriteError = ref<string | null>(null)
 const aiInsightsLoading = ref(false)
 const aiInsightsError = ref<string | null>(null)
 const aiInsights = ref<PlayerAIInsights | null>(null)
+const aiInsightsFallback = ref<{ summary: string; bullets: string[] } | null>(null)
+const aiInsightsInsufficientData = ref(false)
+const aiInsightsCacheStatus = ref<'none' | 'live' | 'cached' | 'stale' | 'fallback' | 'insufficient'>('none')
 
 // Derive player role from stats
 const playerRole = computed<string>(() => {
@@ -411,6 +434,13 @@ const formatStat = (value: number | null | undefined, decimals = 2): string => {
 const aiRecentForm = computed(() => aiInsights.value?.recent_form ?? null)
 const aiStrengths = computed<string[]>(() => aiInsights.value?.strengths ?? [])
 const aiWeaknesses = computed<string[]>(() => aiInsights.value?.weaknesses ?? [])
+const aiInsightsStatusLabel = computed(() => {
+  if (aiInsightsCacheStatus.value === 'cached') return 'Cached insight'
+  if (aiInsightsCacheStatus.value === 'stale') return 'Stale cache'
+  if (aiInsightsCacheStatus.value === 'fallback') return 'Deterministic fallback'
+  if (aiInsightsCacheStatus.value === 'insufficient') return 'Insufficient data'
+  return null
+})
 
 const loadProfile = async () => {
   loading.value = true
@@ -482,18 +512,78 @@ const toggleFavorite = async () => {
 }
 
 // Load AI insights for current player
-const loadAIInsights = async () => {
+const AI_PLAYER_STALE_AFTER_MS = 5 * 60 * 1000
+
+const buildPlayerDeterministicFallback = () => {
+  if (!profile.value) return null
+  const p = profile.value
+  if (p.total_matches <= 0) {
+    return null
+  }
+  const bullets = [
+    `${p.total_runs_scored} runs across ${p.total_innings_batted} batting innings`,
+    `${p.total_wickets} wickets across ${p.total_innings_bowled} bowling innings`,
+    `Strike rate ${formatStat(p.strike_rate)} · Economy ${formatStat(p.economy_rate)}`,
+  ]
+  return {
+    summary: `${p.player_name} has deterministic profile trends available while AI insight is unavailable.`,
+    bullets,
+  }
+}
+
+const loadAIInsights = async (forceRefresh = false) => {
   const playerId = route.params.playerId as string
   if (!playerId) return
 
+  const contextHash = `player:${playerId}:${profile.value?.updated_at ?? 'unknown'}`
+  if (!forceRefresh) {
+    const cached = readAiInsightCache<PlayerAIInsights>({
+      scope: 'player-insights',
+      key: playerId,
+      contextHash,
+      staleAfterMs: AI_PLAYER_STALE_AFTER_MS,
+    })
+    if (cached.entry) {
+      aiInsights.value = cached.entry.value
+      aiInsightsError.value = null
+      aiInsightsFallback.value = null
+      aiInsightsInsufficientData.value = false
+      aiInsightsCacheStatus.value = cached.status === 'stale' ? 'stale' : 'cached'
+      return
+    }
+  }
+
   aiInsightsLoading.value = true
   aiInsightsError.value = null
+  aiInsightsFallback.value = null
+  aiInsightsInsufficientData.value = false
 
   try {
-    aiInsights.value = await getPlayerAIInsights(playerId)
+    const insight = await getPlayerAIInsights(playerId)
+    aiInsights.value = insight
+    aiInsightsCacheStatus.value = 'live'
+    writeAiInsightCache({
+      scope: 'player-insights',
+      key: playerId,
+      contextHash,
+      value: insight,
+    })
   } catch (err) {
-    aiInsightsError.value = getErrorMessage(err) || 'Failed to load AI insights'
     console.warn('Failed to load AI insights:', err)
+    const fallback = buildPlayerDeterministicFallback()
+    if (fallback) {
+      aiInsights.value = null
+      aiInsightsFallback.value = fallback
+      aiInsightsInsufficientData.value = false
+      aiInsightsCacheStatus.value = 'fallback'
+      aiInsightsError.value = null
+    } else {
+      aiInsights.value = null
+      aiInsightsFallback.value = null
+      aiInsightsInsufficientData.value = true
+      aiInsightsCacheStatus.value = 'insufficient'
+      aiInsightsError.value = null
+    }
   } finally {
     aiInsightsLoading.value = false
   }
@@ -963,6 +1053,15 @@ onMounted(async () => {
 
 .ai-tag {
   text-transform: capitalize;
+}
+
+.player-ai-fallback {
+  color: var(--color-text-muted);
+}
+
+.player-ai-fallback ul {
+  margin: var(--space-2) 0 0;
+  padding-left: 1rem;
 }
 
 @keyframes pulse {

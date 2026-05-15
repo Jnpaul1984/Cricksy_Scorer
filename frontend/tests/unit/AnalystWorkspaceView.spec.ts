@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
 
+import { __resetAiInsightCacheForTests } from '@/services/aiInsightCache'
 import * as api from '@/services/api'
 import AnalystWorkspaceView from '@/views/AnalystWorkspaceView.vue'
 
@@ -270,6 +271,7 @@ const mockMatchAiSummary = {
 describe('AnalystWorkspaceView', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    __resetAiInsightCacheForTests()
     pushMock.mockReset()
   })
 
@@ -733,7 +735,7 @@ describe('AnalystWorkspaceView', () => {
     await nextTick()
     await nextTick()
 
-    expect(wrapper.text()).toContain('AI insight data is unavailable for this match.')
+    expect(wrapper.text()).toContain('AI insight unavailable. Showing deterministic match summary.')
   })
 
   it('shows AI insight error state when ai summary request fails', async () => {
@@ -751,8 +753,76 @@ describe('AnalystWorkspaceView', () => {
     await nextTick()
 
     const text = wrapper.text()
-    expect(text).toContain('Unable to load AI insights for this match.')
-    expect(text).toContain('AI fetch failed')
+    expect(text).toContain('AI insight unavailable. Showing deterministic match summary.')
+    expect(text).toContain('Lions vs Falcons: Lions won by 18 runs')
+  })
+
+  it('reuses cached AI insight when re-opening the same match detail', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(mockMatchAiSummary as never)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Cached insight')
+    expect(api.getMatchAiSummary).toHaveBeenCalledTimes(1)
+  })
+
+  it('refresh insight button bypasses cache and refetches', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(mockMatchAiSummary as never)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    expect(api.getMatchAiSummary).toHaveBeenCalledTimes(1)
+
+    const refreshButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Refresh insight'))
+    expect(refreshButton).toBeTruthy()
+    await refreshButton!.trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(api.getMatchAiSummary).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows insufficient-data state when no deterministic or AI insight is available', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue({
+      ...mockMatchDetail,
+      match: { ...mockMatchDetail.match, result: '', innings: [] },
+    } as never)
+    vi.mocked(api.getMatchAiSummary).mockRejectedValue(new Error('AI fetch failed'))
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Insufficient match data for AI or deterministic summary.')
   })
 
   it('renders confidence and limitations when ai metadata is provided', async () => {

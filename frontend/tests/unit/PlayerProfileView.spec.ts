@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
 
+import { __resetAiInsightCacheForTests } from '@/services/aiInsightCache'
 import * as playerApi from '@/services/playerApi'
 import PlayerProfileView from '@/views/PlayerProfileView.vue'
 
@@ -65,6 +66,7 @@ describe('PlayerProfileView', () => {
 
   beforeEach(() => {
     vi.resetAllMocks()
+    __resetAiInsightCacheForTests()
   })
 
   it('displays loading state initially', () => {

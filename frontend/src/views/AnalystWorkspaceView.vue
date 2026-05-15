@@ -525,6 +525,7 @@
                     <p class="aw-detail-ai-note">
                       Advisory insights for analyst workflow. This does not alter official cricket truth.
                     </p>
+                    <p v-if="matchAiStatusLabel" class="aw-detail-ai-note">{{ matchAiStatusLabel }}</p>
 
                     <div v-if="matchAiLoading" class="aw-detail-loading" role="status" aria-live="polite">
                       <p>Loading AI insights…</p>
@@ -536,10 +537,22 @@
                       <BaseButton
                         variant="ghost"
                         size="sm"
-                        @click="selectedMatchId && loadMatchAiSummary(selectedMatchId)"
+                        @click="selectedMatchId && loadMatchAiSummary(selectedMatchId, true)"
                       >
                         Retry
                       </BaseButton>
+                    </div>
+
+                    <div v-else-if="matchAiFallback" class="aw-detail-empty-hint">
+                      <p>AI insight unavailable. Showing deterministic match summary.</p>
+                      <p class="aw-detail-ai-body">{{ matchAiFallback.summary }}</p>
+                      <ul v-if="matchAiFallback.bullets.length" class="aw-detail-ai-list">
+                        <li v-for="(item, idx) in matchAiFallback.bullets" :key="`fallback-${idx}`">{{ item }}</li>
+                      </ul>
+                    </div>
+
+                    <div v-else-if="matchAiInsufficientData" class="aw-detail-empty-hint">
+                      Insufficient match data for AI or deterministic summary.
                     </div>
 
                     <div v-else-if="!matchAiSummary" class="aw-detail-empty-hint">
@@ -605,6 +618,17 @@
                           :momentum-shifts="matchAiSummary.momentum_shifts"
                           :teams="matchAiSummary.teams"
                         />
+                      </section>
+
+                      <section class="aw-detail-ai-block">
+                        <BaseButton
+                          variant="ghost"
+                          size="sm"
+                          :disabled="matchAiLoading"
+                          @click="selectedMatchId && loadMatchAiSummary(selectedMatchId, true)"
+                        >
+                          Refresh insight
+                        </BaseButton>
                       </section>
                     </div>
                   </section>
@@ -1117,6 +1141,7 @@ import ExportUI from '@/components/ExportUI.vue'
 import HistoricalImportPanel from '@/components/HistoricalImportPanel.vue'
 import HistoricalImportBulkZipPanel from '@/components/HistoricalImportBulkZipPanel.vue'
 import HistoricalOcrReviewPanel from '@/components/HistoricalOcrReviewPanel.vue'
+import { readAiInsightCache, writeAiInsightCache } from '@/services/aiInsightCache'
 import { useAuthStore } from '@/stores/authStore'
 import {
   getAnalystMatches,
@@ -1239,6 +1264,9 @@ const detailError = ref<string | null>(null)
 const matchAiSummary = ref<MatchAiSummary | null>(null)
 const matchAiLoading = ref(false)
 const matchAiError = ref<string | null>(null)
+const matchAiFallback = ref<{ summary: string; bullets: string[] } | null>(null)
+const matchAiInsufficientData = ref(false)
+const matchAiCacheStatus = ref<'none' | 'live' | 'cached' | 'stale' | 'fallback' | 'insufficient'>('none')
 
 // Registry & Provenance state - loaded for historical matches (Phase 5M)
 const registryData = ref<MatchRegistryResponse | null>(null)
@@ -1347,6 +1375,13 @@ const aiSourceRefs = computed(() => matchAiSummary.value?.ai_metadata?.source_re
 const aiGroundingSummary = computed(() => {
   const summary = matchAiSummary.value?.ai_metadata?.grounding_summary
   return typeof summary === 'string' ? summary.trim() : ''
+})
+const matchAiStatusLabel = computed(() => {
+  if (matchAiCacheStatus.value === 'cached') return 'Cached insight'
+  if (matchAiCacheStatus.value === 'stale') return 'Stale cache'
+  if (matchAiCacheStatus.value === 'fallback') return 'Deterministic fallback'
+  if (matchAiCacheStatus.value === 'insufficient') return 'Insufficient data'
+  return null
 })
 
 // Workspace-level AI callouts derived from matches
@@ -1477,6 +1512,9 @@ async function loadMatches() {
 async function selectMatch(matchId: string) {
   selectedMatchId.value = matchId
   registryData.value = null
+  matchAiFallback.value = null
+  matchAiInsufficientData.value = false
+  matchAiCacheStatus.value = 'none'
   const selectedMatch = matches.value.find(m => m.id === matchId)
   await Promise.all([loadMatchDetail(matchId), loadMatchAiSummary(matchId)])
   // Registry data is loaded independently of match detail to avoid blocking the main detail
@@ -1506,20 +1544,87 @@ async function loadMatchDetail(matchId: string) {
   }
 }
 
-async function loadMatchAiSummary(matchId: string) {
+async function loadMatchAiSummary(matchId: string, forceRefresh = false) {
+  const contextHash = `match:${matchId}`
+  const staleAfterMs = 5 * 60 * 1000
+  if (!forceRefresh) {
+    const cached = readAiInsightCache<MatchAiSummary>({
+      scope: 'match-summary',
+      key: matchId,
+      contextHash,
+      staleAfterMs,
+    })
+    if (cached.entry) {
+      matchAiSummary.value = cached.entry.value
+      matchAiError.value = null
+      matchAiFallback.value = null
+      matchAiInsufficientData.value = false
+      matchAiCacheStatus.value = cached.status === 'stale' ? 'stale' : 'cached'
+      return
+    }
+  }
+
   matchAiLoading.value = true
   matchAiError.value = null
   matchAiSummary.value = null
+  matchAiFallback.value = null
+  matchAiInsufficientData.value = false
   try {
     const summary = await getMatchAiSummary(matchId)
     if (summary) {
       matchAiSummary.value = summary
+      matchAiCacheStatus.value = 'live'
+      writeAiInsightCache({
+        scope: 'match-summary',
+        key: matchId,
+        contextHash,
+        value: summary,
+      })
+    } else {
+      const fallback = buildDeterministicMatchFallback(matchDetail.value)
+      if (fallback) {
+        matchAiFallback.value = fallback
+        matchAiCacheStatus.value = 'fallback'
+      } else {
+        matchAiInsufficientData.value = true
+        matchAiCacheStatus.value = 'insufficient'
+      }
     }
   } catch (err) {
-    matchAiError.value = err instanceof Error ? err.message : 'Failed to load AI insights'
     console.error('[AnalystWorkspace] Failed to load AI insights:', err)
+    const fallback = buildDeterministicMatchFallback(matchDetail.value)
+    if (fallback) {
+      matchAiFallback.value = fallback
+      matchAiCacheStatus.value = 'fallback'
+      matchAiError.value = null
+    } else {
+      matchAiInsufficientData.value = true
+      matchAiCacheStatus.value = 'insufficient'
+      matchAiError.value = null
+    }
   } finally {
     matchAiLoading.value = false
+  }
+}
+
+function buildDeterministicMatchFallback(detail: MatchCaseStudyResponse | null): { summary: string; bullets: string[] } | null {
+  const match = detail?.match
+  if (!match) return null
+  const innings = match.innings ?? []
+  const hasResult = Boolean(match.result?.trim())
+  if (!hasResult && innings.length === 0) return null
+  const bullets = innings
+    .map((inn) => `${inn.team}: ${inn.runs}/${inn.wickets} in ${inn.overs} overs`)
+    .slice(0, 2)
+  if (detail?.momentum_summary?.title) {
+    bullets.push(detail.momentum_summary.title)
+  }
+  if (detail?.key_phase?.title) {
+    bullets.push(detail.key_phase.title)
+  }
+  return {
+    summary: `${match.teams_label}: ${match.result || 'Result unavailable'}`,
+    bullets: bullets.slice(0, 4),
   }
 }
 
