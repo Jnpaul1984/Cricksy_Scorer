@@ -12,11 +12,6 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Annotated, cast
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import JSONResponse
-from sqlalchemy import update
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.api.schemas.historical_import import (
     HistoricalImportApplyDeliveriesResponse,
     HistoricalImportApplyRequest,
@@ -61,9 +56,14 @@ from backend.services.historical_import_service import (
     get_import_batch,
     list_import_batches,
 )
+from backend.services.pdf_extraction_service import PdfExtractionResult, extract_text_from_pdf
 from backend.services.s3_service import s3_service
 from backend.sql_app import models
 from backend.sql_app.database import get_db as _base_get_db
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import JSONResponse
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/historical-import/json", tags=["historical-import"])
 
@@ -208,7 +208,9 @@ def _scan_zip_members(payload_bytes: bytes) -> list[zipfile.ZipInfo]:
 
             return members
     except zipfile.BadZipFile as exc:
-        raise HTTPException(status_code=415, detail="Only valid .zip uploads are supported.") from exc
+        raise HTTPException(
+            status_code=415, detail="Only valid .zip uploads are supported."
+        ) from exc
 
 
 def _sanitize_storage_name(file_name: str, source_hash_sha256: str) -> str:
@@ -310,8 +312,12 @@ def _ocr_candidate_response(
         status_history=status_history_values,
         source_document=HistoricalOcrSourceDocument.model_validate(
             {
-                "filename": str(source_document.get("filename") or batch.source_filename or "unknown"),
-                "content_type": str(source_document.get("content_type") or "application/octet-stream"),
+                "filename": str(
+                    source_document.get("filename") or batch.source_filename or "unknown"
+                ),
+                "content_type": str(
+                    source_document.get("content_type") or "application/octet-stream"
+                ),
                 "size_bytes": int(source_document.get("size_bytes") or 0),
                 "storage": source_document.get("storage") or {},
             }
@@ -322,6 +328,7 @@ def _ocr_candidate_response(
                 "confidence": extraction.get("confidence"),
                 "uncertainty_flags": extraction.get("uncertainty_flags") or [],
                 "ocr_text": extraction.get("ocr_text"),
+                "warnings": extraction.get("warnings") or [],
                 "non_authoritative_notice": extraction.get("non_authoritative_notice")
                 or "OCR/AI extraction is non-authoritative and must be reviewed before historical import.",
             }
@@ -372,7 +379,9 @@ def _store_bytes_with_fallback(
 
     bucket = (settings.S3_COACH_VIDEOS_BUCKET or "").strip()
     if bucket:
-        s3_service.upload_file_obj(payload, bucket=bucket, key=normalized_key, content_type=content_type)
+        s3_service.upload_file_obj(
+            payload, bucket=bucket, key=normalized_key, content_type=content_type
+        )
         return {"storage": "s3", "bucket": bucket, "key": normalized_key}
 
     local_base = Path(tempfile.gettempdir()) / "cricksy_historical_imports"
@@ -441,12 +450,12 @@ async def _build_bulk_zip_preview(
 
             if normalized_hash in hash_seen:
                 duplicate_within_zip = True
-                duplicate_reason = f"Duplicate inside ZIP: same content as '{hash_seen[normalized_hash]}'."
+                duplicate_reason = (
+                    f"Duplicate inside ZIP: same content as '{hash_seen[normalized_hash]}'."
+                )
             elif semantic_key and semantic_key in semantic_seen:
                 duplicate_within_zip = True
-                duplicate_reason = (
-                    f"Duplicate inside ZIP: same semantic match key as '{semantic_seen[semantic_key]}'."
-                )
+                duplicate_reason = f"Duplicate inside ZIP: same semantic match key as '{semantic_seen[semantic_key]}'."
 
             if not duplicate_within_zip:
                 hash_seen[normalized_hash] = file_name
@@ -526,9 +535,13 @@ async def _build_bulk_zip_preview(
         total_entries=len(members),
         files_scanned=len(members),
         json_entries=len(candidates),
-        non_json_entries=len([f for f in files if f.status == "unsupported" and f.dry_run_preview is None]),
+        non_json_entries=len(
+            [f for f in files if f.status == "unsupported" and f.dry_run_preview is None]
+        ),
         metadata_only_intake_required=metadata_only_intake_required,
-        metadata_only_pending_count=(summary.get("valid", 0) if metadata_only_intake_required else 0),
+        metadata_only_pending_count=(
+            summary.get("valid", 0) if metadata_only_intake_required else 0
+        ),
         intake_status="scanned",
         cost_control_message=(
             "Large ZIP detected. Stored safely for later processing; full import is deferred."
@@ -710,7 +723,9 @@ async def create_historical_ocr_review_candidate(
         )
 
     if extraction_confidence is not None and not (0 <= extraction_confidence <= 1):
-        raise HTTPException(status_code=422, detail="extraction_confidence must be between 0 and 1.")
+        raise HTTPException(
+            status_code=422, detail="extraction_confidence must be between 0 and 1."
+        )
 
     parsed_uncertainty_flags: list[str] = []
     if uncertainty_flags:
@@ -733,10 +748,30 @@ async def create_historical_ocr_review_candidate(
         try:
             parsed_candidate = json.loads(candidate_json)
         except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=422, detail="candidate_json must be valid JSON.") from exc
+            raise HTTPException(
+                status_code=422, detail="candidate_json must be valid JSON."
+            ) from exc
         if not isinstance(parsed_candidate, dict):
             raise HTTPException(status_code=422, detail="candidate_json must be a JSON object.")
         parsed_candidate_json = parsed_candidate
+
+    # Phase 7C — optional PDF text extraction.
+    # Runs only when extraction_method="pdf_text_extract" and the upload is a PDF.
+    # Extraction output is non-authoritative; it populates candidate metadata only.
+    # Operator-supplied values (ocr_text, extraction_confidence, uncertainty_flags) always
+    # take precedence over auto-extracted values.
+    extraction_warnings: list[str] = []
+    normalized_method = extraction_method.strip() or "manual_candidate_json"
+    is_pdf_upload = content_type == "application/pdf" or ext == ".pdf"
+    if normalized_method == "pdf_text_extract" and is_pdf_upload:
+        pdf_result: PdfExtractionResult = extract_text_from_pdf(payload)
+        extraction_warnings = pdf_result.warnings
+        if ocr_text is None or not ocr_text.strip():
+            ocr_text = pdf_result.extracted_text
+        if extraction_confidence is None:
+            extraction_confidence = pdf_result.confidence
+        if not parsed_uncertainty_flags:
+            parsed_uncertainty_flags = pdf_result.uncertainty_flags
 
     source_hash = hashlib.sha256(payload).hexdigest()
     owner_scope = _resolve_intake_owner(
@@ -769,10 +804,11 @@ async def create_historical_ocr_review_candidate(
             "storage": source_doc_storage,
         },
         "extraction": {
-            "method": extraction_method.strip() or "manual_candidate_json",
+            "method": normalized_method,
             "confidence": extraction_confidence,
             "uncertainty_flags": parsed_uncertainty_flags,
             "ocr_text": (ocr_text or None),
+            "warnings": extraction_warnings,
             "non_authoritative_notice": (
                 "OCR/AI extraction is non-authoritative and must be reviewed before historical import."
             ),
@@ -805,7 +841,9 @@ async def create_historical_ocr_review_candidate(
     return _ocr_candidate_response(batch=batch, review_payload=review_payload)
 
 
-@router.get("/ocr-review/candidates/{candidate_id}", response_model=HistoricalOcrReviewCandidateResponse)
+@router.get(
+    "/ocr-review/candidates/{candidate_id}", response_model=HistoricalOcrReviewCandidateResponse
+)
 async def get_historical_ocr_review_candidate(
     candidate_id: str,
     db: AsyncSession = Depends(_get_import_db),
@@ -815,7 +853,10 @@ async def get_historical_ocr_review_candidate(
     return _ocr_candidate_response(batch=batch, review_payload=review_payload)
 
 
-@router.patch("/ocr-review/candidates/{candidate_id}/review", response_model=HistoricalOcrReviewCandidateResponse)
+@router.patch(
+    "/ocr-review/candidates/{candidate_id}/review",
+    response_model=HistoricalOcrReviewCandidateResponse,
+)
 async def review_historical_ocr_candidate(
     candidate_id: str,
     body: HistoricalOcrReviewUpdateRequest,
@@ -825,7 +866,9 @@ async def review_historical_ocr_candidate(
     review_payload = _get_ocr_review_payload(batch)
     current_status = str(review_payload.get("status") or batch.status or "uploaded")
     if current_status == "rejected":
-        raise HTTPException(status_code=409, detail="Rejected OCR review candidates cannot be reviewed.")
+        raise HTTPException(
+            status_code=409, detail="Rejected OCR review candidates cannot be reviewed."
+        )
 
     extraction_payload = review_payload.get("extraction")
     if not isinstance(extraction_payload, dict):
@@ -861,7 +904,10 @@ async def review_historical_ocr_candidate(
     return _ocr_candidate_response(batch=batch, review_payload=review_payload)
 
 
-@router.post("/ocr-review/candidates/{candidate_id}/reject", response_model=HistoricalOcrReviewCandidateResponse)
+@router.post(
+    "/ocr-review/candidates/{candidate_id}/reject",
+    response_model=HistoricalOcrReviewCandidateResponse,
+)
 async def reject_historical_ocr_candidate(
     candidate_id: str,
     body: HistoricalOcrRejectRequest,
@@ -910,7 +956,9 @@ async def dry_run_historical_ocr_candidate(
     if candidate_status == "rejected" or (
         isinstance(rejection_reason, str) and rejection_reason.strip()
     ):
-        raise HTTPException(status_code=409, detail="Rejected OCR review candidates cannot be dry-run applied.")
+        raise HTTPException(
+            status_code=409, detail="Rejected OCR review candidates cannot be dry-run applied."
+        )
 
     reviewed_json = review_payload.get("reviewed_json")
     candidate_json = review_payload.get("candidate_json")
@@ -921,7 +969,9 @@ async def dry_run_historical_ocr_candidate(
             detail="No reviewed structured JSON is available. Submit review corrections first.",
         )
 
-    payload_bytes = json.dumps(payload_obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    payload_bytes = json.dumps(payload_obj, separators=(",", ":"), ensure_ascii=False).encode(
+        "utf-8"
+    )
     status_code, dry_run_result = build_dry_run_response(payload_bytes)
     review_payload["dry_run_result"] = dry_run_result.model_dump()
     review_payload["validation_errors"] = [item.model_dump() for item in dry_run_result.errors]
@@ -994,7 +1044,9 @@ async def dry_run_historical_ocr_candidate(
     review_payload["status_history"] = history
 
     dry_summary = (
-        dict(candidate_batch.dry_run_summary) if isinstance(candidate_batch.dry_run_summary, dict) else {}
+        dict(candidate_batch.dry_run_summary)
+        if isinstance(candidate_batch.dry_run_summary, dict)
+        else {}
     )
     dry_summary["ocr_review"] = review_payload
     await db.execute(
@@ -1034,7 +1086,9 @@ async def historical_json_bulk_zip_dry_run(
         "application/x-zip-compressed",
         "multipart/x-zip",
     }:
-        raise HTTPException(status_code=415, detail="Only .zip uploads are supported for bulk import.")
+        raise HTTPException(
+            status_code=415, detail="Only .zip uploads are supported for bulk import."
+        )
 
     payload_bytes = await file.read()
     owner_user_id: str | None = current_user.id if current_user else None
@@ -1069,11 +1123,15 @@ async def historical_json_bulk_zip_apply(
         "application/x-zip-compressed",
         "multipart/x-zip",
     }:
-        raise HTTPException(status_code=415, detail="Only .zip uploads are supported for bulk import.")
+        raise HTTPException(
+            status_code=415, detail="Only .zip uploads are supported for bulk import."
+        )
 
     selected_names = _parse_selected_file_names(selected_files)
     if not selected_names:
-        raise HTTPException(status_code=422, detail="At least one selected file is required for bulk apply.")
+        raise HTTPException(
+            status_code=422, detail="At least one selected file is required for bulk apply."
+        )
 
     payload_bytes = await file.read()
     owner_user_id: str | None = current_user.id if current_user else None
@@ -1088,7 +1146,11 @@ async def historical_json_bulk_zip_apply(
     )
 
     results: list[HistoricalImportBulkZipApplyFileResult] = []
-    metadata_archive = zipfile.ZipFile(io.BytesIO(payload_bytes)) if preview.metadata_only_intake_required else None
+    metadata_archive = (
+        zipfile.ZipFile(io.BytesIO(payload_bytes))
+        if preview.metadata_only_intake_required
+        else None
+    )
     try:
         for selected_name in selected_names:
             candidate = candidates.get(selected_name)
@@ -1296,7 +1358,7 @@ async def historical_json_bulk_zip_apply(
                     batch_id=batch.id,
                     applied_game_id=game.id,
                 )
-                )
+            )
     finally:
         if metadata_archive is not None:
             metadata_archive.close()
@@ -1523,12 +1585,18 @@ async def apply_historical_import_deliveries(
             raise HTTPException(status_code=409, detail=error_msg)
         if "does not match" in error_msg.lower() or "hash" in error_msg.lower():
             raise HTTPException(status_code=422, detail=error_msg)
-        if "totals" in error_msg.lower() or "run total" in error_msg.lower() or "mismatch" in error_msg.lower():
+        if (
+            "totals" in error_msg.lower()
+            or "run total" in error_msg.lower()
+            or "mismatch" in error_msg.lower()
+        ):
             raise HTTPException(status_code=422, detail=error_msg)
         raise HTTPException(status_code=409, detail=error_msg)
 
     if result_info is None:
-        raise RuntimeError("apply_historical_deliveries returned no result without an error message")
+        raise RuntimeError(
+            "apply_historical_deliveries returned no result without an error message"
+        )
 
     game_id: str = result_info["game_id"]
     deliveries_imported: int = result_info["deliveries_imported"]
@@ -1691,9 +1759,7 @@ async def repair_historical_import_metadata(
             f"Fields added: {', '.join(fields_added) if fields_added else 'none'}."
         )
     elif status_value == "already_complete":
-        detail_text = (
-            f"Game '{game_id_value}' already has Phase 5J metadata. No changes were made."
-        )
+        detail_text = f"Game '{game_id_value}' already has Phase 5J metadata. No changes were made."
     else:
         detail_text = "Repair was not required."
 

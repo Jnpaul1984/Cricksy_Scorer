@@ -1564,6 +1564,7 @@ export interface HistoricalOcrExtractionMetadata {
   confidence?: number | null;
   uncertainty_flags: string[];
   ocr_text?: string | null;
+  warnings?: string[];
   non_authoritative_notice: string;
 }
 

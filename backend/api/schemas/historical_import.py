@@ -195,6 +195,7 @@ class HistoricalOcrExtractionMetadata(BaseModel):
     confidence: float | None = None
     uncertainty_flags: list[str] = Field(default_factory=list)
     ocr_text: str | None = None
+    warnings: list[str] = Field(default_factory=list)
     non_authoritative_notice: str = (
         "OCR/AI extraction is non-authoritative and must be reviewed before historical import."
     )
@@ -253,8 +254,7 @@ class HistoricalImportApplyRequest(BaseModel):
     confirm: bool = Field(
         ...,
         description=(
-            "Must be true to proceed with the apply. "
-            "Safeguard against accidental writes."
+            "Must be true to proceed with the apply. Safeguard against accidental writes."
         ),
     )
 
@@ -282,8 +282,7 @@ class HistoricalImportRollbackRequest(BaseModel):
     confirm: bool = Field(
         ...,
         description=(
-            "Must be true to proceed with rollback. "
-            "Safeguard against accidental deletions."
+            "Must be true to proceed with rollback. Safeguard against accidental deletions."
         ),
     )
 
@@ -351,8 +350,7 @@ class HistoricalImportRepairRequest(BaseModel):
     confirm: bool = Field(
         ...,
         description=(
-            "Must be true to proceed with the repair. "
-            "Safeguard against accidental writes."
+            "Must be true to proceed with the repair. Safeguard against accidental writes."
         ),
     )
 
@@ -413,7 +411,6 @@ class HistoricalImportTrainingStatus(BaseModel):
     training_registry_phase: str = Field(
         default="deferred",
         description=(
-            "Phase that will implement the full ML dataset registry/export. "
-            "'deferred' in Phase 5I."
+            "Phase that will implement the full ML dataset registry/export. 'deferred' in Phase 5I."
         ),
     )
