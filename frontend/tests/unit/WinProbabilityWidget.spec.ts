@@ -10,6 +10,14 @@ describe('WinProbabilityWidget', () => {
     confidence: 75.0,
     batting_team: 'Team A',
     bowling_team: 'Team B',
+    ai_metadata: {
+      confidence_score: 0.76,
+      limitations: [
+        'Prediction accuracy increases as the match progresses.',
+        'Rule-based fallback may be used when model output is unavailable.',
+      ],
+      is_official_truth: false,
+    },
     factors: {
       runs_needed: 45,
       balls_remaining: 30,
@@ -30,7 +38,53 @@ describe('WinProbabilityWidget', () => {
     expect(wrapper.text()).toContain('Win Probability')
     expect(wrapper.text()).toContain('65.5%')
     expect(wrapper.text()).toContain('34.5%')
-    expect(wrapper.text()).toContain('Confidence: 75%')
+    expect(wrapper.text()).toContain('AI Advisory')
+    expect(wrapper.text()).toContain('Confidence: 76%')
+    expect(wrapper.text()).toContain('This insight is advisory and does not change official scoring or match records.')
+  })
+
+  it('renders limitations when ai metadata contains limitations', () => {
+    const wrapper = mount(WinProbabilityWidget, {
+      props: {
+        prediction: samplePrediction,
+      },
+    })
+
+    expect(wrapper.text()).toContain('Limitations')
+    expect(wrapper.text()).toContain('Prediction accuracy increases as the match progresses.')
+    expect(wrapper.text()).toContain('Rule-based fallback may be used when model output is unavailable.')
+  })
+
+  it('shows confidence unavailable when metadata confidence is missing', () => {
+    const wrapper = mount(WinProbabilityWidget, {
+      props: {
+        prediction: {
+          ...samplePrediction,
+          ai_metadata: {
+            ...samplePrediction.ai_metadata,
+            confidence_score: null,
+          },
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('Confidence unavailable')
+  })
+
+  it('does not render an empty limitations section when limitations are missing', () => {
+    const wrapper = mount(WinProbabilityWidget, {
+      props: {
+        prediction: {
+          ...samplePrediction,
+          ai_metadata: {
+            ...samplePrediction.ai_metadata,
+            limitations: [],
+          },
+        },
+      },
+    })
+
+    expect(wrapper.text()).not.toContain('Limitations')
   })
 
   it('displays team names from prediction when available', () => {

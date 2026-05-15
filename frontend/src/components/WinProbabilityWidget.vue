@@ -9,6 +9,11 @@ export interface WinProbability {
   confidence: number
   batting_team?: string
   bowling_team?: string
+  ai_metadata?: {
+    confidence_score?: number | null
+    limitations?: string[]
+    is_official_truth?: boolean
+  }
   factors?: {
     runs_needed?: number
     balls_remaining?: number
@@ -75,6 +80,14 @@ const resolvedTheme = computed<'dark' | 'light'>(() => {
   if (props.theme === 'dark') return 'dark'
   return 'light'
 })
+
+const advisoryConfidenceLabel = computed(() => {
+  const metadataConfidence = props.prediction?.ai_metadata?.confidence_score
+  if (typeof metadataConfidence === 'number') {
+    return `Confidence: ${(metadataConfidence * 100).toFixed(0)}%`
+  }
+  return 'Confidence unavailable'
+})
 </script>
 
 <template>
@@ -82,10 +95,21 @@ const resolvedTheme = computed<'dark' | 'light'>(() => {
     <div v-if="prediction && prediction.confidence > 0" class="prediction-display">
       <div class="header">
         <h3>Win Probability</h3>
-        <span class="confidence" :title="`Confidence: ${prediction.confidence}%`">
-          Confidence: {{ prediction.confidence.toFixed(0) }}%
+        <span class="confidence">
+          AI Advisory · {{ advisoryConfidenceLabel }}
         </span>
       </div>
+      <p class="ai-advisory-note">
+        This insight is advisory and does not change official scoring or match records.
+      </p>
+      <section v-if="prediction.ai_metadata?.limitations?.length" class="ai-limitations">
+        <h4 class="ai-limitations-title">Limitations</h4>
+        <ul class="ai-limitations-list">
+          <li v-for="(limitation, index) in prediction.ai_metadata?.limitations ?? []" :key="index">
+            {{ limitation }}
+          </li>
+        </ul>
+      </section>
 
       <div class="probability-bars">
         <div class="team-row">
@@ -179,6 +203,32 @@ const resolvedTheme = computed<'dark' | 'light'>(() => {
 .confidence {
   font-size: 0.85rem;
   color: var(--pico-muted-color);
+}
+
+.ai-advisory-note {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+  color: var(--pico-muted-color);
+}
+
+.ai-limitations {
+  margin: 0 0 0.85rem;
+  padding: 0.75rem;
+  border: 1px solid #facc15;
+  border-radius: var(--pico-border-radius);
+  background: #fffbeb;
+}
+
+.ai-limitations-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.ai-limitations-list {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.85rem;
 }
 
 .probability-bars {

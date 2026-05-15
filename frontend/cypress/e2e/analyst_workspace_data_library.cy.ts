@@ -206,6 +206,15 @@ const aiSummary = {
   player_highlights: [],
   overall_summary: 'Lions controlled the key moments and finished strongly.',
   created_at: '2025-01-10T12:05:00Z',
+  ai_metadata: {
+    output_type: 'summary',
+    is_official_truth: false,
+    confidence_score: 0.76,
+    limitations: [
+      'Prediction accuracy increases as the match progresses.',
+      'Rule-based fallback may be used when model output is unavailable.',
+    ],
+  },
 }
 
 const authMe = {
@@ -298,6 +307,9 @@ describe('Analyst Workspace data library gate', () => {
     cy.get('[data-testid="match-case-study-page"]').should('be.visible')
     cy.contains('h1', 'Match case study').should('be.visible')
     cy.get('[data-testid="match-case-study-page"]').should('contain.text', 'Lions vs Falcons')
+    cy.get('[data-testid="match-case-study-page"]').should('contain.text', 'AI Advisory · Confidence: 76%')
+    cy.get('[data-testid="match-case-study-page"]').should('contain.text', 'This insight is advisory and does not change official scoring or match records.')
+    cy.get('[data-testid="match-case-study-page"]').should('contain.text', 'Limitations')
   })
 
   it('shows an empty state when the matches API returns no analyst data', () => {
