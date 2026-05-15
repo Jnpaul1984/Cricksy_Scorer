@@ -761,9 +761,9 @@ async def create_historical_ocr_review_candidate(
     # Operator-supplied values (ocr_text, extraction_confidence, uncertainty_flags) always
     # take precedence over auto-extracted values.
     extraction_warnings: list[str] = []
-    normalised_method = extraction_method.strip() or "manual_candidate_json"
+    normalized_method = extraction_method.strip() or "manual_candidate_json"
     is_pdf_upload = content_type == "application/pdf" or ext == ".pdf"
-    if normalised_method == "pdf_text_extract" and is_pdf_upload:
+    if normalized_method == "pdf_text_extract" and is_pdf_upload:
         pdf_result: PdfExtractionResult = extract_text_from_pdf(payload)
         extraction_warnings = pdf_result.warnings
         if ocr_text is None or not ocr_text.strip():
@@ -804,7 +804,7 @@ async def create_historical_ocr_review_candidate(
             "storage": source_doc_storage,
         },
         "extraction": {
-            "method": normalised_method,
+            "method": normalized_method,
             "confidence": extraction_confidence,
             "uncertainty_flags": parsed_uncertainty_flags,
             "ocr_text": (ocr_text or None),
