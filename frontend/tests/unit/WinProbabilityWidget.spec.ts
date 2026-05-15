@@ -16,6 +16,12 @@ describe('WinProbabilityWidget', () => {
         'Prediction accuracy increases as the match progresses.',
         'Rule-based fallback may be used when model output is unavailable.',
       ],
+      source_refs: [
+        { type: 'match', id: 'match-001', label: 'Match: Team A vs Team B' },
+        { type: 'innings', id: 'innings_2', label: 'Innings 2' },
+        { type: 'metric', id: 'required_run_rate', label: 'Required RR: 9.00' },
+      ],
+      grounding_summary: 'Based on live match state, innings context, and run-rate pressure.',
       is_official_truth: false,
     },
     factors: {
@@ -55,6 +61,20 @@ describe('WinProbabilityWidget', () => {
     expect(wrapper.text()).toContain('Rule-based fallback may be used when model output is unavailable.')
   })
 
+  it('renders evidence references when source grounding metadata exists', () => {
+    const wrapper = mount(WinProbabilityWidget, {
+      props: {
+        prediction: samplePrediction,
+      },
+    })
+
+    expect(wrapper.text()).toContain('Based on')
+    expect(wrapper.text()).toContain('Based on live match state, innings context, and run-rate pressure.')
+    expect(wrapper.text()).toContain('Match: Team A vs Team B')
+    expect(wrapper.text()).toContain('Innings 2')
+    expect(wrapper.text()).toContain('Required RR: 9.00')
+  })
+
   it('shows confidence unavailable when metadata confidence is missing', () => {
     const wrapper = mount(WinProbabilityWidget, {
       props: {
@@ -85,6 +105,23 @@ describe('WinProbabilityWidget', () => {
     })
 
     expect(wrapper.text()).not.toContain('Limitations')
+  })
+
+  it('does not render an empty evidence section when source grounding metadata is missing', () => {
+    const wrapper = mount(WinProbabilityWidget, {
+      props: {
+        prediction: {
+          ...samplePrediction,
+          ai_metadata: {
+            ...samplePrediction.ai_metadata,
+            source_refs: [],
+            grounding_summary: '',
+          },
+        },
+      },
+    })
+
+    expect(wrapper.text()).not.toContain('Based on')
   })
 
   it('displays team names from prediction when available', () => {

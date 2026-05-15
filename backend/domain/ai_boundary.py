@@ -124,6 +124,14 @@ cricket truth.  AI-adjacent code must never write to these fields.
 # ---------------------------------------------------------------------------
 
 
+class AiSourceReference(BaseModel):
+    """Compact reference describing deterministic data that grounded an AI output."""
+
+    type: str = Field(description="Source category, e.g. match, innings, phase, metric.")
+    id: str = Field(description="Stable identifier for the referenced source.")
+    label: str = Field(description="Human-readable evidence label for UI display.")
+
+
 class AiOutputMetadata(BaseModel):
     """
     Metadata embedded in every AI-adjacent response to make its
@@ -134,6 +142,9 @@ class AiOutputMetadata(BaseModel):
 
     Phase 8 additions: ``confidence_score`` and ``limitations`` allow callers
     to surface model uncertainty and known advisory constraints in the UI.
+
+    Phase 8B additions: ``source_refs`` and ``grounding_summary`` allow
+    callers to surface what deterministic context grounded the advisory output.
     """
 
     output_type: AiOutputType = Field(
@@ -178,6 +189,20 @@ class AiOutputMetadata(BaseModel):
             "Known limitations or caveats for this advisory output.  "
             "Consumers should display these alongside the output to set "
             "appropriate expectations.  Empty when no specific limitations apply."
+        ),
+    )
+    source_refs: list[AiSourceReference] = Field(
+        default_factory=list,
+        description=(
+            "Compact references to the deterministic match, innings, phase, "
+            "player, or metric data used to ground this advisory output."
+        ),
+    )
+    grounding_summary: str | None = Field(
+        default=None,
+        description=(
+            "Short helper text summarizing the deterministic context behind "
+            "this advisory output.  Explanatory only, not official truth."
         ),
     )
 

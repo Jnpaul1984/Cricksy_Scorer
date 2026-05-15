@@ -13,6 +13,12 @@ export interface WinProbability {
     confidence_score?: number | null
     limitations?: string[]
     is_official_truth?: boolean
+    source_refs?: Array<{
+      type: string
+      id: string
+      label: string
+    }>
+    grounding_summary?: string | null
   }
   factors?: {
     runs_needed?: number
@@ -88,6 +94,17 @@ const advisoryConfidenceLabel = computed(() => {
   }
   return 'Confidence unavailable'
 })
+
+const advisorySourceRefs = computed(() => props.prediction?.ai_metadata?.source_refs ?? [])
+
+const advisoryGroundingSummary = computed(() => {
+  const summary = props.prediction?.ai_metadata?.grounding_summary
+  return typeof summary === 'string' ? summary.trim() : ''
+})
+
+const showEvidence = computed(() => {
+  return advisorySourceRefs.value.length > 0 || advisoryGroundingSummary.value.length > 0
+})
 </script>
 
 <template>
@@ -102,6 +119,20 @@ const advisoryConfidenceLabel = computed(() => {
       <p class="ai-advisory-note">
         This insight is advisory and does not change official scoring or match records.
       </p>
+      <section v-if="showEvidence" class="ai-evidence" data-testid="win-probability-evidence">
+        <h4 class="ai-evidence-title">Based on</h4>
+        <p v-if="advisoryGroundingSummary" class="ai-evidence-summary">
+          {{ advisoryGroundingSummary }}
+        </p>
+        <ul v-if="advisorySourceRefs.length" class="ai-evidence-list">
+          <li
+            v-for="sourceRef in advisorySourceRefs"
+            :key="`${sourceRef.type}-${sourceRef.id}`"
+          >
+            {{ sourceRef.label }}
+          </li>
+        </ul>
+      </section>
       <section v-if="prediction.ai_metadata?.limitations?.length" class="ai-limitations">
         <h4 class="ai-limitations-title">Limitations</h4>
         <ul class="ai-limitations-list">
@@ -209,6 +240,32 @@ const advisoryConfidenceLabel = computed(() => {
   margin: 0 0 0.85rem;
   font-size: 0.85rem;
   color: var(--pico-muted-color);
+}
+
+.ai-evidence {
+  margin: 0 0 0.85rem;
+  padding: 0.75rem;
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-sectioning-background-color);
+}
+
+.ai-evidence-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.ai-evidence-summary {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  color: var(--pico-muted-color);
+}
+
+.ai-evidence-list {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.85rem;
 }
 
 .ai-limitations {

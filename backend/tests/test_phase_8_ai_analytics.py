@@ -42,6 +42,18 @@ class TestAiOutputMetadataPhase8Fields:
         meta = AiOutputMetadata(output_type=AiOutputType.INSIGHT)
         assert meta.limitations == []
 
+    def test_source_refs_default_to_empty_list(self):
+        from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType
+
+        meta = AiOutputMetadata(output_type=AiOutputType.INSIGHT)
+        assert meta.source_refs == []
+
+    def test_grounding_summary_defaults_to_none(self):
+        from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType
+
+        meta = AiOutputMetadata(output_type=AiOutputType.INSIGHT)
+        assert meta.grounding_summary is None
+
     def test_confidence_score_accepts_valid_range(self):
         from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType
 
@@ -89,18 +101,36 @@ class TestAiOutputMetadataPhase8Fields:
         assert meta.grounded_in_data is True
 
     def test_model_dump_includes_phase8_fields(self):
-        from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType
+        from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType, AiSourceReference
 
         meta = AiOutputMetadata(
             output_type=AiOutputType.INSIGHT,
             confidence_score=0.65,
             limitations=["Rule-based fallback used."],
+            source_refs=[
+                AiSourceReference(
+                    type="metric",
+                    id="required_run_rate",
+                    label="Required RR: 8.50",
+                )
+            ],
+            grounding_summary="Based on live match state and run-rate pressure.",
         )
         dumped = meta.model_dump()
         assert "confidence_score" in dumped
         assert "limitations" in dumped
+        assert "source_refs" in dumped
+        assert "grounding_summary" in dumped
         assert dumped["confidence_score"] == 0.65
         assert dumped["limitations"] == ["Rule-based fallback used."]
+        assert dumped["source_refs"] == [
+            {
+                "type": "metric",
+                "id": "required_run_rate",
+                "label": "Required RR: 8.50",
+            }
+        ]
+        assert dumped["grounding_summary"] == "Based on live match state and run-rate pressure."
 
     def test_model_dump_none_confidence_round_trips(self):
         from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType
@@ -144,6 +174,43 @@ class TestWinProbabilityAdvisoryMetadata:
                     f"Limitation string '{limitation}' may inadvertently reference "
                     f"official truth field '{field}'."
                 )
+
+    def test_prediction_source_refs_include_grounding_context(self):
+        from types import SimpleNamespace
+
+        pytest.importorskip("numpy")  # prediction_service transitively requires numpy
+        from backend.routes.prediction import _build_prediction_grounding_summary, _build_prediction_source_refs
+
+        game = SimpleNamespace(
+            batting_team_name="Lions",
+            bowling_team_name="Falcons",
+            current_inning=2,
+            overs_completed=17,
+            overs_limit=20,
+            target=171,
+        )
+        prediction = {
+            "factors": {
+                "required_run_rate": 9.2,
+                "wickets_remaining": 5,
+                "prediction_method": "rule_based_early",
+            }
+        }
+
+        refs = _build_prediction_source_refs(game, prediction, "match-123")
+        labels = [ref.label for ref in refs]
+
+        assert "Match: Lions vs Falcons" in labels
+        assert "Innings 2" in labels
+        assert "Death overs" in labels
+        assert "Target: 171" in labels
+        assert "Required RR: 9.20" in labels
+        assert "Wickets remaining: 5" in labels
+        assert "Data source: Rule-based fallback" in labels
+        assert _build_prediction_grounding_summary(refs) == (
+            "Based on live match state, innings context, phase context, "
+            "wickets remaining, run-rate pressure, and fallback prediction logic."
+        )
 
     def test_ai_metadata_confidence_normalisation(self):
         """Confidence reported as 0-100 by prediction_service must be 0-1 in ai_metadata."""

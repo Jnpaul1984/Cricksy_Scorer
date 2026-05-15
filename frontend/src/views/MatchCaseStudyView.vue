@@ -420,6 +420,24 @@
               <p class="cs-ai-advisory-note">
                 This insight is advisory and does not change official scoring or match records.
               </p>
+              <section
+                v-if="showAiEvidence"
+                class="cs-ai-evidence"
+                data-testid="match-ai-evidence"
+              >
+                <h3 class="cs-ai-evidence-title">Based on</h3>
+                <p v-if="aiGroundingSummary" class="cs-ai-evidence-summary">
+                  {{ aiGroundingSummary }}
+                </p>
+                <ul v-if="aiSourceRefs.length" class="cs-ai-evidence-list">
+                  <li
+                    v-for="sourceRef in aiSourceRefs"
+                    :key="`${sourceRef.type}-${sourceRef.id}`"
+                  >
+                    {{ sourceRef.label }}
+                  </li>
+                </ul>
+              </section>
               <section v-if="aiLimitations.length" class="cs-ai-limitations">
                 <h3 class="cs-ai-limitations-title">Limitations</h3>
                 <ul class="cs-ai-limitations-list">
@@ -768,6 +786,14 @@ const aiAdvisoryConfidenceLabel = computed(() => {
   return 'Confidence unavailable'
 })
 const aiLimitations = computed(() => aiSummary.value?.ai_metadata?.limitations ?? [])
+const aiSourceRefs = computed(() => aiSummary.value?.ai_metadata?.source_refs ?? [])
+const aiGroundingSummary = computed(() => {
+  const summary = aiSummary.value?.ai_metadata?.grounding_summary
+  return typeof summary === 'string' ? summary.trim() : ''
+})
+const showAiEvidence = computed(() => {
+  return aiSourceRefs.value.length > 0 || aiGroundingSummary.value.length > 0
+})
 
 // Per-match AI callouts derived from case study data
 const matchAiLoading = computed(() => loading.value)
@@ -1769,6 +1795,34 @@ function handleCalloutSelect(callout: AiCallout) {
 
 .cs-ai-advisory-note {
   margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.cs-ai-evidence {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-hover);
+}
+
+.cs-ai-evidence-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cs-ai-evidence-summary {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.cs-ai-evidence-list {
+  margin: 0;
+  padding-left: var(--space-4);
   font-size: var(--text-xs);
   color: var(--color-text-muted);
 }

@@ -729,6 +729,12 @@ export interface AiOutputMetadata {
   grounded_in_data?: boolean;
   confidence_score?: number | null;
   limitations?: string[];
+  source_refs?: Array<{
+    type: string;
+    id: string;
+    label: string;
+  }>;
+  grounding_summary?: string | null;
 }
 
 export interface MatchAiSummary {

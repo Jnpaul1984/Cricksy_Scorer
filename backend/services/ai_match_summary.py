@@ -25,7 +25,7 @@ from backend.api.schemas.case_study import (
     CaseStudyPhase,
     MatchCaseStudyResponse,
 )
-from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType
+from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType, AiSourceReference
 from backend.services.analytics_case_study import build_match_case_study
 from pydantic import BaseModel
 
@@ -311,6 +311,85 @@ def _extract_player_highlights(
     return highlights
 
 
+def _build_grounding_source_refs(
+    match: CaseStudyMatch,
+    phases: list[CaseStudyPhase],
+    key_players: list[CaseStudyKeyPlayer],
+) -> list[AiSourceReference]:
+    """Build compact evidence references for the advisory match summary."""
+    refs: list[AiSourceReference] = [
+        AiSourceReference(
+            type="match",
+            id=match.id,
+            label=f"Match: {match.teams_label}",
+        ),
+        AiSourceReference(
+            type="data_source",
+            id="case_study_analytics",
+            label="Data source: Match case-study analytics",
+        ),
+    ]
+
+    for innings_index, innings in enumerate(match.innings[:2], start=1):
+        refs.append(
+            AiSourceReference(
+                type="innings",
+                id=f"innings_{innings_index}",
+                label=(
+                    f"Innings {innings_index}: {innings.team} {innings.runs}/{innings.wickets} "
+                    f"in {innings.overs} overs"
+                ),
+            )
+        )
+
+    if phases:
+        key_phase = max(phases, key=lambda phase: abs(phase.net_swing_vs_par))
+        refs.append(
+            AiSourceReference(
+                type="phase",
+                id=key_phase.id,
+                label=f"Phase: {key_phase.label}",
+            )
+        )
+        refs.append(
+            AiSourceReference(
+                type="metric",
+                id=f"{key_phase.id}_net_vs_par",
+                label=f"Net vs par: {key_phase.net_swing_vs_par:+d}",
+            )
+        )
+
+    if key_players:
+        top_player = key_players[0]
+        refs.append(
+            AiSourceReference(
+                type="player",
+                id=top_player.id or f"{match.id}:top_player",
+                label=f"Player: {top_player.name}",
+            )
+        )
+
+    return refs
+
+
+def _build_grounding_summary(
+    match: CaseStudyMatch,
+    phases: list[CaseStudyPhase],
+    key_players: list[CaseStudyKeyPlayer],
+) -> str:
+    """Summarize the deterministic context grounding the advisory summary."""
+    parts = ["stored match case-study data"]
+    if match.innings:
+        parts.append("innings totals")
+    if phases:
+        parts.append("phase swing analysis")
+    if key_players:
+        parts.append("key-player impact")
+    if len(parts) == 1:
+        return "Based on stored match case-study data."
+    return f"Based on {', '.join(parts[:-1])}, and {parts[-1]}."
+
+
 # ---------------------------------------------------------------------------
 # Main Service Function
 # ---------------------------------------------------------------------------
@@ -359,6 +438,8 @@ async def build_match_ai_summary(
     tactical_themes, tags = _extract_tactical_themes(phases)
     player_highlights = _extract_player_highlights(key_players)
 
+    source_refs = _build_grounding_source_refs(match, phases, key_players)
+
     return MatchAiSummary(
         match_id=match.id,
         headline=headline,
@@ -367,4 +448,9 @@ async def build_match_ai_summary(
         player_highlights=player_highlights,
         tags=tags,
         generated_at=datetime.now(UTC),
+        ai_metadata=AiOutputMetadata(
+            output_type=AiOutputType.SUMMARY,
+            source_refs=source_refs,
+            grounding_summary=_build_grounding_summary(match, phases, key_players),
+        ),
     )
