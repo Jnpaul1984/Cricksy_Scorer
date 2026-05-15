@@ -62,6 +62,11 @@ type PredictionEventPayload = {
     batting_team?: string
     bowling_team?: string
     factors?: Record<string, any>
+    ai_metadata?: {
+      confidence_score?: number | null
+      limitations?: string[]
+      is_official_truth?: boolean
+    }
   }
 }
 
@@ -474,6 +479,11 @@ export const useGameStore = defineStore('game', () => {
     batting_team?: string
     bowling_team?: string
     factors?: Record<string, any>
+    ai_metadata?: {
+      confidence_score?: number | null
+      limitations?: string[]
+      is_official_truth?: boolean
+    }
   } | null>(null)
 
   const offlineEnabled = ref(true)

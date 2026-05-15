@@ -411,10 +411,24 @@
                 Updated {{ new Date(aiSummary.created_at).toLocaleString() }}
               </small>
             </div>
-            <BaseBadge variant="neutral" :uppercase="false" class="cs-ai-badge">
-              Experimental
-            </BaseBadge>
-          </header>
+              <BaseBadge variant="neutral" :uppercase="false" class="cs-ai-badge">
+                Experimental
+              </BaseBadge>
+            </header>
+            <div class="cs-ai-advisory">
+              <p class="cs-ai-advisory-label">AI Advisory · {{ aiAdvisoryConfidenceLabel }}</p>
+              <p class="cs-ai-advisory-note">
+                This insight is advisory and does not change official scoring or match records.
+              </p>
+              <section v-if="aiLimitations.length" class="cs-ai-limitations">
+                <h3 class="cs-ai-limitations-title">Limitations</h3>
+                <ul class="cs-ai-limitations-list">
+                  <li v-for="(limitation, index) in aiLimitations" :key="index">
+                    {{ limitation }}
+                  </li>
+                </ul>
+              </section>
+            </div>
 
           <!-- Loading state -->
           <div v-if="aiSummaryLoading" class="cs-ai-loading">
@@ -746,6 +760,14 @@ const aiMomentumShifts = computed(() => aiSummary.value?.momentum_shifts ?? [])
 const aiTeams = computed(() => aiSummary.value?.teams ?? [])
 const aiPlayerHighlightsRich = computed(() => aiSummary.value?.player_highlights ?? [])
 const aiTags = computed(() => aiSummary.value?.tags ?? [])
+const aiAdvisoryConfidenceLabel = computed(() => {
+  const confidence = aiSummary.value?.ai_metadata?.confidence_score
+  if (typeof confidence === 'number') {
+    return `Confidence: ${(confidence * 100).toFixed(0)}%`
+  }
+  return 'Confidence unavailable'
+})
+const aiLimitations = computed(() => aiSummary.value?.ai_metadata?.limitations ?? [])
 
 // Per-match AI callouts derived from case study data
 const matchAiLoading = computed(() => loading.value)
@@ -1733,6 +1755,44 @@ function handleCalloutSelect(callout: AiCallout) {
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--space-3);
+}
+
+.cs-ai-advisory {
+  margin-top: var(--space-2);
+}
+
+.cs-ai-advisory-label {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+}
+
+.cs-ai-advisory-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.cs-ai-limitations {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-warning-soft, #facc15);
+  background: var(--color-warning-bg, #fffbeb);
+}
+
+.cs-ai-limitations-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cs-ai-limitations-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
 .cs-ai-timestamp {

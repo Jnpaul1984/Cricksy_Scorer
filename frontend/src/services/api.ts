@@ -722,6 +722,15 @@ export interface PlayerHighlightSummary {
   summary: string;
 }
 
+export interface AiOutputMetadata {
+  output_type: string;
+  is_official_truth: boolean;
+  requires_review?: boolean;
+  grounded_in_data?: boolean;
+  confidence_score?: number | null;
+  limitations?: string[];
+}
+
 export interface MatchAiSummary {
   match_id: string;
   format: string;
@@ -738,6 +747,7 @@ export interface MatchAiSummary {
   tactical_themes?: string[];
   tags?: string[];
   generated_at?: string;
+  ai_metadata?: AiOutputMetadata;
 }
 
 export async function getMatchAiSummary(matchId: string): Promise<MatchAiSummary> {

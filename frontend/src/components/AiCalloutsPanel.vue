@@ -93,6 +93,9 @@ function handleViewAll() {
         <p class="ai-callouts-description">
           {{ description }}
         </p>
+        <p class="ai-callouts-advisory">
+          AI Advisory · Non-authoritative insight
+        </p>
       </div>
     </header>
 
@@ -192,6 +195,12 @@ function handleViewAll() {
   margin: var(--space-1) 0 0;
   font-size: var(--text-xs);
   color: var(--color-text-muted);
+}
+
+.ai-callouts-advisory {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
 }
 
 .ai-callouts-skeleton {

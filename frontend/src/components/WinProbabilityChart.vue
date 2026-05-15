@@ -3,9 +3,20 @@
     <div class="header">
       <h3 class="title">{{ isFirstInnings ? 'Score Prediction' : 'Win Probability' }}</h3>
       <BaseBadge v-if="prediction" variant="neutral" size="sm">
-        {{ prediction.confidence.toFixed(0) }}% confidence
+        AI Advisory · {{ advisoryConfidenceLabel }}
       </BaseBadge>
     </div>
+    <p v-if="prediction" class="ai-advisory-note">
+      This insight is advisory and does not change official scoring or match records.
+    </p>
+    <section v-if="prediction && prediction.ai_metadata?.limitations?.length" class="ai-limitations">
+      <h4 class="ai-limitations-title">Limitations</h4>
+      <ul class="ai-limitations-list">
+        <li v-for="(limitation, index) in prediction.ai_metadata?.limitations ?? []" :key="index">
+          {{ limitation }}
+        </li>
+      </ul>
+    </section>
 
     <!-- Score Prediction (First Innings) -->
     <div v-if="prediction && isFirstInnings && prediction.factors?.projected_score" class="score-prediction">
@@ -151,6 +162,13 @@ const gameStore = useGameStore()
 const { currentPrediction, currentGame } = storeToRefs(gameStore)
 
 const prediction = computed(() => currentPrediction.value)
+const advisoryConfidenceLabel = computed(() => {
+  const metadataConfidence = prediction.value?.ai_metadata?.confidence_score
+  if (typeof metadataConfidence === 'number') {
+    return `Confidence: ${(metadataConfidence * 100).toFixed(0)}%`
+  }
+  return 'Confidence unavailable'
+})
 
 // Check if we're in first innings (no target means first innings)
 const isFirstInnings = computed(() => {
@@ -269,6 +287,33 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
   font-weight: 600;
   color: var(--ds-text-primary, #1f2937);
   margin: 0;
+}
+
+.ai-advisory-note {
+  margin: 0 0 0.75rem;
+  color: var(--ds-text-secondary, #6b7280);
+  font-size: 0.85rem;
+}
+
+.ai-limitations {
+  margin: 0 0 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--ds-color-warning-300, #fcd34d);
+  border-radius: var(--ds-radius-md, 8px);
+  background: var(--ds-color-warning-50, #fffbeb);
+}
+
+.ai-limitations-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.ai-limitations-list {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.85rem;
 }
 
 /* Score Prediction Styles (First Innings) */
