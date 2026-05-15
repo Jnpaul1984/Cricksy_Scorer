@@ -2267,6 +2267,223 @@ Lock:
 
 AI insights are more useful and explainable without compromising official cricket data.
 
+## Phase 8 Sub-phases
+
+### Phase 8A — AI Analytics Runtime Audit + Spec Lock
+
+**Purpose**
+- Audit existing AI analytics and related contracts/operations before new implementation continues.
+
+**Strict scope**
+- Docs/spec only. No runtime code changes.
+
+**Gates**
+- Audit is repo-grounded across prediction endpoints, player insight services, frontend dashboards, confidence behavior, latency, cost, and model contracts.
+- Deterministic cricket truth remains protected (`AI advisory only`, `scoring truth untouched`).
+
+**Required tests / validation expectations**
+- Documentation validation only (render/format checks, references resolve, no runtime behavior changed).
+
+**Completion criteria**
+- Repo-grounded audit and spec lock exist for Phase 8 implementation.
+
+**Status**
+- Pending.
+
+### Phase 8B — Insight Contract + Explainability Standardization
+
+**Purpose**
+- Standardize AI insight output shape so each insight exposes confidence, explanation, limitations, provenance/source references, and advisory metadata.
+
+**Strict scope**
+- Backend/frontend contracts only. Do not retrain or replace models.
+
+**Gates**
+- Contract fields are defined and governed:
+  - `insight_id`
+  - `insight_type`
+  - `title`
+  - `summary`
+  - `explanation`
+  - `confidence_score`
+  - `confidence_band`
+  - `limitations`
+  - `source_context`
+  - `provenance_references`
+  - `generated_at`
+  - `model_or_service_source`
+  - `review_state`
+  - `ai_metadata`
+- Contract governance does not permit mutation of official scoring truth.
+
+**Required tests / validation expectations**
+- Contract/schema validation tests for affected backend/frontend AI insight surfaces.
+- Backward-compatibility checks or documented migration path validation where full conformance is deferred.
+
+**Completion criteria**
+- Insight contract exists and affected AI insight outputs conform or have documented migration paths.
+
+**Status**
+- Pending.
+
+### Phase 8C — AI Insight Feedback + Review Workflow
+
+**Purpose**
+- Enable authorized reviewers to approve/reject/request changes, mark useful/not useful, flag unsupported/unsafe claims, and add reviewer notes to AI insights.
+
+**Strict scope**
+- Review metadata workflow only. No scoring, DLS, official stat/result, or model mutation.
+
+**Gates**
+- Reviewer actions are permissioned and auditable.
+- Role/org boundaries are enforced.
+- AI remains advisory and cannot alter deterministic match truth.
+
+**Required tests / validation expectations**
+- Backend persistence and RBAC tests for review state.
+- Frontend workflow tests for review actions and visible review status on a real insight surface.
+- CI must pass before completion.
+
+**Completion criteria**
+- Review workflow is visible in at least one real insight surface, backend review state is persisted, role/org boundaries are enforced, and tests pass.
+
+**Status**
+- In progress via PR `Jnpaul1984/Cricksy_Scorer#225`. Do not mark complete until that PR merges and CI passes.
+
+### Phase 8D — Analyst Workspace AI Insight Panel Upgrade
+
+**Purpose**
+- Make AI insights visible and useful in Analyst Workspace using real match/player/team data.
+
+**Strict scope**
+- Analyst Workspace UI and supporting read-only data contracts only.
+
+**Gates**
+- Display must include confidence labels, limitations, source references, and review state.
+- No fake data and no mutation of scoring truth.
+
+**Required tests / validation expectations**
+- Analyst Workspace UI rendering and contract tests for insight payloads.
+- Validation that displayed insights are sourced from real data pipelines.
+
+**Completion criteria**
+- Analysts can view match intelligence summaries, key player insights, tactical/phase notes, confidence labels, limitations, source references, and review status.
+
+**Status**
+- Pending.
+
+### Phase 8E — Player Development AI Insight Cards
+
+**Purpose**
+- Support coaching vision with clear developmental recommendations for weaker-player improvement.
+
+**Strict scope**
+- Developmental insight cards only. Player-facing outputs must remain reviewed and safe.
+
+**Gates**
+- Card sections are governed:
+  - `main strength`
+  - `main weakness`
+  - `technical focus`
+  - `tactical focus`
+  - `recommended drill category`
+  - `confidence level`
+  - `sample-size warning`
+  - `coach review status`
+- Youth/player-impacting output must respect review gating.
+
+**Required tests / validation expectations**
+- Card schema/UI tests for required sections and safe language behavior.
+- Review-gate tests ensuring coach/player-facing outputs are blocked until approved where required.
+
+**Completion criteria**
+- Coach-facing player development cards exist with confidence, limitations, safe language, and review gating for youth/player-impacting output.
+
+**Status**
+- Pending.
+
+### Phase 8F — Match Intelligence Explainability + Source Citations
+
+**Purpose**
+- Ensure tactical AI claims can surface deterministic data sources behind each claim.
+
+**Strict scope**
+- Explainability and source/provenance display only. No model replacement.
+
+**Gates**
+- Claims show source/provenance links to deterministic cricket data.
+- Sample-size caveats are shown where relevant.
+- Scoring truth remains unchanged.
+
+**Required tests / validation expectations**
+- Explainability/source citation rendering tests across match insight surfaces.
+- Validation that cited metrics map to deterministic sources (balls faced, phase data, scoring rate, dismissal patterns, dot-ball percentage, opposition context).
+
+**Completion criteria**
+- AI match insights show source references such as balls faced, phase data, scoring rate, dismissal patterns, dot-ball percentage, opposition context, and sample-size caveats where relevant.
+
+**Status**
+- Pending.
+
+### Phase 8G — AI Insight Cache + Fallback Behavior
+
+**Purpose**
+- Reduce repeated AI generation and control latency/cost.
+
+**Strict scope**
+- AI insight caching/fallback behavior only.
+
+**Gates**
+- Required behavior is governed:
+  - reuse existing insight if context has not changed
+  - fallback to deterministic summary if AI is unavailable
+  - show stale/refresh status
+  - do not regenerate on every page load
+  - rate-limit expensive insight generation
+- Deterministic cricket truth remains authoritative.
+
+**Required tests / validation expectations**
+- Cache hit/miss and freshness tests.
+- Fallback behavior tests when AI dependency is unavailable.
+- Event-triggered or explicit user-triggered generation behavior tests.
+
+**Completion criteria**
+- AI insight generation is event-triggered or explicitly user-triggered, cached safely, and falls back to deterministic summaries when needed.
+
+**Status**
+- Pending.
+
+### Phase 8H — Manual QA + Production Readiness Gate
+
+**Purpose**
+- Close Phase 8 only after end-to-end AI insight workflow is manually validated.
+
+**Strict scope**
+- Manual QA and production readiness evidence only.
+
+**Gates**
+- Required manual QA flow is completed and documented:
+  - analyst opens match
+  - AI insight appears
+  - confidence/explanation visible
+  - reviewer approves or rejects
+  - review state persists
+  - coach/player-facing output is blocked until approved
+  - no scoring truth is changed
+  - no fake data appears
+  - frontend builds
+  - backend tests pass
+
+**Required tests / validation expectations**
+- Manual QA evidence checklist with traceable run artifacts.
+- Final CI green status across required frontend/backend gates.
+
+**Completion criteria**
+- Manual QA evidence exists, CI passes, no fake data is introduced, and Phase 8 completion report is added.
+
+**Status**
+- Pending.
+
 ---
 
 # Phase 9 — Subscription, Pricing + Tier Enforcement Hardening
