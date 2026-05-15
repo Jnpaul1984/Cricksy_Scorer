@@ -472,6 +472,19 @@
 
           <!-- When AI summary exists -->
           <div v-else class="cs-ai-body">
+            <AiInsightReviewCard
+              v-if="aiSummary"
+              class="cs-ai-review-card"
+              insight-type="summary"
+              :insight-id="matchId"
+              title="AI Insight Review"
+              :explanation="aiOverallSummary || aiOverview"
+              :confidence="aiSummary.ai_metadata?.confidence_score ?? null"
+              :limitations="aiLimitations"
+              :source-refs="aiSourceRefs"
+              :can-review="canReviewAiInsights"
+            />
+
             <!-- Overall Summary -->
             <p v-if="aiOverallSummary || aiOverview" class="cs-ai-overall">
               {{ aiOverallSummary || aiOverview }}
@@ -669,8 +682,9 @@
 import { computed, ref, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { BaseCard, BaseButton, BaseBadge, ImpactBar, MiniSparkline, AiCalloutsPanel } from '@/components'
+import { BaseCard, BaseButton, BaseBadge, ImpactBar, MiniSparkline, AiCalloutsPanel, AiInsightReviewCard } from '@/components'
 import type { AiCallout, CalloutSeverity } from '@/components'
+import { useAuthStore } from '@/stores/authStore'
 import {
   getMatchCaseStudy,
   getMatchAiSummary,
@@ -716,6 +730,7 @@ type ImpactFilter = 'all' | 'positive' | 'negative' | 'neutral'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const matchId = computed(() => route.params.matchId as string)
 
@@ -794,6 +809,7 @@ const aiGroundingSummary = computed(() => {
 const showAiEvidence = computed(() => {
   return aiSourceRefs.value.length > 0 || aiGroundingSummary.value.length > 0
 })
+const canReviewAiInsights = computed(() => authStore.canAnalyze)
 
 // Per-match AI callouts derived from case study data
 const matchAiLoading = computed(() => loading.value)

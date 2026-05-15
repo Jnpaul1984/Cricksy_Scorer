@@ -2334,3 +2334,113 @@ class HistoricalImportBatch(Base):
         Index("ix_hist_import_semantic_user", "semantic_key", "owner_user_id"),
         Index("ix_hist_import_semantic_org", "semantic_key", "owner_org_id"),
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 8C — AI Insight Review
+# ---------------------------------------------------------------------------
+
+
+class AiInsightReviewState(str, enum.Enum):
+    """Review state lifecycle for an AI-generated insight."""
+
+    pending = "pending"
+    """Awaiting reviewer action (default for requires_review outputs)."""
+
+    approved = "approved"
+    """Approved for internal-use distribution."""
+
+    rejected = "rejected"
+    """Blocked / rejected — must not be distributed."""
+
+    changes_requested = "changes_requested"
+    """Reviewer has requested revisions before approval."""
+
+    flagged = "flagged"
+    """Flagged as containing an unsafe claim or unsupported language."""
+
+
+class AiInsightFeedbackType(str, enum.Enum):
+    """Discrete feedback signal attached to a review action."""
+
+    useful = "useful"
+    not_useful = "not_useful"
+    unsafe = "unsafe"
+    unsupported_claim = "unsupported_claim"
+
+
+class AiInsightReview(Base):
+    """
+    Persistent audit record for a reviewer's decision on an AI-generated insight.
+
+    Phase 8C — Governance rule:
+        This table stores advisory review metadata only.  It must never be
+        used to write back to official scoring, player stats, match results,
+        DLS calculations, or any other official cricket truth column.
+
+    One row is created per reviewer action.  The latest row for a given
+    (insight_type, insight_id) pair represents the current review state.
+    """
+
+    __tablename__ = "ai_insight_reviews"
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+        nullable=False,
+    )
+
+    # Insight identity
+    insight_type: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        comment="AI output type: summary, insight, commentary, recommendation, report, draft",
+        index=True,
+    )
+    insight_id: Mapped[str] = mapped_column(
+        String(256),
+        nullable=False,
+        comment="Logical ID for the insight (e.g. match_id, player_id)",
+        index=True,
+    )
+
+    # Reviewer identity + org at time of review
+    reviewer_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id", ondelete="SET NULL"), nullable=False, index=True
+    )
+    reviewer_org_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, comment="Org at time of review (snapshot)"
+    )
+
+    # Review decision
+    review_state: Mapped[AiInsightReviewState] = mapped_column(
+        String(64),
+        nullable=False,
+        default=AiInsightReviewState.pending.value,
+        index=True,
+    )
+    feedback_type: Mapped[AiInsightFeedbackType | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+    note: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Optional reviewer note or change request text",
+    )
+
+    # Timestamps
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index("ix_ai_insight_review_type_id", "insight_type", "insight_id"),
+    )

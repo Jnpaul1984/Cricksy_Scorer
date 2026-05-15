@@ -1823,3 +1823,87 @@ export async function historicalOcrRejectCandidate(
     { method: 'POST', body: JSON.stringify({ reason }) },
   );
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Phase 8C — AI Insight Feedback + Review Workflow
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** Discrete review state for an AI-generated insight. */
+export type AiInsightReviewState =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'changes_requested'
+  | 'flagged';
+
+/** Discrete feedback signal attached to a review action. */
+export type AiInsightFeedbackType =
+  | 'useful'
+  | 'not_useful'
+  | 'unsafe'
+  | 'unsupported_claim';
+
+/** A single persisted review record returned by the API. */
+export interface AiInsightReviewRecord {
+  id: string;
+  insight_type: string;
+  insight_id: string;
+  reviewer_id: string;
+  reviewer_org_id: string | null;
+  review_state: AiInsightReviewState;
+  feedback_type: AiInsightFeedbackType | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Response from GET /ai-insights/review/{insight_type}/{insight_id}.
+ * When no review exists, ``current_state`` is ``'pending'``.
+ */
+export interface AiInsightReviewStateResponse {
+  insight_type: string;
+  insight_id: string;
+  current_state: AiInsightReviewState;
+  latest_review: AiInsightReviewRecord | null;
+  total_reviews: number;
+  /** Always true — review state is advisory metadata, not official cricket truth. */
+  is_advisory_only: boolean;
+}
+
+/** Request body for POST /ai-insights/review/{insight_type}/{insight_id}. */
+export interface AiInsightReviewSubmit {
+  review_state: AiInsightReviewState;
+  feedback_type?: AiInsightFeedbackType | null;
+  note?: string | null;
+}
+
+/**
+ * GET /ai-insights/review/{insightType}/{insightId}
+ * Fetch the current review state for an AI insight.
+ * Requires analyst_pro or org_pro role.
+ */
+export async function getAiInsightReviewState(
+  insightType: string,
+  insightId: string,
+): Promise<AiInsightReviewStateResponse> {
+  return request<AiInsightReviewStateResponse>(
+    `/ai-insights/review/${encodeURIComponent(insightType)}/${encodeURIComponent(insightId)}`,
+  );
+}
+
+/**
+ * POST /ai-insights/review/{insightType}/{insightId}
+ * Submit a review decision for an AI insight.
+ * Requires analyst_pro or org_pro role.
+ */
+export async function submitAiInsightReview(
+  insightType: string,
+  insightId: string,
+  payload: AiInsightReviewSubmit,
+): Promise<AiInsightReviewRecord> {
+  return request<AiInsightReviewRecord>(
+    `/ai-insights/review/${encodeURIComponent(insightType)}/${encodeURIComponent(insightId)}`,
+    { method: 'POST', body: JSON.stringify(payload) },
+  );
+}

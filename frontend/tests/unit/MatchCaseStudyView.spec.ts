@@ -18,6 +18,12 @@ vi.mock('@/services/api', () => ({
   getMatchAiSummary: vi.fn(),
 }))
 
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: () => ({
+    canAnalyze: true,
+  }),
+}))
+
 const globalStubs = {
   BaseCard: { template: '<div class="base-card-stub"><slot /></div>' },
   BaseButton: {
@@ -28,6 +34,7 @@ const globalStubs = {
   ImpactBar: { template: '<div class="impact-bar-stub" />' },
   MiniSparkline: { template: '<div class="mini-sparkline-stub" />' },
   AiCalloutsPanel: { template: '<div class="ai-callouts-panel-stub" />' },
+  AiInsightReviewCard: { template: '<div data-testid="ai-insight-review-card-stub" />' },
 }
 
 const baseCaseStudy = {
@@ -105,6 +112,7 @@ describe('MatchCaseStudyView', () => {
     expect(wrapper.text()).toContain('Phase: Death overs')
     expect(wrapper.text()).toContain('Limitations')
     expect(wrapper.text()).toContain('Advisory only.')
+    expect(wrapper.find('[data-testid="ai-insight-review-card-stub"]').exists()).toBe(true)
   })
 
   it('does not render an empty evidence block when ai grounding metadata is absent', async () => {
