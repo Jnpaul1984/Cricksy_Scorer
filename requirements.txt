@@ -46,3 +46,7 @@ flake8==6.1.0
 # Security
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
+
+# Phase 7C — optional PDF text extraction (digitally generated PDFs only)
+# No image OCR; no binary system dependencies required.
+pdfplumber>=0.11.4

@@ -27,6 +27,7 @@ const baseCandidate = {
     confidence: 0.84,
     uncertainty_flags: [],
     ocr_text: null,
+    warnings: [],
     non_authoritative_notice:
       'OCR/AI extraction is non-authoritative and must be reviewed before historical import.',
   },
@@ -41,6 +42,38 @@ const baseCandidate = {
   validation_errors: [],
   dry_run_result: null,
   dry_run_batch_id: null,
+};
+
+const pdfExtractCandidateWithText = {
+  ...baseCandidate,
+  status: 'needs_review' as const,
+  extraction: {
+    method: 'pdf_text_extract',
+    confidence: 1.0,
+    uncertainty_flags: [],
+    ocr_text: 'Lions vs Falcons\nTotal: 185/6 in 20 overs',
+    warnings: [],
+    non_authoritative_notice:
+      'OCR/AI extraction is non-authoritative and must be reviewed before historical import.',
+  },
+  candidate_json: null,
+};
+
+const pdfExtractCandidateNoText = {
+  ...baseCandidate,
+  status: 'uploaded' as const,
+  extraction: {
+    method: 'pdf_text_extract',
+    confidence: 0.0,
+    uncertainty_flags: ['scanned_pdf_no_text'],
+    ocr_text: null,
+    warnings: [
+      'PDF contains no extractable text layer. This is likely a scanned image PDF. Image OCR is not performed — please enter the scorecard JSON manually.',
+    ],
+    non_authoritative_notice:
+      'OCR/AI extraction is non-authoritative and must be reviewed before historical import.',
+  },
+  candidate_json: null,
 };
 
 const flushPromises = async () => {
@@ -146,5 +179,55 @@ describe('HistoricalOcrReviewPanel', () => {
     await flushPromises();
 
     expect(wrapper.get('.hocr-error').text()).toContain('Invalid structured JSON:');
+  });
+
+  // Phase 7C — PDF text extraction display tests
+
+  it('renders extracted text preview with non-authoritative notice for pdf_text_extract method', async () => {
+    vi.mocked(api.historicalOcrCreateCandidate).mockResolvedValue(pdfExtractCandidateWithText);
+
+    const wrapper = mount(HistoricalOcrReviewPanel);
+    await selectFile(wrapper);
+    await wrapper.get('[data-testid="ocr-create-candidate"]').trigger('click');
+    await flushPromises();
+
+    const preview = wrapper.get('[data-testid="ocr-extracted-text-preview"]');
+    expect(preview.exists()).toBe(true);
+    // Must show non-authoritative warning
+    expect(preview.text()).toContain('not official match data');
+    // Must show extracted text content
+    const content = wrapper.get('[data-testid="ocr-extracted-text-content"]');
+    expect(content.text()).toContain('Lions vs Falcons');
+  });
+
+  it('renders no-text fallback message when pdf_text_extract finds no extractable text', async () => {
+    vi.mocked(api.historicalOcrCreateCandidate).mockResolvedValue(pdfExtractCandidateNoText);
+
+    const wrapper = mount(HistoricalOcrReviewPanel);
+    await selectFile(wrapper);
+    await wrapper.get('[data-testid="ocr-create-candidate"]').trigger('click');
+    await flushPromises();
+
+    const preview = wrapper.get('[data-testid="ocr-extracted-text-preview"]');
+    expect(preview.exists()).toBe(true);
+    const noTextMsg = wrapper.get('[data-testid="ocr-no-text-message"]');
+    expect(noTextMsg.text()).toContain('No extractable text');
+    // Extracted text content block must not render
+    expect(wrapper.find('[data-testid="ocr-extracted-text-content"]').exists()).toBe(false);
+  });
+
+  it('does not render extracted text preview for manual_candidate_json method', async () => {
+    vi.mocked(api.historicalOcrCreateCandidate).mockResolvedValue(baseCandidate);
+
+    const wrapper = mount(HistoricalOcrReviewPanel);
+    await selectFile(wrapper);
+    await wrapper.get('[data-testid="ocr-candidate-json"]').setValue(
+      '{"matchType":"T20","teams":["Lions","Falcons"],"innings":[]}',
+    );
+    await wrapper.get('[data-testid="ocr-create-candidate"]').trigger('click');
+    await flushPromises();
+
+    // No pdf_text_extract preview should render for manual method
+    expect(wrapper.find('[data-testid="ocr-extracted-text-preview"]').exists()).toBe(false);
   });
 });

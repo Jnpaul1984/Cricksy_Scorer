@@ -23,6 +23,7 @@
         Extraction method
         <select v-model="extractionMethod" class="hocr-input">
           <option value="manual_candidate_json">Manual candidate JSON</option>
+          <option value="pdf_text_extract">PDF text extraction (digital PDFs)</option>
           <option value="ocr_text_attachment">OCR text attached</option>
         </select>
       </label>
@@ -95,6 +96,23 @@
       <p><strong>Confidence:</strong> {{ candidate.extraction.confidence ?? 'N/A' }}</p>
       <p class="hocr-notice">{{ candidate.extraction.non_authoritative_notice }}</p>
       <p v-if="candidate.rejection_reason"><strong>Rejected:</strong> {{ candidate.rejection_reason }}</p>
+
+      <div v-if="candidate.extraction.method === 'pdf_text_extract'" class="hocr-extracted-text" data-testid="ocr-extracted-text-preview">
+        <p class="hocr-notice hocr-notice--warning">
+          ⚠ Extracted text is <strong>not official match data</strong>. Operator review and correction are required before dry-run validation.
+        </p>
+        <template v-if="candidate.extraction.ocr_text">
+          <p><strong>Extracted text preview (non-authoritative):</strong></p>
+          <pre class="hocr-extracted-pre" data-testid="ocr-extracted-text-content">{{ candidate.extraction.ocr_text }}</pre>
+        </template>
+        <p v-else class="hocr-notice hocr-notice--fallback" data-testid="ocr-no-text-message">
+          No extractable text was found in this PDF. This may be a scanned image PDF.
+          Image OCR is not performed — please enter the scorecard JSON manually in the field above.
+        </p>
+        <ul v-if="candidate.extraction.warnings && candidate.extraction.warnings.length" class="hocr-warnings">
+          <li v-for="(w, i) in candidate.extraction.warnings" :key="i">{{ w }}</li>
+        </ul>
+      </div>
     </div>
 
     <div v-if="dryRunResult" class="hocr-dryrun" data-testid="ocr-dry-run-result">
@@ -130,7 +148,7 @@ import {
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
-const extractionMethod = ref<'manual_candidate_json' | 'ocr_text_attachment'>('manual_candidate_json')
+const extractionMethod = ref<'manual_candidate_json' | 'pdf_text_extract' | 'ocr_text_attachment'>('manual_candidate_json')
 const confidenceInput = ref('')
 const candidateJsonText = ref('')
 const ocrText = ref('')
@@ -293,4 +311,9 @@ async function rejectCandidate() {
 .hocr-summary, .hocr-dryrun { margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px dashed #d7dbe6; font-size: 0.88rem; }
 .hocr-empty { margin-top: 0.8rem; color: #4b5563; font-size: 0.88rem; }
 .hocr-notice { font-size: 0.82rem; color: #374151; }
+.hocr-notice--warning { color: #92400e; background: #fef3c7; border-radius: 6px; padding: 0.4rem 0.6rem; margin: 0.5rem 0; }
+.hocr-notice--fallback { color: #374151; font-style: italic; }
+.hocr-extracted-text { margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px dotted #d7dbe6; }
+.hocr-extracted-pre { background: #f8f9fc; border: 1px solid #ced4e0; border-radius: 6px; padding: 0.6rem; font-size: 0.78rem; white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
+.hocr-warnings { margin: 0.4rem 0 0; padding-left: 1.2rem; font-size: 0.8rem; color: #92400e; }
 </style>
