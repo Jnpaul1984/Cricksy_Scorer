@@ -261,7 +261,6 @@ describe('AnalystWorkspaceView', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     pushMock.mockReset()
-    vi.mocked(api.getMatchAiSummary).mockResolvedValue(mockMatchAiSummary as never)
   })
 
   it('renders real API match list data', async () => {
@@ -666,6 +665,7 @@ describe('AnalystWorkspaceView', () => {
   it('renders upgraded AI insight panel in match intelligence detail', async () => {
     vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
     vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(mockMatchAiSummary as never)
 
     const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
     await nextTick()

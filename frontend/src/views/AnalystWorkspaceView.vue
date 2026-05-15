@@ -1339,7 +1339,7 @@ const aiConfidencePct = computed<number | null>(() => {
 
 const aiConfidenceLabel = computed<string | null>(() => {
   const pct = aiConfidencePct.value
-  if (pct == null) return null
+  if (pct === null) return null
   if (pct >= 80) return 'High'
   if (pct >= 50) return 'Medium'
   return 'Low'
