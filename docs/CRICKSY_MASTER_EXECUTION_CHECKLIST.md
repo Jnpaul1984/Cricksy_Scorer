@@ -2157,6 +2157,31 @@ Teams can upload scans/photos/PDFs and review extracted match data before saving
 
 ---
 
+### Phase 7C — PDF Text Extraction Integration
+
+- Completed.
+- Evidence: `docs/PHASE_7C_PDF_TEXT_EXTRACTION_INTEGRATION.md`
+- Scope: optional `pdfplumber`-based extraction for digital PDFs only; graceful fallback for
+  scanned PDFs; review-only extracted text preview; focused backend/frontend test coverage.
+- Recommendation: keep PDF extraction non-authoritative and review-only; defer image OCR to
+  Phase 7D audit/spec-lock.
+- No image OCR or hosted OCR added. No official cricket truth behavior changed.
+
+### Phase 7D — Tesseract/Image OCR Integration Audit + Spec Lock
+
+- Completed.
+- Evidence: `docs/PHASE_7D_TESSERACT_IMAGE_OCR_AUDIT_AND_SPEC_LOCK.md`
+- Scope: audit of the existing OCR review flow, Phase 7C extraction path, frontend review
+  panel, import E2E coverage, backend Docker/runtime constraints, deploy workflow, ECS image
+  implications, local Tesseract/OpenCV feasibility, confidence/fallback rules, and rollback
+  safety for image OCR.
+- Recommendation: proceed only with a narrow optional Phase 7E local Tesseract image-text
+  assist slice for direct image uploads; defer scanned PDF conversion, OpenCV-heavy
+  preprocessing, and hosted OCR.
+- No image OCR runtime implementation added. No official cricket truth behavior changed.
+
+---
+
 # Phase 8 — AI Analytics + Match Intelligence Enhancements
 
 ## Purpose
