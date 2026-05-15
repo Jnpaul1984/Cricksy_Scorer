@@ -2134,6 +2134,27 @@ Lock:
 
 Teams can upload scans/photos/PDFs and review extracted match data before saving.
 
+## Sub-phases
+
+### Phase 7A — Manual QA + Operator Workflow Validation for OCR Review Flow
+
+- Completed.
+- Evidence: `docs/PHASE_7A_OCR_REVIEW_FLOW_MANUAL_QA.md`
+- Scope: operator UX validation, empty/loading state polish, dry-run gating tightening,
+  focused frontend unit coverage for `HistoricalOcrReviewPanel`.
+
+### Phase 7B — OCR Extraction Engine Integration Audit + Spec Lock
+
+- Completed.
+- Evidence: `docs/PHASE_7B_OCR_EXTRACTION_ENGINE_AUDIT_AND_SPEC_LOCK.md`
+- Scope: audit of existing Phase 7/7A code assets; OCR engine options comparison;
+  spec-lock document with recommended hybrid extraction strategy, non-authoritative boundary
+  rules, input/output contract, confidence/uncertainty schema, failure modes, file validation
+  rules, CI/testing plan, rollout/rollback plan, and Phase 7C recommendation.
+- Recommendation: Option 6 hybrid — manual candidate JSON (default, current); optional PDF
+  text extraction via `pdfplumber` in Phase 7C; Tesseract image OCR deferred to Phase 7D.
+- No OCR engine implementation added. No official cricket truth behavior changed.
+
 ---
 
 # Phase 8 — AI Analytics + Match Intelligence Enhancements
