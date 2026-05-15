@@ -4,7 +4,7 @@ API routes for win probability predictions.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Any
 
 from backend.domain.ai_boundary import AiOutputMetadata, AiOutputType
 from backend.services.prediction_service import get_win_probability
@@ -30,7 +30,7 @@ _PREDICTION_LIMITATIONS = [
 @router.get("/games/{game_id}/win-probability")
 async def get_game_win_probability(
     game_id: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
     Get current win probability for a game.

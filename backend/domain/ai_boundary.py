@@ -168,7 +168,8 @@ class AiOutputMetadata(BaseModel):
         description=(
             "Model confidence expressed as a value between 0.0 (no confidence) and "
             "1.0 (high confidence).  None when confidence is not applicable or "
-            "cannot be computed for this output type."
+            "cannot be computed for this output type.  When set, validation enforces "
+            "the 0.0-1.0 range; when None, range validation is not applied."
         ),
     )
     limitations: list[str] = Field(
