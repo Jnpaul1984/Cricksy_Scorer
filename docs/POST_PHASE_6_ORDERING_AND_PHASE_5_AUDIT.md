@@ -75,7 +75,8 @@ The checklist's "Recommended Execution Order" section (lines 2580–2601) places
 7.  Phase 6 — Cricksy Intelligence Operating System Governance
 8.  Phase 7 — Historical Match Ingestion: PDF/Image/OCR Review Flow
 9.  Phase 8 — AI Analytics + Match Intelligence Enhancements
-10. Phase 9 — Subscription, Pricing + Tier Enforcement Hardening
+10. Phase 9 — Player Development Intelligence Foundation
+11. Phase 10 — Subscription, Pricing + Tier Enforcement Hardening
 ...
 ```
 

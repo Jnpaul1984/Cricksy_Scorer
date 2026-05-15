@@ -2486,7 +2486,232 @@ AI insights are more useful and explainable without compromising official cricke
 
 ---
 
-# Phase 9 — Subscription, Pricing + Tier Enforcement Hardening
+# Phase 9 — Player Development Intelligence Foundation
+
+## Product doctrine
+
+> Cricksy must not only help teams win matches. In school and academy settings, Cricksy must help every player improve, especially weaker or overlooked players.
+
+## Core principle
+
+> Every player should leave the season measurably better than they started.
+
+## Existing partial foundations to reuse
+
+- `backend/routes/coach_pro.py` coach-player assignment and coaching session workflows
+- `backend/services/ai_player_insights.py` non-authoritative strengths, weaknesses, form, role tags, and recommendations
+- existing monthly improvement tracking, training drill suggestions, tactical suggestion engine, dismissal pattern detection, heatmap overlays
+- Coach Pro Plus video analysis/reporting pipelines
+- Phase 6C Cricksy Skills Architecture governance
+- Phase 8C AI Insight Feedback + Review Workflow
+
+## Phase support requirements
+
+- weakest-player uplift
+- personalized development plans
+- coach-approved AI recommendations
+- evidence-based progress tracking
+- drill assignments
+- progress checkpoints
+- video-analysis evidence intake
+- school/team improvement visibility
+- youth-safe coaching language
+- no fake performance claims
+- deterministic stats separated from AI recommendations
+- organization/player privacy boundaries
+
+### Phase 9A — Pre-Phase Audit + Spec Lock
+
+**Status**
+- todo
+
+Audit existing player, coach, AI insight, drill, video-analysis, and improvement-tracking features before implementation.
+
+**Must inspect and document**
+- PlayerProfile / PlayerForm models
+- CoachPlayerAssignment
+- CoachingSession
+- AI Player Insights service
+- Training Drill Generator
+- Monthly Improvement Tracker
+- Coach Pro / Coach Pro Plus routes
+- Coach video-analysis pipeline
+- AI Insight Review workflow
+- Analyst Workspace player/match data surfaces
+- Frontend player profile and coach dashboard views
+
+**Acceptance criteria**
+- Existing partial features documented
+- No duplicate player-development system planned
+- Data ownership defined
+- AI boundary rules defined
+- Coach approval rules defined
+- Youth-safe wording rules defined
+- Org/player access boundaries defined
+- Frontend visibility requirements defined
+- Documentation only; no runtime behavior changes
+
+### Phase 9B — Player Development Data Model
+
+**Status**
+- todo
+
+Future backend foundation for structured player development.
+
+**Required future entities**
+- PlayerDevelopmentPlan
+- PlayerDevelopmentGoal
+- PlayerWeaknessTag
+- PlayerStrengthTag
+- PlayerDevelopmentIntervention
+- PlayerDrillAssignment
+- PlayerProgressCheckpoint
+
+**Required future fields/concepts**
+- player_profile_id
+- coach_user_id
+- org_id
+- source_type: match_data | video_analysis | coach_note | ai_insight | manual
+- weakness_category
+- severity
+- confidence_score
+- coach_approved
+- status: draft | active | completed | paused | archived
+- evidence_refs
+- ai_metadata where applicable
+- created_at / updated_at
+
+**Acceptance criteria**
+- Alembic migration required in implementation phase
+- SQLAlchemy models required in implementation phase
+- Pydantic schemas required in implementation phase
+- Org/coach/player access boundaries enforced
+- AI-generated suggestions cannot mutate official stats
+- Tests required for creation, update, permissions, and status transitions
+
+### Phase 9C — Development Plan Service + Recommendation Engine
+
+**Status**
+- todo
+
+Convert existing AI player insights, drill suggestions, and improvement tracking into a coach-approved development plan.
+
+**Required future behavior**
+- Generate draft development plan for a player
+- Use existing AI player insights for strengths/weaknesses
+- Use existing drill generator for suggested drills
+- Use monthly improvement tracker for baseline metrics
+- Allow coach to approve/reject/edit AI suggestions
+- Preserve AI insight review rules from Phase 8C
+- Include limitations, confidence scores, and evidence references
+
+**Acceptance criteria**
+- Draft plan generated from real player data only
+- No fake drills, fake stats, or fake improvement claims
+- Weaknesses map to specific drills
+- Plan includes measurable goals
+- Plan includes review date/checkpoint
+- Coach approval required before activation
+- Tests required for plan generation and approval flow
+
+### Phase 9D — Coach Workspace Player Development UI
+
+**Status**
+- todo
+
+Make the player-development system visible and usable in the Coach Workspace.
+
+**Required future frontend**
+- Assigned players list with development status
+- Player development profile
+- Strengths and weaknesses panel
+- Active goals
+- Assigned drills
+- Coaching notes/sessions
+- Progress checkpoints
+- Coach approve/reject/edit AI suggestions
+- “Needs attention” indicator for struggling players
+- “Improving” indicator for players showing progress
+
+**Acceptance criteria**
+- Coach can open assigned player
+- Coach can view development plan
+- Coach can activate plan
+- Coach can assign drills
+- Coach can record session outcome
+- Weakest/developing players are easy to identify without negative wording
+- UI builds successfully in future implementation
+- No backend-only feature if it is meant for coach use
+
+### Phase 9E — School / Team Development Dashboard
+
+**Status**
+- todo
+
+Give schools and coaches a team-level view of player improvement.
+
+**Required future dashboard sections**
+- Team development overview
+- Weakest players needing support, framed constructively
+- Most improved players
+- Players without recent coaching activity
+- Common team weaknesses
+- Drill completion summary
+- Progress by skill category
+- Player confidence/mental-readiness indicators if available
+- School-safe export/report summary
+
+**Acceptance criteria**
+- Coach/org can see all assigned players within permitted scope
+- Dashboard separates match performance from player development
+- Weak players are framed constructively, not negatively
+- Youth-safe language enforced
+- Export/report can summarize team improvement
+
+### Phase 9F — Player Development Reports
+
+**Status**
+- todo
+
+Generate clear reports for coaches, schools, parents, and players.
+
+**Required future report types**
+- Individual player development report
+- Team development report
+- Before/after improvement report
+- Coach session summary
+- Drill progress summary
+
+**Acceptance criteria**
+- Reports use real data only
+- AI-generated recommendations are clearly marked as recommendations
+- Reports include strengths, weaknesses, actions taken, progress, and next steps
+- Parent/school version uses positive, youth-safe wording
+- Coach version can include deeper technical notes
+
+### Phase 9G — Player Development Skill Contract
+
+**Status**
+- todo
+
+Register player development as a governed Cricksy Skill family.
+
+**Required future skills**
+- player_weakness_detection.v1
+- player_development_plan.v1
+- drill_recommendation.v1
+- progress_checkpoint_summary.v1
+- team_development_overview.v1
+
+**Acceptance criteria**
+- Each skill follows Phase 6C skill contract
+- Required inputs, forbidden inputs, confidence fields, limitations, safety rules, youth safety rules, and review requirements defined
+- No skill can overwrite official cricket truth
+- Tests required to validate skill metadata in future implementation
+
+---
+
+# Phase 10 — Subscription, Pricing + Tier Enforcement Hardening
 
 ## Purpose
 
@@ -2548,7 +2773,7 @@ Paid features are protected correctly and pricing/tier behavior is reliable.
 
 ---
 
-# Phase 10 — Organization Pro + League Operations
+# Phase 11 — Organization Pro + League Operations
 
 ## Purpose
 
@@ -2600,7 +2825,7 @@ Organizations can safely manage teams, tournaments, sponsors, and roles.
 
 ---
 
-# Phase 11 — Live Viewer, Streaming + Sponsor Experience
+# Phase 12 — Live Viewer, Streaming + Sponsor Experience
 
 ## Purpose
 
@@ -2651,7 +2876,7 @@ The live viewing experience is more professional without harming scoring or perf
 
 ---
 
-# Phase 12 — Media, Highlights + Report Content Engine
+# Phase 13 — Media, Highlights + Report Content Engine
 
 ## Purpose
 
@@ -2702,7 +2927,7 @@ Cricksy can safely create useful media/reporting assets from existing data.
 
 ---
 
-# Phase 13 — Lightweight Cricket Supervisor Layer
+# Phase 14 — Lightweight Cricket Supervisor Layer
 
 ## Purpose
 
@@ -2757,7 +2982,7 @@ Cricksy gains safe workflow orchestration without becoming over-agentic or unsta
 
 ---
 
-# Phase 14 — Production Scale, Monitoring + Cost Control
+# Phase 15 — Production Scale, Monitoring + Cost Control
 
 ## Purpose
 
@@ -2916,12 +3141,13 @@ Check imports, typing, formatting, migrations, tests, and CI impact before final
 7. Phase 6 — Cricksy Intelligence Operating System Governance
 8. Phase 7 — Historical Match Ingestion: PDF/Image/OCR Review Flow
 9. Phase 8 — AI Analytics + Match Intelligence Enhancements
-10. Phase 9 — Subscription, Pricing + Tier Enforcement Hardening
-11. Phase 10 — Organization Pro + League Operations
-12. Phase 11 — Live Viewer, Streaming + Sponsor Experience
-13. Phase 12 — Media, Highlights + Report Content Engine
-14. Phase 13 — Lightweight Cricket Supervisor Layer
-15. Phase 14 — Production Scale, Monitoring + Cost Control
+10. Phase 9 — Player Development Intelligence Foundation
+11. Phase 10 — Subscription, Pricing + Tier Enforcement Hardening
+12. Phase 11 — Organization Pro + League Operations
+13. Phase 12 — Live Viewer, Streaming + Sponsor Experience
+14. Phase 13 — Media, Highlights + Report Content Engine
+15. Phase 14 — Lightweight Cricket Supervisor Layer
+16. Phase 15 — Production Scale, Monitoring + Cost Control
 
 Reason:
 

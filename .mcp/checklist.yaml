@@ -1598,3 +1598,151 @@
   completed_by: "design-team"
   completed_at: "2025-11-20T10:00:00Z"
   notes: "See frontend/src/styles/design-tokens.css"
+
+
+# ============================================================================
+# MASTER ROADMAP - PHASE 9 PLAYER DEVELOPMENT INTELLIGENCE FOUNDATION
+# ============================================================================
+
+- id: roadmap-phase9a-audit-spec-lock
+  week: 9
+  category: "Roadmap Governance"
+  title: "Phase 9A — Pre-Phase Audit + Spec Lock"
+  description: "Audit and lock spec for unified player-development intelligence workflow using existing foundations"
+  status: todo
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "Existing partial features are documented (coach assignments/sessions, AI insights, drills, monthly improvement, video analysis, review workflow, analyst surfaces, frontend views)"
+    - "No duplicate player-development system is planned"
+    - "Data ownership, AI boundaries, coach approval, youth-safe wording, and org/player access boundaries are defined"
+    - "Documentation-only output; no runtime behavior changes"
+  verification_commands:
+    - "python scripts/checklist.py status"
+  files_touched:
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.yaml"
+    - ".mcp/checklist.md"
+  completed_by: null
+  completed_at: null
+  notes: "Reuse partial foundations; do not duplicate coach_pro, ai_player_insights, drill generation, monthly improvement tracking, Phase 6C skills governance, or Phase 8C review workflow."
+
+- id: roadmap-phase9b-data-model
+  week: 9
+  category: "Roadmap Governance"
+  title: "Phase 9B — Player Development Data Model"
+  description: "Plan future entities/fields and boundaries for structured player development records"
+  status: todo
+  confidence: high
+  risk_level: high
+  acceptance_criteria:
+    - "Future entities include PlayerDevelopmentPlan/Goal, weakness-strength tags, interventions, drill assignments, progress checkpoints"
+    - "Future fields include source_type, coach_approved, status lifecycle, evidence_refs, ai_metadata, timestamps"
+    - "Implementation phase requires Alembic + SQLAlchemy + Pydantic + permissions tests"
+    - "AI suggestions cannot mutate official stats"
+  verification_commands:
+    - "python scripts/checklist.py status"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Planning only."
+
+- id: roadmap-phase9c-plan-engine
+  week: 9
+  category: "Roadmap Governance"
+  title: "Phase 9C — Development Plan Service + Recommendation Engine"
+  description: "Plan coach-approved draft development plans that combine existing AI insights, drill generator, and improvement tracker"
+  status: todo
+  confidence: high
+  risk_level: high
+  acceptance_criteria:
+    - "Draft plan uses real player data only"
+    - "No fake drills, stats, or improvement claims"
+    - "Weaknesses map to drills with measurable goals and review checkpoints"
+    - "Coach approval required before plan activation"
+  verification_commands:
+    - "python scripts/checklist.py status"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Preserve Phase 8C AI review rules and include confidence/limitations/evidence references."
+
+- id: roadmap-phase9d-coach-workspace-ui
+  week: 9
+  category: "Roadmap Governance"
+  title: "Phase 9D — Coach Workspace Player Development UI"
+  description: "Plan coach-facing workflow visibility for player development plans and interventions"
+  status: todo
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "Coach can open assigned player, view/activate plan, assign drills, and record session outcomes"
+    - "UI includes strengths/weaknesses, goals, checkpoints, and approval controls"
+    - "Needs-attention and improving indicators are constructive and youth-safe"
+    - "No backend-only delivery for coach-facing capabilities"
+  verification_commands:
+    - "python scripts/checklist.py status"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Planning only."
+
+- id: roadmap-phase9e-team-dashboard
+  week: 9
+  category: "Roadmap Governance"
+  title: "Phase 9E — School / Team Development Dashboard"
+  description: "Plan team-level development visibility separated from match-performance truth"
+  status: todo
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "Dashboard covers support-needed players (constructive framing), most improved, inactivity, weaknesses, drill completion, skill progress"
+    - "Coach/org scope boundaries are enforced"
+    - "Youth-safe language is required"
+    - "School-safe export/report summary is supported"
+  verification_commands:
+    - "python scripts/checklist.py status"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Planning only."
+
+- id: roadmap-phase9f-development-reports
+  week: 9
+  category: "Roadmap Governance"
+  title: "Phase 9F — Player Development Reports"
+  description: "Plan report families for coaches, schools, parents, and players"
+  status: todo
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "Report types include individual, team, before/after, session summary, drill progress"
+    - "Reports use real data only"
+    - "AI output is explicitly marked as recommendation"
+    - "Youth-safe/positive language required for parent-school versions"
+  verification_commands:
+    - "python scripts/checklist.py status"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Planning only."
+
+- id: roadmap-phase9g-skill-contract
+  week: 9
+  category: "Roadmap Governance"
+  title: "Phase 9G — Player Development Skill Contract"
+  description: "Plan governed skill-family contracts for player development intelligence"
+  status: todo
+  confidence: high
+  risk_level: high
+  acceptance_criteria:
+    - "Skills include player_weakness_detection.v1, player_development_plan.v1, drill_recommendation.v1, progress_checkpoint_summary.v1, team_development_overview.v1"
+    - "Contracts follow Phase 6C required/forbidden inputs, confidence fields, limitations, safety and youth-safety rules, review requirements"
+    - "No skill can overwrite official cricket truth"
+    - "Implementation phase requires skill metadata tests"
+  verification_commands:
+    - "python scripts/checklist.py status"
+  files_touched: []
+  completed_by: null
+  completed_at: null
+  notes: "Planning only."
