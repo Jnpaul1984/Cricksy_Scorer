@@ -6,8 +6,8 @@ Creates the ``ai_insight_reviews`` table used to store reviewer decisions
 on AI-generated insights.  This table holds advisory metadata only and
 must never be used to mutate official cricket truth.
 
-Revision ID: a1b2c3d4e5f6
-Revises: z1a2b3c4d5e6
+Revision ID: c9d8e7f6a5b4
+Revises: b1c2d3e4f5a6
 Create Date: 2026-05-15 04:00:00.000000
 
 """
@@ -19,48 +19,14 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "a1b2c3d4e5f6"
-down_revision: str | None = "z1a2b3c4d5e6"
+revision: str = "c9d8e7f6a5b4"
+down_revision: str | None = "b1c2d3e4f5a6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
     """Create ai_insight_reviews table and associated enums."""
-    # Create enums for PostgreSQL; SQLite ignores CREATE TYPE
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_type WHERE typname = 'ai_insight_review_state'
-            ) THEN
-                CREATE TYPE ai_insight_review_state AS ENUM (
-                    'pending', 'approved', 'rejected', 'changes_requested', 'flagged'
-                );
-            END IF;
-        END$$;
-        """
-        if op.get_bind().dialect.name == "postgresql"
-        else "SELECT 1"
-    )
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_type WHERE typname = 'ai_insight_feedback_type'
-            ) THEN
-                CREATE TYPE ai_insight_feedback_type AS ENUM (
-                    'useful', 'not_useful', 'unsafe', 'unsupported_claim'
-                );
-            END IF;
-        END$$;
-        """
-        if op.get_bind().dialect.name == "postgresql"
-        else "SELECT 1"
-    )
-
     op.create_table(
         "ai_insight_reviews",
         sa.Column("id", sa.String(), nullable=False, primary_key=True),
@@ -108,13 +74,13 @@ def upgrade() -> None:
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
     )

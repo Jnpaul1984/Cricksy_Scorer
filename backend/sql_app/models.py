@@ -2415,13 +2415,13 @@ class AiInsightReview(Base):
 
     # Review decision
     review_state: Mapped[AiInsightReviewState] = mapped_column(
-        SAEnum(AiInsightReviewState, name="ai_insight_review_state"),
+        String(64),
         nullable=False,
-        default=AiInsightReviewState.pending,
+        default=AiInsightReviewState.pending.value,
         index=True,
     )
     feedback_type: Mapped[AiInsightFeedbackType | None] = mapped_column(
-        SAEnum(AiInsightFeedbackType, name="ai_insight_feedback_type"),
+        String(64),
         nullable=True,
     )
     note: Mapped[str | None] = mapped_column(
