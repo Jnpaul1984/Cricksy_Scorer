@@ -1331,7 +1331,7 @@ const canReviewAiInsights = computed(() => authStore.canAnalyze)
 
 const aiConfidencePct = computed<number | null>(() => {
   const score = matchAiSummary.value?.ai_metadata?.confidence_score
-  if (typeof score !== 'number' || Number.isNaN(score)) {
+  if (typeof score !== 'number') {
     return null
   }
   return Math.round(score * 100)
@@ -1511,7 +1511,7 @@ async function loadMatchAiSummary(matchId: string) {
   matchAiSummary.value = null
   try {
     const summary = await getMatchAiSummary(matchId)
-    if (summary && typeof summary === 'object') {
+    if (summary) {
       matchAiSummary.value = summary
     }
   } catch (err) {
