@@ -364,7 +364,7 @@ def _build_grounding_source_refs(
         refs.append(
             AiSourceReference(
                 type="player",
-                id=top_player.id or top_player.name.lower().replace(" ", "_"),
+                id=top_player.id or f"{match.id}:top_player",
                 label=f"Player: {top_player.name}",
             )
         )

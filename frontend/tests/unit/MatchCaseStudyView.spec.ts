@@ -73,6 +73,8 @@ const groundedAiSummary = {
 }
 
 async function flushAsync() {
+  // The view loads case-study data and AI summary in separate onMounted async calls,
+  // so two microtask/tick rounds keep the test aligned with the component lifecycle.
   await Promise.resolve()
   await nextTick()
   await Promise.resolve()

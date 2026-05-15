@@ -57,6 +57,15 @@ def _prediction_method_label(method: str | None) -> str | None:
     return f"Data source: {method.replace('_', ' ')}"
 
 
+def _normalise_overs_completed(value: Any) -> int:
+    """Normalize overs-completed values for evidence-only phase labels."""
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    return 0
+
+
 def _build_prediction_source_refs(game: Any, prediction: dict[str, Any], game_id: str) -> list[AiSourceReference]:
     """Build compact evidence references for the advisory prediction payload."""
     factors = prediction.get("factors")
@@ -74,7 +83,7 @@ def _build_prediction_source_refs(game: Any, prediction: dict[str, Any], game_id
         ),
     ]
 
-    phase_label = _derive_match_phase(int(game.overs_completed or 0), game.overs_limit)
+    phase_label = _derive_match_phase(_normalise_overs_completed(game.overs_completed), game.overs_limit)
     if phase_label:
         refs.append(
             AiSourceReference(
