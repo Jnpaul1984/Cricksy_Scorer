@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
+import { __resetAiInsightCacheForTests } from '@/services/aiInsightCache'
 import * as api from '@/services/api'
 import MatchCaseStudyView from '@/views/MatchCaseStudyView.vue'
 
@@ -110,6 +111,7 @@ async function flushAsync() {
 describe('MatchCaseStudyView', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    __resetAiInsightCacheForTests()
     pushMock.mockReset()
     backMock.mockReset()
   })
@@ -161,5 +163,71 @@ describe('MatchCaseStudyView', () => {
     expect(wrapper.text()).toContain('Confidence: 84%')
     expect(wrapper.text()).toContain('Source/provenance references were not provided for this advisory claim.')
     expect(wrapper.text()).toContain('Deterministic support metrics are limited for this advisory claim.')
+  })
+
+  it('reuses cached AI summary on remount', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(baseCaseStudy as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const first = mount(MatchCaseStudyView, {
+      global: { stubs: globalStubs },
+    })
+    await flushAsync()
+    expect(first.text()).toContain('AI Advisory')
+    first.unmount()
+
+    const second = mount(MatchCaseStudyView, {
+      global: { stubs: globalStubs },
+    })
+    await flushAsync()
+    expect(second.text()).toContain('AI Match Summary')
+    expect(api.getMatchAiSummary).toHaveBeenCalledTimes(1)
+  })
+
+  it('refresh button bypasses cache and refetches', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(baseCaseStudy as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const wrapper = mount(MatchCaseStudyView, {
+      global: { stubs: globalStubs },
+    })
+    await flushAsync()
+    expect(api.getMatchAiSummary).toHaveBeenCalledTimes(1)
+
+    const refreshButton = wrapper
+      .findAll('button')
+      .find((btn) => btn.text().includes('Refresh summary'))
+    expect(refreshButton).toBeTruthy()
+    await refreshButton!.trigger('click')
+    await flushAsync()
+    expect(api.getMatchAiSummary).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows deterministic fallback when AI request fails', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(baseCaseStudy as never)
+    vi.mocked(api.getMatchAiSummary).mockRejectedValue(new Error('AI unavailable'))
+
+    const wrapper = mount(MatchCaseStudyView, {
+      global: { stubs: globalStubs },
+    })
+    await flushAsync()
+
+    expect(wrapper.text()).toContain('AI insight unavailable. Showing deterministic match summary.')
+    expect(wrapper.text()).toContain('Lions vs Falcons: Lions won by 18 runs')
+  })
+
+  it('shows insufficient-data state when AI fails and deterministic data is missing', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue({
+      ...baseCaseStudy,
+      match: { ...baseCaseStudy.match, result: '', innings: [] },
+    } as never)
+    vi.mocked(api.getMatchAiSummary).mockRejectedValue(new Error('AI unavailable'))
+
+    const wrapper = mount(MatchCaseStudyView, {
+      global: { stubs: globalStubs },
+    })
+    await flushAsync()
+
+    expect(wrapper.text()).toContain('Insufficient match data for AI or deterministic summary.')
   })
 })
