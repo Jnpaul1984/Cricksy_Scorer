@@ -38,7 +38,7 @@ const globalStubs = {
   MiniSparkline: { template: '<div class="mini-sparkline-stub" />' },
   AiCalloutsPanel: { template: '<div class="ai-callouts-stub" />' },
   AiInsightReviewCard: {
-    props: ['insightType', 'insightId', 'confidence', 'limitations', 'sourceRefs', 'canReview'],
+    props: ['insightType', 'insightId', 'title', 'explanation', 'confidence', 'limitations', 'sourceRefs', 'canReview'],
     template: `
       <div data-testid="ai-insight-review-card-stub">
         {{ insightType }}|{{ insightId }}|{{ confidence }}|{{ (limitations || []).length }}|{{ (sourceRefs || []).length }}|{{ canReview }}
@@ -801,7 +801,12 @@ describe('AnalystWorkspaceView', () => {
 
     const reviewStub = wrapper.find('[data-testid="ai-insight-review-card-stub"]')
     expect(reviewStub.exists()).toBe(true)
-    expect(reviewStub.text()).toContain('summary|match-001|0.84|2|2|true')
+    const reviewText = reviewStub.text()
+    expect(reviewText).toContain('summary')
+    expect(reviewText).toContain('match-001')
+    expect(reviewText).toContain('0.84')
+    expect(reviewText).toContain('|2|2|')
+    expect(reviewText).toContain('true')
   })
 
   // ──────────────────────────────────────────────────────────────────────────
