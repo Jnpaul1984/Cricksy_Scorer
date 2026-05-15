@@ -928,6 +928,7 @@ export interface PlayerAIInsights {
   recent_form: PlayerAIRecentForm;
   role_tags: string[];
   recommendations: string[];
+  ai_metadata?: AiOutputMetadata;
 }
 
 export async function getPlayerAIInsights(

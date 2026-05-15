@@ -322,98 +322,13 @@
                 </BaseButton>
               </div>
             </header>
-
-            <!-- Loading state -->
-            <div v-if="aiInsightsLoading" class="ai-insights-loading">
-              <div class="skeleton-line" />
-              <div class="skeleton-line" />
-              <div class="skeleton-line short" />
-              <div class="skeleton-line" />
-            </div>
-
-            <!-- Error state -->
-            <p v-else-if="aiInsightsError" class="ai-insights-error">
-              {{ aiInsightsError }}
-            </p>
-
-            <!-- Content -->
-            <div v-else-if="aiInsights" class="ai-insights-grid">
-              <!-- Summary -->
-              <section class="ai-insights-summary">
-                <h3>Summary</h3>
-                <p>{{ aiSummary }}</p>
-              </section>
-
-              <!-- Role Tags -->
-              <section v-if="aiRoleTags.length" class="ai-insights-role-tags">
-                <h3>Player Role</h3>
-                <div class="ai-insights-tag-list">
-                  <BaseBadge
-                    v-for="tag in aiRoleTags"
-                    :key="tag"
-                    variant="primary"
-                    class="ai-tag"
-                  >
-                    {{ tag.replace(/_/g, ' ') }}
-                  </BaseBadge>
-                </div>
-              </section>
-
-              <!-- Strengths -->
-              <section class="ai-insights-strengths">
-                <h3>💪 Strengths</h3>
-                <ul v-if="aiStrengths.length">
-                  <li v-for="(item, idx) in aiStrengths" :key="idx">
-                    {{ item }}
-                  </li>
-                </ul>
-                <p v-else class="ai-insights-empty">No strengths identified yet.</p>
-              </section>
-
-              <!-- Weaknesses -->
-              <section class="ai-insights-weaknesses">
-                <h3>🎯 Areas to Improve</h3>
-                <ul v-if="aiWeaknesses.length">
-                  <li v-for="(item, idx) in aiWeaknesses" :key="idx">
-                    {{ item }}
-                  </li>
-                </ul>
-                <p v-else class="ai-insights-empty">No weaknesses identified yet.</p>
-              </section>
-
-              <!-- Recent form with MiniSparkline -->
-              <section class="ai-insights-form">
-                <h3>📈 Recent Form</h3>
-                <div v-if="aiRecentForm && aiRecentForm.trend.length > 0" class="form-chart">
-                  <MiniSparkline
-                    :points="aiRecentForm.trend"
-                    :width="160"
-                    :height="40"
-                    :highlight-last="true"
-                    variant="default"
-                  />
-                  <p class="form-label">{{ aiRecentForm.label }}</p>
-                </div>
-                <p v-else class="ai-insights-empty">
-                  Not enough recent data to show form trend.
-                </p>
-              </section>
-
-              <!-- Recommendations -->
-              <section v-if="aiRecommendations.length" class="ai-insights-recommendations">
-                <h3>💡 Recommendations</h3>
-                <ul>
-                  <li v-for="(rec, idx) in aiRecommendations" :key="idx">
-                    {{ rec }}
-                  </li>
-                </ul>
-              </section>
-            </div>
-
-            <!-- No data yet -->
-            <div v-else class="ai-insights-empty">
-              AI hasn't generated insights for this player yet.
-            </div>
+            <PlayerDevelopmentInsightCard
+              :player-name="profile?.player_name ?? 'Player'"
+              :player-role="playerRole"
+              :insights="aiInsights"
+              :loading="aiInsightsLoading"
+              :error="aiInsightsError"
+            />
           </BaseCard>
         </section>
       </div>
@@ -429,7 +344,7 @@ import { BaseButton, BaseCard, BaseBadge } from '@/components'
 import CoachNotebookWidget from '@/components/CoachNotebookWidget.vue'
 import FormTrackerWidget from '@/components/FormTrackerWidget.vue'
 import MentalProfilePanel from '@/components/MentalProfilePanel.vue'
-import MiniSparkline from '@/components/MiniSparkline.vue'
+import PlayerDevelopmentInsightCard from '@/components/PlayerDevelopmentInsightCard.vue'
 import SeasonGraphsWidget from '@/components/SeasonGraphsWidget.vue'
 import StrengthWeaknessWidget from '@/components/StrengthWeaknessWidget.vue'
 import { apiService, getErrorMessage, getPlayerAIInsights } from '@/services/api'
@@ -493,12 +408,9 @@ const formatStat = (value: number | null | undefined, decimals = 2): string => {
 }
 
 // AI Insights computed helpers
-const aiSummary = computed(() => aiInsights.value?.summary ?? '')
 const aiRecentForm = computed(() => aiInsights.value?.recent_form ?? null)
 const aiStrengths = computed<string[]>(() => aiInsights.value?.strengths ?? [])
 const aiWeaknesses = computed<string[]>(() => aiInsights.value?.weaknesses ?? [])
-const aiRoleTags = computed<string[]>(() => aiInsights.value?.role_tags ?? [])
-const aiRecommendations = computed<string[]>(() => aiInsights.value?.recommendations ?? [])
 
 const loadProfile = async () => {
   loading.value = true
