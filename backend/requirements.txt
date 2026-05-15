@@ -70,3 +70,4 @@ psycopg2-binary
 mediapipe==0.10.31
 opencv-python-headless==4.8.1.78
 reportlab>=4.0.0
+pdfplumber>=0.11.4
