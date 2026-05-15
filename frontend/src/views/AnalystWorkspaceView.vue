@@ -519,6 +519,99 @@
                     </ul>
                   </section>
 
+                  <!-- AI Insight Panel -->
+                  <section class="aw-detail-ai" aria-label="AI Insight Panel">
+                    <h4 class="aw-detail-section-title">AI Insight Panel</h4>
+                    <p class="aw-detail-ai-note">
+                      Advisory insights for analyst workflow. This does not alter official cricket truth.
+                    </p>
+
+                    <div v-if="matchAiLoading" class="aw-detail-loading" role="status" aria-live="polite">
+                      <p>Loading AI insights…</p>
+                    </div>
+
+                    <div v-else-if="matchAiError" class="aw-detail-error" role="alert">
+                      <p>Unable to load AI insights for this match.</p>
+                      <p class="aw-inline-error-detail">{{ matchAiError }}</p>
+                      <BaseButton
+                        variant="ghost"
+                        size="sm"
+                        @click="selectedMatchId && loadMatchAiSummary(selectedMatchId)"
+                      >
+                        Retry
+                      </BaseButton>
+                    </div>
+
+                    <div v-else-if="!matchAiSummary" class="aw-detail-empty-hint">
+                      AI insight data is unavailable for this match.
+                    </div>
+
+                    <div v-else class="aw-detail-ai-grid">
+                      <AiInsightReviewCard
+                        class="aw-detail-ai-review"
+                        insight-type="summary"
+                        :insight-id="selectedMatchId ?? matchAiSummary.match_id"
+                        title="AI Insight Review"
+                        :explanation="matchAiSummary.overall_summary"
+                        :confidence="matchAiSummary.ai_metadata?.confidence_score ?? null"
+                        :limitations="aiLimitations"
+                        :source-refs="aiSourceRefs"
+                        :can-review="canReviewAiInsights"
+                      />
+
+                      <section v-if="matchAiSummary.overall_summary" class="aw-detail-ai-block">
+                        <h5 class="aw-detail-ai-title">Match Intelligence Summary</h5>
+                        <p class="aw-detail-ai-body">{{ matchAiSummary.overall_summary }}</p>
+                        <p v-if="aiConfidenceLabel" class="aw-detail-ai-confidence">
+                          Confidence: {{ aiConfidenceLabel }} ({{ aiConfidencePct }}%)
+                        </p>
+                      </section>
+
+                      <section v-if="matchAiSummary.momentum_shifts.length" class="aw-detail-ai-block">
+                        <h5 class="aw-detail-ai-title">Momentum / Tactical Notes</h5>
+                        <ul class="aw-detail-ai-list">
+                          <li v-for="shift in matchAiSummary.momentum_shifts" :key="shift.shift_id">
+                            Over {{ shift.over }} (innings {{ shift.innings }}): {{ shift.description }}
+                          </li>
+                        </ul>
+                      </section>
+
+                      <section v-if="matchAiSummary.player_highlights.length" class="aw-detail-ai-block">
+                        <h5 class="aw-detail-ai-title">Key Player Insights</h5>
+                        <ul class="aw-detail-ai-list">
+                          <li v-for="player in matchAiSummary.player_highlights" :key="player.player_id">
+                            <strong>{{ player.player_name }}</strong> ({{ player.role }}): {{ player.summary }}
+                          </li>
+                        </ul>
+                      </section>
+
+                      <section v-if="matchAiSummary.decisive_phases.length" class="aw-detail-ai-block">
+                        <h5 class="aw-detail-ai-title">Phase-by-Phase Notes</h5>
+                        <ul class="aw-detail-ai-list">
+                          <li v-for="phase in matchAiSummary.decisive_phases" :key="phase.phase_id">
+                            <strong>{{ phase.label }}</strong> (innings {{ phase.innings }}, overs {{ phase.over_range[0] }}-{{ phase.over_range[1] }}): {{ phase.narrative }}
+                          </li>
+                        </ul>
+                      </section>
+
+                      <section v-if="aiLimitations.length" class="aw-detail-ai-block">
+                        <h5 class="aw-detail-ai-title">Limitations & Uncertainty</h5>
+                        <ul class="aw-detail-ai-list">
+                          <li v-for="(limitation, idx) in aiLimitations" :key="idx">{{ limitation }}</li>
+                        </ul>
+                      </section>
+
+                      <section v-if="aiSourceRefs.length" class="aw-detail-ai-block">
+                        <h5 class="aw-detail-ai-title">Source / Provenance References</h5>
+                        <ul class="aw-detail-ai-list">
+                          <li v-for="source in aiSourceRefs" :key="`${source.type}-${source.id}`">
+                            {{ source.label }} <span class="aw-detail-ai-muted">({{ source.type }})</span>
+                          </li>
+                        </ul>
+                      </section>
+                    </div>
+                  </section>
+
                   <!-- Podcast Prep Package -->
                   <section
                     v-if="podcastPrepPackage"
@@ -1020,24 +1113,28 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { BaseCard, BaseButton, BaseBadge, BaseInput, ImpactBar, MiniSparkline, AiCalloutsPanel } from '@/components'
+import { BaseCard, BaseButton, BaseBadge, BaseInput, ImpactBar, MiniSparkline, AiCalloutsPanel, AiInsightReviewCard } from '@/components'
 import type { AiCallout } from '@/components'
 import AnalyticsTablesWidget from '@/components/AnalyticsTablesWidget.vue'
 import ExportUI from '@/components/ExportUI.vue'
 import HistoricalImportPanel from '@/components/HistoricalImportPanel.vue'
 import HistoricalImportBulkZipPanel from '@/components/HistoricalImportBulkZipPanel.vue'
 import HistoricalOcrReviewPanel from '@/components/HistoricalOcrReviewPanel.vue'
+import { useAuthStore } from '@/stores/authStore'
 import {
   getAnalystMatches,
   getMatchCaseStudy,
+  getMatchAiSummary,
   getMatchRegistry,
   historicalImportRollback,
   type AnalystMatchListItem,
   type MatchCaseStudyResponse,
+  type MatchAiSummary,
   type MatchRegistryResponse,
 } from '@/services/api'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 // Types
 type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics' | 'import' | 'data-library'
@@ -1142,6 +1239,9 @@ const selectedMatchId = ref<string | null>(null)
 const matchDetail = ref<MatchCaseStudyResponse | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
+const matchAiSummary = ref<MatchAiSummary | null>(null)
+const matchAiLoading = ref(false)
+const matchAiError = ref<string | null>(null)
 
 // Registry & Provenance state - loaded for historical matches (Phase 5M)
 const registryData = ref<MatchRegistryResponse | null>(null)
@@ -1226,6 +1326,27 @@ const currentTabLabel = computed(() => {
   const tab = tabs.find((t) => t.value === activeTab.value)
   return tab?.label ?? ''
 })
+
+const canReviewAiInsights = computed(() => authStore.canAnalyze)
+
+const aiConfidencePct = computed<number | null>(() => {
+  const score = matchAiSummary.value?.ai_metadata?.confidence_score
+  if (typeof score !== 'number') {
+    return null
+  }
+  return Math.round(score * 100)
+})
+
+const aiConfidenceLabel = computed<string | null>(() => {
+  const pct = aiConfidencePct.value
+  if (pct === null) return null
+  if (pct >= 80) return 'High'
+  if (pct >= 50) return 'Medium'
+  return 'Low'
+})
+
+const aiLimitations = computed<string[]>(() => matchAiSummary.value?.ai_metadata?.limitations ?? [])
+const aiSourceRefs = computed(() => matchAiSummary.value?.ai_metadata?.source_refs ?? [])
 
 // Workspace-level AI callouts derived from matches
 const workspaceCallouts = computed<AiCallout[]>(() => {
@@ -1356,7 +1477,7 @@ async function selectMatch(matchId: string) {
   selectedMatchId.value = matchId
   registryData.value = null
   const selectedMatch = matches.value.find(m => m.id === matchId)
-  await loadMatchDetail(matchId)
+  await Promise.all([loadMatchDetail(matchId), loadMatchAiSummary(matchId)])
   // Registry data is loaded independently of match detail to avoid blocking the main detail
   // load. The "Registry & Provenance" panel reactively updates once this resolves.
   if (selectedMatch) {
@@ -1381,6 +1502,23 @@ async function loadMatchDetail(matchId: string) {
     console.error('[AnalystWorkspace] Failed to load match detail:', err)
   } finally {
     detailLoading.value = false
+  }
+}
+
+async function loadMatchAiSummary(matchId: string) {
+  matchAiLoading.value = true
+  matchAiError.value = null
+  matchAiSummary.value = null
+  try {
+    const summary = await getMatchAiSummary(matchId)
+    if (summary) {
+      matchAiSummary.value = summary
+    }
+  } catch (err) {
+    matchAiError.value = err instanceof Error ? err.message : 'Failed to load AI insights'
+    console.error('[AnalystWorkspace] Failed to load AI insights:', err)
+  } finally {
+    matchAiLoading.value = false
   }
 }
 
@@ -2359,6 +2497,71 @@ onMounted(() => {
 .aw-keyplayer-stat {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
+}
+
+.aw-detail-ai {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised, #f8fafc);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.aw-detail-ai-note {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.aw-detail-ai-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.aw-detail-ai-review {
+  border: 1px solid var(--color-border-subtle);
+}
+
+.aw-detail-ai-block {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aw-detail-ai-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.aw-detail-ai-body {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.aw-detail-ai-confidence {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-weight: var(--font-medium);
+}
+
+.aw-detail-ai-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.aw-detail-ai-muted {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
 }
 
 .aw-matches-col {

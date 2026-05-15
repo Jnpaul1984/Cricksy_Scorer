@@ -12,10 +12,17 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: pushMock, back: vi.fn() }),
 }))
 
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: () => ({
+    canAnalyze: true,
+  }),
+}))
+
 // Mock the api module
 vi.mock('@/services/api', () => ({
   getAnalystMatches: vi.fn(),
   getMatchCaseStudy: vi.fn(),
+  getMatchAiSummary: vi.fn(),
   getMatchRegistry: vi.fn(),
   getAnalystExportData: vi.fn(),
   historicalImportRollback: vi.fn(),
@@ -30,6 +37,14 @@ const globalStubs = {
   ImpactBar: { template: '<div class="impact-bar-stub" />' },
   MiniSparkline: { template: '<div class="mini-sparkline-stub" />' },
   AiCalloutsPanel: { template: '<div class="ai-callouts-stub" />' },
+  AiInsightReviewCard: {
+    props: ['insightType', 'insightId', 'title', 'explanation', 'confidence', 'limitations', 'sourceRefs', 'canReview'],
+    template: `
+      <div data-testid="ai-insight-review-card-stub">
+        {{ insightType }}|{{ insightId }}|{{ confidence }}|{{ (limitations || []).length }}|{{ (sourceRefs || []).length }}|{{ canReview }}
+      </div>
+    `,
+  },
   AnalyticsTablesWidget: { template: '<div class="analytics-tables-stub" />' },
   ExportUI: { template: '<div class="export-ui-stub" />' },
   HistoricalImportPanel: {
@@ -193,6 +208,53 @@ const mockMatchDetail = {
   ],
   dismissal_patterns: null,
   ai: null,
+}
+
+const mockMatchAiSummary = {
+  match_id: 'match-001',
+  format: 'T20',
+  teams: [],
+  key_themes: ['Death overs acceleration'],
+  decisive_phases: [
+    {
+      phase_id: 'death',
+      innings: 1,
+      label: 'Death overs',
+      over_range: [16, 20],
+      impact_score: 0.78,
+      narrative: 'Lions scored rapidly to pull ahead.',
+    },
+  ],
+  momentum_shifts: [
+    {
+      shift_id: 'shift-1',
+      innings: 1,
+      over: 18,
+      description: 'Two boundaries changed momentum.',
+      impact_delta: 0.19,
+      team_benefiting_id: 'lions',
+    },
+  ],
+  player_highlights: [
+    {
+      player_id: 'player-001',
+      player_name: 'J. Anderson',
+      team_id: 'lions',
+      role: 'Batsman',
+      highlight_type: 'batting',
+      summary: 'Controlled strike rotation and boundary conversion.',
+    },
+  ],
+  overall_summary: 'Lions controlled the tactical phases and finished strongly.',
+  created_at: '2025-01-10T18:30:00Z',
+  ai_metadata: {
+    confidence_score: 0.84,
+    limitations: ['Advisory only.', 'Sample size limited to available tracked deliveries.'],
+    source_refs: [
+      { type: 'match', id: 'match-001', label: 'Match: Lions vs Falcons' },
+      { type: 'phase', id: 'death', label: 'Phase: Death overs' },
+    ],
+  },
 }
 
 describe('AnalystWorkspaceView', () => {
@@ -598,6 +660,153 @@ describe('AnalystWorkspaceView', () => {
     expect(text).not.toContain('A. Kumar')
     expect(text).not.toContain('Virat')
     expect(text).not.toContain('Kohli')
+  })
+
+  it('renders upgraded AI insight panel in match intelligence detail', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(mockMatchAiSummary as never)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('AI Insight Panel')
+    expect(text).toContain('Match Intelligence Summary')
+    expect(text).toContain('Momentum / Tactical Notes')
+    expect(text).toContain('Key Player Insights')
+    expect(text).toContain('Phase-by-Phase Notes')
+  })
+
+  it('shows AI insight loading state while ai summary is resolving', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    let resolveSummary: ((value: unknown) => void) | null = null
+    vi.mocked(api.getMatchAiSummary).mockReturnValue(
+      new Promise((resolve) => {
+        resolveSummary = resolve
+      }) as never
+    )
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Loading AI insights…')
+
+    resolveSummary?.(mockMatchAiSummary)
+    await nextTick()
+    await nextTick()
+  })
+
+  it('shows AI insight empty state when ai summary is unavailable', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(null as never)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('AI insight data is unavailable for this match.')
+  })
+
+  it('shows AI insight error state when ai summary request fails', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchAiSummary).mockRejectedValue(new Error('AI fetch failed'))
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Unable to load AI insights for this match.')
+    expect(text).toContain('AI fetch failed')
+  })
+
+  it('renders confidence and limitations when ai metadata is provided', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(mockMatchAiSummary as never)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Confidence: High (84%)')
+    expect(text).toContain('Limitations & Uncertainty')
+    expect(text).toContain('Advisory only.')
+  })
+
+  it('renders source references when ai metadata includes provenance', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(mockMatchAiSummary as never)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Source / Provenance References')
+    expect(text).toContain('Match: Lions vs Falcons')
+    expect(text).toContain('Phase: Death overs')
+  })
+
+  it('renders review card metadata for phase 8c review state integration', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(mockMatchAiSummary as never)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const reviewStub = wrapper.find('[data-testid="ai-insight-review-card-stub"]')
+    expect(reviewStub.exists()).toBe(true)
+    const reviewText = reviewStub.text()
+    expect(reviewText).toContain('summary')
+    expect(reviewText).toContain('match-001')
+    expect(reviewText).toContain('0.84')
+    expect(reviewText).toContain('|2|2|')
+    expect(reviewText).toContain('true')
   })
 
   // ──────────────────────────────────────────────────────────────────────────
