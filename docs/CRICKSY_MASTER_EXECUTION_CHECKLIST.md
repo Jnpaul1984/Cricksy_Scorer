@@ -2180,6 +2180,29 @@ Teams can upload scans/photos/PDFs and review extracted match data before saving
   preprocessing, and hosted OCR.
 - No image OCR runtime implementation added. No official cricket truth behavior changed.
 
+### Phase 7 — Closure Note
+
+- Status: **Core workflow implemented. Remaining OCR enhancement sub-phases intentionally deferred.**
+- Closure note: `docs/PHASE_7_CLOSURE_AND_OCR_DEFERRAL_NOTE.md`
+
+**Completed sub-phases:**
+- Phase 7 — OCR review candidate workflow ✅
+- Phase 7A — Manual QA + operator workflow validation ✅
+- Phase 7B — OCR extraction engine audit/spec-lock ✅
+- Phase 7C — PDF text extraction for review candidates ✅
+- Phase 7D — Tesseract/image OCR audit/spec-lock ✅
+
+**Deferred sub-phases:**
+- Phase 7E — Optional Tesseract/Image OCR Integration for Review Candidates ⏸
+- Phase 7F — OCR Ingestion Manual QA + Production Readiness Gate ⏸
+
+**Reason for deferral:**
+Image OCR has higher operational complexity and should be implemented once real club
+scorecard formats, scanned documents, and customer workflows are available. Deferral is a
+product/customer timing decision, not technical abandonment.
+
+**Next active phase: Phase 8 — AI Analytics + Match Intelligence Enhancements**
+
 ---
 
 # Phase 8 — AI Analytics + Match Intelligence Enhancements
@@ -2727,3 +2750,27 @@ plans unless it already exists in this document or is first added through a
 checklist-governance PR. The only valid names for the phases after Phase 6 are those listed
 above (Phase 5N, 5O, 5P, Phase 7, Phase 8, etc.). "Phase 7A" is not a valid phase name —
 it does not exist in this checklist.
+
+---
+
+## Post-Phase-7 Alignment Note (Issue #— 2026-05-15)
+
+Phase 7 core workflow is complete. Remaining OCR enhancement sub-phases are intentionally
+deferred until real club/customer onboarding. Full closure details in
+`docs/PHASE_7_CLOSURE_AND_OCR_DEFERRAL_NOTE.md`.
+
+### Phase 7 Completion Status (closure snapshot)
+
+| Sub-phase | Status |
+|---|---|
+| Phase 7 — OCR review candidate workflow | ✅ Complete |
+| Phase 7A — Manual QA + operator workflow validation | ✅ Complete |
+| Phase 7B — OCR extraction engine audit/spec-lock | ✅ Complete |
+| Phase 7C — PDF text extraction for review candidates | ✅ Complete |
+| Phase 7D — Tesseract/image OCR audit/spec-lock | ✅ Complete |
+| Phase 7E — Optional Tesseract/Image OCR Integration | ⏸ Deferred — pending club onboarding |
+| Phase 7F — OCR Ingestion Manual QA + Production Readiness Gate | ⏸ Deferred — depends on Phase 7E |
+
+### Next Active Phase
+
+**Phase 8 — AI Analytics + Match Intelligence Enhancements** is now the next active phase.
