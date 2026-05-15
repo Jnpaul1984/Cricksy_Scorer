@@ -135,7 +135,7 @@ def _build_prediction_grounding_summary(source_refs: list[AiSourceReference]) ->
     summary_bits: list[str] = ["live match state"]
     if any(label.startswith("Innings ") for label in labels):
         summary_bits.append("innings context")
-    if any(label == "Powerplay" or label == "Middle overs" or label == "Death overs" for label in labels):
+    if any(label in {"Powerplay", "Middle overs", "Death overs"} for label in labels):
         summary_bits.append("phase context")
     if any(label.startswith("Wickets remaining:") for label in labels):
         summary_bits.append("wickets remaining")

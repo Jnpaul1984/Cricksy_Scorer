@@ -385,6 +385,8 @@ def _build_grounding_summary(
         parts.append("phase swing analysis")
     if key_players:
         parts.append("key-player impact")
+    if len(parts) == 1:
+        return "Based on stored match case-study data."
     return f"Based on {', '.join(parts[:-1])}, and {parts[-1]}."
 
 
