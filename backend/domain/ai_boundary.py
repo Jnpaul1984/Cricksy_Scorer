@@ -131,6 +131,9 @@ class AiOutputMetadata(BaseModel):
 
     Consumers must not treat any AI response containing this metadata as
     official cricket truth.
+
+    Phase 8 additions: ``confidence_score`` and ``limitations`` allow callers
+    to surface model uncertainty and known advisory constraints in the UI.
     """
 
     output_type: AiOutputType = Field(
@@ -155,6 +158,25 @@ class AiOutputMetadata(BaseModel):
         description=(
             "True when this output is derived exclusively from stored, validated match "
             "data.  False if any content was generated without a direct data source."
+        ),
+    )
+    # Phase 8 — explainability additions (optional; backward-compatible)
+    confidence_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Model confidence expressed as a value between 0.0 (no confidence) and "
+            "1.0 (high confidence).  None when confidence is not applicable or "
+            "cannot be computed for this output type."
+        ),
+    )
+    limitations: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Known limitations or caveats for this advisory output.  "
+            "Consumers should display these alongside the output to set "
+            "appropriate expectations.  Empty when no specific limitations apply."
         ),
     )
 
