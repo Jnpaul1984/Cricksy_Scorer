@@ -60,9 +60,28 @@ const baseCaseStudy = {
 const groundedAiSummary = {
   match_id: 'match-001',
   format: 'T20',
-  teams: [],
+  teams: [
+    {
+      team_id: 'lions',
+      team_name: 'Lions',
+      result: 'won',
+      total_runs: 178,
+      wickets_lost: 6,
+      overs_faced: 20,
+      key_stats: [],
+    },
+  ],
   key_themes: ['Death overs surge'],
-  decisive_phases: [],
+  decisive_phases: [
+    {
+      phase_id: 'death',
+      innings: 1,
+      label: 'Death overs',
+      over_range: [16, 20],
+      impact_score: 0.78,
+      narrative: 'Lions accelerated hard at the death.',
+    },
+  ],
   momentum_shifts: [],
   player_highlights: [],
   overall_summary: 'Lions controlled the decisive scoring phases.',
@@ -106,21 +125,28 @@ describe('MatchCaseStudyView', () => {
 
     expect(wrapper.text()).toContain('AI Advisory')
     expect(wrapper.text()).toContain('Confidence: 84%')
-    expect(wrapper.text()).toContain('Based on')
+    expect(wrapper.text()).toContain('Supporting data')
     expect(wrapper.text()).toContain('Based on innings totals and phase swing analysis.')
+    expect(wrapper.text()).toContain('Death overs (innings 1, overs 16-20): impact +0.78')
+    expect(wrapper.text()).toContain('Lions: 178/6 in 20 ov (RR 8.90)')
+    expect(wrapper.text()).toContain('Source references')
     expect(wrapper.text()).toContain('Match: Lions vs Falcons')
     expect(wrapper.text()).toContain('Phase: Death overs')
-    expect(wrapper.text()).toContain('Limitations')
+    expect(wrapper.text()).toContain('Caveats')
     expect(wrapper.text()).toContain('Advisory only.')
     expect(wrapper.find('[data-testid="ai-insight-review-card-stub"]').exists()).toBe(true)
   })
 
-  it('does not render an empty evidence block when ai grounding metadata is absent', async () => {
+  it('renders safe caveats when citations and deterministic support are missing', async () => {
     vi.mocked(api.getMatchCaseStudy).mockResolvedValue(baseCaseStudy as never)
     vi.mocked(api.getMatchAiSummary).mockResolvedValue({
       ...groundedAiSummary,
+      teams: [],
+      decisive_phases: [],
+      momentum_shifts: [],
       ai_metadata: {
         ...groundedAiSummary.ai_metadata,
+        limitations: [],
         source_refs: [],
         grounding_summary: '',
       },
@@ -133,6 +159,7 @@ describe('MatchCaseStudyView', () => {
 
     expect(wrapper.text()).toContain('AI Advisory')
     expect(wrapper.text()).toContain('Confidence: 84%')
-    expect(wrapper.find('[data-testid="match-ai-evidence"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Source/provenance references were not provided for this advisory claim.')
+    expect(wrapper.text()).toContain('Deterministic support metrics are limited for this advisory claim.')
   })
 })
