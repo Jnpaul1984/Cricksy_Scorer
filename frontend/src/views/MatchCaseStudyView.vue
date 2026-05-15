@@ -420,32 +420,17 @@
               <p class="cs-ai-advisory-note">
                 This insight is advisory and does not change official scoring or match records.
               </p>
-              <section
-                v-if="showAiEvidence"
+              <MatchInsightEvidence
+                v-if="aiSummary"
                 class="cs-ai-evidence"
-                data-testid="match-ai-evidence"
-              >
-                <h3 class="cs-ai-evidence-title">Based on</h3>
-                <p v-if="aiGroundingSummary" class="cs-ai-evidence-summary">
-                  {{ aiGroundingSummary }}
-                </p>
-                <ul v-if="aiSourceRefs.length" class="cs-ai-evidence-list">
-                  <li
-                    v-for="sourceRef in aiSourceRefs"
-                    :key="`${sourceRef.type}-${sourceRef.id}`"
-                  >
-                    {{ sourceRef.label }}
-                  </li>
-                </ul>
-              </section>
-              <section v-if="aiLimitations.length" class="cs-ai-limitations">
-                <h3 class="cs-ai-limitations-title">Limitations</h3>
-                <ul class="cs-ai-limitations-list">
-                  <li v-for="(limitation, index) in aiLimitations" :key="index">
-                    {{ limitation }}
-                  </li>
-                </ul>
-              </section>
+                :source-refs="aiSourceRefs"
+                :limitations="aiLimitations"
+                :grounding-summary="aiGroundingSummary"
+                :confidence-score="aiSummary.ai_metadata?.confidence_score ?? null"
+                :decisive-phases="aiSummary.decisive_phases"
+                :momentum-shifts="aiSummary.momentum_shifts"
+                :teams="aiSummary.teams"
+              />
             </div>
 
           <!-- Loading state -->
@@ -682,7 +667,7 @@
 import { computed, ref, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { BaseCard, BaseButton, BaseBadge, ImpactBar, MiniSparkline, AiCalloutsPanel, AiInsightReviewCard } from '@/components'
+import { BaseCard, BaseButton, BaseBadge, ImpactBar, MiniSparkline, AiCalloutsPanel, AiInsightReviewCard, MatchInsightEvidence } from '@/components'
 import type { AiCallout, CalloutSeverity } from '@/components'
 import { useAuthStore } from '@/stores/authStore'
 import {
@@ -805,9 +790,6 @@ const aiSourceRefs = computed(() => aiSummary.value?.ai_metadata?.source_refs ??
 const aiGroundingSummary = computed(() => {
   const summary = aiSummary.value?.ai_metadata?.grounding_summary
   return typeof summary === 'string' ? summary.trim() : ''
-})
-const showAiEvidence = computed(() => {
-  return aiSourceRefs.value.length > 0 || aiGroundingSummary.value.length > 0
 })
 const canReviewAiInsights = computed(() => authStore.canAnalyze)
 

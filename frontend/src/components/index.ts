@@ -21,6 +21,7 @@ export type { CalloutSeverity, AiCallout } from './AiCalloutsPanel.vue'
 
 // Phase 8C: AI Insight Review
 export { default as AiInsightReviewCard } from './AiInsightReviewCard.vue'
+export { default as MatchInsightEvidence } from './MatchInsightEvidence.vue'
 
 // Re-export types for consumers
 export type { ButtonVariant, ButtonSize, ButtonType } from './BaseButton.vue'

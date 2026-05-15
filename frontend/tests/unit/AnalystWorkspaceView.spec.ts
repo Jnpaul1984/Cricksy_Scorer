@@ -213,7 +213,17 @@ const mockMatchDetail = {
 const mockMatchAiSummary = {
   match_id: 'match-001',
   format: 'T20',
-  teams: [],
+  teams: [
+    {
+      team_id: 'lions',
+      team_name: 'Lions',
+      result: 'won',
+      total_runs: 178,
+      wickets_lost: 6,
+      overs_faced: 20,
+      key_stats: [],
+    },
+  ],
   key_themes: ['Death overs acceleration'],
   decisive_phases: [
     {
@@ -761,7 +771,7 @@ describe('AnalystWorkspaceView', () => {
 
     const text = wrapper.text()
     expect(text).toContain('Confidence: High (84%)')
-    expect(text).toContain('Limitations & Uncertainty')
+    expect(text).toContain('Caveats')
     expect(text).toContain('Advisory only.')
   })
 
@@ -780,9 +790,60 @@ describe('AnalystWorkspaceView', () => {
     await nextTick()
 
     const text = wrapper.text()
-    expect(text).toContain('Source / Provenance References')
+    expect(text).toContain('Source references')
     expect(text).toContain('Match: Lions vs Falcons')
     expect(text).toContain('Phase: Death overs')
+  })
+
+  it('renders deterministic evidence metrics when match intelligence data is present', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(mockMatchAiSummary as never)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Supporting data')
+    expect(text).toContain('Death overs (innings 1, overs 16-20): impact +0.78')
+    expect(text).toContain('Lions: 178/6 in 20 ov (RR 8.90)')
+    expect(text).toContain('Momentum shift (innings 1, over 18): impact Δ +0.19')
+  })
+
+  it('renders safe caveats when source citations and support metrics are missing', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue({
+      ...mockMatchAiSummary,
+      teams: [],
+      decisive_phases: [],
+      momentum_shifts: [],
+      ai_metadata: {
+        ...mockMatchAiSummary.ai_metadata,
+        limitations: [],
+        source_refs: [],
+      },
+    } as never)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Source/provenance references were not provided for this advisory claim.')
+    expect(text).toContain('Deterministic support metrics are limited for this advisory claim.')
+    expect(text).toContain('Confidence: High (84%)')
   })
 
   it('renders review card metadata for phase 8c review state integration', async () => {

@@ -594,20 +594,17 @@
                         </ul>
                       </section>
 
-                      <section v-if="aiLimitations.length" class="aw-detail-ai-block">
-                        <h5 class="aw-detail-ai-title">Limitations & Uncertainty</h5>
-                        <ul class="aw-detail-ai-list">
-                          <li v-for="(limitation, idx) in aiLimitations" :key="idx">{{ limitation }}</li>
-                        </ul>
-                      </section>
-
-                      <section v-if="aiSourceRefs.length" class="aw-detail-ai-block">
-                        <h5 class="aw-detail-ai-title">Source / Provenance References</h5>
-                        <ul class="aw-detail-ai-list">
-                          <li v-for="source in aiSourceRefs" :key="`${source.type}-${source.id}`">
-                            {{ source.label }} <span class="aw-detail-ai-muted">({{ source.type }})</span>
-                          </li>
-                        </ul>
+                      <section class="aw-detail-ai-block">
+                        <h5 class="aw-detail-ai-title">Explainability & Citations</h5>
+                        <MatchInsightEvidence
+                          :source-refs="aiSourceRefs"
+                          :limitations="aiLimitations"
+                          :grounding-summary="aiGroundingSummary"
+                          :confidence-score="matchAiSummary.ai_metadata?.confidence_score ?? null"
+                          :decisive-phases="matchAiSummary.decisive_phases"
+                          :momentum-shifts="matchAiSummary.momentum_shifts"
+                          :teams="matchAiSummary.teams"
+                        />
                       </section>
                     </div>
                   </section>
@@ -1113,7 +1110,7 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { BaseCard, BaseButton, BaseBadge, BaseInput, ImpactBar, MiniSparkline, AiCalloutsPanel, AiInsightReviewCard } from '@/components'
+import { BaseCard, BaseButton, BaseBadge, BaseInput, ImpactBar, MiniSparkline, AiCalloutsPanel, AiInsightReviewCard, MatchInsightEvidence } from '@/components'
 import type { AiCallout } from '@/components'
 import AnalyticsTablesWidget from '@/components/AnalyticsTablesWidget.vue'
 import ExportUI from '@/components/ExportUI.vue'
@@ -1347,6 +1344,10 @@ const aiConfidenceLabel = computed<string | null>(() => {
 
 const aiLimitations = computed<string[]>(() => matchAiSummary.value?.ai_metadata?.limitations ?? [])
 const aiSourceRefs = computed(() => matchAiSummary.value?.ai_metadata?.source_refs ?? [])
+const aiGroundingSummary = computed(() => {
+  const summary = matchAiSummary.value?.ai_metadata?.grounding_summary
+  return typeof summary === 'string' ? summary.trim() : ''
+})
 
 // Workspace-level AI callouts derived from matches
 const workspaceCallouts = computed<AiCallout[]>(() => {
