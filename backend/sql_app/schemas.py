@@ -1342,6 +1342,90 @@ class PlayerDevelopmentPlanDraftGenerationResponse(BaseModel):
         return value
 
 
+class PlayerDevelopmentDashboardPlayerSummary(BaseModel):
+    player_profile_id: str
+    player_name: str
+
+
+class PlayerDevelopmentDashboardPlayerPlanSummary(PlayerDevelopmentDashboardPlayerSummary):
+    plan_id: str | None = None
+    plan_status: PlayerDevelopmentPlanStatus | None = None
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    advisory_note: str | None = None
+
+
+class PlayerDevelopmentDashboardStatusCount(BaseModel):
+    status: PlayerDevelopmentPlanStatus
+    count: int = Field(ge=0)
+
+
+class PlayerDevelopmentDashboardThemeSummary(BaseModel):
+    category: str
+    safe_display_label: str
+    player_count: int = Field(ge=0)
+
+
+class PlayerDevelopmentDashboardCheckpointSummary(BaseModel):
+    checkpoint_id: str
+    plan_id: str
+    player_profile_id: str
+    player_name: str
+    checkpoint_date: dt.date
+    progress_status: str
+    advisory_label: str
+    is_overdue: bool = False
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+
+
+class PlayerDevelopmentDashboardCategoryCount(BaseModel):
+    category: str
+    count: int = Field(ge=0)
+
+
+class PlayerDevelopmentDashboardDrillSummary(BaseModel):
+    total_assignments: int = Field(0, ge=0)
+    by_status: list[PlayerDevelopmentDashboardStatusCount] = Field(default_factory=list)
+    by_category: list[PlayerDevelopmentDashboardCategoryCount] = Field(default_factory=list)
+
+
+class PlayerDevelopmentDashboardEvidenceCoverageSummary(BaseModel):
+    players_with_confident_recommendations: int = Field(0, ge=0)
+    players_needing_more_evidence: int = Field(0, ge=0)
+    players_needing_more_evidence_details: list[PlayerDevelopmentDashboardPlayerPlanSummary] = Field(
+        default_factory=list
+    )
+
+
+class PlayerDevelopmentTeamOverviewRead(BaseModel):
+    total_assigned_players: int = Field(0, ge=0)
+    players_with_draft_plans: int = Field(0, ge=0)
+    players_without_plans: int = Field(0, ge=0)
+    plans_requiring_review: int = Field(0, ge=0)
+    players_with_goals: int = Field(0, ge=0)
+    players_with_drills: int = Field(0, ge=0)
+    players_with_checkpoints: int = Field(0, ge=0)
+    plans_by_status: list[PlayerDevelopmentDashboardStatusCount] = Field(default_factory=list)
+    players_without_plan_details: list[PlayerDevelopmentDashboardPlayerSummary] = Field(
+        default_factory=list
+    )
+    review_required_players: list[PlayerDevelopmentDashboardPlayerPlanSummary] = Field(
+        default_factory=list
+    )
+    common_development_areas: list[PlayerDevelopmentDashboardThemeSummary] = Field(
+        default_factory=list
+    )
+    drill_assignment_summary: PlayerDevelopmentDashboardDrillSummary = Field(
+        default_factory=PlayerDevelopmentDashboardDrillSummary
+    )
+    evidence_coverage_summary: PlayerDevelopmentDashboardEvidenceCoverageSummary = Field(
+        default_factory=PlayerDevelopmentDashboardEvidenceCoverageSummary
+    )
+    upcoming_checkpoints: list[PlayerDevelopmentDashboardCheckpointSummary] = Field(
+        default_factory=list
+    )
+    most_recent_development_activity_at: dt.datetime | None = None
+
+
 class MentalQuestionnaireQuestionRead(BaseModel):
     id: int
     category: str

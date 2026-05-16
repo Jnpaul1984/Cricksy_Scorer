@@ -7,6 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend import security
+from backend.services.player_development_dashboard_service import (
+    get_team_development_overview,
+)
 from backend.services.player_development_plan_service import (
     generate_draft_player_development_plan,
     get_draft_plan_by_id,
@@ -170,6 +173,25 @@ async def create_player_development_draft_plan(
         confidence_score=result.confidence_score,
         limitations=result.limitations,
         coach_review_required=True,
+    )
+
+
+@router.get(
+    "/dashboard/team-overview",
+    response_model=schemas.PlayerDevelopmentTeamOverviewRead,
+)
+async def get_player_development_team_dashboard(
+    current_user: Annotated[
+        models.User,
+        Depends(security.require_roles(["coach_pro", "coach_pro_plus", "org_pro"])),
+    ],
+    include_archived: bool = False,
+    db: AsyncSession = Depends(get_db),
+) -> schemas.PlayerDevelopmentTeamOverviewRead:
+    return await get_team_development_overview(
+        db=db,
+        current_user=current_user,
+        include_archived=include_archived,
     )
 
 

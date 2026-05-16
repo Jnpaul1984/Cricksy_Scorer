@@ -156,61 +156,13 @@
         </aside>
       </div>
 
-      <!-- Player Development Overview (Phase 9D — replaces random DevDashboardWidget) -->
+      <!-- Player Development Overview (Phase 9E — team dashboard) -->
       <div class="dev-overview-section" style="margin-top: 2rem">
-        <BaseCard as="section" padding="md" class="dev-overview-card">
-          <div class="section-header">
-            <h2>Player Development</h2>
-            <div class="dev-overview-badges">
-              <BaseBadge variant="warning">Draft only</BaseBadge>
-              <BaseBadge variant="primary">Coach review required</BaseBadge>
-            </div>
-          </div>
-          <p class="dev-overview-advisory">
-            Plans shown below are advisory draft plans generated from real player data.
-            They require coach review. No fake or random data is used.
-          </p>
-
-          <!-- Loading -->
-          <div v-if="assignedPlayersLoading" class="dev-overview-loading" data-testid="coach-dev-loading">
-            Loading assigned players…
-          </div>
-
-          <!-- Error -->
-          <div v-else-if="assignedPlayersError" class="dev-overview-error" data-testid="coach-dev-error">
-            {{ assignedPlayersError }}
-          </div>
-
-          <!-- Empty -->
-          <div
-            v-else-if="assignedPlayers.length === 0"
-            class="dev-overview-empty"
-            data-testid="coach-dev-empty"
-          >
-            <p>No players are currently assigned to you.</p>
-            <p>Once players are assigned, their development plans will appear here.</p>
-          </div>
-
-          <!-- Players list -->
-          <div v-else class="dev-overview-players" data-testid="coach-dev-players">
-            <div
-              v-for="assignment in assignedPlayers"
-              :key="assignment.id"
-              class="dev-player-row"
-            >
-              <div class="dev-player-info">
-                <span class="dev-player-id">Player ID: {{ assignment.player_profile_id.slice(0, 8) }}…</span>
-              </div>
-              <BaseButton
-                variant="ghost"
-                size="sm"
-                @click="goToPlayerDevelopment(assignment.player_profile_id)"
-              >
-                View Development Plans →
-              </BaseButton>
-            </div>
-          </div>
-        </BaseCard>
+        <PlayerDevelopmentTeamOverviewCard
+          :loading="teamOverviewLoading"
+          :error="teamOverviewError"
+          :overview="teamOverview"
+        />
       </div>
     </BaseCard>
   </div>
@@ -222,11 +174,12 @@ import { useRouter } from 'vue-router'
 
 import { BaseCard, BaseButton, BaseBadge, BaseInput } from '@/components'
 import LiveMatchCardCoach from '@/components/LiveMatchCardCoach.vue'
+import PlayerDevelopmentTeamOverviewCard from '@/components/PlayerDevelopmentTeamOverviewCard.vue'
 import {
-  listCoachAssignedPlayers,
+  getPlayerDevelopmentTeamOverview,
   PlayerDevelopmentApiError,
+  type PlayerDevelopmentTeamOverview,
 } from '@/services/playerDevelopmentApi'
-import type { CoachPlayerAssignmentRead } from '@/services/playerDevelopmentApi'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 
@@ -358,38 +311,33 @@ function goToVideoSessions() {
   router.push({ name: 'CoachProPlusVideoSessions' })
 }
 
-function goToPlayerDevelopment(playerId: string) {
-  router.push({ name: 'PlayerProfile', params: { playerId } })
-}
+// --- Phase 9E: Team Development Overview ---
+const teamOverviewLoading = ref(false)
+const teamOverviewError = ref<string | null>(null)
+const teamOverview = ref<PlayerDevelopmentTeamOverview | null>(null)
 
-// --- Phase 9D: Assigned Players / Development Overview ---
-const assignedPlayersLoading = ref(false)
-const assignedPlayersError = ref<string | null>(null)
-const assignedPlayers = ref<CoachPlayerAssignmentRead[]>([])
-
-const loadAssignedPlayers = async () => {
+const loadTeamOverview = async () => {
   if (!authStore.canCoach) return
-  assignedPlayersLoading.value = true
-  assignedPlayersError.value = null
+  teamOverviewLoading.value = true
+  teamOverviewError.value = null
   try {
-    assignedPlayers.value = await listCoachAssignedPlayers()
+    teamOverview.value = await getPlayerDevelopmentTeamOverview()
   } catch (err) {
     if (err instanceof PlayerDevelopmentApiError && err.isUnauthorized()) {
-      // Not a coach role — hide section silently
-      assignedPlayers.value = []
+      teamOverviewError.value = 'You do not have permission to view this development overview.'
     } else if (err instanceof PlayerDevelopmentApiError && err.isUnauthenticated()) {
-      assignedPlayers.value = []
+      teamOverviewError.value = 'Please log in again to view team development data.'
     } else {
-      assignedPlayersError.value =
-        err instanceof Error ? err.message : 'Failed to load assigned players.'
+      teamOverviewError.value =
+        err instanceof Error ? err.message : 'Failed to load the team development overview.'
     }
   } finally {
-    assignedPlayersLoading.value = false
+    teamOverviewLoading.value = false
   }
 }
 
 onMounted(() => {
-  loadAssignedPlayers()
+  loadTeamOverview()
 })
 </script>
 
@@ -613,60 +561,4 @@ onMounted(() => {
   gap: var(--space-xs);
 }
 
-/* Phase 9D — Development Overview */
-.dev-overview-card {
-  border: 1px solid var(--color-border);
-}
-
-.dev-overview-advisory {
-  margin: var(--space-sm) 0 var(--space-md);
-  font-size: var(--text-sm);
-  color: var(--color-muted);
-}
-
-.dev-overview-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-}
-
-.dev-overview-loading,
-.dev-overview-error,
-.dev-overview-empty {
-  padding: var(--space-md);
-  color: var(--color-muted);
-  font-size: var(--text-sm);
-}
-
-.dev-overview-error {
-  color: var(--color-error, red);
-}
-
-.dev-overview-players {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-.dev-player-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding: var(--space-sm) var(--space-md);
-  background: var(--color-surface-alt);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-}
-
-.dev-player-info {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-.dev-player-id {
-  font-size: var(--text-sm);
-  color: var(--color-muted);
-}
 </style>
