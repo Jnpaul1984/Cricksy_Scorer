@@ -1035,6 +1035,19 @@ class PlayerDevelopmentPlanRead(PlayerDevelopmentPlanBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PlayerDevelopmentPlanDraftGenerateRequest(BaseModel):
+    additional_evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+    @field_validator("additional_evidence_refs", mode="after")
+    @classmethod
+    def _validate_additional_evidence_refs(
+        cls,
+        value: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        json.dumps(value)
+        return value
+
+
 class PlayerDevelopmentGoalBase(BaseModel):
     plan_id: str
     title: str
@@ -1302,6 +1315,31 @@ class PlayerProgressCheckpointRead(PlayerProgressCheckpointBase):
     updated_at: dt.datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerDevelopmentPlanDraftBundle(BaseModel):
+    plan: PlayerDevelopmentPlanRead
+    goals: list[PlayerDevelopmentGoalRead] = Field(default_factory=list)
+    weakness_tags: list[PlayerWeaknessTagRead] = Field(default_factory=list)
+    strength_tags: list[PlayerStrengthTagRead] = Field(default_factory=list)
+    drill_assignments: list[PlayerDrillAssignmentRead] = Field(default_factory=list)
+    progress_checkpoints: list[PlayerProgressCheckpointRead] = Field(default_factory=list)
+
+
+class PlayerDevelopmentPlanDraftGenerationResponse(BaseModel):
+    status: Literal["draft_created", "insufficient_data"]
+    player_profile_id: str
+    plan: PlayerDevelopmentPlanDraftBundle | None = None
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    limitations: list[str] = Field(default_factory=list)
+    coach_review_required: bool = True
+
+    @field_validator("evidence_refs", mode="after")
+    @classmethod
+    def _validate_evidence_refs(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        json.dumps(value)
+        return value
 
 
 class MentalQuestionnaireQuestionRead(BaseModel):
