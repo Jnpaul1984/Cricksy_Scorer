@@ -3012,9 +3012,19 @@ Require explicit coach approval/rejection/edit workflow before any recommendatio
 #### Phase 9H.4 — Player Development Recommendation Output
 
 **Status**
-- PENDING
+- COMPLETE
 
-Define structured recommendation output format with confidence, limitations, evidence refs, and approval status.
+Enforce player-facing visibility rules for Player Development reports/recommendation outputs.
+
+- `player` audience added to `PlayerDevelopmentReportAudience`.
+- Player-facing approval gate: only `coach_approved == True AND approval_state == approved` plans appear in `audience=player` output.
+- Raw `ai_metadata` not exposed in any report response (excluded from schema).
+- Raw evidence marker JSON stripped to `{type, label}` summaries for player-facing output.
+- Internal `coach_notes` on checkpoints hidden from player-facing output.
+- Internal `next_coach_actions` cleared for player-facing output.
+- Coach/internal (`audience=coach`) output retains full visibility with `approval_state` and `coach_approved` exposed.
+- 13 focused tests added in `backend/tests/test_player_development_recommendation_output.py`.
+- All 60 targeted tests pass (Phase 9H.1, 9H.2, 9H.3 tests, existing report tests, and new output tests).
 
 #### Phase 9H.5 — Coach Pro Plus UI Integration
 
