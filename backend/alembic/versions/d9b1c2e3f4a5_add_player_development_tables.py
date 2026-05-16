@@ -19,35 +19,39 @@ down_revision: str | None = "c9d8e7f6a5b4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-player_development_plan_status = sa.Enum(
+player_development_plan_status = postgresql.ENUM(
     "draft",
     "active",
     "paused",
     "completed",
     "archived",
     name="player_development_plan_status",
+    create_type=False,
 )
-player_development_source_type = sa.Enum(
+player_development_source_type = postgresql.ENUM(
     "match_data",
     "video_analysis",
     "coach_note",
     "ai_insight",
     "manual",
     name="player_development_source_type",
+    create_type=False,
 )
-player_development_severity = sa.Enum(
+player_development_severity = postgresql.ENUM(
     "low",
     "medium",
     "high",
     name="player_development_severity",
+    create_type=False,
 )
-player_development_approval_state = sa.Enum(
+player_development_approval_state = postgresql.ENUM(
     "not_required",
     "pending_review",
     "approved",
     "rejected",
     "changes_requested",
     name="player_development_approval_state",
+    create_type=False,
 )
 json_type = sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql")
 
