@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
 
 import { __resetAiInsightCacheForTests } from '@/services/aiInsightCache'
 import * as playerApi from '@/services/playerApi'
@@ -18,6 +19,25 @@ vi.mock('vue-router', () => ({
 
 // Mock the playerApi module
 vi.mock('@/services/playerApi')
+
+// Mock the playerDevelopmentApi (not used in non-development tabs)
+vi.mock('@/services/playerDevelopmentApi', () => ({
+  listPlayerDevelopmentPlans: vi.fn().mockResolvedValue([]),
+  generateDraftPlayerDevelopmentPlan: vi.fn().mockResolvedValue({ status: 'insufficient_data', plan: null, evidence_refs: [], confidence_score: null, limitations: [], coach_review_required: true }),
+  listCoachAssignedPlayers: vi.fn().mockResolvedValue([]),
+  PlayerDevelopmentApiError: class PlayerDevelopmentApiError extends Error {
+    status: number
+    code?: string
+    constructor(msg: string, status = 500, code?: string) {
+      super(msg)
+      this.status = status
+      this.code = code
+    }
+    isUnauthorized() { return this.status === 403 }
+    isUnauthenticated() { return this.status === 401 }
+    isNotFound() { return this.status === 404 }
+  },
+}))
 
 describe('PlayerProfileView', () => {
   const mockProfile = {
@@ -67,6 +87,7 @@ describe('PlayerProfileView', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     __resetAiInsightCacheForTests()
+    setActivePinia(createPinia())
   })
 
   it('displays loading state initially', () => {

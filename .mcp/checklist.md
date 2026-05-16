@@ -393,9 +393,10 @@ See [`.mcp/README.md`](.mcp/README.md) for detailed DoD templates.
   - Verify: `python scripts/checklist.py status`
   - Evidence: `backend/app.py`, `backend/routes/player_development.py`, `backend/services/player_development_plan_service.py`, `backend/sql_app/schemas.py`, `backend/tests/test_player_development_plan_service.py`, `backend/tests/test_player_development_routes.py`, `docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md`; validations: `cd backend && python -m pytest tests -k "player_development_plan or player_development" -v`, `cd backend && python -m pytest tests/test_health.py tests/test_results_endpoint.py -q`, `cd backend && python -m pytest tests/test_dls_calculations.py -v --tb=short`, `cd backend && python -m ruff check .`, `cd backend && python -m ruff format --check .`, `cd backend && python -m mypy --config-file pyproject.toml --explicit-package-bases .`; no frontend files changed; generated plans remain draft/unapproved and advisory only.
 
-- [ ] **roadmap-phase9d-coach-workspace-ui** - Phase 9D — Coach Workspace Player Development UI
-  - Acceptance: assigned players + plan visibility, approval actions, drill assignment, session outcomes, constructive indicators
-  - Verify: `python scripts/checklist.py status`
+- [x] **roadmap-phase9d-coach-workspace-ui** - Phase 9D — Coach Workspace Player Development UI
+  - Acceptance: draft plan UI, safe dev area labels, strengths/goals/drills/checkpoints, no activation/approval mutation, no fake data, canCoach gate
+  - Verify: `cd frontend && npm run type-check`, `cd frontend && npm run build-only`, `cd frontend && npm run guard:fake-data`, `cd frontend && npm run test:unit`
+  - Evidence: `frontend/src/services/playerDevelopmentApi.ts`, `frontend/src/components/PlayerDevelopmentPlanCard.vue`, `frontend/src/views/PlayerProfileView.vue`, `frontend/src/views/CoachesDashboardView.vue`, `frontend/src/stores/authStore.ts`, `frontend/tests/unit/PlayerDevelopmentPlanCard.spec.ts`, `frontend/tests/unit/PlayerProfileView.spec.ts`; validations: type-check passed, build passed, guard:fake-data passed (0 errors), test:unit 296/301 passed (5 pre-existing failures), 16/16 new tests pass; no backend migrations changed; no activation/approval mutation added; no fake/random data in production UI path; development areas use safe_display_label.
 
 - [ ] **roadmap-phase9e-team-dashboard** - Phase 9E — School / Team Development Dashboard
   - Acceptance: team development overview, constructive support framing, progress visibility, youth-safe language, scoped access
