@@ -2933,9 +2933,21 @@ Connect governed Cricksy Skills to Coach Pro Plus video-analysis evidence so coa
 #### Phase 9H.0 — Pre-Phase Audit + Spec Lock
 
 **Status**
-- PENDING
+- COMPLETE
 
 Audit and lock scope before implementation. This is documentation/spec work only.
+
+**Audit evidence**
+- Spec-lock document: `docs/PHASE_9H0_COACH_PRO_PLUS_GOVERNED_SKILL_AUDIT_AND_SPEC_LOCK.md`
+- All 11 protected areas audited and documented.
+- 12 gaps/blockers identified (see §12 of spec doc).
+- Video-analysis result structure documented with evidence fields, timestamps, and confidence values.
+- Player Development plan approval state machine documented.
+- Six Phase 9G governed skills audited; none currently consumes structured video evidence.
+- Coach approval gate gap identified (no approval API endpoint exists — Phase 9H.3 blocker).
+- Player-facing visibility gap documented (approval filter not enforced on reports — Phase 9H.4 blocker).
+- Skill input contract, output contract, evidence mapping rules, approval workflow, RBAC rules, audit-log contract, and rollback plan all locked.
+- No runtime code changed. No Claw Studio references introduced.
 
 **Required outputs**
 - Reuse map of Coach Pro Plus video-analysis inputs/outputs and existing governed skill boundaries.
