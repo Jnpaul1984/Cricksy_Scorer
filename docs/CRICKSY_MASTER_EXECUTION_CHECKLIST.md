@@ -2975,9 +2975,20 @@ Define/review governed coaching skill entries, versions, input/output schema, sa
 #### Phase 9H.2 — Video Analysis Evidence to Skill Input Mapping
 
 **Status**
-- PENDING
+- COMPLETE
 
 Specify deterministic mapping from video-analysis evidence to governed skill inputs, preserving timestamps and evidence references.
+
+**Evidence notes**
+- Added deterministic mapper: `backend/services/video_evidence_skill_mapping.py`.
+- Added mapping tests: `backend/tests/test_video_evidence_to_skill_input_mapping.py`.
+- Validation:
+  - `cd backend && python -m pytest -q tests/test_player_development_skill_contract.py tests/test_coaching_video_evidence_skill_contract.py tests/test_video_evidence_to_skill_input_mapping.py` (passed)
+  - `cd backend && ruff check .` (passed)
+  - `cd backend && ruff format --check .` (passed)
+  - `cd backend && mypy --config-file pyproject.toml --explicit-package-bases .` (passed)
+- No video-analysis pipeline/route/frontend/migration/CI/package/infra files changed.
+- No Claw Studio references introduced.
 
 #### Phase 9H.3 — Coach Review Gate
 
