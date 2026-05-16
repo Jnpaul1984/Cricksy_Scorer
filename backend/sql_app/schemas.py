@@ -15,8 +15,8 @@ from backend.services.player_development_state import (
 )
 from backend.sql_app.models import (
     FanFavoriteType,
-    PlayerDevelopmentApprovalState,
     PlayerCoachingNoteVisibility,
+    PlayerDevelopmentApprovalState,
     PlayerDevelopmentPlanStatus,
     PlayerDevelopmentSeverity,
     PlayerDevelopmentSourceType,
@@ -967,9 +967,7 @@ class PlayerDevelopmentPlanBase(BaseModel):
     status: PlayerDevelopmentPlanStatus = PlayerDevelopmentPlanStatus.draft
     source_type: PlayerDevelopmentSourceType = PlayerDevelopmentSourceType.manual
     coach_approved: bool = False
-    approval_state: PlayerDevelopmentApprovalState = (
-        PlayerDevelopmentApprovalState.not_required
-    )
+    approval_state: PlayerDevelopmentApprovalState = PlayerDevelopmentApprovalState.not_required
     confidence_score: float | None = Field(None, ge=0.0, le=1.0)
     evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
     ai_metadata: dict[str, Any] = Field(default_factory=dict)
@@ -1411,8 +1409,8 @@ class PlayerDevelopmentDashboardDrillSummary(BaseModel):
 class PlayerDevelopmentDashboardEvidenceCoverageSummary(BaseModel):
     players_with_confident_recommendations: int = Field(0, ge=0)
     players_needing_more_evidence: int = Field(0, ge=0)
-    players_needing_more_evidence_details: list[PlayerDevelopmentDashboardPlayerPlanSummary] = Field(
-        default_factory=list
+    players_needing_more_evidence_details: list[PlayerDevelopmentDashboardPlayerPlanSummary] = (
+        Field(default_factory=list)
     )
 
 
@@ -1448,6 +1446,7 @@ class PlayerDevelopmentTeamOverviewRead(BaseModel):
 
 class PlayerDevelopmentReportAudience(str, Enum):
     coach = "coach"
+    player = "player"
     school = "school"
     parent_safe = "parent_safe"
 

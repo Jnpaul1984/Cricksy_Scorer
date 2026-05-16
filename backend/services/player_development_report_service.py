@@ -3,12 +3,11 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
+from backend.services.player_development_dashboard_service import get_team_development_overview
+from backend.sql_app import models, schemas
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
-from backend.services.player_development_dashboard_service import get_team_development_overview
-from backend.sql_app import models, schemas
 
 _ADVISORY_DISCLAIMER = (
     "Advisory development report only. This report does not change official match "
@@ -26,6 +25,34 @@ _UNSAFE_TERMS = (
     "should be dropped",
     "should be selected",
 )
+
+# Audiences that require the player-facing approval gate.
+_PLAYER_FACING_AUDIENCES = frozenset({schemas.PlayerDevelopmentReportAudience.player})
+
+
+def is_plan_player_approved(plan: models.PlayerDevelopmentPlan) -> bool:
+    """Return True only when a plan meets the approval gate for player-facing output.
+
+    A plan is player-approved when *both* of the following are true:
+    - ``coach_approved is True``
+    - ``approval_state == approved``
+    """
+    return (
+        plan.coach_approved is True
+        and plan.approval_state == models.PlayerDevelopmentApprovalState.approved
+    )
+
+
+def _player_safe_ref_summary(ref: dict[str, Any]) -> dict[str, Any]:
+    """Return a safe evidence reference summary for player-facing output.
+
+    Strips internal IDs and any additional payload fields, keeping only
+    ``type`` and ``label`` so that raw evidence marker JSON is not exposed.
+    """
+    return {
+        "type": str(ref.get("type", "evidence")),
+        "label": str(ref.get("label", "Evidence reference")),
+    }
 
 
 async def get_player_development_report_by_player(
@@ -185,12 +212,23 @@ def _build_player_report(
     include_archived: bool,
     report_type: str,
 ) -> schemas.PlayerDevelopmentPlayerReportRead:
+    is_player_audience = audience in _PLAYER_FACING_AUDIENCES
+
+    # ── Player-facing approval gate ──────────────────────────────────────────
+    # Player-facing output may only include approved + coach-approved plans.
+    if is_player_audience and not is_plan_player_approved(plan):
+        raise ValueError("Plan not approved for player-facing output")
+
     strengths = [
         schemas.PlayerDevelopmentReportStrength(
             category=tag.category,
             label=_safe_text(tag.label, fallback="Evidence-backed coaching strength"),
             confidence_score=tag.confidence_score,
-            evidence_refs=tag.evidence_refs,
+            evidence_refs=(
+                [_player_safe_ref_summary(r) for r in tag.evidence_refs]
+                if is_player_audience
+                else tag.evidence_refs
+            ),
         )
         for tag in sorted(plan.strength_tags, key=lambda item: item.created_at)
     ]
@@ -203,7 +241,11 @@ def _build_player_report(
             ),
             severity=tag.severity,
             confidence_score=tag.confidence_score,
-            evidence_refs=tag.evidence_refs,
+            evidence_refs=(
+                [_player_safe_ref_summary(r) for r in tag.evidence_refs]
+                if is_player_audience
+                else tag.evidence_refs
+            ),
         )
         for tag in sorted(plan.weakness_tags, key=lambda item: item.created_at)
     ]
@@ -214,7 +256,11 @@ def _build_player_report(
             target_metric=goal.target_metric,
             due_date=goal.due_date,
             status=goal.status,
-            evidence_refs=goal.evidence_refs,
+            evidence_refs=(
+                [_player_safe_ref_summary(r) for r in goal.evidence_refs]
+                if is_player_audience
+                else goal.evidence_refs
+            ),
         )
         for goal in sorted(plan.goals, key=lambda item: item.created_at)
     ]
@@ -226,11 +272,17 @@ def _build_player_report(
             frequency=drill.frequency,
             status=drill.status,
             due_date=drill.due_date,
-            evidence_refs=drill.evidence_refs,
+            evidence_refs=(
+                [_player_safe_ref_summary(r) for r in drill.evidence_refs]
+                if is_player_audience
+                else drill.evidence_refs
+            ),
         )
         for drill in sorted(plan.drill_assignments, key=lambda item: item.created_at)
     ]
-    checkpoint_review_summary = _build_checkpoint_review_summary(plan)
+    checkpoint_review_summary = _build_checkpoint_review_summary(
+        plan, strip_coach_notes=is_player_audience
+    )
     limitations = _extract_limitations(plan)
     next_coach_actions = _next_coach_actions(
         plan=plan,
@@ -238,6 +290,11 @@ def _build_player_report(
         has_checkpoints=bool(checkpoint_review_summary.checkpoints),
     )
     evidence_refs = _collect_plan_evidence_refs(plan)
+    if is_player_audience:
+        # Strip raw evidence marker payloads — expose safe summaries only.
+        evidence_refs = [_player_safe_ref_summary(r) for r in evidence_refs]
+        # Internal coach-workflow actions are not surfaced to the player.
+        next_coach_actions = []
 
     return schemas.PlayerDevelopmentPlayerReportRead(
         report_title=f"{profile.player_name} Development Report",
@@ -268,9 +325,11 @@ def _build_player_report(
 
 def _build_checkpoint_review_summary(
     plan: models.PlayerDevelopmentPlan,
+    *,
+    strip_coach_notes: bool = False,
 ) -> schemas.PlayerDevelopmentCheckpointReviewSummaryRead:
     checkpoints = [
-        _serialize_checkpoint(checkpoint)
+        _serialize_checkpoint(checkpoint, strip_coach_notes=strip_coach_notes)
         for checkpoint in sorted(plan.progress_checkpoints, key=lambda item: item.checkpoint_date)
     ]
     return schemas.PlayerDevelopmentCheckpointReviewSummaryRead(
@@ -283,23 +342,32 @@ def _build_checkpoint_review_summary(
 
 def _serialize_checkpoint(
     checkpoint: models.PlayerProgressCheckpoint,
+    *,
+    strip_coach_notes: bool = False,
 ) -> schemas.PlayerDevelopmentReportCheckpoint:
-    evidence_refs = checkpoint.evidence_refs
+    raw_evidence_refs = checkpoint.evidence_refs
     status = checkpoint.progress_status
     progress_statement = "Evidence-backed coaching note."
-    if _contains_improvement_claim(status) and not evidence_refs:
+    if _contains_improvement_claim(status) and not raw_evidence_refs:
         status = "needs_evidence_review"
         progress_statement = (
             "Planned review checkpoint. More evidence would strengthen this recommendation "
             "before any improvement claim."
         )
+    evidence_refs = (
+        [_player_safe_ref_summary(r) for r in raw_evidence_refs]
+        if strip_coach_notes
+        else raw_evidence_refs
+    )
     return schemas.PlayerDevelopmentReportCheckpoint(
         checkpoint_date=checkpoint.checkpoint_date,
         progress_status=status,
         progress_statement=progress_statement,
         confidence_score=checkpoint.confidence_score,
         evidence_refs=evidence_refs,
-        coach_notes=_safe_text(checkpoint.coach_notes, fallback=None),
+        coach_notes=None
+        if strip_coach_notes
+        else _safe_text(checkpoint.coach_notes, fallback=None),
     )
 
 
