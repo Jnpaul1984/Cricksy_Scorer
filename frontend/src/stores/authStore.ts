@@ -43,6 +43,9 @@ export const useAuthStore = defineStore('auth', {
       isSuperuser(state) || state.user?.role === 'analyst_pro' || state.user?.role === 'org_pro',
     canManageTournaments: (state) =>
       isSuperuser(state) || state.user?.role === 'org_pro',
+    /** True if user can access coach-facing player development features (coach_pro, coach_pro_plus, or org_pro). */
+    canCoach: (state) =>
+      isSuperuser(state) || state.user?.role === 'coach_pro' || state.user?.role === 'coach_pro_plus' || state.user?.role === 'org_pro',
     // Legacy helpers used across the app
     isOrg: (state) => state.user?.role === 'org_pro' || isSuperuser(state),
     isCoach: (state) => state.user?.role === 'coach_pro' || state.user?.role === 'coach_pro_plus' || isSuperuser(state),

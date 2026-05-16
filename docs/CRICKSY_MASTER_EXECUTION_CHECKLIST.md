@@ -2691,31 +2691,54 @@ Validation notes:
 ### Phase 9D — Coach Workspace Player Development UI
 
 **Status**
-- todo
+- COMPLETE
 
 Make the player-development system visible and usable in the Coach Workspace.
 
 **Required future frontend**
-- Assigned players list with development status
-- Player development profile
-- Strengths and weaknesses panel
-- Active goals
-- Assigned drills
-- Coaching notes/sessions
-- Progress checkpoints
-- Coach approve/reject/edit AI suggestions
-- “Needs attention” indicator for struggling players
-- “Improving” indicator for players showing progress
+- Assigned players list with development status ✅
+- Player development profile ✅
+- Strengths and weaknesses panel ✅
+- Active goals ✅
+- Assigned drills ✅
+- Coaching notes/sessions (via existing CoachNotebookWidget)
+- Progress checkpoints ✅
+- Coach approve/reject/edit AI suggestions (deferred — no backend activation endpoint in scope for 9D)
+- “Needs attention” indicator for struggling players (planned Phase 9E)
+- “Improving” indicator for players showing progress (planned Phase 9E)
 
 **Acceptance criteria**
-- Coach can open assigned player
-- Coach can view development plan
-- Coach can activate plan
-- Coach can assign drills
-- Coach can record session outcome
-- Weakest/developing players are easy to identify without negative wording
-- UI builds successfully in future implementation
-- No backend-only feature if it is meant for coach use
+- Coach can open assigned player ✅
+- Coach can view development plan ✅
+- Coach can activate plan (deferred — no backend activation endpoint in scope for 9D)
+- Coach can assign drills ✅ (shown as assigned from API)
+- Coach can record session outcome (via existing Notebook)
+- Weakest/developing players are easy to identify without negative wording ✅ (safe_display_label enforced)
+- UI builds successfully ✅
+- No backend-only feature if it is meant for coach use ✅
+
+Validation notes:
+
+- Files changed:
+  - `frontend/src/services/playerDevelopmentApi.ts` (new — typed API client for Phase 9C endpoints)
+  - `frontend/src/components/PlayerDevelopmentPlanCard.vue` (new — draft plan display component)
+  - `frontend/src/views/PlayerProfileView.vue` (Development tab added, coach-gated via canCoach)
+  - `frontend/src/views/CoachesDashboardView.vue` (DevDashboardWidget replaced with real API section)
+  - `frontend/src/stores/authStore.ts` (added canCoach getter)
+  - `frontend/tests/unit/PlayerDevelopmentPlanCard.spec.ts` (new — 16 tests)
+  - `frontend/tests/unit/PlayerProfileView.spec.ts` (updated — Pinia setup + playerDevelopmentApi mock)
+- Commands run:
+  - `cd frontend && npm run type-check` → passed
+  - `cd frontend && npm run build-only` → passed
+  - `cd frontend && npm run guard:fake-data` → passed (0 errors, 3 pre-existing warnings from DevDashboardWidget.vue)
+  - `cd frontend && npm run test:unit` → 296/301 passed (5 pre-existing failures unrelated to Phase 9D)
+  - New test file: 16/16 passed
+- Scope confirmations:
+  - No backend migrations changed.
+  - No plan activation or approval mutation added.
+  - No fake/mock/random development data used in production UI path.
+  - No public/player/fan-facing surfaces added.
+  - Development areas use safe_display_label, never raw internal label.
 
 ### Phase 9E — School / Team Development Dashboard
 

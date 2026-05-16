@@ -113,6 +113,16 @@
           >
             Mental
           </BaseButton>
+          <!-- Development tab: coach-facing only -->
+          <BaseButton
+            v-if="authStore.canCoach"
+            :variant="activeTab === 'development' ? 'primary' : 'ghost'"
+            class="tab-btn"
+            data-tab="development"
+            @click="onDevelopmentTabClick"
+          >
+            Development
+          </BaseButton>
         </BaseCard>
 
         <!-- Tab Content -->
@@ -296,6 +306,86 @@
           <div v-else-if="activeTab === 'mental'" class="tab-panel">
             <MentalProfilePanel :player-id="profile.player_id" :player-name="profile.player_name" />
           </div>
+
+          <!-- Development Tab (coach-facing only) -->
+          <div v-else-if="activeTab === 'development'" class="tab-panel" data-testid="development-tab-panel">
+            <div class="dev-tab-header">
+              <h3>📋 Development Plans</h3>
+              <div class="dev-tab-badges">
+                <BaseBadge variant="warning">Draft only</BaseBadge>
+                <BaseBadge variant="primary">Coach review required</BaseBadge>
+              </div>
+              <p class="dev-tab-advisory">
+                These are advisory draft plans generated from available player data.
+                They require coach review and must not be treated as official assessments.
+              </p>
+            </div>
+
+            <!-- Loading state -->
+            <div v-if="devPlansLoading" class="dev-loading" data-testid="dev-plans-loading">
+              <p>Loading development plans…</p>
+            </div>
+
+            <!-- Error state -->
+            <div v-else-if="devPlansError" class="dev-error" data-testid="dev-plans-error">
+              <p>{{ devPlansError }}</p>
+            </div>
+
+            <!-- Plans list -->
+            <div v-else>
+              <!-- Insufficient data state -->
+              <div
+                v-if="devInsufficientData"
+                class="dev-insufficient"
+                data-testid="dev-insufficient-data"
+              >
+                <p>
+                  <strong>Insufficient data to generate a development plan.</strong>
+                </p>
+                <p>
+                  To generate a draft plan, the player needs recent match/form data,
+                  coach notes, coaching sessions, or video evidence.
+                </p>
+              </div>
+
+              <!-- Empty state -->
+              <div
+                v-else-if="devPlans.length === 0 && !devGenerating"
+                class="dev-empty"
+                data-testid="dev-plans-empty"
+              >
+                <p>No development plans exist for this player yet.</p>
+              </div>
+
+              <!-- Plans -->
+              <div v-if="devPlans.length > 0" class="dev-plans-list">
+                <PlayerDevelopmentPlanCard
+                  v-for="bundle in devPlans"
+                  :key="bundle.plan.id"
+                  :bundle="bundle"
+                  class="dev-plan-item"
+                />
+              </div>
+
+              <!-- Generate draft plan action -->
+              <div class="dev-generate-section" data-testid="dev-generate-section">
+                <BaseButton
+                  variant="primary"
+                  size="sm"
+                  :disabled="devGenerating"
+                  data-testid="dev-generate-btn"
+                  @click="generateDraftPlan"
+                >
+                  <span v-if="devGenerating">Generating draft plan…</span>
+                  <span v-else>Generate draft development plan</span>
+                </BaseButton>
+                <p class="dev-generate-note">
+                  Plan will be generated from available player data only.
+                  No fake recommendations are produced.
+                </p>
+              </div>
+            </div>
+          </div>
         </BaseCard>
 
         <!-- AI Insights Section -->
@@ -364,17 +454,26 @@ import CoachNotebookWidget from '@/components/CoachNotebookWidget.vue'
 import FormTrackerWidget from '@/components/FormTrackerWidget.vue'
 import MentalProfilePanel from '@/components/MentalProfilePanel.vue'
 import PlayerDevelopmentInsightCard from '@/components/PlayerDevelopmentInsightCard.vue'
+import PlayerDevelopmentPlanCard from '@/components/PlayerDevelopmentPlanCard.vue'
 import SeasonGraphsWidget from '@/components/SeasonGraphsWidget.vue'
 import StrengthWeaknessWidget from '@/components/StrengthWeaknessWidget.vue'
 import { readAiInsightCache, writeAiInsightCache } from '@/services/aiInsightCache'
 import { apiService, getErrorMessage, getPlayerAIInsights } from '@/services/api'
 import type { FanFavoriteRead, PlayerAIInsights } from '@/services/api'
+import {
+  generateDraftPlayerDevelopmentPlan,
+  listPlayerDevelopmentPlans,
+  PlayerDevelopmentApiError,
+} from '@/services/playerDevelopmentApi'
+import type { PlayerDevelopmentPlanDraftBundle } from '@/services/playerDevelopmentApi'
 import { getPlayerProfile } from '@/services/playerApi'
+import { useAuthStore } from '@/stores/authStore'
 import type { PlayerProfile } from '@/types/player'
 
-type TabName = 'overview' | 'batting' | 'bowling' | 'form' | 'season' | 'profile' | 'notebook' | 'mental'
+type TabName = 'overview' | 'batting' | 'bowling' | 'form' | 'season' | 'profile' | 'notebook' | 'mental' | 'development'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const loading = ref(true)
 const error = ref<string | null>(null)
 const profile = ref<PlayerProfile | null>(null)
@@ -393,6 +492,13 @@ const aiInsights = ref<PlayerAIInsights | null>(null)
 const aiInsightsFallback = ref<{ summary: string; bullets: string[] } | null>(null)
 const aiInsightsInsufficientData = ref(false)
 const aiInsightsCacheStatus = ref<'none' | 'live' | 'cached' | 'stale' | 'fallback' | 'insufficient'>('none')
+
+// Development plans state (Phase 9D — coach-facing only)
+const devPlansLoading = ref(false)
+const devPlansError = ref<string | null>(null)
+const devPlans = ref<PlayerDevelopmentPlanDraftBundle[]>([])
+const devGenerating = ref(false)
+const devInsufficientData = ref(false)
 
 // Derive player role from stats
 const playerRole = computed<string>(() => {
@@ -594,6 +700,69 @@ onMounted(async () => {
   await loadFavorites()
   await loadAIInsights()
 })
+
+// -----------------------------------------------------------------------
+// Phase 9D — Player Development (coach-facing only)
+// -----------------------------------------------------------------------
+
+const loadDevPlans = async () => {
+  const playerId = route.params.playerId as string
+  if (!playerId || !authStore.canCoach) return
+
+  devPlansLoading.value = true
+  devPlansError.value = null
+  devInsufficientData.value = false
+
+  try {
+    devPlans.value = await listPlayerDevelopmentPlans(playerId)
+  } catch (err) {
+    if (err instanceof PlayerDevelopmentApiError && err.isUnauthorized()) {
+      devPlansError.value = 'You do not have permission to view development plans for this player.'
+    } else if (err instanceof PlayerDevelopmentApiError && err.isNotFound()) {
+      // Player not found — show empty
+      devPlans.value = []
+    } else {
+      devPlansError.value = err instanceof Error ? err.message : 'Failed to load development plans.'
+    }
+  } finally {
+    devPlansLoading.value = false
+  }
+}
+
+const generateDraftPlan = async () => {
+  const playerId = route.params.playerId as string
+  if (!playerId || devGenerating.value) return
+
+  devGenerating.value = true
+  devPlansError.value = null
+  devInsufficientData.value = false
+
+  try {
+    const result = await generateDraftPlayerDevelopmentPlan(playerId)
+    if (result.status === 'insufficient_data') {
+      devInsufficientData.value = true
+    } else if (result.plan) {
+      // Reload the full list to pick up the new plan
+      await loadDevPlans()
+    }
+  } catch (err) {
+    if (err instanceof PlayerDevelopmentApiError && err.isUnauthorized()) {
+      devPlansError.value = 'You do not have permission to generate a development plan for this player.'
+    } else {
+      devPlansError.value = err instanceof Error ? err.message : 'Failed to generate development plan.'
+    }
+  } finally {
+    devGenerating.value = false
+  }
+}
+
+const onDevelopmentTabClick = async () => {
+  activeTab.value = 'development'
+  // Load plans the first time the tab is opened (if not already loaded)
+  if (devPlans.value.length === 0 && !devPlansLoading.value && !devPlansError.value) {
+    await loadDevPlans()
+  }
+}
 </script>
 
 <style scoped>
@@ -1080,5 +1249,73 @@ onMounted(async () => {
     width: 100%;
     justify-content: space-between;
   }
+}
+
+/* -----------------------------------------------------------------------
+   Phase 9D — Development Tab (coach-facing)
+   ----------------------------------------------------------------------- */
+
+.dev-tab-header {
+  margin-bottom: var(--space-4);
+}
+
+.dev-tab-header h3 {
+  margin: 0 0 var(--space-2);
+}
+
+.dev-tab-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.dev-tab-advisory {
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-text-muted, var(--color-muted));
+  margin: 0;
+}
+
+.dev-loading,
+.dev-error,
+.dev-insufficient,
+.dev-empty {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  margin-bottom: var(--space-4);
+}
+
+.dev-error {
+  color: var(--color-error);
+}
+
+.dev-insufficient strong {
+  display: block;
+  margin-bottom: var(--space-2);
+}
+
+.dev-plans-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.dev-generate-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: var(--space-4);
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border);
+}
+
+.dev-generate-note {
+  margin: 0;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-muted, var(--color-muted));
 }
 </style>
