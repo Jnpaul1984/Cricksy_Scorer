@@ -1609,7 +1609,7 @@
   category: "Roadmap Governance"
   title: "Phase 9A — Pre-Phase Audit + Spec Lock"
   description: "Audit and lock spec for unified player-development intelligence workflow using existing foundations"
-  status: todo
+  status: done
   confidence: high
   risk_level: medium
   acceptance_criteria:
@@ -1620,12 +1620,13 @@
   verification_commands:
     - "python scripts/checklist.py status"
   files_touched:
+    - "docs/PHASE_9A_PLAYER_DEVELOPMENT_INTELLIGENCE_AUDIT_AND_SPEC_LOCK.md"
     - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
     - ".mcp/checklist.yaml"
     - ".mcp/checklist.md"
-  completed_by: null
-  completed_at: null
-  notes: "Reuse partial foundations; do not duplicate coach_pro, ai_player_insights, drill generation, monthly improvement tracking, Phase 6C skills governance, or Phase 8C review workflow."
+  completed_by: "copilot"
+  completed_at: "2026-05-16T00:00:53Z"
+  notes: "Completed via docs/PHASE_9A_PLAYER_DEVELOPMENT_INTELLIGENCE_AUDIT_AND_SPEC_LOCK.md. Validation locked that only docs/checklist files changed; no runtime, migrations, tests, CI, or package files were modified."
 
 - id: roadmap-phase9b-data-model
   week: 9
