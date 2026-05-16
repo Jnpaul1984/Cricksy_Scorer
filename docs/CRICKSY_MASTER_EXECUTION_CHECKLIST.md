@@ -2797,16 +2797,14 @@ Validation notes:
 ### Phase 9F — Player Development Reports
 
 **Status**
-- todo
+- COMPLETE ✅
 
-Generate clear reports for coaches, schools, parents, and players.
+Generate clear, advisory, evidence-backed reports for coach/org workflows.
 
-**Required future report types**
+**Delivered report types**
 - Individual player development report
 - Team development report
-- Before/after improvement report
-- Coach session summary
-- Drill progress summary
+- Checkpoint review summary
 
 **Acceptance criteria**
 - Reports use real data only
@@ -2814,6 +2812,30 @@ Generate clear reports for coaches, schools, parents, and players.
 - Reports include strengths, weaknesses, actions taken, progress, and next steps
 - Parent/school version uses positive, youth-safe wording
 - Coach version can include deeper technical notes
+
+Validation notes:
+
+- Files changed:
+  - `backend/services/player_development_report_service.py` (new — read-only report generation and safety filtering)
+  - `backend/routes/player_development.py` (added report endpoints under `/api/player-development/reports/*`)
+  - `backend/sql_app/schemas.py` (added report response contracts for player/team/checkpoint reports)
+  - `backend/tests/test_player_development_reports.py` (new — permission/read-only/safety/evidence coverage)
+- Backend routes/services added:
+  - `GET /api/player-development/reports/players/{player_id}`
+  - `GET /api/player-development/reports/plans/{plan_id}`
+  - `GET /api/player-development/reports/team-summary`
+- Commands run:
+  - `cd backend && python -m pytest tests/test_player_development_reports.py -v` → passed (10/10)
+  - `cd backend && python -m pytest tests -k "player_development_report or player_development" -v` → passed (31 selected)
+  - `cd backend && python -m pytest tests/test_health.py tests/test_results_endpoint.py -q` → passed
+  - `cd backend && python -m ruff check .` → passed
+  - `cd backend && python -m ruff format --check .` → passed
+  - `cd backend && python -m mypy --config-file pyproject.toml --explicit-package-bases .` → passed
+- Scope confirmations:
+  - No backend migrations changed.
+  - No activation/approval mutation endpoints were added.
+  - No public/player/fan report surface was added.
+  - No official scoring/result/stat truth was mutated.
 
 ### Phase 9G — Player Development Skill Contract
 

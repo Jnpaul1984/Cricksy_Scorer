@@ -1426,6 +1426,115 @@ class PlayerDevelopmentTeamOverviewRead(BaseModel):
     most_recent_development_activity_at: dt.datetime | None = None
 
 
+class PlayerDevelopmentReportAudience(str, Enum):
+    coach = "coach"
+    school = "school"
+    parent_safe = "parent_safe"
+
+
+class PlayerDevelopmentReportScope(BaseModel):
+    report_type: str
+    audience: PlayerDevelopmentReportAudience
+    include_archived: bool = False
+    generated_at: dt.datetime
+
+
+class PlayerDevelopmentReportStrength(BaseModel):
+    category: str
+    label: str
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class PlayerDevelopmentReportDevelopmentArea(BaseModel):
+    category: str
+    safe_display_label: str
+    severity: PlayerDevelopmentSeverity
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class PlayerDevelopmentReportGoal(BaseModel):
+    title: str
+    description: str | None = None
+    target_metric: str | None = None
+    due_date: dt.date | None = None
+    status: PlayerDevelopmentPlanStatus
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class PlayerDevelopmentReportDrill(BaseModel):
+    drill_category: str
+    drill_name: str
+    drill_description: str | None = None
+    frequency: str | None = None
+    status: PlayerDevelopmentPlanStatus
+    due_date: dt.date | None = None
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class PlayerDevelopmentReportCheckpoint(BaseModel):
+    checkpoint_date: dt.date
+    progress_status: str
+    progress_statement: str
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    coach_notes: str | None = None
+
+
+class PlayerDevelopmentCheckpointReviewSummaryRead(BaseModel):
+    plan_id: str
+    player_profile_id: str
+    advisory_label: str
+    checkpoints: list[PlayerDevelopmentReportCheckpoint] = Field(default_factory=list)
+
+
+class PlayerDevelopmentPlayerReportRead(BaseModel):
+    report_title: str
+    player_profile_id: str
+    player_name: str
+    plan_id: str
+    report_scope: PlayerDevelopmentReportScope
+    plan_status: PlayerDevelopmentPlanStatus
+    coach_approved: bool
+    approval_state: PlayerDevelopmentApprovalState
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    limitations: list[str] = Field(default_factory=list)
+    strengths: list[PlayerDevelopmentReportStrength] = Field(default_factory=list)
+    safe_development_areas: list[PlayerDevelopmentReportDevelopmentArea] = Field(
+        default_factory=list
+    )
+    goals: list[PlayerDevelopmentReportGoal] = Field(default_factory=list)
+    drills: list[PlayerDevelopmentReportDrill] = Field(default_factory=list)
+    checkpoint_review_summary: PlayerDevelopmentCheckpointReviewSummaryRead
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    advisory_disclaimer: str
+    next_coach_actions: list[str] = Field(default_factory=list)
+
+
+class PlayerDevelopmentTeamSummaryReportRead(BaseModel):
+    report_title: str
+    report_scope: PlayerDevelopmentReportScope
+    total_assigned_players: int = Field(0, ge=0)
+    players_with_plans: int = Field(0, ge=0)
+    players_needing_coach_review: int = Field(0, ge=0)
+    common_safe_development_themes: list[PlayerDevelopmentDashboardThemeSummary] = Field(
+        default_factory=list
+    )
+    drill_overview: PlayerDevelopmentDashboardDrillSummary = Field(
+        default_factory=PlayerDevelopmentDashboardDrillSummary
+    )
+    upcoming_checkpoints: list[PlayerDevelopmentDashboardCheckpointSummary] = Field(
+        default_factory=list
+    )
+    evidence_coverage: PlayerDevelopmentDashboardEvidenceCoverageSummary = Field(
+        default_factory=PlayerDevelopmentDashboardEvidenceCoverageSummary
+    )
+    support_needs_language: list[str] = Field(default_factory=list)
+    advisory_disclaimer: str
+    next_coach_actions: list[str] = Field(default_factory=list)
+
+
 class MentalQuestionnaireQuestionRead(BaseModel):
     id: int
     category: str
