@@ -872,6 +872,209 @@ PLAYER_DEVELOPMENT_SKILL_REGISTRY: Final[dict[str, dict[str, Any]]] = {
             "No reports are published or mutated by the contract registry itself."
         ),
     },
+    # ------------------------------------------------------------------
+    # 7. coaching_video_evidence_skill.v1
+    # ------------------------------------------------------------------
+    "coaching_video_evidence_skill.v1": {
+        "skill_id": "coaching_video_evidence_skill.v1",
+        "name": "Coaching Video Evidence Skill",
+        "version": "1.0.0",
+        "category": "player_development",
+        "purpose": (
+            "Transform structured Coach Pro Plus video-analysis evidence into "
+            "coach-reviewable player development advisory recommendations. "
+            "Output is advisory only and never official cricket truth."
+        ),
+        "allowed_roles": ["coach_pro_plus", "org_pro"],
+        "supported_intents": [
+            "derive_recommendation_from_video_evidence",
+            "summarize_video_analysis_findings_for_coach_review",
+            "prepare_evidence_linked_development_advisory",
+        ],
+        "required_inputs": [
+            "player_profile_id",
+            "coach_user_id",
+            "org_id",
+            "video_session_id",
+            "video_analysis_job_id",
+            "analysis_mode",
+            "evidence_markers",
+            "evidence_markers[].metric_name",
+            "evidence_markers[].timestamp_s",
+            "evidence_markers[].frame_num",
+            "evidence_markers[].score",
+            "evidence_markers[].threshold",
+            "evidence_markers[].finding_label",
+        ],
+        "optional_inputs": [
+            "coach_goals",
+            "goal_compliance_pct",
+            "previous_plan_id",
+            "coach_notes",
+        ],
+        "forbidden_inputs": [
+            "official_truth_mutation_request",
+            "match_result_mutation_request",
+            "scorecard_mutation_request",
+            "innings_state_mutation_request",
+            "dls_mutation_request",
+            "player_stats_mutation_request",
+            "always_running_mode",
+            "player_auto_publish_without_review",
+        ],
+        "deterministic_data_dependencies": [
+            "coach_pro_plus.video_session.id",
+            "coach_pro_plus.analysis_job.id",
+            "coach_pro_plus.evidence_markers.metric_name",
+            "coach_pro_plus.evidence_markers.timestamp_s",
+            "coach_pro_plus.evidence_markers.frame_num",
+            "coach_pro_plus.evidence_markers.score",
+            "coach_pro_plus.evidence_markers.threshold",
+            "coach_pro_plus.evidence_markers.finding_label",
+        ],
+        "output_type": "recommendation",
+        "ai_boundary_metadata": {
+            **_ADVISORY_BOUNDARY_METADATA,
+            "output_type": "recommendation",
+            "coach_authority_required": True,
+        },
+        "output_contract": {
+            "required_fields": [
+                "recommendation_id",
+                "skill_id",
+                "skill_version",
+                "player_profile_id",
+                "video_session_id",
+                "video_analysis_job_id",
+                "analysis_mode",
+                "confidence_score",
+                "limitations",
+                "evidence_refs",
+                "recommendation_text",
+                "suggested_drills",
+                "focus_areas",
+                "approval_state",
+                "is_official_truth",
+                "requires_review",
+                "generated_at",
+                "ai_metadata",
+            ],
+            "advisory_only": True,
+            "requires_coach_review_before_player_facing_use": True,
+        },
+        "allowed_outputs": [
+            "recommendation_id",
+            "skill_id",
+            "skill_version",
+            "player_profile_id",
+            "video_session_id",
+            "video_analysis_job_id",
+            "analysis_mode",
+            "confidence_score",
+            "limitations",
+            "evidence_refs",
+            "recommendation_text",
+            "suggested_drills",
+            "focus_areas",
+            "approval_state",
+            "is_official_truth",
+            "requires_review",
+            "generated_at",
+            "ai_metadata",
+            "advisory_disclaimer",
+        ],
+        "forbidden_outputs": [
+            "official_ranking",
+            "talent_score",
+            "selection_recommendation",
+            "weakest_player",
+            "liability",
+            "poor_performer",
+            "official_cricket_truth_assertion",
+            "unreviewed_player_facing_output",
+            "scorecard_mutation",
+            "match_result_mutation",
+            "innings_state_mutation",
+            "dls_mutation",
+            "player_stats_mutation",
+            "medical_diagnosis_statement",
+            "psychological_diagnosis_statement",
+            "fabricated_evidence_reference",
+        ],
+        "confidence_fields": _STANDARD_CONFIDENCE_FIELDS,
+        "limitations_fields": _STANDARD_LIMITATIONS_FIELDS,
+        "validation_rules": [
+            *_STANDARD_VALIDATION_RULES,
+            "must_require_video_analysis_job_id",
+            "must_require_video_session_id",
+            "must_require_analysis_mode",
+            "must_require_evidence_markers",
+            "must_preserve_video_timestamps_in_evidence_refs",
+            "must_require_coach_review_before_player_facing_use",
+            "execution_must_be_event_triggered_not_always_running",
+        ],
+        "safety_rules": [
+            *_STANDARD_SAFETY_RULES,
+            "no_unapproved_player_facing_ai_output",
+            "coach_remains_authority_for_player_development_decisions",
+        ],
+        "youth_safety_rules": _STANDARD_YOUTH_SAFETY_RULES,
+        "organization_data_boundary_rules": _STANDARD_ORG_BOUNDARY_RULES,
+        "no_fake_data_rule": (
+            "If required structured video evidence is missing or insufficient, return "
+            "insufficient_data or needs_more_evidence fallback. "
+            "Fabricating markers, timestamps, frames, or findings is forbidden."
+        ),
+        "no_official_truth_mutation_rule": (
+            "This skill must never overwrite scoring, match results, player stats, "
+            "DLS values, scorecards, innings state, or any official cricket truth. "
+            "Call validate_no_official_truth_mutation before persisting any output."
+        ),
+        "safe_language_rules": [
+            *_STANDARD_SAFE_LANGUAGE_RULES,
+            "no_medical_or_psychological_diagnosis_language",
+            "coach_review_disclaimer_required_before_player_visibility",
+        ],
+        "review_required": True,
+        "approval_required_before_activation": True,
+        "evidence_ref_requirements": (
+            "Every recommendation must include evidence_refs tied to video_session_id "
+            "and video_analysis_job_id with marker timestamps and/or frame references. "
+            "Outputs without timestamp-preserving evidence refs are blocked."
+        ),
+        "fallback_behaviors": {
+            **_STANDARD_FALLBACK_BEHAVIORS,
+            "insufficient_data": (
+                "Return advisory placeholder indicating insufficient structured video "
+                "evidence. Require additional markers before recommendation generation."
+            ),
+            "needs_more_evidence": (
+                "Block recommendation generation until additional structured markers "
+                "with timestamps/frames are provided."
+            ),
+            "coach_review_required": (
+                "Hold output in review queue. Do not surface to player-facing channels "
+                "until coach approval is recorded."
+            ),
+        },
+        "tests_required": [
+            "contract_validation_test",
+            "no_official_truth_mutation_test",
+            "no_fake_data_test",
+            "youth_safety_rules_test",
+            "evidence_ref_requirement_test",
+            "forbidden_output_terms_test",
+            "fallback_behavior_coverage_test",
+            "role_authorization_test",
+            "coach_review_required_before_player_facing_use_test",
+            "video_evidence_marker_schema_test",
+        ],
+        "rollback_or_disable_strategy": (
+            "Feature flag disable at skill-implementation layer. "
+            "When disabled or insufficient evidence is present, return insufficient_data "
+            "fallback and emit no player-facing recommendation."
+        ),
+    },
 }
 
 # ---------------------------------------------------------------------------
