@@ -205,11 +205,24 @@ async def list_player_development_plans(
     db: AsyncSession = Depends(get_db),
 ) -> list[schemas.PlayerDevelopmentPlanDraftBundle]:
     await _ensure_generation_access(db, current_user, player_id)
-    plans = await list_player_draft_plans(
-        db=db,
-        player_profile_id=player_id,
-        org_id=current_user.org_id or "unscoped-org",
-    )
+    role_value = getattr(current_user.role, "value", current_user.role)
+    if role_value in {"coach_pro", "coach_pro_plus"}:
+        plans = await list_player_draft_plans(
+            db=db,
+            player_profile_id=player_id,
+            coach_user_id=current_user.id,
+        )
+    else:
+        if not current_user.org_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Organization access is not configured for this user",
+            )
+        plans = await list_player_draft_plans(
+            db=db,
+            player_profile_id=player_id,
+            org_id=current_user.org_id,
+        )
     visible_plans: list[schemas.PlayerDevelopmentPlanDraftBundle] = []
     for plan in plans:
         await _ensure_plan_access(db, current_user, plan)

@@ -118,6 +118,31 @@ async def _seed_route_data(db_session) -> tuple[models.User, models.User, models
     return assigned_coach, unassigned_coach, other_org_user, profile
 
 
+async def _create_plan(
+    db_session,
+    *,
+    plan_id: str,
+    player_id: str,
+    coach_user_id: str,
+    org_id: str,
+    title: str,
+) -> models.PlayerDevelopmentPlan:
+    plan = models.PlayerDevelopmentPlan(
+        id=plan_id,
+        player_profile_id=player_id,
+        coach_user_id=coach_user_id,
+        org_id=org_id,
+        title=title,
+        summary="Draft plan for listing scope checks.",
+        source_type=models.PlayerDevelopmentSourceType.ai_insight,
+        evidence_refs=[{"type": "manual", "id": f"evidence-{plan_id}", "label": "Listing test evidence"}],
+        ai_metadata={"is_official_truth": False, "requires_review": True},
+    )
+    db_session.add(plan)
+    await db_session.commit()
+    return plan
+
+
 @pytest.mark.asyncio
 async def test_assigned_coach_can_generate_and_fetch_draft_plan(async_client, db_session) -> None:
     assigned_coach, _unassigned_coach, _other_org_user, profile = await _seed_route_data(db_session)
@@ -180,3 +205,143 @@ async def test_cross_org_user_cannot_fetch_player_development_plan(async_client,
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Access denied"
+
+
+@pytest.mark.asyncio
+async def test_coach_can_list_only_their_own_draft_plans(async_client, db_session) -> None:
+    assigned_coach, unassigned_coach, _other_org_user, profile = await _seed_route_data(db_session)
+    await _create_plan(
+        db_session,
+        plan_id="plan-list-own-001",
+        player_id=profile.player_id,
+        coach_user_id=assigned_coach.id,
+        org_id=assigned_coach.org_id or "org-route-001",
+        title="Assigned coach visible plan",
+    )
+    await _create_plan(
+        db_session,
+        plan_id="plan-list-own-002",
+        player_id=profile.player_id,
+        coach_user_id=unassigned_coach.id,
+        org_id="unscoped-org",
+        title="Other coach unscoped plan",
+    )
+
+    response = await async_client.get(
+        f"/api/player-development/players/{profile.player_id}/plans",
+        headers=_token_headers(assigned_coach),
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert [bundle["plan"]["id"] for bundle in payload] == ["plan-list-own-001"]
+
+
+@pytest.mark.asyncio
+async def test_coach_cannot_list_other_coach_unscoped_plans_for_same_player(
+    async_client,
+    db_session,
+) -> None:
+    assigned_coach, unassigned_coach, _other_org_user, profile = await _seed_route_data(db_session)
+    db_session.add(
+        models.CoachPlayerAssignment(
+            id="assignment-route-002",
+            coach_user_id=unassigned_coach.id,
+            player_profile_id=profile.player_id,
+            is_active=True,
+        )
+    )
+    await db_session.commit()
+    await _create_plan(
+        db_session,
+        plan_id="plan-list-scope-001",
+        player_id=profile.player_id,
+        coach_user_id=unassigned_coach.id,
+        org_id="unscoped-org",
+        title="Unscoped plan owned by other coach",
+    )
+
+    response = await async_client.get(
+        f"/api/player-development/players/{profile.player_id}/plans",
+        headers=_token_headers(assigned_coach),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_org_pro_can_list_org_scoped_plans_only(async_client, db_session) -> None:
+    assigned_coach, _unassigned_coach, _other_org_user, profile = await _seed_route_data(db_session)
+    org_user = models.User(
+        id="org-route-001-user",
+        email="org-user@example.com",
+        hashed_password="hashed",  # noqa: S106
+        role=models.RoleEnum.org_pro,
+        org_id="org-route-001",
+        is_active=True,
+    )
+    db_session.add(org_user)
+    await db_session.commit()
+    await _create_plan(
+        db_session,
+        plan_id="plan-org-list-001",
+        player_id=profile.player_id,
+        coach_user_id=assigned_coach.id,
+        org_id="org-route-001",
+        title="Org visible plan",
+    )
+    await _create_plan(
+        db_session,
+        plan_id="plan-org-list-002",
+        player_id=profile.player_id,
+        coach_user_id=assigned_coach.id,
+        org_id="org-route-999",
+        title="Cross-org hidden plan",
+    )
+
+    response = await async_client.get(
+        f"/api/player-development/players/{profile.player_id}/plans",
+        headers=_token_headers(org_user),
+    )
+
+    assert response.status_code == 200, response.text
+    assert [bundle["plan"]["id"] for bundle in response.json()] == ["plan-org-list-001"]
+
+
+@pytest.mark.asyncio
+async def test_cross_org_plans_are_not_exposed_in_list_results(async_client, db_session) -> None:
+    assigned_coach, _unassigned_coach, other_org_user, profile = await _seed_route_data(db_session)
+    db_session.add(
+        models.CoachPlayerAssignment(
+            id="assignment-route-999",
+            coach_user_id=other_org_user.id,
+            player_profile_id=profile.player_id,
+            is_active=True,
+        )
+    )
+    await db_session.commit()
+    await _create_plan(
+        db_session,
+        plan_id="plan-cross-org-001",
+        player_id=profile.player_id,
+        coach_user_id=assigned_coach.id,
+        org_id="org-route-001",
+        title="Visible org plan",
+    )
+    await _create_plan(
+        db_session,
+        plan_id="plan-cross-org-002",
+        player_id=profile.player_id,
+        coach_user_id=other_org_user.id,
+        org_id="org-route-999",
+        title="Hidden cross-org plan",
+    )
+
+    response = await async_client.get(
+        f"/api/player-development/players/{profile.player_id}/plans",
+        headers=_token_headers(other_org_user),
+    )
+
+    assert response.status_code == 200, response.text
+    assert [bundle["plan"]["id"] for bundle in response.json()] == ["plan-cross-org-002"]

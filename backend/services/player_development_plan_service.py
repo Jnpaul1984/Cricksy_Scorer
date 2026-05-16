@@ -186,14 +186,18 @@ async def get_draft_plan_by_id(
 async def list_player_draft_plans(
     db: AsyncSession,
     player_profile_id: str,
-    org_id: str,
+    coach_user_id: str | None = None,
+    org_id: str | None = None,
 ) -> list[models.PlayerDevelopmentPlan]:
+    filters = [models.PlayerDevelopmentPlan.player_profile_id == player_profile_id]
+    if coach_user_id is not None:
+        filters.append(models.PlayerDevelopmentPlan.coach_user_id == coach_user_id)
+    if org_id is not None:
+        filters.append(models.PlayerDevelopmentPlan.org_id == org_id)
+
     result = await db.execute(
         select(models.PlayerDevelopmentPlan)
-        .where(
-            models.PlayerDevelopmentPlan.player_profile_id == player_profile_id,
-            models.PlayerDevelopmentPlan.org_id == org_id,
-        )
+        .where(*filters)
         .order_by(models.PlayerDevelopmentPlan.created_at.desc())
         .options(
             selectinload(models.PlayerDevelopmentPlan.goals),
