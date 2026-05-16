@@ -2957,9 +2957,20 @@ Audit and lock scope before implementation. This is documentation/spec work only
 #### Phase 9H.1 — Governed Coaching Skill Registry
 
 **Status**
-- PENDING
+- COMPLETE
 
 Define/review governed coaching skill entries, versions, input/output schema, safety rules, and review requirements.
+
+**Evidence notes**
+- Added governed contract: `coaching_video_evidence_skill.v1` in `backend/domain/player_development_skill_contract.py`.
+- Added contract tests: `backend/tests/test_coaching_video_evidence_skill_contract.py`.
+- Validation:
+  - `cd backend && python -m pytest -q tests/test_player_development_skill_contract.py tests/test_coaching_video_evidence_skill_contract.py` (passed)
+  - `cd backend && ruff check .` (passed)
+  - `cd backend && ruff format --check .` (passed)
+  - `cd backend && mypy --config-file pyproject.toml --explicit-package-bases .` (passed)
+- No runtime services/routes/frontend/migrations/CI/package/infra files changed.
+- No Claw Studio references introduced.
 
 #### Phase 9H.2 — Video Analysis Evidence to Skill Input Mapping
 
