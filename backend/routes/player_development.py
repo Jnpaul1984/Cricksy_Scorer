@@ -15,6 +15,11 @@ from backend.services.player_development_plan_service import (
     get_draft_plan_by_id,
     list_player_draft_plans,
 )
+from backend.services.player_development_report_service import (
+    get_player_development_report_by_plan,
+    get_player_development_report_by_player,
+    get_team_development_summary_report,
+)
 from backend.sql_app import models, schemas
 from backend.sql_app.database import get_db
 
@@ -250,3 +255,99 @@ async def list_player_development_plans(
         await _ensure_plan_access(db, current_user, plan)
         visible_plans.append(_serialize_plan(plan))
     return visible_plans
+
+
+@router.get(
+    "/reports/players/{player_id}",
+    response_model=schemas.PlayerDevelopmentPlayerReportRead,
+)
+async def get_player_development_player_report(
+    player_id: str,
+    current_user: Annotated[
+        models.User,
+        Depends(security.require_roles(["coach_pro", "coach_pro_plus", "org_pro"])),
+    ],
+    plan_id: str | None = None,
+    include_archived: bool = False,
+    audience: schemas.PlayerDevelopmentReportAudience = (
+        schemas.PlayerDevelopmentReportAudience.coach
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> schemas.PlayerDevelopmentPlayerReportRead:
+    await _ensure_generation_access(db, current_user, player_id)
+    if plan_id is not None:
+        plan = await get_draft_plan_by_id(db, plan_id)
+        if plan is None:
+            raise HTTPException(status_code=404, detail="Player development plan not found")
+        await _ensure_plan_access(db, current_user, plan)
+        if plan.player_profile_id != player_id:
+            raise HTTPException(status_code=404, detail="Player development plan not found")
+        if (
+            not include_archived
+            and plan.status == models.PlayerDevelopmentPlanStatus.archived
+        ):
+            raise HTTPException(status_code=404, detail="Player development plan not found")
+
+    try:
+        return await get_player_development_report_by_player(
+            db=db,
+            current_user=current_user,
+            player_id=player_id,
+            audience=audience,
+            include_archived=include_archived,
+            plan_id=plan_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.get(
+    "/reports/plans/{plan_id}",
+    response_model=schemas.PlayerDevelopmentPlayerReportRead,
+)
+async def get_player_development_plan_report(
+    plan_id: str,
+    current_user: Annotated[
+        models.User,
+        Depends(security.require_roles(["coach_pro", "coach_pro_plus", "org_pro"])),
+    ],
+    audience: schemas.PlayerDevelopmentReportAudience = (
+        schemas.PlayerDevelopmentReportAudience.coach
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> schemas.PlayerDevelopmentPlayerReportRead:
+    plan = await get_draft_plan_by_id(db, plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Player development plan not found")
+    await _ensure_plan_access(db, current_user, plan)
+    try:
+        return await get_player_development_report_by_plan(
+            db=db,
+            plan=plan,
+            audience=audience,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.get(
+    "/reports/team-summary",
+    response_model=schemas.PlayerDevelopmentTeamSummaryReportRead,
+)
+async def get_player_development_team_summary_report(
+    current_user: Annotated[
+        models.User,
+        Depends(security.require_roles(["coach_pro", "coach_pro_plus", "org_pro"])),
+    ],
+    include_archived: bool = False,
+    audience: schemas.PlayerDevelopmentReportAudience = (
+        schemas.PlayerDevelopmentReportAudience.coach
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> schemas.PlayerDevelopmentTeamSummaryReportRead:
+    return await get_team_development_summary_report(
+        db=db,
+        current_user=current_user,
+        include_archived=include_archived,
+        audience=audience,
+    )

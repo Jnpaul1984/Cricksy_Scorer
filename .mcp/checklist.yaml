@@ -1758,7 +1758,7 @@
   category: "Roadmap Governance"
   title: "Phase 9F — Player Development Reports"
   description: "Plan report families for coaches, schools, parents, and players"
-  status: todo
+  status: complete
   confidence: high
   risk_level: medium
   acceptance_criteria:
@@ -1768,10 +1768,17 @@
     - "Youth-safe/positive language required for parent-school versions"
   verification_commands:
     - "python scripts/checklist.py status"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "Planning only."
+  files_touched:
+    - "backend/services/player_development_report_service.py"
+    - "backend/routes/player_development.py"
+    - "backend/sql_app/schemas.py"
+    - "backend/tests/test_player_development_reports.py"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "copilot"
+  completed_at: "2026-05-16T04:37:36Z"
+  notes: "Validated with backend report pytest (10/10), backend player-development selection (31 selected), backend health/results smoke, ruff, ruff format --check, and mypy. Report endpoints remain read-only coach/org scoped with advisory disclaimer and evidence/confidence/limitations support."
 
 - id: roadmap-phase9g-skill-contract
   week: 9
