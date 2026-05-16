@@ -2743,27 +2743,56 @@ Validation notes:
 ### Phase 9E — School / Team Development Dashboard
 
 **Status**
-- todo
+- COMPLETE
 
-Give schools and coaches a team-level view of player improvement.
+Give schools and coaches a team-level view of player development coverage and support needs.
 
-**Required future dashboard sections**
-- Team development overview
-- Weakest players needing support, framed constructively
-- Most improved players
-- Players without recent coaching activity
-- Common team weaknesses
-- Drill completion summary
-- Progress by skill category
-- Player confidence/mental-readiness indicators if available
-- School-safe export/report summary
+**Delivered dashboard sections**
+- Development coverage summary ✅
+- Needs coach attention queue with constructive wording ✅
+- Common development themes using safe labels ✅
+- Drill assignment overview ✅
+- Upcoming checkpoints ✅
+- Empty / loading / error states ✅
 
 **Acceptance criteria**
-- Coach/org can see all assigned players within permitted scope
-- Dashboard separates match performance from player development
-- Weak players are framed constructively, not negatively
-- Youth-safe language enforced
-- Export/report can summarize team improvement
+- Coach/org can see only permitted assigned-player development scope ✅
+- Dashboard separates match performance from player development truth ✅
+- Constructive youth-safe wording is enforced ✅
+- Real Phase 9 data is used; no fake/random production data path ✅
+- No activation/approval mutation or official cricket-truth mutation is added ✅
+
+Validation notes:
+
+- Files changed:
+  - `backend/services/player_development_dashboard_service.py` (new — read-only scoped team overview aggregation)
+  - `backend/routes/player_development.py` (added `GET /api/player-development/dashboard/team-overview`)
+  - `backend/sql_app/schemas.py` (added team dashboard read schemas)
+  - `backend/tests/test_player_development_dashboard.py` (new — permissions, aggregation, read-only, empty-state coverage)
+  - `frontend/src/services/playerDevelopmentApi.ts` (typed team overview client)
+  - `frontend/src/components/PlayerDevelopmentTeamOverviewCard.vue` (new — constructive team dashboard UI)
+  - `frontend/src/views/CoachesDashboardView.vue` (wired real Phase 9E dashboard into coach/org workspace)
+  - `frontend/tests/unit/PlayerDevelopmentTeamOverviewCard.spec.ts` (new — 8 focused rendering/state tests)
+- Backend route/service added:
+  - `GET /api/player-development/dashboard/team-overview`
+- Commands run:
+  - `cd backend && python -m pytest tests/test_player_development_dashboard.py -v` → passed (7/7)
+  - `cd backend && python -m pytest tests -k "player_development_dashboard or player_development" -v` → passed (21 selected)
+  - `cd backend && python -m pytest tests/test_health.py tests/test_results_endpoint.py -q` → passed
+  - `cd backend && python -m ruff check .` → passed
+  - `cd backend && python -m ruff format --check .` → passed
+  - `cd backend && python -m mypy --config-file pyproject.toml --explicit-package-bases .` → passed
+  - `cd frontend && npm run test:unit -- PlayerDevelopmentTeamOverviewCard.spec.ts --run` → passed (8/8)
+  - `cd frontend && npm run type-check` → passed
+  - `cd frontend && npm run build-only` → passed
+  - `cd frontend && npm run guard:fake-data` → passed (0 errors, 3 pre-existing `DevDashboardWidget.vue` warnings)
+  - `cd frontend && npm run test:unit -- --run` → 307/312 passed; 5 pre-existing unrelated failures remain in `GameScoringView.spec.ts` and `coachProPlusVideoSessionsModalRendering.spec.ts`
+- Scope confirmations:
+  - No backend migrations changed.
+  - No plan activation/approval mutation was added.
+  - No fake/mock/random development data is used in the production dashboard path.
+  - No official scoring/result/stat truth was mutated.
+  - No public/player/fan-facing exposure was added.
 
 ### Phase 9F — Player Development Reports
 

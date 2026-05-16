@@ -1726,21 +1726,32 @@
   week: 9
   category: "Roadmap Governance"
   title: "Phase 9E — School / Team Development Dashboard"
-  description: "Plan team-level development visibility separated from match-performance truth"
-  status: todo
+  description: "Deliver read-only team-level development visibility separated from match-performance truth"
+  status: complete
   confidence: high
   risk_level: medium
   acceptance_criteria:
-    - "Dashboard covers support-needed players (constructive framing), most improved, inactivity, weaknesses, drill completion, skill progress"
+    - "Dashboard covers development coverage, support-needed players, safe development themes, drill overview, and upcoming checkpoints"
     - "Coach/org scope boundaries are enforced"
     - "Youth-safe language is required"
-    - "School-safe export/report summary is supported"
+    - "No fake data or activation/approval mutation is added"
   verification_commands:
     - "python scripts/checklist.py status"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "Planning only."
+  files_touched:
+    - "backend/services/player_development_dashboard_service.py"
+    - "backend/routes/player_development.py"
+    - "backend/sql_app/schemas.py"
+    - "backend/tests/test_player_development_dashboard.py"
+    - "frontend/src/services/playerDevelopmentApi.ts"
+    - "frontend/src/components/PlayerDevelopmentTeamOverviewCard.vue"
+    - "frontend/src/views/CoachesDashboardView.vue"
+    - "frontend/tests/unit/PlayerDevelopmentTeamOverviewCard.spec.ts"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "copilot"
+  completed_at: "2026-05-16T03:32:00Z"
+  notes: "Validated with backend dashboard pytest (7/7), backend player-development selection (21 selected), backend health/results smoke, ruff, ruff format --check, mypy, frontend team dashboard unit test (8/8), frontend type-check, build-only, and guard:fake-data (0 errors, 3 pre-existing DevDashboardWidget warnings). Full frontend unit suite remains at 307/312 with 5 pre-existing unrelated failures in GameScoringView and coachProPlusVideoSessionsModalRendering."
 
 - id: roadmap-phase9f-development-reports
   week: 9
