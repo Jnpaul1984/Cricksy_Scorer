@@ -251,6 +251,81 @@ export interface CoachPlayerAssignmentRead {
   updated_at: string;
 }
 
+export interface PlayerDevelopmentDashboardPlayerSummary {
+  player_profile_id: string;
+  player_name: string;
+}
+
+export interface PlayerDevelopmentDashboardPlayerPlanSummary
+  extends PlayerDevelopmentDashboardPlayerSummary {
+  plan_id: string | null;
+  plan_status: PlanStatus | null;
+  confidence_score: number | null;
+  advisory_note: string | null;
+}
+
+export interface PlayerDevelopmentDashboardStatusCount {
+  status: PlanStatus;
+  count: number;
+}
+
+export interface PlayerDevelopmentDashboardThemeSummary {
+  category: string;
+  safe_display_label: string;
+  player_count: number;
+}
+
+export interface PlayerDevelopmentDashboardCheckpointSummary {
+  checkpoint_id: string;
+  plan_id: string;
+  player_profile_id: string;
+  player_name: string;
+  checkpoint_date: string;
+  progress_status: string;
+  advisory_label: string;
+  is_overdue: boolean;
+  confidence_score: number | null;
+}
+
+export interface PlayerDevelopmentDashboardCategoryCount {
+  category: string;
+  count: number;
+}
+
+export interface PlayerDevelopmentDashboardDrillSummary {
+  total_assignments: number;
+  by_status: PlayerDevelopmentDashboardStatusCount[];
+  by_category: PlayerDevelopmentDashboardCategoryCount[];
+}
+
+export interface PlayerDevelopmentDashboardEvidenceCoverageSummary {
+  players_with_confident_recommendations: number;
+  players_needing_more_evidence: number;
+  players_needing_more_evidence_details: PlayerDevelopmentDashboardPlayerPlanSummary[];
+}
+
+export interface PlayerDevelopmentTeamOverview {
+  total_assigned_players: number;
+  players_with_draft_plans: number;
+  players_without_plans: number;
+  plans_requiring_review: number;
+  players_with_goals: number;
+  players_with_drills: number;
+  players_with_checkpoints: number;
+  plans_by_status: PlayerDevelopmentDashboardStatusCount[];
+  players_without_plan_details: PlayerDevelopmentDashboardPlayerSummary[];
+  review_required_players: PlayerDevelopmentDashboardPlayerPlanSummary[];
+  common_development_areas: PlayerDevelopmentDashboardThemeSummary[];
+  drill_assignment_summary: PlayerDevelopmentDashboardDrillSummary;
+  evidence_coverage_summary: PlayerDevelopmentDashboardEvidenceCoverageSummary;
+  upcoming_checkpoints: PlayerDevelopmentDashboardCheckpointSummary[];
+  most_recent_development_activity_at: string | null;
+}
+
+export interface PlayerDevelopmentTeamOverviewParams {
+  include_archived?: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Public API functions
 // ---------------------------------------------------------------------------
@@ -313,4 +388,23 @@ export async function listPlayerDevelopmentPlans(
  */
 export async function listCoachAssignedPlayers(): Promise<CoachPlayerAssignmentRead[]> {
   return fetchWithAuth<CoachPlayerAssignmentRead[]>('/api/coaches/me/players');
+}
+
+/**
+ * Retrieve the read-only team development overview for the current coach/org scope.
+ *
+ * Throws `PlayerDevelopmentApiError` on permission (403), not-found (404),
+ * authentication (401), or network errors. No fake fallback data is returned.
+ */
+export async function getPlayerDevelopmentTeamOverview(
+  params: PlayerDevelopmentTeamOverviewParams = {},
+): Promise<PlayerDevelopmentTeamOverview> {
+  const query = new URLSearchParams();
+  if (params.include_archived) {
+    query.set('include_archived', 'true');
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return fetchWithAuth<PlayerDevelopmentTeamOverview>(
+    `/api/player-development/dashboard/team-overview${suffix}`,
+  );
 }
