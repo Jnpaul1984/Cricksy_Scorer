@@ -408,9 +408,10 @@ See [`.mcp/README.md`](.mcp/README.md) for detailed DoD templates.
   - Verify: `python scripts/checklist.py status`
   - Evidence: `backend/services/player_development_report_service.py`, `backend/routes/player_development.py`, `backend/sql_app/schemas.py`, `backend/tests/test_player_development_reports.py`, `docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md`; validations: `cd backend && python -m pytest tests/test_player_development_reports.py -v`, `cd backend && python -m pytest tests -k "player_development_report or player_development" -v`, `cd backend && python -m pytest tests/test_health.py tests/test_results_endpoint.py -q`, `cd backend && python -m ruff check .`, `cd backend && python -m ruff format --check .`, `cd backend && python -m mypy --config-file pyproject.toml --explicit-package-bases .`; no backend migrations changed; no activation/approval mutation added; no public/player/fan exposure added; no official cricket truth mutated.
 
-- [ ] **roadmap-phase9g-skill-contract** - Phase 9G — Player Development Skill Contract
-  - Acceptance: governed skill contracts with safety/youth-safety/review rules; no mutation of official cricket truth
-  - Verify: `python scripts/checklist.py status`
+- [x] **roadmap-phase9g-skill-contract** - Phase 9G — Player Development Skill Contract
+  - Acceptance: governed skill contracts (6 skills) with safety/youth-safety/review rules; no mutation of official cricket truth; backend contract registry and 168 tests added
+  - Verify: `cd backend && python -m pytest tests/test_player_development_skill_contract.py -v`, `cd backend && python -m pytest tests/test_health.py tests/test_results_endpoint.py -q`, `cd backend && python -m ruff check .`, `cd backend && python -m ruff format --check .`, `cd backend && python -m mypy --config-file pyproject.toml --explicit-package-bases domain/player_development_skill_contract.py`
+  - Evidence: `docs/PHASE_9G_PLAYER_DEVELOPMENT_SKILL_CONTRACT.md`, `backend/domain/player_development_skill_contract.py`, `backend/tests/test_player_development_skill_contract.py`; 168/168 contract-shape tests passing; no migrations changed; no AI provider integration; no frontend changes; no official cricket truth mutation possible.
 
 Notes:
 - Reuse partial foundations in `backend/routes/coach_pro.py`, `backend/services/ai_player_insights.py`, drill generation, monthly improvement tracking, Coach Pro Plus video analysis, Phase 6C skills governance, and Phase 8C review workflows.
