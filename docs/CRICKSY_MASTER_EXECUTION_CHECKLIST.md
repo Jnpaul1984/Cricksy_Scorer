@@ -2884,6 +2884,132 @@ Register player development as a governed Cricksy Skill family.
   - No official cricket truth mutation possible.
   - No runtime generation behavior added.
 
+### Phase 9H — Player Development: Governed Coach Pro Plus Skill Integration
+
+**Status**
+- PENDING
+
+Connect governed Cricksy Skills to Coach Pro Plus video-analysis evidence so coaches can review structured recommendations before anything becomes player-facing.
+
+**Purpose**
+- Expand Player Development using governed skill execution on top of existing Coach Pro Plus video-analysis outputs.
+- Keep all recommendations advisory, coach-reviewed, and evidence-linked.
+
+**Product Goal**
+- Turn approved video-analysis evidence into structured, reviewable development recommendations under strict governance.
+
+**Core Workflow**
+- Event-triggered video-analysis evidence becomes governed skill input.
+- Governed skill run produces structured recommendation draft with attached evidence references and timestamps.
+- Coach reviews, edits, approves, or rejects recommendation draft.
+- Only coach-approved recommendations are allowed into player-development surfaces.
+
+**Hard Governance Rules**
+- Do not rebuild Coach Pro Plus Video Analysis.
+- Do not change existing model behavior unless separately approved.
+- Do not allow AI to calculate, overwrite, or mutate official cricket truth.
+- Coach remains the authority.
+- No unapproved AI output may become player-facing.
+- Skills must be reusable, versioned, testable, and governed.
+- Skill runs must be event-triggered, not always running.
+- Skill outputs must be structured and reviewable.
+- Video timestamps/evidence must remain attached to generated recommendations.
+- Backend work is not accepted unless there is a visible Coach Pro Plus UI path.
+- Do not introduce fake/mock production data.
+
+**Protected Areas (audit required before touching)**
+- `backend/services/coach_plus_analysis.py`
+- `backend/services/pose_service.py`
+- `backend/workers/analysis_worker.py`
+- `backend/scripts/run_video_analysis_worker.py`
+- `frontend/src/services/coachPlusVideoService.ts`
+- `frontend/src/stores/coachPlusVideoStore.ts`
+- video-analysis migrations under `backend/alembic/versions/`
+- Player Development models/routes/services/frontend components
+- Auth/RBAC/tier gating code
+- Audit logging code
+- AI/governed skill system code, if already present
+
+#### Phase 9H.0 — Pre-Phase Audit + Spec Lock
+
+**Status**
+- PENDING
+
+Audit and lock scope before implementation. This is documentation/spec work only.
+
+**Required outputs**
+- Reuse map of Coach Pro Plus video-analysis inputs/outputs and existing governed skill boundaries.
+- Locked contracts for evidence fields, recommendation schema, and approval states.
+- Explicit non-goals: no video-analysis rebuild, no model-behavior change without separate approval.
+
+#### Phase 9H.1 — Governed Coaching Skill Registry
+
+**Status**
+- PENDING
+
+Define/review governed coaching skill entries, versions, input/output schema, safety rules, and review requirements.
+
+#### Phase 9H.2 — Video Analysis Evidence to Skill Input Mapping
+
+**Status**
+- PENDING
+
+Specify deterministic mapping from video-analysis evidence to governed skill inputs, preserving timestamps and evidence references.
+
+#### Phase 9H.3 — Coach Review Gate
+
+**Status**
+- PENDING
+
+Require explicit coach approval/rejection/edit workflow before any recommendation can be published to player-development surfaces.
+
+#### Phase 9H.4 — Player Development Recommendation Output
+
+**Status**
+- PENDING
+
+Define structured recommendation output format with confidence, limitations, evidence refs, and approval status.
+
+#### Phase 9H.5 — Coach Pro Plus UI Integration
+
+**Status**
+- PENDING
+
+Provide visible Coach Pro Plus UI workflow for review/approval; backend-only delivery is not accepted.
+
+#### Phase 9H.6 — Audit Log + Safety Controls
+
+**Status**
+- PENDING
+
+Ensure governed skill runs, review actions, approvals, and publication decisions are fully auditable and policy-enforced.
+
+#### Phase 9H.7 — Regression + Manual QA
+
+**Status**
+- PENDING
+
+**Required tests**
+- Governed skill contract/schema tests
+- Evidence mapping validation tests (including timestamp/evidence attachment)
+- Coach approval gate tests
+- Auth/RBAC/tier gating tests
+- Audit log integrity tests
+- Player-development output safety/governance tests
+- No-fake-data guard checks
+
+**Manual QA**
+- End-to-end Coach Pro Plus flow proving: video evidence -> governed recommendation draft -> coach approval -> player-development visibility.
+- Negative-path QA proving unapproved recommendations never become player-facing.
+
+**Completion Criteria**
+- All Hard Governance Rules remain satisfied.
+- Protected Areas reviewed and documented before implementation changes.
+- Coach approval is enforced for all player-facing recommendation publication.
+- Coach Pro Plus UI review path is visible and working.
+- No fake/mock production data introduced.
+- No official cricket truth mutation introduced.
+
 ---
 
 # Phase 10 — Subscription, Pricing + Tier Enforcement Hardening
