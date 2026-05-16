@@ -1633,7 +1633,7 @@
   category: "Roadmap Governance"
   title: "Phase 9B — Player Development Data Model"
   description: "Plan future entities/fields and boundaries for structured player development records"
-  status: todo
+  status: complete
   confidence: high
   risk_level: high
   acceptance_criteria:
@@ -1643,10 +1643,18 @@
     - "AI suggestions cannot mutate official stats"
   verification_commands:
     - "python scripts/checklist.py status"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "Planning only."
+  files_touched:
+    - "backend/sql_app/models.py"
+    - "backend/sql_app/schemas.py"
+    - "backend/services/player_development_state.py"
+    - "backend/alembic/versions/d9b1c2e3f4a5_add_player_development_tables.py"
+    - "backend/tests/test_player_development_models.py"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "copilot"
+  completed_at: "2026-05-16T00:50:00Z"
+  notes: "Phase 9B backend-only data model implemented and validated with focused player development tests plus protected health/results and DLS suites. Ruff, format, and mypy passed. SQLite Alembic upgrade is blocked earlier by pre-existing migration 1b13e5e48c1e_add_sponsors_table.py, and local Postgres validation remains pending because pg_isready reported no local server."
 
 - id: roadmap-phase9c-plan-engine
   week: 9

@@ -28,6 +28,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 # Import security logging models for DB discovery (import module to register models)
 from backend.sql_app import models_security  # noqa: F401
+from backend.services.player_development_state import (
+    normalize_player_development_plan_governance,
+)
 
 from .database import Base
 
@@ -125,6 +128,36 @@ class FanFavoriteType(str, enum.Enum):
     team = "team"
 
 
+class PlayerDevelopmentPlanStatus(str, enum.Enum):
+    draft = "draft"
+    active = "active"
+    paused = "paused"
+    completed = "completed"
+    archived = "archived"
+
+
+class PlayerDevelopmentSourceType(str, enum.Enum):
+    match_data = "match_data"
+    video_analysis = "video_analysis"
+    coach_note = "coach_note"
+    ai_insight = "ai_insight"
+    manual = "manual"
+
+
+class PlayerDevelopmentSeverity(str, enum.Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+
+class PlayerDevelopmentApprovalState(str, enum.Enum):
+    not_required = "not_required"
+    pending_review = "pending_review"
+    approved = "approved"
+    rejected = "rejected"
+    changes_requested = "changes_requested"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -168,6 +201,18 @@ class User(Base):
         back_populates="coach_user", cascade="all, delete-orphan"
     )
     coaching_sessions: Mapped[list[CoachingSession]] = relationship(
+        back_populates="coach_user", cascade="all, delete-orphan"
+    )
+    player_development_plans: Mapped[list[PlayerDevelopmentPlan]] = relationship(
+        back_populates="coach_user", cascade="all, delete-orphan"
+    )
+    player_development_interventions: Mapped[list[PlayerDevelopmentIntervention]] = relationship(
+        back_populates="coach_user", cascade="all, delete-orphan"
+    )
+    player_drill_assignments: Mapped[list[PlayerDrillAssignment]] = relationship(
+        back_populates="coach_user", cascade="all, delete-orphan"
+    )
+    player_progress_checkpoints: Mapped[list[PlayerProgressCheckpoint]] = relationship(
         back_populates="coach_user", cascade="all, delete-orphan"
     )
 
@@ -715,6 +760,21 @@ class PlayerProfile(Base):
     coaching_sessions: Mapped[list[CoachingSession]] = relationship(
         back_populates="player_profile", cascade="all, delete-orphan"
     )
+    development_plans: Mapped[list[PlayerDevelopmentPlan]] = relationship(
+        back_populates="player_profile", cascade="all, delete-orphan"
+    )
+    weakness_tags: Mapped[list[PlayerWeaknessTag]] = relationship(
+        back_populates="player_profile", cascade="all, delete-orphan"
+    )
+    strength_tags: Mapped[list[PlayerStrengthTag]] = relationship(
+        back_populates="player_profile", cascade="all, delete-orphan"
+    )
+    drill_assignments: Mapped[list[PlayerDrillAssignment]] = relationship(
+        back_populates="player_profile", cascade="all, delete-orphan"
+    )
+    progress_checkpoints: Mapped[list[PlayerProgressCheckpoint]] = relationship(
+        back_populates="player_profile", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_player_profiles_total_runs", "total_runs_scored"),
@@ -1017,6 +1077,429 @@ class CoachingSession(Base):
     __table_args__ = (
         Index("ix_coaching_sessions_coach_time", "coach_user_id", "scheduled_at"),
         Index("ix_coaching_sessions_player_time", "player_profile_id", "scheduled_at"),
+    )
+
+
+class PlayerDevelopmentPlan(Base):
+    __tablename__ = "player_development_plans"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    player_profile_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    coach_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    org_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[PlayerDevelopmentPlanStatus] = mapped_column(
+        SAEnum(PlayerDevelopmentPlanStatus, name="player_development_plan_status"),
+        default=PlayerDevelopmentPlanStatus.draft,
+        server_default=PlayerDevelopmentPlanStatus.draft.value,
+        nullable=False,
+        index=True,
+    )
+    source_type: Mapped[PlayerDevelopmentSourceType] = mapped_column(
+        SAEnum(PlayerDevelopmentSourceType, name="player_development_source_type"),
+        default=PlayerDevelopmentSourceType.manual,
+        server_default=PlayerDevelopmentSourceType.manual.value,
+        nullable=False,
+        index=True,
+    )
+    coach_approved: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        nullable=False,
+    )
+    approval_state: Mapped[PlayerDevelopmentApprovalState] = mapped_column(
+        SAEnum(PlayerDevelopmentApprovalState, name="player_development_approval_state"),
+        default=PlayerDevelopmentApprovalState.not_required,
+        server_default=PlayerDevelopmentApprovalState.not_required.value,
+        nullable=False,
+    )
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=_empty_list, nullable=False
+    )
+    ai_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
+    activated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    player_profile: Mapped[PlayerProfile] = relationship(back_populates="development_plans")
+    coach_user: Mapped[User] = relationship(back_populates="player_development_plans")
+    goals: Mapped[list[PlayerDevelopmentGoal]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+    weakness_tags: Mapped[list[PlayerWeaknessTag]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+    strength_tags: Mapped[list[PlayerStrengthTag]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+    interventions: Mapped[list[PlayerDevelopmentIntervention]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+    drill_assignments: Mapped[list[PlayerDrillAssignment]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+    progress_checkpoints: Mapped[list[PlayerProgressCheckpoint]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "confidence_score IS NULL OR (confidence_score >= 0 AND confidence_score <= 1)",
+            name="ck_player_development_plans_confidence_range",
+        ),
+        Index(
+            "ix_player_development_plans_owner_status",
+            "player_profile_id",
+            "coach_user_id",
+            "org_id",
+            "status",
+        ),
+    )
+
+    def __init__(self, **kwargs: Any):
+        normalized_status, normalized_coach_approved, normalized_approval_state = (
+            normalize_player_development_plan_governance(
+                kwargs.get("source_type", PlayerDevelopmentSourceType.manual),
+                kwargs.get("status"),
+                kwargs.get("coach_approved"),
+                kwargs.get("approval_state"),
+            )
+        )
+        kwargs["status"] = PlayerDevelopmentPlanStatus(normalized_status)
+        kwargs["coach_approved"] = normalized_coach_approved
+        kwargs["approval_state"] = PlayerDevelopmentApprovalState(normalized_approval_state)
+        super().__init__(**kwargs)
+
+
+class PlayerDevelopmentGoal(Base):
+    __tablename__ = "player_development_goals"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    plan_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_development_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_metric: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    baseline_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    status: Mapped[PlayerDevelopmentPlanStatus] = mapped_column(
+        SAEnum(PlayerDevelopmentPlanStatus, name="player_development_plan_status", create_type=False),
+        default=PlayerDevelopmentPlanStatus.draft,
+        server_default=PlayerDevelopmentPlanStatus.draft.value,
+        nullable=False,
+        index=True,
+    )
+    due_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=_empty_list, nullable=False
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    plan: Mapped[PlayerDevelopmentPlan] = relationship(back_populates="goals")
+
+
+class PlayerWeaknessTag(Base):
+    __tablename__ = "player_weakness_tags"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    plan_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_development_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    player_profile_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    category: Mapped[str] = mapped_column(String(100), nullable=False)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    safe_display_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    severity: Mapped[PlayerDevelopmentSeverity] = mapped_column(
+        SAEnum(PlayerDevelopmentSeverity, name="player_development_severity"),
+        default=PlayerDevelopmentSeverity.medium,
+        server_default=PlayerDevelopmentSeverity.medium.value,
+        nullable=False,
+    )
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_type: Mapped[PlayerDevelopmentSourceType] = mapped_column(
+        SAEnum(PlayerDevelopmentSourceType, name="player_development_source_type", create_type=False),
+        default=PlayerDevelopmentSourceType.manual,
+        server_default=PlayerDevelopmentSourceType.manual.value,
+        nullable=False,
+        index=True,
+    )
+    evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=_empty_list, nullable=False
+    )
+    ai_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    plan: Mapped[PlayerDevelopmentPlan] = relationship(back_populates="weakness_tags")
+    player_profile: Mapped[PlayerProfile] = relationship(back_populates="weakness_tags")
+
+    __table_args__ = (
+        CheckConstraint(
+            "confidence_score IS NULL OR (confidence_score >= 0 AND confidence_score <= 1)",
+            name="ck_player_weakness_tags_confidence_range",
+        ),
+        Index("ix_player_weakness_tags_category", "category"),
+    )
+
+
+class PlayerStrengthTag(Base):
+    __tablename__ = "player_strength_tags"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    plan_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_development_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    player_profile_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    category: Mapped[str] = mapped_column(String(100), nullable=False)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_type: Mapped[PlayerDevelopmentSourceType] = mapped_column(
+        SAEnum(PlayerDevelopmentSourceType, name="player_development_source_type", create_type=False),
+        default=PlayerDevelopmentSourceType.manual,
+        server_default=PlayerDevelopmentSourceType.manual.value,
+        nullable=False,
+        index=True,
+    )
+    evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=_empty_list, nullable=False
+    )
+    ai_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    plan: Mapped[PlayerDevelopmentPlan] = relationship(back_populates="strength_tags")
+    player_profile: Mapped[PlayerProfile] = relationship(back_populates="strength_tags")
+
+    __table_args__ = (
+        CheckConstraint(
+            "confidence_score IS NULL OR (confidence_score >= 0 AND confidence_score <= 1)",
+            name="ck_player_strength_tags_confidence_range",
+        ),
+        Index("ix_player_strength_tags_category", "category"),
+    )
+
+
+class PlayerDevelopmentIntervention(Base):
+    __tablename__ = "player_development_interventions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    plan_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_development_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    coach_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    source_type: Mapped[PlayerDevelopmentSourceType] = mapped_column(
+        SAEnum(PlayerDevelopmentSourceType, name="player_development_source_type", create_type=False),
+        default=PlayerDevelopmentSourceType.manual,
+        server_default=PlayerDevelopmentSourceType.manual.value,
+        nullable=False,
+        index=True,
+    )
+    intervention_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scheduled_for: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=_empty_list, nullable=False
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    plan: Mapped[PlayerDevelopmentPlan] = relationship(back_populates="interventions")
+    coach_user: Mapped[User] = relationship(back_populates="player_development_interventions")
+
+
+class PlayerDrillAssignment(Base):
+    __tablename__ = "player_drill_assignments"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    plan_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_development_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    player_profile_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    coach_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    drill_category: Mapped[str] = mapped_column(String(100), nullable=False)
+    drill_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    drill_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    frequency: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    status: Mapped[PlayerDevelopmentPlanStatus] = mapped_column(
+        SAEnum(PlayerDevelopmentPlanStatus, name="player_development_plan_status", create_type=False),
+        default=PlayerDevelopmentPlanStatus.draft,
+        server_default=PlayerDevelopmentPlanStatus.draft.value,
+        nullable=False,
+        index=True,
+    )
+    assigned_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    due_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=_empty_list, nullable=False
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    plan: Mapped[PlayerDevelopmentPlan] = relationship(back_populates="drill_assignments")
+    player_profile: Mapped[PlayerProfile] = relationship(back_populates="drill_assignments")
+    coach_user: Mapped[User] = relationship(back_populates="player_drill_assignments")
+
+
+class PlayerProgressCheckpoint(Base):
+    __tablename__ = "player_progress_checkpoints"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    plan_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_development_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    player_profile_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    coach_user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    checkpoint_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    progress_status: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=_empty_list, nullable=False
+    )
+    ai_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
+    coach_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    plan: Mapped[PlayerDevelopmentPlan] = relationship(back_populates="progress_checkpoints")
+    player_profile: Mapped[PlayerProfile] = relationship(back_populates="progress_checkpoints")
+    coach_user: Mapped[User] = relationship(back_populates="player_progress_checkpoints")
+
+    __table_args__ = (
+        CheckConstraint(
+            "confidence_score IS NULL OR (confidence_score >= 0 AND confidence_score <= 1)",
+            name="ck_player_progress_checkpoints_confidence_range",
+        ),
+        Index(
+            "ix_player_progress_checkpoints_player_date",
+            "player_profile_id",
+            "checkpoint_date",
+        ),
     )
 
 
