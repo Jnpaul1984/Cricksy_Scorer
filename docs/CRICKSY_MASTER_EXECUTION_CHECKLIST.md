@@ -2559,7 +2559,7 @@ Validation notes:
 - No backend runtime files changed.
 - No frontend runtime files changed.
 - No migrations, tests, CI files, or package files changed.
-- Phase 9C and later remain future work and are not marked complete.
+- Phase 9D and later remain future work and are not marked complete.
 
 ### Phase 9B — Player Development Data Model
 
@@ -2634,7 +2634,7 @@ Validation notes:
 ### Phase 9C — Development Plan Service + Recommendation Engine
 
 **Status**
-- todo
+- COMPLETE
 
 Convert existing AI player insights, drill suggestions, and improvement tracking into a coach-approved development plan.
 
@@ -2655,6 +2655,38 @@ Convert existing AI player insights, drill suggestions, and improvement tracking
 - Plan includes review date/checkpoint
 - Coach approval required before activation
 - Tests required for plan generation and approval flow
+
+Validation notes:
+
+- Files changed:
+  - `backend/app.py`
+  - `backend/routes/player_development.py`
+  - `backend/services/player_development_plan_service.py`
+  - `backend/sql_app/schemas.py`
+  - `backend/tests/test_player_development_plan_service.py`
+  - `backend/tests/test_player_development_routes.py`
+- Service behavior delivered:
+  - Generates stored draft `PlayerDevelopmentPlan` records from existing player profile, form, coaching, and Coach Pro Plus video evidence.
+  - Reuses `ai_player_insights`, `training_drill_generator`, `player_improvement_tracker`, Phase 9B governance defaults, and `validate_no_official_truth_mutation`.
+  - Returns structured `insufficient_data` responses instead of fabricating goals, drills, or progress when evidence is too thin.
+- Routes added:
+  - `POST /api/player-development/players/{player_id}/draft-plan`
+  - `GET /api/player-development/plans/{plan_id}`
+  - `GET /api/player-development/players/{player_id}/plans`
+- Tests added:
+  - Service tests for draft generation, safe labels, AI governance defaults, insufficient-data handling, evidence refs, drill reuse, checkpoint safety, and no stat mutation.
+  - Route tests for assigned-coach success, unassigned-coach denial, and cross-org plan access denial.
+- Commands run:
+  - `cd backend && python -m pytest tests -k "player_development_plan or player_development" -v` → 10 passed
+  - `cd backend && python -m pytest tests/test_health.py tests/test_results_endpoint.py -q` → 9 passed
+  - `cd backend && python -m pytest tests/test_dls_calculations.py -v --tb=short` → 21 passed
+  - `cd backend && python -m ruff check .` → passed
+  - `cd backend && python -m ruff format --check .` → passed
+  - `cd backend && python -m mypy --config-file pyproject.toml --explicit-package-bases .` → passed
+- Scope confirmations:
+  - No frontend files changed.
+  - Generated plans remain `draft`, `coach_approved = false`, and `approval_state = pending_review`.
+  - No official player profile stats, match truth, scoring, results, or DLS state are mutated by draft-plan generation.
 
 ### Phase 9D — Coach Workspace Player Development UI
 
