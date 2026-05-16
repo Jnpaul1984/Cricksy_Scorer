@@ -2993,9 +2993,21 @@ Specify deterministic mapping from video-analysis evidence to governed skill inp
 #### Phase 9H.3 — Coach Review Gate
 
 **Status**
-- PENDING
+- COMPLETE
 
 Require explicit coach approval/rejection/edit workflow before any recommendation can be published to player-development surfaces.
+
+**Evidence notes**
+- Added review gate endpoint: `PATCH /api/player-development/plans/{plan_id}/review` in `backend/routes/player_development.py`.
+- Added review request/response schemas: `PlayerDevelopmentPlanReviewRequest`, `PlayerDevelopmentPlanReviewResponse` in `backend/sql_app/schemas.py`.
+- Added focused approval-gate tests: `backend/tests/test_player_development_approval_gate.py`.
+- Validation:
+  - `cd backend && python -m pytest -q tests/test_player_development_routes.py tests/test_player_development_approval_gate.py tests/test_coaching_video_evidence_skill_contract.py tests/test_video_evidence_to_skill_input_mapping.py` (passed)
+  - `cd backend && ruff check .` (passed)
+  - `cd backend && ruff format --check .` (passed)
+  - `cd backend && mypy --config-file pyproject.toml --explicit-package-bases .` (passed)
+- No frontend/UI/audit-log/video-pipeline/migration/CI/package/infra files changed.
+- No Claw Studio references introduced.
 
 #### Phase 9H.4 — Player Development Recommendation Output
 

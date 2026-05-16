@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -24,6 +25,7 @@ from backend.sql_app import models, schemas
 from backend.sql_app.database import get_db
 
 router = APIRouter(prefix="/api/player-development", tags=["player-development"])
+UTC = getattr(dt, "UTC", dt.UTC)
 
 
 async def _ensure_player_profile(
@@ -139,6 +141,16 @@ def _serialize_plan(
     )
 
 
+def _review_decision_to_state(
+    decision: schemas.PlayerDevelopmentPlanReviewDecision,
+) -> tuple[models.PlayerDevelopmentApprovalState, bool]:
+    if decision == schemas.PlayerDevelopmentPlanReviewDecision.approved:
+        return models.PlayerDevelopmentApprovalState.approved, True
+    if decision == schemas.PlayerDevelopmentPlanReviewDecision.rejected:
+        return models.PlayerDevelopmentApprovalState.rejected, False
+    return models.PlayerDevelopmentApprovalState.changes_requested, False
+
+
 @router.post(
     "/players/{player_id}/draft-plan",
     response_model=schemas.PlayerDevelopmentPlanDraftGenerationResponse,
@@ -217,6 +229,48 @@ async def get_player_development_plan(
         raise HTTPException(status_code=404, detail="Player development plan not found")
     await _ensure_plan_access(db, current_user, plan)
     return _serialize_plan(plan)
+
+
+@router.patch(
+    "/plans/{plan_id}/review",
+    response_model=schemas.PlayerDevelopmentPlanReviewResponse,
+)
+async def review_player_development_plan(
+    plan_id: str,
+    payload: schemas.PlayerDevelopmentPlanReviewRequest,
+    current_user: Annotated[
+        models.User,
+        Depends(security.require_roles(["coach_pro_plus", "org_pro"])),
+    ],
+    db: AsyncSession = Depends(get_db),
+) -> schemas.PlayerDevelopmentPlanReviewResponse:
+    plan = await get_draft_plan_by_id(db, plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Player development plan not found")
+    await _ensure_plan_access(db, current_user, plan)
+
+    if plan.status in {
+        models.PlayerDevelopmentPlanStatus.archived,
+        models.PlayerDevelopmentPlanStatus.completed,
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Player development plan cannot be reviewed in its current status",
+        )
+
+    approval_state, coach_approved = _review_decision_to_state(payload.decision)
+    plan.approval_state = approval_state
+    plan.coach_approved = coach_approved
+    await db.commit()
+
+    return schemas.PlayerDevelopmentPlanReviewResponse(
+        plan_id=plan.id,
+        approval_state=plan.approval_state,
+        coach_approved=plan.coach_approved,
+        reviewer_notes=payload.reviewer_notes,
+        reviewed_by_user_id=current_user.id,
+        reviewed_at=dt.datetime.now(UTC),
+    )
 
 
 @router.get(
