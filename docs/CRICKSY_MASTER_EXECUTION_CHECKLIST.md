@@ -2840,7 +2840,7 @@ Validation notes:
 ### Phase 9G — Player Development Skill Contract
 
 **Status**
-- todo
+- COMPLETE
 
 Register player development as a governed Cricksy Skill family.
 
@@ -2850,12 +2850,39 @@ Register player development as a governed Cricksy Skill family.
 - drill_recommendation.v1
 - progress_checkpoint_summary.v1
 - team_development_overview.v1
+- player_development_report.v1
 
 **Acceptance criteria**
 - Each skill follows Phase 6C skill contract
 - Required inputs, forbidden inputs, confidence fields, limitations, safety rules, youth safety rules, and review requirements defined
 - No skill can overwrite official cricket truth
-- Tests required to validate skill metadata in future implementation
+- Tests validate skill contract shape and governance rules
+
+**Evidence notes**
+- Files changed:
+  - `docs/PHASE_9G_PLAYER_DEVELOPMENT_SKILL_CONTRACT.md` (new — full spec document)
+  - `backend/domain/player_development_skill_contract.py` (new — runtime-neutral contract registry)
+  - `backend/tests/test_player_development_skill_contract.py` (new — 168 contract-shape tests)
+  - `docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md` (this update)
+  - `.mcp/checklist.yaml` (Phase 9G status update)
+  - `.mcp/checklist.md` (Phase 9G status update)
+- Skills defined: all 6 required skills with versioned skill_ids
+- Backend contract registry added: `backend/domain/player_development_skill_contract.py`
+- Tests added: `backend/tests/test_player_development_skill_contract.py` (168 tests)
+- Commands run:
+  - `cd backend && python -m pytest tests/test_player_development_skill_contract.py -v` → passed (168/168)
+  - `cd backend && python -m pytest tests/test_health.py tests/test_results_endpoint.py -q` → passed
+  - `cd backend && python -m ruff check .` → passed
+  - `cd backend && python -m ruff format --check .` → passed
+  - `cd backend && python -m mypy --config-file pyproject.toml --explicit-package-bases domain/player_development_skill_contract.py` → passed
+- Scope confirmations:
+  - No backend migrations changed.
+  - No scoring, DLS, result, or stat logic changed.
+  - No plan activation or approval mutation added.
+  - No AI provider integration added.
+  - No frontend changes.
+  - No official cricket truth mutation possible.
+  - No runtime generation behavior added.
 
 ---
 

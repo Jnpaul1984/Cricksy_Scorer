@@ -1785,17 +1785,27 @@
   category: "Roadmap Governance"
   title: "Phase 9G — Player Development Skill Contract"
   description: "Plan governed skill-family contracts for player development intelligence"
-  status: todo
+  status: done
   confidence: high
   risk_level: high
   acceptance_criteria:
-    - "Skills include player_weakness_detection.v1, player_development_plan.v1, drill_recommendation.v1, progress_checkpoint_summary.v1, team_development_overview.v1"
+    - "Skills include player_weakness_detection.v1, player_development_plan.v1, drill_recommendation.v1, progress_checkpoint_summary.v1, team_development_overview.v1, player_development_report.v1"
     - "Contracts follow Phase 6C required/forbidden inputs, confidence fields, limitations, safety and youth-safety rules, review requirements"
     - "No skill can overwrite official cricket truth"
-    - "Implementation phase requires skill metadata tests"
+    - "Backend contract registry and 168 contract-shape tests added and passing"
   verification_commands:
-    - "python scripts/checklist.py status"
-  files_touched: []
-  completed_by: null
-  completed_at: null
-  notes: "Planning only."
+    - "cd backend && python -m pytest tests/test_player_development_skill_contract.py -v"
+    - "cd backend && python -m pytest tests/test_health.py tests/test_results_endpoint.py -q"
+    - "cd backend && python -m ruff check ."
+    - "cd backend && python -m ruff format --check ."
+    - "cd backend && python -m mypy --config-file pyproject.toml --explicit-package-bases domain/player_development_skill_contract.py"
+  files_touched:
+    - "docs/PHASE_9G_PLAYER_DEVELOPMENT_SKILL_CONTRACT.md"
+    - "backend/domain/player_development_skill_contract.py"
+    - "backend/tests/test_player_development_skill_contract.py"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.yaml"
+    - ".mcp/checklist.md"
+  completed_by: "copilot"
+  completed_at: "2026-05-16T19:03:57Z"
+  notes: "Validated with 168 passing contract-shape tests, health/results smoke tests, ruff, ruff format --check, and mypy. Runtime-neutral contract registry only — no migrations, no AI calls, no plan activation, no frontend changes."
