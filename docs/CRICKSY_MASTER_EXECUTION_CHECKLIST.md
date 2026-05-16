@@ -2523,9 +2523,12 @@ AI insights are more useful and explainable without compromising official cricke
 ### Phase 9A — Pre-Phase Audit + Spec Lock
 
 **Status**
-- todo
+- COMPLETE
 
 Audit existing player, coach, AI insight, drill, video-analysis, and improvement-tracking features before implementation.
+
+**Evidence**
+- `docs/PHASE_9A_PLAYER_DEVELOPMENT_INTELLIGENCE_AUDIT_AND_SPEC_LOCK.md`
 
 **Must inspect and document**
 - PlayerProfile / PlayerForm models
@@ -2550,6 +2553,13 @@ Audit existing player, coach, AI insight, drill, video-analysis, and improvement
 - Org/player access boundaries defined
 - Frontend visibility requirements defined
 - Documentation only; no runtime behavior changes
+
+Validation notes:
+
+- No backend runtime files changed.
+- No frontend runtime files changed.
+- No migrations, tests, CI files, or package files changed.
+- Phase 9B and later remain future work and are not marked complete.
 
 ### Phase 9B — Player Development Data Model
 

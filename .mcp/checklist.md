@@ -378,9 +378,10 @@ See [`.mcp/README.md`](.mcp/README.md) for detailed DoD templates.
 
 ## 🧭 MASTER ROADMAP GOVERNANCE (Phase 9 Insertion)
 
-- [ ] **roadmap-phase9a-audit-spec-lock** - Phase 9A — Pre-Phase Audit + Spec Lock
+- [x] **roadmap-phase9a-audit-spec-lock** - Phase 9A — Pre-Phase Audit + Spec Lock
   - Acceptance: document existing partial foundations; lock AI boundaries, coach approval rules, youth-safe wording, and org/player access boundaries
   - Verify: `python scripts/checklist.py status`
+  - Evidence: `docs/PHASE_9A_PLAYER_DEVELOPMENT_INTELLIGENCE_AUDIT_AND_SPEC_LOCK.md`
 
 - [ ] **roadmap-phase9b-data-model** - Phase 9B — Player Development Data Model
   - Acceptance: define future entities/fields + permission boundaries; require migrations/models/schemas/tests in implementation phase
