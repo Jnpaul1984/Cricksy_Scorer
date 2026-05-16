@@ -10,9 +10,16 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.config import ConfigDict
 
+from backend.services.player_development_state import (
+    normalize_player_development_plan_governance,
+)
 from backend.sql_app.models import (
     FanFavoriteType,
+    PlayerDevelopmentApprovalState,
     PlayerCoachingNoteVisibility,
+    PlayerDevelopmentPlanStatus,
+    PlayerDevelopmentSeverity,
+    PlayerDevelopmentSourceType,
     RoleEnum,
 )
 
@@ -945,6 +952,352 @@ class CoachingSessionRead(CoachingSessionBase):
     id: str
     coach_user_id: str
     player_profile_id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerDevelopmentPlanBase(BaseModel):
+    player_profile_id: str
+    coach_user_id: str
+    org_id: str
+    title: str
+    summary: str | None = None
+    status: PlayerDevelopmentPlanStatus = PlayerDevelopmentPlanStatus.draft
+    source_type: PlayerDevelopmentSourceType = PlayerDevelopmentSourceType.manual
+    coach_approved: bool = False
+    approval_state: PlayerDevelopmentApprovalState = (
+        PlayerDevelopmentApprovalState.not_required
+    )
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    ai_metadata: dict[str, Any] = Field(default_factory=dict)
+    activated_at: dt.datetime | None = None
+    completed_at: dt.datetime | None = None
+
+    @field_validator("evidence_refs", mode="after")
+    @classmethod
+    def _validate_evidence_refs(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        json.dumps(value)
+        return value
+
+    @field_validator("ai_metadata", mode="after")
+    @classmethod
+    def _validate_ai_metadata(cls, value: dict[str, Any]) -> dict[str, Any]:
+        json.dumps(value)
+        return value
+
+    @model_validator(mode="after")
+    def _apply_governance_defaults(self):
+        status_input = self.status if "status" in self.model_fields_set else None
+        coach_approved_input = (
+            self.coach_approved if "coach_approved" in self.model_fields_set else None
+        )
+        approval_state_input = (
+            self.approval_state if "approval_state" in self.model_fields_set else None
+        )
+        status, coach_approved, approval_state = normalize_player_development_plan_governance(
+            self.source_type,
+            status_input,
+            coach_approved_input,
+            approval_state_input,
+        )
+        self.status = PlayerDevelopmentPlanStatus(status)
+        self.coach_approved = coach_approved
+        self.approval_state = PlayerDevelopmentApprovalState(approval_state)
+        return self
+
+
+class PlayerDevelopmentPlanCreate(PlayerDevelopmentPlanBase):
+    pass
+
+
+class PlayerDevelopmentPlanUpdate(BaseModel):
+    title: str | None = None
+    summary: str | None = None
+    status: PlayerDevelopmentPlanStatus | None = None
+    source_type: PlayerDevelopmentSourceType | None = None
+    coach_approved: bool | None = None
+    approval_state: PlayerDevelopmentApprovalState | None = None
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    evidence_refs: list[dict[str, Any]] | None = None
+    ai_metadata: dict[str, Any] | None = None
+    activated_at: dt.datetime | None = None
+    completed_at: dt.datetime | None = None
+
+
+class PlayerDevelopmentPlanRead(PlayerDevelopmentPlanBase):
+    id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerDevelopmentGoalBase(BaseModel):
+    plan_id: str
+    title: str
+    description: str | None = None
+    target_metric: str | None = None
+    baseline_value: float | None = None
+    target_value: float | None = None
+    current_value: float | None = None
+    unit: str | None = None
+    status: PlayerDevelopmentPlanStatus = PlayerDevelopmentPlanStatus.draft
+    due_date: dt.date | None = None
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+    @field_validator("evidence_refs", mode="after")
+    @classmethod
+    def _validate_evidence_refs(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        json.dumps(value)
+        return value
+
+
+class PlayerDevelopmentGoalCreate(PlayerDevelopmentGoalBase):
+    pass
+
+
+class PlayerDevelopmentGoalUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    target_metric: str | None = None
+    baseline_value: float | None = None
+    target_value: float | None = None
+    current_value: float | None = None
+    unit: str | None = None
+    status: PlayerDevelopmentPlanStatus | None = None
+    due_date: dt.date | None = None
+    evidence_refs: list[dict[str, Any]] | None = None
+
+
+class PlayerDevelopmentGoalRead(PlayerDevelopmentGoalBase):
+    id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerWeaknessTagBase(BaseModel):
+    plan_id: str
+    player_profile_id: str
+    category: str
+    label: str
+    safe_display_label: str
+    severity: PlayerDevelopmentSeverity = PlayerDevelopmentSeverity.medium
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    source_type: PlayerDevelopmentSourceType = PlayerDevelopmentSourceType.manual
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    ai_metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("evidence_refs", mode="after")
+    @classmethod
+    def _validate_evidence_refs(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        json.dumps(value)
+        return value
+
+    @field_validator("ai_metadata", mode="after")
+    @classmethod
+    def _validate_ai_metadata(cls, value: dict[str, Any]) -> dict[str, Any]:
+        json.dumps(value)
+        return value
+
+
+class PlayerWeaknessTagCreate(PlayerWeaknessTagBase):
+    pass
+
+
+class PlayerWeaknessTagUpdate(BaseModel):
+    category: str | None = None
+    label: str | None = None
+    safe_display_label: str | None = None
+    severity: PlayerDevelopmentSeverity | None = None
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    source_type: PlayerDevelopmentSourceType | None = None
+    evidence_refs: list[dict[str, Any]] | None = None
+    ai_metadata: dict[str, Any] | None = None
+
+
+class PlayerWeaknessTagRead(PlayerWeaknessTagBase):
+    id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerStrengthTagBase(BaseModel):
+    plan_id: str
+    player_profile_id: str
+    category: str
+    label: str
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    source_type: PlayerDevelopmentSourceType = PlayerDevelopmentSourceType.manual
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    ai_metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("evidence_refs", mode="after")
+    @classmethod
+    def _validate_evidence_refs(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        json.dumps(value)
+        return value
+
+    @field_validator("ai_metadata", mode="after")
+    @classmethod
+    def _validate_ai_metadata(cls, value: dict[str, Any]) -> dict[str, Any]:
+        json.dumps(value)
+        return value
+
+
+class PlayerStrengthTagCreate(PlayerStrengthTagBase):
+    pass
+
+
+class PlayerStrengthTagUpdate(BaseModel):
+    category: str | None = None
+    label: str | None = None
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    source_type: PlayerDevelopmentSourceType | None = None
+    evidence_refs: list[dict[str, Any]] | None = None
+    ai_metadata: dict[str, Any] | None = None
+
+
+class PlayerStrengthTagRead(PlayerStrengthTagBase):
+    id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerDevelopmentInterventionBase(BaseModel):
+    plan_id: str
+    coach_user_id: str
+    source_type: PlayerDevelopmentSourceType = PlayerDevelopmentSourceType.manual
+    intervention_type: str
+    title: str
+    notes: str | None = None
+    scheduled_for: dt.datetime | None = None
+    completed_at: dt.datetime | None = None
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+    @field_validator("evidence_refs", mode="after")
+    @classmethod
+    def _validate_evidence_refs(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        json.dumps(value)
+        return value
+
+
+class PlayerDevelopmentInterventionCreate(PlayerDevelopmentInterventionBase):
+    pass
+
+
+class PlayerDevelopmentInterventionUpdate(BaseModel):
+    source_type: PlayerDevelopmentSourceType | None = None
+    intervention_type: str | None = None
+    title: str | None = None
+    notes: str | None = None
+    scheduled_for: dt.datetime | None = None
+    completed_at: dt.datetime | None = None
+    evidence_refs: list[dict[str, Any]] | None = None
+
+
+class PlayerDevelopmentInterventionRead(PlayerDevelopmentInterventionBase):
+    id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerDrillAssignmentBase(BaseModel):
+    plan_id: str
+    player_profile_id: str
+    coach_user_id: str
+    drill_category: str
+    drill_name: str
+    drill_description: str | None = None
+    frequency: str | None = None
+    status: PlayerDevelopmentPlanStatus = PlayerDevelopmentPlanStatus.draft
+    assigned_at: dt.datetime | None = None
+    due_date: dt.date | None = None
+    completed_at: dt.datetime | None = None
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+    @field_validator("evidence_refs", mode="after")
+    @classmethod
+    def _validate_evidence_refs(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        json.dumps(value)
+        return value
+
+
+class PlayerDrillAssignmentCreate(PlayerDrillAssignmentBase):
+    pass
+
+
+class PlayerDrillAssignmentUpdate(BaseModel):
+    drill_category: str | None = None
+    drill_name: str | None = None
+    drill_description: str | None = None
+    frequency: str | None = None
+    status: PlayerDevelopmentPlanStatus | None = None
+    assigned_at: dt.datetime | None = None
+    due_date: dt.date | None = None
+    completed_at: dt.datetime | None = None
+    evidence_refs: list[dict[str, Any]] | None = None
+
+
+class PlayerDrillAssignmentRead(PlayerDrillAssignmentBase):
+    id: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlayerProgressCheckpointBase(BaseModel):
+    plan_id: str
+    player_profile_id: str
+    coach_user_id: str
+    checkpoint_date: dt.date
+    summary: str
+    progress_status: str
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+    ai_metadata: dict[str, Any] = Field(default_factory=dict)
+    coach_notes: str | None = None
+
+    @field_validator("evidence_refs", mode="after")
+    @classmethod
+    def _validate_evidence_refs(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        json.dumps(value)
+        return value
+
+    @field_validator("ai_metadata", mode="after")
+    @classmethod
+    def _validate_ai_metadata(cls, value: dict[str, Any]) -> dict[str, Any]:
+        json.dumps(value)
+        return value
+
+
+class PlayerProgressCheckpointCreate(PlayerProgressCheckpointBase):
+    pass
+
+
+class PlayerProgressCheckpointUpdate(BaseModel):
+    checkpoint_date: dt.date | None = None
+    summary: str | None = None
+    progress_status: str | None = None
+    confidence_score: float | None = Field(None, ge=0.0, le=1.0)
+    evidence_refs: list[dict[str, Any]] | None = None
+    ai_metadata: dict[str, Any] | None = None
+    coach_notes: str | None = None
+
+
+class PlayerProgressCheckpointRead(PlayerProgressCheckpointBase):
+    id: str
     created_at: dt.datetime
     updated_at: dt.datetime
 

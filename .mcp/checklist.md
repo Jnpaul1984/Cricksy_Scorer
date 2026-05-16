@@ -383,9 +383,10 @@ See [`.mcp/README.md`](.mcp/README.md) for detailed DoD templates.
   - Verify: `python scripts/checklist.py status`
   - Evidence: `docs/PHASE_9A_PLAYER_DEVELOPMENT_INTELLIGENCE_AUDIT_AND_SPEC_LOCK.md`
 
-- [ ] **roadmap-phase9b-data-model** - Phase 9B — Player Development Data Model
+- [x] **roadmap-phase9b-data-model** - Phase 9B — Player Development Data Model
   - Acceptance: define future entities/fields + permission boundaries; require migrations/models/schemas/tests in implementation phase
   - Verify: `python scripts/checklist.py status`
+  - Evidence: `backend/sql_app/models.py`, `backend/sql_app/schemas.py`, `backend/services/player_development_state.py`, `backend/alembic/versions/d9b1c2e3f4a5_add_player_development_tables.py`, `backend/tests/test_player_development_models.py`; validations: `cd backend && python -m pytest tests -k "player_development or development_plan" -v`, `cd backend && python -m pytest tests/test_health.py tests/test_results_endpoint.py -q`, `cd backend && python -m pytest tests/test_dls_calculations.py -v --tb=short`, `cd backend && ruff check .`, `cd backend && ruff format --check .`, `cd backend && mypy --config-file pyproject.toml --explicit-package-bases .`; Postgres migration validation pending because `pg_isready` reported no local server and SQLite Alembic validation is blocked earlier by pre-existing migration `1b13e5e48c1e_add_sponsors_table.py`
 
 - [ ] **roadmap-phase9c-plan-engine** - Phase 9C — Development Plan Service + Recommendation Engine
   - Acceptance: real-data-only draft plans, no fake claims, drill mapping, measurable goals, coach approval before activation
