@@ -1035,6 +1035,26 @@ class PlayerDevelopmentPlanRead(PlayerDevelopmentPlanBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PlayerDevelopmentPlanReviewDecision(str, Enum):
+    approved = "approved"
+    rejected = "rejected"
+    changes_requested = "changes_requested"
+
+
+class PlayerDevelopmentPlanReviewRequest(BaseModel):
+    decision: PlayerDevelopmentPlanReviewDecision
+    reviewer_notes: str | None = Field(default=None, max_length=2000)
+
+
+class PlayerDevelopmentPlanReviewResponse(BaseModel):
+    plan_id: str
+    approval_state: PlayerDevelopmentApprovalState
+    coach_approved: bool
+    reviewer_notes: str | None = None
+    reviewed_by_user_id: str
+    reviewed_at: dt.datetime
+
+
 class PlayerDevelopmentPlanDraftGenerateRequest(BaseModel):
     additional_evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
 
