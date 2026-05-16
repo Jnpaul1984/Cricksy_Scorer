@@ -90,9 +90,9 @@ async function fetchWithAuth<T>(path: string, options: RequestInit = {}): Promis
 // Response types — mirrors backend schemas.py Phase 9B/9C definitions
 // ---------------------------------------------------------------------------
 
-export type PlanStatus = 'draft' | 'active' | 'completed' | 'archived';
-export type ApprovalState = 'not_required' | 'pending_review' | 'approved' | 'rejected';
-export type SourceType = 'manual' | 'ai_generated' | 'coach_pro_plus' | 'combined';
+export type PlanStatus = 'draft' | 'active' | 'paused' | 'completed' | 'archived';
+export type ApprovalState = 'not_required' | 'pending_review' | 'approved' | 'rejected' | 'changes_requested';
+export type SourceType = 'match_data' | 'video_analysis' | 'coach_note' | 'ai_insight' | 'manual';
 export type Severity = 'low' | 'medium' | 'high';
 
 export interface EvidenceRef {

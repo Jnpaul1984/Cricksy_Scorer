@@ -27,7 +27,7 @@ const basePlan: playerDevApi.PlayerDevelopmentPlanRead = {
   title: 'Draft Development Plan — Jamie Smith',
   summary: 'Focus on off-side technique and bowling economy.',
   status: 'draft',
-  source_type: 'ai_generated',
+  source_type: 'ai_insight',
   coach_approved: false,
   approval_state: 'pending_review',
   confidence_score: 0.68,
@@ -319,10 +319,10 @@ describe('PlayerDevelopmentPlanCard', () => {
     expect(wrapper.find('[data-testid="plan-not-approved"]').exists()).toBe(false)
   })
 
-  // Test 13: AI-assisted badge shown when source_type is ai_generated
-  it('shows AI-assisted advisory badge for AI-generated plans', () => {
+  // Test 13: AI-assisted badge shown when source_type is ai_insight
+  it('shows AI-assisted advisory badge for source_type ai_insight plans', () => {
     const wrapper = mount(PlayerDevelopmentPlanCard, {
-      props: { bundle: baseBundle }, // source_type: 'ai_generated'
+      props: { bundle: baseBundle }, // source_type: 'ai_insight'
     })
 
     expect(wrapper.find('[data-testid="plan-ai-badge"]').exists()).toBe(true)
@@ -341,6 +341,55 @@ describe('PlayerDevelopmentPlanCard', () => {
     })
 
     expect(wrapper.find('[data-testid="plan-ai-badge"]').exists()).toBe(false)
+  })
+
+  // Test 15: source_type "video_analysis" does not show AI badge and renders without error
+  it('renders without error for source_type video_analysis (no AI badge)', () => {
+    const videoBundle: playerDevApi.PlayerDevelopmentPlanDraftBundle = {
+      ...baseBundle,
+      plan: makePlan({ source_type: 'video_analysis' }),
+    }
+
+    const wrapper = mount(PlayerDevelopmentPlanCard, {
+      props: { bundle: videoBundle },
+    })
+
+    // Should render (no TypeScript/runtime error)
+    expect(wrapper.find('[data-testid="player-development-plan-card"]').exists()).toBe(true)
+    // No AI badge for video_analysis
+    expect(wrapper.find('[data-testid="plan-ai-badge"]').exists()).toBe(false)
+  })
+
+  // Test 16: status "paused" renders a visible status badge safely
+  it('renders status "paused" safely with a status badge', () => {
+    const pausedBundle: playerDevApi.PlayerDevelopmentPlanDraftBundle = {
+      ...baseBundle,
+      plan: makePlan({ status: 'paused' }),
+    }
+
+    const wrapper = mount(PlayerDevelopmentPlanCard, {
+      props: { bundle: pausedBundle },
+    })
+
+    const statusBadge = wrapper.find('[data-testid="plan-status-badge"]')
+    expect(statusBadge.exists()).toBe(true)
+    expect(statusBadge.text()).toContain('Paused')
+  })
+
+  // Test 17: approval_state "changes_requested" renders safely with a clear label
+  it('renders approval_state "changes_requested" with a clear human-readable label', () => {
+    const changesBundle: playerDevApi.PlayerDevelopmentPlanDraftBundle = {
+      ...baseBundle,
+      plan: makePlan({ approval_state: 'changes_requested' }),
+    }
+
+    const wrapper = mount(PlayerDevelopmentPlanCard, {
+      props: { bundle: changesBundle },
+    })
+
+    const approvalEl = wrapper.find('[data-testid="plan-approval-state"]')
+    expect(approvalEl.exists()).toBe(true)
+    expect(approvalEl.text()).toContain('Changes requested')
   })
 })
 

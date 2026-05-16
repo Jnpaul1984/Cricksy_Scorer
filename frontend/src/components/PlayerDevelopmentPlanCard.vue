@@ -67,6 +67,8 @@ const approvalStateLabel = computed(() => {
       return 'Pending review'
     case 'not_required':
       return 'No review required'
+    case 'changes_requested':
+      return 'Changes requested'
     default:
       return plan.value.approval_state
   }
@@ -91,6 +93,8 @@ const statusLabel = computed(() => {
       return 'Draft'
     case 'active':
       return 'Active'
+    case 'paused':
+      return 'Paused'
     case 'completed':
       return 'Completed'
     case 'archived':
@@ -111,8 +115,8 @@ const statusBadgeVariant = computed<'success' | 'warning' | 'neutral' | 'primary
   }
 })
 
-const isAiGenerated = computed(() =>
-  plan.value.source_type === 'ai_generated' || plan.value.source_type === 'combined',
+const isAiAssisted = computed(() =>
+  plan.value.source_type === 'ai_insight',
 )
 
 const formattedDate = (isoString: string | null): string => {
@@ -145,7 +149,7 @@ const formattedDate = (isoString: string | null): string => {
           <BaseBadge :variant="statusBadgeVariant" data-testid="plan-status-badge">
             {{ statusLabel }}
           </BaseBadge>
-          <BaseBadge v-if="isAiGenerated" variant="neutral" data-testid="plan-ai-badge">
+          <BaseBadge v-if="isAiAssisted" variant="neutral" data-testid="plan-ai-badge">
             AI-assisted advisory
           </BaseBadge>
         </div>
