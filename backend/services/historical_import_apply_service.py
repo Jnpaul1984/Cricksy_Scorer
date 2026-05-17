@@ -319,6 +319,7 @@ async def apply_historical_batch(
         competition_context=competition_context,
         roster_snapshot=roster_snapshot,
         player_names=player_names_found,
+        match_date=match_date,
     )
     historical_meta = dict(phases.get("historical_import") or {})
     historical_meta["player_identity_registry"] = player_identity_registry

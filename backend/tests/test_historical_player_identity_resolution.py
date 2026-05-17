@@ -25,6 +25,7 @@ async def _make_batch(
     db: AsyncSession,
     *,
     roster_names: list[str],
+    roster_entries: list[object] | None = None,
     competition_name: str = "Caribbean Premier League",
     season: str = "2013",
 ) -> str:
@@ -66,7 +67,7 @@ async def _make_batch(
                 "squad_roster_snapshot": [
                     {
                         "team_name": "Team A",
-                        "named_squad": list(roster_names),
+                        "named_squad": list(roster_entries or roster_names),
                         "playing_xi": list(roster_names),
                         "substitutes": [],
                         "unresolved_entries": [],
@@ -191,3 +192,151 @@ async def test_identity_resolution_provenance_preserved_and_queue_created(
     ).scalars().first()
     assert queue_row is not None
     assert queue_row.reason == "unresolved"
+
+
+@pytest.mark.asyncio
+async def test_phase10f_metadata_provenance_and_canonical_safe_fill(db_session: AsyncSession) -> None:
+    db_session.add(Player(id=404, name="Metadata Player", role=None))
+    await db_session.commit()
+
+    game_id = await _make_batch(
+        db_session,
+        roster_names=["Metadata Player"],
+        roster_entries=[
+            {
+                "name": "Metadata Player",
+                "batting_style": "Right hand bat",
+                "bowling_style": "Right arm fast",
+                "role": "Bowler",
+            }
+        ],
+    )
+
+    row = (
+        await db_session.execute(
+            select(HistoricalSourcePlayerRegistry).where(
+                HistoricalSourcePlayerRegistry.normalized_name == "metadata player"
+            )
+        )
+    ).scalars().first()
+    assert row is not None
+
+    metadata_history = row.metadata_field_history
+    assert isinstance(metadata_history, list)
+    fields = {item["field_name"]: item for item in metadata_history if isinstance(item, dict)}
+    assert fields["batting_style"]["value"] == "Right hand bat"
+    assert fields["bowling_style"]["value"] == "Right arm fast"
+    assert fields["player_role"]["value"] == "Bowler"
+    assert fields["player_role"]["source_system"] == "historical_import_json"
+    assert fields["player_role"]["source_schema"] == "cricsheet_json"
+    assert fields["player_role"]["game_id"] == game_id
+    assert fields["player_role"]["batch_id"]
+    assert fields["player_role"]["confidence_status"] == "high"
+    assert fields["player_role"]["first_seen"]
+    assert fields["player_role"]["last_seen"]
+
+    canonical = await db_session.get(Player, 404)
+    assert canonical is not None
+    assert canonical.role == "Bowler"
+
+    foundation = row.career_profile_foundation
+    assert foundation["matches_played"] == 1
+    assert foundation["competitions"][0]["competition_name"] == "Caribbean Premier League"
+    assert foundation["seasons"][0]["season"] == "2013"
+    assert foundation["teams"][0]["team_name"] == "Team A"
+    assert foundation["match_timeline"][0]["game_id"] == game_id
+    assert foundation["match_timeline"][0]["match_date"] == "2013-07-30"
+
+
+@pytest.mark.asyncio
+async def test_phase10f_unknown_metadata_stays_unknown_and_not_fabricated(
+    db_session: AsyncSession,
+) -> None:
+    await _make_batch(db_session, roster_names=["Unknown Metadata Player"])
+
+    row = (
+        await db_session.execute(
+            select(HistoricalSourcePlayerRegistry).where(
+                HistoricalSourcePlayerRegistry.normalized_name == "unknown metadata player"
+            )
+        )
+    ).scalars().first()
+    assert row is not None
+
+    metadata_history = row.metadata_field_history
+    fields = {item["field_name"]: item for item in metadata_history if isinstance(item, dict)}
+    assert fields["batting_style"]["value"] is None
+    assert fields["bowling_style"]["value"] is None
+    assert fields["player_role"]["value"] is None
+    assert fields["batting_style"]["source_status"] == "unknown"
+    assert fields["player_role"]["confidence_status"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_phase10f_conflict_detection_preserves_conflict_without_overwrite(
+    db_session: AsyncSession,
+) -> None:
+    db_session.add(Player(id=505, name="Conflict Player", role="Batsman"))
+    await db_session.commit()
+
+    await _make_batch(
+        db_session,
+        roster_names=["Conflict Player"],
+        roster_entries=[{"name": "Conflict Player", "role": "Bowler"}],
+    )
+
+    row = (
+        await db_session.execute(
+            select(HistoricalSourcePlayerRegistry).where(
+                HistoricalSourcePlayerRegistry.normalized_name == "conflict player"
+            )
+        )
+    ).scalars().first()
+    assert row is not None
+    assert row.review_required is True
+    assert row.metadata_conflicts
+    conflict = row.metadata_conflicts[0]
+    assert conflict["field_name"] == "player_role"
+    assert conflict["canonical_value"] == "Batsman"
+    assert conflict["observed_value"] == "Bowler"
+    assert conflict["review_state"] == "pending_review"
+
+    canonical = await db_session.get(Player, 505)
+    assert canonical is not None
+    assert canonical.role == "Batsman"
+
+
+@pytest.mark.asyncio
+async def test_phase10f_career_profile_cross_match_consistency(db_session: AsyncSession) -> None:
+    db_session.add(Player(id=606, name="Career Player", role=None))
+    await db_session.commit()
+
+    first_game_id = await _make_batch(
+        db_session,
+        roster_names=["Career Player"],
+        competition_name="Caribbean Premier League",
+        season="2013",
+        roster_entries=[{"name": "Career Player", "role": "Bowler"}],
+    )
+    second_game_id = await _make_batch(
+        db_session,
+        roster_names=["Career Player"],
+        competition_name="Caribbean Premier League",
+        season="2014",
+        roster_entries=[{"name": "Career Player", "role": "Bowler"}],
+    )
+
+    row = (
+        await db_session.execute(
+            select(HistoricalSourcePlayerRegistry).where(
+                HistoricalSourcePlayerRegistry.normalized_name == "career player"
+            )
+        )
+    ).scalars().first()
+    assert row is not None
+    foundation = row.career_profile_foundation
+    assert foundation["matches_played"] == 2
+    timeline_game_ids = {item["game_id"] for item in foundation["match_timeline"]}
+    assert timeline_game_ids == {first_game_id, second_game_id}
+    seasons = {item["season"] for item in foundation["seasons"]}
+    assert seasons == {"2013", "2014"}
