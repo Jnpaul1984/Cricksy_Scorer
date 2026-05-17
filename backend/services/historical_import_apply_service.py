@@ -56,6 +56,7 @@ from backend.services.historical_import_delivery_service import (
     verify_payload_hash,
 )
 from backend.services.historical_player_identity_service import register_historical_source_players
+from backend.services.historical_venue_intelligence_service import resolve_historical_venue
 from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 
 # Batch statuses from which an apply is allowed.
@@ -323,6 +324,21 @@ async def apply_historical_batch(
     )
     historical_meta = dict(phases.get("historical_import") or {})
     historical_meta["player_identity_registry"] = player_identity_registry
+    venue_resolution = await resolve_historical_venue(
+        db,
+        batch_id=batch_id,
+        game_id=game_id,
+        source_schema=source_provenance.get("source_schema")
+        or schema_classification.get("source_schema")
+        or "unknown",
+        source_system="historical_import_json",
+        source_provenance=source_provenance,
+        competition_context=competition_context,
+        match_date=match_date,
+        raw_venue_value=venue,
+        venue_context=venue_context,
+    )
+    historical_meta["venue_resolution"] = venue_resolution
     game.phases = {**phases, "historical_import": historical_meta}
     db.add(game)
 

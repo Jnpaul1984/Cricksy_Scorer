@@ -3064,6 +3064,250 @@ class HistoricalCompetitionRosterEntry(Base):
 
 
 # ---------------------------------------------------------------------------
+# Phase 10H - Venue Intelligence Backfill
+# ---------------------------------------------------------------------------
+
+
+class HistoricalVenueVerificationStatus(str, enum.Enum):
+    unverified = "unverified"
+    verified = "verified"
+    review_required = "review_required"
+
+
+class HistoricalVenueResolutionState(str, enum.Enum):
+    resolved = "resolved"
+    unresolved = "unresolved"
+    review_required = "review_required"
+
+
+class HistoricalVenueIntelligence(Base):
+    __tablename__ = "historical_venue_intelligence"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    canonical_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalized_canonical_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    short_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    normalized_short_name: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    alternate_names: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    city: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    region: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    timezone: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    venue_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    indoor_outdoor: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    verification_status: Mapped[HistoricalVenueVerificationStatus] = mapped_column(
+        SAEnum(HistoricalVenueVerificationStatus, name="historical_venue_verification_status"),
+        nullable=False,
+        default=HistoricalVenueVerificationStatus.unverified,
+        server_default=HistoricalVenueVerificationStatus.unverified.value,
+        index=True,
+    )
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_from_import: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provenance_references: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    first_seen: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class HistoricalVenueAlias(Base):
+    __tablename__ = "historical_venue_aliases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    venue_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("historical_venue_intelligence.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    alias_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalized_alias: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    source_schema: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_system: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    provenance_reference: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    first_seen: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_hist_venue_alias_unique",
+            "venue_id",
+            "normalized_alias",
+            unique=True,
+        ),
+    )
+
+
+class HistoricalVenueResolutionDecision(Base):
+    __tablename__ = "historical_venue_resolution_decisions"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    batch_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("historical_import_batches.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    game_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("games.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    raw_imported_value: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalized_raw_value: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    canonical_venue_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("historical_venue_intelligence.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    resolution_state: Mapped[HistoricalVenueResolutionState] = mapped_column(
+        SAEnum(HistoricalVenueResolutionState, name="historical_venue_resolution_state"),
+        nullable=False,
+        default=HistoricalVenueResolutionState.unresolved,
+        server_default=HistoricalVenueResolutionState.unresolved.value,
+        index=True,
+    )
+    matched_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unresolved_reason: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    source_schema: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_system: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    competition_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    season: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    review_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    provenance_references: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    resolution_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_hist_venue_resolution_unique_context",
+            "game_id",
+            "normalized_raw_value",
+            "source_schema",
+            "source_system",
+            unique=True,
+        ),
+    )
+
+
+class HistoricalVenueResolutionQueue(Base):
+    __tablename__ = "historical_venue_resolution_queue"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    decision_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("historical_venue_resolution_decisions.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+    raw_imported_value: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalized_raw_value: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    source_schema: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_system: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    queue_state: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    reason: Mapped[str] = mapped_column(String(128), nullable=False, default="unresolved")
+    review_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    provenance_references: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_seen: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index(
+            "ix_hist_venue_queue_unique_context",
+            "normalized_raw_value",
+            "source_schema",
+            "source_system",
+            "reason",
+            unique=True,
+        ),
+    )
+
+
+class HistoricalCompetitionVenueUsage(Base):
+    __tablename__ = "historical_competition_venue_usage"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    canonical_venue_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("historical_venue_intelligence.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    competition_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    season: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    source_schema: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_system: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    matches_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    game_references: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    provenance_references: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    review_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_hist_comp_venue_usage_unique_context",
+            "canonical_venue_id",
+            "competition_name",
+            "season",
+            "source_schema",
+            "source_system",
+            unique=True,
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Phase 8C — AI Insight Review
 # ---------------------------------------------------------------------------
 

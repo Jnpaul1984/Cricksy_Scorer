@@ -29,6 +29,11 @@ from backend.api.schemas.historical_import import (
     HistoricalImportRollbackResponse,
     HistoricalImportTotalsValidation,
     HistoricalImportTrainingStatus,
+    HistoricalVenueAliasRecord,
+    HistoricalVenueIntelligenceRecord,
+    HistoricalVenueResolutionSnapshot,
+    HistoricalVenueUnresolvedRecord,
+    HistoricalVenueUsageRecord,
     HistoricalOcrDryRunRequest,
     HistoricalOcrDryRunResponse,
     HistoricalOcrExtractionMetadata,
@@ -55,6 +60,13 @@ from backend.services.historical_import_service import (
     find_duplicate_by_semantic_key,
     get_import_batch,
     list_import_batches,
+)
+from backend.services.historical_venue_intelligence_service import (
+    list_unresolved_venues,
+    list_venue_aliases,
+    list_venue_intelligence,
+    list_venue_resolution_snapshots,
+    list_venue_usage_stats,
 )
 from backend.services.pdf_extraction_service import PdfExtractionResult, extract_text_from_pdf
 from backend.services.s3_service import s3_service
@@ -1423,6 +1435,160 @@ async def list_historical_import_batches(
             updated_at=b.updated_at,
         )
         for b in batches
+    ]
+
+
+@router.get("/venues/intelligence", response_model=list[HistoricalVenueIntelligenceRecord])
+async def list_historical_venue_intelligence(
+    limit: int = Query(default=100, ge=1, le=500),
+    db: AsyncSession = Depends(_get_import_db),
+) -> list[HistoricalVenueIntelligenceRecord]:
+    venues = await list_venue_intelligence(db, limit=limit)
+    return [
+        HistoricalVenueIntelligenceRecord(
+            id=row.id,
+            canonical_name=row.canonical_name,
+            short_name=row.short_name,
+            alternate_names=list(row.alternate_names or []),
+            city=row.city,
+            region=row.region,
+            country=row.country,
+            latitude=row.latitude,
+            longitude=row.longitude,
+            timezone=row.timezone,
+            venue_type=row.venue_type,
+            indoor_outdoor=row.indoor_outdoor,
+            verification_status=row.verification_status.value,
+            confidence_score=row.confidence_score,
+            source_type=row.source_type,
+            created_from_import=row.created_from_import,
+            notes=row.notes,
+            provenance_references=list(row.provenance_references or []),
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+        for row in venues
+    ]
+
+
+@router.get("/venues/unresolved", response_model=list[HistoricalVenueUnresolvedRecord])
+async def list_historical_unresolved_venues(
+    limit: int = Query(default=100, ge=1, le=500),
+    db: AsyncSession = Depends(_get_import_db),
+) -> list[HistoricalVenueUnresolvedRecord]:
+    queue_rows = await list_unresolved_venues(db, limit=limit)
+    return [
+        HistoricalVenueUnresolvedRecord(
+            id=row.id,
+            decision_id=row.decision_id,
+            raw_imported_value=row.raw_imported_value,
+            normalized_raw_value=row.normalized_raw_value,
+            source_schema=row.source_schema,
+            source_system=row.source_system,
+            queue_state=row.queue_state,
+            reason=row.reason,
+            review_required=row.review_required,
+            provenance_references=list(row.provenance_references or []),
+            created_at=row.created_at,
+            last_seen=row.last_seen,
+            resolved_at=row.resolved_at,
+        )
+        for row in queue_rows
+    ]
+
+
+@router.get("/venues/resolution-snapshots", response_model=list[HistoricalVenueResolutionSnapshot])
+async def list_historical_venue_resolution_snapshots(
+    limit: int = Query(default=100, ge=1, le=500),
+    batch_id: str | None = Query(default=None),
+    game_id: str | None = Query(default=None),
+    db: AsyncSession = Depends(_get_import_db),
+) -> list[HistoricalVenueResolutionSnapshot]:
+    rows = await list_venue_resolution_snapshots(
+        db,
+        limit=limit,
+        batch_id=batch_id,
+        game_id=game_id,
+    )
+    return [
+        HistoricalVenueResolutionSnapshot(
+            id=row.id,
+            batch_id=row.batch_id,
+            game_id=row.game_id,
+            raw_imported_value=row.raw_imported_value,
+            normalized_raw_value=row.normalized_raw_value,
+            canonical_venue_id=row.canonical_venue_id,
+            resolution_state=row.resolution_state.value,
+            matched_by=row.matched_by,
+            confidence_score=row.confidence_score,
+            unresolved_reason=row.unresolved_reason,
+            review_required=row.review_required,
+            source_schema=row.source_schema,
+            source_system=row.source_system,
+            competition_name=row.competition_name,
+            season=row.season,
+            provenance_references=list(row.provenance_references or []),
+            resolution_snapshot=dict(row.resolution_snapshot or {}),
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+        for row in rows
+    ]
+
+
+@router.get("/venues/usage", response_model=list[HistoricalVenueUsageRecord])
+async def list_historical_venue_usage(
+    limit: int = Query(default=100, ge=1, le=500),
+    competition_name: str | None = Query(default=None),
+    season: str | None = Query(default=None),
+    db: AsyncSession = Depends(_get_import_db),
+) -> list[HistoricalVenueUsageRecord]:
+    usage_rows = await list_venue_usage_stats(
+        db,
+        limit=limit,
+        competition_name=competition_name,
+        season=season,
+    )
+    return [
+        HistoricalVenueUsageRecord(
+            id=row.id,
+            canonical_venue_id=row.canonical_venue_id,
+            competition_name=row.competition_name,
+            season=row.season,
+            source_schema=row.source_schema,
+            source_system=row.source_system,
+            matches_count=row.matches_count,
+            game_references=list(row.game_references or []),
+            provenance_references=list(row.provenance_references or []),
+            review_required=row.review_required,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+        for row in usage_rows
+    ]
+
+
+@router.get("/venues/aliases", response_model=list[HistoricalVenueAliasRecord])
+async def list_historical_venue_aliases(
+    limit: int = Query(default=100, ge=1, le=500),
+    venue_id: str | None = Query(default=None),
+    db: AsyncSession = Depends(_get_import_db),
+) -> list[HistoricalVenueAliasRecord]:
+    alias_rows = await list_venue_aliases(db, limit=limit, venue_id=venue_id)
+    return [
+        HistoricalVenueAliasRecord(
+            id=row.id,
+            venue_id=row.venue_id,
+            alias_name=row.alias_name,
+            normalized_alias=row.normalized_alias,
+            source_schema=row.source_schema,
+            source_system=row.source_system,
+            confidence_score=row.confidence_score,
+            provenance_reference=dict(row.provenance_reference or {}),
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+        for row in alias_rows
     ]
 
 

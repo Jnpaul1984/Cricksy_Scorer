@@ -164,6 +164,100 @@ class HistoricalImportBatchRecord(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Phase 10H - Venue intelligence access schemas
+# ---------------------------------------------------------------------------
+
+
+class HistoricalVenueIntelligenceRecord(BaseModel):
+    id: str
+    canonical_name: str
+    short_name: str | None = None
+    alternate_names: list[str] = Field(default_factory=list)
+    city: str | None = None
+    region: str | None = None
+    country: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    timezone: str | None = None
+    venue_type: str | None = None
+    indoor_outdoor: str | None = None
+    verification_status: str
+    confidence_score: float | None = None
+    source_type: str | None = None
+    created_from_import: bool = False
+    notes: str | None = None
+    provenance_references: list[dict[str, object]] = Field(default_factory=list)
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+
+class HistoricalVenueUnresolvedRecord(BaseModel):
+    id: str
+    decision_id: str | None = None
+    raw_imported_value: str
+    normalized_raw_value: str
+    source_schema: str | None = None
+    source_system: str | None = None
+    queue_state: str
+    reason: str
+    review_required: bool
+    provenance_references: list[dict[str, object]] = Field(default_factory=list)
+    created_at: dt.datetime
+    last_seen: dt.datetime
+    resolved_at: dt.datetime | None = None
+
+
+class HistoricalVenueResolutionSnapshot(BaseModel):
+    id: str
+    batch_id: str | None = None
+    game_id: str | None = None
+    raw_imported_value: str
+    normalized_raw_value: str
+    canonical_venue_id: str | None = None
+    resolution_state: str
+    matched_by: str | None = None
+    confidence_score: float | None = None
+    unresolved_reason: str | None = None
+    review_required: bool
+    source_schema: str | None = None
+    source_system: str | None = None
+    competition_name: str | None = None
+    season: str | None = None
+    provenance_references: list[dict[str, object]] = Field(default_factory=list)
+    resolution_snapshot: dict[str, object] = Field(default_factory=dict)
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+
+class HistoricalVenueUsageRecord(BaseModel):
+    id: str
+    canonical_venue_id: str
+    competition_name: str | None = None
+    season: str | None = None
+    source_schema: str | None = None
+    source_system: str | None = None
+    matches_count: int
+    game_references: list[str] = Field(default_factory=list)
+    provenance_references: list[dict[str, object]] = Field(default_factory=list)
+    review_required: bool
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+
+class HistoricalVenueAliasRecord(BaseModel):
+    id: int
+    venue_id: str
+    alias_name: str
+    normalized_alias: str
+    source_schema: str | None = None
+    source_system: str | None = None
+    confidence_score: float | None = None
+    provenance_reference: dict[str, object] = Field(default_factory=dict)
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+
+# ---------------------------------------------------------------------------
 # Phase 5L - Bulk ZIP historical JSON schemas
 # ---------------------------------------------------------------------------
 
