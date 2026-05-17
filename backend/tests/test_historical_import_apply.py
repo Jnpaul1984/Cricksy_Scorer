@@ -239,9 +239,9 @@ def test_apply_rollback_info_contains_game_id() -> None:
     data = apply_resp.json()
     rollback_info = data["rollback_info"]
     game_id = data["applied_game_id"]
-    assert game_id in rollback_info, (
-        f"rollback_info must mention the created game id '{game_id}'; got: {rollback_info!r}"
-    )
+    assert (
+        game_id in rollback_info
+    ), f"rollback_info must mention the created game id '{game_id}'; got: {rollback_info!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -342,9 +342,7 @@ def test_apply_does_not_alter_other_batches() -> None:
 
     by_id = {b["id"]: b for b in batches}
     assert by_id[batch_a]["is_finalized"] is True
-    assert by_id[batch_b]["is_finalized"] is False, (
-        "apply on batch_a must not finalize batch_b"
-    )
+    assert by_id[batch_b]["is_finalized"] is False, "apply on batch_a must not finalize batch_b"
     assert by_id[batch_b]["applied_game_id"] is None
 
 
@@ -395,17 +393,19 @@ def test_apply_succeeds_when_player_identity_registration_fails() -> None:
     The batch must be finalized, the applied_game_id must be set, and a
     descriptive warning must be present in the response.
     """
-    with patch(
-        "backend.services.historical_import_apply_service.register_historical_source_players",
-        new=AsyncMock(side_effect=RuntimeError("simulated Phase-10G table missing")),
+    with (
+        patch(
+            "backend.services.historical_import_apply_service.register_historical_source_players",
+            new=AsyncMock(side_effect=RuntimeError("simulated Phase-10G table missing")),
+        ),
+        TestClient(app) as client,
     ):
-        with TestClient(app) as client:
-            batch_id = _record_batch(client)
-            resp = client.post(
-                f"/api/historical-import/json/batches/{batch_id}/apply",
-                json={"confirm": True},
-            )
-            batches = client.get("/api/historical-import/json/batches").json()
+        batch_id = _record_batch(client)
+        resp = client.post(
+            f"/api/historical-import/json/batches/{batch_id}/apply",
+            json={"confirm": True},
+        )
+        batches = client.get("/api/historical-import/json/batches").json()
 
     assert resp.status_code == 200, resp.text
     data = resp.json()
@@ -413,9 +413,9 @@ def test_apply_succeeds_when_player_identity_registration_fails() -> None:
     assert data["applied_game_id"] is not None
     # At least one warning must mention the player identity failure
     warnings_text = " ".join(data.get("warnings", []))
-    assert "player identity" in warnings_text.lower(), (
-        f"Expected player identity warning in {data['warnings']!r}"
-    )
+    assert (
+        "player identity" in warnings_text.lower()
+    ), f"Expected player identity warning in {data['warnings']!r}"
     # Batch must still be finalised
     assert len(batches) == 1
     assert batches[0]["is_finalized"] is True
@@ -429,17 +429,19 @@ def test_apply_succeeds_when_venue_resolution_fails() -> None:
     The batch must be finalized, the applied_game_id must be set, and a
     descriptive warning must be present in the response.
     """
-    with patch(
-        "backend.services.historical_import_apply_service.resolve_historical_venue",
-        new=AsyncMock(side_effect=RuntimeError("simulated Phase-10H table missing")),
+    with (
+        patch(
+            "backend.services.historical_import_apply_service.resolve_historical_venue",
+            new=AsyncMock(side_effect=RuntimeError("simulated Phase-10H table missing")),
+        ),
+        TestClient(app) as client,
     ):
-        with TestClient(app) as client:
-            batch_id = _record_batch(client)
-            resp = client.post(
-                f"/api/historical-import/json/batches/{batch_id}/apply",
-                json={"confirm": True},
-            )
-            batches = client.get("/api/historical-import/json/batches").json()
+        batch_id = _record_batch(client)
+        resp = client.post(
+            f"/api/historical-import/json/batches/{batch_id}/apply",
+            json={"confirm": True},
+        )
+        batches = client.get("/api/historical-import/json/batches").json()
 
     assert resp.status_code == 200, resp.text
     data = resp.json()
@@ -447,9 +449,7 @@ def test_apply_succeeds_when_venue_resolution_fails() -> None:
     assert data["applied_game_id"] is not None
     # At least one warning must mention venue resolution failure
     warnings_text = " ".join(data.get("warnings", []))
-    assert "venue" in warnings_text.lower(), (
-        f"Expected venue warning in {data['warnings']!r}"
-    )
+    assert "venue" in warnings_text.lower(), f"Expected venue warning in {data['warnings']!r}"
     # Batch must still be finalised
     assert len(batches) == 1
     assert batches[0]["is_finalized"] is True
@@ -465,20 +465,21 @@ def test_apply_returns_500_json_on_unexpected_core_failure() -> None:
     the HTTPException path flows through FastAPI's exception handlers and
     then through CORSMiddleware.
     """
-    with patch(
-        "backend.routes.historical_import.apply_historical_batch",
-        new=AsyncMock(side_effect=Exception("simulated unexpected DB crash")),
+    with (
+        patch(
+            "backend.routes.historical_import.apply_historical_batch",
+            new=AsyncMock(side_effect=Exception("simulated unexpected DB crash")),
+        ),
+        TestClient(app) as client,
     ):
-        with TestClient(app) as client:
-            batch_id = _record_batch(client)
-            resp = client.post(
-                f"/api/historical-import/json/batches/{batch_id}/apply",
-                json={"confirm": True},
-            )
+        batch_id = _record_batch(client)
+        resp = client.post(
+            f"/api/historical-import/json/batches/{batch_id}/apply",
+            json={"confirm": True},
+        )
 
     assert resp.status_code == 500, resp.text
     # Must be a JSON response with a detail key (not a raw HTML 500 page)
     body = resp.json()
     assert "detail" in body, f"Expected 'detail' in JSON error body, got: {body!r}"
     assert "unexpected error" in body["detail"].lower() or "Exception" in body["detail"]
-

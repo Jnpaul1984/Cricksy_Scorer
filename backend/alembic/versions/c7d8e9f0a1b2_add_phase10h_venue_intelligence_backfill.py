@@ -64,9 +64,19 @@ def upgrade() -> None:
         ),
         sa.Column("confidence_score", sa.Float(), nullable=True),
         sa.Column("source_type", sa.String(length=64), nullable=True),
-        sa.Column("created_from_import", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "created_from_import",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("false"),
+        ),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("provenance_references", json_type, nullable=False, server_default=sa.text("'[]'")),
+        sa.Column(
+            "provenance_references",
+            json_type,
+            nullable=False,
+            server_default=sa.text("'[]'"),
+        ),
         sa.Column("first_seen", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_seen", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
@@ -118,7 +128,12 @@ def upgrade() -> None:
         sa.Column("source_schema", sa.String(length=64), nullable=True),
         sa.Column("source_system", sa.String(length=64), nullable=True),
         sa.Column("confidence_score", sa.Float(), nullable=True),
-        sa.Column("provenance_reference", json_type, nullable=False, server_default=sa.text("'{}'")),
+        sa.Column(
+            "provenance_reference",
+            json_type,
+            nullable=False,
+            server_default=sa.text("'{}'"),
+        ),
         sa.Column("first_seen", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_seen", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
@@ -133,7 +148,11 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
-        sa.ForeignKeyConstraint(["venue_id"], ["historical_venue_intelligence.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["venue_id"],
+            ["historical_venue_intelligence.id"],
+            ondelete="CASCADE",
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -175,7 +194,12 @@ def upgrade() -> None:
         sa.Column("competition_name", sa.String(length=255), nullable=True),
         sa.Column("season", sa.String(length=64), nullable=True),
         sa.Column("review_required", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-        sa.Column("provenance_references", json_type, nullable=False, server_default=sa.text("'[]'")),
+        sa.Column(
+            "provenance_references",
+            json_type,
+            nullable=False,
+            server_default=sa.text("'[]'"),
+        ),
         sa.Column("resolution_snapshot", json_type, nullable=False, server_default=sa.text("'{}'")),
         sa.Column(
             "created_at",
@@ -189,8 +213,14 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
-        sa.ForeignKeyConstraint(["batch_id"], ["historical_import_batches.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["canonical_venue_id"], ["historical_venue_intelligence.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["batch_id"], ["historical_import_batches.id"], ondelete="SET NULL"
+        ),
+        sa.ForeignKeyConstraint(
+            ["canonical_venue_id"],
+            ["historical_venue_intelligence.id"],
+            ondelete="SET NULL",
+        ),
         sa.ForeignKeyConstraint(["game_id"], ["games.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -247,12 +277,14 @@ def upgrade() -> None:
         sa.Column("queue_state", sa.String(length=32), nullable=False),
         sa.Column("reason", sa.String(length=128), nullable=False),
         sa.Column("review_required", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("provenance_references", json_type, nullable=False, server_default=sa.text("'[]'")),
+        sa.Column(
+            "provenance_references",
+            json_type,
+            nullable=False,
+            server_default=sa.text("'[]'"),
+        ),
         sa.Column(
             "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
         sa.Column("last_seen", sa.DateTime(timezone=True), nullable=False),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
@@ -291,7 +323,12 @@ def upgrade() -> None:
         sa.Column("source_system", sa.String(length=64), nullable=True),
         sa.Column("matches_count", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("game_references", json_type, nullable=False, server_default=sa.text("'[]'")),
-        sa.Column("provenance_references", json_type, nullable=False, server_default=sa.text("'[]'")),
+        sa.Column(
+            "provenance_references",
+            json_type,
+            nullable=False,
+            server_default=sa.text("'[]'"),
+        ),
         sa.Column("review_required", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column(
             "created_at",
@@ -375,7 +412,10 @@ def downgrade() -> None:
         op.f("ix_historical_venue_resolution_queue_decision_id"),
         table_name="historical_venue_resolution_queue",
     )
-    op.drop_index("ix_hist_venue_queue_unique_context", table_name="historical_venue_resolution_queue")
+    op.drop_index(
+        "ix_hist_venue_queue_unique_context",
+        table_name="historical_venue_resolution_queue",
+    )
     op.drop_table("historical_venue_resolution_queue")
 
     op.drop_index(

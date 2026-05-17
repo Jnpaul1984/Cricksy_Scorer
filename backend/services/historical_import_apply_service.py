@@ -338,7 +338,7 @@ async def apply_historical_batch(
                 match_date=match_date,
             )
         historical_meta["player_identity_registry"] = player_identity_registry
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _log.warning(
             "historical_import_apply: player identity registration failed; "
             "game will still be created. batch_id=%s error=%s",
@@ -352,7 +352,7 @@ async def apply_historical_batch(
         warnings.append(
             "Player identity registration encountered an error and was skipped. "
             "The game record was still created successfully. "
-            "Ensure Phase 10E–10G migrations are applied in production."
+            "Ensure Phase 10E-10G migrations are applied in production."
         )
 
     # Phase 10H: Resolve historical venue.
@@ -372,7 +372,7 @@ async def apply_historical_batch(
                 venue_context=venue_context,
             )
         historical_meta["venue_resolution"] = venue_resolution
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _log.warning(
             "historical_import_apply: venue resolution failed; "
             "game will still be created. batch_id=%s error=%s",
@@ -427,22 +427,17 @@ async def rollback_historical_batch(
         return None, warnings, f"Batch '{batch_id}' not found."
 
     if batch.owner_user_id or batch.owner_org_id:
-        user_authorized = (
-            batch.owner_user_id is None
-            or (requester_user_id is not None and requester_user_id == batch.owner_user_id)
+        user_authorized = batch.owner_user_id is None or (
+            requester_user_id is not None and requester_user_id == batch.owner_user_id
         )
-        org_authorized = (
-            batch.owner_org_id is None
-            or (requester_org_id is not None and requester_org_id == batch.owner_org_id)
+        org_authorized = batch.owner_org_id is None or (
+            requester_org_id is not None and requester_org_id == batch.owner_org_id
         )
         if not (user_authorized and org_authorized):
             return (
                 None,
                 warnings,
-                (
-                    f"Batch '{batch_id}' is owned by another user/org. "
-                    "Rollback is not authorized."
-                ),
+                (f"Batch '{batch_id}' is owned by another user/org. Rollback is not authorized."),
             )
 
     if not batch.is_finalized:
@@ -727,22 +722,23 @@ async def apply_historical_deliveries(
     second_innings_runs = 0
     second_innings_wickets = 0
     second_innings_legal_balls = 0
-    second_innings_team = game.batting_team_name or (teams_preview[1] if len(teams_preview) > 1 else None)
-    second_innings_bowling_team = (
-        teams_preview[0] if teams_preview else game.bowling_team_name
+    second_innings_team = game.batting_team_name or (
+        teams_preview[1] if len(teams_preview) > 1 else None
     )
+    second_innings_bowling_team = teams_preview[0] if teams_preview else game.bowling_team_name
     if len(normalized_innings) >= 2:
         inn2 = normalized_innings[1]
         delivs2 = inn2["deliveries"]
         second_innings_team = inn2.get("team") or second_innings_team
         second_innings_bowling_team = (
-            normalized_innings[0].get("team")
-            or second_innings_bowling_team
+            normalized_innings[0].get("team") or second_innings_bowling_team
         )
         second_innings_runs = (
             inn2["runs_explicit"]
             if inn2["runs_explicit"] is not None
-            else sum(int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0) for d in delivs2)
+            else sum(
+                int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0) for d in delivs2
+            )
         )
         second_innings_wickets = (
             inn2["wickets_explicit"]
