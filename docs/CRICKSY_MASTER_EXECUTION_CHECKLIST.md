@@ -3172,7 +3172,7 @@ Paid features are protected correctly and pricing/tier behavior is reliable.
 
 ## Competition-Aware Historical Import Sub-Phase Tracker
 
-> This table tracks all sub-phases of the Competition-Aware Historical Import series (Phase 10A–10D).
+> This table tracks all sub-phases of the Competition-Aware Historical Import series (Phase 10A–10I).
 > Do **not** mark any item complete unless the corresponding PR is merged and CI is green.
 
 | Sub-Phase | Title | Issue | PR | Status |
@@ -3182,6 +3182,11 @@ Paid features are protected correctly and pricing/tier behavior is reliable.
 | Phase 10B | Competition-Aware Historical JSON Import Foundation Implementation | [#278](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/278) | [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279) | ⬜ Pending |
 | Phase 10C | Competition-Aware Import UI + Analyst Workspace Verification | [#280](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/280) | [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281) | ⬜ Pending |
 | Phase 10D | Master Checklist Correction + Historical Match Upload Runbook | (this issue) | (this PR) | ⬜ Pending |
+| Phase 10E | Historical Player Registry + Identity Resolution Foundation | (future issue) | (future PR) | ⬜ Pending |
+| Phase 10F | Player Metadata + Career Profile Backfill | (future issue) | (future PR) | ⬜ Pending |
+| Phase 10G | Competition Squad/Roster Intelligence | (future issue) | (future PR) | ⬜ Pending |
+| Phase 10H | Venue Intelligence Backfill | (future issue) | (future PR) | ⬜ Pending |
+| Phase 10I | Controlled CPL Historical Dataset Import | (future issue) | (future PR) | ⬜ Pending |
 
 ## Status Checklist
 
@@ -3498,6 +3503,10 @@ Do not upload historical matches until:
 
 Always start small and increase batch size only after each previous batch fully passes verification.
 
+> 🚫 **CPL Guardrail:** Do **not** run any 400-file (or similarly large-scale) CPL historical
+> import until Phase 10E, Phase 10F, Phase 10G, and Phase 10H are all implemented, verified,
+> and merged with green CI.
+
 | Step | Batch Size | Condition |
 |---|---|---|
 | 1 | 1 match | Use a single known-good JSON file from your most reliable source |
@@ -3551,6 +3560,273 @@ If a batch must be rolled back:
 2. Call `POST /api/historical-import/rollback/{batch_id}`
 3. Verify the matches no longer appear in Analyst Workspace
 4. Document the reason for rollback before retrying with corrected data
+
+---
+
+# Phase 10E — Historical Player Registry + Identity Resolution Foundation
+
+> **Issue:** (future issue) | **PR:** (future PR)
+
+## Purpose
+
+Create a safe identity resolution foundation for imported source player names, aliases,
+ambiguous names, and canonical Cricksy player records before any large-scale historical import.
+
+## Status Checklist
+
+- [ ] Source player name registry contract defined
+- [ ] Canonical player mapping contract defined
+- [ ] Alias tracking contract defined
+- [ ] Unresolved/ambiguous player review queue contract defined
+- [ ] Deterministic matching rules locked and documented
+- [ ] Blind auto-creation forbidden unless confidence rules are explicitly approved
+- [ ] Governance, tests/validation expectations, and gates approved
+- [ ] Phase 10E implementation PR merged with green CI
+
+## Governance Rules
+
+- Deterministic identity resolution is mandatory before large-scale imports.
+- Unresolved or ambiguous player mappings must enter a review queue.
+- No blind player auto-creation is allowed unless confidence thresholds are locked and auditable.
+- Source provenance for all player identity mappings must be preserved and queryable.
+
+## Gates / Dependency Notes
+
+- Depends on Phase 10B and Phase 10C contracts remaining stable.
+- Must be complete before Phase 10I controlled CPL historical dataset import.
+- No large-batch imports are allowed while ambiguous identity mappings remain unresolved.
+
+## Validation Expectations
+
+- Deterministic matching-rule validation coverage
+- Ambiguous-name queue behavior validation
+- Alias-to-canonical linkage validation
+- Provenance persistence validation for identity decisions
+- Dry-run visibility validation for unresolved identity outcomes
+
+## Acceptance Criteria
+
+- Player identity mapping pipeline is deterministic, auditable, and safe.
+- Ambiguity handling is explicit and reviewable.
+- Provenance is retained for player identity decisions.
+
+## Completion Criteria
+
+Phase 10E is complete when deterministic player identity resolution contracts are implemented,
+validated, and merged with green CI.
+
+---
+
+# Phase 10F — Player Metadata + Career Profile Backfill
+
+> **Issue:** (future issue) | **PR:** (future PR)
+
+## Purpose
+
+Backfill player metadata and career profile intelligence from registered/imported matches using
+safe, provenance-backed update rules.
+
+## Status Checklist
+
+- [ ] Batting style / bowling style / role metadata backfill rules defined
+- [ ] Career timeline foundation rules defined
+- [ ] Competition participation history rules defined
+- [ ] Team history rules defined
+- [ ] Metadata provenance rules defined and locked
+- [ ] Safe backfill constraints defined (no unsafe overwrite behavior)
+- [ ] Governance, tests/validation expectations, and gates approved
+- [ ] Phase 10F implementation PR merged with green CI
+
+## Governance Rules
+
+- Provenance preservation is mandatory for all backfilled metadata and career profile fields.
+- Backfill must be deterministic and must not silently overwrite trusted canonical truth.
+- Unknown/low-confidence metadata must remain reviewable instead of force-written.
+
+## Gates / Dependency Notes
+
+- Depends on Phase 10E identity foundation.
+- Must be complete before Phase 10I controlled CPL historical dataset import.
+- Backfill may proceed only where identity linkage confidence is approved.
+
+## Validation Expectations
+
+- Metadata field-level provenance validation
+- Career timeline consistency validation
+- Team/competition history consistency validation
+- Safe-overwrite and conflict-handling validation
+- Dry-run visibility validation for metadata backfill outcomes
+
+## Acceptance Criteria
+
+- Player metadata and career profile backfill rules are safe, deterministic, and auditable.
+- Provenance is retained for all derived/backfilled profile data.
+- Backfill behavior is bounded by explicit confidence and overwrite policies.
+
+## Completion Criteria
+
+Phase 10F is complete when metadata/career backfill governance and implementation are validated
+and merged with green CI.
+
+---
+
+# Phase 10G — Competition Squad/Roster Intelligence
+
+> **Issue:** (future issue) | **PR:** (future PR)
+
+## Purpose
+
+Build competition-season squad and roster intelligence for franchise, club, international,
+school, academy, and domestic contexts.
+
+## Status Checklist
+
+- [ ] Competition-season squad snapshot rules defined
+- [ ] Playing XI vs named squad vs substitutes modeling rules defined
+- [ ] Team-season roster membership rules defined
+- [ ] Franchise player movement support rules defined
+- [ ] Roster availability foundation rules defined
+- [ ] Governance, tests/validation expectations, and gates approved
+- [ ] Phase 10G implementation PR merged with green CI
+
+## Governance Rules
+
+- Squad/roster records must remain tied to competition, season, team, and source provenance.
+- Playing XI, named squad, and substitutes must remain distinguishable in canonical records.
+- Ambiguous roster membership must remain reviewable instead of force-resolved.
+
+## Gates / Dependency Notes
+
+- Depends on Phase 10E identity resolution and Phase 10F metadata foundations.
+- Must be complete before Phase 10I controlled CPL historical dataset import.
+- Franchise player movement handling must be proven safe before high-volume imports.
+
+## Validation Expectations
+
+- Competition-season roster snapshot validation
+- Playing XI / squad / substitute separation validation
+- Team-season membership consistency validation
+- Franchise movement transition validation
+- Provenance visibility validation for roster intelligence records
+
+## Acceptance Criteria
+
+- Competition-aware roster intelligence is safe, explicit, and auditable.
+- Squad membership and role distinctions are preserved correctly.
+- Provenance is retained for roster sources and transformations.
+
+## Completion Criteria
+
+Phase 10G is complete when roster intelligence governance and implementation are validated and
+merged with green CI.
+
+---
+
+# Phase 10H — Venue Intelligence Backfill
+
+> **Issue:** (future issue) | **PR:** (future PR)
+
+## Purpose
+
+Convert imported match venue strings into reusable venue intelligence records with identity
+resolution, alias handling, and governance-safe review paths.
+
+## Status Checklist
+
+- [ ] Venue identity resolution rules defined
+- [ ] Venue alias tracking rules defined
+- [ ] City/country/ground metadata rules defined
+- [ ] Unresolved venue review queue rules defined
+- [ ] Historical scoring trend foundation rules defined
+- [ ] Governance, tests/validation expectations, and gates approved
+- [ ] Phase 10H implementation PR merged with green CI
+
+## Governance Rules
+
+- Venue identity decisions must be deterministic and auditable.
+- Venue alias mappings must preserve source provenance.
+- Unresolved venue mappings must enter explicit review queues before broad import usage.
+
+## Gates / Dependency Notes
+
+- Depends on Phase 10E identity resolution patterns.
+- Must be complete before Phase 10I controlled CPL historical dataset import.
+- Venue ambiguity must be below approved thresholds before large-batch imports.
+
+## Validation Expectations
+
+- Venue identity resolution validation
+- Venue alias normalization validation
+- City/country/ground metadata completeness validation
+- Unresolved-venue queue behavior validation
+- Provenance and trend-foundation consistency validation
+
+## Acceptance Criteria
+
+- Venue normalization and alias tracking are deterministic and reviewable.
+- Venue intelligence records preserve source lineage.
+- Unresolved venue mappings are safely gated.
+
+## Completion Criteria
+
+Phase 10H is complete when venue intelligence governance and implementation are validated and
+merged with green CI.
+
+---
+
+# Phase 10I — Controlled CPL Historical Dataset Import
+
+> **Issue:** (future issue) | **PR:** (future PR)
+
+## Purpose
+
+Import a controlled CPL historical dataset only after player identity, metadata, roster, and
+venue foundations are implemented and verified.
+
+## Status Checklist
+
+- [ ] Pilot CPL import plan approved
+- [ ] Batch-size controls approved and configured
+- [ ] Dry-run / apply / verify workflow approved
+- [ ] Rollback plan tested and approved
+- [ ] Post-import Analyst Workspace QA checklist approved
+- [ ] Explicit guardrail: no 400-file CPL import until Phase 10E–10H are merged
+- [ ] Governance, tests/validation expectations, and gates approved
+- [ ] Phase 10I implementation PR merged with green CI
+
+## Governance Rules
+
+- No 400-file (or similarly large-scale) CPL import is allowed until Phase 10E–10H foundations
+  are complete, validated, and merged.
+- Deterministic identity resolution and review-queue handling must be active before high-volume
+  CPL imports.
+- Provenance preservation is mandatory for every imported CPL match, player mapping, roster
+  mapping, and venue mapping.
+
+## Gates / Dependency Notes
+
+- Hard dependency: Phase 10E, Phase 10F, Phase 10G, and Phase 10H complete with green CI.
+- Controlled pilot-only import scope until all validation gates pass.
+- Large-scale CPL import remains blocked until post-import QA evidence is approved.
+
+## Validation Expectations
+
+- CPL pilot batch dry-run/apply/verify validation
+- Identity/roster/venue integrity validation on imported CPL samples
+- Provenance completeness validation across all imported CPL entities
+- Analyst Workspace compatibility and no-fabrication QA validation
+- Rollback execution validation on pilot and medium-sized batches
+
+## Acceptance Criteria
+
+- CPL import process is controlled, reversible, and evidence-backed.
+- Required identity, roster, metadata, and venue foundations are proven in production-like QA.
+- Provenance and Analyst Workspace safety expectations are satisfied before scale-up.
+
+## Completion Criteria
+
+Phase 10I is complete when controlled CPL import governance and phased execution validation are
+approved and merged with green CI, with large-scale imports still gated by explicit evidence.
 
 ---
 
@@ -3929,6 +4205,11 @@ Check imports, typing, formatting, migrations, tests, and CI impact before final
     - Phase 10B — Competition-Aware Historical JSON Import Foundation Implementation ([#278](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/278) / [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279))
     - Phase 10C — Competition-Aware Import UI + Analyst Workspace Verification ([#280](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/280) / [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281))
     - Phase 10D — Master Checklist Correction + Historical Match Upload Runbook (this phase)
+    - Phase 10E — Historical Player Registry + Identity Resolution Foundation (future issue/PR)
+    - Phase 10F — Player Metadata + Career Profile Backfill (future issue/PR)
+    - Phase 10G — Competition Squad/Roster Intelligence (future issue/PR)
+    - Phase 10H — Venue Intelligence Backfill (future issue/PR)
+    - Phase 10I — Controlled CPL Historical Dataset Import (future issue/PR)
 13. Phase 11 — Organization Pro + League Operations
 14. Phase 12 — Live Viewer, Streaming + Sponsor Experience
 15. Phase 13 — Media, Highlights + Report Content Engine
