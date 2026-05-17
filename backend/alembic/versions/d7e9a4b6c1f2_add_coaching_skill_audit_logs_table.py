@@ -9,7 +9,7 @@ summaries and must never contain raw video payloads, raw prompts, or other
 unsafe evidence blobs.
 
 Revision ID: d7e9a4b6c1f2
-Revises: c9d8e7f6a5b4
+Revises: d9b1c2e3f4a5
 Create Date: 2026-05-17 00:00:00.000000
 
 """
@@ -22,7 +22,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d7e9a4b6c1f2"
-down_revision: str | None = "c9d8e7f6a5b4"
+down_revision: str | None = "d9b1c2e3f4a5"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
