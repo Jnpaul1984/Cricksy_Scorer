@@ -2982,6 +2982,88 @@ class HistoricalPlayerResolutionQueue(Base):
 
 
 # ---------------------------------------------------------------------------
+# Phase 10G - Competition Squad/Roster Intelligence
+# ---------------------------------------------------------------------------
+
+
+class HistoricalCompetitionRosterStatus(str, enum.Enum):
+    named_squad = "named_squad"
+    playing_xi = "playing_xi"
+    substitute = "substitute"
+    unresolved = "unresolved"
+    unavailable_unknown = "unavailable_unknown"
+
+
+class HistoricalCompetitionRosterEntry(Base):
+    __tablename__ = "historical_competition_roster_entries"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    competition_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    competition_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    season: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    team_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    roster_status: Mapped[HistoricalCompetitionRosterStatus] = mapped_column(
+        SAEnum(HistoricalCompetitionRosterStatus, name="historical_competition_roster_status"),
+        nullable=False,
+        default=HistoricalCompetitionRosterStatus.unavailable_unknown,
+        server_default=HistoricalCompetitionRosterStatus.unavailable_unknown.value,
+        index=True,
+    )
+    canonical_player_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("players.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_player_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("historical_source_player_registry.source_player_id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    source_player_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalized_source_player_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    source_schema: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_system: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    batch_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("historical_import_batches.id", ondelete="SET NULL"), nullable=True
+    )
+    game_id: Mapped[str | None] = mapped_column(String, ForeignKey("games.id", ondelete="SET NULL"))
+    provenance_references: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    conflict_references: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    review_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_hist_comp_roster_unique_context",
+            "source_system",
+            "source_schema",
+            "game_id",
+            "team_name",
+            "roster_status",
+            "normalized_source_player_name",
+            unique=True,
+        ),
+        Index(
+            "ix_hist_comp_roster_comp_season_team",
+            "competition_type",
+            "competition_name",
+            "season",
+            "team_name",
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Phase 8C — AI Insight Review
 # ---------------------------------------------------------------------------
 
