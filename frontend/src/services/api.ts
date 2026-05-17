@@ -794,13 +794,13 @@ export async function getAnalystMatches(): Promise<AnalystMatchListResponse> {
 }
 
 /**
- * Phase 5M: Registry metadata, provenance, and training eligibility for a match.
+ * Phase 5M / Phase 10B: Registry metadata, provenance, and training eligibility for a match.
  * Returned by GET /analytics/matches/{matchId}/registry.
  */
 export interface MatchRegistryResponse {
   match_id: string;
   is_historical: boolean;
-  // Competition context
+  // Competition context (Phase 5M)
   competition: string | null;
   season: string | null;
   venue: string | null;
@@ -809,12 +809,25 @@ export interface MatchRegistryResponse {
   player_count: number;
   innings_count: number;
   has_deliveries: boolean;
-  // Import batch / source provenance
+  // Competition-aware fields (Phase 10B)
+  competition_type: string | null;
+  competition_name: string | null;
+  match_format: string | null;
+  tournament_name: string | null;
+  tournament_round: string | null;
+  venue_context: Record<string, unknown> | null;
+  roster_snapshot_available: boolean;
+  // Import batch / source provenance (Phase 5M)
   import_batch_id: string | null;
   source_filename: string | null;
   source_format: string | null;
   source_type: string;
   imported_at: string | null;
+  // Provenance adapter lineage (Phase 10B)
+  source_schema: string | null;
+  source_schema_version: string | null;
+  adapter_id: string | null;
+  adapter_version: string | null;
   // Validation / registration / training eligibility
   validation_status: string; // "valid"|"invalid"|"unsupported"|"not_applicable"|"unknown"
   registration_status: string; // "registered"|"not_registered"
