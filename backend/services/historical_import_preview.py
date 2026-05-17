@@ -814,6 +814,7 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         canonical_preview.competition_context.competition_type,
         source_schema_version=source_schema_version,
     )
+    canonical_preview_out = canonical_preview if status == "valid" else None
     semantic_key = _derive_semantic_key(parsed, metadata_preview, team_names, competition_context)
 
     response = HistoricalImportDryRunResponse(
@@ -823,7 +824,7 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         detected_sections=detected_sections,
         metadata_preview=metadata_preview,
         schema_classification=schema_classification,
-        canonical_preview=canonical_preview,
+        canonical_preview=canonical_preview_out,
         teams_preview=team_names,
         innings_count=len(innings_nodes),
         delivery_count=total_deliveries,

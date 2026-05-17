@@ -195,6 +195,7 @@ def test_dry_run_invalid_json_payload_returns_structured_error() -> None:
     assert response.status_code == 400
     data = response.json()
     assert data["status"] == "invalid"
+    assert data["canonical_preview"] is None
     assert any(issue["code"] == "INVALID_JSON" for issue in data["errors"])
 
 
@@ -205,6 +206,7 @@ def test_dry_run_unsupported_shape_returns_structured_error() -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "unsupported"
+    assert data["canonical_preview"] is None
     assert data["schema_classification"]["source_schema_category"] == "unknown_unsupported_json"
     assert any(issue["code"] == "UNSUPPORTED_FORMAT" for issue in data["errors"])
 
@@ -247,6 +249,7 @@ def test_dry_run_missing_innings_and_deliveries_flags_errors() -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["status"] in {"invalid", "unsupported"}
+    assert data["canonical_preview"] is None
     assert any(issue["code"] == "MISSING_INNINGS" for issue in data["errors"])
 
 
@@ -263,6 +266,7 @@ def test_dry_run_innings_without_delivery_events_flags_error() -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "invalid"
+    assert data["canonical_preview"] is None
     assert any(issue["code"] == "MISSING_DELIVERY_EVENTS" for issue in data["errors"])
 
 
@@ -284,6 +288,7 @@ def test_dry_run_requires_two_teams_in_metadata() -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "invalid"
+    assert data["canonical_preview"] is None
     assert any(issue["code"] == "MISSING_TEAMS" for issue in data["errors"])
 
 
