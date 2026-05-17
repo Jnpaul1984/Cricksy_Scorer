@@ -2844,6 +2844,134 @@ class HistoricalImportBatch(Base):
 
 
 # ---------------------------------------------------------------------------
+# Phase 10E - Historical Player Registry + Identity Resolution
+# ---------------------------------------------------------------------------
+
+
+class HistoricalPlayerResolutionState(str, enum.Enum):
+    unresolved = "unresolved"
+    auto_resolved = "auto_resolved"
+    manually_resolved = "manually_resolved"
+    ambiguous = "ambiguous"
+    blocked = "blocked"
+    duplicate = "duplicate"
+
+
+class HistoricalSourcePlayerRegistry(Base):
+    __tablename__ = "historical_source_player_registry"
+
+    source_player_id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    source_player_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    source_schema: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_system: Mapped[str] = mapped_column(String(64), nullable=False)
+    resolution_state: Mapped[HistoricalPlayerResolutionState] = mapped_column(
+        SAEnum(HistoricalPlayerResolutionState, name="historical_player_resolution_state"),
+        nullable=False,
+        default=HistoricalPlayerResolutionState.unresolved,
+        server_default=HistoricalPlayerResolutionState.unresolved.value,
+        index=True,
+    )
+    canonical_player_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("players.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mapping_method: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reviewed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    manual_override: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    first_seen: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    match_references: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    competition_references: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    provenance_references: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    alias_references: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_hist_source_player_unique_key",
+            "source_system",
+            "source_schema",
+            "normalized_name",
+            unique=True,
+        ),
+    )
+
+
+class HistoricalSourcePlayerAlias(Base):
+    __tablename__ = "historical_source_player_aliases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_player_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("historical_source_player_registry.source_player_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    alias_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalized_alias: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    source_schema: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_system: Mapped[str] = mapped_column(String(64), nullable=False)
+    provenance_reference: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    first_seen: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_hist_source_player_alias_unique",
+            "source_player_id",
+            "normalized_alias",
+            "source_schema",
+            "source_system",
+            unique=True,
+        ),
+    )
+
+
+class HistoricalPlayerResolutionQueue(Base):
+    __tablename__ = "historical_player_resolution_queue"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    source_player_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("historical_source_player_registry.source_player_id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    queue_state: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    reason: Mapped[str] = mapped_column(String(128), nullable=False, default="unresolved")
+    resolution_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_seen: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# ---------------------------------------------------------------------------
 # Phase 8C — AI Insight Review
 # ---------------------------------------------------------------------------
 

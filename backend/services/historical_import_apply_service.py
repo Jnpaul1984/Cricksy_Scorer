@@ -55,6 +55,7 @@ from backend.services.historical_import_delivery_service import (
     validate_innings_totals,
     verify_payload_hash,
 )
+from backend.services.historical_player_identity_service import register_historical_source_players
 from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 
 # Batch statuses from which an apply is allowed.
@@ -187,6 +188,7 @@ async def apply_historical_batch(
     source_provenance: dict[str, Any] = canonical_preview.get("source_provenance") or {}
     schema_classification: dict[str, Any] = dry_run.get("schema_classification") or {}
     teams_preview: list[str] = dry_run.get("teams_preview") or []
+    player_names_found: list[str] = dry_run.get("player_names_found") or []
 
     # Gate 7: teams must be derivable
     if len(teams_preview) < 2:
@@ -303,6 +305,25 @@ async def apply_historical_batch(
 
     # Flush to detect constraint violations before finalizing the batch
     await db.flush()
+
+    # Finalize the batch - mark as applied with the created game ID
+    player_identity_registry = await register_historical_source_players(
+        db,
+        batch_id=batch_id,
+        game_id=game_id,
+        source_schema=source_provenance.get("source_schema")
+        or schema_classification.get("source_schema")
+        or "unknown",
+        source_system="historical_import_json",
+        source_provenance=source_provenance,
+        competition_context=competition_context,
+        roster_snapshot=roster_snapshot,
+        player_names=player_names_found,
+    )
+    historical_meta = dict(phases.get("historical_import") or {})
+    historical_meta["player_identity_registry"] = player_identity_registry
+    game.phases = {**phases, "historical_import": historical_meta}
+    db.add(game)
 
     # Finalize the batch - mark as applied with the created game ID
     batch.is_finalized = True
