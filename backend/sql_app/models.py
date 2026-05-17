@@ -1192,6 +1192,30 @@ class PlayerDevelopmentPlan(Base):
         super().__init__(**kwargs)
 
 
+class CoachingSkillAuditLog(Base):
+    __tablename__ = "coaching_skill_audit_logs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    skill_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    skill_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    triggered_by_user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    reviewed_by_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    player_profile_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    plan_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    video_session_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    video_analysis_job_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    approval_decision: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    approval_state_after: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    coach_approved_after: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    organization_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    input_summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
+    output_summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+
 class PlayerDevelopmentGoal(Base):
     __tablename__ = "player_development_goals"
 

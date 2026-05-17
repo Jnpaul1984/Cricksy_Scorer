@@ -11,6 +11,9 @@ from backend import security
 from backend.services.player_development_dashboard_service import (
     get_team_development_overview,
 )
+from backend.services.coaching_skill_audit_service import (
+    write_player_development_review_audit_event,
+)
 from backend.services.player_development_plan_service import (
     generate_draft_player_development_plan,
     get_draft_plan_by_id,
@@ -259,9 +262,24 @@ async def review_player_development_plan(
         )
 
     approval_state, coach_approved = _review_decision_to_state(payload.decision)
+    reviewed_at = dt.datetime.now(UTC)
     plan.approval_state = approval_state
     plan.coach_approved = coach_approved
-    await db.commit()
+    try:
+        await write_player_development_review_audit_event(
+            db=db,
+            plan=plan,
+            decision=payload.decision,
+            reviewer=current_user,
+            reviewer_notes=payload.reviewer_notes,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to persist governed audit record for review action",
+        ) from None
 
     return schemas.PlayerDevelopmentPlanReviewResponse(
         plan_id=plan.id,
@@ -269,7 +287,7 @@ async def review_player_development_plan(
         coach_approved=plan.coach_approved,
         reviewer_notes=payload.reviewer_notes,
         reviewed_by_user_id=current_user.id,
-        reviewed_at=dt.datetime.now(UTC),
+        reviewed_at=reviewed_at,
     )
 
 

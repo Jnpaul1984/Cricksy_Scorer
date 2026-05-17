@@ -3041,9 +3041,14 @@ Provide visible Coach Pro Plus UI workflow for review/approval; backend-only del
 #### Phase 9H.6 — Audit Log + Safety Controls
 
 **Status**
-- PENDING
+- COMPLETE
 
 Ensure governed skill runs, review actions, approvals, and publication decisions are fully auditable and policy-enforced.
+
+- Added governed `coaching_skill_audit_logs` persistence plus `coaching_skill_audit_service.py` to record safe review-decision audit events for player-development recommendation workflows.
+- `PATCH /api/player-development/plans/{plan_id}/review` now writes `review_approved`, `review_rejected`, or `review_changes_requested` audit rows in the same transaction and fails safely if audit persistence cannot be completed.
+- Audit rows capture plan/player/reviewer/video IDs, approval outcome, safe input/output summaries, and strip raw frame/prompt/token payloads instead of persisting unsafe evidence blobs.
+- Validation passed: `python -m pytest -q tests/test_coaching_skill_audit_log.py tests/test_player_development_approval_gate.py tests/test_player_development_recommendation_output.py tests/test_video_evidence_to_skill_input_mapping.py tests/test_coaching_video_evidence_skill_contract.py`, `ruff check .`, `ruff format --check .`, `mypy --config-file pyproject.toml --explicit-package-bases .`, and `alembic upgrade head` against local Postgres.
 
 #### Phase 9H.7 — Regression + Manual QA
 
