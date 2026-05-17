@@ -660,6 +660,8 @@ async def historical_json_dry_run(
         top_level_keys=response.top_level_keys,
         detected_sections=response.detected_sections,
         metadata_preview=response.metadata_preview,
+        schema_classification=response.schema_classification,
+        canonical_preview=response.canonical_preview,
         teams_preview=response.teams_preview,
         innings_count=response.innings_count,
         delivery_count=response.delivery_count,

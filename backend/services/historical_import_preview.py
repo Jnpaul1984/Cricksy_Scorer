@@ -5,12 +5,17 @@ import json
 from typing import Any
 
 from backend.api.schemas.historical_import import (
+    HistoricalImportCanonicalPreview,
+    HistoricalImportCompetitionContext,
     HistoricalImportDetectedSections,
     HistoricalImportDryRunResponse,
     HistoricalImportDuplicatePreview,
     HistoricalImportInningsPreview,
     HistoricalImportIssue,
     HistoricalImportMetadataPreview,
+    HistoricalImportRosterTeamSnapshot,
+    HistoricalImportSchemaClassification,
+    HistoricalImportVenueContext,
 )
 from backend.domain.constants import norm_extra
 
@@ -22,6 +27,24 @@ DUPLICATE_TRACKING_MESSAGE_NO_DB = (
 )
 # Keep old name for backwards compat with any external references
 DUPLICATE_TRACKING_MESSAGE = DUPLICATE_TRACKING_MESSAGE_NO_DB
+ADAPTER_ID = "historical_json_competition_adapter"
+ADAPTER_VERSION = "10b.1"
+_INTERNATIONAL_TEAM_HINTS = {
+    "india",
+    "australia",
+    "england",
+    "new zealand",
+    "south africa",
+    "pakistan",
+    "sri lanka",
+    "bangladesh",
+    "afghanistan",
+    "west indies",
+    "ireland",
+    "zimbabwe",
+    "netherlands",
+    "scotland",
+}
 
 
 def _hash_payload(payload: bytes) -> str:
@@ -38,6 +61,7 @@ def _derive_semantic_key(
     parsed: dict[str, Any],
     metadata_preview: HistoricalImportMetadataPreview,
     team_names: list[str],
+    competition_context: HistoricalImportCompetitionContext,
 ) -> str | None:
     """Derive a stable semantic key for duplicate detection.
 
@@ -51,7 +75,18 @@ def _derive_semantic_key(
     if len(team_names) < 2:
         return None
     sorted_teams = sorted(t.strip().lower() for t in team_names)
-    return "|".join([match_type.strip().lower(), date.strip(), *sorted_teams])
+    competition_name = (competition_context.competition_name or "").strip().lower()
+    season = (competition_context.season or "").strip().lower()
+    return "|".join(
+        [
+            competition_context.competition_type,
+            competition_name,
+            season,
+            match_type.strip().lower(),
+            date.strip(),
+            *sorted_teams,
+        ]
+    )
 
 
 def _as_str(value: Any) -> str | None:
@@ -63,6 +98,16 @@ def _as_str(value: Any) -> str | None:
 def _first_str(values: Any) -> str | None:
     if isinstance(values, list) and values:
         return _as_str(values[0])
+    return None
+
+
+def _stringify_scalar(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return _as_str(value)
+    if isinstance(value, (int, float)):
+        return str(value)
     return None
 
 
@@ -175,6 +220,204 @@ def _extract_players_from_teams(payload: dict[str, Any]) -> set[str]:
                     _consume_player_entry(p)
 
     return players
+
+
+def _extract_roster_snapshot(
+    payload: dict[str, Any], team_names: list[str]
+) -> list[HistoricalImportRosterTeamSnapshot]:
+    info_payload = payload.get("info")
+    info = info_payload if isinstance(info_payload, dict) else {}
+    info_players = info.get("players")
+    players_map = info_players if isinstance(info_players, dict) else {}
+    snapshots: list[HistoricalImportRosterTeamSnapshot] = []
+
+    for team_name in team_names:
+        roster_raw = players_map.get(team_name)
+        roster = (
+            [p.strip() for p in roster_raw if isinstance(p, str) and p.strip()]
+            if isinstance(roster_raw, list)
+            else []
+        )
+        snapshots.append(
+            HistoricalImportRosterTeamSnapshot(
+                team_name=team_name,
+                playing_xi=list(roster),
+                named_squad=list(roster),
+                substitutes=[],
+                unresolved_entries=[],
+                mapping_confidence="high" if roster else "unknown",
+            )
+        )
+    return snapshots
+
+
+def _classify_competition_type(
+    event_name: str | None,
+    teams: list[str],
+) -> tuple[str, str]:
+    if event_name:
+        lowered = event_name.lower()
+        if any(token in lowered for token in ("premier league", "ipl", "cpl", "sa20", "hundred")):
+            return "franchise", "inferred"
+        if any(token in lowered for token in ("academy",)):
+            return "academy", "inferred"
+        if any(token in lowered for token in ("school", "u-19 school", "schools")):
+            return "school", "inferred"
+        if any(token in lowered for token in ("club", "county", "domestic", "ranji", "super50")):
+            return "domestic", "inferred"
+        if any(token in lowered for token in ("world cup", "icc", "international", "test championship")):
+            return "international", "inferred"
+
+    normalized_teams = {team.strip().lower() for team in teams if team.strip()}
+    if normalized_teams and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS):
+        return "international", "inferred"
+
+    return "unknown", "unknown"
+
+
+def _classify_schema(
+    detected_format: str, competition_type: str, source_schema_version: str | None = None
+) -> HistoricalImportSchemaClassification:
+    if detected_format == "cricksy_fixture":
+        category = "cricksy_internal_json"
+    elif detected_format == "cricsheet_json":
+        if competition_type == "franchise":
+            category = "franchise_tournament_json"
+        elif competition_type == "international":
+            category = "international_match_json"
+        elif competition_type in {"domestic", "club"}:
+            category = "domestic_club_match_json"
+        elif competition_type in {"school", "academy"}:
+            category = "school_academy_match_json"
+        else:
+            category = "cricsheet_style_json"
+    else:
+        category = "unknown_unsupported_json"
+
+    return HistoricalImportSchemaClassification(
+        source_schema_category=category,
+        source_schema=detected_format,
+        source_schema_version=source_schema_version,
+        adapter_id=ADAPTER_ID,
+        adapter_version=ADAPTER_VERSION,
+    )
+
+
+def _build_canonical_preview(
+    parsed: dict[str, Any],
+    metadata_preview: HistoricalImportMetadataPreview,
+    team_names: list[str],
+    innings_preview: list[HistoricalImportInningsPreview],
+    detected_format: str,
+    source_hash: str,
+    warnings: list[HistoricalImportIssue],
+    errors: list[HistoricalImportIssue],
+) -> tuple[HistoricalImportCanonicalPreview, HistoricalImportCompetitionContext]:
+    info_payload = parsed.get("info")
+    info = info_payload if isinstance(info_payload, dict) else {}
+    meta_payload = parsed.get("meta")
+    meta = meta_payload if isinstance(meta_payload, dict) else {}
+    source_schema_version = _as_str(meta.get("data_version"))
+    event_payload = info.get("event") if isinstance(info.get("event"), dict) else {}
+    event_name = metadata_preview.event_name
+
+    competition_type, competition_type_status = _classify_competition_type(event_name, team_names)
+    competition_context = HistoricalImportCompetitionContext(
+        competition_type=competition_type,  # type: ignore[arg-type]
+        competition_name=event_name,
+        competition_stage=_as_str(event_payload.get("stage")),
+        season=metadata_preview.season,
+        match_format=(metadata_preview.match_type or "unknown").lower(),
+        tournament_name=event_name,
+        tournament_round=_stringify_scalar(event_payload.get("match_number"))
+        or _as_str(event_payload.get("group"))
+        or _as_str(event_payload.get("round")),
+        value_status={
+            "competition_type": competition_type_status,  # type: ignore[dict-item]
+            "competition_name": "source" if event_name else "missing",
+            "season": "source" if metadata_preview.season else "missing",
+            "match_format": "source" if metadata_preview.match_type else "unknown",
+        },
+    )
+
+    venue_raw = _as_str(parsed.get("venue")) or _as_str(info.get("venue"))
+    venue_context = HistoricalImportVenueContext(
+        venue_name=venue_raw,
+        source_venue_raw=venue_raw,
+        venue_resolution_status="resolved" if venue_raw else "unknown",
+    )
+    if venue_raw is None:
+        warnings.append(
+            HistoricalImportIssue(
+                code="VENUE_UNKNOWN",
+                message="Venue metadata is missing; venue context remains unknown.",
+                severity="warning",
+                path="venue_context",
+            )
+        )
+
+    roster_snapshot = _extract_roster_snapshot(parsed, team_names)
+    if not any(team.playing_xi for team in roster_snapshot):
+        warnings.append(
+            HistoricalImportIssue(
+                code="ROSTER_SNAPSHOT_MISSING",
+                message="Roster snapshot was not present in source payload.",
+                severity="warning",
+                path="squad_roster_snapshot",
+            )
+        )
+    if competition_type == "unknown":
+        warnings.append(
+            HistoricalImportIssue(
+                code="COMPETITION_TYPE_UNKNOWN",
+                message="Competition type could not be deterministically resolved from source.",
+                severity="warning",
+                path="competition_context.competition_type",
+            )
+        )
+
+    schema_classification = _classify_schema(
+        detected_format, competition_type, source_schema_version=source_schema_version
+    )
+    canonical = HistoricalImportCanonicalPreview(
+        match_metadata={
+            "match_type": metadata_preview.match_type,
+            "match_date": metadata_preview.date,
+            "teams": team_names,
+        },
+        competition_context=competition_context,
+        tournament_season_context={
+            "season": metadata_preview.season,
+            "tournament_name": event_name,
+            "tournament_round": competition_context.tournament_round,
+        },
+        venue_context=venue_context,
+        team_context={"teams": team_names},
+        squad_roster_snapshot=roster_snapshot,
+        player_identity_mapping={
+            "mapping_status": "source_names_only",
+            "unresolved_entries": [],
+            "deterministic_blocking": False,
+        },
+        innings_summaries=[inning.model_dump(mode="python") for inning in innings_preview],
+        delivery_events={"count": sum(inn.deliveries for inn in innings_preview)},
+        result_metadata={"result": metadata_preview.result},
+        source_provenance={
+            "source_schema": schema_classification.source_schema,
+            "source_schema_version": schema_classification.source_schema_version,
+            "adapter_id": schema_classification.adapter_id,
+            "adapter_version": schema_classification.adapter_version,
+            "source_hash_sha256": source_hash,
+            "raw_competition_name": event_name,
+            "source_venue_raw": venue_raw,
+        },
+        validation_report={
+            "warning_count": len(warnings),
+            "error_count": len(errors),
+            "issues": [issue.model_dump(mode="python") for issue in [*warnings, *errors]],
+        },
+    )
+    return canonical, competition_context
 
 
 def _extract_deliveries_from_overs(overs: Any) -> list[dict[str, Any]]:
@@ -376,6 +619,7 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
                 tracking_available=False,
                 message=DUPLICATE_TRACKING_MESSAGE,
             ),
+            schema_classification=_classify_schema("unknown", "unknown"),
         )
         return 400, response
 
@@ -407,6 +651,7 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
                 tracking_available=False,
                 message=DUPLICATE_TRACKING_MESSAGE,
             ),
+            schema_classification=_classify_schema("unknown", "unknown"),
         )
         return 400, response
 
@@ -436,6 +681,7 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
                 tracking_available=False,
                 message=DUPLICATE_TRACKING_MESSAGE,
             ),
+            schema_classification=_classify_schema("unknown", "unknown"),
         )
         return 400, response
 
@@ -550,7 +796,25 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         status = "valid"
 
     normalized_hash = _hash_payload(_to_canonical_json_bytes(parsed))
-    semantic_key = _derive_semantic_key(parsed, metadata_preview, team_names)
+    canonical_preview, competition_context = _build_canonical_preview(
+        parsed,
+        metadata_preview,
+        team_names,
+        innings_preview,
+        detected_format,
+        normalized_hash,
+        warnings,
+        errors,
+    )
+    meta_payload = parsed.get("meta")
+    meta = meta_payload if isinstance(meta_payload, dict) else {}
+    source_schema_version = _as_str(meta.get("data_version"))
+    schema_classification = _classify_schema(
+        detected_format,
+        canonical_preview.competition_context.competition_type,
+        source_schema_version=source_schema_version,
+    )
+    semantic_key = _derive_semantic_key(parsed, metadata_preview, team_names, competition_context)
 
     response = HistoricalImportDryRunResponse(
         status=status,
@@ -558,6 +822,8 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         top_level_keys=sorted(parsed.keys()),
         detected_sections=detected_sections,
         metadata_preview=metadata_preview,
+        schema_classification=schema_classification,
+        canonical_preview=canonical_preview,
         teams_preview=team_names,
         innings_count=len(innings_nodes),
         delivery_count=total_deliveries,

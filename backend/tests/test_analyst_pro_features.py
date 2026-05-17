@@ -813,6 +813,9 @@ async def test_match_registry_for_live_match_returns_not_historical(client: Test
     assert data["blocking_reason"] == "not_a_historical_import"
     assert data["import_batch_id"] is None
     assert data["source_filename"] is None
+    assert data["competition_type"] is None
+    assert data["source_schema"] is None
+    assert data["roster_snapshot_available"] is False
 
 
 async def test_match_registry_returns_404_for_unknown_match(client: TestClient) -> None:
@@ -872,6 +875,15 @@ async def test_match_registry_for_applied_historical_import(client: TestClient) 
     assert data["innings_count"] >= 1
     # Source provenance fields must be present
     assert data["source_format"] is not None
+    assert data["source_schema"] == "cricksy_fixture"
+    assert data["adapter_id"] == "historical_json_competition_adapter"
+    assert data["adapter_version"] == "10b.1"
+    assert data["competition_type"] == "unknown"
+    assert data["competition_name"] is None
+    assert data["match_format"] == "t20"
+    assert isinstance(data["venue_context"], dict)
+    assert data["venue_context"]["venue_name"] == "Generic Cricket Ground"
+    assert data["roster_snapshot_available"] is True
     assert data["imported_at"] is not None
 
 
@@ -907,4 +919,3 @@ async def test_match_registry_cross_org_blocked(client: TestClient) -> None:
         headers=_auth_headers(other_token),
     )
     assert blocked_resp.status_code == 404
-
