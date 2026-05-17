@@ -180,6 +180,12 @@ async def apply_historical_batch(
     # Extract metadata from the stored dry-run summary
     dry_run: dict[str, Any] = batch.dry_run_summary or {}
     metadata: dict[str, Any] = dry_run.get("metadata_preview") or {}
+    canonical_preview: dict[str, Any] = dry_run.get("canonical_preview") or {}
+    competition_context: dict[str, Any] = canonical_preview.get("competition_context") or {}
+    venue_context: dict[str, Any] = canonical_preview.get("venue_context") or {}
+    roster_snapshot: list[dict[str, Any]] = canonical_preview.get("squad_roster_snapshot") or []
+    source_provenance: dict[str, Any] = canonical_preview.get("source_provenance") or {}
+    schema_classification: dict[str, Any] = dry_run.get("schema_classification") or {}
     teams_preview: list[str] = dry_run.get("teams_preview") or []
 
     # Gate 7: teams must be derivable
@@ -237,6 +243,22 @@ async def apply_historical_batch(
             "season": metadata.get("season"),
             "match_number": metadata.get("match_number"),
             "source_dates": metadata.get("source_dates") or [],
+            "competition_type": competition_context.get("competition_type"),
+            "competition_name": competition_context.get("competition_name"),
+            "competition_stage": competition_context.get("competition_stage"),
+            "match_format": competition_context.get("match_format"),
+            "tournament_name": competition_context.get("tournament_name"),
+            "tournament_round": competition_context.get("tournament_round"),
+            "venue_context": venue_context,
+            "source_schema": source_provenance.get("source_schema")
+            or schema_classification.get("source_schema"),
+            "source_schema_version": source_provenance.get("source_schema_version")
+            or schema_classification.get("source_schema_version"),
+            "adapter_id": source_provenance.get("adapter_id")
+            or schema_classification.get("adapter_id"),
+            "adapter_version": source_provenance.get("adapter_version")
+            or schema_classification.get("adapter_version"),
+            "roster_snapshot_available": bool(roster_snapshot),
             "is_historical": True,
         },
         "historical_innings_summary": innings_summary,

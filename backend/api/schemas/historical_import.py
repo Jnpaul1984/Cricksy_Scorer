@@ -32,6 +32,76 @@ class HistoricalImportMetadataPreview(BaseModel):
     source_dates: list[str] = Field(default_factory=list)
 
 
+class HistoricalImportSchemaClassification(BaseModel):
+    source_schema_category: Literal[
+        "cricksy_internal_json",
+        "cricsheet_style_json",
+        "franchise_tournament_json",
+        "international_match_json",
+        "domestic_club_match_json",
+        "school_academy_match_json",
+        "unknown_unsupported_json",
+    ]
+    source_schema: str
+    source_schema_version: str | None = None
+    adapter_id: str
+    adapter_version: str
+
+
+class HistoricalImportCompetitionContext(BaseModel):
+    competition_type: Literal[
+        "franchise",
+        "club",
+        "international",
+        "domestic",
+        "school",
+        "academy",
+        "unknown",
+    ] = "unknown"
+    competition_name: str | None = None
+    competition_stage: str | None = None
+    season: str | None = None
+    match_format: str = "unknown"
+    tournament_name: str | None = None
+    tournament_round: str | None = None
+    value_status: dict[str, Literal["source", "inferred", "missing", "unknown"]] = Field(
+        default_factory=dict
+    )
+
+
+class HistoricalImportVenueContext(BaseModel):
+    venue_name: str | None = None
+    city: str | None = None
+    country: str | None = None
+    ground_code: str | None = None
+    source_venue_raw: str | None = None
+    venue_resolution_status: Literal["resolved", "unresolved", "unknown"] = "unknown"
+
+
+class HistoricalImportRosterTeamSnapshot(BaseModel):
+    team_name: str
+    playing_xi: list[str] = Field(default_factory=list)
+    named_squad: list[str] = Field(default_factory=list)
+    substitutes: list[str] = Field(default_factory=list)
+    unresolved_entries: list[str] = Field(default_factory=list)
+    mapping_confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+
+
+class HistoricalImportCanonicalPreview(BaseModel):
+    match_metadata: dict[str, object] = Field(default_factory=dict)
+    competition_context: HistoricalImportCompetitionContext
+    tournament_season_context: dict[str, object] = Field(default_factory=dict)
+    venue_context: HistoricalImportVenueContext
+    team_context: dict[str, object] = Field(default_factory=dict)
+    squad_roster_snapshot: list[HistoricalImportRosterTeamSnapshot] = Field(default_factory=list)
+    player_identity_mapping: dict[str, object] = Field(default_factory=dict)
+    innings_summaries: list[dict[str, object]] = Field(default_factory=list)
+    delivery_events: dict[str, object] = Field(default_factory=dict)
+    result_metadata: dict[str, object] = Field(default_factory=dict)
+    source_provenance: dict[str, object] = Field(default_factory=dict)
+    validation_report: dict[str, object] = Field(default_factory=dict)
+
+
 class HistoricalImportInningsPreview(BaseModel):
     inning_no: int
     team: str | None = None
@@ -58,6 +128,8 @@ class HistoricalImportDryRunResponse(BaseModel):
     top_level_keys: list[str] = Field(default_factory=list)
     detected_sections: HistoricalImportDetectedSections
     metadata_preview: HistoricalImportMetadataPreview
+    schema_classification: HistoricalImportSchemaClassification | None = None
+    canonical_preview: HistoricalImportCanonicalPreview | None = None
     teams_preview: list[str] = Field(default_factory=list)
     innings_count: int = 0
     delivery_count: int = 0

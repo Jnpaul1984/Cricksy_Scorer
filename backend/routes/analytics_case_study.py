@@ -78,6 +78,10 @@ def _historical_import_meta(game: Game) -> dict[str, Any] | None:
     return None
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 @router.get("", response_model=AnalystMatchListResponse)
 async def list_analyst_matches(
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
@@ -253,6 +257,20 @@ async def get_match_registry(
         batch = batch_result.scalar_one_or_none()
 
     if batch is not None:
+        dry_run_summary = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
+        canonical_preview = _as_dict(dry_run_summary.get("canonical_preview"))
+        competition_context = _as_dict(canonical_preview.get("competition_context"))
+        source_provenance = _as_dict(canonical_preview.get("source_provenance"))
+        roster_snapshot = (
+            canonical_preview.get("squad_roster_snapshot")
+            if isinstance(canonical_preview.get("squad_roster_snapshot"), list)
+            else []
+        )
+        venue_context = hist_meta.get("venue_context")
+        if not isinstance(venue_context, dict):
+            canonical_venue_context = _as_dict(canonical_preview.get("venue_context"))
+            venue_context = canonical_venue_context or None
+
         # Derive training eligibility (mirrors existing training-status endpoint logic)
         blocking_reason: str | None = None
         if batch.status in {"scanned", "metadata_extracted", "pending_full_import"}:
@@ -277,16 +295,36 @@ async def get_match_registry(
             match_id=match_id,
             is_historical=True,
             competition=hist_meta.get("event_name"),
+            competition_type=hist_meta.get("competition_type")
+            or competition_context.get("competition_type"),
+            competition_name=hist_meta.get("competition_name")
+            or competition_context.get("competition_name")
+            or hist_meta.get("event_name"),
+            match_format=hist_meta.get("match_format") or competition_context.get("match_format"),
+            tournament_name=hist_meta.get("tournament_name")
+            or competition_context.get("tournament_name"),
+            tournament_round=hist_meta.get("tournament_round")
+            or competition_context.get("tournament_round"),
             season=hist_meta.get("season"),
             venue=hist_meta.get("venue"),
+            venue_context=venue_context,
             teams=f"{team_a_name} vs {team_b_name}",
             match_number=hist_meta.get("match_number"),
             player_count=player_count,
             innings_count=innings_count,
             has_deliveries=deliveries_imported,
+            roster_snapshot_available=bool(
+                hist_meta.get("roster_snapshot_available") or roster_snapshot
+            ),
             import_batch_id=batch.id,
             source_filename=batch.source_filename,
             source_format=batch.source_format,
+            source_schema=hist_meta.get("source_schema") or source_provenance.get("source_schema"),
+            source_schema_version=hist_meta.get("source_schema_version")
+            or source_provenance.get("source_schema_version"),
+            adapter_id=hist_meta.get("adapter_id") or source_provenance.get("adapter_id"),
+            adapter_version=hist_meta.get("adapter_version")
+            or source_provenance.get("adapter_version"),
             source_type="json",
             # batch.created_at is when the dry-run/preview batch record was created,
             # i.e. when the import process was initiated by the user.
@@ -302,16 +340,27 @@ async def get_match_registry(
         match_id=match_id,
         is_historical=True,
         competition=hist_meta.get("event_name"),
+        competition_type=hist_meta.get("competition_type"),
+        competition_name=hist_meta.get("competition_name") or hist_meta.get("event_name"),
+        match_format=hist_meta.get("match_format"),
+        tournament_name=hist_meta.get("tournament_name"),
+        tournament_round=hist_meta.get("tournament_round"),
         season=hist_meta.get("season"),
         venue=hist_meta.get("venue"),
+        venue_context=hist_meta.get("venue_context"),
         teams=f"{team_a_name} vs {team_b_name}",
         match_number=hist_meta.get("match_number"),
         player_count=player_count,
         innings_count=innings_count,
         has_deliveries=deliveries_imported,
+        roster_snapshot_available=bool(hist_meta.get("roster_snapshot_available")),
         import_batch_id=batch_id,
         source_filename=None,
         source_format=None,
+        source_schema=hist_meta.get("source_schema"),
+        source_schema_version=hist_meta.get("source_schema_version"),
+        adapter_id=hist_meta.get("adapter_id"),
+        adapter_version=hist_meta.get("adapter_version"),
         source_type="json",
         imported_at=None,
         validation_status="unknown",

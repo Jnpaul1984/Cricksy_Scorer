@@ -123,18 +123,29 @@ class MatchRegistryResponse(BaseModel):
 
     # Competition context from historical metadata
     competition: str | None = None  # event_name from historical import
+    competition_type: str | None = None
+    competition_name: str | None = None
+    match_format: str | None = None
+    tournament_name: str | None = None
+    tournament_round: str | None = None
     season: str | None = None
     venue: str | None = None
+    venue_context: dict[str, Any] | None = None
     teams: str | None = None
     match_number: int | None = None
     player_count: int = 0
     innings_count: int = 0
     has_deliveries: bool = False
+    roster_snapshot_available: bool = False
 
     # Import batch / source provenance
     import_batch_id: str | None = None
     source_filename: str | None = None
     source_format: str | None = None
+    source_schema: str | None = None
+    source_schema_version: str | None = None
+    adapter_id: str | None = None
+    adapter_version: str | None = None
     source_type: str = "json"
     imported_at: datetime | None = None
 
