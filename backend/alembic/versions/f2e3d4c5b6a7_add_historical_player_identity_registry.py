@@ -1,7 +1,7 @@
 """add historical player identity registry
 
 Revision ID: f2e3d4c5b6a7
-Revises: d9b1c2e3f4a5
+Revises: d7e9a4b6c1f2
 Create Date: 2026-05-17 17:45:00.000000
 
 """
@@ -15,7 +15,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "f2e3d4c5b6a7"
-down_revision: str | None = "d9b1c2e3f4a5"
+down_revision: str | None = "d7e9a4b6c1f2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
