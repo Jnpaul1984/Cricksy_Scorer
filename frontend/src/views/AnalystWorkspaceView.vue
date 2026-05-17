@@ -772,6 +772,26 @@
                       <span class="aw-registry-label">Competition</span>
                       <span class="aw-registry-value">{{ registryData.competition ?? 'Unknown' }}</span>
                     </div>
+                    <div v-if="registryData.competition_type" class="aw-registry-row">
+                      <span class="aw-registry-label">Competition type</span>
+                      <span class="aw-registry-value">{{ registryData.competition_type }}</span>
+                    </div>
+                    <div v-if="registryData.competition_name && registryData.competition_name !== registryData.competition" class="aw-registry-row">
+                      <span class="aw-registry-label">Competition name</span>
+                      <span class="aw-registry-value">{{ registryData.competition_name }}</span>
+                    </div>
+                    <div v-if="registryData.match_format" class="aw-registry-row">
+                      <span class="aw-registry-label">Match format</span>
+                      <span class="aw-registry-value">{{ registryData.match_format }}</span>
+                    </div>
+                    <div v-if="registryData.tournament_name" class="aw-registry-row">
+                      <span class="aw-registry-label">Tournament</span>
+                      <span class="aw-registry-value">{{ registryData.tournament_name }}</span>
+                    </div>
+                    <div v-if="registryData.tournament_round" class="aw-registry-row">
+                      <span class="aw-registry-label">Tournament round</span>
+                      <span class="aw-registry-value">{{ registryData.tournament_round }}</span>
+                    </div>
                     <div class="aw-registry-row">
                       <span class="aw-registry-label">Season</span>
                       <span class="aw-registry-value">{{ registryData.season ?? 'Unknown' }}</span>
@@ -779,6 +799,18 @@
                     <div class="aw-registry-row">
                       <span class="aw-registry-label">Venue</span>
                       <span class="aw-registry-value">{{ registryData.venue ?? 'Unknown' }}</span>
+                    </div>
+                    <div v-if="registryData.venue_context" class="aw-registry-row">
+                      <span class="aw-registry-label">Venue context</span>
+                      <span class="aw-registry-value">
+                        {{
+                          [
+                            (registryData.venue_context as Record<string, unknown>)['venue_name'] as string | undefined,
+                            (registryData.venue_context as Record<string, unknown>)['city'] as string | undefined,
+                            (registryData.venue_context as Record<string, unknown>)['country'] as string | undefined,
+                          ].filter(Boolean).join(', ') || 'Unknown'
+                        }}
+                      </span>
                     </div>
                     <div v-if="registryData.match_number != null" class="aw-registry-row">
                       <span class="aw-registry-label">Match no.</span>
@@ -789,6 +821,10 @@
                       <span class="aw-registry-value">
                         {{ registryData.player_count > 0 ? `${registryData.player_count} players found` : 'Not registered yet' }}
                       </span>
+                    </div>
+                    <div class="aw-registry-row">
+                      <span class="aw-registry-label">Roster snapshot</span>
+                      <span class="aw-registry-value">{{ registryData.roster_snapshot_available ? 'Available' : 'Not available' }}</span>
                     </div>
                     <div class="aw-registry-row">
                       <span class="aw-registry-label">Innings imported</span>
@@ -812,6 +848,22 @@
                     <div class="aw-registry-row">
                       <span class="aw-registry-label">Source type</span>
                       <span class="aw-registry-value">{{ registryData.source_format ?? registryData.source_type }}</span>
+                    </div>
+                    <div v-if="registryData.source_schema" class="aw-registry-row">
+                      <span class="aw-registry-label">Source schema</span>
+                      <span class="aw-registry-value aw-registry-mono">{{ registryData.source_schema }}</span>
+                    </div>
+                    <div v-if="registryData.source_schema_version" class="aw-registry-row">
+                      <span class="aw-registry-label">Schema version</span>
+                      <span class="aw-registry-value aw-registry-mono">{{ registryData.source_schema_version }}</span>
+                    </div>
+                    <div v-if="registryData.adapter_id" class="aw-registry-row">
+                      <span class="aw-registry-label">Adapter</span>
+                      <span class="aw-registry-value aw-registry-mono">{{ registryData.adapter_id }}</span>
+                    </div>
+                    <div v-if="registryData.adapter_version" class="aw-registry-row">
+                      <span class="aw-registry-label">Adapter version</span>
+                      <span class="aw-registry-value aw-registry-mono">{{ registryData.adapter_version }}</span>
                     </div>
                     <div class="aw-registry-row">
                       <span class="aw-registry-label">Imported at</span>

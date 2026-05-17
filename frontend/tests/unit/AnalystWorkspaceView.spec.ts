@@ -1354,22 +1354,38 @@ describe('AnalystWorkspaceView', () => {
     expect(keyPlayersSection.text()).toContain('Key players')
   })
 
-  // ── Phase 5M: Registry & Provenance panel ────────────────────────────────
+  // ── Phase 5M / Phase 10B: Registry & Provenance panel ───────────────────
 
   const mockRegistryHistorical = {
     match_id: 'match-001',
     is_historical: true,
     competition: 'Caribbean Premier League',
+    competition_type: 'franchise',
+    competition_name: 'Caribbean Premier League',
+    match_format: 'T20',
+    tournament_name: null,
+    tournament_round: null,
     season: '2013',
     venue: 'Generic Cricket Ground',
+    venue_context: {
+      venue_name: 'Generic Cricket Ground',
+      city: 'Port of Spain',
+      country: 'Trinidad and Tobago',
+      venue_resolution_status: 'resolved',
+    },
     teams: 'Lions vs Falcons',
     match_number: 1,
     player_count: 22,
     innings_count: 2,
     has_deliveries: true,
+    roster_snapshot_available: true,
     import_batch_id: 'batch-001',
     source_filename: 'match_001.json',
     source_format: 'cricsheet_json',
+    source_schema: 'cricsheet_json_v1',
+    source_schema_version: 'v1.0',
+    adapter_id: 'historical_json_competition_adapter',
+    adapter_version: 'v10b.1',
     source_type: 'json',
     imported_at: '2025-01-10T12:00:00Z',
     validation_status: 'valid',
@@ -1382,16 +1398,27 @@ describe('AnalystWorkspaceView', () => {
     match_id: 'match-002',
     is_historical: false,
     competition: null,
+    competition_type: null,
+    competition_name: null,
+    match_format: null,
+    tournament_name: null,
+    tournament_round: null,
     season: null,
     venue: null,
+    venue_context: null,
     teams: 'Tigers vs Eagles',
     match_number: null,
     player_count: 0,
     innings_count: 0,
     has_deliveries: false,
+    roster_snapshot_available: false,
     import_batch_id: null,
     source_filename: null,
     source_format: null,
+    source_schema: null,
+    source_schema_version: null,
+    adapter_id: null,
+    adapter_version: null,
     source_type: 'json',
     imported_at: null,
     validation_status: 'not_applicable',
@@ -1567,6 +1594,146 @@ describe('AnalystWorkspaceView', () => {
     await rows[0].trigger('click')
 
     expect(api.getMatchRegistry).toHaveBeenCalledWith('match-001')
+  })
+
+  // ── Phase 10C: Competition-aware registry/provenance fields ───────────────
+
+  it('displays competition_type and match_format for competition-aware historical imports', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue(mockRegistryHistorical)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.find('.aw-detail-registry').text()
+    expect(text).toContain('franchise')
+    expect(text).toContain('T20')
+  })
+
+  it('displays venue context details for competition-aware historical imports', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue(mockRegistryHistorical)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.find('.aw-detail-registry').text()
+    expect(text).toContain('Port of Spain')
+    expect(text).toContain('Trinidad and Tobago')
+  })
+
+  it('displays adapter provenance lineage fields for competition-aware historical imports', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue(mockRegistryHistorical)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.find('.aw-detail-registry').text()
+    expect(text).toContain('cricsheet_json_v1')
+    expect(text).toContain('v1.0')
+    expect(text).toContain('historical_json_competition_adapter')
+    expect(text).toContain('v10b.1')
+  })
+
+  it('displays roster_snapshot_available status for historical imports', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue(mockRegistryHistorical)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.find('.aw-detail-registry').text()
+    expect(text).toContain('Available')
+  })
+
+  it('does not crash when Phase 10B metadata fields are null/missing', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue({
+      ...mockRegistryHistorical,
+      competition_type: null,
+      competition_name: null,
+      match_format: null,
+      tournament_name: null,
+      tournament_round: null,
+      venue_context: null,
+      source_schema: null,
+      source_schema_version: null,
+      adapter_id: null,
+      adapter_version: null,
+      roster_snapshot_available: false,
+    })
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[0].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    // Panel renders without error; fallback values are shown
+    const registrySection = wrapper.find('.aw-detail-registry')
+    expect(registrySection.exists()).toBe(true)
+    const text = registrySection.text()
+    expect(text).toContain('Caribbean Premier League')
+    expect(text).toContain('Not available')
+  })
+
+  it('does not display competition_type row when value is null for live match', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(mockMatchDetail)
+    vi.mocked(api.getMatchRegistry).mockResolvedValue(mockRegistryLive)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const rows = wrapper.findAll('.aw-matches-row')
+    await rows[1].trigger('click')
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.find('.aw-detail-registry').text()
+    // Competition type row should not appear for live match with null competition_type
+    expect(text).not.toContain('Competition type')
+    expect(text).not.toContain('Match format')
   })
 
   // ──────────────────────────────────────────────────────────────────────────
