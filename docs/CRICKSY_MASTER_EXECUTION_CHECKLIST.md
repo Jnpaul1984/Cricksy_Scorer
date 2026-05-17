@@ -2887,7 +2887,7 @@ Register player development as a governed Cricksy Skill family.
 ### Phase 9H — Player Development: Governed Coach Pro Plus Skill Integration
 
 **Status**
-- PENDING
+- COMPLETE ✅
 
 Connect governed Cricksy Skills to Coach Pro Plus video-analysis evidence so coaches can review structured recommendations before anything becomes player-facing.
 
@@ -3053,7 +3053,28 @@ Ensure governed skill runs, review actions, approvals, and publication decisions
 #### Phase 9H.7 — Regression + Manual QA
 
 **Status**
-- PENDING
+- COMPLETE ✅
+
+**Evidence notes**
+- Full closeout evidence documented in `docs/PHASE_9H7_REGRESSION_AND_MANUAL_QA.md`.
+- Backend regression passed:
+  - `cd backend && python -m pytest -q tests/test_coaching_video_evidence_skill_contract.py tests/test_video_evidence_to_skill_input_mapping.py tests/test_player_development_approval_gate.py tests/test_player_development_recommendation_output.py tests/test_coaching_skill_audit_log.py tests/test_player_development_routes.py tests/test_player_development_reports.py`
+  - `cd backend && ruff check .`
+  - `cd backend && ruff format --check .`
+  - `cd backend && mypy --config-file pyproject.toml --explicit-package-bases .`
+- Frontend validation passed:
+  - `cd frontend && CYPRESS_INSTALL_BINARY=0 npm ci`
+  - `cd frontend && npm run guard:fake-data`
+  - `cd frontend && npm run type-check`
+  - `cd frontend && npm run build-only`
+  - `cd frontend && npm run test:unit -- CoachProPlusVideoSessionsView.spec.ts CoachingSkillRecommendationReviewCard.spec.ts`
+- Postgres migration validation passed on real local Postgres via Docker Compose:
+  - `cd backend && alembic heads` -> `d7e9a4b6c1f2 (head)`
+  - `cd backend && DATABASE_URL=postgresql+asyncpg://postgres:RubyAnita2018@127.0.0.1:5555/cricksy_scorer alembic upgrade head`
+- Minimal blocker fix applied during validation: `frontend/src/views/CoachProPlusVideoSessionsView.vue` now uses `authStore.canCoach` for the page-level gate so authorized `org_pro` reviewers are not incorrectly shown the upgrade screen; focused coverage added in `frontend/tests/unit/CoachProPlusVideoSessionsView.spec.ts`.
+- Manual QA evidence confirms governed recommendation review states, RBAC, audit logging, player-facing filtering, and no official cricket-truth mutation.
+- No AI generation / LLM / video-analysis pipeline behavior changed.
+- No Claw Studio references introduced.
 
 **Required tests**
 - Governed skill contract/schema tests
