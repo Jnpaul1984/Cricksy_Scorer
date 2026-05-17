@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +28,18 @@ class _ResolvedIdentity:
     confidence_score: float | None
     mapping_method: str | None
     queue_reason: str | None = None
+
+
+class _RegistrationSummary(TypedDict):
+    registered_count: int
+    auto_resolved_count: int
+    manually_resolved_count: int
+    unresolved_count: int
+    ambiguous_count: int
+    blocked_count: int
+    queue_pending_count: int
+    source_player_ids: list[str]
+    deterministic_methods_used: list[str]
 
 
 def normalize_source_player_name(name: str) -> str:
@@ -274,10 +286,10 @@ async def register_historical_source_players(
     competition_context: dict[str, Any],
     roster_snapshot: list[dict[str, Any]],
     player_names: list[str],
-) -> dict[str, Any]:
+) -> _RegistrationSummary:
     now = dt.datetime.now(UTC)
     entries = _extract_roster_entries(roster_snapshot, player_names)
-    summary = {
+    summary: _RegistrationSummary = {
         "registered_count": 0,
         "auto_resolved_count": 0,
         "manually_resolved_count": 0,
@@ -462,11 +474,18 @@ async def register_historical_source_players(
 
         summary["source_player_ids"].append(registry.source_player_id)
         if registry.mapping_method:
-            summary["deterministic_methods_used"] = _append_unique(
-                summary["deterministic_methods_used"], registry.mapping_method
-            )
-        state_key = f"{registry.resolution_state.value}_count"
-        if state_key in summary:
-            summary[state_key] += 1
+            if registry.mapping_method not in summary["deterministic_methods_used"]:
+                summary["deterministic_methods_used"].append(registry.mapping_method)
+
+        if registry.resolution_state == HistoricalPlayerResolutionState.auto_resolved:
+            summary["auto_resolved_count"] += 1
+        elif registry.resolution_state == HistoricalPlayerResolutionState.manually_resolved:
+            summary["manually_resolved_count"] += 1
+        elif registry.resolution_state == HistoricalPlayerResolutionState.unresolved:
+            summary["unresolved_count"] += 1
+        elif registry.resolution_state == HistoricalPlayerResolutionState.ambiguous:
+            summary["ambiguous_count"] += 1
+        elif registry.resolution_state == HistoricalPlayerResolutionState.blocked:
+            summary["blocked_count"] += 1
 
     return summary
