@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json as _json
+import logging
 import uuid
 from typing import Any
 
@@ -61,6 +62,8 @@ from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 
 # Batch statuses from which an apply is allowed.
 _APPLICABLE_STATUSES = {"valid"}
+
+_log = logging.getLogger(__name__)
 
 
 async def get_batch_by_id(
@@ -307,38 +310,85 @@ async def apply_historical_batch(
     # Flush to detect constraint violations before finalizing the batch
     await db.flush()
 
-    # Finalize the batch - mark as applied with the created game ID
-    player_identity_registry = await register_historical_source_players(
-        db,
-        batch_id=batch_id,
-        game_id=game_id,
-        source_schema=source_provenance.get("source_schema")
-        or schema_classification.get("source_schema")
-        or "unknown",
-        source_system="historical_import_json",
-        source_provenance=source_provenance,
-        competition_context=competition_context,
-        roster_snapshot=roster_snapshot,
-        player_names=player_names_found,
-        match_date=match_date,
-    )
+    # Build the mutable historical_meta from the phases blob created above.
     historical_meta = dict(phases.get("historical_import") or {})
-    historical_meta["player_identity_registry"] = player_identity_registry
-    venue_resolution = await resolve_historical_venue(
-        db,
-        batch_id=batch_id,
-        game_id=game_id,
-        source_schema=source_provenance.get("source_schema")
+
+    # Phase 10E/10F/10G: Register historical source players.
+    # Wrapped in a savepoint so that a missing-table error (production migration
+    # not yet applied) does NOT abort the outer transaction that creates the Game
+    # row.  A failure here adds a warning and records "skipped: true" in the
+    # phases metadata; the game is still persisted successfully.
+    _source_schema = (
+        source_provenance.get("source_schema")
         or schema_classification.get("source_schema")
-        or "unknown",
-        source_system="historical_import_json",
-        source_provenance=source_provenance,
-        competition_context=competition_context,
-        match_date=match_date,
-        raw_venue_value=venue,
-        venue_context=venue_context,
+        or "unknown"
     )
-    historical_meta["venue_resolution"] = venue_resolution
+    try:
+        async with db.begin_nested():
+            player_identity_registry = await register_historical_source_players(
+                db,
+                batch_id=batch_id,
+                game_id=game_id,
+                source_schema=_source_schema,
+                source_system="historical_import_json",
+                source_provenance=source_provenance,
+                competition_context=competition_context,
+                roster_snapshot=roster_snapshot,
+                player_names=player_names_found,
+                match_date=match_date,
+            )
+        historical_meta["player_identity_registry"] = player_identity_registry
+    except Exception as exc:  # noqa: BLE001
+        _log.warning(
+            "historical_import_apply: player identity registration failed; "
+            "game will still be created. batch_id=%s error=%s",
+            batch_id,
+            exc,
+        )
+        historical_meta["player_identity_registry"] = {
+            "skipped": True,
+            "error": type(exc).__name__,
+        }
+        warnings.append(
+            "Player identity registration encountered an error and was skipped. "
+            "The game record was still created successfully. "
+            "Ensure Phase 10E–10G migrations are applied in production."
+        )
+
+    # Phase 10H: Resolve historical venue.
+    # Same savepoint safety net as above.
+    try:
+        async with db.begin_nested():
+            venue_resolution = await resolve_historical_venue(
+                db,
+                batch_id=batch_id,
+                game_id=game_id,
+                source_schema=_source_schema,
+                source_system="historical_import_json",
+                source_provenance=source_provenance,
+                competition_context=competition_context,
+                match_date=match_date,
+                raw_venue_value=venue,
+                venue_context=venue_context,
+            )
+        historical_meta["venue_resolution"] = venue_resolution
+    except Exception as exc:  # noqa: BLE001
+        _log.warning(
+            "historical_import_apply: venue resolution failed; "
+            "game will still be created. batch_id=%s error=%s",
+            batch_id,
+            exc,
+        )
+        historical_meta["venue_resolution"] = {
+            "skipped": True,
+            "error": type(exc).__name__,
+        }
+        warnings.append(
+            "Venue intelligence resolution encountered an error and was skipped. "
+            "The game record was still created successfully. "
+            "Ensure Phase 10H migrations are applied in production."
+        )
+
     game.phases = {**phases, "historical_import": historical_meta}
     db.add(game)
 

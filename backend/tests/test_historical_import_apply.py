@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -380,3 +381,104 @@ def test_apply_records_created_is_one_not_more() -> None:
         "Phase 5D must create exactly 1 record (the Game row); "
         f"delivery_count={delivery_count} should NOT be added as records_created"
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 10G/10H graceful degradation: sub-phase failures must not abort apply
+# ---------------------------------------------------------------------------
+
+
+def test_apply_succeeds_when_player_identity_registration_fails() -> None:
+    """apply must still create the Game record when Phase 10G player identity
+    registration raises an unexpected error (e.g. missing production migration).
+
+    The batch must be finalized, the applied_game_id must be set, and a
+    descriptive warning must be present in the response.
+    """
+    with patch(
+        "backend.services.historical_import_apply_service.register_historical_source_players",
+        new=AsyncMock(side_effect=RuntimeError("simulated Phase-10G table missing")),
+    ):
+        with TestClient(app) as client:
+            batch_id = _record_batch(client)
+            resp = client.post(
+                f"/api/historical-import/json/batches/{batch_id}/apply",
+                json={"confirm": True},
+            )
+            batches = client.get("/api/historical-import/json/batches").json()
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "applied"
+    assert data["applied_game_id"] is not None
+    # At least one warning must mention the player identity failure
+    warnings_text = " ".join(data.get("warnings", []))
+    assert "player identity" in warnings_text.lower(), (
+        f"Expected player identity warning in {data['warnings']!r}"
+    )
+    # Batch must still be finalised
+    assert len(batches) == 1
+    assert batches[0]["is_finalized"] is True
+    assert batches[0]["applied_game_id"] == data["applied_game_id"]
+
+
+def test_apply_succeeds_when_venue_resolution_fails() -> None:
+    """apply must still create the Game record when Phase 10H venue resolution
+    raises an unexpected error (e.g. missing production migration).
+
+    The batch must be finalized, the applied_game_id must be set, and a
+    descriptive warning must be present in the response.
+    """
+    with patch(
+        "backend.services.historical_import_apply_service.resolve_historical_venue",
+        new=AsyncMock(side_effect=RuntimeError("simulated Phase-10H table missing")),
+    ):
+        with TestClient(app) as client:
+            batch_id = _record_batch(client)
+            resp = client.post(
+                f"/api/historical-import/json/batches/{batch_id}/apply",
+                json={"confirm": True},
+            )
+            batches = client.get("/api/historical-import/json/batches").json()
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "applied"
+    assert data["applied_game_id"] is not None
+    # At least one warning must mention venue resolution failure
+    warnings_text = " ".join(data.get("warnings", []))
+    assert "venue" in warnings_text.lower(), (
+        f"Expected venue warning in {data['warnings']!r}"
+    )
+    # Batch must still be finalised
+    assert len(batches) == 1
+    assert batches[0]["is_finalized"] is True
+    assert batches[0]["applied_game_id"] == data["applied_game_id"]
+
+
+def test_apply_returns_500_json_on_unexpected_core_failure() -> None:
+    """When apply_historical_batch raises a completely unexpected error
+    (not a validation gate failure), the route must return HTTP 500 with
+    a JSON body rather than propagating as an unhandled exception.
+
+    This ensures CORS headers are present on the error response because
+    the HTTPException path flows through FastAPI's exception handlers and
+    then through CORSMiddleware.
+    """
+    with patch(
+        "backend.routes.historical_import.apply_historical_batch",
+        new=AsyncMock(side_effect=Exception("simulated unexpected DB crash")),
+    ):
+        with TestClient(app) as client:
+            batch_id = _record_batch(client)
+            resp = client.post(
+                f"/api/historical-import/json/batches/{batch_id}/apply",
+                json={"confirm": True},
+            )
+
+    assert resp.status_code == 500, resp.text
+    # Must be a JSON response with a detail key (not a raw HTML 500 page)
+    body = resp.json()
+    assert "detail" in body, f"Expected 'detail' in JSON error body, got: {body!r}"
+    assert "unexpected error" in body["detail"].lower() or "Exception" in body["detail"]
+
