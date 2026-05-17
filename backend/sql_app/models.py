@@ -2894,6 +2894,16 @@ class HistoricalSourcePlayerRegistry(Base):
         JSON, nullable=False, default=list
     )
     alias_references: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    metadata_field_history: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    metadata_conflicts: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    career_profile_foundation: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    review_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

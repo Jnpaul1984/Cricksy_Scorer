@@ -40,6 +40,10 @@ class _RegistrationSummary(TypedDict):
     queue_pending_count: int
     source_player_ids: list[str]
     deterministic_methods_used: list[str]
+    metadata_fields_recorded: int
+    career_profiles_updated: int
+    canonical_safe_fills: int
+    metadata_conflicts: int
 
 
 def normalize_source_player_name(name: str) -> str:
@@ -102,14 +106,44 @@ def _extract_roster_entries(
         if not isinstance(team_entry, dict):
             continue
         team_name = str(team_entry.get("team_name") or "").strip()
-        for player_name in team_entry.get("named_squad") or []:
-            if not isinstance(player_name, str) or not player_name.strip():
+        for player_entry in team_entry.get("named_squad") or []:
+            player_name: str | None = None
+            entry_metadata: dict[str, Any] = {}
+            source_status = "unknown"
+            if isinstance(player_entry, str):
+                player_name = player_entry.strip() or None
+            elif isinstance(player_entry, dict):
+                player_name = (
+                    str(
+                        player_entry.get("name")
+                        or player_entry.get("player_name")
+                        or player_entry.get("full_name")
+                        or ""
+                    ).strip()
+                    or None
+                )
+                entry_metadata = {
+                    "batting_style": player_entry.get("batting_style"),
+                    "bowling_style": player_entry.get("bowling_style"),
+                    "role": player_entry.get("role") or player_entry.get("player_role"),
+                    "batting_innings_count": player_entry.get("batting_innings_count"),
+                    "bowling_participation_count": player_entry.get("bowling_participation_count"),
+                }
+                source_status = "source"
+            if not player_name:
                 continue
-            key = player_name.strip().casefold()
+            key = player_name.casefold()
             if key in seen:
                 continue
             seen.add(key)
-            entries.append({"name": player_name.strip(), "team_name": team_name or None})
+            entries.append(
+                {
+                    "name": player_name,
+                    "team_name": team_name or None,
+                    "metadata": entry_metadata,
+                    "metadata_source_status": source_status,
+                }
+            )
     for player_name in player_names:
         if not isinstance(player_name, str) or not player_name.strip():
             continue
@@ -275,6 +309,258 @@ def _append_unique(sequence: list[Any], item: Any, key: str | None = None) -> li
     return sequence
 
 
+def _normalize_metadata_value(value: Any) -> str | None:
+    if isinstance(value, str):
+        normalized = value.strip()
+        return normalized or None
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _safe_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _upsert_metadata_history(
+    registry: HistoricalSourcePlayerRegistry,
+    *,
+    field_name: str,
+    value: str | None,
+    source_system: str,
+    source_schema: str,
+    batch_id: str,
+    game_id: str,
+    source_status: str,
+    confidence_status: str,
+    now: dt.datetime,
+) -> bool:
+    history = list(registry.metadata_field_history or [])
+    now_iso = now.isoformat()
+    for row in history:
+        if not isinstance(row, dict):
+            continue
+        if row.get("field_name") != field_name:
+            continue
+        if row.get("value") != value:
+            continue
+        row["last_seen"] = now_iso
+        row["source_system"] = source_system
+        row["source_schema"] = source_schema
+        row["batch_id"] = batch_id
+        row["game_id"] = game_id
+        row["source_status"] = source_status
+        row["confidence_status"] = confidence_status
+        registry.metadata_field_history = history
+        return False
+
+    history.append(
+        {
+            "field_name": field_name,
+            "value": value,
+            "source_system": source_system,
+            "source_schema": source_schema,
+            "batch_id": batch_id,
+            "game_id": game_id,
+            "source_status": source_status,
+            "confidence_status": confidence_status,
+            "first_seen": now_iso,
+            "last_seen": now_iso,
+        }
+    )
+    registry.metadata_field_history = history
+    return True
+
+
+def _record_conflict_if_needed(
+    registry: HistoricalSourcePlayerRegistry,
+    *,
+    field_name: str,
+    canonical_value: str | None,
+    observed_value: str | None,
+    source_system: str,
+    source_schema: str,
+    batch_id: str,
+    game_id: str,
+    now: dt.datetime,
+) -> bool:
+    if observed_value is None or canonical_value is None:
+        return False
+    if canonical_value.strip().casefold() == observed_value.strip().casefold():
+        return False
+
+    conflicts = list(registry.metadata_conflicts or [])
+    conflict_row = {
+        "field_name": field_name,
+        "canonical_value": canonical_value,
+        "observed_value": observed_value,
+        "source_system": source_system,
+        "source_schema": source_schema,
+        "batch_id": batch_id,
+        "game_id": game_id,
+        "review_state": "pending_review",
+        "detected_at": now.isoformat(),
+    }
+    if conflict_row not in conflicts:
+        conflicts.append(conflict_row)
+    registry.metadata_conflicts = conflicts
+    registry.review_required = bool(conflicts)
+    return True
+
+
+def _upsert_career_profile_foundation(
+    registry: HistoricalSourcePlayerRegistry,
+    *,
+    competition_context: dict[str, Any],
+    team_name: str | None,
+    role_value: str | None,
+    batting_innings_count: int | None,
+    bowling_participation_count: int | None,
+    game_id: str,
+    batch_id: str,
+    source_system: str,
+    source_schema: str,
+    match_date: str | None,
+    now: dt.datetime,
+) -> None:
+    now_iso = now.isoformat()
+    foundation = dict(registry.career_profile_foundation or {})
+    competition_name = _normalize_metadata_value(competition_context.get("competition_name"))
+    season = _normalize_metadata_value(competition_context.get("season"))
+    timeline = list(foundation.get("match_timeline") or [])
+    timeline_item = {
+        "game_id": game_id,
+        "batch_id": batch_id,
+        "match_date": match_date,
+        "competition_name": competition_name,
+        "season": season,
+        "team_name": team_name,
+        "source_system": source_system,
+        "source_schema": source_schema,
+        "first_seen": now_iso,
+        "last_seen": now_iso,
+    }
+    found_timeline = False
+    for row in timeline:
+        if not isinstance(row, dict):
+            continue
+        if row.get("game_id") != game_id:
+            continue
+        row["last_seen"] = now_iso
+        found_timeline = True
+        break
+    if not found_timeline:
+        timeline.append(timeline_item)
+    foundation["match_timeline"] = timeline
+
+    competitions = list(foundation.get("competitions") or [])
+    if competition_name:
+        existing_comp = next(
+            (
+                row
+                for row in competitions
+                if isinstance(row, dict) and row.get("competition_name") == competition_name
+            ),
+            None,
+        )
+        if existing_comp is None:
+            competitions.append(
+                {
+                    "competition_name": competition_name,
+                    "source_system": source_system,
+                    "source_schema": source_schema,
+                    "first_seen": now_iso,
+                    "last_seen": now_iso,
+                }
+            )
+        else:
+            existing_comp["last_seen"] = now_iso
+    foundation["competitions"] = competitions
+
+    seasons = list(foundation.get("seasons") or [])
+    if season:
+        existing_season = next(
+            (row for row in seasons if isinstance(row, dict) and row.get("season") == season),
+            None,
+        )
+        if existing_season is None:
+            seasons.append(
+                {
+                    "season": season,
+                    "source_system": source_system,
+                    "source_schema": source_schema,
+                    "first_seen": now_iso,
+                    "last_seen": now_iso,
+                }
+            )
+        else:
+            existing_season["last_seen"] = now_iso
+    foundation["seasons"] = seasons
+
+    teams = list(foundation.get("teams") or [])
+    if team_name:
+        existing_team = next(
+            (
+                row
+                for row in teams
+                if isinstance(row, dict)
+                and row.get("team_name") == team_name
+                and row.get("competition_name") == competition_name
+                and row.get("season") == season
+            ),
+            None,
+        )
+        if existing_team is None:
+            teams.append(
+                {
+                    "team_name": team_name,
+                    "competition_name": competition_name,
+                    "season": season,
+                    "source_system": source_system,
+                    "source_schema": source_schema,
+                    "first_seen": now_iso,
+                    "last_seen": now_iso,
+                }
+            )
+        else:
+            existing_team["last_seen"] = now_iso
+    foundation["teams"] = teams
+
+    role_appearances = dict(foundation.get("role_appearances") or {})
+    if role_value:
+        role_entry = dict(role_appearances.get(role_value) or {})
+        role_entry["count"] = int(role_entry.get("count") or 0) + 1
+        role_entry["source_system"] = source_system
+        role_entry["source_schema"] = source_schema
+        role_entry["first_seen"] = role_entry.get("first_seen") or now_iso
+        role_entry["last_seen"] = now_iso
+        role_appearances[role_value] = role_entry
+    foundation["role_appearances"] = role_appearances
+
+    foundation["matches_played"] = len(
+        {
+            row.get("game_id")
+            for row in timeline
+            if isinstance(row, dict) and isinstance(row.get("game_id"), str)
+        }
+    )
+    if batting_innings_count is not None:
+        foundation["batting_innings_count"] = batting_innings_count
+    else:
+        foundation.setdefault("batting_innings_count", None)
+    if bowling_participation_count is not None:
+        foundation["bowling_participation_count"] = bowling_participation_count
+    else:
+        foundation.setdefault("bowling_participation_count", None)
+    registry.career_profile_foundation = foundation
+
+
 async def register_historical_source_players(
     db: AsyncSession,
     *,
@@ -286,6 +572,7 @@ async def register_historical_source_players(
     competition_context: dict[str, Any],
     roster_snapshot: list[dict[str, Any]],
     player_names: list[str],
+    match_date: str | None = None,
 ) -> _RegistrationSummary:
     now = dt.datetime.now(UTC)
     entries = _extract_roster_entries(roster_snapshot, player_names)
@@ -299,11 +586,33 @@ async def register_historical_source_players(
         "queue_pending_count": 0,
         "source_player_ids": [],
         "deterministic_methods_used": [],
+        "metadata_fields_recorded": 0,
+        "career_profiles_updated": 0,
+        "canonical_safe_fills": 0,
+        "metadata_conflicts": 0,
     }
 
     for entry in entries:
         source_player_name = entry["name"]
         team_name = entry.get("team_name")
+        metadata_raw = entry.get("metadata")
+        metadata: dict[str, Any] = metadata_raw if isinstance(metadata_raw, dict) else {}
+        metadata_source_status = (
+            "source" if str(entry.get("metadata_source_status") or "unknown") == "source" else "unknown"
+        )
+        batting_style = _normalize_metadata_value(metadata.get("batting_style"))
+        bowling_style = _normalize_metadata_value(metadata.get("bowling_style"))
+        role_value = _normalize_metadata_value(metadata.get("role"))
+        batting_innings_count = _safe_int(metadata.get("batting_innings_count"))
+        bowling_participation_count = _safe_int(metadata.get("bowling_participation_count"))
+        role_source_status = "source" if (metadata_source_status == "source" and role_value) else "unknown"
+        style_source_status = (
+            "source"
+            if (metadata_source_status == "source" and (batting_style or bowling_style))
+            else "unknown"
+        )
+        role_confidence_status = "high" if role_source_status == "source" else "unknown"
+        style_confidence_status = "high" if style_source_status == "source" else "unknown"
         normalized_name = normalize_source_player_name(source_player_name)
         registry_stmt = select(HistoricalSourcePlayerRegistry).where(
             HistoricalSourcePlayerRegistry.source_system == source_system,
@@ -349,6 +658,10 @@ async def register_historical_source_players(
                     }
                 ],
                 alias_references=[source_player_name],
+                metadata_field_history=[],
+                metadata_conflicts=[],
+                career_profile_foundation={},
+                review_required=False,
             )
             db.add(registry)
             await db.flush()
@@ -471,6 +784,86 @@ async def register_historical_source_players(
             queue_row.last_seen = now
             queue_row.resolved_at = now
             db.add(queue_row)
+
+        if _upsert_metadata_history(
+            registry,
+            field_name="batting_style",
+            value=batting_style,
+            source_system=source_system,
+            source_schema=source_schema,
+            batch_id=batch_id,
+            game_id=game_id,
+            source_status=style_source_status,
+            confidence_status=style_confidence_status,
+            now=now,
+        ):
+            summary["metadata_fields_recorded"] += 1
+        if _upsert_metadata_history(
+            registry,
+            field_name="bowling_style",
+            value=bowling_style,
+            source_system=source_system,
+            source_schema=source_schema,
+            batch_id=batch_id,
+            game_id=game_id,
+            source_status=style_source_status,
+            confidence_status=style_confidence_status,
+            now=now,
+        ):
+            summary["metadata_fields_recorded"] += 1
+        if _upsert_metadata_history(
+            registry,
+            field_name="player_role",
+            value=role_value,
+            source_system=source_system,
+            source_schema=source_schema,
+            batch_id=batch_id,
+            game_id=game_id,
+            source_status=role_source_status,
+            confidence_status=role_confidence_status,
+            now=now,
+        ):
+            summary["metadata_fields_recorded"] += 1
+
+        canonical_player: Player | None = None
+        if registry.canonical_player_id is not None:
+            canonical_player = await db.get(Player, registry.canonical_player_id)
+
+        if canonical_player is not None and role_value:
+            canonical_role = _normalize_metadata_value(canonical_player.role)
+            if canonical_role is None and role_confidence_status == "high":
+                canonical_player.role = role_value
+                db.add(canonical_player)
+                summary["canonical_safe_fills"] += 1
+            elif canonical_role is not None and _record_conflict_if_needed(
+                registry,
+                field_name="player_role",
+                canonical_value=canonical_role,
+                observed_value=role_value,
+                source_system=source_system,
+                source_schema=source_schema,
+                batch_id=batch_id,
+                game_id=game_id,
+                now=now,
+            ):
+                summary["metadata_conflicts"] += 1
+
+        _upsert_career_profile_foundation(
+            registry,
+            competition_context=competition_context,
+            team_name=team_name,
+            role_value=role_value,
+            batting_innings_count=batting_innings_count,
+            bowling_participation_count=bowling_participation_count,
+            game_id=game_id,
+            batch_id=batch_id,
+            source_system=source_system,
+            source_schema=source_schema,
+            match_date=match_date,
+            now=now,
+        )
+        summary["career_profiles_updated"] += 1
+        db.add(registry)
 
         summary["source_player_ids"].append(registry.source_player_id)
         if registry.mapping_method:
