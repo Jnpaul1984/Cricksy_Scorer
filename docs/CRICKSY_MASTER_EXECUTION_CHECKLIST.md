@@ -3161,11 +3161,31 @@ Paid features are protected correctly and pricing/tier behavior is reliable.
 
 ---
 
+> **Naming Note — Two Separate Phase 10 Tracks:**
+> **Phase 10** (immediately above) covers subscription, pricing, and tier enforcement hardening.
+> **Phase 10A–10D** (below) is a separate, non-conflicting track covering competition-aware
+> historical JSON import. Both tracks are active and tracked independently. Do not confuse them.
+
+---
+
 # Phase 10A — Competition-Aware Historical Match Registry + JSON Import Foundation
+
+## Competition-Aware Historical Import Sub-Phase Tracker
+
+> This table tracks all sub-phases of the Competition-Aware Historical Import series (Phase 10A–10D).
+> Do **not** mark any item complete unless the corresponding PR is merged and CI is green.
+
+| Sub-Phase | Title | Issue | PR | Status |
+|---|---|---|---|---|
+| Phase 10A | Competition-Aware Historical Match Registry + JSON Import Foundation (governance/spec) | [#274](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/274) | [#275](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/275) | ⬜ Pending |
+| Phase 10A.1 | Competition-Aware Historical Match Registry Audit + Spec Lock | [#276](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/276) | [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277) | ⬜ Pending |
+| Phase 10B | Competition-Aware Historical JSON Import Foundation Implementation | [#278](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/278) | [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279) | ⬜ Pending |
+| Phase 10C | Competition-Aware Import UI + Analyst Workspace Verification | [#280](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/280) | [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281) | ⬜ Pending |
+| Phase 10D | Master Checklist Correction + Historical Match Upload Runbook | (this issue) | (this PR) | ⬜ Pending |
 
 ## Status Checklist
 
-- [ ] Required pre-phase audit completed and documented
+- [ ] Required pre-phase audit completed and documented (Phase 10A governance doc created)
 - [ ] Spec lock approved before any importer implementation begins
 - [ ] JSON schema categories locked
 - [ ] Canonical import contract locked
@@ -3174,6 +3194,10 @@ Paid features are protected correctly and pricing/tier behavior is reliable.
 - [ ] Analyst Workspace acceptance criteria locked
 - [ ] Required tests and CI/gates locked
 - [ ] Implementation deferred until audit/spec lock approval is complete
+- [ ] Phase 10A.1 audit + spec lock merged with green CI (issue [#276](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/276) / PR [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277))
+- [ ] Phase 10B implementation merged with green CI (issue [#278](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/278) / PR [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279))
+- [ ] Phase 10C UI + verification merged with green CI (issue [#280](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/280) / PR [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281))
+- [ ] Phase 10D master checklist + runbook merged with green CI (this PR)
 
 ## Purpose
 
@@ -3334,6 +3358,199 @@ Future implementation must lock safe roster rules for imported matches, includin
 - Analyst Workspace compatibility expectations are explicit and bounded by real imported data only.
 - Existing phase content and evidence remain preserved, and Phase 10 remains intact with this governance phase inserted between Phase 10 and Phase 11.
 - No backend code, frontend code, migrations, tests, or CI workflows are changed in this governance phase.
+
+---
+
+# Phase 10A.1 — Competition-Aware Historical Match Registry Audit + Spec Lock
+
+> **Issue:** [#276](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/276) | **PR:** [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277)
+
+## Purpose
+
+Perform the detailed audit and spec lock for competition-aware historical match import, as
+documented in `docs/PHASE_10A1_COMPETITION_AWARE_HISTORICAL_REGISTRY_AUDIT_AND_SPEC_LOCK.md`.
+This phase locks all contracts (schema classification, canonical normalization, dry-run,
+duplicate protection, provenance, competition metadata, roster snapshots, Analyst Workspace
+compatibility) before any implementation begins in Phase 10B.
+
+## Status Checklist
+
+- [ ] Detailed audit doc reviewed and approved (`docs/PHASE_10A1_COMPETITION_AWARE_HISTORICAL_REGISTRY_AUDIT_AND_SPEC_LOCK.md`)
+- [ ] All 28 audit sections reviewed and signed off
+- [ ] JSON schema classification contract locked
+- [ ] Canonical normalization contract locked
+- [ ] Dry-run, duplicate-detection, and provenance contracts locked
+- [ ] Competition metadata contract locked
+- [ ] Roster snapshot contract locked
+- [ ] Analyst Workspace compatibility contract locked
+- [ ] Required tests and migration expectations locked for Phase 10B
+- [ ] PR [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277) merged with green CI
+
+## Completion Criteria
+
+Phase 10A.1 is complete when PR [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277)
+is merged with green CI and the spec lock document is committed.
+
+---
+
+# Phase 10B — Competition-Aware Historical JSON Import Foundation Implementation
+
+> **Issue:** [#278](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/278) | **PR:** [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279)
+
+## Purpose
+
+Implement the competition-aware historical JSON import backend based on the Phase 10A / Phase 10A.1
+spec lock. Introduces schema classification, canonical normalization, dry-run validation, duplicate
+protection, provenance tracking, and competition metadata fields into the historical import pipeline.
+
+## Status Checklist
+
+- [ ] Phase 10A.1 spec lock merged with green CI (prerequisite)
+- [ ] JSON schema classification adapter implemented and tested
+- [ ] Canonical normalization contract implemented
+- [ ] Dry-run no-write gate implemented and verified
+- [ ] Duplicate detection and provenance fields populated in import batch
+- [ ] Competition metadata fields populated in import batch
+- [ ] Roster snapshot attached to imported match
+- [ ] Analyst Workspace API compatibility maintained for imported matches
+- [ ] Org/RBAC isolation enforced for imported historical visibility
+- [ ] All required tests (classification, normalization, dry-run, duplicate, provenance, rollback) passing
+- [ ] PR [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279) merged with green CI
+
+## Completion Criteria
+
+Phase 10B is complete when PR [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279)
+is merged with green CI and all required tests pass.
+
+> ⚠️ **Historical match uploads are NOT safe until both Phase 10B and Phase 10C are merged.**
+> See the Historical Match Upload Safety Runbook in Phase 10D.
+
+---
+
+# Phase 10C — Competition-Aware Import UI + Analyst Workspace Verification
+
+> **Issue:** [#280](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/280) | **PR:** [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281)
+
+## Purpose
+
+Verify and extend the Analyst Workspace frontend to display competition-aware import metadata:
+competition context, registry/provenance panel, imported badge, schema/adapter visibility,
+and safe handling of insufficient data in AI/podcast sections.
+
+## Status Checklist
+
+- [ ] Phase 10B merged with green CI (prerequisite)
+- [ ] Imported matches appear in Analyst Workspace completed matches list
+- [ ] Imported badge visible on each imported match
+- [ ] Imported match detail opens without errors
+- [ ] Innings data appears where available
+- [ ] Delivery availability shown accurately for imported matches
+- [ ] Registry/provenance panel shows competition, season, venue, source, and import batch metadata
+- [ ] Export functions work with imported matches
+- [ ] AI summary and podcast prep handle insufficient data safely (no fabrication)
+- [ ] No fake frontend data paths required
+- [ ] All required frontend tests passing
+- [ ] PR [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281) merged with green CI
+
+## Completion Criteria
+
+Phase 10C is complete when PR [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281)
+is merged with green CI and Analyst Workspace verification passes end-to-end.
+
+> ⚠️ **Historical match uploads are NOT safe until both Phase 10B and Phase 10C are merged.**
+> See the Historical Match Upload Safety Runbook in Phase 10D.
+
+---
+
+# Phase 10D — Master Checklist Correction + Historical Match Upload Runbook
+
+> **Issue:** (this issue) | **PR:** (this PR)
+
+## Purpose
+
+Fix the master checklist to clearly track the Phase 10A–10D competition-aware import series,
+preserve the original Phase 10 subscription/tier content, and add the Historical Match Upload
+Safety Runbook explaining when uploads are safe and how many matches to upload at a time.
+
+## Status Checklist
+
+- [ ] Master checklist updated with sub-phase tracker table (Phase 10A–10D)
+- [ ] Naming clarification note added between Phase 10 subscription track and Phase 10A–10D track
+- [ ] Phase 10A.1, 10B, 10C, 10D section stubs added with issue/PR references
+- [ ] Historical Match Upload Safety Runbook added
+- [ ] Recommended Execution Order updated to show full sub-phase sequence
+- [ ] This PR merged with green CI
+
+---
+
+## Historical Match Upload Safety Runbook
+
+### When Is It Safe to Upload?
+
+Uploads are safe **only after Phase 10B and Phase 10C are both merged with green CI workflows**.
+
+Do not upload historical matches until:
+
+- [ ] Phase 10B PR ([#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279)) is merged and CI is green
+- [ ] Phase 10C PR ([#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281)) is merged and CI is green
+
+### Batch Size Guidance
+
+Always start small and increase batch size only after each previous batch fully passes verification.
+
+| Step | Batch Size | Condition |
+|---|---|---|
+| 1 | 1 match | Use a single known-good JSON file from your most reliable source |
+| 2 | 3–5 matches | Same schema/source as step 1 only after step 1 passes |
+| 3 | 10 matches | Same competition/source only after step 2 passes |
+| Routine | 20–25 matches | Only after rollback/monitoring confidence is proven |
+| ❌ Never | Hundreds at once | Do not bulk-import hundreds of matches until routine batches are stable |
+
+### Procedure for Each Batch
+
+1. **Always run dry-run first**: `POST /api/historical-import/dry-run`
+2. **Review dry-run output**: Check for validation errors, duplicate detection warnings, and missing fields
+3. **Apply only after dry-run passes cleanly**: `POST /api/historical-import/apply`
+4. **Verify each batch using the checklist below** before proceeding to the next batch
+
+### Post-Batch Verification Checklist
+
+After each batch, verify **all** of the following before proceeding to the next batch:
+
+- [ ] dry-run passes without validation errors
+- [ ] duplicate warnings reviewed and understood
+- [ ] apply succeeds without errors
+- [ ] matches appear in Analyst Workspace completed matches list
+- [ ] imported badge is visible on each imported match
+- [ ] registry/provenance fields (competition, season, venue, source, import batch) are visible
+- [ ] innings count matches expected value
+- [ ] delivery availability is correct (not inflated or missing)
+- [ ] source schema/adapter is visible in provenance panel
+- [ ] no fake frontend data paths are triggered
+- [ ] AI/podcast sections fail safely if data is insufficient (no fabrication)
+- [ ] rollback remains available for the batch (`POST /api/historical-import/rollback/{batch_id}`)
+
+### Stop and Investigate If
+
+Stop uploading and investigate immediately if any of the following occur:
+
+- validation errors appear in dry-run or apply output
+- duplicate collision warnings require manual review or cannot be resolved
+- team or player identity is ambiguous and cannot be resolved deterministically
+- match does not appear in Analyst Workspace after a successful apply
+- registry/provenance is missing critical fields after apply
+- delivery count mismatches the expected value from the source file
+- frontend crashes or shows errors when opening an imported match detail
+- AI fabricates or invents details not present in the import data
+
+### Rollback Procedure
+
+If a batch must be rolled back:
+
+1. Note the `batch_id` from the apply response or the Analyst Workspace provenance panel
+2. Call `POST /api/historical-import/rollback/{batch_id}`
+3. Verify the matches no longer appear in Analyst Workspace
+4. Document the reason for rollback before retrying with corrected data
 
 ---
 
@@ -3707,7 +3924,11 @@ Check imports, typing, formatting, migrations, tests, and CI impact before final
 9. Phase 8 — AI Analytics + Match Intelligence Enhancements
 10. Phase 9 — Player Development Intelligence Foundation
 11. Phase 10 — Subscription, Pricing + Tier Enforcement Hardening
-12. Phase 10A — Competition-Aware Historical Match Registry + JSON Import Foundation
+12. Phase 10A — Competition-Aware Historical Match Registry + JSON Import Foundation (governance/spec) ([#274](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/274) / [#275](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/275))
+    - Phase 10A.1 — Competition-Aware Historical Match Registry Audit + Spec Lock ([#276](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/276) / [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277))
+    - Phase 10B — Competition-Aware Historical JSON Import Foundation Implementation ([#278](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/278) / [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279))
+    - Phase 10C — Competition-Aware Import UI + Analyst Workspace Verification ([#280](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/280) / [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281))
+    - Phase 10D — Master Checklist Correction + Historical Match Upload Runbook (this phase)
 13. Phase 11 — Organization Pro + League Operations
 14. Phase 12 — Live Viewer, Streaming + Sponsor Experience
 15. Phase 13 — Media, Highlights + Report Content Engine
