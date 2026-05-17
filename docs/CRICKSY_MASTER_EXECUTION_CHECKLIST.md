@@ -3161,6 +3161,182 @@ Paid features are protected correctly and pricing/tier behavior is reliable.
 
 ---
 
+# Phase 10A — Competition-Aware Historical Match Registry + JSON Import Foundation
+
+## Status Checklist
+
+- [ ] Required pre-phase audit completed and documented
+- [ ] Spec lock approved before any importer implementation begins
+- [ ] JSON schema categories locked
+- [ ] Canonical import contract locked
+- [ ] Competition metadata requirements locked
+- [ ] Squad/roster snapshot requirements locked
+- [ ] Analyst Workspace acceptance criteria locked
+- [ ] Required tests and CI/gates locked
+- [ ] Implementation deferred until audit/spec lock approval is complete
+
+## Purpose
+
+Cricksy needs a safe foundation for historical cricket JSON files to be:
+
+- classified by schema/source type
+- normalized into a canonical Cricksy match contract
+- validated through dry-run before commit
+- imported with duplicate protection and provenance
+- tagged by competition context
+- visible in the existing Analyst Workspace
+- prepared for franchise, club, school, academy, domestic, and international cricket intelligence
+
+This phase is governance-only. It defines the required audit and spec lock before any importer code, backend routes, frontend UI, models, migrations, CI workflow edits, or tests are implemented.
+
+## Scope
+
+- Extend historical import governance from Phase 5A and later Phase 5 registry/library work into competition-aware analyst intelligence readiness.
+- Define supported historical JSON source classes and the normalization boundary between raw source files and Cricksy truth.
+- Lock the minimum metadata, roster snapshot, provenance, duplicate-protection, and dry-run requirements for future implementation.
+- Define how imported historical matches must appear in existing Analyst Workspace flows without fake frontend data.
+
+## Out of Scope
+
+- Importer implementation code
+- Backend routes, services, models, or migrations
+- Frontend UI implementation beyond documenting required acceptance criteria
+- CI workflow edits
+- Coach Pro Plus video-analysis systems
+- Live scoring logic
+- DLS logic
+- Re-marking existing incomplete phases as complete
+
+## Required Pre-Phase Audit
+
+Audit and document, at minimum:
+
+- `docs/PHASE_5A_HISTORICAL_JSON_IMPORT_AUDIT_AND_SPEC_LOCK.md`
+- `docs/CRICKSY_ANALYST_SYSTEM_BLUEPRINT_V1.md`
+- `docs/ANALYST_PRODUCTION_WORKFLOW_V1.md`
+- `docs/COMPETITION_INTELLIGENCE_FRAMEWORK_V1.md`
+- current Phase 5 historical import lifecycle, including dry-run, duplicate detection, provenance, rollback, registry, and Analyst Workspace data-library expectations
+- existing Analyst Workspace completed-match list/detail/export/AI-summary compatibility requirements
+- current org/RBAC boundaries for imported match visibility
+- current completed-match and delivery-availability behavior so imported data does not require fake or bypassed frontend paths
+- competition, season, venue, roster, and source lineage gaps that must be closed before future implementation
+
+## Spec Lock Requirements
+
+Lock, before implementation:
+
+- supported JSON schema categories and unknown/unsupported handling behavior
+- canonical normalization contract and explicit source-to-canonical mapping boundary
+- dry-run-first validation contract, including no-write guarantees and error/warning reporting
+- duplicate-protection and provenance requirements, including import-batch linkage
+- competition metadata contract and required nullable/optional handling rules
+- roster snapshot and player identity mapping expectations
+- Analyst Workspace visibility and compatibility rules
+- required tests, migration expectations if schema changes are later approved, and CI gates for the implementation phase
+- explicit statement that implementation comes later, only after audit/spec lock approval
+
+## JSON Schema Categories
+
+At minimum, future implementation must classify incoming files as one of:
+
+- Cricksy internal JSON
+- Cricsheet-style JSON, if applicable
+- Franchise tournament JSON
+- International match JSON
+- Domestic/club match JSON
+- School/academy match JSON
+- Unknown/unsupported JSON
+
+## Canonical Import Contract
+
+Future implementation must normalize every supported source into a canonical Cricksy import contract covering, at minimum:
+
+- Match metadata
+- Competition context
+- Tournament/season context
+- Venue context
+- Team context
+- Squad/roster snapshot context
+- Player identity mapping
+- Innings summaries
+- Delivery-level events
+- Result metadata
+- Source provenance
+- Validation report
+
+## Competition Metadata Requirements
+
+Every canonical historical import contract must define and validate, at minimum:
+
+- `competition_type`
+- `competition_name`
+- `season`
+- `match_format`
+- `tournament_stage`
+- `venue`
+- `source_system`
+- `source_schema`
+- `source_schema_version`
+- `import_batch_id`
+
+These fields must remain available for registry/provenance display and Analyst Workspace filtering when present in source data, with dry-run output making missing or inferred values explicit.
+
+## Squad/Roster Snapshot Requirements
+
+Future implementation must lock safe roster rules for imported matches, including:
+
+- preserve the squad/roster snapshot attached to the imported match when source data provides it
+- distinguish playing XI, named squad, substitutes, and unresolved roster entries when available
+- keep roster context tied to competition, season, team, and match provenance
+- avoid silently remapping ambiguous players without deterministic identity validation
+- allow dry-run reporting when roster data is partial, missing, or source-ambiguous
+- ensure roster snapshots do not overwrite live/current team-management truth outside the import scope
+
+## Analyst Workspace Acceptance Criteria
+
+- Imported matches appear in Analyst Workspace completed matches list.
+- Imported matches are visually marked as imported.
+- Imported match detail opens without errors.
+- Innings data appears where available.
+- Delivery availability is shown accurately.
+- Registry/provenance panel shows competition, season, venue, source, and import batch metadata.
+- Export functions work with imported matches.
+- AI summary and podcast prep handle insufficient data safely.
+- No fake frontend data is required.
+
+## Required Tests
+
+- JSON schema classification tests
+- Canonical normalization tests
+- Dry-run no-write tests
+- Validation failure tests
+- Duplicate detection tests
+- Import batch provenance tests
+- Rollback/cleanup tests
+- Analyst Workspace API compatibility tests
+- Org/RBAC isolation tests
+- Migration tests if schema changes are added
+
+## Required CI/Gates
+
+- Governance audit/spec lock approval completed before any implementation PR starts
+- Dry-run-first gate enforced before any write/commit behavior is allowed
+- Duplicate-protection and provenance gates enforced before apply/import approval
+- Analyst Workspace compatibility gates pass without fake frontend data paths
+- Org/RBAC isolation gates pass for imported historical visibility
+- Existing historical import, live scoring, DLS, Coach Pro Plus, and completed phase evidence remain protected
+- Full existing repo CI gates must pass in the later implementation phase whenever backend/frontend/runtime changes are introduced
+
+## Success Criteria
+
+- The competition-aware historical registry/import foundation is documented without implementing runtime code in this phase.
+- Future implementation requirements are locked for schema classification, canonical normalization, dry-run validation, duplicate protection, provenance, competition metadata, and roster snapshots.
+- Analyst Workspace compatibility expectations are explicit and bounded by real imported data only.
+- Existing phase content and evidence remain preserved, and Phase 10 remains intact with this governance phase inserted between Phase 10 and Phase 11.
+- No backend code, frontend code, migrations, tests, or CI workflows are changed in this governance phase.
+
+---
+
 # Phase 11 — Organization Pro + League Operations
 
 ## Purpose
@@ -3531,11 +3707,12 @@ Check imports, typing, formatting, migrations, tests, and CI impact before final
 9. Phase 8 — AI Analytics + Match Intelligence Enhancements
 10. Phase 9 — Player Development Intelligence Foundation
 11. Phase 10 — Subscription, Pricing + Tier Enforcement Hardening
-12. Phase 11 — Organization Pro + League Operations
-13. Phase 12 — Live Viewer, Streaming + Sponsor Experience
-14. Phase 13 — Media, Highlights + Report Content Engine
-15. Phase 14 — Lightweight Cricket Supervisor Layer
-16. Phase 15 — Production Scale, Monitoring + Cost Control
+12. Phase 10A — Competition-Aware Historical Match Registry + JSON Import Foundation
+13. Phase 11 — Organization Pro + League Operations
+14. Phase 12 — Live Viewer, Streaming + Sponsor Experience
+15. Phase 13 — Media, Highlights + Report Content Engine
+16. Phase 14 — Lightweight Cricket Supervisor Layer
+17. Phase 15 — Production Scale, Monitoring + Cost Control
 
 Reason:
 
