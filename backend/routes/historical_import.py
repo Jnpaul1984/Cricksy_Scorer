@@ -98,6 +98,7 @@ PHASE_5L_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
 PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
 PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES = 100 * 1024 * 1024
 PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR = "::"
+PHASE_10I_CPL_MAX_BATCH_FILES = 25
 PHASE_7_MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 PHASE_7_ALLOWED_DOCUMENT_CONTENT_TYPES = frozenset(
     {
@@ -158,6 +159,88 @@ def _parse_selected_file_names(selected_files: str) -> list[str]:
         seen.add(normalized_name)
         unique_names.append(normalized_name)
     return unique_names
+
+
+def _is_controlled_cpl_candidate(candidate: _BulkJsonCandidate) -> bool:
+    metadata_event = (candidate.dry_run.metadata_preview.event_name or "").strip().lower()
+    competition_name = ""
+    tournament_name = ""
+    canonical_preview = candidate.dry_run.canonical_preview
+    if canonical_preview is not None:
+        competition_name = (canonical_preview.competition_context.competition_name or "").strip().lower()
+        tournament_name = (canonical_preview.competition_context.tournament_name or "").strip().lower()
+
+    cpl_sources = [metadata_event, competition_name, tournament_name]
+    return any(
+        ("caribbean premier league" in source) or bool(re.search(r"\bcpl\b", source))
+        for source in cpl_sources
+        if source
+    )
+
+
+def _validate_controlled_cpl_batch_selection(
+    *,
+    selected_names: list[str],
+    candidates: dict[str, _BulkJsonCandidate],
+    total_entries: int,
+) -> None:
+    selected_cpl: list[tuple[str, _BulkJsonCandidate]] = []
+    for file_name in selected_names:
+        candidate = candidates.get(file_name)
+        if candidate is not None and _is_controlled_cpl_candidate(candidate):
+            selected_cpl.append((file_name, candidate))
+
+    if not selected_cpl:
+        return
+
+    if total_entries > PHASE_10I_CPL_MAX_BATCH_FILES:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Controlled CPL import blocks ZIP-wide scans above 25 entries. "
+                "Use staged CPL batches only (1, 3-5, 10, then 20-25)."
+            ),
+        )
+
+    selected_count = len(selected_cpl)
+    in_ladder = (
+        selected_count == 1
+        or 3 <= selected_count <= 5
+        or selected_count == 10
+        or 20 <= selected_count <= PHASE_10I_CPL_MAX_BATCH_FILES
+    )
+    if not in_ladder:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Controlled CPL staged ladder violation: selected {selected_count} CPL files. "
+                "Allowed batch sizes are 1, 3-5, 10, or 20-25."
+            ),
+        )
+
+    duplicate_selected = [
+        file_name for file_name, candidate in selected_cpl if candidate.status == "duplicate"
+    ]
+    if duplicate_selected:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Controlled CPL import stopped: duplicate collisions require manual review "
+                f"before apply ({', '.join(duplicate_selected)})."
+            ),
+        )
+
+    invalid_selected = [
+        file_name for file_name, candidate in selected_cpl if candidate.status != "valid"
+    ]
+    if invalid_selected:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Controlled CPL import stopped: every selected CPL file must pass dry-run "
+                f"as valid before apply ({', '.join(invalid_selected)})."
+            ),
+        )
 
 
 def _scan_zip_members(payload_bytes: bytes) -> list[zipfile.ZipInfo]:
@@ -1157,6 +1240,11 @@ async def historical_json_bulk_zip_apply(
         db=db,
         owner_user_id=owner_user_id,
         owner_org_id=owner_org_id,
+    )
+    _validate_controlled_cpl_batch_selection(
+        selected_names=selected_names,
+        candidates=candidates,
+        total_entries=preview.total_entries,
     )
 
     results: list[HistoricalImportBulkZipApplyFileResult] = []

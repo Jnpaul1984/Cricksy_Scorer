@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import io
 import json
 import zipfile
@@ -9,16 +10,34 @@ from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.routes.historical_import import (
+    PHASE_10I_CPL_MAX_BATCH_FILES,
     PHASE_5L_MAX_FILES,
     PHASE_5L_MAX_FULL_APPLY_FILES,
     PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES,
 )
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
+CPL_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_635215.json"
 
 
 def _load_fixture() -> dict[str, object]:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+
+
+def _load_cpl_fixture() -> dict[str, object]:
+    return json.loads(CPL_FIXTURE_PATH.read_text(encoding="utf-8"))
+
+
+def _build_cpl_fixture(match_number: int) -> dict[str, object]:
+    fixture = deepcopy(_load_cpl_fixture())
+    info = fixture.setdefault("info", {})
+    if not isinstance(info, dict):
+        return fixture
+    event = info.setdefault("event", {})
+    if isinstance(event, dict):
+        event["match_number"] = match_number
+    info["dates"] = [f"2013-08-{(match_number % 28) + 1:02d}"]
+    return fixture
 
 
 def _build_zip(entries: dict[str, bytes]) -> bytes:
@@ -338,3 +357,60 @@ def test_bulk_zip_apply_large_zip_records_metadata_only_batches_not_training_eli
     training_data = training.json()
     assert training_data["training_eligible"] is False
     assert training_data["exclusion_reason"] == "metadata_only_pending_full_import"
+
+
+def test_bulk_zip_apply_rejects_cpl_batch_size_outside_controlled_ladder() -> None:
+    payload = _build_zip(
+        {
+            "cpl_a.json": json.dumps(_build_cpl_fixture(1)).encode("utf-8"),
+            "cpl_b.json": json.dumps(_build_cpl_fixture(2)).encode("utf-8"),
+        }
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/historical-import/json/bulk-zip/apply",
+            files={"file": ("cpl.zip", payload, "application/zip")},
+            data={"confirm": "true", "selected_files": json.dumps(["cpl_a.json", "cpl_b.json"])},
+        )
+
+    assert response.status_code == 422, response.text
+    assert "staged ladder" in response.json()["detail"].lower()
+
+
+def test_bulk_zip_apply_rejects_cpl_duplicate_collision_stop_condition() -> None:
+    cpl = json.dumps(_build_cpl_fixture(1)).encode("utf-8")
+    payload = _build_zip({"cpl_a.json": cpl, "cpl_b.json": cpl, "cpl_c.json": cpl})
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/historical-import/json/bulk-zip/apply",
+            files={"file": ("cpl.zip", payload, "application/zip")},
+            data={
+                "confirm": "true",
+                "selected_files": json.dumps(["cpl_a.json", "cpl_b.json", "cpl_c.json"]),
+            },
+        )
+
+    assert response.status_code == 409, response.text
+    assert "manual review" in response.json()["detail"].lower()
+    assert "duplicate" in response.json()["detail"].lower()
+
+
+def test_bulk_zip_apply_rejects_cpl_zip_above_controlled_batch_limit() -> None:
+    entries = {
+        f"cpl_{idx:03d}.json": json.dumps(_build_cpl_fixture(idx + 1)).encode("utf-8")
+        for idx in range(PHASE_10I_CPL_MAX_BATCH_FILES + 1)
+    }
+    selected = list(entries.keys())[:PHASE_10I_CPL_MAX_BATCH_FILES]
+    payload = _build_zip(entries)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/historical-import/json/bulk-zip/apply",
+            files={"file": ("cpl-large.zip", payload, "application/zip")},
+            data={"confirm": "true", "selected_files": json.dumps(selected)},
+        )
+
+    assert response.status_code == 422, response.text
+    assert "above 25 entries" in response.json()["detail"].lower()
