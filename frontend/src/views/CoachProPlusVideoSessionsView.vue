@@ -292,6 +292,20 @@
         </div>
 
         <div v-else class="history-list">
+          <div class="review-workflow-banner">
+            <h3>Governed recommendation review</h3>
+            <p class="status-text">
+              Coach approval controls player-facing visibility. Unapproved recommendations remain
+              internal/advisory only.
+            </p>
+            <p v-if="recommendationLookupLoading" class="status-text">
+              Loading linked player development recommendations…
+            </p>
+            <p v-else-if="recommendationLookupError" class="status-text review-workflow-error">
+              {{ recommendationLookupError }}
+            </p>
+          </div>
+
           <!-- Comparison Mode Toggle -->
           <div class="comparison-toolbar">
             <button class="btn-secondary" @click="toggleComparisonMode">
@@ -315,6 +329,7 @@
                 </th>
                 <th>Date</th>
                 <th>Status</th>
+                <th>Recommendation review</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -332,6 +347,12 @@
                 <td>
                   <span :class="['status-badge', `status-${job.status}`]">
                     {{ job.status }}
+                  </span>
+                </td>
+                <td class="history-review">
+                  <strong class="history-review-summary">{{ reviewSummaryForJob(job) }}</strong>
+                  <span class="history-review-message">
+                    {{ reviewStatusMessageForJob(job) }}
                   </span>
                 </td>
                 <td class="history-actions">
@@ -381,6 +402,58 @@
             • {{ formatCameraView(selectedJob.camera_view) }}
           </span>
         </div>
+
+        <section class="results-section recommendation-review-section">
+          <h3>Coach Pro Plus recommendation review</h3>
+          <p class="status-text">
+            Coach approval controls player-facing visibility. Unapproved recommendations remain
+            internal/advisory only until approved.
+          </p>
+          <p v-if="recommendationLookupLoading" class="status-text">
+            Loading linked player development recommendations…
+          </p>
+          <p v-else-if="recommendationLookupError" class="status-text review-workflow-error">
+            {{ recommendationLookupError }}
+          </p>
+          <p
+            v-else-if="selectedJobReviewBundles.length === 0"
+            class="status-text"
+            data-testid="recommendation-review-status"
+          >
+            {{ reviewStatusMessageForJob(selectedJob) }}
+          </p>
+          <div v-else class="recommendation-review-cards">
+            <CoachingSkillRecommendationReviewCard
+              v-for="bundle in selectedJobReviewBundles"
+              :key="bundle.plan.id"
+              :plan-id="bundle.plan.id"
+              :player-profile-id="bundle.plan.player_profile_id"
+              :session-title="selectedSessionTitleForJob(selectedJob)"
+              :session-id="selectedJob.session_id"
+              :job-id="selectedJob.id"
+              :analysis-mode="analysisModeLabelForJob(selectedJob)"
+              :approval-state="bundle.plan.approval_state"
+              :coach-approved="bundle.plan.coach_approved"
+              :evidence-refs="bundle.plan.evidence_refs"
+              :confidence-score="bundle.plan.confidence_score"
+              :limitations="planLimitations(bundle)"
+              :recommendation-text="planRecommendationSummary(bundle)"
+              :focus-areas="planFocusAreas(bundle)"
+              :suggested-drills="planSuggestedDrills(bundle)"
+              :evidence-status-text="evidenceStatusTextForJob(selectedJob)"
+              :review-loading="Boolean(reviewLoadingByPlanId[bundle.plan.id])"
+              :review-error="reviewErrorByPlanId[bundle.plan.id] ?? null"
+              :review-success="reviewSuccessByPlanId[bundle.plan.id] ?? null"
+              :reviewer-notes="latestReviewByPlanId[bundle.plan.id]?.reviewer_notes ?? null"
+              :reviewed-by-user-id="latestReviewByPlanId[bundle.plan.id]?.reviewed_by_user_id ?? null"
+              :reviewed-at="latestReviewByPlanId[bundle.plan.id]?.reviewed_at ?? null"
+              :can-review="canReviewRecommendations"
+              @approve="submitPlanReview(bundle.plan.id, 'approved', $event)"
+              @reject="submitPlanReview(bundle.plan.id, 'rejected', $event)"
+              @request-changes="submitPlanReview(bundle.plan.id, 'changes_requested', $event)"
+            />
+          </div>
+        </section>
 
         <!-- Timed out -->
         <div v-if="pollTimedOut" class="results-error">
@@ -666,6 +739,7 @@ import GoalSetter from '@/components/GoalSetter.vue';
 import OutcomesViewer from '@/components/OutcomesViewer.vue';
 import SessionComparison from '@/components/SessionComparison.vue';
 import CoachSuggestionsPanel from '@/components/CoachSuggestionsPanel.vue';
+import CoachingSkillRecommendationReviewCard from '@/components/CoachingSkillRecommendationReviewCard.vue';
 import PlayerSummaryCard from '@/components/PlayerSummaryCard.vue';
 import type {
   VideoAnalysisJob,
@@ -681,6 +755,14 @@ import {
   generateCoachSuggestions,
   getCoachSuggestions,
 } from '@/services/coachPlusVideoService';
+import {
+  listPlayerDevelopmentPlans,
+  reviewPlayerDevelopmentPlan,
+  PlayerDevelopmentApiError,
+  type PlayerDevelopmentPlanDraftBundle,
+  type PlayerDevelopmentPlanReviewResponse,
+  type PlayerDevelopmentReviewDecision,
+} from '@/services/playerDevelopmentApi';
 import { useAuthStore } from '@/stores/authStore';
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
 import { buildCoachNarrative } from '@/utils/coachVideoAnalysisNarrative';
@@ -721,6 +803,13 @@ const loadingSuggestions = ref(false);
 const selectedSession = ref<any | null>(null);
 const analysisHistory = ref<VideoAnalysisJob[]>([]);
 const loadingHistory = ref(false);
+const recommendationLookupLoading = ref(false);
+const recommendationLookupError = ref<string | null>(null);
+const recommendationBundlesByJobId = ref<Record<string, PlayerDevelopmentPlanDraftBundle[]>>({});
+const reviewLoadingByPlanId = ref<Record<string, boolean>>({});
+const reviewErrorByPlanId = ref<Record<string, string | null>>({});
+const reviewSuccessByPlanId = ref<Record<string, string | null>>({});
+const latestReviewByPlanId = ref<Record<string, PlayerDevelopmentPlanReviewResponse | null>>({});
 
 const selectedFile = ref<File | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -810,6 +899,11 @@ const canExport = computed(() => {
   const t = String(tierRaw.value).toLowerCase();
   return t.includes('plus');
 });
+
+const canReviewRecommendations = computed(() => authStore.isCoachProPlus);
+const selectedJobReviewBundles = computed(() =>
+  selectedJob.value ? recommendationBundlesByJobId.value[selectedJob.value.id] ?? [] : [],
+);
 
 const uiPollInterval = ref<ReturnType<typeof setInterval> | null>(null);
 const pollTimedOut = ref(false);
@@ -932,6 +1026,202 @@ async function exportPdf() {
 
 const currentPage = computed(() => Math.floor(offset.value / limit.value) + 1);
 
+function isRecommendationEligibleJob(job: VideoAnalysisJob): boolean {
+  return job.status === 'done' || job.status === 'completed';
+}
+
+function selectedSessionTitleForJob(job: VideoAnalysisJob): string | null {
+  if (selectedSession.value?.id === job.session_id) {
+    return selectedSession.value?.title ?? null;
+  }
+  return sessions.value.find((session) => session.id === job.session_id)?.title ?? null;
+}
+
+function analysisModeLabelForJob(job: VideoAnalysisJob): string {
+  const raw =
+    job.analysis_context ??
+    selectedSession.value?.analysis_context ??
+    sessions.value.find((session) => session.id === job.session_id)?.analysis_context ??
+    null;
+  return raw ? formatAnalysisContext(raw) : 'Not available yet';
+}
+
+function evidenceStatusTextForJob(job: VideoAnalysisJob): string {
+  if (!isRecommendationEligibleJob(job)) {
+    return 'Timestamp-linked evidence becomes eligible for governed review once the job reaches completed/done.';
+  }
+
+  const narrative = buildCoachNarrative(job);
+  let momentCount = 0;
+  let timestampCount = 0;
+  let segmentCount = 0;
+
+  for (const priority of narrative.priorities) {
+    const evidence = priority.evidence;
+    if (!evidence) continue;
+    momentCount += evidence.worstFrames.length;
+    segmentCount += evidence.badSegments.length;
+    timestampCount += evidence.worstFrames.filter((frame) => frame.timeSeconds !== undefined).length;
+    timestampCount += evidence.badSegments.filter((segment) => segment.startSeconds !== undefined).length;
+  }
+
+  if (momentCount === 0 && segmentCount === 0) {
+    return 'No timestamp-linked evidence markers are exposed for this completed job yet.';
+  }
+
+  return `${timestampCount} timestamped marker${timestampCount === 1 ? '' : 's'} across ${momentCount} moment${momentCount === 1 ? '' : 's'} and ${segmentCount} segment${segmentCount === 1 ? '' : 's'}.`;
+}
+
+function bundleMatchesJob(
+  bundle: PlayerDevelopmentPlanDraftBundle,
+  sessionId: string,
+  jobId: string,
+): boolean {
+  const aiMetadata = bundle.plan.ai_metadata ?? {};
+  const videoJobId =
+    typeof aiMetadata.video_analysis_job_id === 'string' ? aiMetadata.video_analysis_job_id : null;
+  const videoSessionId =
+    typeof aiMetadata.video_session_id === 'string' ? aiMetadata.video_session_id : null;
+  const hasJobRef = bundle.plan.evidence_refs.some(
+    (ref) => ref.type === 'video_analysis_job' && ref.id === jobId,
+  );
+  const hasSessionRef = bundle.plan.evidence_refs.some(
+    (ref) => ref.type === 'video_session' && ref.id === sessionId,
+  );
+
+  return (
+    (videoJobId === jobId || hasJobRef) &&
+    (!videoSessionId || videoSessionId === sessionId || hasSessionRef)
+  );
+}
+
+function planRecommendationSummary(bundle: PlayerDevelopmentPlanDraftBundle): string {
+  if (bundle.plan.summary) return bundle.plan.summary;
+  if (bundle.goals[0]?.title) return bundle.goals[0].title;
+  if (bundle.weakness_tags[0]?.safe_display_label) return bundle.weakness_tags[0].safe_display_label;
+  return bundle.plan.title;
+}
+
+function planFocusAreas(bundle: PlayerDevelopmentPlanDraftBundle): string[] {
+  return bundle.weakness_tags
+    .map((tag) => tag.safe_display_label)
+    .filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index)
+    .slice(0, 4);
+}
+
+function planSuggestedDrills(bundle: PlayerDevelopmentPlanDraftBundle): string[] {
+  return bundle.drill_assignments
+    .map((drill) => drill.drill_name)
+    .filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index)
+    .slice(0, 4);
+}
+
+function planLimitations(bundle: PlayerDevelopmentPlanDraftBundle): string[] {
+  return Array.isArray(bundle.plan.ai_metadata?.limitations)
+    ? (bundle.plan.ai_metadata.limitations as string[])
+    : [];
+}
+
+function reviewStateLabel(approvalState: string): string {
+  switch (approvalState) {
+    case 'approved':
+      return 'Approved';
+    case 'rejected':
+      return 'Rejected';
+    case 'changes_requested':
+      return 'Changes requested';
+    case 'pending_review':
+      return 'Pending review';
+    case 'not_required':
+      return 'No review required';
+    default:
+      return approvalState;
+  }
+}
+
+function reviewStatusMessageForJob(job: VideoAnalysisJob): string {
+  if (recommendationLookupLoading.value) {
+    return 'Checking player development recommendations…';
+  }
+
+  if (job.status === 'failed') {
+    return 'Review unavailable because this analysis job failed.';
+  }
+
+  if (!isRecommendationEligibleJob(job)) {
+    return 'Completed/done analysis is required before governed recommendation review becomes eligible.';
+  }
+
+  if (!selectedSession.value?.player_ids?.length) {
+    return 'This session has no linked player IDs, so governed recommendation matching is unavailable.';
+  }
+
+  const linkedPlans = recommendationBundlesByJobId.value[job.id] ?? [];
+  if (linkedPlans.length === 0) {
+    return 'Completed job, but no linked governed recommendation is available yet.';
+  }
+
+  return linkedPlans
+    .map(
+      (bundle) =>
+        `${reviewStateLabel(bundle.plan.approval_state)} · ${
+          bundle.plan.coach_approved ? 'player-facing allowed' : 'internal only'
+        }`,
+    )
+    .join(' • ');
+}
+
+function reviewSummaryForJob(job: VideoAnalysisJob): string {
+  if (job.status === 'failed') return 'Not reviewable';
+  if (!isRecommendationEligibleJob(job)) return 'Not eligible yet';
+
+  const linkedPlans = recommendationBundlesByJobId.value[job.id] ?? [];
+  if (linkedPlans.length === 0) return 'Eligible, awaiting recommendation';
+  if (linkedPlans.length === 1) return reviewStateLabel(linkedPlans[0].plan.approval_state);
+  return `${linkedPlans.length} linked recommendations`;
+}
+
+function applyReviewResponse(
+  planId: string,
+  response: PlayerDevelopmentPlanReviewResponse,
+): void {
+  const nextBundles: Record<string, PlayerDevelopmentPlanDraftBundle[]> = {};
+  for (const [jobId, bundles] of Object.entries(recommendationBundlesByJobId.value)) {
+    nextBundles[jobId] = bundles.map((bundle) =>
+      bundle.plan.id === planId
+        ? {
+            ...bundle,
+            plan: {
+              ...bundle.plan,
+              approval_state: response.approval_state,
+              coach_approved: response.coach_approved,
+              updated_at: response.reviewed_at,
+            },
+          }
+        : bundle,
+    );
+  }
+  recommendationBundlesByJobId.value = nextBundles;
+}
+
+function formatReviewSubmissionError(error: unknown): string {
+  if (error instanceof PlayerDevelopmentApiError) {
+    if (error.isUnauthorized()) {
+      return 'You are not allowed to review this recommendation.';
+    }
+    if (error.isNotFound()) {
+      return 'The linked player development recommendation could not be found.';
+    }
+    if (error.isConflict()) {
+      return 'This recommendation cannot be reviewed in its current plan status.';
+    }
+    if (error.isValidationError()) {
+      return 'Review request was invalid. Please update the notes and try again.';
+    }
+  }
+  return error instanceof Error ? error.message : 'Failed to submit review decision.';
+}
+
 // ============================================================================
 // Methods
 // ============================================================================
@@ -951,6 +1241,96 @@ async function fetchSessions() {
     console.error(err);
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadRecommendationLinks(
+  session: { id: string; player_ids?: string[] },
+  jobs: VideoAnalysisJob[],
+) {
+  recommendationLookupLoading.value = true;
+  recommendationLookupError.value = null;
+  recommendationBundlesByJobId.value = {};
+
+  try {
+    const playerIds = Array.isArray(session.player_ids) ? session.player_ids : [];
+    const eligibleJobs = jobs.filter(isRecommendationEligibleJob);
+    if (playerIds.length === 0 || eligibleJobs.length === 0) {
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      playerIds.map((playerId) => listPlayerDevelopmentPlans(playerId)),
+    );
+
+    const bundles = results.flatMap((result) =>
+      result.status === 'fulfilled' ? result.value : [],
+    );
+
+    const linkedByJobId: Record<string, PlayerDevelopmentPlanDraftBundle[]> = {};
+    for (const job of eligibleJobs) {
+      const linked = bundles.filter((bundle) => bundleMatchesJob(bundle, session.id, job.id));
+      if (linked.length > 0) {
+        linkedByJobId[job.id] = linked;
+      }
+    }
+
+    const rejected = results.find((result) => result.status === 'rejected');
+    if (rejected) {
+      recommendationLookupError.value =
+        rejected.reason instanceof Error
+          ? rejected.reason.message
+          : 'Some recommendation links could not be loaded.';
+    }
+
+    recommendationBundlesByJobId.value = linkedByJobId;
+  } finally {
+    recommendationLookupLoading.value = false;
+  }
+}
+
+async function submitPlanReview(
+  planId: string,
+  decision: PlayerDevelopmentReviewDecision,
+  reviewerNotes: string,
+) {
+  reviewLoadingByPlanId.value = {
+    ...reviewLoadingByPlanId.value,
+    [planId]: true,
+  };
+  reviewErrorByPlanId.value = {
+    ...reviewErrorByPlanId.value,
+    [planId]: null,
+  };
+  reviewSuccessByPlanId.value = {
+    ...reviewSuccessByPlanId.value,
+    [planId]: null,
+  };
+
+  try {
+    const response = await reviewPlayerDevelopmentPlan(planId, {
+      decision,
+      reviewer_notes: reviewerNotes || undefined,
+    });
+    latestReviewByPlanId.value = {
+      ...latestReviewByPlanId.value,
+      [planId]: response,
+    };
+    reviewSuccessByPlanId.value = {
+      ...reviewSuccessByPlanId.value,
+      [planId]: `Review saved: ${reviewStateLabel(response.approval_state)}.`,
+    };
+    applyReviewResponse(planId, response);
+  } catch (reviewError) {
+    reviewErrorByPlanId.value = {
+      ...reviewErrorByPlanId.value,
+      [planId]: formatReviewSubmissionError(reviewError),
+    };
+  } finally {
+    reviewLoadingByPlanId.value = {
+      ...reviewLoadingByPlanId.value,
+      [planId]: false,
+    };
   }
 }
 
@@ -1233,6 +1613,9 @@ function timelineSegStyle(seg: {
 
 async function selectSession(sessionId: string) {
   try {
+    recommendationLookupError.value = null;
+    recommendationBundlesByJobId.value = {};
+
     // Find the session
     const session = sessions.value.find(s => s.id === sessionId);
     if (!session) {
@@ -1247,6 +1630,7 @@ async function selectSession(sessionId: string) {
 
     const { getAnalysisHistory } = await import('@/services/coachPlusVideoService');
     analysisHistory.value = await getAnalysisHistory(sessionId);
+    await loadRecommendationLinks(session, analysisHistory.value);
     loadingHistory.value = false;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load session history';
@@ -1368,6 +1752,9 @@ function closeHistoryModal() {
   showHistoryModal.value = false;
   selectedSession.value = null;
   analysisHistory.value = [];
+  recommendationLookupLoading.value = false;
+  recommendationLookupError.value = null;
+  recommendationBundlesByJobId.value = {};
 }
 
 // ============================================================================
@@ -2506,6 +2893,22 @@ onBeforeUnmount(() => {
   margin-top: 1.5rem;
 }
 
+.review-workflow-banner {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid #dbe4ff;
+  border-radius: 8px;
+  background: #f8faff;
+}
+
+.review-workflow-banner h3 {
+  margin: 0 0 0.5rem;
+}
+
+.review-workflow-error {
+  color: #c0392b;
+}
+
 .history-table {
   width: 100%;
   border-collapse: collapse;
@@ -2527,6 +2930,21 @@ onBeforeUnmount(() => {
 
 .history-table tbody tr:hover {
   background: #f5f5f5;
+}
+
+.history-review {
+  min-width: 220px;
+}
+
+.history-review-summary,
+.history-review-message {
+  display: block;
+}
+
+.history-review-message {
+  margin-top: 0.25rem;
+  color: #666;
+  font-size: 0.875rem;
 }
 
 .history-actions {
@@ -2564,6 +2982,18 @@ onBeforeUnmount(() => {
 .btn-small:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.recommendation-review-section {
+  border: 1px solid #dbe4ff;
+  border-radius: 8px;
+  background: #f8faff;
+}
+
+.recommendation-review-cards {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
 }
 
 /* Phase 2: Comparison Toolbar */

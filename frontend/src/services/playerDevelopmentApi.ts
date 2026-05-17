@@ -41,6 +41,10 @@ export class PlayerDevelopmentApiError extends Error {
     return this.status === 404;
   }
 
+  isConflict(): boolean {
+    return this.status === 409;
+  }
+
   isValidationError(): boolean {
     return this.status === 422;
   }
@@ -92,6 +96,7 @@ async function fetchWithAuth<T>(path: string, options: RequestInit = {}): Promis
 
 export type PlanStatus = 'draft' | 'active' | 'paused' | 'completed' | 'archived';
 export type ApprovalState = 'not_required' | 'pending_review' | 'approved' | 'rejected' | 'changes_requested';
+export type PlayerDevelopmentReviewDecision = 'approved' | 'rejected' | 'changes_requested';
 export type SourceType = 'match_data' | 'video_analysis' | 'coach_note' | 'ai_insight' | 'manual';
 export type Severity = 'low' | 'medium' | 'high';
 
@@ -326,6 +331,20 @@ export interface PlayerDevelopmentTeamOverviewParams {
   include_archived?: boolean;
 }
 
+export interface ReviewPlayerDevelopmentPlanPayload {
+  decision: PlayerDevelopmentReviewDecision;
+  reviewer_notes?: string;
+}
+
+export interface PlayerDevelopmentPlanReviewResponse {
+  plan_id: string;
+  approval_state: Extract<ApprovalState, 'approved' | 'rejected' | 'changes_requested'>;
+  coach_approved: boolean;
+  reviewer_notes?: string | null;
+  reviewed_by_user_id: string;
+  reviewed_at: string;
+}
+
 // ---------------------------------------------------------------------------
 // Public API functions
 // ---------------------------------------------------------------------------
@@ -406,5 +425,24 @@ export async function getPlayerDevelopmentTeamOverview(
   const suffix = query.toString() ? `?${query.toString()}` : '';
   return fetchWithAuth<PlayerDevelopmentTeamOverview>(
     `/api/player-development/dashboard/team-overview${suffix}`,
+  );
+}
+
+/**
+ * Submit a governed coach review decision for a player development plan.
+ *
+ * Throws `PlayerDevelopmentApiError` on permission (403), not-found (404),
+ * conflict (409), validation (422), authentication (401), or network errors.
+ */
+export async function reviewPlayerDevelopmentPlan(
+  planId: string,
+  payload: ReviewPlayerDevelopmentPlanPayload,
+): Promise<PlayerDevelopmentPlanReviewResponse> {
+  return fetchWithAuth<PlayerDevelopmentPlanReviewResponse>(
+    `/api/player-development/plans/${encodeURIComponent(planId)}/review`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
   );
 }
