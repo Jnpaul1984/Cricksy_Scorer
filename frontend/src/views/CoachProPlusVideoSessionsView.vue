@@ -1,7 +1,7 @@
 <template>
   <div class="coach-pro-plus-video-sessions">
-    <!-- Feature Gate: Not Coach (Pro / Pro Plus) -->
-    <div v-if="!authStore.isCoach" class="feature-gate">
+    <!-- Feature Gate: No coach-facing access -->
+    <div v-if="!authStore.canCoach" class="feature-gate">
       <div class="upgrade-card">
         <h2>Unlock Video Sessions</h2>
         <p>
