@@ -9,6 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.sql_app.models import (
+    HistoricalCompetitionRosterEntry,
+    HistoricalCompetitionRosterStatus,
     HistoricalPlayerResolutionQueue,
     HistoricalPlayerResolutionState,
     HistoricalSourcePlayerAlias,
@@ -44,6 +46,8 @@ class _RegistrationSummary(TypedDict):
     career_profiles_updated: int
     canonical_safe_fills: int
     metadata_conflicts: int
+    roster_entries_upserted: int
+    roster_conflicts: int
 
 
 def normalize_source_player_name(name: str) -> str:
@@ -100,59 +104,110 @@ def _extract_roster_entries(
     roster_snapshot: list[dict[str, Any]],
     player_names: list[str],
 ) -> list[dict[str, Any]]:
-    entries: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for team_entry in roster_snapshot:
-        if not isinstance(team_entry, dict):
-            continue
-        team_name = str(team_entry.get("team_name") or "").strip()
-        for player_entry in team_entry.get("named_squad") or []:
-            player_name: str | None = None
-            entry_metadata: dict[str, Any] = {}
-            source_status = "unknown"
-            if isinstance(player_entry, str):
-                player_name = player_entry.strip() or None
-            elif isinstance(player_entry, dict):
-                player_name = (
-                    str(
-                        player_entry.get("name")
-                        or player_entry.get("player_name")
-                        or player_entry.get("full_name")
-                        or ""
-                    ).strip()
-                    or None
-                )
-                entry_metadata = {
+    entries_by_key: dict[tuple[str | None, str], dict[str, Any]] = {}
+    status_order = {
+        "named_squad": 0,
+        "playing_xi": 1,
+        "substitute": 2,
+        "unresolved": 3,
+        "unavailable_unknown": 4,
+    }
+
+    def _parse_player_entry(player_entry: Any) -> tuple[str | None, dict[str, Any], str]:
+        if isinstance(player_entry, str):
+            return player_entry.strip() or None, {}, "unknown"
+        if isinstance(player_entry, dict):
+            player_name = (
+                str(
+                    player_entry.get("name")
+                    or player_entry.get("player_name")
+                    or player_entry.get("full_name")
+                    or ""
+                ).strip()
+                or None
+            )
+            return (
+                player_name,
+                {
                     "batting_style": player_entry.get("batting_style"),
                     "bowling_style": player_entry.get("bowling_style"),
                     "role": player_entry.get("role") or player_entry.get("player_role"),
                     "batting_innings_count": player_entry.get("batting_innings_count"),
                     "bowling_participation_count": player_entry.get("bowling_participation_count"),
-                }
-                source_status = "source"
-            if not player_name:
-                continue
-            key = player_name.casefold()
-            if key in seen:
-                continue
-            seen.add(key)
-            entries.append(
-                {
-                    "name": player_name,
-                    "team_name": team_name or None,
-                    "metadata": entry_metadata,
-                    "metadata_source_status": source_status,
-                }
+                    "source_player_id": player_entry.get("source_player_id"),
+                },
+                "source",
             )
+        return None, {}, "unknown"
+
+    def _add_entry(
+        *,
+        player_name: str,
+        team_name: str | None,
+        roster_status: str,
+        metadata: dict[str, Any],
+        metadata_source_status: str,
+    ) -> None:
+        key = (team_name, player_name.casefold())
+        existing = entries_by_key.get(key)
+        if existing is None:
+            existing = {
+                "name": player_name,
+                "team_name": team_name,
+                "metadata": metadata,
+                "metadata_source_status": metadata_source_status,
+                "roster_statuses": [],
+            }
+            entries_by_key[key] = existing
+        elif existing.get("metadata_source_status") != "source" and metadata_source_status == "source":
+            existing["metadata"] = metadata
+            existing["metadata_source_status"] = "source"
+
+        roster_statuses = list(existing.get("roster_statuses") or [])
+        if roster_status not in roster_statuses:
+            roster_statuses.append(roster_status)
+            roster_statuses.sort(key=lambda status: status_order.get(status, 999))
+            existing["roster_statuses"] = roster_statuses
+
+    for team_entry in roster_snapshot:
+        if not isinstance(team_entry, dict):
+            continue
+        team_name = str(team_entry.get("team_name") or "").strip()
+        status_lists: list[tuple[str, Any]] = [
+            ("named_squad", team_entry.get("named_squad")),
+            ("playing_xi", team_entry.get("playing_xi")),
+            ("substitute", team_entry.get("substitutes")),
+            ("unresolved", team_entry.get("unresolved_entries")),
+        ]
+        for status, players in status_lists:
+            if not isinstance(players, list):
+                continue
+            for player_entry in players:
+                player_name, entry_metadata, source_status = _parse_player_entry(player_entry)
+                if not player_name:
+                    continue
+                _add_entry(
+                    player_name=player_name,
+                    team_name=team_name or None,
+                    roster_status=status,
+                    metadata=entry_metadata,
+                    metadata_source_status=source_status,
+                )
+
     for player_name in player_names:
         if not isinstance(player_name, str) or not player_name.strip():
             continue
-        key = player_name.strip().casefold()
-        if key in seen:
+        normalized_key = player_name.strip().casefold()
+        if any(existing_key[1] == normalized_key for existing_key in entries_by_key):
             continue
-        seen.add(key)
-        entries.append({"name": player_name.strip(), "team_name": None})
-    return entries
+        _add_entry(
+            player_name=player_name.strip(),
+            team_name=None,
+            roster_status="unavailable_unknown",
+            metadata={},
+            metadata_source_status="unknown",
+        )
+    return list(entries_by_key.values())
 
 
 async def _resolve_identity(
@@ -561,6 +616,151 @@ def _upsert_career_profile_foundation(
     registry.career_profile_foundation = foundation
 
 
+def _append_unique_dict_by_keys(
+    rows: list[dict[str, Any]],
+    candidate: dict[str, Any],
+    key_fields: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if all(row.get(field) == candidate.get(field) for field in key_fields):
+            return rows
+    rows.append(candidate)
+    return rows
+
+
+async def _upsert_competition_roster_entry(
+    db: AsyncSession,
+    *,
+    competition_type: str,
+    competition_name: str | None,
+    season: str | None,
+    team_name: str | None,
+    roster_status: HistoricalCompetitionRosterStatus,
+    canonical_player_id: int | None,
+    source_player_id: str | None,
+    source_player_name: str,
+    normalized_source_player_name: str,
+    source_schema: str,
+    source_system: str,
+    batch_id: str,
+    game_id: str,
+    source_provenance: dict[str, Any],
+    now: dt.datetime,
+) -> tuple[bool, int]:
+    filters = [
+        HistoricalCompetitionRosterEntry.source_system == source_system,
+        HistoricalCompetitionRosterEntry.source_schema == source_schema,
+        HistoricalCompetitionRosterEntry.game_id == game_id,
+        HistoricalCompetitionRosterEntry.roster_status == roster_status,
+        HistoricalCompetitionRosterEntry.normalized_source_player_name == normalized_source_player_name,
+    ]
+    if team_name is None:
+        filters.append(HistoricalCompetitionRosterEntry.team_name.is_(None))
+    else:
+        filters.append(HistoricalCompetitionRosterEntry.team_name == team_name)
+
+    existing = (await db.execute(select(HistoricalCompetitionRosterEntry).where(*filters))).scalars().first()
+    provenance_ref = {
+        "batch_id": batch_id,
+        "game_id": game_id,
+        "source_hash_sha256": source_provenance.get("source_hash_sha256"),
+        "source_schema": source_schema,
+        "source_system": source_system,
+    }
+    created = False
+    if existing is None:
+        existing = HistoricalCompetitionRosterEntry(
+            competition_type=competition_type,
+            competition_name=competition_name,
+            season=season,
+            team_name=team_name,
+            roster_status=roster_status,
+            canonical_player_id=canonical_player_id,
+            source_player_id=source_player_id,
+            source_player_name=source_player_name,
+            normalized_source_player_name=normalized_source_player_name,
+            source_schema=source_schema,
+            source_system=source_system,
+            batch_id=batch_id,
+            game_id=game_id,
+            provenance_references=[provenance_ref],
+            conflict_references=[],
+            review_required=False,
+        )
+        db.add(existing)
+        await db.flush()
+        created = True
+    else:
+        existing.provenance_references = _append_unique_dict_by_keys(
+            list(existing.provenance_references or []),
+            provenance_ref,
+            ("batch_id", "game_id", "source_hash_sha256"),
+        )
+        if existing.canonical_player_id is None and canonical_player_id is not None:
+            existing.canonical_player_id = canonical_player_id
+        if existing.source_player_id is None and source_player_id is not None:
+            existing.source_player_id = source_player_id
+        if existing.batch_id is None:
+            existing.batch_id = batch_id
+        db.add(existing)
+
+    conflict_count = 0
+    if canonical_player_id is not None and team_name:
+        team_conflicts = (
+            await db.execute(
+                select(HistoricalCompetitionRosterEntry).where(
+                    HistoricalCompetitionRosterEntry.id != existing.id,
+                    HistoricalCompetitionRosterEntry.source_system == source_system,
+                    HistoricalCompetitionRosterEntry.source_schema == source_schema,
+                    HistoricalCompetitionRosterEntry.competition_type == competition_type,
+                    HistoricalCompetitionRosterEntry.competition_name == competition_name,
+                    HistoricalCompetitionRosterEntry.season == season,
+                    HistoricalCompetitionRosterEntry.game_id == game_id,
+                    HistoricalCompetitionRosterEntry.canonical_player_id == canonical_player_id,
+                    HistoricalCompetitionRosterEntry.team_name.is_not(None),
+                    HistoricalCompetitionRosterEntry.team_name != team_name,
+                )
+            )
+        ).scalars().all()
+        for conflict_row in team_conflicts:
+            conflict_ref = {
+                "type": "same_match_multi_team_conflict",
+                "conflicting_entry_id": conflict_row.id,
+                "canonical_player_id": canonical_player_id,
+                "game_id": game_id,
+                "competition_name": competition_name,
+                "season": season,
+                "team_name": team_name,
+                "conflicting_team_name": conflict_row.team_name,
+                "detected_at": now.isoformat(),
+            }
+            existing.conflict_references = _append_unique_dict_by_keys(
+                list(existing.conflict_references or []),
+                conflict_ref,
+                ("type", "conflicting_entry_id"),
+            )
+            conflict_row.conflict_references = _append_unique_dict_by_keys(
+                list(conflict_row.conflict_references or []),
+                {
+                    **conflict_ref,
+                    "conflicting_entry_id": existing.id,
+                    "team_name": conflict_row.team_name,
+                    "conflicting_team_name": team_name,
+                },
+                ("type", "conflicting_entry_id"),
+            )
+            existing.review_required = True
+            conflict_row.review_required = True
+            db.add(conflict_row)
+            conflict_count += 1
+        if conflict_count:
+            db.add(existing)
+
+    return created, conflict_count
+
+
 async def register_historical_source_players(
     db: AsyncSession,
     *,
@@ -590,6 +790,8 @@ async def register_historical_source_players(
         "career_profiles_updated": 0,
         "canonical_safe_fills": 0,
         "metadata_conflicts": 0,
+        "roster_entries_upserted": 0,
+        "roster_conflicts": 0,
     }
 
     for entry in entries:
@@ -597,6 +799,13 @@ async def register_historical_source_players(
         team_name = entry.get("team_name")
         metadata_raw = entry.get("metadata")
         metadata: dict[str, Any] = metadata_raw if isinstance(metadata_raw, dict) else {}
+        roster_statuses_raw = entry.get("roster_statuses")
+        roster_statuses = (
+            [str(item) for item in roster_statuses_raw if isinstance(item, str)]
+            if isinstance(roster_statuses_raw, list)
+            else ["unavailable_unknown"]
+        )
+        explicit_source_player_id = _normalize_metadata_value(metadata.get("source_player_id"))
         metadata_source_status = (
             "source" if str(entry.get("metadata_source_status") or "unknown") == "source" else "unknown"
         )
@@ -863,6 +1072,41 @@ async def register_historical_source_players(
             now=now,
         )
         summary["career_profiles_updated"] += 1
+
+        competition_type = _normalize_metadata_value(competition_context.get("competition_type")) or "unknown"
+        competition_name = _normalize_metadata_value(competition_context.get("competition_name"))
+        season = _normalize_metadata_value(competition_context.get("season"))
+        source_player_ref = (
+            None
+            if registry.canonical_player_id is not None
+            else (explicit_source_player_id or registry.source_player_id)
+        )
+        for raw_status in roster_statuses:
+            try:
+                roster_status = HistoricalCompetitionRosterStatus(raw_status)
+            except ValueError:
+                roster_status = HistoricalCompetitionRosterStatus.unavailable_unknown
+            created, conflict_count = await _upsert_competition_roster_entry(
+                db,
+                competition_type=competition_type,
+                competition_name=competition_name,
+                season=season,
+                team_name=team_name,
+                roster_status=roster_status,
+                canonical_player_id=registry.canonical_player_id,
+                source_player_id=source_player_ref,
+                source_player_name=source_player_name,
+                normalized_source_player_name=normalized_name,
+                source_schema=source_schema,
+                source_system=source_system,
+                batch_id=batch_id,
+                game_id=game_id,
+                source_provenance=source_provenance,
+                now=now,
+            )
+            if created:
+                summary["roster_entries_upserted"] += 1
+            summary["roster_conflicts"] += conflict_count
         db.add(registry)
 
         summary["source_player_ids"].append(registry.source_player_id)
