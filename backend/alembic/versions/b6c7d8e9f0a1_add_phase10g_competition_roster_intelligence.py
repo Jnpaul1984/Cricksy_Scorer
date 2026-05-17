@@ -23,13 +23,14 @@ json_type = sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "pos
 
 
 def upgrade() -> None:
-    roster_status_enum = sa.Enum(
+    roster_status_enum = postgresql.ENUM(
         "named_squad",
         "playing_xi",
         "substitute",
         "unresolved",
         "unavailable_unknown",
         name="historical_competition_roster_status",
+        create_type=False,
     )
     roster_status_enum.create(op.get_bind(), checkfirst=True)
 
@@ -165,6 +166,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    roster_status_enum = postgresql.ENUM(
+        "named_squad",
+        "playing_xi",
+        "substitute",
+        "unresolved",
+        "unavailable_unknown",
+        name="historical_competition_roster_status",
+        create_type=False,
+    )
     op.drop_index(
         op.f("ix_historical_competition_roster_entries_source_system"),
         table_name="historical_competition_roster_entries",
@@ -214,4 +224,4 @@ def downgrade() -> None:
         table_name="historical_competition_roster_entries",
     )
     op.drop_table("historical_competition_roster_entries")
-    sa.Enum(name="historical_competition_roster_status").drop(op.get_bind(), checkfirst=True)
+    roster_status_enum.drop(op.get_bind(), checkfirst=True)
