@@ -318,7 +318,8 @@ def _build_canonical_preview(
     meta_payload = parsed.get("meta")
     meta = meta_payload if isinstance(meta_payload, dict) else {}
     source_schema_version = _as_str(meta.get("data_version"))
-    event_payload = info.get("event") if isinstance(info.get("event"), dict) else {}
+    event_raw = info.get("event")
+    event_payload = event_raw if isinstance(event_raw, dict) else {}
     event_name = metadata_preview.event_name
 
     competition_type, competition_type_status = _classify_competition_type(event_name, team_names)

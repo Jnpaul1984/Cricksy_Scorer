@@ -78,6 +78,10 @@ def _historical_import_meta(game: Game) -> dict[str, Any] | None:
     return None
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 @router.get("", response_model=AnalystMatchListResponse)
 async def list_analyst_matches(
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
@@ -254,21 +258,9 @@ async def get_match_registry(
 
     if batch is not None:
         dry_run_summary = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
-        canonical_preview = (
-            dry_run_summary.get("canonical_preview")
-            if isinstance(dry_run_summary.get("canonical_preview"), dict)
-            else {}
-        )
-        competition_context = (
-            canonical_preview.get("competition_context")
-            if isinstance(canonical_preview.get("competition_context"), dict)
-            else {}
-        )
-        source_provenance = (
-            canonical_preview.get("source_provenance")
-            if isinstance(canonical_preview.get("source_provenance"), dict)
-            else {}
-        )
+        canonical_preview = _as_dict(dry_run_summary.get("canonical_preview"))
+        competition_context = _as_dict(canonical_preview.get("competition_context"))
+        source_provenance = _as_dict(canonical_preview.get("source_provenance"))
         roster_snapshot = (
             canonical_preview.get("squad_roster_snapshot")
             if isinstance(canonical_preview.get("squad_roster_snapshot"), list)
@@ -276,11 +268,8 @@ async def get_match_registry(
         )
         venue_context = hist_meta.get("venue_context")
         if not isinstance(venue_context, dict):
-            venue_context = (
-                canonical_preview.get("venue_context")
-                if isinstance(canonical_preview.get("venue_context"), dict)
-                else None
-            )
+            canonical_venue_context = _as_dict(canonical_preview.get("venue_context"))
+            venue_context = canonical_venue_context or None
 
         # Derive training eligibility (mirrors existing training-status endpoint logic)
         blocking_reason: str | None = None
