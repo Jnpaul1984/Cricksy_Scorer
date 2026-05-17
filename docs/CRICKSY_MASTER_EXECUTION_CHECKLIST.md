@@ -3803,6 +3803,21 @@ venue foundations are implemented and verified.
 - Provenance preservation is mandatory for every imported CPL match, player mapping, roster
   mapping, and venue mapping.
 
+## Controlled CPL Batch Ladder (Required)
+
+Every CPL batch must follow this exact staged ladder:
+
+1. Stage 1: exactly 1 known-good CPL JSON match
+2. Stage 2: 3–5 CPL matches from the same schema/source
+3. Stage 3: exactly 10 CPL matches from the same season/source
+4. Stage 4: 20–25 CPL matches per routine controlled batch (only after Stages 1–3 pass)
+
+Hard guardrails:
+
+- No 2-file, 6-file, 11-file, or 26+ CPL apply selections
+- No ZIP-wide CPL scans/import attempts above 25 entries for controlled Phase 10I execution
+- No 400-file CPL ZIP imports in Phase 10I
+
 ## Gates / Dependency Notes
 
 - Hard dependency: Phase 10E, Phase 10F, Phase 10G, and Phase 10H complete with green CI.
@@ -3816,6 +3831,74 @@ venue foundations are implemented and verified.
 - Provenance completeness validation across all imported CPL entities
 - Analyst Workspace compatibility and no-fabrication QA validation
 - Rollback execution validation on pilot and medium-sized batches
+
+## Controlled Batch Procedure (Dry-Run First, Every Time)
+
+For each CPL batch:
+
+1. Run dry-run first (`/api/historical-import/json/dry-run` or ZIP dry-run endpoint)
+2. Review duplicate warnings and semantic collisions
+3. Verify canonical preview includes:
+   - provenance
+   - competition type/name/season
+   - source schema + adapter
+   - roster and venue context
+4. Apply only if dry-run is clean and duplicate review is complete
+5. Verify rollback endpoint remains available for all applied batch records
+
+## Post-Apply Verification Checklist (Required After Every Batch)
+
+- Matches are visible in Analyst Workspace
+- Imported badge is visible
+- Registry/provenance fields are visible
+- Competition type/name/season are visible
+- Venue resolution state is visible
+- Source schema/adapter metadata is visible
+- Player identity registry updates are present
+- Unresolved player queue is reviewable
+- Roster intelligence records are created
+- Venue intelligence records are created
+- AI/podcast sections do not fabricate unsupported claims
+- Delivery totals remain consistent with source expectations
+
+## Stop Conditions (Immediate Halt)
+
+Stop CPL import immediately if any occur:
+
+- Dry-run validation errors
+- Duplicate collisions requiring manual review
+- Unresolved player ambiguity spike
+- Unresolved venue spike
+- Missing roster intelligence records
+- Delivery count mismatches
+- Analyst Workspace visibility failure
+- Rollback failure
+- Frontend crash
+- Unsupported/fabricated AI or podcast output
+
+## Controlled Import Report (Required Output)
+
+Each controlled CPL cycle must produce a report with:
+
+- Batches/files imported
+- Accepted/rejected counts
+- Duplicate warning counts
+- Player registry totals and unresolved player count
+- Roster record count
+- Venue resolved/unresolved counts
+- Rollback status
+- Analyst Workspace QA status
+- Known risks before scaling beyond controlled limits
+
+## Targeted Validation Commands
+
+```bash
+cd backend
+python scripts/check_alembic_single_head.py
+alembic -c alembic.ini upgrade head
+mypy --config-file pyproject.toml --explicit-package-bases .
+python -m pytest tests -k "historical_import or historical_player or roster or venue" -v
+```
 
 ## Acceptance Criteria
 
