@@ -1145,6 +1145,11 @@
               </div>
             </div>
 
+            <!-- CPL Podcast & Social Dashboard Tab -->
+            <div v-else-if="activeTab === 'cpl-dashboard'" class="aw-table-wrapper">
+              <CplPodcastDashboard />
+            </div>
+
             <!-- Analytics Tab -->
             <div v-else-if="activeTab === 'analytics'" class="aw-table-wrapper">
               <AnalyticsTablesWidget :profile="null" />
@@ -1189,6 +1194,7 @@ import { useRouter } from 'vue-router'
 import { BaseCard, BaseButton, BaseBadge, BaseInput, ImpactBar, MiniSparkline, AiCalloutsPanel, AiInsightReviewCard, MatchInsightEvidence } from '@/components'
 import type { AiCallout } from '@/components'
 import AnalyticsTablesWidget from '@/components/AnalyticsTablesWidget.vue'
+import CplPodcastDashboard from '@/components/CplPodcastDashboard.vue'
 import ExportUI from '@/components/ExportUI.vue'
 import HistoricalImportPanel from '@/components/HistoricalImportPanel.vue'
 import HistoricalImportBulkZipPanel from '@/components/HistoricalImportBulkZipPanel.vue'
@@ -1211,7 +1217,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 // Types
-type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics' | 'import' | 'data-library'
+type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics' | 'import' | 'data-library' | 'cpl-dashboard'
 
 // State
 const activeTab = ref<AnalystTab>('matches')
@@ -1250,6 +1256,7 @@ const tabs: { value: AnalystTab; label: string }[] = [
   { value: 'deliveries', label: 'Deliveries' },
   { value: 'case-studies', label: 'Case studies' },
   { value: 'analytics', label: 'Analytics' },
+  { value: 'cpl-dashboard', label: 'CPL Dashboard' },
   { value: 'import', label: 'Import Data' }
 ]
 

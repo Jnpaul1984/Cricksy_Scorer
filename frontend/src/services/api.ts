@@ -874,6 +874,127 @@ export async function getAnalystExportData(
   return request<AnalystExportDataResponse>(`/api/analyst/export-data${query ? `?${query}` : ''}`);
 }
 
+/* ------------------- Historical Stats (Phase 5N / CPL Dashboard) ------------------- */
+
+/**
+ * Aggregate stats for a single innings within a historical match.
+ * Mirrors backend InningsAggregate schema.
+ */
+export interface InningsAggregate {
+  inning_no: number;
+  team: string | null;
+  runs: number;
+  wickets: number;
+  overs: number;
+  extras: number;
+}
+
+/**
+ * Deterministic aggregate for a single historical match.
+ * Mirrors backend MatchAggregate schema.
+ */
+export interface HistoricalMatchAggregate {
+  match_id: string;
+  teams: string;
+  team_a: string | null;
+  team_b: string | null;
+  import_batch_id: string | null;
+  source_filename: string | null;
+  source_format: string | null;
+  competition: string | null;
+  season: string | null;
+  venue: string | null;
+  match_date: string | null;
+  match_type: string | null;
+  innings_count: number;
+  total_runs: number;
+  total_wickets: number;
+  innings_totals: InningsAggregate[];
+  has_delivery_data: boolean;
+}
+
+/** Player batting + bowling aggregate across historical matches. */
+export interface HistoricalPlayerAggregate {
+  player_name: string;
+  matches_contributed: number;
+  runs_scored: number;
+  balls_faced: number;
+  strike_rate: number;
+  fours: number;
+  sixes: number;
+  dismissals: number;
+  overs_bowled: number;
+  runs_conceded: number;
+  wickets: number;
+  economy_rate: number;
+  maidens: number;
+}
+
+/** Team aggregate across historical matches. */
+export interface HistoricalTeamAggregate {
+  team_name: string;
+  matches_played: number;
+  innings_batted: number;
+  avg_score: number;
+  avg_wickets: number;
+  total_runs: number;
+  total_wickets: number;
+}
+
+/** Venue aggregate across historical matches. */
+export interface HistoricalVenueAggregate {
+  venue: string;
+  match_count: number;
+  avg_first_innings_score: number;
+  avg_second_innings_score: number | null;
+  avg_total_runs: number;
+  avg_wickets: number;
+}
+
+/** Competition aggregate across historical matches. */
+export interface HistoricalCompetitionAggregate {
+  competition: string;
+  match_count: number;
+  avg_total_runs: number;
+  avg_wickets: number;
+}
+
+/** Season aggregate across historical matches. */
+export interface HistoricalSeasonAggregate {
+  season: string;
+  match_count: number;
+  avg_total_runs: number;
+  avg_wickets: number;
+}
+
+/**
+ * Full deterministic historical stats summary.
+ * Mirrors backend HistoricalStatsSummaryResponse schema.
+ * Phase 5N — read-only, no fake data.
+ */
+export interface HistoricalStatsSummaryResponse {
+  total_eligible_matches: number;
+  excluded_metadata_only_count: number;
+  excluded_invalid_count: number;
+  matches: HistoricalMatchAggregate[];
+  players: HistoricalPlayerAggregate[];
+  teams: HistoricalTeamAggregate[];
+  venues: HistoricalVenueAggregate[];
+  competitions: HistoricalCompetitionAggregate[];
+  seasons: HistoricalSeasonAggregate[];
+  generated_at: string;
+  note: string;
+}
+
+/**
+ * GET /analytics/historical-stats/summary
+ * Returns deterministic aggregate stats from all eligible historical matches.
+ * Phase 5N — read-only. Requires analyst_pro or org_pro role.
+ */
+export async function getHistoricalStatsSummary(): Promise<HistoricalStatsSummaryResponse> {
+  return request<HistoricalStatsSummaryResponse>('/analytics/historical-stats/summary');
+}
+
 /* ----------------------------- AI Commentary ----------------------------- */
 
 /* Match AI Commentary (GET /matches/{match_id}/ai-commentary) */
