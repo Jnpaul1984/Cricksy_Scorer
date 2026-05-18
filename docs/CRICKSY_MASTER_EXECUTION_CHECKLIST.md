@@ -3177,32 +3177,39 @@ Paid features are protected correctly and pricing/tier behavior is reliable.
 
 | Sub-Phase | Title | Issue | PR | Status |
 |---|---|---|---|---|
-| Phase 10A | Competition-Aware Historical Match Registry + JSON Import Foundation (governance/spec) | [#274](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/274) | [#275](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/275) | ⬜ Pending |
-| Phase 10A.1 | Competition-Aware Historical Match Registry Audit + Spec Lock | [#276](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/276) | [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277) | ⬜ Pending |
-| Phase 10B | Competition-Aware Historical JSON Import Foundation Implementation | [#278](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/278) | [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279) | ⬜ Pending |
-| Phase 10C | Competition-Aware Import UI + Analyst Workspace Verification | [#280](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/280) | [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281) | ⬜ Pending |
-| Phase 10D | Master Checklist Correction + Historical Match Upload Runbook | (this issue) | (this PR) | ⬜ Pending |
-| Phase 10E | Historical Player Registry + Identity Resolution Foundation | (future issue) | (future PR) | ⬜ Pending |
-| Phase 10F | Player Metadata + Career Profile Backfill | (future issue) | (future PR) | ⬜ Pending |
-| Phase 10G | Competition Squad/Roster Intelligence | (future issue) | (future PR) | ⬜ Pending |
-| Phase 10H | Venue Intelligence Backfill | (future issue) | (future PR) | ⬜ Pending |
-| Phase 10I | Controlled CPL Historical Dataset Import | (future issue) | (future PR) | ⬜ Pending |
+| Phase 10A | Competition-Aware Historical Match Registry + JSON Import Foundation (governance/spec) | [#274](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/274) | [#275](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/275) | ✅ Complete |
+| Phase 10A.1 | Competition-Aware Historical Match Registry Audit + Spec Lock | [#276](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/276) | [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277) | ✅ Complete |
+| Phase 10B | Competition-Aware Historical JSON Import Foundation Implementation | [#278](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/278) | [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279) | ✅ Complete |
+| Phase 10C | Competition-Aware Import UI + Analyst Workspace Verification | [#280](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/280) | [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281) | ✅ Complete |
+| Phase 10D | Master Checklist Correction + Historical Match Upload Runbook | [#282](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/282) | [#283](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/283) | ✅ Complete |
+| Phase 10E | Historical Player Registry + Identity Resolution Foundation | [#285](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/285) | [#287](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/287), [#289](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/289) | ✅ Complete |
+| Phase 10F | Player Metadata + Career Profile Backfill | [#292](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/292) | [#293](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/293) | ✅ Complete |
+| Phase 10G | Competition Squad/Roster Intelligence | [#294](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/294) | [#295](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/295) | ✅ Complete |
+| Phase 10H | Venue Intelligence Backfill | [#296](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/296) | [#297](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/297) | ✅ Complete |
+| Phase 10I | Controlled CPL Historical Dataset Import | [#298](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/298) | [#299](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/299) | ✅ Complete |
 
 ## Status Checklist
 
-- [ ] Required pre-phase audit completed and documented (Phase 10A governance doc created)
-- [ ] Spec lock approved before any importer implementation begins
-- [ ] JSON schema categories locked
-- [ ] Canonical import contract locked
-- [ ] Competition metadata requirements locked
-- [ ] Squad/roster snapshot requirements locked
-- [ ] Analyst Workspace acceptance criteria locked
-- [ ] Required tests and CI/gates locked
-- [ ] Implementation deferred until audit/spec lock approval is complete
-- [ ] Phase 10A.1 audit + spec lock merged with green CI (issue [#276](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/276) / PR [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277))
-- [ ] Phase 10B implementation merged with green CI (issue [#278](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/278) / PR [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279))
-- [ ] Phase 10C UI + verification merged with green CI (issue [#280](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/280) / PR [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281))
-- [ ] Phase 10D master checklist + runbook merged with green CI (this PR)
+- [x] Required pre-phase audit completed and documented (Phase 10A governance doc created)
+- [x] Spec lock approved before any importer implementation begins
+- [x] JSON schema categories locked
+- [x] Canonical import contract locked
+- [x] Competition metadata requirements locked
+- [x] Squad/roster snapshot requirements locked
+- [x] Analyst Workspace acceptance criteria locked
+- [x] Required tests and CI/gates locked
+- [x] Implementation deferred until audit/spec lock approval is complete
+- [x] Phase 10A.1 audit + spec lock merged with green CI (issue [#276](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/276) / PR [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277))
+- [x] Phase 10B implementation merged with green CI (issue [#278](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/278) / PR [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279))
+- [x] Phase 10C UI + verification merged with green CI (issue [#280](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/280) / PR [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281))
+- [x] Phase 10D master checklist + runbook merged with green CI (issue [#282](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/282) / PR [#283](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/283))
+
+### Evidence Notes (repo-verified)
+
+- Governance foundation merged: PR [#275](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/275).
+- Spec lock evidence present: `docs/PHASE_10A1_COMPETITION_AWARE_HISTORICAL_REGISTRY_AUDIT_AND_SPEC_LOCK.md` (PR [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277)).
+- Phase sequencing evidence present for implementation/verification/runbook completion through PRs [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279), [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281), and [#283](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/283).
+- Validation evidence exists in merged PR records; dedicated manual QA sign-off artifacts are not separately versioned in this checklist.
 
 ## Purpose
 
@@ -3380,16 +3387,21 @@ compatibility) before any implementation begins in Phase 10B.
 
 ## Status Checklist
 
-- [ ] Detailed audit doc reviewed and approved (`docs/PHASE_10A1_COMPETITION_AWARE_HISTORICAL_REGISTRY_AUDIT_AND_SPEC_LOCK.md`)
-- [ ] All 28 audit sections reviewed and signed off
-- [ ] JSON schema classification contract locked
-- [ ] Canonical normalization contract locked
-- [ ] Dry-run, duplicate-detection, and provenance contracts locked
-- [ ] Competition metadata contract locked
-- [ ] Roster snapshot contract locked
-- [ ] Analyst Workspace compatibility contract locked
-- [ ] Required tests and migration expectations locked for Phase 10B
-- [ ] PR [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277) merged with green CI
+- [x] Detailed audit doc reviewed and approved (`docs/PHASE_10A1_COMPETITION_AWARE_HISTORICAL_REGISTRY_AUDIT_AND_SPEC_LOCK.md`)
+- [x] All 28 audit sections reviewed and signed off
+- [x] JSON schema classification contract locked
+- [x] Canonical normalization contract locked
+- [x] Dry-run, duplicate-detection, and provenance contracts locked
+- [x] Competition metadata contract locked
+- [x] Roster snapshot contract locked
+- [x] Analyst Workspace compatibility contract locked
+- [x] Required tests and migration expectations locked for Phase 10B
+- [x] PR [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277) merged with green CI
+
+### Evidence Notes (repo-verified)
+
+- Spec lock document committed at `docs/PHASE_10A1_COMPETITION_AWARE_HISTORICAL_REGISTRY_AUDIT_AND_SPEC_LOCK.md`.
+- PR [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277) is merged and records this audit/spec artifact.
 
 ## Completion Criteria
 
@@ -3410,17 +3422,24 @@ protection, provenance tracking, and competition metadata fields into the histor
 
 ## Status Checklist
 
-- [ ] Phase 10A.1 spec lock merged with green CI (prerequisite)
-- [ ] JSON schema classification adapter implemented and tested
-- [ ] Canonical normalization contract implemented
-- [ ] Dry-run no-write gate implemented and verified
-- [ ] Duplicate detection and provenance fields populated in import batch
-- [ ] Competition metadata fields populated in import batch
-- [ ] Roster snapshot attached to imported match
-- [ ] Analyst Workspace API compatibility maintained for imported matches
-- [ ] Org/RBAC isolation enforced for imported historical visibility
-- [ ] All required tests (classification, normalization, dry-run, duplicate, provenance, rollback) passing
-- [ ] PR [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279) merged with green CI
+- [x] Phase 10A.1 spec lock merged with green CI (prerequisite)
+- [x] JSON schema classification adapter implemented and tested
+- [x] Canonical normalization contract implemented
+- [x] Dry-run no-write gate implemented and verified
+- [x] Duplicate detection and provenance fields populated in import batch
+- [x] Competition metadata fields populated in import batch
+- [x] Roster snapshot attached to imported match
+- [x] Analyst Workspace API compatibility maintained for imported matches
+- [x] Org/RBAC isolation enforced for imported historical visibility
+- [x] All required tests (classification, normalization, dry-run, duplicate, provenance, rollback) passing
+- [x] PR [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279) merged with green CI
+
+### Evidence Notes (repo-verified)
+
+- PR [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279) merged with Phase 10B implementation evidence.
+- Canonical dry-run/schema evidence is present in `backend/services/historical_import_preview.py` and `backend/api/schemas/historical_import.py`.
+- Validation evidence is present in `backend/tests/test_historical_import_dry_run.py` and `backend/tests/test_historical_import_apply.py`.
+- Validation evidence exists in merged PR records; dedicated manual QA sign-off artifacts are not separately versioned in this checklist.
 
 ## Completion Criteria
 
@@ -3444,18 +3463,25 @@ and safe handling of insufficient data in AI/podcast sections.
 
 ## Status Checklist
 
-- [ ] Phase 10B merged with green CI (prerequisite)
-- [ ] Imported matches appear in Analyst Workspace completed matches list
-- [ ] Imported badge visible on each imported match
-- [ ] Imported match detail opens without errors
-- [ ] Innings data appears where available
-- [ ] Delivery availability shown accurately for imported matches
-- [ ] Registry/provenance panel shows competition, season, venue, source, and import batch metadata
-- [ ] Export functions work with imported matches
-- [ ] AI summary and podcast prep handle insufficient data safely (no fabrication)
-- [ ] No fake frontend data paths required
-- [ ] All required frontend tests passing
-- [ ] PR [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281) merged with green CI
+- [x] Phase 10B merged with green CI (prerequisite)
+- [x] Imported matches appear in Analyst Workspace completed matches list
+- [x] Imported badge visible on each imported match
+- [x] Imported match detail opens without errors
+- [x] Innings data appears where available
+- [x] Delivery availability shown accurately for imported matches
+- [x] Registry/provenance panel shows competition, season, venue, source, and import batch metadata
+- [x] Export functions work with imported matches
+- [x] AI summary and podcast prep handle insufficient data safely (no fabrication)
+- [x] No fake frontend data paths required
+- [x] All required frontend tests passing
+- [x] PR [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281) merged with green CI
+
+### Evidence Notes (repo-verified)
+
+- PR [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281) merged with Phase 10C Analyst Workspace verification updates.
+- UI/API evidence is present in `frontend/src/utils/api.ts` and `frontend/src/views/AnalystWorkspaceView.vue`.
+- Validation evidence is present in `frontend/tests/unit/AnalystWorkspaceView.spec.ts`.
+- Validation evidence exists in merged PR records; dedicated manual QA sign-off artifacts are not separately versioned in this checklist.
 
 ## Completion Criteria
 
@@ -3469,7 +3495,7 @@ is merged with green CI and Analyst Workspace verification passes end-to-end.
 
 # Phase 10D — Master Checklist Correction + Historical Match Upload Runbook
 
-> **Issue:** (this issue) | **PR:** (this PR)
+> **Issue:** [#282](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/282) | **PR:** [#283](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/283)
 
 ## Purpose
 
@@ -3479,12 +3505,16 @@ Safety Runbook explaining when uploads are safe and how many matches to upload a
 
 ## Status Checklist
 
-- [ ] Master checklist updated with sub-phase tracker table (Phase 10A–10D)
-- [ ] Naming clarification note added between Phase 10 subscription track and Phase 10A–10D track
-- [ ] Phase 10A.1, 10B, 10C, 10D section stubs added with issue/PR references
-- [ ] Historical Match Upload Safety Runbook added
-- [ ] Recommended Execution Order updated to show full sub-phase sequence
-- [ ] This PR merged with green CI
+- [x] Master checklist updated with sub-phase tracker table (Phase 10A–10D)
+- [x] Naming clarification note added between Phase 10 subscription track and Phase 10A–10D track
+- [x] Phase 10A.1, 10B, 10C, 10D section stubs added with issue/PR references
+- [x] Historical Match Upload Safety Runbook added
+- [x] Recommended Execution Order updated to show full sub-phase sequence
+- [x] PR [#283](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/283) merged with green CI
+
+### Evidence Notes (repo-verified)
+
+- PR [#283](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/283) merged and introduced the checklist/runbook structure now used for Phase 10 tracking.
 
 ---
 
@@ -3496,8 +3526,8 @@ Uploads are safe **only after Phase 10B and Phase 10C are both merged with green
 
 Do not upload historical matches until:
 
-- [ ] Phase 10B PR ([#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279)) is merged and CI is green
-- [ ] Phase 10C PR ([#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281)) is merged and CI is green
+- [x] Phase 10B PR ([#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279)) is merged and CI is green
+- [x] Phase 10C PR ([#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281)) is merged and CI is green
 
 ### Batch Size Guidance
 
@@ -3565,7 +3595,7 @@ If a batch must be rolled back:
 
 # Phase 10E — Historical Player Registry + Identity Resolution Foundation
 
-> **Issue:** (future issue) | **PR:** (future PR)
+> **Issue:** [#285](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/285) | **PR:** [#287](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/287), [#289](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/289)
 
 ## Purpose
 
@@ -3574,14 +3604,20 @@ ambiguous names, and canonical Cricksy player records before any large-scale his
 
 ## Status Checklist
 
-- [ ] Source player name registry contract defined
-- [ ] Canonical player mapping contract defined
-- [ ] Alias tracking contract defined
-- [ ] Unresolved/ambiguous player review queue contract defined
-- [ ] Deterministic matching rules locked and documented
-- [ ] Blind auto-creation forbidden unless confidence rules are explicitly approved
-- [ ] Governance, tests/validation expectations, and gates approved
-- [ ] Phase 10E implementation PR merged with green CI
+- [x] Source player name registry contract defined
+- [x] Canonical player mapping contract defined
+- [x] Alias tracking contract defined
+- [x] Unresolved/ambiguous player review queue contract defined
+- [x] Deterministic matching rules locked and documented
+- [x] Blind auto-creation forbidden unless confidence rules are explicitly approved
+- [x] Governance, tests/validation expectations, and gates approved
+- [x] Phase 10E implementation PRs [#287](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/287) and [#289](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/289) merged with green CI
+
+### Evidence Notes (repo-verified)
+
+- PR [#287](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/287) introduced deterministic identity-resolution foundation and registry flows.
+- PR [#289](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/289) fixed the migration graph for single-head safety.
+- Implementation evidence is present in `backend/services/historical_player_identity_service.py`, `backend/alembic/versions/f2e3d4c5b6a7_add_historical_player_identity_registry.py`, and `backend/tests/test_historical_player_identity_resolution.py`.
 
 ## Governance Rules
 
@@ -3619,7 +3655,7 @@ validated, and merged with green CI.
 
 # Phase 10F — Player Metadata + Career Profile Backfill
 
-> **Issue:** (future issue) | **PR:** (future PR)
+> **Issue:** [#292](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/292) | **PR:** [#293](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/293)
 
 ## Purpose
 
@@ -3628,14 +3664,19 @@ safe, provenance-backed update rules.
 
 ## Status Checklist
 
-- [ ] Batting style / bowling style / role metadata backfill rules defined
-- [ ] Career timeline foundation rules defined
-- [ ] Competition participation history rules defined
-- [ ] Team history rules defined
-- [ ] Metadata provenance rules defined and locked
-- [ ] Safe backfill constraints defined (no unsafe overwrite behavior)
-- [ ] Governance, tests/validation expectations, and gates approved
-- [ ] Phase 10F implementation PR merged with green CI
+- [x] Batting style / bowling style / role metadata backfill rules defined
+- [x] Career timeline foundation rules defined
+- [x] Competition participation history rules defined
+- [x] Team history rules defined
+- [x] Metadata provenance rules defined and locked
+- [x] Safe backfill constraints defined (no unsafe overwrite behavior)
+- [x] Governance, tests/validation expectations, and gates approved
+- [x] Phase 10F implementation PR [#293](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/293) merged with green CI
+
+### Evidence Notes (repo-verified)
+
+- PR [#293](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/293) merged with metadata/career backfill implementation.
+- Implementation evidence is present in `backend/alembic/versions/a4b5c6d7e8f9_add_phase10f_player_metadata_career_foundation.py`, `backend/services/historical_player_identity_service.py`, and `backend/tests/test_historical_player_identity_resolution.py`.
 
 ## Governance Rules
 
@@ -3672,7 +3713,7 @@ and merged with green CI.
 
 # Phase 10G — Competition Squad/Roster Intelligence
 
-> **Issue:** (future issue) | **PR:** (future PR)
+> **Issue:** [#294](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/294) | **PR:** [#295](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/295)
 
 ## Purpose
 
@@ -3681,13 +3722,18 @@ school, academy, and domestic contexts.
 
 ## Status Checklist
 
-- [ ] Competition-season squad snapshot rules defined
-- [ ] Playing XI vs named squad vs substitutes modeling rules defined
-- [ ] Team-season roster membership rules defined
-- [ ] Franchise player movement support rules defined
-- [ ] Roster availability foundation rules defined
-- [ ] Governance, tests/validation expectations, and gates approved
-- [ ] Phase 10G implementation PR merged with green CI
+- [x] Competition-season squad snapshot rules defined
+- [x] Playing XI vs named squad vs substitutes modeling rules defined
+- [x] Team-season roster membership rules defined
+- [x] Franchise player movement support rules defined
+- [x] Roster availability foundation rules defined
+- [x] Governance, tests/validation expectations, and gates approved
+- [x] Phase 10G implementation PR [#295](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/295) merged with green CI
+
+### Evidence Notes (repo-verified)
+
+- PR [#295](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/295) merged with roster-intelligence implementation.
+- Implementation evidence is present in `backend/alembic/versions/b6c7d8e9f0a1_add_phase10g_competition_roster_intelligence.py`, `backend/sql_app/models.py`, and `backend/tests/test_historical_player_identity_resolution.py`.
 
 ## Governance Rules
 
@@ -3724,7 +3770,7 @@ merged with green CI.
 
 # Phase 10H — Venue Intelligence Backfill
 
-> **Issue:** (future issue) | **PR:** (future PR)
+> **Issue:** [#296](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/296) | **PR:** [#297](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/297)
 
 ## Purpose
 
@@ -3733,13 +3779,18 @@ resolution, alias handling, and governance-safe review paths.
 
 ## Status Checklist
 
-- [ ] Venue identity resolution rules defined
-- [ ] Venue alias tracking rules defined
-- [ ] City/country/ground metadata rules defined
-- [ ] Unresolved venue review queue rules defined
-- [ ] Historical scoring trend foundation rules defined
-- [ ] Governance, tests/validation expectations, and gates approved
-- [ ] Phase 10H implementation PR merged with green CI
+- [x] Venue identity resolution rules defined
+- [x] Venue alias tracking rules defined
+- [x] City/country/ground metadata rules defined
+- [x] Unresolved venue review queue rules defined
+- [x] Historical scoring trend foundation rules defined
+- [x] Governance, tests/validation expectations, and gates approved
+- [x] Phase 10H implementation PR [#297](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/297) merged with green CI
+
+### Evidence Notes (repo-verified)
+
+- PR [#297](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/297) merged with venue-intelligence implementation.
+- Implementation evidence is present in `backend/alembic/versions/c7d8e9f0a1b2_add_phase10h_venue_intelligence_backfill.py`, `backend/services/historical_venue_intelligence_service.py`, `backend/routes/historical_import.py`, and `backend/tests/test_historical_venue_intelligence.py`.
 
 ## Governance Rules
 
@@ -3776,7 +3827,7 @@ merged with green CI.
 
 # Phase 10I — Controlled CPL Historical Dataset Import
 
-> **Issue:** (future issue) | **PR:** (future PR)
+> **Issue:** [#298](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/298) | **PR:** [#299](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/299)
 
 ## Purpose
 
@@ -3785,14 +3836,20 @@ venue foundations are implemented and verified.
 
 ## Status Checklist
 
-- [ ] Pilot CPL import plan approved
-- [ ] Batch-size controls approved and configured
-- [ ] Dry-run / apply / verify workflow approved
-- [ ] Rollback plan tested and approved
-- [ ] Post-import Analyst Workspace QA checklist approved
-- [ ] Explicit guardrail: no 400-file CPL import until Phase 10E–10H are merged
-- [ ] Governance, tests/validation expectations, and gates approved
-- [ ] Phase 10I implementation PR merged with green CI
+- [x] Pilot CPL import plan approved
+- [x] Batch-size controls approved and configured
+- [x] Dry-run / apply / verify workflow approved
+- [x] Rollback plan tested and approved
+- [x] Post-import Analyst Workspace QA checklist approved
+- [x] Explicit guardrail: no 400-file CPL import until Phase 10E–10H are merged
+- [x] Governance, tests/validation expectations, and gates approved
+- [x] Phase 10I implementation PR [#299](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/299) merged with green CI
+
+### Evidence Notes (repo-verified)
+
+- PR [#299](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/299) merged with controlled CPL ladder and stop-condition enforcement.
+- Implementation evidence is present in `backend/routes/historical_import.py` (Phase 10I ladder guards) and `backend/tests/test_historical_import_bulk_zip.py` (ladder and >25-entry protections).
+- Validation evidence exists in merged PR records; dedicated manual QA sign-off artifacts are not separately versioned in this checklist.
 
 ## Governance Rules
 
@@ -3910,6 +3967,15 @@ python -m pytest tests -k "historical_import or historical_player or roster or v
 
 Phase 10I is complete when controlled CPL import governance and phased execution validation are
 approved and merged with green CI, with large-scale imports still gated by explicit evidence.
+
+---
+
+## Post-Phase-10I Status Summary
+
+- Phase 10A through Phase 10I are marked complete with repo evidence (merged issues/PRs and implementation/validation artifacts referenced above).
+- Deterministic cricket truth protection remains in force: no fake production data, and AI behavior remains bounded to explanation/summarization/recommendation (not fabrication).
+- Governance terms remain unchanged across completed phases: pre-phase audit, spec lock, implementation evidence, validation evidence, and manual QA expectations.
+- Future governed continuation should proceed **after** Phase 10I (do not restart Phase 10), focused on historical CPL archive population, competition-aware metadata expansion, and podcast/social visual expansion under the same deterministic safeguards.
 
 ---
 
@@ -4287,12 +4353,12 @@ Check imports, typing, formatting, migrations, tests, and CI impact before final
     - Phase 10A.1 — Competition-Aware Historical Match Registry Audit + Spec Lock ([#276](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/276) / [#277](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/277))
     - Phase 10B — Competition-Aware Historical JSON Import Foundation Implementation ([#278](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/278) / [#279](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/279))
     - Phase 10C — Competition-Aware Import UI + Analyst Workspace Verification ([#280](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/280) / [#281](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/281))
-    - Phase 10D — Master Checklist Correction + Historical Match Upload Runbook (this phase)
-    - Phase 10E — Historical Player Registry + Identity Resolution Foundation (future issue/PR)
-    - Phase 10F — Player Metadata + Career Profile Backfill (future issue/PR)
-    - Phase 10G — Competition Squad/Roster Intelligence (future issue/PR)
-    - Phase 10H — Venue Intelligence Backfill (future issue/PR)
-    - Phase 10I — Controlled CPL Historical Dataset Import (future issue/PR)
+    - Phase 10D — Master Checklist Correction + Historical Match Upload Runbook ([#282](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/282) / [#283](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/283))
+    - Phase 10E — Historical Player Registry + Identity Resolution Foundation ([#285](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/285) / [#287](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/287), [#289](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/289))
+    - Phase 10F — Player Metadata + Career Profile Backfill ([#292](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/292) / [#293](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/293))
+    - Phase 10G — Competition Squad/Roster Intelligence ([#294](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/294) / [#295](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/295))
+    - Phase 10H — Venue Intelligence Backfill ([#296](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/296) / [#297](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/297))
+    - Phase 10I — Controlled CPL Historical Dataset Import ([#298](https://github.com/Jnpaul1984/Cricksy_Scorer/issues/298) / [#299](https://github.com/Jnpaul1984/Cricksy_Scorer/pull/299))
 13. Phase 11 — Organization Pro + League Operations
 14. Phase 12 — Live Viewer, Streaming + Sponsor Experience
 15. Phase 13 — Media, Highlights + Report Content Engine
