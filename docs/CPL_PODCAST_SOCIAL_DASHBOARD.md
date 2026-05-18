@@ -97,6 +97,41 @@ Each fact includes a caveat when the underlying data is incomplete (e.g., "From 
 - AI will only summarise deterministic chart data
 - AI will never calculate official scores, invent missing facts, or publish without review
 
+### 8. CPL Social Image Export Pack
+
+The dashboard now includes a guarded **Social Image Export Pack** for deterministic sections.
+
+Supported export targets:
+- Season summary cards
+- Selected match story panel
+- Leaderboards panel
+- Venue intelligence panel
+- Podcast prep facts panel
+
+Supported output formats:
+- Podcast landscape: **1920×1080**
+- Social square: **1080×1080**
+- Story/reel vertical: **1080×1920**
+
+Workflow:
+1. Select an export target and output format.
+2. Review watermark/provenance toggles.
+3. Generate preview.
+4. Review preview and download PNG.
+
+Watermark/provenance options:
+- `Powered by Cricksy`
+- `Imported CPL historical data`
+- Season/match/venue context label
+- Generated timestamp
+
+Safe disable behavior:
+- No CPL data: export disabled
+- No selected match: match story export disabled
+- Match has no delivery data: match story export disabled to avoid misleading advanced visuals
+- No leaderboard data: leaderboard export disabled
+- No venue data: venue export disabled
+
 ---
 
 ## Data Sources
@@ -167,7 +202,7 @@ CRICKSY_IN_MEMORY_DB=1 APP_SECRET_KEY=test-secret-key \
 
 File: `frontend/tests/unit/CplPodcastDashboard.spec.ts`
 
-Tests (18):
+Tests (22):
 - Loading, error, and empty states
 - Summary cards with correct values from mock data
 - Venue rendering and missing-score warnings
@@ -179,6 +214,10 @@ Tests (18):
 - Provenance bar always visible
 - No fake/hardcoded data
 - Filter reset
+- Export target/format controls
+- Match story export disabled without selected match
+- Preview generation + download enablement
+- Leaderboard export disabled when delivery data is absent
 
 Run:
 ```bash
@@ -193,6 +232,7 @@ npx vitest run tests/unit/CplPodcastDashboard.spec.ts
 | File | Change |
 |------|--------|
 | `frontend/src/components/CplPodcastDashboard.vue` | **New** — CPL podcast/social dashboard component |
+| `frontend/package.json` / `frontend/package-lock.json` | Added lightweight `html-to-image` dependency for frontend-only client-side PNG export |
 | `frontend/src/views/AnalystWorkspaceView.vue` | Added "CPL Dashboard" tab + import |
 | `frontend/src/services/api.ts` | Added `getHistoricalStatsSummary()` + types |
 | `backend/tests/test_cpl_dashboard_historical_stats.py` | **New** — backend contract tests |
@@ -210,6 +250,8 @@ npx vitest run tests/unit/CplPodcastDashboard.spec.ts
 3. **Phase breakdown** — Powerplay/middle/death phase visuals require ball-by-ball delivery data import (Phase 5F). Only innings totals are shown for matches without delivery data.
 
 4. **AI talking points** — The AI Talking-Point Assistant is a documented future enhancement. No AI commentary is generated in this version.
+
+5. **Image export fidelity** — Export snapshots are generated client-side from dashboard DOM. Complex browser differences (fonts/rendering) may cause minor visual variance.
 
 ---
 

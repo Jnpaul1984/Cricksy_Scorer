@@ -26,9 +26,14 @@ import type { HistoricalStatsSummaryResponse } from '@/services/api';
 // ── Mock the API module ────────────────────────────────────────────────────
 
 const mockGetHistoricalStatsSummary = vi.fn<[], Promise<HistoricalStatsSummaryResponse>>();
+const mockToPng = vi.fn<(...args: unknown[]) => Promise<string>>();
 
 vi.mock('@/services/api', () => ({
   getHistoricalStatsSummary: (...args: unknown[]) => mockGetHistoricalStatsSummary(...(args as [])),
+}));
+
+vi.mock('html-to-image', () => ({
+  toPng: (...args: unknown[]) => mockToPng(...args),
 }));
 
 // ── Test data factories ────────────────────────────────────────────────────
@@ -185,6 +190,7 @@ function cplSummary(): HistoricalStatsSummaryResponse {
 describe('CplPodcastDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockToPng.mockResolvedValue('data:image/png;base64,mock-preview');
   });
 
   it('shows loading state while fetching', async () => {
@@ -397,5 +403,59 @@ describe('CplPodcastDashboard', () => {
 
     const teamSelect = wrapper.find('[aria-label="Filter by team"]');
     expect(teamSelect.text()).toContain('Trinbago Knight Riders');
+  });
+
+  it('shows export target and format selectors', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    expect(wrapper.find('[aria-label="Select export target"]').exists()).toBe(true);
+    expect(wrapper.find('[aria-label="Select export format"]').text()).toContain('Podcast landscape (1920×1080)');
+    expect(wrapper.find('[aria-label="Select export format"]').text()).toContain('Social square (1080×1080)');
+    expect(wrapper.find('[aria-label="Select export format"]').text()).toContain('Story/reel vertical (1080×1920)');
+  });
+
+  it('disables match story export when no match is selected', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Select export target"]').setValue('match_story');
+    await flushPromises();
+
+    const previewButton = wrapper.find('[aria-label="Generate export preview"]');
+    expect(previewButton.attributes('disabled')).toBeDefined();
+    expect(wrapper.text()).toContain('select a match before exporting match story');
+  });
+
+  it('generates export preview and enables download', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    const previewButton = wrapper.find('[aria-label="Generate export preview"]');
+    await previewButton.trigger('click');
+    await flushPromises();
+
+    expect(mockToPng).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('img[alt="Export preview image"]').exists()).toBe(true);
+    expect(wrapper.find('[aria-label="Download export image"]').attributes('disabled')).toBeUndefined();
+  });
+
+  it('disables leaderboard export when delivery data is unavailable', async () => {
+    const noDelivery = cplSummary();
+    noDelivery.matches = noDelivery.matches.map(match => ({ ...match, has_delivery_data: false }));
+    noDelivery.players = [];
+    mockGetHistoricalStatsSummary.mockResolvedValue(noDelivery);
+
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Select export target"]').setValue('leaderboards');
+    await flushPromises();
+
+    expect(wrapper.find('[aria-label="Generate export preview"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.text()).toContain('leaderboard data is unavailable');
   });
 });

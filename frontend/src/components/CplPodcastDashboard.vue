@@ -44,6 +44,9 @@
         No validated Caribbean Premier League matches have been imported yet.
         Import CPL historical data through the <strong>Import Data</strong> tab to populate this dashboard.
       </p>
+      <p class="cpld-empty-body">
+        Social image export is disabled until deterministic CPL data is available.
+      </p>
     </div>
 
     <template v-else>
@@ -73,8 +76,91 @@
         <button class="cpld-reset-btn" @click="resetFilters">Reset filters</button>
       </section>
 
+      <section class="cpld-section cpld-export-pack" aria-label="Social image export pack">
+        <h4 class="cpld-section-title">🖼 CPL Social Image Export Pack</h4>
+        <p class="cpld-export-desc">
+          Export deterministic dashboard panels as reviewable images. No AI-generated claims are added.
+        </p>
+
+        <div class="cpld-export-grid">
+          <div class="cpld-filter-group">
+            <label class="cpld-filter-label" for="cpld-export-target">Export target</label>
+            <select id="cpld-export-target" v-model="exportTarget" class="cpld-select" aria-label="Select export target">
+              <option v-for="target in exportTargets" :key="target.value" :value="target.value">
+                {{ target.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="cpld-filter-group">
+            <label class="cpld-filter-label" for="cpld-export-format">Format</label>
+            <select id="cpld-export-format" v-model="exportFormat" class="cpld-select" aria-label="Select export format">
+              <option v-for="format in exportFormats" :key="format.value" :value="format.value">
+                {{ format.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="cpld-export-toggles">
+            <label class="cpld-export-check">
+              <input v-model="exportIncludePoweredBy" type="checkbox" />
+              Powered by Cricksy
+            </label>
+            <label class="cpld-export-check">
+              <input v-model="exportIncludeImportedLabel" type="checkbox" />
+              Imported CPL historical data
+            </label>
+            <label class="cpld-export-check">
+              <input v-model="exportIncludeContextLabel" type="checkbox" />
+              Include season/match/venue context
+            </label>
+          </div>
+        </div>
+
+        <div class="cpld-export-review" role="note" aria-label="Export review summary">
+          <p>
+            Review target:
+            <strong>{{ activeExportTarget?.label ?? 'Unavailable' }}</strong>
+            · Format: <strong>{{ activeExportFormat?.label ?? 'Unavailable' }}</strong>
+          </p>
+          <p class="cpld-export-meta">
+            {{ exportReviewLabel }}
+          </p>
+        </div>
+
+        <div v-if="!activeExportAvailability.available" class="cpld-insufficient cpld-insufficient--warn" role="alert">
+          {{ activeExportAvailability.reason }}
+        </div>
+
+        <div class="cpld-export-actions">
+          <button
+            class="cpld-export-btn"
+            :disabled="!activeExportAvailability.available || exportBusy"
+            aria-label="Generate export preview"
+            @click="generateExportPreview"
+          >
+            {{ exportBusy ? 'Generating preview…' : 'Generate preview' }}
+          </button>
+          <button
+            class="cpld-export-btn cpld-export-btn--secondary"
+            :disabled="!exportPreviewUrl || exportBusy"
+            aria-label="Download export image"
+            @click="downloadExportImage"
+          >
+            Download PNG
+          </button>
+        </div>
+
+        <p v-if="exportError" class="cpld-export-error" role="alert">⚠ {{ exportError }}</p>
+
+        <div v-if="exportPreviewUrl" class="cpld-export-preview-wrap">
+          <p class="cpld-export-preview-label">Preview (review before download)</p>
+          <img class="cpld-export-preview" :src="exportPreviewUrl" alt="Export preview image" />
+        </div>
+      </section>
+
       <!-- ── 1. Season Summary Cards ── -->
-      <section class="cpld-section" aria-label="Season summary">
+      <section ref="seasonSummaryRef" class="cpld-section" aria-label="Season summary">
         <h4 class="cpld-section-title">📊 Season Summary</h4>
         <p v-if="selectedSeason !== 'all'" class="cpld-section-scope">
           Showing season: <strong>{{ selectedSeason }}</strong>
@@ -118,7 +204,7 @@
       </section>
 
       <!-- ── 2. Match Story Visuals ── -->
-      <section class="cpld-section" aria-label="Match story">
+      <section ref="matchStoryRef" class="cpld-section" aria-label="Match story">
         <h4 class="cpld-section-title">📈 Match Story</h4>
 
         <!-- Match selector -->
@@ -204,7 +290,7 @@
       </section>
 
       <!-- ── 3. Leaderboards ── -->
-      <section class="cpld-section" aria-label="Leaderboards">
+      <section ref="leaderboardRef" class="cpld-section" aria-label="Leaderboards">
         <h4 class="cpld-section-title">🏆 Leaderboards</h4>
 
         <div v-if="filteredPlayers.length > 0 || filteredTeamAggregates.length > 0" class="cpld-leaderboards">
@@ -308,7 +394,7 @@
       </section>
 
       <!-- ── 4. Venue Intelligence ── -->
-      <section class="cpld-section" aria-label="Venue intelligence">
+      <section ref="venueRef" class="cpld-section" aria-label="Venue intelligence">
         <h4 class="cpld-section-title">📍 Venue Intelligence</h4>
 
         <div v-if="cplVenues.length > 0" class="cpld-venue-grid">
@@ -348,7 +434,7 @@
       </section>
 
       <!-- ── 5. Podcast Prep Panel ── -->
-      <section class="cpld-section cpld-podcast-panel" aria-label="Podcast preparation">
+      <section ref="podcastFactsRef" class="cpld-section cpld-podcast-panel" aria-label="Podcast preparation">
         <h4 class="cpld-section-title">🎙 Podcast Prep Panel</h4>
         <p class="cpld-podcast-desc">
           Deterministic talking-point candidates grounded in imported match data.
@@ -389,7 +475,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { toPng } from 'html-to-image'
 import {
   getHistoricalStatsSummary,
   type HistoricalStatsSummaryResponse,
@@ -411,6 +498,38 @@ const selectedSeason = ref('all')
 const selectedTeam = ref('all')
 const selectedVenue = ref('all')
 const selectedMatchId = ref('')
+
+type ExportTarget = 'season_summary' | 'match_story' | 'leaderboards' | 'venue_intelligence' | 'podcast_facts'
+type ExportFormat = 'podcast_landscape' | 'social_square' | 'story_vertical'
+
+const seasonSummaryRef = ref<HTMLElement | null>(null)
+const matchStoryRef = ref<HTMLElement | null>(null)
+const leaderboardRef = ref<HTMLElement | null>(null)
+const venueRef = ref<HTMLElement | null>(null)
+const podcastFactsRef = ref<HTMLElement | null>(null)
+
+const exportTarget = ref<ExportTarget>('season_summary')
+const exportFormat = ref<ExportFormat>('podcast_landscape')
+const exportIncludePoweredBy = ref(true)
+const exportIncludeImportedLabel = ref(true)
+const exportIncludeContextLabel = ref(true)
+const exportPreviewUrl = ref<string | null>(null)
+const exportError = ref<string | null>(null)
+const exportBusy = ref(false)
+
+const exportTargets = [
+  { value: 'season_summary', label: 'Season summary cards' },
+  { value: 'match_story', label: 'Selected match story panel' },
+  { value: 'leaderboards', label: 'Leaderboard panel' },
+  { value: 'venue_intelligence', label: 'Venue intelligence panel' },
+  { value: 'podcast_facts', label: 'Podcast prep facts panel' },
+] as const satisfies ReadonlyArray<{ value: ExportTarget; label: string }>
+
+const exportFormats = [
+  { value: 'podcast_landscape', label: 'Podcast landscape (1920×1080)', width: 1920, height: 1080 },
+  { value: 'social_square', label: 'Social square (1080×1080)', width: 1080, height: 1080 },
+  { value: 'story_vertical', label: 'Story/reel vertical (1080×1920)', width: 1080, height: 1920 },
+] as const satisfies ReadonlyArray<{ value: ExportFormat; label: string; width: number; height: number }>
 
 // ---------------------------------------------------------------------------
 // CPL detection helper
@@ -699,6 +818,115 @@ const podcastFacts = computed<PodcastFact[]>(() => {
   return facts
 })
 
+const activeExportTarget = computed(() =>
+  exportTargets.find(t => t.value === exportTarget.value) ?? null
+)
+
+const activeExportFormat = computed(() =>
+  exportFormats.find(f => f.value === exportFormat.value) ?? null
+)
+
+const activeExportNode = computed<HTMLElement | null>(() => {
+  switch (exportTarget.value) {
+    case 'season_summary':
+      return seasonSummaryRef.value
+    case 'match_story':
+      return matchStoryRef.value
+    case 'leaderboards':
+      return leaderboardRef.value
+    case 'venue_intelligence':
+      return venueRef.value
+    case 'podcast_facts':
+      return podcastFactsRef.value
+    default:
+      return null
+  }
+})
+
+const activeExportAvailability = computed<{ available: boolean; reason: string }>(() => {
+  if (cplMatches.value.length === 0) {
+    return { available: false, reason: 'Export disabled: no CPL data is available.' }
+  }
+  if (!activeExportNode.value) {
+    return { available: false, reason: 'Export target is not available in this view yet.' }
+  }
+
+  switch (exportTarget.value) {
+    case 'season_summary':
+      if (filteredMatches.value.length === 0) {
+        return { available: false, reason: 'Export disabled: no filtered season summary data is available.' }
+      }
+      return { available: true, reason: '' }
+    case 'match_story':
+      if (!selectedMatch.value) {
+        return { available: false, reason: 'Export disabled: select a match before exporting match story.' }
+      }
+      if (!selectedMatch.value.has_delivery_data) {
+        return {
+          available: false,
+          reason: 'Export disabled: selected match has no delivery data. Import deliveries before exporting advanced match story visuals.',
+        }
+      }
+      return { available: true, reason: '' }
+    case 'leaderboards':
+      if (topRunScorers.value.length === 0 && topWicketTakers.value.length === 0) {
+        return {
+          available: false,
+          reason: 'Export disabled: leaderboard data is unavailable (delivery data required).',
+        }
+      }
+      return { available: true, reason: '' }
+    case 'venue_intelligence':
+      if (cplVenues.value.length === 0) {
+        return { available: false, reason: 'Export disabled: venue intelligence data is unavailable.' }
+      }
+      return { available: true, reason: '' }
+    case 'podcast_facts':
+      if (podcastFacts.value.length === 0) {
+        return { available: false, reason: 'Export disabled: no deterministic podcast prep facts for current filters.' }
+      }
+      return { available: true, reason: '' }
+    default:
+      return { available: false, reason: 'Export target not recognized.' }
+  }
+})
+
+const exportReviewLabel = computed(() => {
+  const parts: string[] = []
+  if (exportIncludePoweredBy.value) parts.push('Powered by Cricksy')
+  if (exportIncludeImportedLabel.value) parts.push('Imported CPL historical data')
+  if (exportIncludeContextLabel.value) {
+    const contextParts = [
+      selectedSeason.value !== 'all' ? `Season: ${selectedSeason.value}` : null,
+      selectedVenue.value !== 'all' ? `Venue: ${selectedVenue.value}` : null,
+      selectedMatch.value?.teams ? `Match: ${selectedMatch.value.teams}` : null,
+    ].filter(Boolean)
+    if (contextParts.length > 0) {
+      parts.push(contextParts.join(' · '))
+    }
+  }
+  parts.push(`Generated: ${new Date().toISOString()}`)
+  return parts.join(' · ')
+})
+
+watch(
+  [
+    exportTarget,
+    exportFormat,
+    exportIncludePoweredBy,
+    exportIncludeImportedLabel,
+    exportIncludeContextLabel,
+    selectedSeason,
+    selectedVenue,
+    selectedMatchId,
+    selectedTeam,
+  ],
+  () => {
+    exportPreviewUrl.value = null
+    exportError.value = null
+  }
+)
+
 // ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
@@ -720,6 +948,93 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+function buildExportFrame(targetNode: HTMLElement, width: number, height: number): HTMLDivElement {
+  const wrapper = document.createElement('div')
+  wrapper.style.position = 'fixed'
+  wrapper.style.left = '-99999px'
+  wrapper.style.top = '0'
+  wrapper.style.width = `${width}px`
+  wrapper.style.height = `${height}px`
+  wrapper.style.background = '#ffffff'
+  wrapper.style.padding = '24px'
+  wrapper.style.display = 'flex'
+  wrapper.style.flexDirection = 'column'
+  wrapper.style.gap = '12px'
+  wrapper.style.boxSizing = 'border-box'
+  wrapper.style.fontFamily = 'Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+
+  const title = document.createElement('div')
+  title.style.fontSize = '20px'
+  title.style.fontWeight = '700'
+  title.style.color = '#0f172a'
+  title.textContent = activeExportTarget.value?.label ?? 'CPL export'
+
+  const content = document.createElement('div')
+  content.style.flex = '1'
+  content.style.overflow = 'hidden'
+  content.style.border = '1px solid #e2e8f0'
+  content.style.borderRadius = '8px'
+  content.style.padding = '16px'
+  content.style.boxSizing = 'border-box'
+
+  const clone = targetNode.cloneNode(true) as HTMLElement
+  clone.style.margin = '0'
+  clone.style.maxHeight = '100%'
+  clone.style.overflow = 'hidden'
+  content.appendChild(clone)
+
+  const provenance = document.createElement('div')
+  provenance.style.fontSize = '14px'
+  provenance.style.lineHeight = '1.4'
+  provenance.style.color = '#334155'
+  provenance.textContent = exportReviewLabel.value
+
+  wrapper.append(title, content, provenance)
+  document.body.appendChild(wrapper)
+  return wrapper
+}
+
+async function generateExportPreview() {
+  if (!activeExportAvailability.value.available || !activeExportNode.value || !activeExportFormat.value) {
+    return
+  }
+  exportBusy.value = true
+  exportError.value = null
+  exportPreviewUrl.value = null
+
+  let frame: HTMLDivElement | null = null
+  try {
+    frame = buildExportFrame(
+      activeExportNode.value,
+      activeExportFormat.value.width,
+      activeExportFormat.value.height
+    )
+    exportPreviewUrl.value = await toPng(frame, {
+      cacheBust: true,
+      canvasWidth: activeExportFormat.value.width,
+      canvasHeight: activeExportFormat.value.height,
+      backgroundColor: '#ffffff',
+      pixelRatio: 1,
+    })
+  } catch (e: unknown) {
+    exportError.value = e instanceof Error ? e.message : 'Unable to generate export preview.'
+  } finally {
+    if (frame) {
+      frame.remove()
+    }
+    exportBusy.value = false
+  }
+}
+
+function downloadExportImage() {
+  if (!exportPreviewUrl.value || !activeExportFormat.value || !activeExportTarget.value) return
+  const filename = `cpl-${activeExportTarget.value.value}-${activeExportFormat.value.value}.png`
+  const link = document.createElement('a')
+  link.href = exportPreviewUrl.value
+  link.download = filename
+  link.click()
 }
 
 onMounted(load)
@@ -870,6 +1185,110 @@ onMounted(load)
   font-size: 0.8rem;
   color: var(--color-text-muted, #64748b);
   align-self: flex-end;
+}
+
+.cpld-export-pack {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+}
+
+.cpld-export-desc {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+.cpld-export-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: flex-start;
+}
+
+.cpld-export-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.cpld-export-check {
+  font-size: 0.74rem;
+  color: var(--color-text-muted, #64748b);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.cpld-export-review {
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  background: #ffffff;
+}
+
+.cpld-export-review p {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--color-text, #1e293b);
+}
+
+.cpld-export-meta {
+  margin-top: 0.2rem !important;
+  color: var(--color-text-muted, #64748b) !important;
+}
+
+.cpld-export-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cpld-export-btn {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #0f766e;
+  background: #0f766e;
+  color: #ffffff;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.cpld-export-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.cpld-export-btn--secondary {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+}
+
+.cpld-export-error {
+  margin: 0;
+  font-size: 0.76rem;
+  color: #b91c1c;
+}
+
+.cpld-export-preview-wrap {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.65rem;
+}
+
+.cpld-export-preview-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.74rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+.cpld-export-preview {
+  width: 100%;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
 }
 
 /* Section */
