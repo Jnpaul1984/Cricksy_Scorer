@@ -459,14 +459,182 @@
           Select a season or match to generate talking-point candidates.
         </div>
 
-        <!-- AI placeholder -->
-        <div class="cpld-ai-placeholder">
-          <p class="cpld-ai-placeholder-label">AI Talking-Point Assistant</p>
-          <p class="cpld-ai-placeholder-body">
-            AI-assisted podcast talking-point generation is documented as a future enhancement.
-            When available it will summarise deterministic chart data and suggest reviewable talking points.
-            AI will never calculate official scores, invent missing facts, or publish without review.
+        <!-- AI Talking-Point Assistant -->
+        <div class="cpld-ai-panel" aria-label="AI Talking-Point Assistant">
+          <div class="cpld-ai-panel-header">
+            <span class="cpld-ai-panel-title">🤖 AI Talking-Point Assistant</span>
+            <span class="cpld-badge cpld-badge--review">Reviewer-gated · Draft only</span>
+          </div>
+          <p class="cpld-ai-disclaimer">
+            AI drafts are generated <strong>only from the deterministic facts shown below</strong>.
+            AI will not calculate official scores, invent statistics, or publish without your review.
+            All talking points start as <em>needs review</em> — you must approve before use.
           </p>
+
+          <!-- Fact bundle preview -->
+          <div class="cpld-ai-bundle" aria-label="Fact bundle preview">
+            <p class="cpld-ai-bundle-label">
+              Fact bundle ({{ podcastFacts.length }} fact{{ podcastFacts.length === 1 ? '' : 's' }} will be sent to AI)
+            </p>
+            <div v-if="podcastFacts.length > 0" class="cpld-ai-bundle-list">
+              <span
+                v-for="(fact, i) in podcastFacts"
+                :key="i"
+                class="cpld-ai-bundle-tag"
+                :title="fact.value"
+              >{{ fact.label }}</span>
+            </div>
+            <p v-else class="cpld-ai-bundle-empty">
+              No deterministic facts available — select a season or match to populate the fact bundle before generating.
+            </p>
+          </div>
+
+          <!-- Insufficient-data block -->
+          <div v-if="podcastFacts.length > 0 && podcastFacts.length < 2" class="cpld-ai-insufficient">
+            ⚠ At least 2 deterministic facts are required to generate talking points. Add more filter context.
+          </div>
+
+          <!-- Generate button -->
+          <div class="cpld-ai-generate-row">
+            <button
+              class="cpld-ai-generate-btn"
+              :disabled="podcastFacts.length < 2 || aiGenerating"
+              :aria-disabled="podcastFacts.length < 2 || aiGenerating"
+              aria-label="Generate AI talking points"
+              @click="generateAiTalkingPoints"
+            >
+              <span v-if="aiGenerating">Generating…</span>
+              <span v-else>Generate Talking Points</span>
+            </button>
+            <button
+              v-if="aiResult"
+              class="cpld-ai-generate-btn cpld-ai-generate-btn--secondary"
+              aria-label="Clear AI talking points"
+              @click="clearAiResult"
+            >
+              Clear
+            </button>
+          </div>
+
+          <!-- AI error -->
+          <p v-if="aiError" class="cpld-ai-error" role="alert">{{ aiError }}</p>
+
+          <!-- Generated talking points -->
+          <div v-if="aiResult" class="cpld-ai-result" aria-label="Generated talking points">
+            <div class="cpld-ai-result-meta">
+              <span>Generated {{ aiResult.generatedAt }}</span>
+              <span class="cpld-badge cpld-badge--needs-review">All points need review</span>
+            </div>
+
+            <!-- Limitations -->
+            <div v-if="aiResult.limitations.length > 0" class="cpld-ai-limitations" aria-label="AI limitations">
+              <p class="cpld-ai-limitations-label">⚠ Limitations</p>
+              <ul class="cpld-ai-limitations-list">
+                <li v-for="(lim, li) in aiResult.limitations" :key="li">{{ lim }}</li>
+              </ul>
+            </div>
+
+            <!-- Talking point cards -->
+            <div
+              v-for="(tp, tpIdx) in aiResult.talkingPoints"
+              :key="tp.id"
+              class="cpld-tp-card"
+              :class="`cpld-tp-card--${tp.status}`"
+              :aria-label="`Talking point: ${tp.title}`"
+            >
+              <!-- Status badge + section label -->
+              <div class="cpld-tp-card-top">
+                <span class="cpld-tp-section">{{ tp.section }}</span>
+                <span
+                  class="cpld-badge"
+                  :class="{
+                    'cpld-badge--needs-review': tp.status === 'needs_review',
+                    'cpld-badge--approved': tp.status === 'approved',
+                    'cpld-badge--rejected': tp.status === 'rejected',
+                  }"
+                  :aria-label="`Status: ${tp.status}`"
+                >{{ tp.status === 'needs_review' ? 'Needs review' : tp.status === 'approved' ? 'Approved' : 'Rejected' }}</span>
+                <span class="cpld-tp-confidence" :title="`Confidence: ${tp.confidence}`">
+                  {{ tp.confidence === 'high' ? '🟢' : tp.confidence === 'medium' ? '🟡' : '🔴' }} {{ tp.confidence }}
+                </span>
+              </div>
+
+              <!-- Title -->
+              <p class="cpld-tp-title">{{ tp.title }}</p>
+
+              <!-- Text (show edited version if available) -->
+              <div v-if="aiTpEditing[tpIdx]" class="cpld-tp-edit-wrap">
+                <textarea
+                  class="cpld-tp-edit-area"
+                  :value="aiTpEdits[tpIdx] ?? tp.text"
+                  :aria-label="`Edit talking point ${tpIdx + 1}`"
+                  rows="4"
+                  @input="e => { aiTpEdits[tpIdx] = (e.target as HTMLTextAreaElement).value }"
+                />
+                <div class="cpld-tp-edit-actions">
+                  <button class="cpld-tp-btn cpld-tp-btn--save" @click="saveEditTp(tpIdx)">Save edit</button>
+                  <button class="cpld-tp-btn cpld-tp-btn--cancel" @click="cancelEditTp(tpIdx)">Cancel</button>
+                </div>
+              </div>
+              <p v-else class="cpld-tp-text">{{ aiTpEdits[tpIdx] ?? tp.text }}</p>
+
+              <!-- Source facts -->
+              <div class="cpld-tp-sources">
+                <span class="cpld-tp-sources-label">Sources:</span>
+                <span
+                  v-for="(sid, si) in tp.sourceFactIds"
+                  :key="si"
+                  class="cpld-tp-source-tag"
+                >{{ sid }}</span>
+              </div>
+
+              <!-- Review controls -->
+              <div class="cpld-tp-actions" v-if="tp.status !== 'rejected'">
+                <button
+                  v-if="tp.status !== 'approved'"
+                  class="cpld-tp-btn cpld-tp-btn--approve"
+                  :aria-label="`Approve talking point ${tpIdx + 1}`"
+                  @click="approveTp(tpIdx)"
+                >✓ Approve</button>
+                <button
+                  v-if="tp.status === 'approved'"
+                  class="cpld-tp-btn cpld-tp-btn--unapprove"
+                  :aria-label="`Unapprove talking point ${tpIdx + 1}`"
+                  @click="unapproveTp(tpIdx)"
+                >↩ Unapprove</button>
+                <button
+                  class="cpld-tp-btn cpld-tp-btn--edit"
+                  :aria-label="`Edit talking point ${tpIdx + 1}`"
+                  @click="startEditTp(tpIdx)"
+                >✎ Edit</button>
+                <button
+                  class="cpld-tp-btn cpld-tp-btn--copy"
+                  :aria-label="`Copy talking point ${tpIdx + 1}`"
+                  :title="tp.status !== 'approved' ? 'Review this point before copying' : 'Copy approved talking point'"
+                  @click="copyTp(tpIdx)"
+                >
+                  {{ tp.status === 'approved' ? '📋 Copy (Reviewed)' : '📋 Copy (Unreviewed)' }}
+                </button>
+                <button
+                  class="cpld-tp-btn cpld-tp-btn--reject"
+                  :aria-label="`Reject talking point ${tpIdx + 1}`"
+                  @click="rejectTp(tpIdx)"
+                >✕ Reject</button>
+              </div>
+              <div v-else class="cpld-tp-rejected-note">
+                Rejected — this talking point has been dismissed.
+                <button class="cpld-tp-btn cpld-tp-btn--unapprove" @click="unapproveTp(tpIdx)">↩ Restore</button>
+              </div>
+            </div>
+
+            <!-- Summary: how many approved -->
+            <div class="cpld-ai-review-summary" aria-label="Review summary">
+              {{ approvedCount }} of {{ aiResult.talkingPoints.length }} talking point{{ aiResult.talkingPoints.length === 1 ? '' : 's' }} approved.
+              <span v-if="approvedCount === 0" class="cpld-ai-review-note">Review and approve before using any content.</span>
+              <span v-else-if="approvedCount < aiResult.talkingPoints.length" class="cpld-ai-review-note">Some points still need review.</span>
+              <span v-else class="cpld-ai-review-note cpld-ai-review-note--ok">All points reviewed.</span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -475,7 +643,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { toPng } from 'html-to-image'
 import {
   getHistoricalStatsSummary,
@@ -1038,6 +1206,306 @@ function downloadExportImage() {
 }
 
 onMounted(load)
+
+type TalkingPointStatus = 'needs_review' | 'approved' | 'rejected'
+type TalkingPointConfidence = 'high' | 'medium' | 'low'
+
+interface TalkingPoint {
+  id: string
+  section: string
+  title: string
+  text: string
+  sourceFactIds: string[]
+  confidence: TalkingPointConfidence
+  status: TalkingPointStatus
+}
+
+interface AiTalkingPointsResult {
+  status: 'needs_review'
+  generatedAt: string
+  limitations: string[]
+  talkingPoints: TalkingPoint[]
+}
+
+// ---------------------------------------------------------------------------
+// AI Talking-Point Assistant — state
+// ---------------------------------------------------------------------------
+
+const aiGenerating = ref(false)
+const aiResult = ref<AiTalkingPointsResult | null>(null)
+const aiError = ref<string | null>(null)
+/** Per-index edited text (set when analyst edits a point). */
+const aiTpEdits = reactive<Record<number, string>>({})
+/** Per-index editing flag. */
+const aiTpEditing = reactive<Record<number, boolean>>({})
+
+const approvedCount = computed<number>(() => {
+  if (!aiResult.value) return 0
+  return aiResult.value.talkingPoints.filter(tp => tp.status === 'approved').length
+})
+
+// ---------------------------------------------------------------------------
+// AI Talking-Point Assistant — generation
+// ---------------------------------------------------------------------------
+
+/**
+ * Deterministic frontend-only talking-point generator.
+ * Generates reviewable drafts from the current podcastFacts bundle.
+ * Does not contact any backend — all content is grounded in supplied facts.
+ * AI never calculates official scores, invents missing data, or publishes.
+ */
+function generateAiTalkingPoints(): void {
+  if (podcastFacts.value.length < 2) return
+
+  aiGenerating.value = true
+  aiError.value = null
+  aiResult.value = null
+  // Clear any prior edits
+  Object.keys(aiTpEdits).forEach(k => { delete (aiTpEdits as Record<string, string>)[k] })
+  Object.keys(aiTpEditing).forEach(k => { delete (aiTpEditing as Record<string, boolean>)[k] })
+
+  // Short async tick to reflect generating state in UI
+  setTimeout(() => {
+    try {
+      aiResult.value = _buildTalkingPoints(podcastFacts.value)
+    } catch (e: unknown) {
+      aiError.value = e instanceof Error ? e.message : 'Unable to generate talking points.'
+    } finally {
+      aiGenerating.value = false
+    }
+  }, 0)
+}
+
+function clearAiResult(): void {
+  aiResult.value = null
+  aiError.value = null
+  Object.keys(aiTpEdits).forEach(k => { delete (aiTpEdits as Record<string, string>)[k] })
+  Object.keys(aiTpEditing).forEach(k => { delete (aiTpEditing as Record<string, boolean>)[k] })
+}
+
+function _buildTalkingPoints(facts: PodcastFact[]): AiTalkingPointsResult {
+  const limitations: string[] = []
+  const tps: TalkingPoint[] = []
+
+  // Categorise facts by type for source referencing
+  const seasonFacts = facts.filter(f => f.type === 'season')
+  const matchFacts  = facts.filter(f => f.type === 'match')
+  const playerFacts = facts.filter(f => f.type === 'player')
+  const venueFacts  = facts.filter(f => f.type === 'venue')
+  const teamFacts   = facts.filter(f => f.type === 'team')
+
+  // Determine limitations from caveat signals
+  const hasNoDeliveryData = facts.some(f => f.label === 'Delivery data' && f.value === 'Not imported')
+  const hasDeliveryWarning = facts.some(f => f.caveat?.toLowerCase().includes('delivery data'))
+  if (hasNoDeliveryData) {
+    limitations.push('Delivery data is missing for the selected match — ball-by-ball and phase claims cannot be made.')
+  }
+  if (hasDeliveryWarning && !hasNoDeliveryData) {
+    limitations.push('Some facts are derived from innings totals only — delivery-level detail is unavailable for some matches.')
+  }
+  if (playerFacts.length === 0) {
+    limitations.push('Leaderboard data is unavailable — top scorer / wicket-taker narratives cannot be stated.')
+  }
+  if (venueFacts.length === 0) {
+    limitations.push('No venue-specific data is selected — venue angle is limited to team/season context.')
+  }
+
+  // Helper to build a stable source ID from a fact
+  function factId(f: PodcastFact): string {
+    return `${f.type}.${f.label.toLowerCase().replace(/\s+/g, '_')}`
+  }
+
+  // ── Section 1: Opening hook ──────────────────────────────────────────────
+  if (matchFacts.length > 0) {
+    const mf = matchFacts[0]
+    const scoreFact = matchFacts.find(f => f.label === 'Match scores' || f.label === '1st innings score')
+    tps.push({
+      id: 'opening-hook',
+      section: 'Opening hook',
+      title: 'Set the scene',
+      text: scoreFact
+        ? `This episode looks at ${mf.value}. The match showed: ${scoreFact.value}.`
+        : `This episode covers the match: ${mf.value}.`,
+      sourceFactIds: [factId(mf), ...(scoreFact ? [factId(scoreFact)] : [])],
+      confidence: scoreFact ? 'high' : 'medium',
+      status: 'needs_review',
+    })
+  } else if (seasonFacts.length > 0) {
+    const sf = seasonFacts[0]
+    tps.push({
+      id: 'opening-hook',
+      section: 'Opening hook',
+      title: 'Set the scene',
+      text: `Welcome. Today we look at the CPL data: ${sf.value}.`,
+      sourceFactIds: [factId(sf)],
+      confidence: 'medium',
+      status: 'needs_review',
+    })
+  }
+
+  // ── Section 2: Key match / season facts ─────────────────────────────────
+  if (seasonFacts.length >= 2) {
+    const runsFact  = seasonFacts.find(f => f.label === 'Total runs in dataset')
+    const wktFact   = seasonFacts.find(f => f.label === 'Total wickets in dataset')
+    const mtchFact  = seasonFacts.find(f => f.label === 'Matches imported')
+    const sourceFacts = [runsFact, wktFact, mtchFact].filter(Boolean) as PodcastFact[]
+    if (sourceFacts.length >= 2) {
+      const runsPart   = runsFact  ? `${runsFact.value} total runs` : ''
+      const wicketsPart = wktFact  ? `${wktFact.value} wickets` : ''
+      const matchPart   = mtchFact ? ` across ${mtchFact.value}` : ''
+      tps.push({
+        id: 'key-season-facts',
+        section: 'Key season facts',
+        title: 'Season by the numbers',
+        text: `The imported CPL dataset shows${matchPart}: ${[runsPart, wicketsPart].filter(Boolean).join(' and ')}.`,
+        sourceFactIds: sourceFacts.map(factId),
+        confidence: 'high',
+        status: 'needs_review',
+      })
+    }
+  }
+
+  // ── Section 3: Player / team angle ──────────────────────────────────────
+  if (playerFacts.length > 0) {
+    const runnerFact  = playerFacts.find(f => f.label === 'Top run scorer')
+    const wicketFact  = playerFacts.find(f => f.label === 'Top wicket taker')
+    const usedFacts   = [runnerFact, wicketFact].filter(Boolean) as PodcastFact[]
+    if (usedFacts.length > 0) {
+      const runnerText  = runnerFact  ? `Top run scorer: ${runnerFact.value}.` : ''
+      const wicketText  = wicketFact  ? `Top wicket taker: ${wicketFact.value}.` : ''
+      tps.push({
+        id: 'player-angle',
+        section: 'Player / team angle',
+        title: 'Star performers',
+        text: [runnerText, wicketText].filter(Boolean).join(' ') + ' These figures come from matches with delivery data only.',
+        sourceFactIds: usedFacts.map(factId),
+        confidence: 'medium',
+        status: 'needs_review',
+      })
+    }
+  }
+
+  // ── Section 4: Venue angle ───────────────────────────────────────────────
+  const venueAvgFact = facts.find(f => f.label === 'Venue avg first innings')
+  const venueListFact = facts.find(f => f.label === 'Venues represented')
+  if (venueAvgFact) {
+    tps.push({
+      id: 'venue-angle',
+      section: 'Venue angle',
+      title: 'The venue factor',
+      text: `At the selected venue: ${venueAvgFact.value}.${venueAvgFact.caveat ? ' Note: ' + venueAvgFact.caveat + '.' : ''}`,
+      sourceFactIds: [factId(venueAvgFact)],
+      confidence: venueAvgFact.caveat ? 'low' : 'medium',
+      status: 'needs_review',
+    })
+  } else if (venueListFact) {
+    tps.push({
+      id: 'venue-angle',
+      section: 'Venue angle',
+      title: 'Venues in dataset',
+      text: `CPL matches in this dataset were played at: ${venueListFact.value}. Select a specific venue for detailed averages.`,
+      sourceFactIds: [factId(venueListFact)],
+      confidence: 'medium',
+      status: 'needs_review',
+    })
+  }
+
+  // ── Section 5: Caution / limitation note ────────────────────────────────
+  if (limitations.length > 0) {
+    tps.push({
+      id: 'caution-note',
+      section: 'Caution / limitation',
+      title: 'What this data cannot tell us',
+      text: limitations.join(' ') + ' Always verify with official CPL records before broadcast.',
+      sourceFactIds: [],
+      confidence: 'low',
+      status: 'needs_review',
+    })
+  }
+
+  // ── Section 6: Questions for the host ───────────────────────────────────
+  const questionParts: string[] = []
+  if (playerFacts.length > 0) {
+    questionParts.push('Which player performance surprised you most in this dataset?')
+  }
+  if (matchFacts.length > 0) {
+    questionParts.push('What was the tactical turning point in the selected match?')
+  }
+  if (venueFacts.length > 0 || facts.find(f => f.type === 'venue')) {
+    questionParts.push('How does this venue compare to others in the CPL circuit?')
+  }
+  if (seasonFacts.length > 0) {
+    questionParts.push("What does this season's run-rate and wickets data suggest about batting depth?")
+  }
+  if (questionParts.length > 0) {
+    const allFactIds = facts.slice(0, 4).map(factId)
+    tps.push({
+      id: 'host-questions',
+      section: 'Questions for the host',
+      title: 'Suggested discussion questions',
+      text: questionParts.join(' | '),
+      sourceFactIds: allFactIds,
+      confidence: 'medium',
+      status: 'needs_review',
+    })
+  }
+
+  return {
+    status: 'needs_review',
+    generatedAt: new Date().toLocaleTimeString(),
+    limitations,
+    talkingPoints: tps,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AI Talking-Point Assistant — review actions
+// ---------------------------------------------------------------------------
+
+function approveTp(idx: number): void {
+  if (aiResult.value) {
+    aiResult.value.talkingPoints[idx].status = 'approved'
+  }
+}
+
+function unapproveTp(idx: number): void {
+  if (aiResult.value) {
+    aiResult.value.talkingPoints[idx].status = 'needs_review'
+  }
+}
+
+function rejectTp(idx: number): void {
+  if (aiResult.value) {
+    aiResult.value.talkingPoints[idx].status = 'rejected'
+  }
+}
+
+function startEditTp(idx: number): void {
+  aiTpEditing[idx] = true
+  if (!aiTpEdits[idx] && aiResult.value) {
+    aiTpEdits[idx] = aiResult.value.talkingPoints[idx].text
+  }
+}
+
+function saveEditTp(idx: number): void {
+  aiTpEditing[idx] = false
+}
+
+function cancelEditTp(idx: number): void {
+  aiTpEditing[idx] = false
+}
+
+function copyTp(idx: number): void {
+  if (!aiResult.value) return
+  const tp = aiResult.value.talkingPoints[idx]
+  const text = aiTpEdits[idx] ?? tp.text
+  const reviewedLabel = tp.status === 'approved' ? '[REVIEWED]' : '[UNREVIEWED — not final]'
+  const fullText = `${reviewedLabel} ${tp.title}: ${text}`
+  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+    void navigator.clipboard.writeText(fullText)
+  }
+}
+
 </script>
 
 <style scoped>
@@ -1681,7 +2149,7 @@ onMounted(load)
   margin-top: 0.25rem;
 }
 
-/* AI placeholder */
+/* AI placeholder (kept for backward compat, unused) */
 .cpld-ai-placeholder {
   background: #f8fafc;
   border: 1px dashed #cbd5e1;
@@ -1703,5 +2171,378 @@ onMounted(load)
   font-size: 0.75rem;
   color: var(--color-text-muted, #64748b);
   margin: 0;
+}
+
+/* AI Talking-Point Panel */
+.cpld-ai-panel {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cpld-ai-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.cpld-ai-panel-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0c4a6e;
+}
+
+.cpld-ai-disclaimer {
+  font-size: 0.75rem;
+  color: #075985;
+  margin: 0;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+}
+
+.cpld-badge--review {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.cpld-badge--needs-review {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.cpld-badge--approved {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.cpld-badge--rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Fact bundle */
+.cpld-ai-bundle {
+  background: #ffffff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+}
+
+.cpld-ai-bundle-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #0369a1;
+  margin: 0 0 0.4rem;
+}
+
+.cpld-ai-bundle-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.cpld-ai-bundle-tag {
+  display: inline-block;
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.cpld-ai-bundle-empty {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #64748b);
+  margin: 0;
+}
+
+/* Insufficient warning */
+.cpld-ai-insufficient {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: #92400e;
+}
+
+/* Generate row */
+.cpld-ai-generate-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cpld-ai-generate-btn {
+  padding: 0.4rem 1rem;
+  background: #0369a1;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cpld-ai-generate-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cpld-ai-generate-btn--secondary {
+  background: #ffffff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.cpld-ai-error {
+  font-size: 0.75rem;
+  color: #b91c1c;
+  margin: 0;
+}
+
+/* AI result */
+.cpld-ai-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cpld-ai-result-meta {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #64748b);
+  flex-wrap: wrap;
+}
+
+/* Limitations */
+.cpld-ai-limitations {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+}
+
+.cpld-ai-limitations-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin: 0 0 0.3rem;
+  color: #92400e;
+}
+
+.cpld-ai-limitations-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.75rem;
+  color: #92400e;
+}
+
+/* Talking point cards */
+.cpld-tp-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.cpld-tp-card--approved {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.cpld-tp-card--rejected {
+  border-color: #fca5a5;
+  background: #fff5f5;
+  opacity: 0.75;
+}
+
+.cpld-tp-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cpld-tp-section {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted, #64748b);
+}
+
+.cpld-tp-confidence {
+  font-size: 0.7rem;
+  color: var(--color-text-muted, #64748b);
+  margin-left: auto;
+}
+
+.cpld-tp-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--color-text, #1e293b);
+}
+
+.cpld-tp-text {
+  font-size: 0.82rem;
+  color: var(--color-text, #1e293b);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.cpld-tp-edit-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cpld-tp-edit-area {
+  width: 100%;
+  border: 1px solid #bae6fd;
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.cpld-tp-edit-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+/* Source fact tags */
+.cpld-tp-sources {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.cpld-tp-sources-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cpld-tp-source-tag {
+  display: inline-block;
+  background: #f1f5f9;
+  color: #475569;
+  border-radius: 3px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.68rem;
+  font-family: monospace;
+}
+
+/* Review action buttons */
+.cpld-tp-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.cpld-tp-btn {
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.cpld-tp-btn--approve {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.cpld-tp-btn--unapprove {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.cpld-tp-btn--edit {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.cpld-tp-btn--save {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.cpld-tp-btn--cancel {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.cpld-tp-btn--copy {
+  background: #f8fafc;
+  color: #334155;
+  border-color: #e2e8f0;
+}
+
+.cpld-tp-btn--reject {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.cpld-tp-rejected-note {
+  font-size: 0.72rem;
+  color: #991b1b;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* Review summary */
+.cpld-ai-review-summary {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #64748b);
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cpld-ai-review-note {
+  font-weight: 500;
+  color: #b45309;
+}
+
+.cpld-ai-review-note--ok {
+  color: #166534;
 }
 </style>
