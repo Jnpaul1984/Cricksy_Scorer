@@ -636,6 +636,73 @@
             </div>
           </div>
         </div>
+
+        <div class="cpld-script-panel" aria-label="Advanced Podcast Script Builder">
+          <div class="cpld-script-panel-header">
+            <span class="cpld-script-panel-title">📝 Advanced Podcast Script Builder</span>
+            <span class="cpld-badge cpld-badge--review">Deterministic · Analyst editable</span>
+          </div>
+          <p class="cpld-script-desc">
+            Build a podcast prep script from deterministic facts, selected CPL context, reviewed talking points, and export metadata.
+            Unreviewed talking points are excluded from final copy/export by default.
+          </p>
+
+          <div v-if="!canGeneratePodcastScript" class="cpld-ai-insufficient" role="alert">
+            {{ podcastScriptDisabledReason }}
+          </div>
+
+          <div v-else class="cpld-script-actions">
+            <button
+              class="cpld-ai-generate-btn"
+              aria-label="Generate podcast script"
+              @click="generatePodcastScript"
+            >
+              Generate script draft
+            </button>
+            <button
+              class="cpld-ai-generate-btn cpld-ai-generate-btn--secondary"
+              aria-label="Copy script as markdown"
+              :disabled="!podcastScriptDraft"
+              @click="copyPodcastScriptMarkdown"
+            >
+              Copy Markdown
+            </button>
+            <button
+              class="cpld-ai-generate-btn cpld-ai-generate-btn--secondary"
+              aria-label="Copy script as plain text"
+              :disabled="!podcastScriptDraft"
+              @click="copyPodcastScriptPlainText"
+            >
+              Copy Plain Text
+            </button>
+            <button
+              class="cpld-ai-generate-btn cpld-ai-generate-btn--secondary"
+              aria-label="Download script markdown"
+              :disabled="!podcastScriptDraft"
+              @click="downloadPodcastScriptMarkdown"
+            >
+              Download .md
+            </button>
+          </div>
+
+          <div v-if="needsReviewTalkingPoints.length > 0" class="cpld-script-needs-review" aria-label="Talking points needing review">
+            <p class="cpld-script-needs-review-label">Needs review (excluded from final script by default):</p>
+            <ul class="cpld-script-needs-review-list">
+              <li v-for="tp in needsReviewTalkingPoints" :key="tp.id">{{ tp.title }}</li>
+            </ul>
+          </div>
+
+          <div v-if="podcastScriptDraft" class="cpld-script-editor">
+            <label class="cpld-filter-label" for="cpld-script-editor">Podcast script draft (editable before export)</label>
+            <textarea
+              id="cpld-script-editor"
+              v-model="podcastScriptDraft"
+              class="cpld-script-textarea"
+              rows="22"
+              aria-label="Podcast script draft editor"
+            />
+          </div>
+        </div>
       </section>
 
     </template>
@@ -1244,6 +1311,35 @@ const approvedCount = computed<number>(() => {
   return aiResult.value.talkingPoints.filter(tp => tp.status === 'approved').length
 })
 
+const approvedTalkingPoints = computed<TalkingPoint[]>(() => {
+  if (!aiResult.value) return []
+  return aiResult.value.talkingPoints.filter(tp => tp.status === 'approved')
+})
+
+const needsReviewTalkingPoints = computed<TalkingPoint[]>(() => {
+  if (!aiResult.value) return []
+  return aiResult.value.talkingPoints.filter(tp => tp.status === 'needs_review')
+})
+
+const canGeneratePodcastScript = computed<boolean>(() =>
+  cplMatches.value.length > 0 && podcastFacts.value.length >= 2
+)
+
+const podcastScriptDisabledReason = computed<string>(() => {
+  if (cplMatches.value.length === 0) {
+    return 'Script builder disabled: no CPL data is available.'
+  }
+  if (podcastFacts.value.length === 0) {
+    return 'Script builder disabled: no deterministic facts are available for current filters.'
+  }
+  if (podcastFacts.value.length < 2) {
+    return 'Script builder disabled: at least 2 deterministic facts are required to assemble a script.'
+  }
+  return ''
+})
+
+const podcastScriptDraft = ref('')
+
 // ---------------------------------------------------------------------------
 // AI Talking-Point Assistant — generation
 // ---------------------------------------------------------------------------
@@ -1504,6 +1600,178 @@ function copyTp(idx: number): void {
   if (typeof navigator !== 'undefined' && navigator.clipboard) {
     void navigator.clipboard.writeText(fullText)
   }
+}
+
+function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.map(v => (v ?? '').trim()).filter(Boolean))]
+}
+
+function buildPodcastScriptMarkdown(): string {
+  const nowIso = new Date().toISOString()
+  const selectedMatchLabel = selectedMatch.value?.teams
+    ? `${selectedMatch.value.teams}${selectedMatch.value.match_date ? ` (${selectedMatch.value.match_date})` : ''}`
+    : 'Not selected'
+  const contextBits = uniqueNonEmpty([
+    selectedSeason.value !== 'all' ? `Season: ${selectedSeason.value}` : 'Season: all seasons',
+    selectedTeam.value !== 'all' ? `Team focus: ${selectedTeam.value}` : null,
+    selectedVenue.value !== 'all' ? `Venue focus: ${selectedVenue.value}` : null,
+    `Match: ${selectedMatchLabel}`,
+  ])
+
+  const approved = approvedTalkingPoints.value
+  const incompleteFactsOnly = approved.length === 0
+  const keyFacts = podcastFacts.value
+
+  const approvedQuestions = approved
+    .filter(tp => tp.section.toLowerCase().includes('question'))
+    .flatMap(tp => tp.text.split('|').map(part => part.trim()).filter(Boolean))
+
+  const caveatLines = uniqueNonEmpty([
+    ...keyFacts.map(f => f.caveat),
+    ...(aiResult.value?.limitations ?? []),
+    selectedMatch.value && !selectedMatch.value.has_delivery_data
+      ? 'Delivery data is missing for selected match; avoid phase-by-phase or ball-by-ball claims.'
+      : null,
+    keyFacts.some(f => f.label === 'Top run scorer' || f.label === 'Top wicket taker')
+      ? null
+      : 'Leaderboard data is unavailable; avoid player-rank narratives.',
+    incompleteFactsOnly
+      ? 'No approved talking points yet. This is a facts-only outline and is incomplete for publication.'
+      : null,
+  ])
+
+  const visualCueLines = uniqueNonEmpty([
+    activeExportTarget.value ? `Export target: ${activeExportTarget.value.label}` : null,
+    activeExportFormat.value ? `Format: ${activeExportFormat.value.label}` : null,
+    exportPreviewUrl.value ? 'Export preview is available and can be reviewed before publishing assets.' : 'No export preview generated yet.',
+  ])
+
+  const followUpIdeas = uniqueNonEmpty([
+    selectedSeason.value !== 'all' ? `Create a season recap segment for ${selectedSeason.value}.` : 'Create a multi-season CPL comparison segment.',
+    selectedVenue.value !== 'all' ? `Prepare a venue-focused clip for ${selectedVenue.value}.` : 'Prepare a venue-comparison clip for social channels.',
+    selectedMatch.value ? 'Publish a match-specific teaser image from the selected match story panel.' : 'Select a specific match to prepare a focused teaser image.',
+  ])
+
+  const lines: string[] = [
+    '# Episode working title',
+    selectedMatch.value
+      ? `CPL Match Breakdown: ${selectedMatch.value.teams}`
+      : `CPL Data Briefing${selectedSeason.value !== 'all' ? ` (${selectedSeason.value})` : ''}`,
+    '',
+    '## Episode objective',
+    incompleteFactsOnly
+      ? 'Prepare a deterministic facts-first briefing while approved talking points are still pending review.'
+      : 'Deliver a deterministic CPL analysis using approved talking points and validated dashboard facts.',
+    '',
+    '## Opening hook',
+  ]
+
+  if (approved.length > 0) {
+    lines.push(approved[0].text)
+  } else {
+    const selectedMatchFact = keyFacts.find(f => f.label === 'Selected match')
+    lines.push(selectedMatchFact ? selectedMatchFact.value : `Dataset scope: ${keyFacts[0]?.value ?? 'No fact available'}.`)
+  }
+
+  lines.push(
+    '',
+    '## Context setup',
+    ...contextBits.map(item => `- ${item}`),
+    '',
+    '## Key facts to mention',
+    ...keyFacts.map(f => `- **${f.label}:** ${f.value}${f.caveat ? ` _(caveat: ${f.caveat})_` : ''}`),
+    '',
+    '## Visual cue list',
+    ...visualCueLines.map(item => `- ${item}`),
+    '',
+    '## Approved talking points'
+  )
+
+  if (approved.length > 0) {
+    lines.push(
+      ...approved.map(tp => {
+        const idx = aiResult.value?.talkingPoints.findIndex(candidate => candidate.id === tp.id) ?? -1
+        const editedText = idx >= 0 ? aiTpEdits[idx] : undefined
+        return `- **${tp.title}:** ${editedText ?? tp.text}`
+      })
+    )
+  } else {
+    lines.push('- _No approved talking points yet. Facts-only outline in progress._')
+  }
+
+  lines.push(
+    '',
+    '## Host/analyst questions',
+    ...(approvedQuestions.length > 0
+      ? approvedQuestions.map(q => `- ${q}`)
+      : ['- Which deterministic fact should be reviewed next for approval?']),
+    '',
+    '## Limitations / data caveats',
+    ...(caveatLines.length > 0
+      ? caveatLines.map(l => `- ${l}`)
+      : ['- No additional caveats flagged from current deterministic dashboard context.']),
+    '',
+    '## Closing summary',
+    incompleteFactsOnly
+      ? 'This draft is incomplete and uses deterministic facts only until talking points are approved.'
+      : `Approved talking points ready: ${approved.length}. Keep all claims grounded in validated import data.`,
+    '',
+    '## Follow-up content ideas',
+    ...followUpIdeas.map(item => `- ${item}`),
+    '',
+    '## Provenance & limitations',
+    '- Source: validated historical CPL imports displayed in the dashboard',
+    `- Fact bundle count: ${keyFacts.length}`,
+    `- Approved talking points included: ${approved.length}`,
+    `- Export context: ${exportReviewLabel.value}`,
+    `- Generated at (UTC): ${nowIso}`,
+    '- No auto-publishing, no social posting automation, no unsupported AI claims',
+  )
+
+  return lines.join('\n')
+}
+
+function generatePodcastScript(): void {
+  if (!canGeneratePodcastScript.value) return
+  podcastScriptDraft.value = buildPodcastScriptMarkdown()
+}
+
+function toPlainText(markdown: string): string {
+  return markdown
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    .replace(/^- /gm, '• ')
+}
+
+function copyText(text: string): void {
+  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+    void navigator.clipboard.writeText(text)
+  }
+}
+
+function copyPodcastScriptMarkdown(): void {
+  if (!podcastScriptDraft.value) return
+  copyText(podcastScriptDraft.value)
+}
+
+function copyPodcastScriptPlainText(): void {
+  if (!podcastScriptDraft.value) return
+  copyText(toPlainText(podcastScriptDraft.value))
+}
+
+function downloadPodcastScriptMarkdown(): void {
+  if (!podcastScriptDraft.value) return
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function' || typeof URL.revokeObjectURL !== 'function') {
+    return
+  }
+  const blob = new Blob([podcastScriptDraft.value], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'cpl-podcast-script.md'
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 </script>
@@ -2544,5 +2812,81 @@ function copyTp(idx: number): void {
 
 .cpld-ai-review-note--ok {
   color: #166534;
+}
+
+.cpld-script-panel {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cpld-script-panel-header {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.cpld-script-panel-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.cpld-script-desc {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+.cpld-script-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cpld-script-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cpld-script-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0.65rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  resize: vertical;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.cpld-script-needs-review {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+}
+
+.cpld-script-needs-review-label {
+  margin: 0 0 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #9a3412;
+}
+
+.cpld-script-needs-review-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.74rem;
+  color: #9a3412;
 }
 </style>

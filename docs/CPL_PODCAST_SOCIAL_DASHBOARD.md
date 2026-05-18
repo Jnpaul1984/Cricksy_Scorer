@@ -148,7 +148,43 @@ A review summary at the bottom shows how many points are approved vs total.
 - The assistant is entirely frontend-based and works without any backend AI service.
 - If CPL data is absent, the Generate button is disabled and the panel explains why.
 
-### 8. CPL Social Image Export Pack
+### 8. Advanced Podcast Script Builder
+
+The dashboard now includes an **Advanced Podcast Script Builder** directly under the talking-point assistant.
+
+**Scope and safety:**
+- Frontend-only assembly from deterministic dashboard facts and current filter context.
+- Includes only **approved** talking points in final script copy/export by default.
+- Shows unapproved talking points in a separate "needs review" list.
+- No publishing automation, no social posting, no new AI/LLM calls.
+
+**Template sections generated:**
+- Episode working title
+- Episode objective
+- Opening hook
+- Context setup
+- Key facts to mention
+- Visual cue list
+- Approved talking points
+- Host/analyst questions
+- Limitations / data caveats
+- Closing summary
+- Follow-up content ideas
+- Provenance & limitations block
+
+**Review gates and insufficiency behavior:**
+- Script generation is disabled when CPL data is unavailable.
+- Script generation is disabled when fewer than 2 deterministic facts are available.
+- If no talking points are approved, a facts-only script is generated and marked incomplete.
+- Missing delivery/leaderboard signals are carried into the caveats block.
+
+**Export/copy workflow:**
+- Analyst can edit the generated script in-place before export.
+- Copy as Markdown.
+- Copy as plain text.
+- Download local `.md` file.
+
+### 9. CPL Social Image Export Pack
 
 The dashboard now includes a guarded **Social Image Export Pack** for deterministic sections.
 

@@ -14,7 +14,7 @@
  * - No fake/hardcoded data: all displayed values come from the mocked API
  * - Insufficient-data warnings render when delivery data is absent
  * - Provenance bar is always visible
- * - AI placeholder is visible (future enhancement note)
+ * - AI talking-point review gates and podcast script builder behavior
  */
 
 import { flushPromises, mount } from '@vue/test-utils';
@@ -27,6 +27,7 @@ import type { HistoricalStatsSummaryResponse } from '@/services/api';
 
 const mockGetHistoricalStatsSummary = vi.fn<[], Promise<HistoricalStatsSummaryResponse>>();
 const mockToPng = vi.fn<(...args: unknown[]) => Promise<string>>();
+const mockClipboardWriteText = vi.fn<(text: string) => Promise<void>>();
 
 vi.mock('@/services/api', () => ({
   getHistoricalStatsSummary: (...args: unknown[]) => mockGetHistoricalStatsSummary(...(args as [])),
@@ -191,6 +192,11 @@ describe('CplPodcastDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockToPng.mockResolvedValue('data:image/png;base64,mock-preview');
+    mockClipboardWriteText.mockResolvedValue(undefined);
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: mockClipboardWriteText },
+    });
   });
 
   it('shows loading state while fetching', async () => {
@@ -713,5 +719,100 @@ describe('CplPodcastDashboard', () => {
 
     expect(wrapper.find('[aria-label="Generate export preview"]').attributes('disabled')).toBeDefined();
     expect(wrapper.text()).toContain('leaderboard data is unavailable');
+  });
+
+  it('builds editable podcast script draft with provenance and required sections', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Generate AI talking points"]').trigger('click');
+    await new Promise(r => setTimeout(r, 10));
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Generate podcast script"]').trigger('click');
+    await flushPromises();
+
+    const editor = wrapper.find('[aria-label="Podcast script draft editor"]');
+    expect(editor.exists()).toBe(true);
+    const text = (editor.element as HTMLTextAreaElement).value;
+    expect(text).toContain('# Episode working title');
+    expect(text).toContain('## Context setup');
+    expect(text).toContain('## Approved talking points');
+    expect(text).toContain('facts-only outline');
+    expect(text).toContain('## Provenance & limitations');
+  });
+
+  it('includes only approved talking points in generated script by default', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Generate AI talking points"]').trigger('click');
+    await new Promise(r => setTimeout(r, 10));
+    await flushPromises();
+
+    expect(wrapper.find('[aria-label="Talking points needing review"]').text()).toContain('Set the scene');
+
+    await wrapper.find('[aria-label="Generate podcast script"]').trigger('click');
+    await flushPromises();
+    let text = (wrapper.find('[aria-label="Podcast script draft editor"]').element as HTMLTextAreaElement).value;
+    expect(text).toContain('No approved talking points yet');
+
+    await wrapper.find('[aria-label="Approve talking point 1"]').trigger('click');
+    await wrapper.find('[aria-label="Generate podcast script"]').trigger('click');
+    await flushPromises();
+
+    text = (wrapper.find('[aria-label="Podcast script draft editor"]').element as HTMLTextAreaElement).value;
+    expect(text).toContain('Set the scene');
+    expect(text).not.toContain('Suggested discussion questions');
+  });
+
+  it('copies script as markdown and plain text', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Generate AI talking points"]').trigger('click');
+    await new Promise(r => setTimeout(r, 10));
+    await flushPromises();
+    await wrapper.find('[aria-label="Generate podcast script"]').trigger('click');
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Copy script as markdown"]').trigger('click');
+    await wrapper.find('[aria-label="Copy script as plain text"]').trigger('click');
+
+    expect(mockClipboardWriteText).toHaveBeenCalledTimes(2);
+    expect(mockClipboardWriteText.mock.calls[0][0]).toContain('# Episode working title');
+    expect(mockClipboardWriteText.mock.calls[1][0]).not.toContain('# Episode working title');
+  });
+
+  it('downloads generated script as markdown file', async () => {
+    const createObjectURLSpy = vi.fn(() => 'blob:mock-script');
+    const revokeObjectURLSpy = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: createObjectURLSpy,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: revokeObjectURLSpy,
+    });
+
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Generate AI talking points"]').trigger('click');
+    await new Promise(r => setTimeout(r, 10));
+    await flushPromises();
+    await wrapper.find('[aria-label="Generate podcast script"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[aria-label="Download script markdown"]').trigger('click');
+
+    expect(createObjectURLSpy).toHaveBeenCalled();
+    expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:mock-script');
   });
 });
