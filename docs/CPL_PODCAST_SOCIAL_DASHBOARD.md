@@ -93,9 +93,60 @@ Deterministic talking-point candidates grounded in imported match data:
 
 Each fact includes a caveat when the underlying data is incomplete (e.g., "From matches with delivery data only").
 
-**AI Talking-Point Assistant** is documented as a future enhancement. The placeholder explains:
-- AI will only summarise deterministic chart data
-- AI will never calculate official scores, invent missing facts, or publish without review
+### 8. AI Talking-Point Assistant
+
+The **AI Talking-Point Assistant** generates reviewable podcast talking-point drafts directly from the deterministic facts shown in the Podcast Prep Panel.
+
+**Architecture:**
+- **Frontend-only** — no new backend endpoint is required. All content is generated client-side from the visible fact bundle.
+- All generated content is grounded exclusively in the deterministic `podcastFacts` computed array.
+- No AI model contact, no database access, no mutation side effects.
+
+**Fact bundle:**
+- The analyst sees a preview of exactly which facts (by label) will be used before generation.
+- If the fact bundle contains fewer than 2 facts, the Generate button is disabled and a warning is shown.
+
+**Generated talking-point sections:**
+
+| Section | Grounding |
+|---------|-----------|
+| Opening hook | Selected match facts or season summary |
+| Key season facts | Total runs, wickets, match count |
+| Player / team angle | Top scorer and wicket taker (delivery data only) |
+| Venue angle | Venue avg first innings or venue list |
+| Caution / limitation | Any missing or incomplete data signals |
+| Questions for host | Context-aware discussion starters |
+
+Every talking point includes:
+- `section` label
+- `title`
+- `text` (draft — editable by analyst)
+- `sourceFactIds` — IDs of the specific facts used
+- `confidence` badge (`high` / `medium` / `low`)
+- `status` badge (`needs_review` / `approved` / `rejected`)
+
+**Review gates:**
+
+All generated talking points start as `needs_review`. The analyst must explicitly approve each point before it can be considered final copy. Controls per point:
+- **✓ Approve** — marks the point as reviewed and approved
+- **↩ Unapprove** — reverts an approved point back to needs_review
+- **✎ Edit** — opens an inline editor; saving updates the draft text
+- **📋 Copy (Unreviewed)** / **📋 Copy (Reviewed)** — copies text to clipboard, with a label indicating review status
+- **✕ Reject** — dismisses the point; it can be restored
+
+A review summary at the bottom shows how many points are approved vs total.
+
+**Safety rules enforced:**
+- AI will not calculate official scores, averages, or records.
+- AI will not mention facts not present in the supplied bundle.
+- AI will not generate gambling/betting language.
+- If delivery data is absent, a Caution/limitation talking point explains what is missing.
+- If player leaderboard data is unavailable, no top-scorer narratives are generated.
+- Unreviewed points are clearly labeled as `[UNREVIEWED — not final]` when copied.
+
+**Deterministic fallback:**
+- The assistant is entirely frontend-based and works without any backend AI service.
+- If CPL data is absent, the Generate button is disabled and the panel explains why.
 
 ### 8. CPL Social Image Export Pack
 
@@ -231,13 +282,9 @@ npx vitest run tests/unit/CplPodcastDashboard.spec.ts
 
 | File | Change |
 |------|--------|
-| `frontend/src/components/CplPodcastDashboard.vue` | **New** — CPL podcast/social dashboard component |
-| `frontend/package.json` / `frontend/package-lock.json` | Added lightweight `html-to-image` dependency for frontend-only client-side PNG export |
-| `frontend/src/views/AnalystWorkspaceView.vue` | Added "CPL Dashboard" tab + import |
-| `frontend/src/services/api.ts` | Added `getHistoricalStatsSummary()` + types |
-| `backend/tests/test_cpl_dashboard_historical_stats.py` | **New** — backend contract tests |
-| `frontend/tests/unit/CplPodcastDashboard.spec.ts` | **New** — frontend component tests |
-| `docs/CPL_PODCAST_SOCIAL_DASHBOARD.md` | **New** — this documentation |
+| `frontend/src/components/CplPodcastDashboard.vue` | Added full AI Talking-Point Assistant panel (replaced placeholder) |
+| `frontend/tests/unit/CplPodcastDashboard.spec.ts` | Updated AI placeholder test; added 14 new AI panel tests |
+| `docs/CPL_PODCAST_SOCIAL_DASHBOARD.md` | Updated Section 7/8, Known Limitations, and Next Steps |
 
 ---
 
@@ -249,7 +296,7 @@ npx vitest run tests/unit/CplPodcastDashboard.spec.ts
 
 3. **Phase breakdown** — Powerplay/middle/death phase visuals require ball-by-ball delivery data import (Phase 5F). Only innings totals are shown for matches without delivery data.
 
-4. **AI talking points** — The AI Talking-Point Assistant is a documented future enhancement. No AI commentary is generated in this version.
+4. **AI talking points** — The AI Talking-Point Assistant is frontend-only and deterministic. It does not use a backend AI model. The `_buildTalkingPoints()` function generates all content from the fact bundle only. For production use, a backend AI endpoint could replace this with an LLM-based generation step while keeping the same review gates and fact-bundle constraints.
 
 5. **Image export fidelity** — Export snapshots are generated client-side from dashboard DOM. Complex browser differences (fonts/rendering) may cause minor visual variance.
 
@@ -259,7 +306,8 @@ npx vitest run tests/unit/CplPodcastDashboard.spec.ts
 
 The next issue should focus on:
 
-1. **Image/social export formats** — If a small image-export button can be safely reused from ExportUI, add PNG stat card export for individual summary cards.
-2. **AI-assisted podcast talking points** — When AI talking-point generation is safely available, wire it to the deterministic facts in the podcast prep panel with full review gates.
-3. **Win/loss data** — Add win/loss tracking to the historical stats schema to enable the "top team by wins" card.
-4. **Player-to-competition scoping** — Scope player aggregates to CPL specifically once per-match player attribution is available in the summary endpoint.
+1. **Win/loss data** — Add win/loss tracking to the historical stats schema to enable the "top team by wins" card.
+2. **Player-to-competition scoping** — Scope player aggregates to CPL specifically once per-match player attribution is available in the summary endpoint.
+3. **Backend AI integration** — If an LLM-based AI service becomes available, wire the AI Talking-Point Assistant to a backend endpoint using the same fact-bundle payload and review-gate structure already in place.
+4. **Advanced podcast script builder** — Reusable visual templates and a content calendar workflow to take approved talking points through to a full podcast prep document.
+5. **Image/social export formats** — Add per-section PNG stat card export for individual summary cards.
