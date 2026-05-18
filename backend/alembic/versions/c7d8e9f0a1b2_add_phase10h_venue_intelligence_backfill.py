@@ -65,17 +65,11 @@ def upgrade() -> None:
         sa.Column("confidence_score", sa.Float(), nullable=True),
         sa.Column("source_type", sa.String(length=64), nullable=True),
         sa.Column(
-            "created_from_import",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.text("false"),
+            "created_from_import", sa.Boolean(), nullable=False, server_default=sa.text("false")
         ),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column(
-            "provenance_references",
-            json_type,
-            nullable=False,
-            server_default=sa.text("'[]'"),
+            "provenance_references", json_type, nullable=False, server_default=sa.text("'[]'")
         ),
         sa.Column("first_seen", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_seen", sa.DateTime(timezone=True), nullable=False),
@@ -129,10 +123,7 @@ def upgrade() -> None:
         sa.Column("source_system", sa.String(length=64), nullable=True),
         sa.Column("confidence_score", sa.Float(), nullable=True),
         sa.Column(
-            "provenance_reference",
-            json_type,
-            nullable=False,
-            server_default=sa.text("'{}'"),
+            "provenance_reference", json_type, nullable=False, server_default=sa.text("'{}'")
         ),
         sa.Column("first_seen", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_seen", sa.DateTime(timezone=True), nullable=False),
@@ -149,9 +140,7 @@ def upgrade() -> None:
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
         sa.ForeignKeyConstraint(
-            ["venue_id"],
-            ["historical_venue_intelligence.id"],
-            ondelete="CASCADE",
+            ["venue_id"], ["historical_venue_intelligence.id"], ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -195,10 +184,7 @@ def upgrade() -> None:
         sa.Column("season", sa.String(length=64), nullable=True),
         sa.Column("review_required", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column(
-            "provenance_references",
-            json_type,
-            nullable=False,
-            server_default=sa.text("'[]'"),
+            "provenance_references", json_type, nullable=False, server_default=sa.text("'[]'")
         ),
         sa.Column("resolution_snapshot", json_type, nullable=False, server_default=sa.text("'{}'")),
         sa.Column(
@@ -217,9 +203,7 @@ def upgrade() -> None:
             ["batch_id"], ["historical_import_batches.id"], ondelete="SET NULL"
         ),
         sa.ForeignKeyConstraint(
-            ["canonical_venue_id"],
-            ["historical_venue_intelligence.id"],
-            ondelete="SET NULL",
+            ["canonical_venue_id"], ["historical_venue_intelligence.id"], ondelete="SET NULL"
         ),
         sa.ForeignKeyConstraint(["game_id"], ["games.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
@@ -278,13 +262,13 @@ def upgrade() -> None:
         sa.Column("reason", sa.String(length=128), nullable=False),
         sa.Column("review_required", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column(
-            "provenance_references",
-            json_type,
-            nullable=False,
-            server_default=sa.text("'[]'"),
+            "provenance_references", json_type, nullable=False, server_default=sa.text("'[]'")
         ),
         sa.Column(
             "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
         sa.Column("last_seen", sa.DateTime(timezone=True), nullable=False),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
@@ -324,10 +308,7 @@ def upgrade() -> None:
         sa.Column("matches_count", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("game_references", json_type, nullable=False, server_default=sa.text("'[]'")),
         sa.Column(
-            "provenance_references",
-            json_type,
-            nullable=False,
-            server_default=sa.text("'[]'"),
+            "provenance_references", json_type, nullable=False, server_default=sa.text("'[]'")
         ),
         sa.Column("review_required", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column(
@@ -413,8 +394,7 @@ def downgrade() -> None:
         table_name="historical_venue_resolution_queue",
     )
     op.drop_index(
-        "ix_hist_venue_queue_unique_context",
-        table_name="historical_venue_resolution_queue",
+        "ix_hist_venue_queue_unique_context", table_name="historical_venue_resolution_queue"
     )
     op.drop_table("historical_venue_resolution_queue")
 
