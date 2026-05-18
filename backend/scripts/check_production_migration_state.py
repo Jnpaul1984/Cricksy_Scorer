@@ -137,7 +137,10 @@ def classify_migration_state(
             repo_heads=repo_heads,
             status="uninitialized",
             behind=True,
-            detail="Production database has no alembic_version row and is behind the repository head.",
+            detail=(
+                "Production database has no alembic_version row and is behind the "
+                "repository head."
+            ),
         )
 
     if all(revision in lineage for revision in current_revisions):
@@ -229,14 +232,20 @@ async def async_main() -> int:
     if args.require_at_head and state.status != "at_head":
         _annotation(
             "error",
-            f"{args.label}: production database is not at repo head ({current_display} vs {head_display}).",
+            (
+                f"{args.label}: production database is not at repo head "
+                f"({current_display} vs {head_display})."
+            ),
         )
         return 1
 
     if state.behind:
         _annotation(
             "warning",
-            f"{args.label}: production database is behind repo head ({current_display} vs {head_display}).",
+            (
+                f"{args.label}: production database is behind repo head "
+                f"({current_display} vs {head_display})."
+            ),
         )
 
     return 0
