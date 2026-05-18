@@ -3,6 +3,13 @@
 Date: 2026-05-18  
 Repository: `Jnpaul1984/Cricksy_Scorer`
 
+## Clarification for PR review readiness
+
+- This PR **does not import the full CPL dataset**.
+- This PR only verifies **readiness + controlled safeguards** for continued CPL historical archive population.
+- Future archive population must still follow the controlled CPL ladder: **1, 3-5, 10, then 20-25 files per batch**.
+- File change scope for this PR remains: `docs/POST_PHASE_10I_CPL_HISTORICAL_ARCHIVE_IMPORT_REPORT.md` only.
+
 ## 1) Scope and execution mode
 
 This report covers **Post-Phase-10I controlled CPL historical archive population readiness + verification** only.
