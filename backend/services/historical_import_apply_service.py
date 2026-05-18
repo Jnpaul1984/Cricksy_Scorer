@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json as _json
+import logging
 import uuid
 from typing import Any
 
@@ -61,6 +62,8 @@ from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 
 # Batch statuses from which an apply is allowed.
 _APPLICABLE_STATUSES = {"valid"}
+
+_log = logging.getLogger(__name__)
 
 
 async def get_batch_by_id(
@@ -307,38 +310,85 @@ async def apply_historical_batch(
     # Flush to detect constraint violations before finalizing the batch
     await db.flush()
 
-    # Finalize the batch - mark as applied with the created game ID
-    player_identity_registry = await register_historical_source_players(
-        db,
-        batch_id=batch_id,
-        game_id=game_id,
-        source_schema=source_provenance.get("source_schema")
-        or schema_classification.get("source_schema")
-        or "unknown",
-        source_system="historical_import_json",
-        source_provenance=source_provenance,
-        competition_context=competition_context,
-        roster_snapshot=roster_snapshot,
-        player_names=player_names_found,
-        match_date=match_date,
-    )
+    # Build the mutable historical_meta from the phases blob created above.
     historical_meta = dict(phases.get("historical_import") or {})
-    historical_meta["player_identity_registry"] = player_identity_registry
-    venue_resolution = await resolve_historical_venue(
-        db,
-        batch_id=batch_id,
-        game_id=game_id,
-        source_schema=source_provenance.get("source_schema")
+
+    # Phase 10E/10F/10G: Register historical source players.
+    # Wrapped in a savepoint so that a missing-table error (production migration
+    # not yet applied) does NOT abort the outer transaction that creates the Game
+    # row.  A failure here adds a warning and records "skipped: true" in the
+    # phases metadata; the game is still persisted successfully.
+    _source_schema = (
+        source_provenance.get("source_schema")
         or schema_classification.get("source_schema")
-        or "unknown",
-        source_system="historical_import_json",
-        source_provenance=source_provenance,
-        competition_context=competition_context,
-        match_date=match_date,
-        raw_venue_value=venue,
-        venue_context=venue_context,
+        or "unknown"
     )
-    historical_meta["venue_resolution"] = venue_resolution
+    try:
+        async with db.begin_nested():
+            player_identity_registry = await register_historical_source_players(
+                db,
+                batch_id=batch_id,
+                game_id=game_id,
+                source_schema=_source_schema,
+                source_system="historical_import_json",
+                source_provenance=source_provenance,
+                competition_context=competition_context,
+                roster_snapshot=roster_snapshot,
+                player_names=player_names_found,
+                match_date=match_date,
+            )
+        historical_meta["player_identity_registry"] = player_identity_registry
+    except Exception as exc:
+        _log.warning(
+            "historical_import_apply: player identity registration failed; "
+            "game will still be created. batch_id=%s error=%s",
+            batch_id,
+            exc,
+        )
+        historical_meta["player_identity_registry"] = {
+            "skipped": True,
+            "error": type(exc).__name__,
+        }
+        warnings.append(
+            "Player identity registration encountered an error and was skipped. "
+            "The game record was still created successfully. "
+            "Ensure Phase 10E-10G migrations are applied in production."
+        )
+
+    # Phase 10H: Resolve historical venue.
+    # Same savepoint safety net as above.
+    try:
+        async with db.begin_nested():
+            venue_resolution = await resolve_historical_venue(
+                db,
+                batch_id=batch_id,
+                game_id=game_id,
+                source_schema=_source_schema,
+                source_system="historical_import_json",
+                source_provenance=source_provenance,
+                competition_context=competition_context,
+                match_date=match_date,
+                raw_venue_value=venue,
+                venue_context=venue_context,
+            )
+        historical_meta["venue_resolution"] = venue_resolution
+    except Exception as exc:
+        _log.warning(
+            "historical_import_apply: venue resolution failed; "
+            "game will still be created. batch_id=%s error=%s",
+            batch_id,
+            exc,
+        )
+        historical_meta["venue_resolution"] = {
+            "skipped": True,
+            "error": type(exc).__name__,
+        }
+        warnings.append(
+            "Venue intelligence resolution encountered an error and was skipped. "
+            "The game record was still created successfully. "
+            "Ensure Phase 10H migrations are applied in production."
+        )
+
     game.phases = {**phases, "historical_import": historical_meta}
     db.add(game)
 
@@ -377,22 +427,17 @@ async def rollback_historical_batch(
         return None, warnings, f"Batch '{batch_id}' not found."
 
     if batch.owner_user_id or batch.owner_org_id:
-        user_authorized = (
-            batch.owner_user_id is None
-            or (requester_user_id is not None and requester_user_id == batch.owner_user_id)
+        user_authorized = batch.owner_user_id is None or (
+            requester_user_id is not None and requester_user_id == batch.owner_user_id
         )
-        org_authorized = (
-            batch.owner_org_id is None
-            or (requester_org_id is not None and requester_org_id == batch.owner_org_id)
+        org_authorized = batch.owner_org_id is None or (
+            requester_org_id is not None and requester_org_id == batch.owner_org_id
         )
         if not (user_authorized and org_authorized):
             return (
                 None,
                 warnings,
-                (
-                    f"Batch '{batch_id}' is owned by another user/org. "
-                    "Rollback is not authorized."
-                ),
+                (f"Batch '{batch_id}' is owned by another user/org. Rollback is not authorized."),
             )
 
     if not batch.is_finalized:
@@ -677,22 +722,23 @@ async def apply_historical_deliveries(
     second_innings_runs = 0
     second_innings_wickets = 0
     second_innings_legal_balls = 0
-    second_innings_team = game.batting_team_name or (teams_preview[1] if len(teams_preview) > 1 else None)
-    second_innings_bowling_team = (
-        teams_preview[0] if teams_preview else game.bowling_team_name
+    second_innings_team = game.batting_team_name or (
+        teams_preview[1] if len(teams_preview) > 1 else None
     )
+    second_innings_bowling_team = teams_preview[0] if teams_preview else game.bowling_team_name
     if len(normalized_innings) >= 2:
         inn2 = normalized_innings[1]
         delivs2 = inn2["deliveries"]
         second_innings_team = inn2.get("team") or second_innings_team
         second_innings_bowling_team = (
-            normalized_innings[0].get("team")
-            or second_innings_bowling_team
+            normalized_innings[0].get("team") or second_innings_bowling_team
         )
         second_innings_runs = (
             inn2["runs_explicit"]
             if inn2["runs_explicit"] is not None
-            else sum(int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0) for d in delivs2)
+            else sum(
+                int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0) for d in delivs2
+            )
         )
         second_innings_wickets = (
             inn2["wickets_explicit"]

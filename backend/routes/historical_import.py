@@ -77,6 +77,10 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import logging
+
+_log = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/historical-import/json", tags=["historical-import"])
 
 
@@ -167,8 +171,12 @@ def _is_controlled_cpl_candidate(candidate: _BulkJsonCandidate) -> bool:
     tournament_name = ""
     canonical_preview = candidate.dry_run.canonical_preview
     if canonical_preview is not None:
-        competition_name = (canonical_preview.competition_context.competition_name or "").strip().lower()
-        tournament_name = (canonical_preview.competition_context.tournament_name or "").strip().lower()
+        competition_name = (
+            (canonical_preview.competition_context.competition_name or "").strip().lower()
+        )
+        tournament_name = (
+            (canonical_preview.competition_context.tournament_name or "").strip().lower()
+        )
 
     cpl_sources = [metadata_event, competition_name, tournament_name]
     return any(
@@ -1699,11 +1707,25 @@ async def apply_historical_import_batch(
     current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
 ) -> HistoricalImportApplyResponse:
     """Apply a validated historical import batch and create a historical Game row."""
-    game, warnings, error_msg = await apply_historical_batch(
-        db,
-        batch_id=batch_id,
-        confirm=body.confirm,
-    )
+    try:
+        game, warnings, error_msg = await apply_historical_batch(
+            db,
+            batch_id=batch_id,
+            confirm=body.confirm,
+        )
+    except Exception as exc:
+        # Catch unexpected DB/service errors (e.g. ProgrammingError from a
+        # missing migration in production) and convert them to an explicit HTTP
+        # 500 so the response still flows through CORSMiddleware and the
+        # frontend receives CORS headers rather than a CORS-masked network error.
+        _log.exception("apply_historical_import_batch: unexpected error batch_id=%s", batch_id)
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Historical import apply encountered an unexpected error "
+                f"({type(exc).__name__}). Check server logs for details."
+            ),
+        )
 
     if error_msg is not None:
         # Determine appropriate status code from error type

@@ -85,7 +85,9 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
-        sa.ForeignKeyConstraint(["batch_id"], ["historical_import_batches.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["batch_id"], ["historical_import_batches.id"], ondelete="SET NULL"
+        ),
         sa.ForeignKeyConstraint(["canonical_player_id"], ["players.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["game_id"], ["games.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(
