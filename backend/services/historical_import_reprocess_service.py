@@ -555,4 +555,3 @@ async def apply_delivery_backfill(
         ),
         "audit_snapshot": record_lookup,
     }
-    payload_overrides = source_payloads_by_batch or {}
