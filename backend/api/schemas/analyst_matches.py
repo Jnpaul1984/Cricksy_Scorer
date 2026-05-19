@@ -96,6 +96,54 @@ class AnalystExportDataResponse(BaseModel):
     meta: dict[str, Any]
 
 
+class AnalystPlayerAggregate(BaseModel):
+    player: str
+    role: str = "Unknown"
+    innings: int = 0
+    matches: int = 0
+    runs: int = 0
+    strike_rate: float = 0.0
+    wickets: int = 0
+    economy: float = 0.0
+
+
+class AnalystPlayersResponse(BaseModel):
+    items: list[AnalystPlayerAggregate] = Field(default_factory=list)
+    total: int = 0
+    data_completeness: str = "metadata_only"
+
+
+class AnalystDeliveryRow(BaseModel):
+    match_id: str
+    innings: int | None = None
+    team: str | None = None
+    over_number: int | None = None
+    ball_number: int | None = None
+    batter: str | None = None
+    bowler: str | None = None
+    non_striker: str | None = None
+    batter_source_player_id: str | None = None
+    bowler_source_player_id: str | None = None
+    non_striker_source_player_id: str | None = None
+    runs_off_bat: int = 0
+    extra_runs: int = 0
+    total_runs: int = 0
+    extra_type: str | None = None
+    wicket: bool = False
+    dismissal_type: str | None = None
+    player_out: str | None = None
+    player_out_source_player_id: str | None = None
+    fielders: list[str] = Field(default_factory=list)
+    phase: str | None = None
+    data_completeness: str = "metadata_only"
+
+
+class AnalystDeliveriesResponse(BaseModel):
+    items: list[AnalystDeliveryRow] = Field(default_factory=list)
+    total: int = 0
+    data_completeness: str = "metadata_only"
+
+
 class MatchRegistryResponse(BaseModel):
     """Registry metadata, provenance, and training eligibility for a match.
 

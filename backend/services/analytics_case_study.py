@@ -651,7 +651,9 @@ async def _build_case_study_from_db(
     hist_meta = game_phases_blob.get("historical_import")
     is_historical = isinstance(hist_meta, dict) and bool(hist_meta.get("is_historical"))
     hist_innings = game_phases_blob.get("historical_innings_summary") or []
-    deliveries_imported = isinstance(hist_meta, dict) and bool(hist_meta.get("deliveries_imported"))
+    deliveries_imported = (
+        isinstance(hist_meta, dict) and bool(hist_meta.get("deliveries_imported"))
+    ) or bool(isinstance(game.deliveries, list) and len(game.deliveries) > 0)
 
     # 3) Build innings summaries
     innings_summaries: list[CaseStudyInningsSummary] = []
@@ -692,7 +694,9 @@ async def _build_case_study_from_db(
     # Second innings (live or historical post-Phase-5F)
     if not is_historical:
         if game.current_inning >= 2 or not innings_summaries:
-            overs_display = _display_overs_from_game_state(game.overs_completed, game.balls_this_over)
+            overs_display = _display_overs_from_game_state(
+                game.overs_completed, game.balls_this_over
+            )
             decimal_overs = legal_balls_to_decimal_overs(
                 (game.overs_completed * 6) + game.balls_this_over
             )
@@ -723,12 +727,15 @@ async def _build_case_study_from_db(
                         2,
                     ),
                 )
-            overs_display = _display_overs_from_game_state(game.overs_completed, game.balls_this_over)
+            overs_display = _display_overs_from_game_state(
+                game.overs_completed, game.balls_this_over
+            )
             decimal_overs = legal_balls_to_decimal_overs(
                 (game.overs_completed * 6) + game.balls_this_over
             )
             second_summary = CaseStudyInningsSummary(
-                team=game.batting_team_name or (hist_innings[1].get("team") if len(hist_innings) > 1 else team_b_name),
+                team=game.batting_team_name
+                or (hist_innings[1].get("team") if len(hist_innings) > 1 else team_b_name),
                 runs=game.total_runs,
                 wickets=game.total_wickets,
                 overs=overs_display,

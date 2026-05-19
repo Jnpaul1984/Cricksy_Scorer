@@ -424,7 +424,9 @@ async def test_legacy_historical_match_without_source_dates_still_loads(client: 
 
     list_resp = client.get("/analytics/matches", headers=_auth_headers(token))
     assert list_resp.status_code == 200, list_resp.text
-    listed = next((item for item in list_resp.json()["items"] if item["id"] == "legacy-historical"), None)
+    listed = next(
+        (item for item in list_resp.json()["items"] if item["id"] == "legacy-historical"), None
+    )
     assert listed is not None
     assert listed["is_historical"] is True
     assert listed["source"] == "historical_import"
@@ -446,7 +448,13 @@ async def test_legacy_historical_match_without_source_dates_still_loads(client: 
 
 
 @pytest.mark.parametrize(
-    ("fixture_path", "expected_teams", "expected_result", "expected_venue", "expected_match_number"),
+    (
+        "fixture_path",
+        "expected_teams",
+        "expected_result",
+        "expected_venue",
+        "expected_match_number",
+    ),
     [
         (
             HISTORICAL_FIXTURE_PATH,
@@ -576,7 +584,9 @@ async def test_historical_imported_match_visible_in_analyst_workspace(
         assert len(analyst_detail["source_dates"]) == 1
 
 
-async def test_historical_import_cleanup_removes_match_and_allows_reupload(client: TestClient) -> None:
+async def test_historical_import_cleanup_removes_match_and_allows_reupload(
+    client: TestClient,
+) -> None:
     analyst = register_user(client, "analyst-cleanup@example.com")
     await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
     token = login_user(client, analyst["email"])
@@ -621,7 +631,11 @@ async def test_historical_import_cleanup_removes_match_and_allows_reupload(clien
     session_maker = client.session_maker  # type: ignore[attr-defined]
     async with session_maker() as session:
         batch_row = (
-            await session.execute(select(models.HistoricalImportBatch).where(models.HistoricalImportBatch.id == batch_id))
+            await session.execute(
+                select(models.HistoricalImportBatch).where(
+                    models.HistoricalImportBatch.id == batch_id
+                )
+            )
         ).scalar_one()
     rollback_log = (batch_row.dry_run_summary or {}).get("_rollback_log")
     assert isinstance(rollback_log, list) and len(rollback_log) == 1
@@ -689,7 +703,11 @@ async def test_historical_import_cleanup_refuses_unauthorized_user(client: TestC
     session_maker = client.session_maker  # type: ignore[attr-defined]
     async with session_maker() as session:
         batch_row = (
-            await session.execute(select(models.HistoricalImportBatch).where(models.HistoricalImportBatch.id == batch_id))
+            await session.execute(
+                select(models.HistoricalImportBatch).where(
+                    models.HistoricalImportBatch.id == batch_id
+                )
+            )
         ).scalar_one()
     rollback_log = (batch_row.dry_run_summary or {}).get("_rollback_log")
     assert rollback_log in (None, [])
@@ -729,7 +747,9 @@ async def test_analyst_export_data_real_rows_or_empty_never_fake(client: TestCli
     assert payload_rows["meta"]["row_count"] == 1
     assert payload_rows["rows"][0]["player"] == "p-1"
     text_dump = str(payload_rows)
-    assert "Player A" not in text_dump and "Player B" not in text_dump and "Player C" not in text_dump
+    assert (
+        "Player A" not in text_dump and "Player B" not in text_dump and "Player C" not in text_dump
+    )
 
     resp_empty = client.get(
         "/api/analyst/export-data?match_id=export-real&phase=death",
@@ -740,6 +760,109 @@ async def test_analyst_export_data_real_rows_or_empty_never_fake(client: TestCli
     assert payload_empty["rows"] == []
     assert payload_empty["meta"]["row_count"] == 0
     assert payload_empty["meta"]["empty_reason"] == "no_rows_for_match_or_filters"
+
+
+async def test_analyst_players_endpoint_returns_historical_player_aggregates(
+    client: TestClient,
+) -> None:
+    analyst = register_user(client, "analyst-players@example.com")
+    await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
+    token = login_user(client, analyst["email"])
+
+    payload = json.loads(CRICSHEET_HISTORICAL_FIXTURE_PATH.read_text(encoding="utf-8"))
+    dry_run_resp = client.post(
+        "/api/historical-import/json/dry-run",
+        headers=_auth_headers(token),
+        params={"record_preview": "true"},
+        json=payload,
+    )
+    assert dry_run_resp.status_code == 200, dry_run_resp.text
+    batch_id = dry_run_resp.json()["record_id"]
+    assert batch_id
+
+    apply_resp = client.post(
+        f"/api/historical-import/json/batches/{batch_id}/apply",
+        headers=_auth_headers(token),
+        json={"confirm": True},
+    )
+    assert apply_resp.status_code == 200, apply_resp.text
+    game_id = apply_resp.json()["applied_game_id"]
+    assert game_id
+
+    apply_deliveries_resp = client.post(
+        f"/api/historical-import/json/batches/{batch_id}/apply-deliveries?confirm=true",
+        headers={**_auth_headers(token), "content-type": "application/json"},
+        content=CRICSHEET_HISTORICAL_FIXTURE_PATH.read_bytes(),
+    )
+    assert apply_deliveries_resp.status_code == 200, apply_deliveries_resp.text
+
+    players_resp = client.get(
+        f"/api/analyst/players?match_id={game_id}",
+        headers=_auth_headers(token),
+    )
+    assert players_resp.status_code == 200, players_resp.text
+    data = players_resp.json()
+    assert data["total"] > 0
+    assert data["data_completeness"] in {
+        "delivery_data_available",
+        "wicket_data_available",
+        "phase_analytics_available",
+    }
+    assert any(item["runs"] > 0 for item in data["items"])
+
+
+async def test_analyst_deliveries_endpoint_returns_historical_delivery_rows(
+    client: TestClient,
+) -> None:
+    analyst = register_user(client, "analyst-deliveries@example.com")
+    await set_role(client, analyst["email"], models.RoleEnum.analyst_pro)
+    token = login_user(client, analyst["email"])
+
+    payload = json.loads(CRICSHEET_HISTORICAL_FIXTURE_PATH.read_text(encoding="utf-8"))
+    dry_run_resp = client.post(
+        "/api/historical-import/json/dry-run",
+        headers=_auth_headers(token),
+        params={"record_preview": "true"},
+        json=payload,
+    )
+    assert dry_run_resp.status_code == 200, dry_run_resp.text
+    batch_id = dry_run_resp.json()["record_id"]
+    assert batch_id
+
+    apply_resp = client.post(
+        f"/api/historical-import/json/batches/{batch_id}/apply",
+        headers=_auth_headers(token),
+        json={"confirm": True},
+    )
+    assert apply_resp.status_code == 200, apply_resp.text
+    game_id = apply_resp.json()["applied_game_id"]
+    assert game_id
+
+    apply_deliveries_resp = client.post(
+        f"/api/historical-import/json/batches/{batch_id}/apply-deliveries?confirm=true",
+        headers={**_auth_headers(token), "content-type": "application/json"},
+        content=CRICSHEET_HISTORICAL_FIXTURE_PATH.read_bytes(),
+    )
+    assert apply_deliveries_resp.status_code == 200, apply_deliveries_resp.text
+
+    deliveries_resp = client.get(
+        f"/api/analyst/deliveries?match_id={game_id}",
+        headers=_auth_headers(token),
+    )
+    assert deliveries_resp.status_code == 200, deliveries_resp.text
+    data = deliveries_resp.json()
+    assert data["total"] > 0
+    assert data["data_completeness"] in {
+        "delivery_data_available",
+        "wicket_data_available",
+        "phase_analytics_available",
+    }
+    first_row = data["items"][0]
+    assert first_row["match_id"] == game_id
+    assert first_row["batter"]
+    assert first_row["bowler"]
+    assert first_row["phase"] in {"powerplay", "middle", "death"}
+    assert any(row["wicket"] for row in data["items"])
 
 
 async def test_analyst_match_detail_and_export_cross_org_blocked(client: TestClient) -> None:
