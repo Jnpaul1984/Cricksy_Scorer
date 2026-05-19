@@ -148,7 +148,7 @@ A review summary at the bottom shows how many points are approved vs total.
 - The assistant is entirely frontend-based and works without any backend AI service.
 - If CPL data is absent, the Generate button is disabled and the panel explains why.
 
-### 8. Advanced Podcast Script Builder
+### 9. Advanced Podcast Script Builder
 
 The dashboard now includes an **Advanced Podcast Script Builder** directly under the talking-point assistant.
 
@@ -184,7 +184,7 @@ The dashboard now includes an **Advanced Podcast Script Builder** directly under
 - Copy as plain text.
 - Download local `.md` file.
 
-### 9. CPL Social Image Export Pack
+### 10. CPL Social Image Export Pack
 
 The dashboard now includes a guarded **Social Image Export Pack** for deterministic sections.
 
@@ -241,6 +241,49 @@ Limitations:
 - Templates restyle deterministic dashboard content only; they do not invent or mutate cricket facts.
 - No automated posting/publishing was added.
 - No backend schema or migration changes were required for the template library.
+
+### 11. Podcast Episode Archive (Local Draft Packages)
+
+The dashboard now includes a frontend-only **Podcast Episode Archive** below the script builder.
+
+**Persistence model (safe first version):**
+- Local storage only (`cricksy.cplPodcastEpisodeArchive.v1`)
+- No backend schema changes, no migrations, no external uploads
+- Stores deterministic package data only (facts/context/script/talking-point review state/export metadata/provenance)
+
+**Saved package schema (v1):**
+- `id`, `schema_version`, `status`
+- `working_title`, `objective`, `created_at`, `updated_at`
+- `context` (filters, selected match, selected export target/format/template metadata)
+- `deterministic_facts`
+- `approved_talking_points` (final/default)
+- `needs_review_talking_points` (separate list)
+- `script_draft`
+- `provenance` (`source`, generated/saved timestamps, import timestamp, `limitations`, safety note)
+- `is_incomplete` flag when no talking points are approved
+
+**Package statuses:**
+- `draft`
+- `ready_for_review`
+- `approved_for_recording`
+- `archived`
+
+**Review and insufficiency behavior:**
+- Save/update disabled when no CPL data is available.
+- Save/update disabled until a script draft exists.
+- If no talking points are approved, package saves as facts-only/incomplete and is clearly labeled.
+- Missing delivery/leaderboard context is preserved in package limitations.
+
+**Archive operations:**
+- Save package from current dashboard/script state.
+- List saved packages with title, timestamps, match/season context, and status.
+- Reopen package to restore filters, selected match, export metadata, script draft, and saved review state where practical.
+- Delete package.
+
+**Safe export:**
+- Export each package as Markdown (`.md`)
+- Export each package as JSON (`.json`)
+- Provenance and limitations are included in both export formats.
 
 ---
 
