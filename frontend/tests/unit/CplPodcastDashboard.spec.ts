@@ -28,6 +28,7 @@ import type { HistoricalStatsSummaryResponse } from '@/services/api';
 const mockGetHistoricalStatsSummary = vi.fn<[], Promise<HistoricalStatsSummaryResponse>>();
 const mockToPng = vi.fn<(...args: unknown[]) => Promise<string>>();
 const mockClipboardWriteText = vi.fn<(text: string) => Promise<void>>();
+const EPISODE_ARCHIVE_KEY = 'cricksy.cplPodcastEpisodeArchive.v1';
 
 vi.mock('@/services/api', () => ({
   getHistoricalStatsSummary: (...args: unknown[]) => mockGetHistoricalStatsSummary(...(args as [])),
@@ -191,6 +192,7 @@ function cplSummary(): HistoricalStatsSummaryResponse {
 describe('CplPodcastDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem(EPISODE_ARCHIVE_KEY);
     mockToPng.mockResolvedValue('data:image/png;base64,mock-preview');
     mockClipboardWriteText.mockResolvedValue(undefined);
     Object.defineProperty(globalThis.navigator, 'clipboard', {
@@ -848,5 +850,122 @@ describe('CplPodcastDashboard', () => {
 
     expect(createObjectURLSpy).toHaveBeenCalled();
     expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:mock-script');
+  });
+
+  it('disables episode package save before a script draft exists', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    const saveButton = wrapper.find('[aria-label="Save episode package"]');
+    expect(saveButton.attributes('disabled')).toBeDefined();
+    expect(wrapper.text()).toContain('generate or edit a script draft before saving a package');
+  });
+
+  it('saves episode package with approved points only and keeps needs-review separately', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Generate AI talking points"]').trigger('click');
+    await new Promise(r => setTimeout(r, 10));
+    await flushPromises();
+    await wrapper.find('[aria-label="Approve talking point 1"]').trigger('click');
+    await wrapper.find('[aria-label="Generate podcast script"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[aria-label="Episode working title input"]').setValue('Episode 23 Wrap');
+    await wrapper.find('[aria-label="Episode objective input"]').setValue('Review deterministic match context');
+    await wrapper.find('[aria-label="Save episode package"]').trigger('click');
+
+    const raw = localStorage.getItem(EPISODE_ARCHIVE_KEY);
+    expect(raw).toBeTruthy();
+    const parsed = JSON.parse(raw as string);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].working_title).toBe('Episode 23 Wrap');
+    expect(parsed[0].approved_talking_points).toHaveLength(1);
+    expect(parsed[0].approved_talking_points[0].title).toBe('Set the scene');
+    expect(parsed[0].needs_review_talking_points.length).toBeGreaterThan(0);
+    expect(parsed[0].needs_review_talking_points.some((tp: { title: string }) => tp.title === 'Suggested discussion questions')).toBe(true);
+    expect(parsed[0].is_incomplete).toBe(false);
+  });
+
+  it('marks saved episode package incomplete when no points are approved', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Generate AI talking points"]').trigger('click');
+    await new Promise(r => setTimeout(r, 10));
+    await flushPromises();
+    await wrapper.find('[aria-label="Generate podcast script"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[aria-label="Save episode package"]').trigger('click');
+
+    const parsed = JSON.parse(localStorage.getItem(EPISODE_ARCHIVE_KEY) as string);
+    expect(parsed[0].is_incomplete).toBe(true);
+    expect(parsed[0].approved_talking_points).toHaveLength(0);
+  });
+
+  it('restores saved package context and script when reopened from archive list', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Generate AI talking points"]').trigger('click');
+    await new Promise(r => setTimeout(r, 10));
+    await flushPromises();
+    await wrapper.find('[aria-label="Generate podcast script"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[aria-label="Episode working title input"]').setValue('Reusable Episode');
+    await wrapper.find('[aria-label="Save episode package"]').trigger('click');
+
+    await wrapper.find('[aria-label="Episode working title input"]').setValue('Changed');
+    await wrapper.find('[aria-label="Episode objective input"]').setValue('Changed objective');
+    await wrapper.find('[aria-label="Podcast script draft editor"]').setValue('Changed draft');
+
+    const reopenButton = wrapper.find('[aria-label^="Reopen episode package"]');
+    await reopenButton.trigger('click');
+    await flushPromises();
+
+    expect((wrapper.find('[aria-label="Episode working title input"]').element as HTMLInputElement).value).toBe('Reusable Episode');
+    expect((wrapper.find('[aria-label="Podcast script draft editor"]').element as HTMLTextAreaElement).value).toContain('# Episode working title');
+  });
+
+  it('exports episode package markdown and json with provenance block', async () => {
+    const createObjectURLSpy = vi.fn(() => 'blob:mock-package');
+    const revokeObjectURLSpy = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: createObjectURLSpy,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: revokeObjectURLSpy,
+    });
+
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Generate AI talking points"]').trigger('click');
+    await new Promise(r => setTimeout(r, 10));
+    await flushPromises();
+    await wrapper.find('[aria-label="Generate podcast script"]').trigger('click');
+    await flushPromises();
+    await wrapper.find('[aria-label="Save episode package"]').trigger('click');
+
+    await wrapper.find('[aria-label^="Export package markdown"]').trigger('click');
+    await wrapper.find('[aria-label^="Export package json"]').trigger('click');
+
+    expect(createObjectURLSpy).toHaveBeenCalledTimes(2);
+    const markdownBlob = createObjectURLSpy.mock.calls[0][0] as Blob;
+    const jsonBlob = createObjectURLSpy.mock.calls[1][0] as Blob;
+    expect(markdownBlob.type).toContain('text/markdown');
+    expect(jsonBlob.type).toContain('application/json');
+    const savedPackages = JSON.parse(localStorage.getItem(EPISODE_ARCHIVE_KEY) as string);
+    expect(savedPackages[0].provenance.limitations.length).toBeGreaterThan(0);
+    expect(revokeObjectURLSpy).toHaveBeenCalledTimes(2);
   });
 });

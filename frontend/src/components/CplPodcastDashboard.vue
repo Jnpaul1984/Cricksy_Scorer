@@ -726,6 +726,134 @@
               aria-label="Podcast script draft editor"
             />
           </div>
+
+          <div class="cpld-episode-archive" aria-label="Podcast episode archive">
+            <div class="cpld-script-panel-header">
+              <span class="cpld-script-panel-title">🗂 Podcast Episode Archive</span>
+              <span class="cpld-badge cpld-badge--review">Local only · deterministic package</span>
+            </div>
+            <p class="cpld-script-desc">
+              Save and reopen episode prep packages from the current deterministic dashboard, talking-point review state, script draft, and export metadata.
+            </p>
+
+            <div class="cpld-archive-form">
+              <div class="cpld-filter-group">
+                <label class="cpld-filter-label" for="cpld-episode-title">Working title</label>
+                <input
+                  id="cpld-episode-title"
+                  v-model="episodeWorkingTitle"
+                  class="cpld-select cpld-archive-input"
+                  aria-label="Episode working title input"
+                  placeholder="Episode working title"
+                  type="text"
+                />
+              </div>
+              <div class="cpld-filter-group">
+                <label class="cpld-filter-label" for="cpld-episode-objective">Episode objective</label>
+                <textarea
+                  id="cpld-episode-objective"
+                  v-model="episodeObjective"
+                  class="cpld-script-textarea cpld-archive-objective"
+                  rows="3"
+                  aria-label="Episode objective input"
+                  placeholder="What should this episode deliver for analysts/listeners?"
+                />
+              </div>
+              <div class="cpld-filter-group">
+                <label class="cpld-filter-label" for="cpld-episode-status">Package status</label>
+                <select
+                  id="cpld-episode-status"
+                  v-model="episodePackageStatus"
+                  class="cpld-select"
+                  aria-label="Episode package status"
+                >
+                  <option
+                    v-for="statusOption in episodeStatusOptions"
+                    :key="statusOption.value"
+                    :value="statusOption.value"
+                  >
+                    {{ statusOption.label }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <p v-if="!canCreateEpisodePackage" class="cpld-ai-insufficient" role="alert">
+              {{ episodePackageDisabledReason }}
+            </p>
+            <p v-else-if="packageWillBeIncomplete" class="cpld-archive-note">
+              No approved talking points yet — this package will be saved as facts-only/incomplete.
+            </p>
+
+            <div class="cpld-script-actions">
+              <button
+                class="cpld-ai-generate-btn"
+                :disabled="!canCreateEpisodePackage"
+                aria-label="Save episode package"
+                @click="saveEpisodePackage"
+              >
+                {{ activeEpisodePackageId ? 'Update episode package' : 'Save episode package' }}
+              </button>
+            </div>
+
+            <p v-if="episodeArchiveError" class="cpld-export-error" role="alert">⚠ {{ episodeArchiveError }}</p>
+
+            <div v-if="sortedEpisodePackages.length === 0" class="cpld-state cpld-state--hint">
+              No saved episode packages yet. Generate a script draft and save a package for reuse.
+            </div>
+            <ul v-else class="cpld-archive-list" aria-label="Episode package list">
+              <li
+                v-for="pkg in sortedEpisodePackages"
+                :key="pkg.id"
+                class="cpld-archive-item"
+                :aria-label="`Episode package ${pkg.working_title}`"
+              >
+                <div class="cpld-archive-item-top">
+                  <strong>{{ pkg.working_title }}</strong>
+                  <span class="cpld-badge cpld-badge--approved">{{ episodeStatusLabel(pkg.status) }}</span>
+                </div>
+                <p class="cpld-archive-meta">
+                  Updated: {{ formatArchiveTimestamp(pkg.updated_at) }} · Created: {{ formatArchiveTimestamp(pkg.created_at) }}
+                </p>
+                <p class="cpld-archive-meta">
+                  Season: {{ pkg.context.filters.season }} · Match: {{ pkg.context.selected_match_label }} · Facts: {{ pkg.deterministic_facts.length }}
+                </p>
+                <p v-if="pkg.is_incomplete" class="cpld-archive-meta cpld-archive-meta--warn">
+                  Incomplete: no approved talking points were saved in this package.
+                </p>
+                <div class="cpld-script-actions">
+                  <button
+                    class="cpld-ai-generate-btn cpld-ai-generate-btn--secondary"
+                    :aria-label="`Reopen episode package ${pkg.id}`"
+                    @click="reopenEpisodePackage(pkg.id)"
+                  >
+                    Reopen
+                  </button>
+                  <button
+                    class="cpld-ai-generate-btn cpld-ai-generate-btn--secondary"
+                    :aria-label="`Export package markdown ${pkg.id}`"
+                    @click="downloadEpisodePackageMarkdown(pkg)"
+                  >
+                    Export .md
+                  </button>
+                  <button
+                    class="cpld-ai-generate-btn cpld-ai-generate-btn--secondary"
+                    :aria-label="`Export package json ${pkg.id}`"
+                    @click="downloadEpisodePackageJson(pkg)"
+                  >
+                    Export .json
+                  </button>
+                  <button
+                    class="cpld-ai-generate-btn cpld-ai-generate-btn--secondary"
+                    :aria-label="`Delete episode package ${pkg.id}`"
+                    @click="deleteEpisodePackage(pkg.id)"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
         </div>
       </section>
 
@@ -1456,7 +1584,10 @@ function downloadExportImage() {
   link.click()
 }
 
-onMounted(load)
+onMounted(() => {
+  loadEpisodeArchive()
+  void load()
+})
 
 type TalkingPointStatus = 'needs_review' | 'approved' | 'rejected'
 type TalkingPointConfidence = 'high' | 'medium' | 'low'
@@ -1523,6 +1654,389 @@ const podcastScriptDisabledReason = computed<string>(() => {
 })
 
 const podcastScriptDraft = ref('')
+
+type EpisodePackageStatus = 'draft' | 'ready_for_review' | 'approved_for_recording' | 'archived'
+
+interface ArchivedTalkingPoint {
+  id: string
+  section: string
+  title: string
+  text: string
+  source_fact_ids: string[]
+  status: 'approved' | 'needs_review'
+}
+
+interface EpisodeArchivePackage {
+  id: string
+  schema_version: 1
+  status: EpisodePackageStatus
+  working_title: string
+  objective: string
+  created_at: string
+  updated_at: string
+  is_incomplete: boolean
+  context: {
+    filters: {
+      season: string
+      team: string
+      venue: string
+    }
+    selected_match_id: string
+    selected_match_label: string
+    selected_export_target: ExportTarget
+    selected_export_format: ExportFormat
+    selected_export_template_id: string
+    selected_export_template_label: string
+    export_review_label: string
+  }
+  deterministic_facts: PodcastFact[]
+  approved_talking_points: ArchivedTalkingPoint[]
+  needs_review_talking_points: ArchivedTalkingPoint[]
+  script_draft: string
+  provenance: {
+    source: string
+    generated_at_utc: string
+    archive_saved_at_utc: string
+    import_generated_at_utc: string | null
+    limitations: string[]
+    note: string
+  }
+}
+
+const EPISODE_ARCHIVE_STORAGE_KEY = 'cricksy.cplPodcastEpisodeArchive.v1'
+
+const episodeStatusOptions = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'ready_for_review', label: 'Ready for review' },
+  { value: 'approved_for_recording', label: 'Approved for recording' },
+  { value: 'archived', label: 'Archived' },
+] as const satisfies ReadonlyArray<{ value: EpisodePackageStatus; label: string }>
+
+const episodeStatusLabelMap: Record<EpisodePackageStatus, string> = {
+  draft: 'Draft',
+  ready_for_review: 'Ready for review',
+  approved_for_recording: 'Approved for recording',
+  archived: 'Archived',
+}
+
+const episodeWorkingTitle = ref('')
+const episodeObjective = ref('')
+const episodePackageStatus = ref<EpisodePackageStatus>('draft')
+const episodeArchive = ref<EpisodeArchivePackage[]>([])
+const activeEpisodePackageId = ref<string | null>(null)
+const episodeArchiveError = ref<string | null>(null)
+
+const sortedEpisodePackages = computed(() =>
+  [...episodeArchive.value].sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+)
+
+const canCreateEpisodePackage = computed(() =>
+  cplMatches.value.length > 0 && podcastScriptDraft.value.trim().length > 0
+)
+
+const episodePackageDisabledReason = computed(() => {
+  if (cplMatches.value.length === 0) {
+    return 'Episode archive disabled: no CPL data is available.'
+  }
+  if (podcastScriptDraft.value.trim().length === 0) {
+    return 'Episode archive disabled: generate or edit a script draft before saving a package.'
+  }
+  return ''
+})
+
+const packageWillBeIncomplete = computed(() => approvedTalkingPoints.value.length === 0)
+
+function episodeStatusLabel(status: EpisodePackageStatus): string {
+  return episodeStatusLabelMap[status]
+}
+
+function archiveNowIso(): string {
+  return new Date().toISOString()
+}
+
+function archivePackageId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `episode-${Date.now()}`
+}
+
+function archivedTalkingPointText(tp: TalkingPoint): string {
+  const idx = aiResult.value?.talkingPoints.findIndex(candidate => candidate.id === tp.id) ?? -1
+  return idx >= 0 ? (aiTpEdits[idx] ?? tp.text) : tp.text
+}
+
+function buildEpisodeLimitations(): string[] {
+  return uniqueNonEmpty([
+    ...podcastFacts.value.map(f => f.caveat),
+    ...(aiResult.value?.limitations ?? []),
+    selectedMatch.value && !selectedMatch.value.has_delivery_data
+      ? 'Delivery data is missing for selected match; avoid phase-by-phase or ball-by-ball claims.'
+      : null,
+    topRunScorers.value.length === 0 && topWicketTakers.value.length === 0
+      ? 'Leaderboard data is unavailable; player ranking narratives may be incomplete.'
+      : null,
+    packageWillBeIncomplete.value
+      ? 'No approved talking points are included yet; package is facts-only/incomplete.'
+      : null,
+  ])
+}
+
+function persistEpisodeArchive(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(EPISODE_ARCHIVE_STORAGE_KEY, JSON.stringify(episodeArchive.value))
+    episodeArchiveError.value = null
+  } catch {
+    episodeArchiveError.value = 'Unable to persist episode archive in local storage.'
+  }
+}
+
+function loadEpisodeArchive(): void {
+  if (typeof window === 'undefined') return
+  try {
+    const raw = window.localStorage.getItem(EPISODE_ARCHIVE_STORAGE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return
+    episodeArchive.value = parsed.filter(pkg =>
+      pkg && typeof pkg === 'object' && pkg.schema_version === 1 && typeof pkg.id === 'string'
+    )
+    episodeArchiveError.value = null
+  } catch {
+    episodeArchiveError.value = 'Unable to read episode archive from local storage.'
+  }
+}
+
+function buildCurrentEpisodePackage(): EpisodeArchivePackage {
+  const nowIso = archiveNowIso()
+  const existing = activeEpisodePackageId.value
+    ? episodeArchive.value.find(pkg => pkg.id === activeEpisodePackageId.value) ?? null
+    : null
+  const packageId = existing?.id ?? archivePackageId()
+  const createdAt = existing?.created_at ?? nowIso
+  const selectedMatchLabel = selectedMatch.value?.teams
+    ? `${selectedMatch.value.teams}${selectedMatch.value.match_date ? ` (${selectedMatch.value.match_date})` : ''}`
+    : 'Not selected'
+  const fallbackTitle = selectedMatch.value
+    ? `CPL Episode Prep: ${selectedMatch.value.teams}`
+    : `CPL Episode Prep${selectedSeason.value !== 'all' ? ` (${selectedSeason.value})` : ''}`
+  const workingTitle = episodeWorkingTitle.value.trim() || fallbackTitle
+  const objective = episodeObjective.value.trim() || 'Deterministic CPL preparation package.'
+
+  const approved = approvedTalkingPoints.value.map(tp => ({
+    id: tp.id,
+    section: tp.section,
+    title: tp.title,
+    text: archivedTalkingPointText(tp),
+    source_fact_ids: tp.sourceFactIds,
+    status: 'approved' as const,
+  }))
+  const needsReview = needsReviewTalkingPoints.value.map(tp => ({
+    id: tp.id,
+    section: tp.section,
+    title: tp.title,
+    text: archivedTalkingPointText(tp),
+    source_fact_ids: tp.sourceFactIds,
+    status: 'needs_review' as const,
+  }))
+
+  return {
+    id: packageId,
+    schema_version: 1,
+    status: episodePackageStatus.value,
+    working_title: workingTitle,
+    objective,
+    created_at: createdAt,
+    updated_at: nowIso,
+    is_incomplete: approved.length === 0,
+    context: {
+      filters: {
+        season: selectedSeason.value,
+        team: selectedTeam.value,
+        venue: selectedVenue.value,
+      },
+      selected_match_id: selectedMatchId.value,
+      selected_match_label: selectedMatchLabel,
+      selected_export_target: exportTarget.value,
+      selected_export_format: exportFormat.value,
+      selected_export_template_id: exportTemplateId.value,
+      selected_export_template_label: activeExportTemplate.value?.label ?? 'Unavailable',
+      export_review_label: exportReviewLabel.value,
+    },
+    deterministic_facts: podcastFacts.value.map(f => ({ ...f })),
+    approved_talking_points: approved,
+    needs_review_talking_points: needsReview,
+    script_draft: podcastScriptDraft.value,
+    provenance: {
+      source: 'validated historical CPL imports displayed in dashboard',
+      generated_at_utc: nowIso,
+      archive_saved_at_utc: nowIso,
+      import_generated_at_utc: summary.value?.generated_at ?? null,
+      limitations: buildEpisodeLimitations(),
+      note: 'Frontend-only archive package. No auto-publishing and no unsupported AI claims.',
+    },
+  }
+}
+
+function saveEpisodePackage(): void {
+  if (!canCreateEpisodePackage.value) return
+  const pkg = buildCurrentEpisodePackage()
+  episodeWorkingTitle.value = pkg.working_title
+  episodeObjective.value = pkg.objective
+  activeEpisodePackageId.value = pkg.id
+  const withoutExisting = episodeArchive.value.filter(existing => existing.id !== pkg.id)
+  episodeArchive.value = [pkg, ...withoutExisting]
+  persistEpisodeArchive()
+}
+
+function formatArchiveTimestamp(isoValue: string): string {
+  const d = new Date(isoValue)
+  if (Number.isNaN(d.getTime())) return isoValue
+  return d.toLocaleString()
+}
+
+function reopenEpisodePackage(packageId: string): void {
+  const pkg = episodeArchive.value.find(item => item.id === packageId)
+  if (!pkg) return
+
+  selectedSeason.value = pkg.context.filters.season === 'all' || availableSeasons.value.includes(pkg.context.filters.season)
+    ? pkg.context.filters.season
+    : 'all'
+  selectedTeam.value = pkg.context.filters.team === 'all' || availableTeams.value.includes(pkg.context.filters.team)
+    ? pkg.context.filters.team
+    : 'all'
+  selectedVenue.value = pkg.context.filters.venue === 'all' || availableVenues.value.includes(pkg.context.filters.venue)
+    ? pkg.context.filters.venue
+    : 'all'
+  selectedMatchId.value = cplMatches.value.some(match => match.match_id === pkg.context.selected_match_id)
+    ? pkg.context.selected_match_id
+    : ''
+
+  exportTarget.value = pkg.context.selected_export_target
+  exportFormat.value = pkg.context.selected_export_format
+  exportTemplateId.value = pkg.context.selected_export_template_id
+
+  episodeWorkingTitle.value = pkg.working_title
+  episodeObjective.value = pkg.objective
+  episodePackageStatus.value = pkg.status
+  podcastScriptDraft.value = pkg.script_draft
+  activeEpisodePackageId.value = pkg.id
+
+  aiResult.value = {
+    status: 'needs_review',
+    generatedAt: formatArchiveTimestamp(pkg.updated_at),
+    limitations: [...pkg.provenance.limitations],
+    talkingPoints: [
+      ...pkg.approved_talking_points.map(tp => ({
+        id: tp.id,
+        section: tp.section,
+        title: tp.title,
+        text: tp.text,
+        sourceFactIds: [...tp.source_fact_ids],
+        confidence: 'medium' as const,
+        status: 'approved' as const,
+      })),
+      ...pkg.needs_review_talking_points.map(tp => ({
+        id: tp.id,
+        section: tp.section,
+        title: tp.title,
+        text: tp.text,
+        sourceFactIds: [...tp.source_fact_ids],
+        confidence: 'medium' as const,
+        status: 'needs_review' as const,
+      })),
+    ],
+  }
+  Object.keys(aiTpEdits).forEach(k => { delete (aiTpEdits as Record<string, string>)[k] })
+  Object.keys(aiTpEditing).forEach(k => { delete (aiTpEditing as Record<string, boolean>)[k] })
+}
+
+function deleteEpisodePackage(packageId: string): void {
+  episodeArchive.value = episodeArchive.value.filter(pkg => pkg.id !== packageId)
+  if (activeEpisodePackageId.value === packageId) {
+    activeEpisodePackageId.value = null
+  }
+  persistEpisodeArchive()
+}
+
+function downloadTextFile(filename: string, content: string, mimeType: string): void {
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function' || typeof URL.revokeObjectURL !== 'function') {
+    return
+  }
+  const blob = new Blob([content], { type: mimeType })
+  const blobUrl = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = blobUrl
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(blobUrl)
+}
+
+function buildEpisodePackageMarkdown(pkg: EpisodeArchivePackage): string {
+  const lines: string[] = [
+    '# Podcast episode package',
+    `- Working title: ${pkg.working_title}`,
+    `- Status: ${episodeStatusLabel(pkg.status)}`,
+    `- Created: ${pkg.created_at}`,
+    `- Updated: ${pkg.updated_at}`,
+    '',
+    '## Episode objective',
+    pkg.objective,
+    '',
+    '## Filter and context',
+    `- Season: ${pkg.context.filters.season}`,
+    `- Team: ${pkg.context.filters.team}`,
+    `- Venue: ${pkg.context.filters.venue}`,
+    `- Match: ${pkg.context.selected_match_label}`,
+    '',
+    '## Deterministic facts',
+    ...(pkg.deterministic_facts.length > 0
+      ? pkg.deterministic_facts.map(f => `- **${f.label}:** ${f.value}${f.caveat ? ` _(caveat: ${f.caveat})_` : ''}`)
+      : ['- No deterministic facts saved.']),
+    '',
+    '## Approved talking points',
+    ...(pkg.approved_talking_points.length > 0
+      ? pkg.approved_talking_points.map(tp => `- **${tp.title}:** ${tp.text}`)
+      : ['- No approved talking points in this package.']),
+    '',
+    '## Talking points still needing review',
+    ...(pkg.needs_review_talking_points.length > 0
+      ? pkg.needs_review_talking_points.map(tp => `- **${tp.title}:** ${tp.text}`)
+      : ['- None.']),
+    '',
+    '## Script draft',
+    pkg.script_draft,
+    '',
+    '## Visual/export metadata',
+    `- Target: ${pkg.context.selected_export_target}`,
+    `- Format: ${pkg.context.selected_export_format}`,
+    `- Template: ${pkg.context.selected_export_template_label} (${pkg.context.selected_export_template_id})`,
+    `- Review label: ${pkg.context.export_review_label}`,
+    '',
+    '## Provenance & limitations',
+    `- Source: ${pkg.provenance.source}`,
+    `- Dashboard aggregate generated at (UTC): ${pkg.provenance.import_generated_at_utc ?? 'Unknown'}`,
+    `- Package generated at (UTC): ${pkg.provenance.generated_at_utc}`,
+    `- Package saved at (UTC): ${pkg.provenance.archive_saved_at_utc}`,
+    `- Note: ${pkg.provenance.note}`,
+    ...pkg.provenance.limitations.map(limitation => `- Limitation: ${limitation}`),
+  ]
+  return lines.join('\n')
+}
+
+function downloadEpisodePackageMarkdown(pkg: EpisodeArchivePackage): void {
+  const slug = pkg.working_title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || pkg.id
+  downloadTextFile(`cpl-episode-package-${slug}.md`, buildEpisodePackageMarkdown(pkg), 'text/markdown;charset=utf-8')
+}
+
+function downloadEpisodePackageJson(pkg: EpisodeArchivePackage): void {
+  downloadTextFile(
+    `cpl-episode-package-${pkg.id}.json`,
+    JSON.stringify(pkg, null, 2),
+    'application/json;charset=utf-8'
+  )
+}
 
 // ---------------------------------------------------------------------------
 // AI Talking-Point Assistant — generation
@@ -3072,6 +3586,71 @@ function downloadPodcastScriptMarkdown(): void {
   margin: 0;
   padding-left: 1.1rem;
   font-size: 0.74rem;
+  color: #9a3412;
+}
+
+.cpld-episode-archive {
+  border-top: 1px solid #cbd5e1;
+  padding-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cpld-archive-form {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.cpld-archive-input {
+  min-width: 100%;
+}
+
+.cpld-archive-objective {
+  min-height: 82px;
+}
+
+.cpld-archive-note {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #b45309;
+}
+
+.cpld-archive-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.cpld-archive-item {
+  background: #ffffff;
+  border: 1px solid #dbe3ef;
+  border-radius: 6px;
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.cpld-archive-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cpld-archive-meta {
+  margin: 0;
+  font-size: 0.73rem;
+  color: #475569;
+}
+
+.cpld-archive-meta--warn {
   color: #9a3412;
 }
 </style>
