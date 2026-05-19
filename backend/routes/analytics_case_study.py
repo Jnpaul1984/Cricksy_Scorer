@@ -90,7 +90,11 @@ async def list_analyst_matches(
     """
     Return a list of matches for the Analyst Workspace.
     """
-    stmt = scoped_games_stmt(current_user).where(Game.status == GameStatus.completed).order_by(Game.id.desc())
+    stmt = (
+        scoped_games_stmt(current_user)
+        .where(Game.status == GameStatus.completed)
+        .order_by(Game.id.desc())
+    )
     result = await db.execute(stmt)
     games = result.scalars().all()
 
@@ -244,7 +248,9 @@ async def get_match_registry(
     phases = game.phases if isinstance(game.phases, dict) else {}
     hist_innings = phases.get("historical_innings_summary") or []
     innings_count = len(hist_innings) if isinstance(hist_innings, list) else 0
-    deliveries_imported = bool(hist_meta.get("deliveries_imported"))
+    deliveries_imported = bool(hist_meta.get("deliveries_imported")) or bool(
+        isinstance(game.deliveries, list) and len(game.deliveries) > 0
+    )
     player_names = hist_meta.get("player_names") or []
     player_count = len(player_names) if isinstance(player_names, list) else 0
 

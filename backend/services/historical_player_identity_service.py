@@ -81,7 +81,9 @@ def _deterministic_alias_candidates(source_normalized_name: str, players: list[P
 
     candidates: set[int] = set()
     for player in players:
-        canonical_tokens = [token for token in normalize_source_player_name(player.name).split(" ") if token]
+        canonical_tokens = [
+            token for token in normalize_source_player_name(player.name).split(" ") if token
+        ]
         if len(canonical_tokens) < 2:
             continue
         canonical_last = canonical_tokens[-1]
@@ -89,8 +91,10 @@ def _deterministic_alias_candidates(source_normalized_name: str, players: list[P
             continue
         canonical_first_tokens = canonical_tokens[:-1]
         canonical_initials = _initials(canonical_first_tokens)
-        same_first_name = source_first_tokens and canonical_first_tokens and (
-            source_first_tokens[0] == canonical_first_tokens[0]
+        same_first_name = (
+            source_first_tokens
+            and canonical_first_tokens
+            and (source_first_tokens[0] == canonical_first_tokens[0])
         )
         initials_match = bool(source_initials) and (
             canonical_initials == source_initials or canonical_initials.startswith(source_initials)
@@ -159,7 +163,10 @@ def _extract_roster_entries(
                 "roster_statuses": [],
             }
             entries_by_key[key] = existing
-        elif existing.get("metadata_source_status") != "source" and metadata_source_status == "source":
+        elif (
+            existing.get("metadata_source_status") != "source"
+            and metadata_source_status == "source"
+        ):
             existing["metadata"] = metadata
             existing["metadata_source_status"] = "source"
 
@@ -231,7 +238,9 @@ async def _resolve_identity(
     exact_result = await db.execute(select(Player).where(Player.name.is_not(None)))
     all_players = exact_result.scalars().all()
     exact_candidates = [
-        player for player in all_players if normalize_source_player_name(player.name) == normalized_name
+        player
+        for player in all_players
+        if normalize_source_player_name(player.name) == normalized_name
     ]
     if len(exact_candidates) == 1:
         return _ResolvedIdentity(
@@ -270,7 +279,8 @@ async def _resolve_identity(
         select(HistoricalSourcePlayerAlias, HistoricalSourcePlayerRegistry)
         .join(
             HistoricalSourcePlayerRegistry,
-            HistoricalSourcePlayerRegistry.source_player_id == HistoricalSourcePlayerAlias.source_player_id,
+            HistoricalSourcePlayerRegistry.source_player_id
+            == HistoricalSourcePlayerAlias.source_player_id,
         )
         .where(
             HistoricalSourcePlayerAlias.normalized_alias == normalized_name,
@@ -280,7 +290,9 @@ async def _resolve_identity(
         )
     )
     alias_rows = (await db.execute(alias_stmt)).all()
-    alias_candidates = {registry.canonical_player_id for _, registry in alias_rows if registry.canonical_player_id}
+    alias_candidates = {
+        registry.canonical_player_id for _, registry in alias_rows if registry.canonical_player_id
+    }
     if len(alias_candidates) == 1:
         canonical_player_id = next(iter(alias_candidates))
         return _ResolvedIdentity(
@@ -654,14 +666,19 @@ async def _upsert_competition_roster_entry(
         HistoricalCompetitionRosterEntry.source_schema == source_schema,
         HistoricalCompetitionRosterEntry.game_id == game_id,
         HistoricalCompetitionRosterEntry.roster_status == roster_status,
-        HistoricalCompetitionRosterEntry.normalized_source_player_name == normalized_source_player_name,
+        HistoricalCompetitionRosterEntry.normalized_source_player_name
+        == normalized_source_player_name,
     ]
     if team_name is None:
         filters.append(HistoricalCompetitionRosterEntry.team_name.is_(None))
     else:
         filters.append(HistoricalCompetitionRosterEntry.team_name == team_name)
 
-    existing = (await db.execute(select(HistoricalCompetitionRosterEntry).where(*filters))).scalars().first()
+    existing = (
+        (await db.execute(select(HistoricalCompetitionRosterEntry).where(*filters)))
+        .scalars()
+        .first()
+    )
     provenance_ref = {
         "batch_id": batch_id,
         "game_id": game_id,
@@ -709,21 +726,25 @@ async def _upsert_competition_roster_entry(
     conflict_count = 0
     if canonical_player_id is not None and team_name:
         team_conflicts = (
-            await db.execute(
-                select(HistoricalCompetitionRosterEntry).where(
-                    HistoricalCompetitionRosterEntry.id != existing.id,
-                    HistoricalCompetitionRosterEntry.source_system == source_system,
-                    HistoricalCompetitionRosterEntry.source_schema == source_schema,
-                    HistoricalCompetitionRosterEntry.competition_type == competition_type,
-                    HistoricalCompetitionRosterEntry.competition_name == competition_name,
-                    HistoricalCompetitionRosterEntry.season == season,
-                    HistoricalCompetitionRosterEntry.game_id == game_id,
-                    HistoricalCompetitionRosterEntry.canonical_player_id == canonical_player_id,
-                    HistoricalCompetitionRosterEntry.team_name.is_not(None),
-                    HistoricalCompetitionRosterEntry.team_name != team_name,
+            (
+                await db.execute(
+                    select(HistoricalCompetitionRosterEntry).where(
+                        HistoricalCompetitionRosterEntry.id != existing.id,
+                        HistoricalCompetitionRosterEntry.source_system == source_system,
+                        HistoricalCompetitionRosterEntry.source_schema == source_schema,
+                        HistoricalCompetitionRosterEntry.competition_type == competition_type,
+                        HistoricalCompetitionRosterEntry.competition_name == competition_name,
+                        HistoricalCompetitionRosterEntry.season == season,
+                        HistoricalCompetitionRosterEntry.game_id == game_id,
+                        HistoricalCompetitionRosterEntry.canonical_player_id == canonical_player_id,
+                        HistoricalCompetitionRosterEntry.team_name.is_not(None),
+                        HistoricalCompetitionRosterEntry.team_name != team_name,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for conflict_row in team_conflicts:
             conflict_ref = {
                 "type": "same_match_multi_team_conflict",
@@ -807,14 +828,18 @@ async def register_historical_source_players(
         )
         explicit_source_player_id = _normalize_metadata_value(metadata.get("source_player_id"))
         metadata_source_status = (
-            "source" if str(entry.get("metadata_source_status") or "unknown") == "source" else "unknown"
+            "source"
+            if str(entry.get("metadata_source_status") or "unknown") == "source"
+            else "unknown"
         )
         batting_style = _normalize_metadata_value(metadata.get("batting_style"))
         bowling_style = _normalize_metadata_value(metadata.get("bowling_style"))
         role_value = _normalize_metadata_value(metadata.get("role"))
         batting_innings_count = _safe_int(metadata.get("batting_innings_count"))
         bowling_participation_count = _safe_int(metadata.get("bowling_participation_count"))
-        role_source_status = "source" if (metadata_source_status == "source" and role_value) else "unknown"
+        role_source_status = (
+            "source" if (metadata_source_status == "source" and role_value) else "unknown"
+        )
         style_source_status = (
             "source"
             if (metadata_source_status == "source" and (batting_style or bowling_style))
@@ -823,12 +848,22 @@ async def register_historical_source_players(
         role_confidence_status = "high" if role_source_status == "source" else "unknown"
         style_confidence_status = "high" if style_source_status == "source" else "unknown"
         normalized_name = normalize_source_player_name(source_player_name)
-        registry_stmt = select(HistoricalSourcePlayerRegistry).where(
-            HistoricalSourcePlayerRegistry.source_system == source_system,
-            HistoricalSourcePlayerRegistry.source_schema == source_schema,
-            HistoricalSourcePlayerRegistry.normalized_name == normalized_name,
-        )
-        registry = (await db.execute(registry_stmt)).scalars().first()
+        registry: HistoricalSourcePlayerRegistry | None = None
+        if explicit_source_player_id:
+            registry_by_id_stmt = select(HistoricalSourcePlayerRegistry).where(
+                HistoricalSourcePlayerRegistry.source_system == source_system,
+                HistoricalSourcePlayerRegistry.source_schema == source_schema,
+                HistoricalSourcePlayerRegistry.source_player_id == explicit_source_player_id,
+            )
+            registry = (await db.execute(registry_by_id_stmt)).scalars().first()
+
+        if registry is None:
+            registry_stmt = select(HistoricalSourcePlayerRegistry).where(
+                HistoricalSourcePlayerRegistry.source_system == source_system,
+                HistoricalSourcePlayerRegistry.source_schema == source_schema,
+                HistoricalSourcePlayerRegistry.normalized_name == normalized_name,
+            )
+            registry = (await db.execute(registry_stmt)).scalars().first()
         if registry is None:
             resolved = await _resolve_identity(
                 db,
@@ -838,6 +873,9 @@ async def register_historical_source_players(
                 competition_context=competition_context,
                 team_name=team_name,
             )
+            create_kwargs: dict[str, Any] = {}
+            if explicit_source_player_id:
+                create_kwargs["source_player_id"] = explicit_source_player_id
             registry = HistoricalSourcePlayerRegistry(
                 source_player_name=source_player_name,
                 normalized_name=normalized_name,
@@ -871,13 +909,21 @@ async def register_historical_source_players(
                 metadata_conflicts=[],
                 career_profile_foundation={},
                 review_required=False,
+                **create_kwargs,
             )
             db.add(registry)
             await db.flush()
             summary["registered_count"] += 1
         else:
             registry.last_seen = now
-            registry.match_references = _append_unique(list(registry.match_references or []), game_id)
+            if explicit_source_player_id and registry.source_player_id != explicit_source_player_id:
+                registry.alias_references = _append_unique(
+                    list(registry.alias_references or []),
+                    explicit_source_player_id,
+                )
+            registry.match_references = _append_unique(
+                list(registry.match_references or []), game_id
+            )
             registry.competition_references = _append_unique(
                 list(registry.competition_references or []),
                 {
@@ -1073,7 +1119,9 @@ async def register_historical_source_players(
         )
         summary["career_profiles_updated"] += 1
 
-        competition_type = _normalize_metadata_value(competition_context.get("competition_type")) or "unknown"
+        competition_type = (
+            _normalize_metadata_value(competition_context.get("competition_type")) or "unknown"
+        )
         competition_name = _normalize_metadata_value(competition_context.get("competition_name"))
         season = _normalize_metadata_value(competition_context.get("season"))
         source_player_ref = (

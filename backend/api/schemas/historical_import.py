@@ -80,10 +80,10 @@ class HistoricalImportVenueContext(BaseModel):
 
 class HistoricalImportRosterTeamSnapshot(BaseModel):
     team_name: str
-    playing_xi: list[str] = Field(default_factory=list)
-    named_squad: list[str] = Field(default_factory=list)
-    substitutes: list[str] = Field(default_factory=list)
-    unresolved_entries: list[str] = Field(default_factory=list)
+    playing_xi: list[str | dict[str, object]] = Field(default_factory=list)
+    named_squad: list[str | dict[str, object]] = Field(default_factory=list)
+    substitutes: list[str | dict[str, object]] = Field(default_factory=list)
+    unresolved_entries: list[str | dict[str, object]] = Field(default_factory=list)
     mapping_confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
 
 

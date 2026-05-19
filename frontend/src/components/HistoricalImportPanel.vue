@@ -267,7 +267,8 @@
           </button>
         </div>
         <p class="hip-action-hint">
-          Skipping is safe. You can view the match in Analyst Workspace now.
+          Skipping keeps metadata + innings totals only. Run <code>apply-deliveries</code> to unlock
+          delivery rows, wickets, phase analytics, and CPL match-story visuals.
         </p>
       </div>
     </div>
@@ -290,7 +291,7 @@
           <div v-else class="hip-done-row">
             <span class="hip-done-label">Deliveries</span>
             <span class="hip-done-value hip-done-value--muted">
-              Skipped — import deliveries later via API if needed
+              Skipped — metadata/innings only. Run apply-deliveries later to mark as delivery-complete.
             </span>
           </div>
           <div v-if="trainingStatus" class="hip-done-row">

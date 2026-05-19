@@ -40,10 +40,10 @@ if (isProduction && API_BASE === RUNTIME_ORIGIN && !URL_OVERRIDE) {
     'Expected: API endpoint URL. Got:', API_BASE
   );
 }
-console.info('API_BASE resolved to:', API_BASE, '| Source:', 
-  URL_OVERRIDE ? '?apiBase override' : 
-  VITE_BASE ? 'VITE_API_BASE' : 
-  LEGACY_BASE ? 'VITE_API_BASE_URL' : 
+console.info('API_BASE resolved to:', API_BASE, '| Source:',
+  URL_OVERRIDE ? '?apiBase override' :
+  VITE_BASE ? 'VITE_API_BASE' :
+  LEGACY_BASE ? 'VITE_API_BASE_URL' :
   'window.origin (fallback)'
 );
 
@@ -791,6 +791,64 @@ export interface AnalystMatchListResponse {
 
 export async function getAnalystMatches(): Promise<AnalystMatchListResponse> {
   return request<AnalystMatchListResponse>('/analytics/matches');
+}
+
+export interface AnalystPlayerAggregateItem {
+  player: string;
+  role: string;
+  innings: number;
+  matches: number;
+  runs: number;
+  strike_rate: number;
+  wickets: number;
+  economy: number;
+}
+
+export interface AnalystPlayersResponse {
+  items: AnalystPlayerAggregateItem[];
+  total: number;
+  data_completeness: string;
+}
+
+export async function getAnalystPlayers(matchId?: string | null): Promise<AnalystPlayersResponse> {
+  const params = new URLSearchParams();
+  if (matchId) params.set('match_id', matchId);
+  const query = params.toString();
+  return request<AnalystPlayersResponse>(`/api/analyst/players${query ? `?${query}` : ''}`);
+}
+
+export interface AnalystDeliveryRow {
+  match_id: string;
+  innings: number | null;
+  team: string | null;
+  over_number: number | null;
+  ball_number: number | null;
+  batter: string | null;
+  bowler: string | null;
+  non_striker: string | null;
+  runs_off_bat: number;
+  extra_runs: number;
+  total_runs: number;
+  extra_type: string | null;
+  wicket: boolean;
+  dismissal_type: string | null;
+  player_out: string | null;
+  fielders: string[];
+  phase: string | null;
+  data_completeness: string;
+}
+
+export interface AnalystDeliveriesResponse {
+  items: AnalystDeliveryRow[];
+  total: number;
+  data_completeness: string;
+}
+
+export async function getAnalystDeliveries(matchId?: string | null): Promise<AnalystDeliveriesResponse> {
+  const params = new URLSearchParams();
+  if (matchId) params.set('match_id', matchId);
+  const query = params.toString();
+  return request<AnalystDeliveriesResponse>(`/api/analyst/deliveries${query ? `?${query}` : ''}`);
 }
 
 /**

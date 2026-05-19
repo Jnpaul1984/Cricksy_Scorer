@@ -934,6 +934,9 @@
                 <h3>Players</h3>
                 <p class="aw-table-subtitle">
                   Player-level aggregates for the current filters.
+                  <span class="aw-inline-completeness">
+                    Data completeness: {{ playerDataCompleteness }}
+                  </span>
                 </p>
               </div>
               <div class="aw-table-scroll">
@@ -962,6 +965,56 @@
                     <tr v-if="filteredPlayers.length === 0">
                       <td colspan="7" class="aw-empty">
                         No players found for the current filters.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Deliveries tab -->
+            <div v-else-if="activeTab === 'deliveries'" class="aw-table-wrapper">
+              <div class="aw-table-header">
+                <h3>Deliveries</h3>
+                <p class="aw-table-subtitle">
+                  Delivery-level rows from imported historical matches.
+                  <span class="aw-inline-completeness">
+                    Data completeness: {{ deliveryDataCompleteness }}
+                  </span>
+                </p>
+              </div>
+              <div class="aw-table-scroll">
+                <table class="aw-table">
+                  <thead>
+                    <tr>
+                      <th>Over</th>
+                      <th>Innings</th>
+                      <th>Team</th>
+                      <th>Batter</th>
+                      <th>Bowler</th>
+                      <th>Runs</th>
+                      <th>Extras</th>
+                      <th>Wicket</th>
+                      <th>Dismissal</th>
+                      <th>Phase</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="delivery in filteredDeliveries" :key="delivery.id">
+                      <td>{{ delivery.overNumber }}.{{ delivery.ballNumber }}</td>
+                      <td>{{ delivery.innings ?? '—' }}</td>
+                      <td>{{ delivery.team || '—' }}</td>
+                      <td>{{ delivery.batter || '—' }}</td>
+                      <td>{{ delivery.bowler || '—' }}</td>
+                      <td>{{ delivery.runsOffBat }}</td>
+                      <td>{{ delivery.extraRuns }}<span v-if="delivery.extraType"> ({{ delivery.extraType }})</span></td>
+                      <td>{{ delivery.wicket ? 'Yes' : 'No' }}</td>
+                      <td>{{ delivery.dismissalType || '—' }}</td>
+                      <td>{{ delivery.phase || '—' }}</td>
+                    </tr>
+                    <tr v-if="filteredDeliveries.length === 0">
+                      <td colspan="10" class="aw-empty">
+                        No delivery rows found for the current filters.
                       </td>
                     </tr>
                   </tbody>
@@ -1202,12 +1255,16 @@ import HistoricalOcrReviewPanel from '@/components/HistoricalOcrReviewPanel.vue'
 import { readAiInsightCache, writeAiInsightCache } from '@/services/aiInsightCache'
 import { useAuthStore } from '@/stores/authStore'
 import {
+  getAnalystDeliveries,
   getAnalystMatches,
+  getAnalystPlayers,
   getMatchCaseStudy,
   getMatchAiSummary,
   getMatchRegistry,
   historicalImportRollback,
+  type AnalystDeliveryRow,
   type AnalystMatchListItem,
+  type AnalystPlayerAggregateItem,
   type MatchCaseStudyResponse,
   type MatchAiSummary,
   type MatchRegistryResponse,
@@ -1333,7 +1390,12 @@ const registryLoading = ref(false)
 
 // Players list - NO FAKE DATA
 // Required: GET /analyst/players
-const players = ref<any[]>([])
+const players = ref<Array<{ id: string; name: string; role: string; innings: number; runs: number; strikeRate: number; wickets: number; economy: number; matches: number }>>([])
+const playerDataCompleteness = ref('metadata_only')
+
+// Deliveries list - NO FAKE DATA
+const deliveries = ref<Array<{ id: string; matchId: string; innings: number | null; team: string | null; overNumber: number | null; ballNumber: number | null; batter: string | null; bowler: string | null; nonStriker: string | null; runsOffBat: number; extraRuns: number; totalRuns: number; extraType: string | null; wicket: boolean; dismissalType: string | null; playerOut: string | null; fielders: string[]; phase: string | null; dataCompleteness: string }>>([])
+const deliveryDataCompleteness = ref('metadata_only')
 
 // Computed
 const filteredMatches = computed(() => {
@@ -1358,6 +1420,22 @@ const filteredPlayers = computed(() => {
     const matchesTerm =
       !term || p.name.toLowerCase().includes(term) || p.role.toLowerCase().includes(term)
     return matchesTerm
+  })
+})
+
+const filteredDeliveries = computed(() => {
+  const term = filters.search.toLowerCase()
+  return deliveries.value.filter((d) => {
+    if (!term) return true
+    return [
+      d.team ?? '',
+      d.batter ?? '',
+      d.bowler ?? '',
+      d.nonStriker ?? '',
+      d.dismissalType ?? '',
+      d.playerOut ?? '',
+      d.phase ?? '',
+    ].some(value => value.toLowerCase().includes(term))
   })
 })
 
@@ -1568,6 +1646,60 @@ async function loadMatches() {
   }
 }
 
+async function loadPlayers() {
+  try {
+    const response = await getAnalystPlayers()
+    playerDataCompleteness.value = response.data_completeness
+    players.value = response.items.map((item: AnalystPlayerAggregateItem) => ({
+      id: item.player,
+      name: item.player,
+      role: item.role || 'Unknown',
+      innings: item.innings ?? 0,
+      matches: item.matches ?? 0,
+      runs: item.runs ?? 0,
+      strikeRate: Number((item.strike_rate ?? 0).toFixed(2)),
+      wickets: item.wickets ?? 0,
+      economy: Number((item.economy ?? 0).toFixed(2)),
+    }))
+  } catch (err) {
+    console.error('[AnalystWorkspace] Failed to load players:', err)
+    players.value = []
+    playerDataCompleteness.value = 'metadata_only'
+  }
+}
+
+async function loadDeliveries() {
+  try {
+    const response = await getAnalystDeliveries()
+    deliveryDataCompleteness.value = response.data_completeness
+    deliveries.value = response.items.map((row: AnalystDeliveryRow, index: number) => ({
+      id: `${row.match_id}-${row.innings ?? 'x'}-${row.over_number ?? 0}-${row.ball_number ?? 0}-${index}`,
+      matchId: row.match_id,
+      innings: row.innings,
+      team: row.team,
+      overNumber: row.over_number,
+      ballNumber: row.ball_number,
+      batter: row.batter,
+      bowler: row.bowler,
+      nonStriker: row.non_striker,
+      runsOffBat: row.runs_off_bat ?? 0,
+      extraRuns: row.extra_runs ?? 0,
+      totalRuns: row.total_runs ?? 0,
+      extraType: row.extra_type,
+      wicket: row.wicket,
+      dismissalType: row.dismissal_type,
+      playerOut: row.player_out,
+      fielders: row.fielders ?? [],
+      phase: row.phase,
+      dataCompleteness: row.data_completeness ?? 'metadata_only',
+    }))
+  } catch (err) {
+    console.error('[AnalystWorkspace] Failed to load deliveries:', err)
+    deliveries.value = []
+    deliveryDataCompleteness.value = 'metadata_only'
+  }
+}
+
 async function selectMatch(matchId: string) {
   selectedMatchId.value = matchId
   registryData.value = null
@@ -1708,6 +1840,7 @@ function openFullCaseStudy() {
 
 async function refreshData() {
   await loadMatches()
+  await Promise.all([loadPlayers(), loadDeliveries()])
 }
 
 function canCleanupImportedMatch(match: AnalystMatch): boolean {
@@ -1751,7 +1884,7 @@ async function cleanupImportedMatch(match: AnalystMatch) {
 function onImportDone(_gameId: string | null) {
   // Switch to the matches tab and refresh so the newly imported match appears
   activeTab.value = 'matches'
-  loadMatches()
+  void Promise.all([loadMatches(), loadPlayers(), loadDeliveries()])
 }
 
 function resetFilters() {
@@ -1993,7 +2126,7 @@ async function copyPodcastPrep() {
 
 // Lifecycle - load data on mount
 onMounted(() => {
-  loadMatches()
+  void Promise.all([loadMatches(), loadPlayers(), loadDeliveries()])
 })
 </script>
 
@@ -2232,6 +2365,12 @@ onMounted(() => {
   margin: var(--space-1) 0 0;
   font-size: var(--text-sm);
   color: var(--color-text-muted);
+}
+
+.aw-inline-completeness {
+  display: inline-block;
+  margin-left: var(--space-2);
+  font-weight: var(--font-medium);
 }
 
 .aw-import-panels {

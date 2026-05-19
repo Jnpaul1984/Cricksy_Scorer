@@ -23,9 +23,13 @@ from backend.sql_app.models import (
 )
 from backend.sql_app.schemas import AnalyticsQuery, AnalyticsResult
 from backend.api.schemas.analyst_matches import (
+    AnalystDeliveriesResponse,
     AnalystExportDataResponse,
     AnalystMatchDetailResponse,
     AnalystMatchInningsSummary,
+    AnalystPlayerAggregate,
+    AnalystPlayersResponse,
+    AnalystDeliveryRow,
 )
 from backend.sql_app.match_ai import MatchAiSummaryResponse
 from backend.services.analyst_access import scoped_games_stmt
@@ -68,8 +72,44 @@ def _historical_import_meta(game: Game) -> dict[str, Any] | None:
     return None
 
 
+def _data_completeness_label(game: Game) -> str:
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    hist_meta_value = phases.get("historical_import")
+    hist_meta = hist_meta_value if isinstance(hist_meta_value, dict) else {}
+    has_innings = bool(phases.get("historical_innings_summary"))
+    deliveries = game.deliveries if isinstance(game.deliveries, list) else []
+    has_deliveries = bool(hist_meta.get("deliveries_imported")) or len(deliveries) > 0
+    if not has_innings:
+        return "metadata_only"
+    if not has_deliveries:
+        return "innings_totals_only"
+    has_wickets = any(bool(d.get("is_wicket")) for d in deliveries if isinstance(d, dict))
+    if has_wickets:
+        has_phase = any(
+            isinstance(phases.get(phase_name), dict) and bool(phases.get(phase_name))
+            for phase_name in ("powerplay", "middle", "death")
+        ) or any(bool(d.get("phase")) for d in deliveries if isinstance(d, dict))
+        if has_phase:
+            return "phase_analytics_available"
+        return "wicket_data_available"
+    return "delivery_data_available"
+
+
+def _max_data_completeness(current: str, candidate: str) -> str:
+    order = {
+        "metadata_only": 0,
+        "innings_totals_only": 1,
+        "delivery_data_available": 2,
+        "wicket_data_available": 3,
+        "phase_analytics_available": 4,
+    }
+    return candidate if order.get(candidate, 0) > order.get(current, 0) else current
+
+
 def _display_overs_from_game(game: Game) -> float:
-    return cricket_overs_from_legal_balls((int(game.overs_completed) * 6) + int(game.balls_this_over))
+    return cricket_overs_from_legal_balls(
+        (int(game.overs_completed) * 6) + int(game.balls_this_over)
+    )
 
 
 def _resolved_result(game: Game) -> str | None:
@@ -88,7 +128,9 @@ def _match_innings_summaries(game: Game) -> list[AnalystMatchInningsSummary]:
     hist_meta = _historical_import_meta(game)
     phases = game.phases if isinstance(game.phases, dict) else {}
     hist_innings = phases.get("historical_innings_summary") or []
-    deliveries_imported = isinstance(hist_meta, dict) and bool(hist_meta.get("deliveries_imported"))
+    deliveries_imported = (
+        isinstance(hist_meta, dict) and bool(hist_meta.get("deliveries_imported"))
+    ) or bool(isinstance(game.deliveries, list) and len(game.deliveries) > 0)
 
     if hist_meta and hist_innings:
         for idx, inning in enumerate(hist_innings, start=1):
@@ -116,7 +158,11 @@ def _match_innings_summaries(game: Game) -> list[AnalystMatchInningsSummary]:
             second_summary = AnalystMatchInningsSummary(
                 inning_no=2,
                 team=game.batting_team_name
-                or (hist_innings[1].get("team") if len(hist_innings) > 1 and isinstance(hist_innings[1], dict) else team_b_name),
+                or (
+                    hist_innings[1].get("team")
+                    if len(hist_innings) > 1 and isinstance(hist_innings[1], dict)
+                    else team_b_name
+                ),
                 runs=game.total_runs,
                 wickets=game.total_wickets,
                 overs=_display_overs_from_game(game),
@@ -148,6 +194,65 @@ def _match_innings_summaries(game: Game) -> list[AnalystMatchInningsSummary]:
             )
         )
     return summaries
+
+
+def _delivery_rows_from_game(game: Game) -> list[AnalystDeliveryRow]:
+    rows: list[AnalystDeliveryRow] = []
+    deliveries = game.deliveries if isinstance(game.deliveries, list) else []
+    completeness = _data_completeness_label(game)
+    team_a_name = _team_name(game.team_a, "Team A")
+    team_b_name = _team_name(game.team_b, "Team B")
+    for delivery in deliveries:
+        if not isinstance(delivery, dict):
+            continue
+        inning_no = int(delivery.get("inning_no") or delivery.get("inning") or 0) or None
+        batting_team = delivery.get("batting_team")
+        team = (
+            str(batting_team).strip()
+            if isinstance(batting_team, str) and batting_team.strip()
+            else None
+        )
+        if not team and inning_no == 1:
+            team = team_a_name
+        elif not team and inning_no == 2:
+            team = team_b_name
+        rows.append(
+            AnalystDeliveryRow(
+                match_id=game.id,
+                innings=inning_no,
+                team=team,
+                over_number=delivery.get("over_number"),
+                ball_number=delivery.get("ball_in_over") or delivery.get("ball_number"),
+                batter=delivery.get("batter") or delivery.get("batsman"),
+                bowler=delivery.get("bowler"),
+                non_striker=delivery.get("non_striker"),
+                batter_source_player_id=delivery.get("batter_source_player_id"),
+                bowler_source_player_id=delivery.get("bowler_source_player_id"),
+                non_striker_source_player_id=delivery.get("non_striker_source_player_id"),
+                runs_off_bat=int(delivery.get("runs_off_bat") or 0),
+                extra_runs=int(delivery.get("extra_runs") or 0),
+                total_runs=int(
+                    delivery.get("runs_scored")
+                    or (
+                        int(delivery.get("runs_off_bat") or 0)
+                        + int(delivery.get("extra_runs") or 0)
+                    )
+                ),
+                extra_type=delivery.get("extra_type"),
+                wicket=bool(delivery.get("is_wicket")),
+                dismissal_type=delivery.get("dismissal_type") or delivery.get("wicket_type"),
+                player_out=delivery.get("player_out"),
+                player_out_source_player_id=delivery.get("player_out_source_player_id"),
+                fielders=[
+                    str(fielder).strip()
+                    for fielder in (delivery.get("fielders") or [])
+                    if isinstance(fielder, str) and str(fielder).strip()
+                ],
+                phase=delivery.get("phase") or _phase_from_over(delivery.get("over_number")),
+                data_completeness=completeness,
+            )
+        )
+    return rows
 
 
 def _export_rows_for_game(game: Game) -> list[dict[str, Any]]:
@@ -378,8 +483,132 @@ async def get_analyst_match_detail(
         source_dates=hist_meta.get("source_dates") if hist_meta else [],
         match_datetime=getattr(game, "created_at", None),
         innings=_match_innings_summaries(game),
-        batting_scorecard=game.batting_scorecard if isinstance(game.batting_scorecard, dict) else None,
-        bowling_scorecard=game.bowling_scorecard if isinstance(game.bowling_scorecard, dict) else None,
+        batting_scorecard=game.batting_scorecard
+        if isinstance(game.batting_scorecard, dict)
+        else None,
+        bowling_scorecard=game.bowling_scorecard
+        if isinstance(game.bowling_scorecard, dict)
+        else None,
+    )
+
+
+@router.get("/players", response_model=AnalystPlayersResponse)
+async def get_analyst_players(
+    current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    match_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = scoped_games_stmt(current_user).where(Game.status == GameStatus.completed)
+    if match_id:
+        stmt = stmt.where(Game.id == match_id)
+    result = await db.execute(stmt.order_by(Game.id.desc()))
+    games = result.scalars().all()
+    if match_id and not games:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    batting_acc: dict[str, dict[str, Any]] = {}
+    bowling_acc: dict[str, dict[str, Any]] = {}
+    completeness = "metadata_only"
+    for game in games:
+        completeness = _max_data_completeness(completeness, _data_completeness_label(game))
+        batting_scorecard = (
+            game.batting_scorecard if isinstance(game.batting_scorecard, dict) else {}
+        )
+        bowling_scorecard = (
+            game.bowling_scorecard if isinstance(game.bowling_scorecard, dict) else {}
+        )
+        for player_name, stats in batting_scorecard.items():
+            if not isinstance(stats, dict):
+                continue
+            acc = batting_acc.setdefault(
+                str(player_name),
+                {"innings": 0, "matches": set(), "runs": 0, "balls": 0},
+            )
+            acc["innings"] += 1
+            acc["matches"].add(game.id)
+            acc["runs"] += int(stats.get("runs") or 0)
+            acc["balls"] += int(stats.get("balls_faced") or 0)
+        for player_name, stats in bowling_scorecard.items():
+            if not isinstance(stats, dict):
+                continue
+            acc = bowling_acc.setdefault(
+                str(player_name),
+                {"matches": set(), "balls": 0, "runs_conceded": 0, "wickets": 0},
+            )
+            acc["matches"].add(game.id)
+            acc["balls"] += int(stats.get("balls_bowled") or 0)
+            acc["runs_conceded"] += int(stats.get("runs_conceded") or 0)
+            acc["wickets"] += int(stats.get("wickets_taken") or 0)
+
+    players: list[AnalystPlayerAggregate] = []
+    for player_name in sorted(set(batting_acc.keys()).union(set(bowling_acc.keys()))):
+        bstats = batting_acc.get(
+            player_name, {"innings": 0, "matches": set(), "runs": 0, "balls": 0}
+        )
+        bwstats = bowling_acc.get(
+            player_name,
+            {"matches": set(), "balls": 0, "runs_conceded": 0, "wickets": 0},
+        )
+        runs = int(bstats.get("runs") or 0)
+        balls = int(bstats.get("balls") or 0)
+        strike_rate = round((runs / balls) * 100, 2) if balls > 0 else 0.0
+        wickets = int(bwstats.get("wickets") or 0)
+        bowler_balls = int(bwstats.get("balls") or 0)
+        bowler_overs = bowler_balls / 6.0 if bowler_balls > 0 else 0.0
+        economy = (
+            round(int(bwstats.get("runs_conceded") or 0) / bowler_overs, 2)
+            if bowler_overs > 0
+            else 0.0
+        )
+        has_batting = runs > 0 or balls > 0
+        has_bowling = wickets > 0 or bowler_balls > 0
+        role = (
+            "All-rounder"
+            if has_batting and has_bowling
+            else ("Bowler" if has_bowling else "Batter")
+        )
+        players.append(
+            AnalystPlayerAggregate(
+                player=player_name,
+                role=role,
+                innings=int(bstats.get("innings") or 0),
+                matches=max(len(bstats.get("matches", set())), len(bwstats.get("matches", set()))),
+                runs=runs,
+                strike_rate=strike_rate,
+                wickets=wickets,
+                economy=economy,
+            )
+        )
+    return AnalystPlayersResponse(
+        items=players,
+        total=len(players),
+        data_completeness=completeness,
+    )
+
+
+@router.get("/deliveries", response_model=AnalystDeliveriesResponse)
+async def get_analyst_deliveries(
+    current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    match_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = scoped_games_stmt(current_user).where(Game.status == GameStatus.completed)
+    if match_id:
+        stmt = stmt.where(Game.id == match_id)
+    result = await db.execute(stmt.order_by(Game.id.desc()))
+    games = result.scalars().all()
+    if match_id and not games:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    all_rows: list[AnalystDeliveryRow] = []
+    completeness = "metadata_only"
+    for game in games:
+        completeness = _max_data_completeness(completeness, _data_completeness_label(game))
+        all_rows.extend(_delivery_rows_from_game(game))
+    return AnalystDeliveriesResponse(
+        items=all_rows,
+        total=len(all_rows),
+        data_completeness=completeness,
     )
 
 
@@ -410,7 +639,9 @@ async def get_analyst_export_data(
     filtered_rows: list[dict[str, Any]] = []
     normalized_player = player.lower() if isinstance(player, str) and player.strip() else None
     normalized_dismissal = (
-        dismissal_type.lower() if isinstance(dismissal_type, str) and dismissal_type.strip() else None
+        dismissal_type.lower()
+        if isinstance(dismissal_type, str) and dismissal_type.strip()
+        else None
     )
     normalized_phase = phase.lower() if isinstance(phase, str) and phase.strip() else None
     for row in all_rows:

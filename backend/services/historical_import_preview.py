@@ -222,8 +222,25 @@ def _extract_players_from_teams(payload: dict[str, Any]) -> set[str]:
     return players
 
 
+def _extract_registry_people_map(payload: dict[str, Any]) -> dict[str, str]:
+    info_payload = payload.get("info")
+    info = info_payload if isinstance(info_payload, dict) else {}
+    registry_payload = info.get("registry")
+    registry = registry_payload if isinstance(registry_payload, dict) else {}
+    people_payload = registry.get("people")
+    people = people_payload if isinstance(people_payload, dict) else {}
+
+    mapping: dict[str, str] = {}
+    for name, source_id in people.items():
+        name_text = _as_str(name)
+        source_text = _as_str(source_id)
+        if name_text and source_text:
+            mapping[name_text] = source_text
+    return mapping
+
+
 def _extract_roster_snapshot(
-    payload: dict[str, Any], team_names: list[str]
+    payload: dict[str, Any], team_names: list[str], registry_people_map: dict[str, str]
 ) -> list[HistoricalImportRosterTeamSnapshot]:
     info_payload = payload.get("info")
     info = info_payload if isinstance(info_payload, dict) else {}
@@ -233,11 +250,23 @@ def _extract_roster_snapshot(
 
     for team_name in team_names:
         roster_raw = players_map.get(team_name)
-        roster = (
+        roster_names = (
             [p.strip() for p in roster_raw if isinstance(p, str) and p.strip()]
             if isinstance(roster_raw, list)
             else []
         )
+        roster: list[str | dict[str, object]] = []
+        for player_name in roster_names:
+            source_player_id = registry_people_map.get(player_name)
+            if source_player_id:
+                roster.append(
+                    {
+                        "name": player_name,
+                        "source_player_id": source_player_id,
+                    }
+                )
+            else:
+                roster.append(player_name)
         snapshots.append(
             HistoricalImportRosterTeamSnapshot(
                 team_name=team_name,
@@ -265,7 +294,9 @@ def _classify_competition_type(
             return "school", "inferred"
         if any(token in lowered for token in ("club", "county", "domestic", "ranji", "super50")):
             return "domestic", "inferred"
-        if any(token in lowered for token in ("world cup", "icc", "international", "test championship")):
+        if any(
+            token in lowered for token in ("world cup", "icc", "international", "test championship")
+        ):
             return "international", "inferred"
 
     normalized_teams = {team.strip().lower() for team in teams if team.strip()}
@@ -357,7 +388,8 @@ def _build_canonical_preview(
             )
         )
 
-    roster_snapshot = _extract_roster_snapshot(parsed, team_names)
+    registry_people_map = _extract_registry_people_map(parsed)
+    roster_snapshot = _extract_roster_snapshot(parsed, team_names, registry_people_map)
     if not any(team.playing_xi for team in roster_snapshot):
         warnings.append(
             HistoricalImportIssue(
@@ -690,6 +722,7 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
     detected_format = _detect_format(parsed, innings_nodes)
     team_names = _extract_team_names(parsed)
     players_from_teams = _extract_players_from_teams(parsed)
+    players_from_registry = set(_extract_registry_people_map(parsed).keys())
 
     innings_preview, players_from_innings, innings_warnings = _derive_innings_preview(innings_nodes)
 
@@ -769,7 +802,9 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         source_dates=source_dates,
     )
 
-    player_names = sorted(players_from_teams.union(players_from_innings))
+    player_names = sorted(
+        players_from_teams.union(players_from_innings).union(players_from_registry)
+    )
 
     detected_sections = HistoricalImportDetectedSections(
         teams=bool(team_names),

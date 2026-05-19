@@ -91,6 +91,85 @@ def is_legal_delivery(delivery: dict[str, Any]) -> bool:
     return True
 
 
+def _extract_registry_people_map(parsed: dict[str, Any]) -> dict[str, str]:
+    info_payload = parsed.get("info")
+    info = info_payload if isinstance(info_payload, dict) else {}
+    registry_payload = info.get("registry")
+    registry = registry_payload if isinstance(registry_payload, dict) else {}
+    people_payload = registry.get("people")
+    people = people_payload if isinstance(people_payload, dict) else {}
+    result: dict[str, str] = {}
+    for name, source_id in people.items():
+        name_text = str(name).strip()
+        source_id_text = str(source_id).strip() if source_id is not None else ""
+        if name_text and source_id_text:
+            result[name_text] = source_id_text
+    return result
+
+
+def _phase_from_over_number(over_number: int) -> str:
+    if over_number <= 6:
+        return "powerplay"
+    if over_number <= 15:
+        return "middle"
+    return "death"
+
+
+def _parse_powerplay_ranges(innings_obj: dict[str, Any]) -> list[dict[str, Any]]:
+    powerplays_raw = innings_obj.get("powerplays")
+    if not isinstance(powerplays_raw, list):
+        return []
+
+    def _ball_position(raw: Any) -> int | None:
+        text = str(raw).strip()
+        if not text or "." not in text:
+            return None
+        over_text, _, ball_text = text.partition(".")
+        try:
+            over = int(over_text)
+            ball = int(ball_text)
+        except ValueError:
+            return None
+        if ball < 1:
+            ball = 1
+        return over * 10 + ball
+
+    parsed_ranges: list[dict[str, Any]] = []
+    for entry in powerplays_raw:
+        if not isinstance(entry, dict):
+            continue
+        start = _ball_position(entry.get("from"))
+        end = _ball_position(entry.get("to"))
+        if start is None or end is None:
+            continue
+        parsed_ranges.append(
+            {
+                "start": start,
+                "end": end,
+                "powerplay_type": str(entry.get("type") or "mandatory").strip() or "mandatory",
+            }
+        )
+    return parsed_ranges
+
+
+def _resolve_powerplay_type(
+    *,
+    over_number: int,
+    ball_in_over: int,
+    powerplay_ranges: list[dict[str, Any]],
+) -> str | None:
+    position = (max(over_number, 1) - 1) * 10 + max(ball_in_over, 1)
+    for item in powerplay_ranges:
+        start = item.get("start")
+        end = item.get("end")
+        if isinstance(start, int) and isinstance(end, int) and start <= position <= end:
+            value = item.get("powerplay_type")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            return "mandatory"
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Delivery normalization
 # ---------------------------------------------------------------------------
@@ -102,6 +181,11 @@ def _normalize_ball(
     *,
     over_number: int | None = None,
     ball_in_over: int | None = None,
+    batting_team: str | None = None,
+    bowling_team: str | None = None,
+    registry_people_map: dict[str, str] | None = None,
+    legal_ball_index: int | None = None,
+    powerplay_ranges: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Normalize a single ball dict from the fixture into analytics format.
 
@@ -163,17 +247,102 @@ def _normalize_ball(
         bool(wicket_raw) if not isinstance(wicket_raw, dict) else bool(wicket_raw)
     )
 
+    wicket_data: dict[str, Any] | None = None
+    if isinstance(wickets_list_raw, list) and wickets_list_raw:
+        first_wicket = wickets_list_raw[0]
+        wicket_data = first_wicket if isinstance(first_wicket, dict) else None
+    elif isinstance(wicket_raw, dict):
+        wicket_data = wicket_raw
+
+    player_out = (
+        str(wicket_data.get("player_out") or "").strip() if isinstance(wicket_data, dict) else ""
+    )
+    dismissal_type = (
+        str(wicket_data.get("kind") or wicket_data.get("dismissal_type") or "").strip()
+        if isinstance(wicket_data, dict)
+        else ""
+    )
+    fielders: list[str] = []
+    if isinstance(wicket_data, dict):
+        raw_fielders = wicket_data.get("fielders")
+        if isinstance(raw_fielders, list):
+            for entry in raw_fielders:
+                if isinstance(entry, str) and entry.strip():
+                    fielders.append(entry.strip())
+                elif isinstance(entry, dict):
+                    name = str(entry.get("name") or "").strip()
+                    if name:
+                        fielders.append(name)
+        elif isinstance(raw_fielders, dict):
+            name = str(raw_fielders.get("name") or "").strip()
+            if name:
+                fielders.append(name)
+        single_fielder = str(wicket_data.get("fielder") or "").strip()
+        if single_fielder:
+            fielders.append(single_fielder)
+
+    fielders = sorted(set(fielders))
+    primary_fielder = fielders[0] if fielders else None
+    resolved_over = over_number if over_number is not None else int(ball.get("over") or 1)
+    resolved_ball_in_over = ball_in_over if ball_in_over is not None else int(ball.get("ball") or 1)
+    powerplay_type = _resolve_powerplay_type(
+        over_number=resolved_over,
+        ball_in_over=resolved_ball_in_over,
+        powerplay_ranges=powerplay_ranges or [],
+    )
+
+    batter_name = str(ball.get("batsman") or ball.get("batter") or "")
+    bowler_name = str(ball.get("bowler") or "")
+    non_striker_name = str(ball.get("non_striker") or ball.get("nonStriker") or "")
+    registry = registry_people_map or {}
+    extras_detail = ball.get("extras")
+    extras_types: list[str] = []
+    if isinstance(extras_detail, dict):
+        for key, value in extras_detail.items():
+            if _safe_int(value) > 0:
+                extras_types.append(str(key))
+
+    dismissal_value = dismissal_type or ("Unknown" if is_wicket else None)
+
     return {
         "inning": inning_idx,
-        "over_number": over_number if over_number is not None else int(ball.get("over") or 1),
-        "ball_in_over": ball_in_over if ball_in_over is not None else int(ball.get("ball") or 1),
+        "inning_no": inning_idx,
+        "over_number": resolved_over,
+        "ball_in_over": resolved_ball_in_over,
         "runs_off_bat": runs_off_bat,
         "extra_runs": extra_runs,
+        "runs_scored": runs_off_bat + extra_runs,
         "extra_type": extra_type,
+        "extras_types": extras_types,
+        "extras": extras_detail if isinstance(extras_detail, dict) else {},
         "is_wicket": is_wicket,
         "is_legal_delivery": is_legal,
-        "batsman": str(ball.get("batsman") or ball.get("batter") or ""),
-        "bowler": str(ball.get("bowler") or ""),
+        "batsman": batter_name,
+        "batter": batter_name,
+        "batter_id": batter_name,
+        "batter_source_player_id": registry.get(batter_name),
+        "bowler": bowler_name,
+        "bowler_id": bowler_name,
+        "bowler_source_player_id": registry.get(bowler_name),
+        "non_striker": non_striker_name,
+        "non_striker_id": non_striker_name,
+        "non_striker_source_player_id": registry.get(non_striker_name),
+        "player_out": player_out or None,
+        "player_out_source_player_id": registry.get(player_out) if player_out else None,
+        "dismissal_type": dismissal_value,
+        "wicket_type": dismissal_value,
+        "fielder_id": primary_fielder,
+        "fielder_source_player_id": registry.get(primary_fielder) if primary_fielder else None,
+        "fielders": fielders,
+        "fielders_source_player_ids": [
+            {"name": fielder_name, "source_player_id": registry.get(fielder_name)}
+            for fielder_name in fielders
+        ],
+        "batting_team": batting_team,
+        "bowling_team": bowling_team,
+        "phase": _phase_from_over_number(resolved_over),
+        "powerplay_type": powerplay_type,
+        "legal_ball_index": legal_ball_index,
         "_source": "historical_import",
     }
 
@@ -194,6 +363,15 @@ def extract_normalized_innings(
         }
     """
     innings_raw = parsed.get("innings") or []
+    info_payload = parsed.get("info")
+    info = info_payload if isinstance(info_payload, dict) else {}
+    teams_payload = info.get("teams")
+    teams = (
+        [str(team).strip() for team in teams_payload if isinstance(team, str) and str(team).strip()]
+        if isinstance(teams_payload, list)
+        else []
+    )
+    registry_people_map = _extract_registry_people_map(parsed)
     result: list[dict[str, Any]] = []
 
     for idx, innings in enumerate(innings_raw, start=1):
@@ -203,17 +381,45 @@ def extract_normalized_innings(
         innings_obj = innings
         # Cricsheet JSON often stores innings as {"<Team Name>": {...}} instead
         # of a flat innings object. Unwrap that single-key wrapper for import.
-        if len(innings_obj) == 1 and not any(k in innings_obj for k in ("balls", "deliveries", "overs")):
+        if len(innings_obj) == 1 and not any(
+            k in innings_obj for k in ("balls", "deliveries", "overs")
+        ):
             nested = next(iter(innings_obj.values()))
             if isinstance(nested, dict):
                 innings_obj = dict(nested)
                 if "team" not in innings_obj:
                     innings_obj["team"] = next(iter(innings.keys()))
 
+        innings_team = innings_obj.get("team") or None
+        innings_team_text = str(innings_team).strip() if isinstance(innings_team, str) else None
+        bowling_team = None
+        if innings_team_text and len(teams) >= 2:
+            if teams[0] == innings_team_text:
+                bowling_team = teams[1]
+            elif teams[1] == innings_team_text:
+                bowling_team = teams[0]
+
+        powerplay_ranges = _parse_powerplay_ranges(innings_obj)
         balls_raw = innings_obj.get("balls") or innings_obj.get("deliveries") or []
         normalized_deliveries: list[dict[str, Any]]
+        legal_ball_counter = 0
         if isinstance(balls_raw, list):
-            normalized_deliveries = [_normalize_ball(b, idx) for b in balls_raw if isinstance(b, dict)]
+            normalized_deliveries = []
+            for ball in balls_raw:
+                if not isinstance(ball, dict):
+                    continue
+                delivery = _normalize_ball(
+                    ball,
+                    idx,
+                    batting_team=innings_team_text,
+                    bowling_team=bowling_team,
+                    registry_people_map=registry_people_map,
+                    powerplay_ranges=powerplay_ranges,
+                )
+                if is_legal_delivery(delivery):
+                    legal_ball_counter += 1
+                    delivery["legal_ball_index"] = legal_ball_counter
+                normalized_deliveries.append(delivery)
         else:
             normalized_deliveries = []
 
@@ -232,14 +438,20 @@ def extract_normalized_innings(
                         continue
                     for ball_idx, ball in enumerate(over_deliveries, start=1):
                         if isinstance(ball, dict):
-                            normalized_deliveries.append(
-                                _normalize_ball(
-                                    ball,
-                                    idx,
-                                    over_number=over_number,
-                                    ball_in_over=ball_idx,
-                                )
+                            delivery = _normalize_ball(
+                                ball,
+                                idx,
+                                over_number=over_number,
+                                ball_in_over=ball_idx,
+                                batting_team=innings_team_text,
+                                bowling_team=bowling_team,
+                                registry_people_map=registry_people_map,
+                                powerplay_ranges=powerplay_ranges,
                             )
+                            if is_legal_delivery(delivery):
+                                legal_ball_counter += 1
+                                delivery["legal_ball_index"] = legal_ball_counter
+                            normalized_deliveries.append(delivery)
 
         runs_explicit = innings_obj.get("runs")
         wickets_explicit = innings_obj.get("wickets")
@@ -247,7 +459,7 @@ def extract_normalized_innings(
         result.append(
             {
                 "inning_no": idx,
-                "team": innings_obj.get("team") or None,
+                "team": innings_team_text,
                 "runs_explicit": int(runs_explicit) if isinstance(runs_explicit, int) else None,
                 "wickets_explicit": (
                     int(wickets_explicit) if isinstance(wickets_explicit, int) else None
@@ -304,14 +516,29 @@ def _derive_batting_scorecard(
         entry = scorecard[batsman]
         runs = int(d.get("runs_off_bat") or 0)
         entry["runs"] += runs
-        entry["balls_faced"] += 1
+        if is_legal_delivery(d):
+            entry["balls_faced"] += 1
         if runs == 4:
             entry["fours"] += 1
         elif runs == 6:
             entry["sixes"] += 1
 
         if d.get("is_wicket"):
-            entry["is_out"] = True
+            player_out = str(d.get("player_out") or "").strip()
+            if player_out:
+                out_entry = scorecard.get(player_out)
+                if out_entry is None:
+                    out_entry = {
+                        "runs": 0,
+                        "balls_faced": 0,
+                        "fours": 0,
+                        "sixes": 0,
+                        "is_out": False,
+                    }
+                    scorecard[player_out] = out_entry
+                out_entry["is_out"] = True
+            else:
+                entry["is_out"] = True
 
     return scorecard
 
@@ -369,11 +596,7 @@ def _derive_bowling_scorecard(
         overs_float = cricket_overs_from_legal_balls(balls)
 
         # Count maiden overs: overs where 0 runs were conceded
-        maidens = sum(
-            1
-            for over_num, over_run in over_runs[bowler].items()
-            if over_run == 0
-        )
+        maidens = sum(1 for over_num, over_run in over_runs[bowler].items() if over_run == 0)
 
         scorecard[bowler] = {
             "overs_bowled": overs_float,
@@ -407,8 +630,7 @@ def validate_innings_totals(
         - blocking_error: non-None string if import should be blocked
     """
     preview_by_no: dict[int, dict[str, Any]] = {
-        p.get("inning_no", i + 1): p
-        for i, p in enumerate(innings_preview or [])
+        p.get("inning_no", i + 1): p for i, p in enumerate(innings_preview or [])
     }
 
     validation_results: list[dict[str, Any]] = []
@@ -422,8 +644,7 @@ def validate_innings_totals(
 
         # Derive totals from delivery events
         derived_runs = sum(
-            int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0)
-            for d in deliveries
+            int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0) for d in deliveries
         )
         derived_wickets = sum(1 for d in deliveries if d.get("is_wicket"))
         legal_balls = sum(1 for d in deliveries if is_legal_delivery(d))
@@ -435,7 +656,9 @@ def validate_innings_totals(
         # Compare against stored preview (for additional validation)
         preview = preview_by_no.get(inning_no, {})
         expected_runs = explicit_runs if explicit_runs is not None else preview.get("runs")
-        expected_wickets = explicit_wickets if explicit_wickets is not None else preview.get("wickets")
+        expected_wickets = (
+            explicit_wickets if explicit_wickets is not None else preview.get("wickets")
+        )
 
         # Determine validation status
         runs_diff = abs(derived_runs - expected_runs) if expected_runs is not None else 0
@@ -567,8 +790,7 @@ def _derive_first_inning_summary(
     wickets_explicit = inn.get("wickets_explicit")
 
     derived_runs = sum(
-        int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0)
-        for d in deliveries
+        int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0) for d in deliveries
     )
     derived_wickets = sum(1 for d in deliveries if d.get("is_wicket"))
 

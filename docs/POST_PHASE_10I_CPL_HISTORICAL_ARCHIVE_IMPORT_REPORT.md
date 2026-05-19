@@ -1,6 +1,6 @@
 # Post-Phase-10I Controlled CPL Historical Archive Import Report
 
-Date: 2026-05-18  
+Date: 2026-05-18
 Repository: `Jnpaul1984/Cricksy_Scorer`
 
 ## Clarification for PR review readiness
@@ -47,6 +47,11 @@ Confirmed available paths:
   - `/api/historical-import/json/batches/{batch_id}/rollback`
 
 Reference: `backend/routes/historical_import.py`.
+
+Operator note:
+
+- `apply` creates the historical match shell and innings/metadata context.
+- `apply-deliveries` is required to mark a match as delivery-complete (players/deliveries tabs, wicket/phase analytics, and CPL delivery-driven story sections).
 
 ## 4) Controlled batch verification evidence summary
 

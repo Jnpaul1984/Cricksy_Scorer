@@ -140,6 +140,59 @@ def test_delivery_service_normalize_cricsheet_fixture() -> None:
     assert wicket_ball["is_wicket"] is True
 
 
+def test_delivery_service_maps_cricsheet_registry_ids_and_wicket_detail() -> None:
+    parsed = {
+        "info": {
+            "teams": ["Team A", "Team B"],
+            "registry": {
+                "people": {
+                    "A Batter": "cricsheet-a-batter",
+                    "A Partner": "cricsheet-a-partner",
+                    "B Bowler": "cricsheet-b-bowler",
+                    "A Fielder": "cricsheet-a-fielder",
+                }
+            },
+        },
+        "innings": [
+            {
+                "Team A": {
+                    "overs": [
+                        {
+                            "over": 0,
+                            "deliveries": [
+                                {
+                                    "batter": "A Batter",
+                                    "non_striker": "A Partner",
+                                    "bowler": "B Bowler",
+                                    "runs": {"batter": 0, "extras": 0, "total": 0},
+                                    "wickets": [
+                                        {
+                                            "player_out": "A Batter",
+                                            "kind": "caught",
+                                            "fielders": [{"name": "A Fielder"}],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        ],
+    }
+    innings = extract_normalized_innings(parsed)
+    ball = innings[0]["deliveries"][0]
+    assert ball["batter_source_player_id"] == "cricsheet-a-batter"
+    assert ball["non_striker_source_player_id"] == "cricsheet-a-partner"
+    assert ball["bowler_source_player_id"] == "cricsheet-b-bowler"
+    assert ball["player_out"] == "A Batter"
+    assert ball["player_out_source_player_id"] == "cricsheet-a-batter"
+    assert ball["dismissal_type"] == "caught"
+    assert ball["fielders"] == ["A Fielder"]
+    assert ball["fielder_source_player_id"] == "cricsheet-a-fielder"
+    assert ball["phase"] == "powerplay"
+
+
 @pytest.mark.parametrize(
     ("fixture_path", "expected_teams"),
     [
@@ -162,7 +215,9 @@ def test_delivery_service_uses_actual_innings_teams_and_legal_balls(
 
     assert [inn["team"] for inn in innings] == expected_teams
     assert [len(inn["deliveries"]) for inn in innings] == [7, 7]
-    legal_balls = [sum(1 for delivery in inn["deliveries"] if is_legal_delivery(delivery)) for inn in innings]
+    legal_balls = [
+        sum(1 for delivery in inn["deliveries"] if is_legal_delivery(delivery)) for inn in innings
+    ]
     assert legal_balls == [6, 6]
     assert [cricket_overs_from_legal_balls(balls) for balls in legal_balls] == [1.0, 1.0]
 
@@ -290,9 +345,9 @@ def test_apply_deliveries_correct_count() -> None:
         resp = _apply_deliveries(client, batch_id)
 
     assert resp.status_code == 200, resp.text
-    assert resp.json()["deliveries_imported"] == expected_delivery_count, (
-        f"Expected {expected_delivery_count} deliveries but got {resp.json()['deliveries_imported']}"
-    )
+    assert (
+        resp.json()["deliveries_imported"] == expected_delivery_count
+    ), f"Expected {expected_delivery_count} deliveries but got {resp.json()['deliveries_imported']}"
 
 
 def test_apply_deliveries_totals_validation_returned() -> None:
@@ -309,9 +364,9 @@ def test_apply_deliveries_totals_validation_returned() -> None:
         assert "inning_no" in item
         assert "derived_runs" in item
         assert "status" in item
-        assert item["status"] in ("ok", "warning"), (
-            f"Totals validation status must be ok or warning for valid fixture, got: {item['status']}"
-        )
+        assert (
+            item["status"] in ("ok", "warning")
+        ), f"Totals validation status must be ok or warning for valid fixture, got: {item['status']}"
 
 
 # ---------------------------------------------------------------------------
@@ -455,7 +510,13 @@ async def _create_batch_with_fixture_hash(db_session: AsyncSession) -> Historica
             },
             "teams_preview": ["Team Alpha", "Team Beta"],
             "innings_preview": [
-                {"inning_no": 1, "team": "Team Alpha", "deliveries": 120, "runs": 157, "wickets": 6},
+                {
+                    "inning_no": 1,
+                    "team": "Team Alpha",
+                    "deliveries": 120,
+                    "runs": 157,
+                    "wickets": 6,
+                },
                 {"inning_no": 2, "team": "Team Beta", "deliveries": 120, "runs": 142, "wickets": 8},
             ],
         },
@@ -506,9 +567,9 @@ async def test_historical_innings_summary_visible_after_phase5d(db_session: Asyn
     case_study = await _build_case_study_from_db(db_session, game.id, "test-user")
 
     # Innings must be populated from historical_innings_summary
-    assert len(case_study.match.innings) >= 1, (
-        "Case study must show at least one innings from historical data after Phase 5D"
-    )
+    assert (
+        len(case_study.match.innings) >= 1
+    ), "Case study must show at least one innings from historical data after Phase 5D"
 
     # Should not be all zeros (fake data guard)
     total_runs = sum(inn.runs for inn in case_study.match.innings)
@@ -553,22 +614,20 @@ async def test_analyst_case_study_after_delivery_import(db_session: AsyncSession
     assert case_study.match.innings[1].runs > 0, "Second innings must have non-zero runs"
 
     # Phases must be computed from delivery data
-    assert len(case_study.phases) > 0, (
-        "Phases must be non-empty after delivery import; got empty phases list"
-    )
-    assert any(p.runs > 0 for p in case_study.phases), (
-        "At least one phase must have runs > 0 from imported delivery data"
-    )
+    assert (
+        len(case_study.phases) > 0
+    ), "Phases must be non-empty after delivery import; got empty phases list"
+    assert any(
+        p.runs > 0 for p in case_study.phases
+    ), "At least one phase must have runs > 0 from imported delivery data"
 
     # Key players must be populated
-    assert len(case_study.key_players) > 0, (
-        "Key players must be populated after delivery import"
-    )
+    assert len(case_study.key_players) > 0, "Key players must be populated after delivery import"
 
     # Key phase must have real data
-    assert case_study.key_phase.title != "Phase data not yet available", (
-        "Key phase must have real data after delivery import"
-    )
+    assert (
+        case_study.key_phase.title != "Phase data not yet available"
+    ), "Key phase must have real data after delivery import"
 
 
 @pytest.mark.asyncio
@@ -730,8 +789,8 @@ async def test_rollback_removes_delivery_data_service_level(db_session: AsyncSes
 
     # Game must no longer exist
     game_after = (
-        await db_session.execute(select(Game).where(Game.id == game_id))
-    ).scalars().first()
+        (await db_session.execute(select(Game).where(Game.id == game_id))).scalars().first()
+    )
     assert game_after is None, "Game (including delivery data) must be deleted after rollback"
 
 

@@ -145,7 +145,9 @@ def _build_match_aggregate(
     total_runs = sum(i.runs for i in innings_aggregates)
     total_wickets = sum(i.wickets for i in innings_aggregates)
 
-    has_delivery_data = bool(meta.get("deliveries_imported"))
+    has_delivery_data = bool(meta.get("deliveries_imported")) or bool(
+        isinstance(game.deliveries, list) and len(game.deliveries) > 0
+    )
 
     return MatchAggregate(
         match_id=game.id,

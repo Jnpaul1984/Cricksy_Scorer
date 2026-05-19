@@ -97,7 +97,9 @@ async def test_identity_resolution_exact_match_and_no_blind_auto_create(
 
     rows = (
         await db_session.execute(
-            select(HistoricalSourcePlayerRegistry).order_by(HistoricalSourcePlayerRegistry.source_player_name)
+            select(HistoricalSourcePlayerRegistry).order_by(
+                HistoricalSourcePlayerRegistry.source_player_name
+            )
         )
     ).scalars()
     players = list(rows)
@@ -136,16 +138,58 @@ async def test_identity_resolution_alias_match(db_session: AsyncSession) -> None
     await _make_batch(db_session, roster_names=["Dwayne R Smith", "Smith, DR"])
 
     alias_row = (
-        await db_session.execute(
-            select(HistoricalSourcePlayerRegistry).where(
-                HistoricalSourcePlayerRegistry.source_player_name == "Smith, DR"
+        (
+            await db_session.execute(
+                select(HistoricalSourcePlayerRegistry).where(
+                    HistoricalSourcePlayerRegistry.source_player_name == "Smith, DR"
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     assert alias_row is not None
     assert alias_row.resolution_state == HistoricalPlayerResolutionState.auto_resolved
     assert alias_row.canonical_player_id == 202
     assert alias_row.mapping_method == "alias_match"
+
+
+@pytest.mark.asyncio
+async def test_identity_resolution_reuses_cricsheet_source_player_id_across_aliases(
+    db_session: AsyncSession,
+) -> None:
+    db_session.add(Player(id=222, name="Registry Anchor Player", role="Batter"))
+    await db_session.commit()
+
+    await _make_batch(
+        db_session,
+        roster_names=["Registry Anchor Player"],
+        roster_entries=[
+            {"name": "Registry Anchor Player", "source_player_id": "cricsheet-anchored-player"}
+        ],
+    )
+    await _make_batch(
+        db_session,
+        roster_names=["R. Anchor"],
+        roster_entries=[{"name": "R. Anchor", "source_player_id": "cricsheet-anchored-player"}],
+    )
+
+    rows = (
+        (
+            await db_session.execute(
+                select(HistoricalSourcePlayerRegistry).where(
+                    HistoricalSourcePlayerRegistry.source_player_id == "cricsheet-anchored-player"
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.canonical_player_id == 222
+    assert "Registry Anchor Player" in (row.alias_references or [])
+    assert "R. Anchor" in (row.alias_references or [])
 
 
 @pytest.mark.asyncio
@@ -159,12 +203,16 @@ async def test_identity_resolution_duplicate_handling_cross_match_consistency(
     second_game_id = await _make_batch(db_session, roster_names=["Consistent Player"])
 
     rows = (
-        await db_session.execute(
-            select(HistoricalSourcePlayerRegistry).where(
-                HistoricalSourcePlayerRegistry.normalized_name == "consistent player"
+        (
+            await db_session.execute(
+                select(HistoricalSourcePlayerRegistry).where(
+                    HistoricalSourcePlayerRegistry.normalized_name == "consistent player"
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1, "duplicate source players should not create duplicate registry rows"
     assert set(rows[0].match_references) == {first_game_id, second_game_id}
 
@@ -175,9 +223,7 @@ async def test_identity_resolution_provenance_preserved_and_queue_created(
 ) -> None:
     await _make_batch(db_session, roster_names=["Queue Candidate"])
 
-    row = (
-        await db_session.execute(select(HistoricalSourcePlayerRegistry))
-    ).scalars().first()
+    row = (await db_session.execute(select(HistoricalSourcePlayerRegistry))).scalars().first()
     assert row is not None
     assert row.provenance_references
     provenance = row.provenance_references[0]
@@ -188,18 +234,24 @@ async def test_identity_resolution_provenance_preserved_and_queue_created(
     assert provenance["source_hash_sha256"]
 
     queue_row = (
-        await db_session.execute(
-            select(HistoricalPlayerResolutionQueue).where(
-                HistoricalPlayerResolutionQueue.source_player_id == row.source_player_id
+        (
+            await db_session.execute(
+                select(HistoricalPlayerResolutionQueue).where(
+                    HistoricalPlayerResolutionQueue.source_player_id == row.source_player_id
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     assert queue_row is not None
     assert queue_row.reason == "unresolved"
 
 
 @pytest.mark.asyncio
-async def test_phase10f_metadata_provenance_and_canonical_safe_fill(db_session: AsyncSession) -> None:
+async def test_phase10f_metadata_provenance_and_canonical_safe_fill(
+    db_session: AsyncSession,
+) -> None:
     db_session.add(Player(id=404, name="Metadata Player", role=None))
     await db_session.commit()
 
@@ -217,12 +269,16 @@ async def test_phase10f_metadata_provenance_and_canonical_safe_fill(db_session: 
     )
 
     row = (
-        await db_session.execute(
-            select(HistoricalSourcePlayerRegistry).where(
-                HistoricalSourcePlayerRegistry.normalized_name == "metadata player"
+        (
+            await db_session.execute(
+                select(HistoricalSourcePlayerRegistry).where(
+                    HistoricalSourcePlayerRegistry.normalized_name == "metadata player"
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     assert row is not None
 
     metadata_history = row.metadata_field_history
@@ -259,12 +315,16 @@ async def test_phase10f_unknown_metadata_stays_unknown_and_not_fabricated(
     await _make_batch(db_session, roster_names=["Unknown Metadata Player"])
 
     row = (
-        await db_session.execute(
-            select(HistoricalSourcePlayerRegistry).where(
-                HistoricalSourcePlayerRegistry.normalized_name == "unknown metadata player"
+        (
+            await db_session.execute(
+                select(HistoricalSourcePlayerRegistry).where(
+                    HistoricalSourcePlayerRegistry.normalized_name == "unknown metadata player"
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     assert row is not None
 
     metadata_history = row.metadata_field_history
@@ -290,12 +350,16 @@ async def test_phase10f_conflict_detection_preserves_conflict_without_overwrite(
     )
 
     row = (
-        await db_session.execute(
-            select(HistoricalSourcePlayerRegistry).where(
-                HistoricalSourcePlayerRegistry.normalized_name == "conflict player"
+        (
+            await db_session.execute(
+                select(HistoricalSourcePlayerRegistry).where(
+                    HistoricalSourcePlayerRegistry.normalized_name == "conflict player"
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     assert row is not None
     assert row.review_required is True
     assert row.metadata_conflicts
@@ -331,12 +395,16 @@ async def test_phase10f_career_profile_cross_match_consistency(db_session: Async
     )
 
     row = (
-        await db_session.execute(
-            select(HistoricalSourcePlayerRegistry).where(
-                HistoricalSourcePlayerRegistry.normalized_name == "career player"
+        (
+            await db_session.execute(
+                select(HistoricalSourcePlayerRegistry).where(
+                    HistoricalSourcePlayerRegistry.normalized_name == "career player"
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     assert row is not None
     foundation = row.career_profile_foundation
     assert foundation["matches_played"] == 2
@@ -347,7 +415,9 @@ async def test_phase10f_career_profile_cross_match_consistency(db_session: Async
 
 
 @pytest.mark.asyncio
-async def test_phase10g_roster_tracks_named_playing_xi_and_substitute(db_session: AsyncSession) -> None:
+async def test_phase10g_roster_tracks_named_playing_xi_and_substitute(
+    db_session: AsyncSession,
+) -> None:
     db_session.add(Player(id=701, name="Roster Captain", role="All-rounder"))
     await db_session.commit()
 
@@ -366,13 +436,17 @@ async def test_phase10g_roster_tracks_named_playing_xi_and_substitute(db_session
     )
 
     rows = (
-        await db_session.execute(
-            select(HistoricalCompetitionRosterEntry).where(
-                HistoricalCompetitionRosterEntry.game_id == game_id,
-                HistoricalCompetitionRosterEntry.team_name == "Team A",
+        (
+            await db_session.execute(
+                select(HistoricalCompetitionRosterEntry).where(
+                    HistoricalCompetitionRosterEntry.game_id == game_id,
+                    HistoricalCompetitionRosterEntry.team_name == "Team A",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     status_by_name: dict[str, set[str]] = {}
     for row in rows:
@@ -383,21 +457,27 @@ async def test_phase10g_roster_tracks_named_playing_xi_and_substitute(db_session
     assert status_by_name["Bench Player"] == {"named_squad"}
     assert status_by_name["Impact Sub"] == {"substitute"}
     fallback_row = (
-        await db_session.execute(
-            select(HistoricalCompetitionRosterEntry).where(
-                HistoricalCompetitionRosterEntry.game_id == game_id,
-                HistoricalCompetitionRosterEntry.team_name.is_(None),
-                HistoricalCompetitionRosterEntry.source_player_name == "Detached Player",
-                HistoricalCompetitionRosterEntry.roster_status
-                == HistoricalCompetitionRosterStatus.unavailable_unknown,
+        (
+            await db_session.execute(
+                select(HistoricalCompetitionRosterEntry).where(
+                    HistoricalCompetitionRosterEntry.game_id == game_id,
+                    HistoricalCompetitionRosterEntry.team_name.is_(None),
+                    HistoricalCompetitionRosterEntry.source_player_name == "Detached Player",
+                    HistoricalCompetitionRosterEntry.roster_status
+                    == HistoricalCompetitionRosterStatus.unavailable_unknown,
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     assert fallback_row is not None
 
 
 @pytest.mark.asyncio
-async def test_phase10g_unresolved_roster_entry_preserves_source_identity(db_session: AsyncSession) -> None:
+async def test_phase10g_unresolved_roster_entry_preserves_source_identity(
+    db_session: AsyncSession,
+) -> None:
     await _make_batch(
         db_session,
         roster_names=["Unknown Trialist"],
@@ -413,14 +493,18 @@ async def test_phase10g_unresolved_roster_entry_preserves_source_identity(db_ses
     )
 
     unresolved = (
-        await db_session.execute(
-            select(HistoricalCompetitionRosterEntry).where(
-                HistoricalCompetitionRosterEntry.source_player_name == "Unknown Trialist",
-                HistoricalCompetitionRosterEntry.roster_status
-                == HistoricalCompetitionRosterStatus.unresolved,
+        (
+            await db_session.execute(
+                select(HistoricalCompetitionRosterEntry).where(
+                    HistoricalCompetitionRosterEntry.source_player_name == "Unknown Trialist",
+                    HistoricalCompetitionRosterEntry.roster_status
+                    == HistoricalCompetitionRosterStatus.unresolved,
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     assert unresolved is not None
     assert unresolved.canonical_player_id is None
     assert unresolved.source_player_id == "src-u1"
@@ -464,15 +548,19 @@ async def test_phase10g_player_movement_across_seasons_is_safe(db_session: Async
     )
 
     rows = (
-        await db_session.execute(
-            select(HistoricalCompetitionRosterEntry).where(
-                HistoricalCompetitionRosterEntry.canonical_player_id == 702,
-                HistoricalCompetitionRosterEntry.roster_status
-                == HistoricalCompetitionRosterStatus.named_squad,
-                HistoricalCompetitionRosterEntry.team_name.is_not(None),
+        (
+            await db_session.execute(
+                select(HistoricalCompetitionRosterEntry).where(
+                    HistoricalCompetitionRosterEntry.canonical_player_id == 702,
+                    HistoricalCompetitionRosterEntry.roster_status
+                    == HistoricalCompetitionRosterStatus.named_squad,
+                    HistoricalCompetitionRosterEntry.team_name.is_not(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 2
     assert {row.season for row in rows} == {"2013", "2014"}
     assert {row.team_name for row in rows} == {"Team A", "Team B"}
@@ -508,16 +596,20 @@ async def test_phase10g_same_match_cross_team_conflict_marked_review_required(
     )
 
     rows = (
-        await db_session.execute(
-            select(HistoricalCompetitionRosterEntry).where(
-                HistoricalCompetitionRosterEntry.game_id == game_id,
-                HistoricalCompetitionRosterEntry.canonical_player_id == 703,
-                HistoricalCompetitionRosterEntry.roster_status
-                == HistoricalCompetitionRosterStatus.named_squad,
-                HistoricalCompetitionRosterEntry.team_name.is_not(None),
+        (
+            await db_session.execute(
+                select(HistoricalCompetitionRosterEntry).where(
+                    HistoricalCompetitionRosterEntry.game_id == game_id,
+                    HistoricalCompetitionRosterEntry.canonical_player_id == 703,
+                    HistoricalCompetitionRosterEntry.roster_status
+                    == HistoricalCompetitionRosterStatus.named_squad,
+                    HistoricalCompetitionRosterEntry.team_name.is_not(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     assert len(rows) == 2
     assert {row.team_name for row in rows} == {"Team A", "Team B"}
