@@ -201,10 +201,27 @@ Supported output formats:
 - Story/reel vertical: **1080×1920**
 
 Workflow:
-1. Select an export target and output format.
+1. Select an export target, output format, and visual template.
 2. Review watermark/provenance toggles.
 3. Generate preview.
 4. Review preview and download PNG.
+
+Template library (frontend-only):
+- Template families:
+  - Match Story Template
+  - Season Summary Template
+  - Leaderboard Template
+  - Venue Intelligence Template
+  - Podcast Episode Card Template
+- Template variants:
+  - Clean Broadcast
+  - Bold Social
+  - Data Desk
+  - Minimal Stat Card
+- Format-aware spacing:
+  - Podcast landscape (1920×1080)
+  - Social square (1080×1080)
+  - Story/reel vertical (1080×1920)
 
 Watermark/provenance options:
 - `Powered by Cricksy`
@@ -218,6 +235,12 @@ Safe disable behavior:
 - Match has no delivery data: match story export disabled to avoid misleading advanced visuals
 - No leaderboard data: leaderboard export disabled
 - No venue data: venue export disabled
+- Template-specific requirements: if selected template requires match/leaderboard/venue/fact data, preview/export stays disabled until required deterministic data exists
+
+Limitations:
+- Templates restyle deterministic dashboard content only; they do not invent or mutate cricket facts.
+- No automated posting/publishing was added.
+- No backend schema or migration changes were required for the template library.
 
 ---
 
