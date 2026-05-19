@@ -1,0 +1,557 @@
+from __future__ import annotations
+# mypy: ignore-errors
+
+import datetime as dt
+import json
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.services.historical_import_apply_service import apply_historical_deliveries
+from backend.services.historical_import_delivery_service import extract_normalized_innings
+from backend.services.historical_player_identity_service import register_historical_source_players
+from backend.services.s3_service import s3_service
+from backend.sql_app.models import Game, HistoricalImportBatch
+
+
+def _completeness(game: Game) -> str:
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+    has_innings = bool(phases.get("historical_innings_summary"))
+    deliveries = game.deliveries if isinstance(game.deliveries, list) else []
+    has_deliveries = bool(hist_meta.get("deliveries_imported")) or bool(deliveries)
+    if not has_innings:
+        return "metadata_only"
+    if not has_deliveries:
+        return "innings_totals_only"
+    has_wickets = any(bool(d.get("is_wicket")) for d in deliveries if isinstance(d, dict))
+    if not has_wickets:
+        return "delivery_data_available"
+    has_phase = any(
+        isinstance(phases.get(phase_name), dict) and bool(phases.get(phase_name))
+        for phase_name in ("powerplay", "middle", "death")
+    ) or any(bool(d.get("phase")) for d in deliveries if isinstance(d, dict))
+    return "phase_analytics_available" if has_phase else "wicket_data_available"
+
+
+def _is_cpl(batch: HistoricalImportBatch, game: Game) -> bool:
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+    dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
+    canonical = dry_run.get("canonical_preview") if isinstance(dry_run.get("canonical_preview"), dict) else {}
+    comp = (
+        str(hist_meta.get("event_name") or "").lower(),
+        str(hist_meta.get("competition_name") or "").lower(),
+        str(canonical.get("competition_context", {}).get("competition_name") or "").lower()
+        if isinstance(canonical.get("competition_context"), dict)
+        else "",
+        str(canonical.get("competition_context", {}).get("tournament_name") or "").lower()
+        if isinstance(canonical.get("competition_context"), dict)
+        else "",
+        str(batch.source_filename or "").lower(),
+    )
+    return any(("caribbean premier league" in value) or ("cpl" in value) for value in comp if value)
+
+
+def _import_origin(batch: HistoricalImportBatch) -> str:
+    source_filename = str(batch.source_filename or "")
+    dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
+    if "::" in source_filename or "large_zip_intake" in dry_run:
+        return "bulk_zip_apply"
+    if source_filename:
+        return "single_json_apply"
+    return "unknown"
+
+
+def _registry_people(parsed: dict[str, Any]) -> dict[str, str]:
+    info = parsed.get("info") if isinstance(parsed.get("info"), dict) else {}
+    registry = info.get("registry") if isinstance(info.get("registry"), dict) else {}
+    people = registry.get("people") if isinstance(registry.get("people"), dict) else {}
+    return {
+        str(name).strip(): str(source_id).strip()
+        for name, source_id in people.items()
+        if str(name).strip() and str(source_id or "").strip()
+    }
+
+
+def _load_storage_ref(batch: HistoricalImportBatch) -> dict[str, Any] | None:
+    dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
+    intake = dry_run.get("large_zip_intake") if isinstance(dry_run.get("large_zip_intake"), dict) else {}
+    storage = intake.get("storage") if isinstance(intake.get("storage"), dict) else {}
+    raw = storage.get("raw") if isinstance(storage.get("raw"), dict) else None
+    return raw
+
+
+def _load_retained_payload(batch: HistoricalImportBatch) -> tuple[bytes | None, str | None]:
+    raw_ref = _load_storage_ref(batch)
+    if not isinstance(raw_ref, dict):
+        return None, "missing_source_json"
+
+    storage = str(raw_ref.get("storage") or "").strip().lower()
+    if storage == "local":
+        path = str(raw_ref.get("path") or "").strip()
+        if not path:
+            return None, "missing_source_json"
+        target = Path(path)
+        if not target.exists():
+            return None, "missing_source_json"
+        return target.read_bytes(), None
+
+    if storage == "s3":
+        bucket = str(raw_ref.get("bucket") or "").strip()
+        key = str(raw_ref.get("key") or "").strip()
+        if not bucket or not key:
+            return None, "missing_source_json"
+        try:
+            body = s3_service.s3_client.get_object(Bucket=bucket, Key=key)["Body"].read()
+        except Exception:
+            return None, "missing_source_json"
+        return body, None
+
+    return None, "missing_source_json"
+
+
+def _selection_allowed(size: int) -> bool:
+    return size == 1 or 3 <= size <= 5 or size == 10 or 20 <= size <= 25
+
+
+async def _resolve_selected_pairs(
+    db: AsyncSession,
+    *,
+    match_ids: list[str],
+    batch_ids: list[str],
+) -> list[tuple[HistoricalImportBatch, Game]]:
+    pairs: list[tuple[HistoricalImportBatch, Game]] = []
+    seen: set[tuple[str, str]] = set()
+
+    if match_ids:
+        game_rows = (
+            (await db.execute(select(Game).where(Game.id.in_(match_ids)))).scalars().all()  # type: ignore[arg-type]
+        )
+    else:
+        game_rows = []
+    for game in game_rows:
+        phases = game.phases if isinstance(game.phases, dict) else {}
+        hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+        batch_id = str(hist_meta.get("batch_id") or "").strip()
+        if not batch_id:
+            continue
+        batch = await db.scalar(select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_id))
+        if batch is None:
+            continue
+        key = (batch.id, game.id)
+        if key not in seen:
+            seen.add(key)
+            pairs.append((batch, game))
+
+    if batch_ids:
+        batch_rows = (
+            (
+                await db.execute(
+                    select(HistoricalImportBatch).where(HistoricalImportBatch.id.in_(batch_ids))
+                )
+            ).scalars().all()  # type: ignore[arg-type]
+        )
+        for batch in batch_rows:
+            if not batch.applied_game_id:
+                continue
+            game = await db.scalar(select(Game).where(Game.id == batch.applied_game_id))
+            if game is None:
+                continue
+            key = (batch.id, game.id)
+            if key not in seen:
+                seen.add(key)
+                pairs.append((batch, game))
+
+    if not match_ids and not batch_ids:
+        rows = (
+            await db.execute(
+                select(HistoricalImportBatch, Game).join(
+                    Game, HistoricalImportBatch.applied_game_id == Game.id
+                )
+            )
+        ).all()
+        for batch, game in rows:
+            key = (batch.id, game.id)
+            if key not in seen:
+                seen.add(key)
+                pairs.append((batch, game))
+
+    return pairs
+
+
+async def audit_delivery_backfill(
+    db: AsyncSession,
+    *,
+    match_ids: list[str],
+    batch_ids: list[str],
+    max_batch_size: int,
+    source_payloads_by_batch: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    pairs = await _resolve_selected_pairs(db, match_ids=match_ids, batch_ids=batch_ids)
+    filtered_to_cpl = not match_ids and not batch_ids
+    cpl_pairs = (
+        [(batch, game) for batch, game in pairs if _is_cpl(batch, game)] if filtered_to_cpl else pairs
+    )
+    payload_overrides = source_payloads_by_batch or {}
+
+    selected_size = len(cpl_pairs)
+    if selected_size > max_batch_size:
+        raise ValueError(f"Controlled batch size exceeded ({selected_size} > {max_batch_size}).")
+    if selected_size > 0 and not _selection_allowed(selected_size):
+        raise ValueError(
+            "Controlled CPL staged ladder violation. Allowed sizes: 1, 3-5, 10, or 20-25."
+        )
+
+    completeness_counts = {
+        "metadata_only": 0,
+        "innings_totals_only": 0,
+        "delivery_data_available": 0,
+        "wicket_data_available": 0,
+        "phase_analytics_available": 0,
+    }
+    import_origin_counts = {"single_json_apply": 0, "bulk_zip_apply": 0, "unknown": 0}
+    records: list[dict[str, Any]] = []
+    eligible = 0
+    blocked = 0
+
+    for batch, game in cpl_pairs:
+        completeness = _completeness(game)
+        completeness_counts[completeness] = completeness_counts.get(completeness, 0) + 1
+
+        origin = _import_origin(batch)
+        import_origin_counts[origin] = import_origin_counts.get(origin, 0) + 1
+
+        phases = game.phases if isinstance(game.phases, dict) else {}
+        hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+        deliveries = game.deliveries if isinstance(game.deliveries, list) else []
+        duplicate_risk = bool(deliveries) or bool(hist_meta.get("deliveries_imported"))
+
+        override_payload = payload_overrides.get(batch.id)
+        if isinstance(override_payload, dict):
+            payload = json.dumps(override_payload, separators=(",", ":")).encode("utf-8")
+            load_error = None
+        else:
+            payload, load_error = _load_retained_payload(batch)
+        blocked_reason = load_error
+        expected_deliveries = 0
+        expected_wickets = 0
+        expected_players = 0
+        registry_count = 0
+        players_without_source_ids = 0
+        registry_available = False
+        if payload is not None:
+            try:
+                parsed = json.loads(payload.decode("utf-8"))
+                innings = extract_normalized_innings(parsed)
+                expected_deliveries = sum(len(inn["deliveries"]) for inn in innings)
+                expected_wickets = sum(
+                    1 for inn in innings for delivery in inn["deliveries"] if delivery.get("is_wicket")
+                )
+                unique_players = {
+                    str(delivery.get(key)).strip()
+                    for inn in innings
+                    for delivery in inn["deliveries"]
+                    for key in ("batter", "bowler", "non_striker")
+                    if str(delivery.get(key) or "").strip()
+                }
+                expected_players = len(unique_players)
+                registry = _registry_people(parsed if isinstance(parsed, dict) else {})
+                registry_count = len(registry)
+                registry_available = registry_count > 0
+                players_without_source_ids = len(
+                    [name for name in unique_players if name not in registry]
+                )
+                if expected_deliveries == 0:
+                    blocked_reason = "source_has_no_deliveries"
+            except Exception:
+                blocked_reason = "invalid_retained_source_json"
+
+        row = {
+            "match_id": game.id,
+            "batch_id": batch.id,
+            "import_source": origin,
+            "completeness": completeness,
+            "eligible": blocked_reason is None and expected_deliveries > 0,
+            "blocked_reason": blocked_reason,
+            "missing_source_json": blocked_reason == "missing_source_json",
+            "duplicate_delivery_risk": duplicate_risk,
+            "apply_deliveries_previously_run": bool(hist_meta.get("deliveries_imported")),
+            "source_json_retained": payload is not None,
+            "registry_people_available": registry_available,
+            "registry_people_count": registry_count,
+            "players_without_source_ids": players_without_source_ids,
+            "expected_deliveries": expected_deliveries,
+            "expected_wickets": expected_wickets,
+            "expected_players": expected_players,
+        }
+        if row["eligible"]:
+            eligible += 1
+        else:
+            blocked += 1
+        records.append(row)
+
+    return {
+        "total_imported_cpl_matches": len(cpl_pairs),
+        "completeness_counts": completeness_counts,
+        "import_origin_counts": import_origin_counts,
+        "player_aggregate_scope": "delivery-complete matches only",
+        "rollback_feasibility": (
+            "Per-batch game rollback is supported via /api/historical-import/json/batches/{batch_id}/rollback. "
+            "Derived before/after snapshots are recorded in historical_import._delivery_backfill_log."
+        ),
+        "eligible_matches": eligible,
+        "blocked_matches": blocked,
+        "selected_matches": len(cpl_pairs),
+        "records": records,
+    }
+
+
+async def apply_delivery_backfill(
+    db: AsyncSession,
+    *,
+    match_ids: list[str],
+    batch_ids: list[str],
+    max_batch_size: int,
+    source_payloads_by_batch: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    audit = await audit_delivery_backfill(
+        db,
+        match_ids=match_ids,
+        batch_ids=batch_ids,
+        max_batch_size=max_batch_size,
+        source_payloads_by_batch=source_payloads_by_batch,
+    )
+
+    results: list[dict[str, Any]] = []
+    changed_match_ids: list[str] = []
+    blocked_records: list[dict[str, str]] = []
+    deliveries_rebuilt = 0
+    wickets_rebuilt = 0
+    mappings_updated = 0
+    unresolved_players = 0
+    unresolved_venues = 0
+    processed = 0
+    skipped = 0
+    failed = 0
+
+    record_lookup = {row["batch_id"]: row for row in audit["records"]}
+    for row in audit["records"]:
+        if not row["eligible"]:
+            skipped += 1
+            blocked_records.append(
+                {
+                    "match_id": row["match_id"],
+                    "batch_id": row["batch_id"],
+                    "reason": row.get("blocked_reason") or "blocked",
+                }
+            )
+
+    batch_ids_to_process = [row["batch_id"] for row in audit["records"] if row["eligible"]]
+    for batch_id in batch_ids_to_process:
+        batch = await db.scalar(select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_id))
+        if batch is None or not batch.applied_game_id:
+            failed += 1
+            blocked_records.append(
+                {"match_id": "", "batch_id": batch_id, "reason": "batch_or_game_not_found"}
+            )
+            continue
+        game = await db.scalar(select(Game).where(Game.id == batch.applied_game_id))
+        if game is None:
+            failed += 1
+            blocked_records.append(
+                {"match_id": "", "batch_id": batch_id, "reason": "batch_or_game_not_found"}
+            )
+            continue
+
+        payload_override = (source_payloads_by_batch or {}).get(batch.id)
+        if isinstance(payload_override, dict):
+            payload = json.dumps(payload_override, separators=(",", ":")).encode("utf-8")
+            load_error = None
+        else:
+            payload, load_error = _load_retained_payload(batch)
+        if payload is None:
+            failed += 1
+            blocked_records.append(
+                {
+                    "match_id": game.id,
+                    "batch_id": batch_id,
+                    "reason": load_error or "missing_source_json",
+                }
+            )
+            continue
+
+        before_deliveries = len(game.deliveries) if isinstance(game.deliveries, list) else 0
+        before_wickets = (
+            sum(1 for d in (game.deliveries or []) if isinstance(d, dict) and d.get("is_wicket"))
+            if isinstance(game.deliveries, list)
+            else 0
+        )
+        before_completeness = _completeness(game)
+
+        _, warnings, error = await apply_historical_deliveries(
+            db,
+            batch_id=batch_id,
+            confirm=True,
+            raw_payload=payload,
+            allow_reprocess=True,
+        )
+        if error is not None:
+            failed += 1
+            results.append(
+                {
+                    "match_id": game.id,
+                    "batch_id": batch_id,
+                    "status": "failed",
+                    "reason": error,
+                    "completeness_before": before_completeness,
+                    "completeness_after": before_completeness,
+                    "deliveries_before": before_deliveries,
+                    "deliveries_after": before_deliveries,
+                    "wickets_before": before_wickets,
+                    "wickets_after": before_wickets,
+                    "player_mappings_updated": 0,
+                    "unresolved_players": 0,
+                    "unresolved_venues": 0,
+                }
+            )
+            continue
+
+        game = await db.scalar(select(Game).where(Game.id == batch.applied_game_id))
+        if game is None:
+            failed += 1
+            continue
+
+        dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
+        canonical_preview = (
+            dry_run.get("canonical_preview") if isinstance(dry_run.get("canonical_preview"), dict) else {}
+        )
+        source_provenance = (
+            canonical_preview.get("source_provenance")
+            if isinstance(canonical_preview.get("source_provenance"), dict)
+            else {}
+        )
+        competition_context = (
+            canonical_preview.get("competition_context")
+            if isinstance(canonical_preview.get("competition_context"), dict)
+            else {}
+        )
+        roster_snapshot = (
+            canonical_preview.get("squad_roster_snapshot")
+            if isinstance(canonical_preview.get("squad_roster_snapshot"), list)
+            else []
+        )
+        metadata_preview = dry_run.get("metadata_preview") if isinstance(dry_run.get("metadata_preview"), dict) else {}
+        player_names = dry_run.get("player_names_found") if isinstance(dry_run.get("player_names_found"), list) else []
+
+        registry_summary = await register_historical_source_players(
+            db,
+            batch_id=batch.id,
+            game_id=game.id,
+            source_schema=str(source_provenance.get("source_schema") or "unknown"),
+            source_system="historical_import_json",
+            source_provenance=source_provenance,
+            competition_context=competition_context,
+            roster_snapshot=roster_snapshot,
+            player_names=[str(name) for name in player_names if isinstance(name, str)],
+            match_date=str(metadata_preview.get("date") or ""),
+        )
+        mappings_updated += int(registry_summary.get("auto_resolved_count") or 0) + int(
+            registry_summary.get("manually_resolved_count") or 0
+        )
+        unresolved_players += int(registry_summary.get("unresolved_count") or 0)
+
+        phases = game.phases if isinstance(game.phases, dict) else {}
+        hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+        venue_resolution = hist_meta.get("venue_resolution") if isinstance(hist_meta.get("venue_resolution"), dict) else {}
+        unresolved_venue = int(not bool(venue_resolution.get("canonical_venue_id")))
+        unresolved_venues += unresolved_venue
+
+        after_deliveries = len(game.deliveries) if isinstance(game.deliveries, list) else 0
+        after_wickets = (
+            sum(1 for d in (game.deliveries or []) if isinstance(d, dict) and d.get("is_wicket"))
+            if isinstance(game.deliveries, list)
+            else 0
+        )
+        after_completeness = _completeness(game)
+
+        log = hist_meta.get("_delivery_backfill_log")
+        log_entries = list(log) if isinstance(log, list) else []
+        log_entries.append(
+            {
+                "batch_id": batch.id,
+                "processed_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "before": {
+                    "completeness": before_completeness,
+                    "deliveries": before_deliveries,
+                    "wickets": before_wickets,
+                },
+                "after": {
+                    "completeness": after_completeness,
+                    "deliveries": after_deliveries,
+                    "wickets": after_wickets,
+                },
+                "warnings": warnings,
+            }
+        )
+        hist_meta["_delivery_backfill_log"] = log_entries
+        hist_meta["player_identity_registry"] = registry_summary
+        phases["historical_import"] = hist_meta
+        game.phases = phases
+        db.add(game)
+        await db.commit()
+
+        deliveries_rebuilt += max(after_deliveries - before_deliveries, 0)
+        wickets_rebuilt += max(after_wickets - before_wickets, 0)
+        changed_match_ids.append(game.id)
+        processed += 1
+        results.append(
+            {
+                "match_id": game.id,
+                "batch_id": batch.id,
+                "status": "processed",
+                "reason": None,
+                "completeness_before": before_completeness,
+                "completeness_after": after_completeness,
+                "deliveries_before": before_deliveries,
+                "deliveries_after": after_deliveries,
+                "wickets_before": before_wickets,
+                "wickets_after": after_wickets,
+                "player_mappings_updated": int(
+                    registry_summary.get("auto_resolved_count") or 0
+                )
+                + int(registry_summary.get("manually_resolved_count") or 0),
+                "unresolved_players": int(registry_summary.get("unresolved_count") or 0),
+                "unresolved_venues": unresolved_venue,
+            }
+        )
+
+    if processed > 0 and failed == 0:
+        status = "applied"
+    elif processed > 0:
+        status = "partial"
+    else:
+        status = "failed"
+
+    return {
+        "status": status,
+        "processed_matches": processed,
+        "skipped_matches": skipped,
+        "failed_matches": failed,
+        "deliveries_rebuilt": deliveries_rebuilt,
+        "wickets_rebuilt": wickets_rebuilt,
+        "player_mappings_updated": mappings_updated,
+        "unresolved_players": unresolved_players,
+        "unresolved_venues": unresolved_venues,
+        "changed_match_ids": changed_match_ids,
+        "blocked_records": blocked_records,
+        "results": results,
+        "rollback_info": (
+            "Use /api/historical-import/json/batches/{batch_id}/rollback with confirm=true "
+            "to remove a batch-applied game. Backfill snapshots are stored in "
+            "game.phases.historical_import._delivery_backfill_log."
+        ),
+        "audit_snapshot": record_lookup,
+    }

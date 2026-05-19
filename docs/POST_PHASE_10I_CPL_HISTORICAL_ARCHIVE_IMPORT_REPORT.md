@@ -164,3 +164,37 @@ No unrelated auto-format changes were kept.
 ## 10) Go/No-Go statement for next governed phase
 
 **GO (ready)** for the next governed issue focused on podcast/social visual expansion, with the constraint that controlled CPL batch ladder and stop conditions remain enforced during continued archive population.
+
+## 11) Post-Phase-10I historical backfill/reprocess runbook
+
+Use the governed dry-run/apply workflow below for previously imported CPL records:
+
+1. Dry-run audit (no writes):
+
+```bash
+curl -X POST /api/historical-import/json/backfill-reprocess/audit \
+  -H "Content-Type: application/json" \
+  -d '{"batch_ids":["<batch-id>"],"max_batch_size":25}'
+```
+
+2. Controlled apply/reprocess (idempotent rebuild):
+
+```bash
+curl -X POST /api/historical-import/json/backfill-reprocess/apply \
+  -H "Content-Type: application/json" \
+  -d '{"confirm":true,"batch_ids":["<batch-id>"],"max_batch_size":25}'
+```
+
+3. Verify analyst/data surfaces:
+
+- Players tab API: `GET /api/analyst/players`
+- Deliveries tab API: `GET /api/analyst/deliveries?match_id=<match-id>`
+- CPL dashboard aggregate: `GET /analytics/historical-stats/summary`
+- Case study: `GET /analytics/matches/<match-id>/case-study`
+
+4. Recovery:
+
+- Per-batch rollback (deletes the imported game shell and derived delivery artifacts):
+  `POST /api/historical-import/json/batches/{batch_id}/rollback` with `{"confirm": true}`.
+- Per-match before/after backfill snapshots are recorded at:
+  `game.phases.historical_import._delivery_backfill_log`.

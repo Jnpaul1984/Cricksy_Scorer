@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -580,3 +580,85 @@ class HistoricalImportTrainingStatus(BaseModel):
             "Phase that will implement the full ML dataset registry/export. 'deferred' in Phase 5I."
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 10I - Historical delivery backfill / reprocess schemas
+# ---------------------------------------------------------------------------
+
+
+class HistoricalBackfillAuditRequest(BaseModel):
+    match_ids: list[str] = Field(default_factory=list)
+    batch_ids: list[str] = Field(default_factory=list)
+    max_batch_size: int = Field(default=25, ge=1, le=25)
+    source_payloads_by_batch: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
+class HistoricalBackfillApplyRequest(HistoricalBackfillAuditRequest):
+    confirm: bool = Field(
+        ...,
+        description="Must be true to proceed with the controlled backfill reprocess.",
+    )
+
+
+class HistoricalBackfillAuditMatchRecord(BaseModel):
+    match_id: str
+    batch_id: str
+    import_source: Literal["single_json_apply", "bulk_zip_apply", "unknown"]
+    completeness: str
+    eligible: bool
+    blocked_reason: str | None = None
+    missing_source_json: bool = False
+    duplicate_delivery_risk: bool = False
+    apply_deliveries_previously_run: bool = False
+    source_json_retained: bool = False
+    registry_people_available: bool = False
+    registry_people_count: int = 0
+    players_without_source_ids: int = 0
+    expected_deliveries: int = 0
+    expected_wickets: int = 0
+    expected_players: int = 0
+
+
+class HistoricalBackfillAuditResponse(BaseModel):
+    total_imported_cpl_matches: int
+    completeness_counts: dict[str, int]
+    import_origin_counts: dict[str, int]
+    player_aggregate_scope: str
+    rollback_feasibility: str
+    eligible_matches: int
+    blocked_matches: int
+    selected_matches: int
+    records: list[HistoricalBackfillAuditMatchRecord] = Field(default_factory=list)
+
+
+class HistoricalBackfillApplyMatchResult(BaseModel):
+    match_id: str
+    batch_id: str
+    status: Literal["processed", "skipped", "failed"]
+    reason: str | None = None
+    completeness_before: str
+    completeness_after: str
+    deliveries_before: int
+    deliveries_after: int
+    wickets_before: int
+    wickets_after: int
+    player_mappings_updated: int = 0
+    unresolved_players: int = 0
+    unresolved_venues: int = 0
+
+
+class HistoricalBackfillApplyResponse(BaseModel):
+    status: Literal["applied", "partial", "failed"]
+    processed_matches: int
+    skipped_matches: int
+    failed_matches: int
+    deliveries_rebuilt: int
+    wickets_rebuilt: int
+    player_mappings_updated: int
+    unresolved_players: int
+    unresolved_venues: int
+    changed_match_ids: list[str] = Field(default_factory=list)
+    blocked_records: list[dict[str, str]] = Field(default_factory=list)
+    results: list[HistoricalBackfillApplyMatchResult] = Field(default_factory=list)
+    rollback_info: str = Field(default="")
