@@ -676,6 +676,23 @@ describe('CplPodcastDashboard', () => {
     expect(wrapper.find('[aria-label="Select export format"]').text()).toContain('Podcast landscape (1920×1080)');
     expect(wrapper.find('[aria-label="Select export format"]').text()).toContain('Social square (1080×1080)');
     expect(wrapper.find('[aria-label="Select export format"]').text()).toContain('Story/reel vertical (1080×1920)');
+    expect(wrapper.find('[aria-label="Select export template"]').exists()).toBe(true);
+    expect(wrapper.find('[aria-label="Select export template"]').text()).toContain('Clean Broadcast · Season Summary');
+    expect(wrapper.find('[aria-label="Select export template"]').text()).toContain('Bold Social · Season Summary');
+  });
+
+  it('updates template family options when export target changes', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Select export target"]').setValue('match_story');
+    await flushPromises();
+
+    const templateSelect = wrapper.find('[aria-label="Select export template"]');
+    expect(templateSelect.text()).toContain('Data Desk · Match Story');
+    expect(templateSelect.text()).toContain('Minimal Stat Card · Match Story');
+    expect(wrapper.text()).toContain('Family: Match Story Template · Variant: Data Desk');
   });
 
   it('disables match story export when no match is selected', async () => {
@@ -703,6 +720,23 @@ describe('CplPodcastDashboard', () => {
     expect(mockToPng).toHaveBeenCalledTimes(1);
     expect(wrapper.find('img[alt="Export preview image"]').exists()).toBe(true);
     expect(wrapper.find('[aria-label="Download export image"]').attributes('disabled')).toBeUndefined();
+  });
+
+  it('applies selected template variant styling to export frame', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Select export template"]').setValue('season-bold-social');
+    await flushPromises();
+    await wrapper.find('[aria-label="Generate export preview"]').trigger('click');
+    await flushPromises();
+
+    expect(mockToPng).toHaveBeenCalledTimes(1);
+    const frame = mockToPng.mock.calls[0]?.[0] as HTMLElement;
+    expect(frame).toBeTruthy();
+    expect(frame.style.background).toMatch(/15,\s*23,\s*42|#0f172a/i);
+    expect(wrapper.text()).toContain('Variant: Bold Social');
   });
 
   it('disables leaderboard export when delivery data is unavailable', async () => {

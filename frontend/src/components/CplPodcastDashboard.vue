@@ -101,6 +101,20 @@
             </select>
           </div>
 
+          <div class="cpld-filter-group">
+            <label class="cpld-filter-label" for="cpld-export-template">Template</label>
+            <select
+              id="cpld-export-template"
+              v-model="exportTemplateId"
+              class="cpld-select"
+              aria-label="Select export template"
+            >
+              <option v-for="templateOption in availableExportTemplates" :key="templateOption.id" :value="templateOption.id">
+                {{ templateOption.label }}
+              </option>
+            </select>
+          </div>
+
           <div class="cpld-export-toggles">
             <label class="cpld-export-check">
               <input v-model="exportIncludePoweredBy" type="checkbox" />
@@ -122,6 +136,13 @@
             Review target:
             <strong>{{ activeExportTarget?.label ?? 'Unavailable' }}</strong>
             · Format: <strong>{{ activeExportFormat?.label ?? 'Unavailable' }}</strong>
+            · Template: <strong>{{ activeExportTemplate?.label ?? 'Unavailable' }}</strong>
+          </p>
+          <p v-if="activeExportTemplate" class="cpld-export-meta">
+            Family: {{ activeExportTemplateFamilyLabel }} · Variant: {{ activeExportTemplateVariantLabel }}
+          </p>
+          <p v-if="activeExportTemplate" class="cpld-export-meta">
+            {{ activeExportTemplate.description }}
           </p>
           <p class="cpld-export-meta">
             {{ exportReviewLabel }}
@@ -131,11 +152,14 @@
         <div v-if="!activeExportAvailability.available" class="cpld-insufficient cpld-insufficient--warn" role="alert">
           {{ activeExportAvailability.reason }}
         </div>
+        <div v-else-if="!templateRequirementAvailability.available" class="cpld-insufficient cpld-insufficient--warn" role="alert">
+          {{ templateRequirementAvailability.reason }}
+        </div>
 
         <div class="cpld-export-actions">
           <button
             class="cpld-export-btn"
-            :disabled="!activeExportAvailability.available || exportBusy"
+            :disabled="!activeExportAvailability.available || !templateRequirementAvailability.available || exportBusy"
             aria-label="Generate export preview"
             @click="generateExportPreview"
           >
@@ -720,6 +744,15 @@ import {
   type HistoricalTeamAggregate,
   type HistoricalVenueAggregate,
 } from '@/services/api'
+import {
+  cplVisualTemplates,
+  templateFamilyByTarget,
+  templateFormatSpacing,
+  templateVariantLabels,
+  type CplTemplateFamily,
+  type ExportFormat,
+  type ExportTarget,
+} from '@/components/cplVisualTemplates'
 
 // ---------------------------------------------------------------------------
 // State
@@ -734,9 +767,6 @@ const selectedTeam = ref('all')
 const selectedVenue = ref('all')
 const selectedMatchId = ref('')
 
-type ExportTarget = 'season_summary' | 'match_story' | 'leaderboards' | 'venue_intelligence' | 'podcast_facts'
-type ExportFormat = 'podcast_landscape' | 'social_square' | 'story_vertical'
-
 const seasonSummaryRef = ref<HTMLElement | null>(null)
 const matchStoryRef = ref<HTMLElement | null>(null)
 const leaderboardRef = ref<HTMLElement | null>(null)
@@ -745,6 +775,7 @@ const podcastFactsRef = ref<HTMLElement | null>(null)
 
 const exportTarget = ref<ExportTarget>('season_summary')
 const exportFormat = ref<ExportFormat>('podcast_landscape')
+const exportTemplateId = ref('season-clean-broadcast')
 const exportIncludePoweredBy = ref(true)
 const exportIncludeImportedLabel = ref(true)
 const exportIncludeContextLabel = ref(true)
@@ -1061,6 +1092,39 @@ const activeExportFormat = computed(() =>
   exportFormats.find(f => f.value === exportFormat.value) ?? null
 )
 
+const activeTemplateFamily = computed<CplTemplateFamily>(() => templateFamilyByTarget[exportTarget.value])
+
+const availableExportTemplates = computed(() =>
+  cplVisualTemplates.filter(template => template.family === activeTemplateFamily.value)
+)
+
+const activeExportTemplate = computed(() => {
+  const fromSelection = availableExportTemplates.value.find(template => template.id === exportTemplateId.value)
+  return fromSelection ?? availableExportTemplates.value[0] ?? null
+})
+
+const activeExportTemplateFamilyLabel = computed(() => {
+  if (!activeExportTemplate.value) return 'Unavailable'
+  switch (activeExportTemplate.value.family) {
+    case 'match_story':
+      return 'Match Story Template'
+    case 'season_summary':
+      return 'Season Summary Template'
+    case 'leaderboard':
+      return 'Leaderboard Template'
+    case 'venue_intelligence':
+      return 'Venue Intelligence Template'
+    case 'podcast_episode_card':
+      return 'Podcast Episode Card Template'
+    default:
+      return 'Template'
+  }
+})
+
+const activeExportTemplateVariantLabel = computed(() =>
+  activeExportTemplate.value ? templateVariantLabels[activeExportTemplate.value.variant] : 'Unavailable'
+)
+
 const activeExportNode = computed<HTMLElement | null>(() => {
   switch (exportTarget.value) {
     case 'season_summary':
@@ -1084,6 +1148,9 @@ const activeExportAvailability = computed<{ available: boolean; reason: string }
   }
   if (!activeExportNode.value) {
     return { available: false, reason: 'Export target is not available in this view yet.' }
+  }
+  if (!activeExportTemplate.value) {
+    return { available: false, reason: 'Export disabled: no visual template is available for this target.' }
   }
 
   switch (exportTarget.value) {
@@ -1126,6 +1193,45 @@ const activeExportAvailability = computed<{ available: boolean; reason: string }
   }
 })
 
+const templateRequirementAvailability = computed<{ available: boolean; reason: string }>(() => {
+  const template = activeExportTemplate.value
+  if (!template) {
+    return { available: false, reason: 'Template unavailable.' }
+  }
+  for (const requirement of template.requirements) {
+    switch (requirement) {
+      case 'match_selected':
+        if (!selectedMatch.value) {
+          return { available: false, reason: 'Template requires a selected match story before export.' }
+        }
+        break
+      case 'match_delivery_data':
+        if (!selectedMatch.value?.has_delivery_data) {
+          return { available: false, reason: 'Template requires selected match delivery data.' }
+        }
+        break
+      case 'leaderboard_data':
+        if (topRunScorers.value.length === 0 && topWicketTakers.value.length === 0) {
+          return { available: false, reason: 'Template requires leaderboard data from delivery imports.' }
+        }
+        break
+      case 'venue_data':
+        if (cplVenues.value.length === 0) {
+          return { available: false, reason: 'Template requires venue intelligence data.' }
+        }
+        break
+      case 'podcast_facts_data':
+        if (podcastFacts.value.length === 0) {
+          return { available: false, reason: 'Template requires deterministic podcast fact data.' }
+        }
+        break
+      default:
+        return { available: false, reason: 'Template requirement is not supported.' }
+    }
+  }
+  return { available: true, reason: '' }
+})
+
 const exportReviewLabel = computed(() => {
   const parts: string[] = []
   if (exportIncludePoweredBy.value) parts.push('Powered by Cricksy')
@@ -1144,10 +1250,18 @@ const exportReviewLabel = computed(() => {
   return parts.join(' · ')
 })
 
+watch(exportTarget, () => {
+  const nextTemplate = availableExportTemplates.value[0]
+  if (nextTemplate) {
+    exportTemplateId.value = nextTemplate.id
+  }
+})
+
 watch(
   [
     exportTarget,
     exportFormat,
+    exportTemplateId,
     exportIncludePoweredBy,
     exportIncludeImportedLabel,
     exportIncludeContextLabel,
@@ -1186,53 +1300,123 @@ async function load() {
 }
 
 function buildExportFrame(targetNode: HTMLElement, width: number, height: number): HTMLDivElement {
+  const activeTemplate = activeExportTemplate.value
+  const spacing = templateFormatSpacing(exportFormat.value)
+  const variant = activeTemplate?.variant ?? 'clean_broadcast'
   const wrapper = document.createElement('div')
   wrapper.style.position = 'fixed'
   wrapper.style.left = '-99999px'
   wrapper.style.top = '0'
   wrapper.style.width = `${width}px`
   wrapper.style.height = `${height}px`
-  wrapper.style.background = '#ffffff'
-  wrapper.style.padding = '24px'
+  wrapper.style.background = variant === 'bold_social' ? '#0f172a' : '#ffffff'
+  wrapper.style.padding = spacing.wrapperPadding
   wrapper.style.display = 'flex'
   wrapper.style.flexDirection = 'column'
-  wrapper.style.gap = '12px'
+  wrapper.style.gap = '14px'
   wrapper.style.boxSizing = 'border-box'
   wrapper.style.fontFamily = 'Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+  wrapper.style.color = variant === 'bold_social' ? '#f8fafc' : '#0f172a'
+
+  const header = document.createElement('div')
+  header.style.display = 'flex'
+  header.style.justifyContent = 'space-between'
+  header.style.alignItems = 'center'
+  header.style.gap = '12px'
 
   const title = document.createElement('div')
-  title.style.fontSize = '20px'
-  title.style.fontWeight = '700'
-  title.style.color = '#0f172a'
+  title.style.fontSize = spacing.titleSize
+  title.style.fontWeight = variant === 'minimal_stat_card' ? '600' : '700'
+  title.style.color = variant === 'bold_social' ? '#f8fafc' : '#0f172a'
   title.textContent = activeExportTarget.value?.label ?? 'CPL export'
+
+  const brand = document.createElement('div')
+  brand.style.fontSize = '14px'
+  brand.style.fontWeight = '600'
+  brand.style.padding = '4px 10px'
+  brand.style.borderRadius = '999px'
+  brand.style.border = variant === 'bold_social' ? '1px solid #38bdf8' : '1px solid #cbd5e1'
+  brand.style.background = variant === 'bold_social' ? 'rgba(14, 165, 233, 0.18)' : '#f8fafc'
+  brand.style.color = variant === 'bold_social' ? '#7dd3fc' : '#0f172a'
+  brand.textContent = 'Cricksy · CPL Visuals'
+
+  header.append(title, brand)
 
   const content = document.createElement('div')
   content.style.flex = '1'
   content.style.overflow = 'hidden'
-  content.style.border = '1px solid #e2e8f0'
+  content.style.border = variant === 'bold_social' ? '1px solid #334155' : '1px solid #e2e8f0'
   content.style.borderRadius = '8px'
-  content.style.padding = '16px'
+  content.style.padding = spacing.contentPadding
   content.style.boxSizing = 'border-box'
+  content.style.background = variant === 'bold_social' ? '#0b1220' : '#ffffff'
 
   const clone = targetNode.cloneNode(true) as HTMLElement
   clone.style.margin = '0'
   clone.style.maxHeight = '100%'
   clone.style.overflow = 'hidden'
+  if (variant === 'minimal_stat_card') {
+    clone.style.transform = 'scale(0.96)'
+    clone.style.transformOrigin = 'top left'
+    clone.style.width = '104%'
+  }
   content.appendChild(clone)
 
+  if (exportIncludePoweredBy.value && activeTemplate?.watermarkPlacement === 'overlay') {
+    const overlayWatermark = document.createElement('div')
+    overlayWatermark.style.position = 'absolute'
+    overlayWatermark.style.right = spacing.wrapperPadding
+    overlayWatermark.style.bottom = spacing.wrapperPadding
+    overlayWatermark.style.fontSize = '13px'
+    overlayWatermark.style.fontWeight = '600'
+    overlayWatermark.style.opacity = '0.7'
+    overlayWatermark.style.color = variant === 'bold_social' ? '#bae6fd' : '#334155'
+    overlayWatermark.textContent = 'Powered by Cricksy'
+    wrapper.appendChild(overlayWatermark)
+  }
+
+  const footer = document.createElement('div')
+  footer.style.display = 'flex'
+  footer.style.justifyContent = 'space-between'
+  footer.style.alignItems = 'flex-end'
+  footer.style.gap = '8px'
+  footer.style.flexWrap = 'wrap'
+
   const provenance = document.createElement('div')
-  provenance.style.fontSize = '14px'
+  provenance.style.fontSize = spacing.footerSize
   provenance.style.lineHeight = '1.4'
-  provenance.style.color = '#334155'
+  provenance.style.color = variant === 'bold_social' ? '#cbd5e1' : '#334155'
   provenance.textContent = exportReviewLabel.value
 
-  wrapper.append(title, content, provenance)
+  const watermark = document.createElement('div')
+  watermark.style.fontSize = spacing.footerSize
+  watermark.style.fontWeight = '600'
+  watermark.style.color = variant === 'bold_social' ? '#7dd3fc' : '#0f172a'
+  watermark.textContent = exportIncludePoweredBy.value ? 'Powered by Cricksy' : ''
+
+  if (!exportIncludePoweredBy.value || activeTemplate?.watermarkPlacement === 'overlay') {
+    watermark.style.display = 'none'
+  }
+
+  if (activeTemplate?.watermarkPlacement === 'header' && watermark.style.display !== 'none') {
+    header.appendChild(watermark)
+    footer.append(provenance)
+  } else {
+    footer.append(provenance, watermark)
+  }
+
+  wrapper.append(header, content, footer)
   document.body.appendChild(wrapper)
   return wrapper
 }
 
 async function generateExportPreview() {
-  if (!activeExportAvailability.value.available || !activeExportNode.value || !activeExportFormat.value) {
+  if (
+    !activeExportAvailability.value.available ||
+    !templateRequirementAvailability.value.available ||
+    !activeExportNode.value ||
+    !activeExportFormat.value
+  ) {
     return
   }
   exportBusy.value = true
@@ -1643,6 +1827,7 @@ function buildPodcastScriptMarkdown(): string {
   const visualCueLines = uniqueNonEmpty([
     activeExportTarget.value ? `Export target: ${activeExportTarget.value.label}` : null,
     activeExportFormat.value ? `Format: ${activeExportFormat.value.label}` : null,
+    activeExportTemplate.value ? `Template: ${activeExportTemplate.value.label}` : null,
     exportPreviewUrl.value ? 'Export preview is available and can be reviewed before publishing assets.' : 'No export preview generated yet.',
   ])
 
