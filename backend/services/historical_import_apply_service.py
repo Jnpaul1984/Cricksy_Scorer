@@ -531,6 +531,7 @@ async def apply_historical_deliveries(
     batch_id: str,
     confirm: bool,
     raw_payload: bytes,
+    allow_reprocess: bool = False,
 ) -> tuple[dict[str, Any] | None, list[str], str | None]:
     """Import delivery-level data into a previously-applied historical Game.
 
@@ -620,7 +621,7 @@ async def apply_historical_deliveries(
         )
 
     # Gate 6: idempotency - deliveries must not already be imported
-    if hist_meta.get("deliveries_imported") is True:
+    if hist_meta.get("deliveries_imported") is True and not allow_reprocess:
         return (
             None,
             warnings,
@@ -750,12 +751,42 @@ async def apply_historical_deliveries(
     second_innings_overs_completed = second_innings_legal_balls // 6
     second_innings_balls_this_over = second_innings_legal_balls % 6
 
+    def _phase_aggregates(deliveries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        phase_keys = ("powerplay", "middle", "death")
+        phase_stats = {
+            key: {"runs": 0, "wickets": 0, "legal_balls": 0, "overs": 0.0, "deliveries": 0}
+            for key in phase_keys
+        }
+        for delivery in deliveries:
+            phase = str(delivery.get("phase") or "").strip().lower()
+            if phase not in phase_stats:
+                continue
+            phase_stats[phase]["deliveries"] += 1
+            phase_stats[phase]["runs"] += int(delivery.get("runs_off_bat") or 0) + int(
+                delivery.get("extra_runs") or 0
+            )
+            phase_stats[phase]["wickets"] += int(bool(delivery.get("is_wicket")))
+            if is_legal_delivery(delivery):
+                phase_stats[phase]["legal_balls"] += 1
+
+        for phase in phase_keys:
+            legal_balls = int(phase_stats[phase]["legal_balls"])
+            phase_stats[phase]["overs"] = float(f"{legal_balls // 6}.{legal_balls % 6}")
+        return phase_stats
+
     # 6) Update game phases to mark deliveries as imported (idempotency marker)
     updated_phases: dict[str, Any] = dict(phases)
     updated_hist_meta: dict[str, Any] = dict(hist_meta)
     updated_hist_meta["deliveries_imported"] = True
     updated_hist_meta["delivery_count"] = total_deliveries
+    if allow_reprocess:
+        updated_hist_meta["deliveries_reprocessed_at"] = dt.datetime.now(
+            dt.timezone.utc
+        ).isoformat()
     updated_phases["historical_import"] = updated_hist_meta
+    phase_stats = _phase_aggregates(all_deliveries)
+    for phase_name, stats in phase_stats.items():
+        updated_phases[phase_name] = stats
 
     # 7) Persist all changes in a single transaction
     game.deliveries = all_deliveries
