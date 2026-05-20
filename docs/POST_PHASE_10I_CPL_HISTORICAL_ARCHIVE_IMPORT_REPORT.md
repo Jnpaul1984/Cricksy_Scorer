@@ -198,3 +198,21 @@ curl -X POST /api/historical-import/json/backfill-reprocess/apply \
   `POST /api/historical-import/json/batches/{batch_id}/rollback` with `{"confirm": true}`.
 - Per-match before/after backfill snapshots are recorded at:
   `game.phases.historical_import._delivery_backfill_log`.
+
+### 11.1 Operator UI path (preferred production workflow)
+
+Use Analyst Workspace UI instead of manual curl:
+
+1. Open **Analyst Workspace → Import Data**.
+2. In panel **Historical Backfill Audit + Reprocess**, run **Run dry-run audit**.
+3. Review eligibility, blocked reasons, source JSON retention, completeness counts, and expected delivery/wicket/player totals.
+4. Select only controlled ladder sizes (**1**, **3–5**, **10**, **20–25**).
+5. Confirm provenance/idempotency checkbox, then apply selected records.
+6. Use the built-in post-apply checklist:
+   - Open Players tab
+   - Open Deliveries tab
+   - Open CPL Dashboard
+   - Open Case Study
+   - Verify totals did not double-count after second run
+
+If a record shows missing source payload, do **not** suggest delete/reupload. Follow source-payload reattach workflow first.

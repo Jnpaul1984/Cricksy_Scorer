@@ -1,0 +1,192 @@
+import { mount } from '@vue/test-utils'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+
+import HistoricalBackfillReprocessPanel from '@/components/HistoricalBackfillReprocessPanel.vue'
+import * as api from '@/services/api'
+
+vi.mock('@/services/api', () => ({
+  historicalBackfillReprocessAudit: vi.fn(),
+  historicalBackfillReprocessApply: vi.fn(),
+}))
+
+const flushPromises = async () => {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
+const auditResponse = {
+  total_imported_cpl_matches: 3,
+  completeness_counts: {
+    metadata_only: 1,
+    innings_totals_only: 1,
+    delivery_data_available: 0,
+    wicket_data_available: 1,
+    phase_analytics_available: 0,
+  },
+  import_origin_counts: {
+    single_json_apply: 1,
+    bulk_zip_apply: 1,
+    unknown: 1,
+  },
+  player_aggregate_scope: 'delivery-complete matches only',
+  rollback_feasibility: 'rollback info',
+  eligible_matches: 2,
+  blocked_matches: 1,
+  selected_matches: 3,
+  records: [
+    {
+      match_id: 'match-1',
+      batch_id: 'batch-1',
+      import_source: 'bulk_zip_apply' as const,
+      completeness: 'metadata_only',
+      eligible: true,
+      blocked_reason: null,
+      missing_source_json: false,
+      duplicate_delivery_risk: false,
+      apply_deliveries_previously_run: false,
+      source_json_retained: true,
+      registry_people_available: true,
+      registry_people_count: 14,
+      players_without_source_ids: 0,
+      expected_deliveries: 120,
+      expected_wickets: 8,
+      expected_players: 22,
+    },
+    {
+      match_id: 'match-2',
+      batch_id: 'batch-2',
+      import_source: 'single_json_apply' as const,
+      completeness: 'innings_totals_only',
+      eligible: true,
+      blocked_reason: null,
+      missing_source_json: false,
+      duplicate_delivery_risk: true,
+      apply_deliveries_previously_run: false,
+      source_json_retained: true,
+      registry_people_available: false,
+      registry_people_count: 0,
+      players_without_source_ids: 5,
+      expected_deliveries: 118,
+      expected_wickets: 7,
+      expected_players: 21,
+    },
+    {
+      match_id: 'match-3',
+      batch_id: 'batch-3',
+      import_source: 'unknown' as const,
+      completeness: 'metadata_only',
+      eligible: false,
+      blocked_reason: 'missing_source_json',
+      missing_source_json: true,
+      duplicate_delivery_risk: false,
+      apply_deliveries_previously_run: false,
+      source_json_retained: false,
+      registry_people_available: false,
+      registry_people_count: 0,
+      players_without_source_ids: 0,
+      expected_deliveries: 0,
+      expected_wickets: 0,
+      expected_players: 0,
+    },
+  ],
+}
+
+describe('HistoricalBackfillReprocessPanel', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+  })
+
+  it('disables apply for invalid controlled selection size and enables with valid size + confirmation', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const applyButton = wrapper.get('[data-testid="hbr-apply-btn"]')
+    expect(applyButton.attributes('disabled')).toBeDefined()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[0].setValue(true)
+    await rowChecks[1].setValue(true)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Selection size must be 1, 3–5, 10, or 20–25.')
+    expect(applyButton.attributes('disabled')).toBeDefined()
+
+    await rowChecks[1].setValue(false)
+    await flushPromises()
+    expect(applyButton.attributes('disabled')).toBeDefined()
+
+    const confirm = wrapper.get('.hbr-confirm input[type="checkbox"]')
+    await confirm.setValue(true)
+    await flushPromises()
+
+    expect(applyButton.attributes('disabled')).toBeUndefined()
+  })
+
+  it('submits apply only after valid audit selection and confirmation', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+    vi.mocked(api.historicalBackfillReprocessApply).mockResolvedValue({
+      status: 'applied',
+      processed_matches: 1,
+      skipped_matches: 0,
+      failed_matches: 0,
+      deliveries_rebuilt: 120,
+      wickets_rebuilt: 8,
+      player_mappings_updated: 3,
+      unresolved_players: 0,
+      unresolved_venues: 0,
+      changed_match_ids: ['match-1'],
+      blocked_records: [],
+      results: [
+        {
+          match_id: 'match-1',
+          batch_id: 'batch-1',
+          status: 'processed',
+          reason: null,
+          completeness_before: 'metadata_only',
+          completeness_after: 'phase_analytics_available',
+          deliveries_before: 0,
+          deliveries_after: 120,
+          wickets_before: 0,
+          wickets_after: 8,
+          player_mappings_updated: 3,
+          unresolved_players: 0,
+          unresolved_venues: 0,
+        },
+      ],
+      rollback_info: 'rollback info',
+    })
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[0].setValue(true)
+    await wrapper.get('.hbr-confirm input[type="checkbox"]').setValue(true)
+    await wrapper.get('[data-testid="hbr-apply-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(api.historicalBackfillReprocessApply).toHaveBeenCalledWith({
+      confirm: true,
+      batch_ids: ['batch-1'],
+      max_batch_size: 25,
+    })
+    expect(wrapper.text()).toContain('Changed match IDs: match-1')
+    expect(wrapper.text()).toContain('Open CPL Dashboard')
+  })
+
+  it('shows missing source JSON warning guidance', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(
+      'Source JSON missing. This record requires a source-payload reattach workflow before delivery reprocess can run.',
+    )
+  })
+})

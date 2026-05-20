@@ -1750,6 +1750,80 @@ export interface HistoricalImportBulkZipApplyResponse {
   results: HistoricalImportBulkZipApplyFileResult[];
 }
 
+export interface HistoricalBackfillAuditRequest {
+  match_ids?: string[];
+  batch_ids?: string[];
+  max_batch_size?: number;
+  source_payloads_by_batch?: Record<string, Record<string, unknown>>;
+}
+
+export interface HistoricalBackfillAuditMatchRecord {
+  match_id: string;
+  batch_id: string;
+  import_source: 'single_json_apply' | 'bulk_zip_apply' | 'unknown';
+  completeness: string;
+  eligible: boolean;
+  blocked_reason?: string | null;
+  missing_source_json: boolean;
+  duplicate_delivery_risk: boolean;
+  apply_deliveries_previously_run: boolean;
+  source_json_retained: boolean;
+  registry_people_available: boolean;
+  registry_people_count: number;
+  players_without_source_ids: number;
+  expected_deliveries: number;
+  expected_wickets: number;
+  expected_players: number;
+}
+
+export interface HistoricalBackfillAuditResponse {
+  total_imported_cpl_matches: number;
+  completeness_counts: Record<string, number>;
+  import_origin_counts: Record<string, number>;
+  player_aggregate_scope: string;
+  rollback_feasibility: string;
+  eligible_matches: number;
+  blocked_matches: number;
+  selected_matches: number;
+  records: HistoricalBackfillAuditMatchRecord[];
+}
+
+export interface HistoricalBackfillApplyRequest extends HistoricalBackfillAuditRequest {
+  confirm: boolean;
+}
+
+export interface HistoricalBackfillApplyMatchResult {
+  match_id: string;
+  batch_id: string;
+  status: 'processed' | 'skipped' | 'failed';
+  reason?: string | null;
+  completeness_before: string;
+  completeness_after: string;
+  deliveries_before: number;
+  deliveries_after: number;
+  wickets_before: number;
+  wickets_after: number;
+  player_mappings_updated: number;
+  unresolved_players: number;
+  unresolved_venues: number;
+}
+
+export interface HistoricalBackfillApplyResponse {
+  status: 'applied' | 'partial' | 'failed';
+  processed_matches: number;
+  skipped_matches: number;
+  failed_matches: number;
+  deliveries_rebuilt: number;
+  wickets_rebuilt: number;
+  player_mappings_updated: number;
+  unresolved_players: number;
+  unresolved_venues: number;
+  changed_match_ids: string[];
+  blocked_records: Array<{ match_id: string; batch_id: string; reason: string }>;
+  results: HistoricalBackfillApplyMatchResult[];
+  rollback_info: string;
+}
+
 export type HistoricalOcrReviewStatus =
   | 'uploaded'
   | 'extracted'
@@ -1918,6 +1992,49 @@ export async function historicalImportBulkZipApply(
   return request<HistoricalImportBulkZipApplyResponse>(
     '/api/historical-import/json/bulk-zip/apply',
     { method: 'POST', body: form },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/backfill-reprocess/audit
+ * Performs controlled dry-run audit of historical CPL backfill/reprocess eligibility.
+ */
+export async function historicalBackfillReprocessAudit(
+  payload: HistoricalBackfillAuditRequest,
+): Promise<HistoricalBackfillAuditResponse> {
+  return request<HistoricalBackfillAuditResponse>(
+    '/api/historical-import/json/backfill-reprocess/audit',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        match_ids: payload.match_ids ?? [],
+        batch_ids: payload.batch_ids ?? [],
+        max_batch_size: payload.max_batch_size ?? 25,
+        source_payloads_by_batch: payload.source_payloads_by_batch ?? {},
+      }),
+    },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/backfill-reprocess/apply
+ * Performs controlled apply/reprocess for selected historical CPL records.
+ */
+export async function historicalBackfillReprocessApply(
+  payload: HistoricalBackfillApplyRequest,
+): Promise<HistoricalBackfillApplyResponse> {
+  return request<HistoricalBackfillApplyResponse>(
+    '/api/historical-import/json/backfill-reprocess/apply',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        confirm: payload.confirm,
+        match_ids: payload.match_ids ?? [],
+        batch_ids: payload.batch_ids ?? [],
+        max_batch_size: payload.max_batch_size ?? 25,
+        source_payloads_by_batch: payload.source_payloads_by_batch ?? {},
+      }),
+    },
   );
 }
 
