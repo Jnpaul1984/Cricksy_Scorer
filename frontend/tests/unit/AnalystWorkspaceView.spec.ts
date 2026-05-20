@@ -1900,6 +1900,13 @@ describe('AnalystWorkspaceView', () => {
     await dlTab!.trigger('click')
     await nextTick()
 
+    // Switch to flat list view to use .aw-dl-row selector
+    const flatBtn = wrapper.findAll('button.aw-chip').find((b) => b.text().includes('Flat list'))
+    if (flatBtn) {
+      await flatBtn.trigger('click')
+      await nextTick()
+    }
+
     const dlRows = wrapper.findAll('.aw-dl-row')
     expect(dlRows.length).toBeGreaterThan(0)
     // Default sort is 'most recent'; match-002 (2025-01-15) appears first
@@ -1929,5 +1936,79 @@ describe('AnalystWorkspaceView', () => {
     expect(text).not.toContain('A. Kumar')
     expect(text).not.toContain('Mock Match')
     expect(text).not.toContain('Demo')
+  })
+
+  it('Data Library defaults to collections view with competition grouping', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const dlTab = tabButtons.find((b) => b.text().includes('Data Library'))
+    await dlTab!.trigger('click')
+    await nextTick()
+
+    // Default view mode is 'collections' — flat rows should not be visible by default
+    const dlRows = wrapper.findAll('.aw-dl-row')
+    expect(dlRows.length).toBe(0)
+
+    // Collections view should show competition-level headers
+    const collectionHeaders = wrapper.findAll('.aw-dl-collection-header')
+    expect(collectionHeaders.length).toBeGreaterThan(0)
+  })
+
+  it('Deliveries tab shows empty-state when no match is selected', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const deliveriesTab = tabButtons.find((b) => b.text().includes('Deliveries'))
+    await deliveriesTab!.trigger('click')
+    await nextTick()
+
+    const emptyMsg = wrapper.find('.aw-delivery-empty-msg')
+    expect(emptyMsg.exists()).toBe(true)
+    expect(emptyMsg.text()).toContain('Select a match to view delivery-level data.')
+  })
+
+  it('Analytics tab shows empty-state when no match is selected', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const analyticsTab = tabButtons.find((b) => b.text().includes('Analytics'))
+    await analyticsTab!.trigger('click')
+    await nextTick()
+
+    const emptyMsg = wrapper.find('.aw-delivery-empty-msg')
+    expect(emptyMsg.exists()).toBe(true)
+    expect(emptyMsg.text()).toContain('Select a match to generate analytics visuals.')
+  })
+
+  it('Players tab shows completeness diagnostics row', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const tabButtons = wrapper.findAll('button.base-button-stub')
+    const playersTab = tabButtons.find((b) => b.text().includes('Players'))
+    await playersTab!.trigger('click')
+    await nextTick()
+
+    const diagnostics = wrapper.find('.aw-diagnostics-row')
+    expect(diagnostics.exists()).toBe(true)
+    expect(diagnostics.text()).toContain('players shown')
+    expect(diagnostics.text()).toContain('Scope:')
+    expect(diagnostics.text()).toContain('Completeness:')
   })
 })
