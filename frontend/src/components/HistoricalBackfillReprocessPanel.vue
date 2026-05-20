@@ -11,12 +11,54 @@
       Controlled apply only. Do not process all 402 matches at once.
     </p>
 
+    <section class="hbr-section">
+      <h4 class="hbr-section-title">Pre-audit scope controls</h4>
+      <p class="hbr-idempotency-note">
+        Start with 1 record. If successful, continue with 3–5, then 10, then 20–25.
+      </p>
+      <label class="hbr-field">
+        Audit scope
+        <select v-model="auditScopeMode" :disabled="loading" data-testid="hbr-audit-scope-mode">
+          <option value="first_1">Audit first eligible record (safe default)</option>
+          <option value="first_3_5">Audit first 3–5 eligible records</option>
+          <option value="first_10">Audit first 10 eligible records</option>
+          <option value="first_20_25">Audit first 20–25 eligible records</option>
+          <option value="manual_batch_ids">Manual batch IDs</option>
+          <option value="manual_match_ids">Manual match IDs</option>
+        </select>
+      </label>
+      <label v-if="isRangeScopeMode" class="hbr-field">
+        Records to audit
+        <input
+          v-model.number="rangeAuditCount"
+          type="number"
+          :min="rangeScopeBounds.min"
+          :max="rangeScopeBounds.max"
+          :disabled="loading"
+          data-testid="hbr-audit-scope-count"
+        />
+      </label>
+      <label v-if="isManualScopeMode" class="hbr-field">
+        {{ auditScopeMode === 'manual_batch_ids' ? 'Batch IDs' : 'Match IDs' }}
+        <textarea
+          v-model="manualIdsInput"
+          rows="4"
+          :disabled="loading"
+          data-testid="hbr-audit-manual-ids"
+          placeholder="Paste IDs (one per line or comma-separated)"
+        />
+      </label>
+      <p v-if="!auditSelectionValid" class="hbr-error" role="alert">
+        Audit selection size must be 1, 3–5, 10, or 20–25.
+      </p>
+    </section>
+
     <div class="hbr-actions">
       <button
         type="button"
         class="hbr-btn hbr-btn--primary"
         data-testid="hbr-run-audit-btn"
-        :disabled="loading"
+        :disabled="!canRunAudit"
         @click="runAudit"
       >
         {{ loading && loadingStep === 'audit' ? 'Running dry-run audit…' : 'Run dry-run audit' }}
@@ -179,6 +221,7 @@ import { computed, ref } from 'vue'
 import {
   historicalBackfillReprocessApply,
   historicalBackfillReprocessAudit,
+  historicalImportListBatches,
   type HistoricalBackfillApplyResponse,
   type HistoricalBackfillAuditResponse,
 } from '@/services/api'
@@ -190,6 +233,11 @@ const auditResult = ref<HistoricalBackfillAuditResponse | null>(null)
 const applyResult = ref<HistoricalBackfillApplyResponse | null>(null)
 const selectedBatchIds = ref<string[]>([])
 const confirmApply = ref(false)
+const auditScopeMode = ref<
+  'first_1' | 'first_3_5' | 'first_10' | 'first_20_25' | 'manual_batch_ids' | 'manual_match_ids'
+>('first_1')
+const rangeAuditCount = ref(3)
+const manualIdsInput = ref('')
 
 const eligibleRecords = computed(() =>
   auditResult.value?.records.filter((record) => record.eligible) ?? [],
@@ -232,6 +280,52 @@ const canApply = computed(() =>
     confirmApply.value &&
     !loading.value,
   ),
+)
+
+const isManualScopeMode = computed(
+  () => auditScopeMode.value === 'manual_batch_ids' || auditScopeMode.value === 'manual_match_ids',
+)
+
+const isRangeScopeMode = computed(
+  () => auditScopeMode.value === 'first_3_5' || auditScopeMode.value === 'first_20_25',
+)
+
+const rangeScopeBounds = computed(() => {
+  if (auditScopeMode.value === 'first_3_5') return { min: 3, max: 5 }
+  if (auditScopeMode.value === 'first_20_25') return { min: 20, max: 25 }
+  return { min: 1, max: 1 }
+})
+
+const parsedManualIds = computed(() =>
+  manualIdsInput.value
+    .split(/[\n,]/)
+    .map((id) => id.trim())
+    .filter(Boolean),
+)
+
+const requestedAuditCount = computed(() => {
+  if (auditScopeMode.value === 'first_1') return 1
+  if (auditScopeMode.value === 'first_10') return 10
+  if (auditScopeMode.value === 'first_3_5' || auditScopeMode.value === 'first_20_25') return rangeAuditCount.value
+  return parsedManualIds.value.length
+})
+
+const auditSelectionValid = computed(() => {
+  const size = requestedAuditCount.value
+  return size === 1 || (size >= 3 && size <= 5) || size === 10 || (size >= 20 && size <= 25)
+})
+
+const requestedAuditMaxBatchSize = computed(() => {
+  const size = requestedAuditCount.value
+  if (size === 1) return 1
+  if (size >= 3 && size <= 5) return 5
+  if (size === 10) return 10
+  if (size >= 20 && size <= 25) return 25
+  return null
+})
+
+const canRunAudit = computed(
+  () => !loading.value && auditSelectionValid.value && requestedAuditMaxBatchSize.value !== null,
 )
 
 const applyCompletenessSummary = computed(() => {
@@ -282,13 +376,32 @@ function toggleRecord(batchId: string, event: Event) {
 }
 
 async function runAudit() {
+  if (!canRunAudit.value || requestedAuditMaxBatchSize.value === null) return
   loading.value = true
   loadingStep.value = 'audit'
   error.value = null
   applyResult.value = null
   clearSelection()
   try {
-    auditResult.value = await historicalBackfillReprocessAudit({ max_batch_size: 25 })
+    const payload = {
+      batch_ids: [] as string[],
+      match_ids: [] as string[],
+      max_batch_size: requestedAuditMaxBatchSize.value,
+    }
+
+    if (auditScopeMode.value === 'manual_batch_ids') {
+      payload.batch_ids = parsedManualIds.value
+    } else if (auditScopeMode.value === 'manual_match_ids') {
+      payload.match_ids = parsedManualIds.value
+    } else {
+      const batches = await historicalImportListBatches(requestedAuditCount.value)
+      payload.batch_ids = batches.slice(0, requestedAuditCount.value).map((batch) => batch.id)
+      if (payload.batch_ids.length === 0) {
+        throw new Error('No import batches available for the selected audit scope.')
+      }
+    }
+
+    auditResult.value = await historicalBackfillReprocessAudit(payload)
   } catch (err) {
     error.value = normalizeErrorMessage(err)
   } finally {
@@ -344,6 +457,21 @@ async function applySelected() {
 .hbr-section-title {
   margin: 0;
   font-size: var(--text-sm);
+}
+
+.hbr-field {
+  display: grid;
+  gap: 0.35rem;
+  font-size: var(--text-sm);
+}
+
+.hbr-field textarea,
+.hbr-field select,
+.hbr-field input[type='number'] {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.55rem;
+  background: #fff;
 }
 
 .hbr-actions,
