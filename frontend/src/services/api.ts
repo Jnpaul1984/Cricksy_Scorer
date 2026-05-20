@@ -1788,6 +1788,39 @@ export interface HistoricalBackfillAuditResponse {
   records: HistoricalBackfillAuditMatchRecord[];
 }
 
+export interface HistoricalBackfillDiagnosisMatchRecord {
+  match_id: string;
+  batch_id: string;
+  import_source: 'single_json_apply' | 'bulk_zip_apply' | 'unknown';
+  completeness: string;
+  source_json_retained: boolean;
+  source_json_required: boolean;
+  schema_detected: string;
+  innings_path_detected: boolean;
+  delivery_path_detected: boolean;
+  detected_delivery_path?: string | null;
+  delivery_path_candidates: string[];
+  expected_deliveries: number;
+  expected_wickets: number;
+  registry_people_available: boolean;
+  batter_field_detected: boolean;
+  bowler_field_detected: boolean;
+  non_striker_field_detected: boolean;
+  runs_field_detected: boolean;
+  extras_field_detected: boolean;
+  wicket_field_detected: boolean;
+  skip_or_failure_reason?: string | null;
+  safely_reprocessable: boolean;
+  recommended_next_action: string;
+}
+
+export interface HistoricalBackfillDiagnosisResponse {
+  total_imported_cpl_matches: number;
+  selected_matches: number;
+  blocked_matches: number;
+  records: HistoricalBackfillDiagnosisMatchRecord[];
+}
+
 export interface HistoricalBackfillApplyRequest extends HistoricalBackfillAuditRequest {
   confirm: boolean;
 }
@@ -2068,6 +2101,27 @@ export async function historicalBackfillReprocessAudit(
 ): Promise<HistoricalBackfillAuditResponse> {
   return request<HistoricalBackfillAuditResponse>(
     '/api/historical-import/json/backfill-reprocess/audit',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        match_ids: payload.match_ids ?? [],
+        batch_ids: payload.batch_ids ?? [],
+        max_batch_size: payload.max_batch_size ?? 25,
+        source_payloads_by_batch: payload.source_payloads_by_batch ?? {},
+      }),
+    },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/backfill-reprocess/diagnose
+ * Performs read-only diagnosis of delivery extraction readiness and failure reasons.
+ */
+export async function historicalBackfillReprocessDiagnose(
+  payload: HistoricalBackfillAuditRequest,
+): Promise<HistoricalBackfillDiagnosisResponse> {
+  return request<HistoricalBackfillDiagnosisResponse>(
+    '/api/historical-import/json/backfill-reprocess/diagnose',
     {
       method: 'POST',
       body: JSON.stringify({

@@ -1,7 +1,7 @@
 <template>
   <div class="hbr-panel">
     <div class="hbr-header">
-      <h3 class="hbr-title">Historical Backfill Audit + Reprocess</h3>
+      <h3 class="hbr-title">Historical Backfill Diagnosis + Reprocess</h3>
       <p class="hbr-subtitle">
         Audit historical CPL imports and apply controlled, idempotent delivery rebuilds with provenance.
       </p>
@@ -56,6 +56,15 @@
     <div class="hbr-actions">
       <button
         type="button"
+        class="hbr-btn hbr-btn--ghost"
+        data-testid="hbr-run-diagnosis-btn"
+        :disabled="!canRunAudit"
+        @click="runDiagnosis"
+      >
+        {{ loading && loadingStep === 'diagnose' ? 'Running diagnosis…' : 'Run diagnosis (read-only)' }}
+      </button>
+      <button
+        type="button"
         class="hbr-btn hbr-btn--primary"
         data-testid="hbr-run-audit-btn"
         :disabled="!canRunAudit"
@@ -66,6 +75,55 @@
     </div>
 
     <p v-if="error" class="hbr-error" role="alert">{{ error }}</p>
+
+    <section v-if="diagnosisResult" class="hbr-section">
+      <h4 class="hbr-section-title">Diagnosis summary (read-only)</h4>
+      <ul class="hbr-list">
+        <li>Total selected records: {{ diagnosisResult.selected_matches }}</li>
+        <li>Blocked records: {{ diagnosisResult.blocked_matches }}</li>
+      </ul>
+    </section>
+
+    <section v-if="diagnosisResult" class="hbr-section">
+      <h4 class="hbr-section-title">Diagnosis records</h4>
+      <div class="hbr-table-wrap">
+        <table class="hbr-table">
+          <thead>
+            <tr>
+              <th>Match ID</th>
+              <th>Batch ID</th>
+              <th>Import source</th>
+              <th>Current completeness</th>
+              <th>Source JSON retained</th>
+              <th>Schema detected</th>
+              <th>Delivery path detected</th>
+              <th>Expected deliveries</th>
+              <th>Expected wickets</th>
+              <th>Skip/failure reason</th>
+              <th>Recommended next action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="record in diagnosisResult.records" :key="`diag-${record.batch_id}`">
+              <td>{{ record.match_id }}</td>
+              <td>{{ record.batch_id }}</td>
+              <td>{{ record.import_source }}</td>
+              <td>{{ record.completeness }}</td>
+              <td>{{ record.source_json_retained ? 'Yes' : 'No' }}</td>
+              <td>{{ record.schema_detected }}</td>
+              <td>{{ record.delivery_path_detected ? 'Yes' : 'No' }}</td>
+              <td>{{ record.expected_deliveries }}</td>
+              <td>{{ record.expected_wickets }}</td>
+              <td>{{ record.skip_or_failure_reason || '—' }}</td>
+              <td>{{ record.recommended_next_action }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-if="diagnosisMissingSourceJsonCount > 0" class="hbr-warning-banner">
+        Source JSON missing. Reattach original JSON before delivery diagnosis or reprocess can run.
+      </p>
+    </section>
 
     <section v-if="auditResult" class="hbr-section">
       <h4 class="hbr-section-title">Dry-run audit summary</h4>
@@ -221,15 +279,18 @@ import { computed, ref } from 'vue'
 import {
   historicalBackfillReprocessApply,
   historicalBackfillReprocessAudit,
+  historicalBackfillReprocessDiagnose,
   historicalImportListBatches,
   type HistoricalBackfillApplyResponse,
   type HistoricalBackfillAuditResponse,
+  type HistoricalBackfillDiagnosisResponse,
 } from '@/services/api'
 
 const loading = ref(false)
-const loadingStep = ref<'audit' | 'apply'>('audit')
+const loadingStep = ref<'diagnose' | 'audit' | 'apply'>('audit')
 const error = ref<string | null>(null)
 const auditResult = ref<HistoricalBackfillAuditResponse | null>(null)
+const diagnosisResult = ref<HistoricalBackfillDiagnosisResponse | null>(null)
 const applyResult = ref<HistoricalBackfillApplyResponse | null>(null)
 const selectedBatchIds = ref<string[]>([])
 const confirmApply = ref(false)
@@ -266,6 +327,10 @@ const expectedTotals = computed(() => {
     { deliveries: 0, wickets: 0, players: 0 },
   )
 })
+
+const diagnosisMissingSourceJsonCount = computed(() =>
+  diagnosisResult.value?.records.filter((record) => record.source_json_required).length ?? 0,
+)
 
 const selectionSizeAllowed = computed(() => {
   const size = selectedBatchIds.value.length
@@ -402,6 +467,38 @@ async function runAudit() {
     }
 
     auditResult.value = await historicalBackfillReprocessAudit(payload)
+  } catch (err) {
+    error.value = normalizeErrorMessage(err)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function runDiagnosis() {
+  if (!canRunAudit.value || requestedAuditMaxBatchSize.value === null) return
+  loading.value = true
+  loadingStep.value = 'diagnose'
+  error.value = null
+  try {
+    const payload = {
+      batch_ids: [] as string[],
+      match_ids: [] as string[],
+      max_batch_size: requestedAuditMaxBatchSize.value,
+    }
+
+    if (auditScopeMode.value === 'manual_batch_ids') {
+      payload.batch_ids = parsedManualIds.value
+    } else if (auditScopeMode.value === 'manual_match_ids') {
+      payload.match_ids = parsedManualIds.value
+    } else {
+      const batches = await historicalImportListBatches(requestedAuditCount.value)
+      payload.batch_ids = batches.slice(0, requestedAuditCount.value).map((batch) => batch.id)
+      if (payload.batch_ids.length === 0) {
+        throw new Error('No import batches available for the selected diagnosis scope.')
+      }
+    }
+
+    diagnosisResult.value = await historicalBackfillReprocessDiagnose(payload)
   } catch (err) {
     error.value = normalizeErrorMessage(err)
   } finally {

@@ -84,6 +84,119 @@ def _registry_people(parsed: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def _delivery_path_candidates(parsed: dict[str, Any]) -> tuple[bool, list[str]]:
+    innings_raw = parsed.get("innings")
+    if not isinstance(innings_raw, list):
+        return False, []
+
+    candidates: set[str] = set()
+    for innings in innings_raw:
+        if not isinstance(innings, dict):
+            continue
+
+        if isinstance(innings.get("deliveries"), list):
+            candidates.add("innings[].deliveries[]")
+        if isinstance(innings.get("balls"), list):
+            candidates.add("innings[].balls[]")
+
+        overs = innings.get("overs")
+        if isinstance(overs, list) and any(
+            isinstance(over, dict) and isinstance(over.get("deliveries"), list) for over in overs
+        ):
+            candidates.add("innings[].overs[].deliveries[]")
+
+        if len(innings) == 1:
+            nested = next(iter(innings.values()))
+            if isinstance(nested, dict):
+                if isinstance(nested.get("deliveries"), list):
+                    candidates.add("innings[].<team>.deliveries[]")
+                if isinstance(nested.get("balls"), list):
+                    candidates.add("innings[].<team>.balls[]")
+                nested_overs = nested.get("overs")
+                if isinstance(nested_overs, list) and any(
+                    isinstance(over, dict) and isinstance(over.get("deliveries"), list)
+                    for over in nested_overs
+                ):
+                    candidates.add("innings[].<team>.overs[].deliveries[]")
+
+    return True, sorted(candidates)
+
+
+def _choose_detected_delivery_path(candidates: list[str]) -> str | None:
+    priority = [
+        "innings[].overs[].deliveries[]",
+        "innings[].deliveries[]",
+        "innings[].balls[]",
+        "innings[].<team>.overs[].deliveries[]",
+        "innings[].<team>.deliveries[]",
+        "innings[].<team>.balls[]",
+    ]
+    for path in priority:
+        if path in candidates:
+            return path
+    return candidates[0] if candidates else None
+
+
+def _detect_schema_type(
+    *,
+    innings_path_detected: bool,
+    detected_delivery_path: str | None,
+) -> str:
+    if not innings_path_detected:
+        return "unknown_delivery_schema"
+    if detected_delivery_path == "innings[].overs[].deliveries[]":
+        return "overs_deliveries_schema"
+    if detected_delivery_path in {"innings[].deliveries[]", "innings[].balls[]"}:
+        return "flat_innings_deliveries_schema"
+    if detected_delivery_path in {
+        "innings[].<team>.overs[].deliveries[]",
+        "innings[].<team>.deliveries[]",
+        "innings[].<team>.balls[]",
+    }:
+        return "cricsheet_nested_innings_schema"
+    return "unknown_delivery_schema"
+
+
+def _expected_wickets_from_innings(parsed: dict[str, Any]) -> int:
+    innings_raw = parsed.get("innings")
+    if not isinstance(innings_raw, list):
+        return 0
+
+    total = 0
+    for innings in innings_raw:
+        if not isinstance(innings, dict):
+            continue
+        innings_obj = innings
+        if len(innings_obj) == 1 and not any(
+            key in innings_obj for key in ("balls", "deliveries", "overs", "runs", "wickets")
+        ):
+            nested = next(iter(innings_obj.values()))
+            if isinstance(nested, dict):
+                innings_obj = nested
+        wickets = innings_obj.get("wickets")
+        if isinstance(wickets, int):
+            total += wickets
+    return total
+
+
+def _recommended_next_action(reason: str | None, safely_reprocessable: bool) -> str:
+    if reason == "missing_source_json":
+        return "Source JSON missing. Reattach original JSON before delivery diagnosis or reprocess can run."
+    if reason == "invalid_retained_source_json":
+        return "Retained source JSON is invalid. Reattach original JSON and rerun diagnosis."
+    if reason == "no_innings_path_detected":
+        return "JSON does not expose an innings list. Confirm source format before reprocess."
+    if reason == "no_delivery_path_detected":
+        return "No delivery path detected. Add parser support or provide canonical source JSON."
+    if reason == "unknown_delivery_schema":
+        return "Unknown delivery schema. Extend parser rules before controlled reprocess."
+    if reason == "missing_required_delivery_fields":
+        return "Delivery entries are present but required fields are missing. Validate schema mapping first."
+    if safely_reprocessable:
+        return "Diagnosis indicates delivery extraction is possible. Keep controlled apply gate and proceed in staged batches."
+    return "Diagnosis incomplete. Review source JSON and parser compatibility before reprocess."
+
+
 def _load_storage_ref(batch: HistoricalImportBatch) -> dict[str, Any] | None:
     dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
     reattach = (
@@ -209,6 +322,181 @@ async def _resolve_selected_pairs(
     return pairs
 
 
+def _selected_cpl_pairs(
+    pairs: list[tuple[HistoricalImportBatch, Game]],
+    *,
+    match_ids: list[str],
+    batch_ids: list[str],
+) -> tuple[list[tuple[HistoricalImportBatch, Game]], bool]:
+    filtered_to_cpl = not match_ids and not batch_ids
+    cpl_pairs = (
+        [(batch, game) for batch, game in pairs if _is_cpl(batch, game)]
+        if filtered_to_cpl
+        else pairs
+    )
+    return cpl_pairs, filtered_to_cpl
+
+
+def _validate_selection_size(selected_size: int, max_batch_size: int) -> None:
+    if selected_size > max_batch_size:
+        raise ValueError(f"Controlled batch size exceeded ({selected_size} > {max_batch_size}).")
+    if selected_size > 0 and not _selection_allowed(selected_size):
+        raise ValueError(
+            "Controlled CPL staged ladder violation. Allowed sizes: 1, 3-5, 10, or 20-25."
+        )
+
+
+async def diagnose_delivery_backfill(
+    db: AsyncSession,
+    *,
+    match_ids: list[str],
+    batch_ids: list[str],
+    max_batch_size: int,
+    source_payloads_by_batch: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    pairs = await _resolve_selected_pairs(db, match_ids=match_ids, batch_ids=batch_ids)
+    cpl_pairs, _filtered_to_cpl = _selected_cpl_pairs(
+        pairs, match_ids=match_ids, batch_ids=batch_ids
+    )
+    _validate_selection_size(len(cpl_pairs), max_batch_size)
+
+    payload_overrides = source_payloads_by_batch or {}
+    records: list[dict[str, Any]] = []
+    blocked = 0
+
+    for batch, game in cpl_pairs:
+        completeness = _completeness(game)
+        origin = _import_origin(batch)
+        override_payload = payload_overrides.get(batch.id)
+        if isinstance(override_payload, dict):
+            payload = json.dumps(override_payload, separators=(",", ":")).encode("utf-8")
+            load_error = None
+        else:
+            payload, load_error = _load_retained_payload(batch)
+
+        registry_available = False
+        expected_deliveries = 0
+        expected_wickets = 0
+        innings_path_detected = False
+        delivery_path_candidates: list[str] = []
+        detected_delivery_path: str | None = None
+        schema_detected = "unknown_delivery_schema"
+        batter_field_detected = False
+        bowler_field_detected = False
+        non_striker_field_detected = False
+        runs_field_detected = False
+        extras_field_detected = False
+        wicket_field_detected = False
+        reason = load_error
+
+        if payload is not None:
+            try:
+                parsed_any = json.loads(payload.decode("utf-8"))
+                parsed = parsed_any if isinstance(parsed_any, dict) else {}
+                innings_path_detected, delivery_path_candidates = _delivery_path_candidates(parsed)
+                detected_delivery_path = _choose_detected_delivery_path(delivery_path_candidates)
+                schema_detected = _detect_schema_type(
+                    innings_path_detected=innings_path_detected,
+                    detected_delivery_path=detected_delivery_path,
+                )
+
+                innings = extract_normalized_innings(parsed)
+                normalized_deliveries = [
+                    delivery
+                    for inn in innings
+                    for delivery in inn.get("deliveries", [])
+                    if isinstance(delivery, dict)
+                ]
+                expected_deliveries = len(normalized_deliveries)
+                expected_wickets = sum(
+                    1 for delivery in normalized_deliveries if delivery.get("is_wicket")
+                )
+                if expected_wickets == 0:
+                    expected_wickets = _expected_wickets_from_innings(parsed)
+                registry_available = len(_registry_people(parsed)) > 0
+
+                batter_field_detected = any(
+                    str(delivery.get("batter") or "").strip() for delivery in normalized_deliveries
+                )
+                bowler_field_detected = any(
+                    str(delivery.get("bowler") or "").strip() for delivery in normalized_deliveries
+                )
+                non_striker_field_detected = any(
+                    str(delivery.get("non_striker") or "").strip()
+                    for delivery in normalized_deliveries
+                )
+                runs_field_detected = any(
+                    isinstance(delivery.get("runs_off_bat"), int)
+                    or isinstance(delivery.get("extra_runs"), int)
+                    for delivery in normalized_deliveries
+                )
+                extras_field_detected = any(
+                    bool(delivery.get("extra_type")) or int(delivery.get("extra_runs") or 0) > 0
+                    for delivery in normalized_deliveries
+                )
+                wicket_field_detected = any(
+                    bool(delivery.get("is_wicket"))
+                    or bool(delivery.get("dismissal_kind"))
+                    or bool(delivery.get("player_out"))
+                    for delivery in normalized_deliveries
+                ) or expected_wickets > 0
+
+                if not innings_path_detected:
+                    reason = "no_innings_path_detected"
+                elif not delivery_path_candidates:
+                    reason = "no_delivery_path_detected"
+                elif expected_deliveries == 0:
+                    reason = "unknown_delivery_schema"
+                elif not (
+                    batter_field_detected
+                    and bowler_field_detected
+                    and non_striker_field_detected
+                    and runs_field_detected
+                ):
+                    reason = "missing_required_delivery_fields"
+                else:
+                    reason = None
+            except Exception:
+                reason = "invalid_retained_source_json"
+
+        safely_reprocessable = payload is not None and reason is None and expected_deliveries > 0
+        row = {
+            "match_id": game.id,
+            "batch_id": batch.id,
+            "import_source": origin,
+            "completeness": completeness,
+            "source_json_retained": payload is not None,
+            "source_json_required": payload is None,
+            "schema_detected": schema_detected,
+            "innings_path_detected": innings_path_detected,
+            "delivery_path_detected": detected_delivery_path is not None and expected_deliveries > 0,
+            "detected_delivery_path": detected_delivery_path,
+            "delivery_path_candidates": delivery_path_candidates,
+            "expected_deliveries": expected_deliveries,
+            "expected_wickets": expected_wickets,
+            "registry_people_available": registry_available,
+            "batter_field_detected": batter_field_detected,
+            "bowler_field_detected": bowler_field_detected,
+            "non_striker_field_detected": non_striker_field_detected,
+            "runs_field_detected": runs_field_detected,
+            "extras_field_detected": extras_field_detected,
+            "wicket_field_detected": wicket_field_detected,
+            "skip_or_failure_reason": reason,
+            "safely_reprocessable": safely_reprocessable,
+            "recommended_next_action": _recommended_next_action(reason, safely_reprocessable),
+        }
+        if reason is not None:
+            blocked += 1
+        records.append(row)
+
+    return {
+        "total_imported_cpl_matches": len(cpl_pairs),
+        "selected_matches": len(cpl_pairs),
+        "blocked_matches": blocked,
+        "records": records,
+    }
+
+
 async def audit_delivery_backfill(
     db: AsyncSession,
     *,
@@ -218,21 +506,12 @@ async def audit_delivery_backfill(
     source_payloads_by_batch: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     pairs = await _resolve_selected_pairs(db, match_ids=match_ids, batch_ids=batch_ids)
-    filtered_to_cpl = not match_ids and not batch_ids
-    cpl_pairs = (
-        [(batch, game) for batch, game in pairs if _is_cpl(batch, game)]
-        if filtered_to_cpl
-        else pairs
+    cpl_pairs, _filtered_to_cpl = _selected_cpl_pairs(
+        pairs, match_ids=match_ids, batch_ids=batch_ids
     )
     payload_overrides = source_payloads_by_batch or {}
 
-    selected_size = len(cpl_pairs)
-    if selected_size > max_batch_size:
-        raise ValueError(f"Controlled batch size exceeded ({selected_size} > {max_batch_size}).")
-    if selected_size > 0 and not _selection_allowed(selected_size):
-        raise ValueError(
-            "Controlled CPL staged ladder violation. Allowed sizes: 1, 3-5, 10, or 20-25."
-        )
+    _validate_selection_size(len(cpl_pairs), max_batch_size)
 
     completeness_counts = {
         "metadata_only": 0,

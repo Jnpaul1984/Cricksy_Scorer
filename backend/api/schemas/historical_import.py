@@ -632,6 +632,39 @@ class HistoricalBackfillAuditResponse(BaseModel):
     records: list[HistoricalBackfillAuditMatchRecord] = Field(default_factory=list)
 
 
+class HistoricalBackfillDiagnosisMatchRecord(BaseModel):
+    match_id: str
+    batch_id: str
+    import_source: Literal["single_json_apply", "bulk_zip_apply", "unknown"]
+    completeness: str
+    source_json_retained: bool = False
+    source_json_required: bool = False
+    schema_detected: str = "unknown_delivery_schema"
+    innings_path_detected: bool = False
+    delivery_path_detected: bool = False
+    detected_delivery_path: str | None = None
+    delivery_path_candidates: list[str] = Field(default_factory=list)
+    expected_deliveries: int = 0
+    expected_wickets: int = 0
+    registry_people_available: bool = False
+    batter_field_detected: bool = False
+    bowler_field_detected: bool = False
+    non_striker_field_detected: bool = False
+    runs_field_detected: bool = False
+    extras_field_detected: bool = False
+    wicket_field_detected: bool = False
+    skip_or_failure_reason: str | None = None
+    safely_reprocessable: bool = False
+    recommended_next_action: str = ""
+
+
+class HistoricalBackfillDiagnosisResponse(BaseModel):
+    total_imported_cpl_matches: int
+    selected_matches: int
+    blocked_matches: int
+    records: list[HistoricalBackfillDiagnosisMatchRecord] = Field(default_factory=list)
+
+
 class HistoricalBackfillApplyMatchResult(BaseModel):
     match_id: str
     batch_id: str
