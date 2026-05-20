@@ -11,7 +11,7 @@ import zipfile
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Annotated, cast
+from typing import Annotated, Any, Literal, cast
 
 from backend.api.schemas.historical_import import (
     HistoricalImportApplyDeliveriesResponse,
@@ -61,6 +61,7 @@ from backend.services.historical_import_apply_service import (
     apply_historical_deliveries,
     rollback_historical_batch,
 )
+from backend.services.historical_import_delivery_service import extract_normalized_innings
 from backend.services.historical_import_backfill_service import (
     repair_legacy_historical_metadata,
 )
@@ -548,10 +549,18 @@ def _source_file_token(file_name: str | None) -> str:
 def _maybe_int(value: object) -> int | None:
     if value in (None, ""):
         return None
-    try:
+    if isinstance(value, bool):
         return int(value)
-    except (TypeError, ValueError):
-        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _first_text(*values: object) -> str | None:
@@ -573,7 +582,9 @@ def _team_names_from_game(game: models.Game) -> list[str]:
 
 
 def _team_signature(teams: list[str]) -> tuple[str, ...]:
-    return tuple(sorted(_normalize_match_text(team) for team in teams if _normalize_match_text(team)))
+    return tuple(
+        sorted(_normalize_match_text(team) for team in teams if _normalize_match_text(team))
+    )
 
 
 def _innings_runs_from_preview(innings_preview: list[object]) -> tuple[int, ...]:
@@ -600,18 +611,22 @@ def _candidate_payload_metadata(
     expected_deliveries = 0
     expected_wickets = 0
     registry_people_available = False
+    parsed_dict: dict[str, Any] | None = None
 
     try:
-        parsed = json.loads(payload_bytes.decode("utf-8"))
-        info = parsed.get("info") if isinstance(parsed, dict) and isinstance(parsed.get("info"), dict) else {}
-        registry = info.get("registry") if isinstance(info.get("registry"), dict) else {}
-        people = registry.get("people") if isinstance(registry.get("people"), dict) else {}
+        parsed_raw = json.loads(payload_bytes.decode("utf-8"))
+        parsed_dict = parsed_raw if isinstance(parsed_raw, dict) else None
+        info_raw = parsed_dict.get("info") if parsed_dict is not None else None
+        info: dict[str, Any] = info_raw if isinstance(info_raw, dict) else {}
+        registry_raw = info.get("registry")
+        registry: dict[str, Any] = registry_raw if isinstance(registry_raw, dict) else {}
+        people = registry.get("people")
         registry_people_available = bool(people)
     except Exception:
-        parsed = None
+        parsed_dict = None
 
     try:
-        innings = extract_normalized_innings(parsed if isinstance(parsed, dict) else {})
+        innings = extract_normalized_innings(parsed_dict or {})
         expected_deliveries = sum(len(inn["deliveries"]) for inn in innings)
         expected_wickets = sum(
             1 for inn in innings for delivery in inn["deliveries"] if delivery.get("is_wicket")
@@ -619,7 +634,11 @@ def _candidate_payload_metadata(
     except Exception:
         expected_deliveries = dry_run.delivery_count
         expected_wickets = sum(
-            _maybe_int(getattr(inning, "wickets", None) if not isinstance(inning, dict) else inning.get("wickets"))
+            _maybe_int(
+                getattr(inning, "wickets", None)
+                if not isinstance(inning, dict)
+                else inning.get("wickets")
+            )
             or 0
             for inning in dry_run.innings_preview
         )
@@ -660,13 +679,22 @@ async def _load_historical_reattach_targets(
     targets: list[_HistoricalMatchTarget] = []
     for batch, game in rows:
         phases = game.phases if isinstance(game.phases, dict) else {}
-        hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+        hist_meta_raw = phases.get("historical_import")
+        hist_meta: dict[str, Any] = hist_meta_raw if isinstance(hist_meta_raw, dict) else {}
         if not hist_meta.get("is_historical"):
             continue
-        venue_context = hist_meta.get("venue_context") if isinstance(hist_meta.get("venue_context"), dict) else {}
-        venue_resolution = (
-            hist_meta.get("venue_resolution") if isinstance(hist_meta.get("venue_resolution"), dict) else {}
+        venue_context_raw = hist_meta.get("venue_context")
+        venue_context: dict[str, Any] = (
+            venue_context_raw if isinstance(venue_context_raw, dict) else {}
         )
+        venue_resolution_raw = hist_meta.get("venue_resolution")
+        venue_resolution: dict[str, Any] = (
+            venue_resolution_raw if isinstance(venue_resolution_raw, dict) else {}
+        )
+        source_dates_raw = hist_meta.get("source_dates")
+        source_dates = source_dates_raw if isinstance(source_dates_raw, list) else []
+        innings_summary_raw = phases.get("historical_innings_summary")
+        innings_summary = innings_summary_raw if isinstance(innings_summary_raw, list) else []
         target_metadata = HistoricalSourcePayloadReattachMetadata(
             competition_name=_first_text(
                 hist_meta.get("competition_name"),
@@ -675,7 +703,7 @@ async def _load_historical_reattach_targets(
             ),
             season=_first_text(hist_meta.get("season")),
             match_number=_maybe_int(hist_meta.get("match_number")),
-            date=_first_text(hist_meta.get("match_date"), *(hist_meta.get("source_dates") or [])),
+            date=_first_text(hist_meta.get("match_date"), *source_dates),
             teams=_team_names_from_game(game),
             venue=_first_text(hist_meta.get("venue"), venue_context.get("venue_name")),
             city=_first_text(venue_context.get("city")),
@@ -684,7 +712,7 @@ async def _load_historical_reattach_targets(
             expected_deliveries=batch.delivery_count,
             expected_wickets=sum(
                 (_maybe_int(inning.get("wickets")) or 0)
-                for inning in (phases.get("historical_innings_summary") or [])
+                for inning in innings_summary
                 if isinstance(inning, dict)
             ),
         )
@@ -707,15 +735,13 @@ async def _load_historical_reattach_targets(
             if _normalize_match_text(value)
         }
         dry_run_summary = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
-        canonical_preview = (
-            dry_run_summary.get("canonical_preview")
-            if isinstance(dry_run_summary.get("canonical_preview"), dict)
-            else {}
+        canonical_preview_raw = dry_run_summary.get("canonical_preview")
+        canonical_preview: dict[str, Any] = (
+            canonical_preview_raw if isinstance(canonical_preview_raw, dict) else {}
         )
-        competition_context = (
-            canonical_preview.get("competition_context")
-            if isinstance(canonical_preview.get("competition_context"), dict)
-            else {}
+        competition_context_raw = canonical_preview.get("competition_context")
+        competition_context: dict[str, Any] = (
+            competition_context_raw if isinstance(competition_context_raw, dict) else {}
         )
         for value in (
             competition_context.get("competition_name"),
@@ -733,10 +759,10 @@ async def _load_historical_reattach_targets(
                 competition_aliases=competition_aliases,
                 source_dates={
                     str(value).strip()
-                    for value in [target_metadata.date, *(hist_meta.get("source_dates") or [])]
+                    for value in [target_metadata.date, *source_dates]
                     if str(value or "").strip()
                 },
-                innings_runs=_innings_runs_from_preview(phases.get("historical_innings_summary") or []),
+                innings_runs=_innings_runs_from_preview(innings_summary),
             )
         )
     return targets
@@ -781,7 +807,9 @@ def _build_reattach_match_candidate(
         candidate_source_filename
         and candidate_source_filename == _source_file_token(target.metadata.source_filename)
     )
-    innings_total_match = bool(candidate_innings_runs and candidate_innings_runs == target.innings_runs)
+    innings_total_match = bool(
+        candidate_innings_runs and candidate_innings_runs == target.innings_runs
+    )
     city_match = bool(
         candidate_city and candidate_city == _normalize_match_text(target.metadata.city)
     )
@@ -801,7 +829,7 @@ def _build_reattach_match_candidate(
     return HistoricalSourcePayloadReattachMatchCandidate(
         match_id=target.game.id,
         batch_id=target.batch.id,
-        confidence=cast("Literal['exact_match', 'likely_match']", confidence),
+        confidence=cast(Literal["exact_match", "likely_match"], confidence),
         matched_on=matched_on,
         source_json_retained=False,
         metadata=target.metadata,
@@ -810,12 +838,18 @@ def _build_reattach_match_candidate(
 
 def _batch_has_retained_source(batch: models.HistoricalImportBatch) -> bool:
     dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
-    reattach = dry_run.get("source_payload_reattach") if isinstance(dry_run.get("source_payload_reattach"), dict) else {}
-    reattach_storage = reattach.get("storage") if isinstance(reattach.get("storage"), dict) else {}
+    reattach_raw = dry_run.get("source_payload_reattach")
+    reattach: dict[str, Any] = reattach_raw if isinstance(reattach_raw, dict) else {}
+    reattach_storage_raw = reattach.get("storage")
+    reattach_storage: dict[str, Any] = (
+        reattach_storage_raw if isinstance(reattach_storage_raw, dict) else {}
+    )
     if isinstance(reattach_storage.get("raw"), dict):
         return True
-    intake = dry_run.get("large_zip_intake") if isinstance(dry_run.get("large_zip_intake"), dict) else {}
-    storage = intake.get("storage") if isinstance(intake.get("storage"), dict) else {}
+    intake_raw = dry_run.get("large_zip_intake")
+    intake: dict[str, Any] = intake_raw if isinstance(intake_raw, dict) else {}
+    storage_raw = intake.get("storage")
+    storage: dict[str, Any] = storage_raw if isinstance(storage_raw, dict) else {}
     return isinstance(storage.get("raw"), dict)
 
 
@@ -832,9 +866,9 @@ def _source_reattach_file_result(
 ) -> HistoricalSourcePayloadReattachDryRunFileResult:
     return HistoricalSourcePayloadReattachDryRunFileResult(
         file_name=file_name,
-        status=cast("Literal['ready', 'invalid', 'unsupported', 'error']", status),
+        status=cast(Literal["ready", "invalid", "unsupported", "error"], status),
         match_confidence=cast(
-            "Literal['exact_match', 'likely_match', 'ambiguous', 'no_match']",
+            Literal["exact_match", "likely_match", "ambiguous", "no_match"],
             match_confidence,
         ),
         blocked_from_apply=match_confidence in {"ambiguous", "no_match"} or status != "ready",
@@ -890,7 +924,8 @@ async def _build_source_reattach_preview(
         matches = [
             match
             for target in targets
-            if (match := _build_reattach_match_candidate(candidate=candidate, target=target)) is not None
+            if (match := _build_reattach_match_candidate(candidate=candidate, target=target))
+            is not None
         ]
         matches.sort(
             key=lambda item: (
@@ -1006,7 +1041,9 @@ async def _build_source_reattach_preview(
     ready_candidates = sum(
         1
         for item in file_results
-        if item.status == "ready" and not item.blocked_from_apply and item.matched_target is not None
+        if item.status == "ready"
+        and not item.blocked_from_apply
+        and item.matched_target is not None
     )
     return (
         HistoricalSourcePayloadReattachDryRunResponse(
@@ -2658,9 +2695,9 @@ async def historical_source_payload_reattach_apply(
         preview_lookup[item.file_name] = item
         preview_lookup[_source_file_label(item.file_name)] = item
     normalized_candidate_lookup: dict[str, _SourceReattachCandidate] = {}
-    for key, candidate in candidate_lookup.items():
-        normalized_candidate_lookup[key] = candidate
-        normalized_candidate_lookup[_source_file_label(key)] = candidate
+    for key, lookup_candidate in candidate_lookup.items():
+        normalized_candidate_lookup[key] = lookup_candidate
+        normalized_candidate_lookup[_source_file_label(key)] = lookup_candidate
     mappings = _parse_source_reattach_selection(selected_mappings)
 
     for file_name, batch_id in mappings:
@@ -2695,7 +2732,7 @@ async def historical_source_payload_reattach_apply(
 
     for file_name, batch_id in mappings:
         preview_item = preview_lookup[file_name]
-        candidate = normalized_candidate_lookup.get(file_name)
+        candidate: _SourceReattachCandidate | None = normalized_candidate_lookup.get(file_name)
         if candidate is None or preview_item.matched_target is None:
             error_count += 1
             results.append(
@@ -2708,7 +2745,9 @@ async def historical_source_payload_reattach_apply(
             )
             continue
 
-        batch = await db.scalar(select(models.HistoricalImportBatch).where(models.HistoricalImportBatch.id == batch_id))
+        batch = await db.scalar(
+            select(models.HistoricalImportBatch).where(models.HistoricalImportBatch.id == batch_id)
+        )
         if batch is None or not batch.applied_game_id:
             error_count += 1
             results.append(
@@ -2790,15 +2829,16 @@ async def historical_source_payload_reattach_apply(
             "expected_wickets": candidate.metadata.expected_wickets,
         }
 
-        dry_run_summary = dict(batch.dry_run_summary) if isinstance(batch.dry_run_summary, dict) else {}
+        batch_dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else None
+        dry_run_summary: dict[str, Any] = dict(batch_dry_run) if batch_dry_run is not None else {}
         dry_run_summary["source_payload_reattach"] = reattach_summary
         batch.dry_run_summary = dry_run_summary
 
         phases = game.phases if isinstance(game.phases, dict) else {}
-        historical_meta = (
-            phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+        historical_meta_raw = phases.get("historical_import")
+        historical_meta: dict[str, Any] = (
+            dict(historical_meta_raw) if isinstance(historical_meta_raw, dict) else {}
         )
-        historical_meta = dict(historical_meta)
         historical_meta["source_payload_reattach"] = {
             **reattach_summary,
             "source_filename": batch.source_filename,
@@ -2830,7 +2870,7 @@ async def historical_source_payload_reattach_apply(
         status = "partial"
 
     return HistoricalSourcePayloadReattachApplyResponse(
-        status=cast("Literal['applied', 'partial', 'failed']", status),
+        status=cast(Literal["applied", "partial", "failed"], status),
         source_filename=source_filename,
         selected_count=len(mappings),
         reattached_count=reattached_count,

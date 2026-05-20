@@ -107,7 +107,9 @@ def _cpl_payload_with_registry() -> dict[str, Any]:
     return payload
 
 
-def _create_and_apply_batch(client: TestClient, token: str, payload: dict[str, Any]) -> tuple[str, str]:
+def _create_and_apply_batch(
+    client: TestClient, token: str, payload: dict[str, Any]
+) -> tuple[str, str]:
     dry_run = client.post(
         "/api/historical-import/json/dry-run",
         headers=_auth_headers(token),
@@ -147,7 +149,9 @@ def _load_batch(client: TestClient, batch_id: str) -> models.HistoricalImportBat
     async def _query() -> models.HistoricalImportBatch:
         async with client.session_maker() as session:  # type: ignore[attr-defined]
             result = await session.execute(
-                select(models.HistoricalImportBatch).where(models.HistoricalImportBatch.id == batch_id)
+                select(models.HistoricalImportBatch).where(
+                    models.HistoricalImportBatch.id == batch_id
+                )
             )
             return result.scalar_one()
 
@@ -320,7 +324,9 @@ def test_source_reattach_dry_run_matches_existing_historical_record(client: Test
     assert result["metadata"]["expected_wickets"] > 0
 
 
-def test_source_reattach_dry_run_blocks_no_match_and_ambiguous_candidates(client: TestClient) -> None:
+def test_source_reattach_dry_run_blocks_no_match_and_ambiguous_candidates(
+    client: TestClient,
+) -> None:
     token = _register_analyst(client)
     payload = _cpl_payload_with_registry()
     batch_id, _ = _create_and_apply_batch(client, token, payload)
@@ -332,7 +338,13 @@ def test_source_reattach_dry_run_blocks_no_match_and_ambiguous_candidates(client
     response = client.post(
         "/api/historical-import/json/source-reattach/dry-run",
         headers=_auth_headers(token),
-        files={"file": ("repair-no-match.json", json.dumps(no_match_payload).encode("utf-8"), "application/json")},
+        files={
+            "file": (
+                "repair-no-match.json",
+                json.dumps(no_match_payload).encode("utf-8"),
+                "application/json",
+            )
+        },
     )
     assert response.status_code == 200, response.text
     no_match_result = response.json()["files"][0]
@@ -347,7 +359,13 @@ def test_source_reattach_dry_run_blocks_no_match_and_ambiguous_candidates(client
     ambiguous_response = client.post(
         "/api/historical-import/json/source-reattach/dry-run",
         headers=_auth_headers(token),
-        files={"file": ("repair-ambiguous.json", json.dumps(payload).encode("utf-8"), "application/json")},
+        files={
+            "file": (
+                "repair-ambiguous.json",
+                json.dumps(payload).encode("utf-8"),
+                "application/json",
+            )
+        },
     )
     assert ambiguous_response.status_code == 200, ambiguous_response.text
     ambiguous_result = ambiguous_response.json()["files"][0]
@@ -397,7 +415,9 @@ def test_source_reattach_apply_attaches_provenance_without_duplicate_games(
     assert game_after.deliveries in (None, [])
     assert _count_games(client) == game_count_before
     phases = game_after.phases if isinstance(game_after.phases, dict) else {}
-    hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+    hist_meta = (
+        phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+    )
     assert hist_meta.get("source_json_retained") is True
     assert isinstance(hist_meta.get("source_payload_reattach"), dict)
 

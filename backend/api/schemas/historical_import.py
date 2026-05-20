@@ -695,7 +695,9 @@ class HistoricalSourcePayloadReattachDryRunFileResult(BaseModel):
     message: str
     metadata: HistoricalSourcePayloadReattachMetadata
     matched_target: HistoricalSourcePayloadReattachMatchCandidate | None = None
-    candidate_matches: list[HistoricalSourcePayloadReattachMatchCandidate] = Field(default_factory=list)
+    candidate_matches: list[HistoricalSourcePayloadReattachMatchCandidate] = Field(
+        default_factory=list
+    )
     warnings: list[str] = Field(default_factory=list)
 
 
