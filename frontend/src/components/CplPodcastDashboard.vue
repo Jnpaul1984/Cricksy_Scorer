@@ -191,6 +191,11 @@
           <span v-if="selectedTeam !== 'all'"> · Team: <strong>{{ selectedTeam }}</strong></span>
           <span v-if="selectedVenue !== 'all'"> · Venue: <strong>{{ selectedVenue }}</strong></span>
         </p>
+        <p v-else class="cpld-section-scope">
+          Scope: <strong>All-time CPL</strong>
+          <span v-if="selectedTeam !== 'all'"> · Team: <strong>{{ selectedTeam }}</strong></span>
+          <span v-if="selectedVenue !== 'all'"> · Venue: <strong>{{ selectedVenue }}</strong></span>
+        </p>
 
         <div class="cpld-cards">
           <div class="cpld-card">
@@ -224,6 +229,34 @@
             <p class="cpld-card-label">Top team (most wins)</p>
             <p v-if="!topTeamByWins" class="cpld-card-warn">Win data not available in current imports</p>
           </div>
+        </div>
+
+        <!-- Data completeness diagnostics panel -->
+        <div class="cpld-diagnostics" role="note" aria-label="Data completeness diagnostics">
+          <p class="cpld-diagnostics-title">📋 Data Completeness Diagnostics</p>
+          <div class="cpld-diagnostics-grid">
+            <div class="cpld-diag-item">
+              <span class="cpld-diag-val">{{ cplMatches.length }}</span>
+              <span class="cpld-diag-lbl">Total CPL matches imported</span>
+            </div>
+            <div class="cpld-diag-item">
+              <span class="cpld-diag-val">{{ deliveryCompleteCount }}</span>
+              <span class="cpld-diag-lbl">Delivery-complete matches</span>
+            </div>
+            <div class="cpld-diag-item">
+              <span class="cpld-diag-val cpld-diag-val--warn">{{ missingDeliveryCount }}</span>
+              <span class="cpld-diag-lbl">Matches missing delivery data</span>
+            </div>
+            <div class="cpld-diag-item">
+              <span class="cpld-diag-val">{{ availableSeasons.length }}</span>
+              <span class="cpld-diag-lbl">Seasons represented</span>
+            </div>
+          </div>
+          <p v-if="missingDeliveryCount > 0" class="cpld-diagnostics-note">
+            ⚠ {{ missingDeliveryCount }} match{{ missingDeliveryCount === 1 ? '' : 'es' }} are metadata-only.
+            Player batting/bowling totals are derived from delivery-complete matches only and may appear lower than expected.
+            Import delivery data via the Import tab to improve completeness.
+          </p>
         </div>
       </section>
 
@@ -316,6 +349,16 @@
       <!-- ── 3. Leaderboards ── -->
       <section ref="leaderboardRef" class="cpld-section" aria-label="Leaderboards">
         <h4 class="cpld-section-title">🏆 Leaderboards</h4>
+        <p class="cpld-section-scope">
+          Scope:
+          <strong>{{
+            selectedSeason !== 'all'
+              ? 'CPL ' + selectedSeason
+              : 'All-time CPL'
+          }}</strong>
+          <span v-if="selectedTeam !== 'all'"> · Team: <strong>{{ selectedTeam }}</strong></span>
+          · From delivery-complete matches only
+        </p>
 
         <div v-if="filteredPlayers.length > 0 || filteredTeamAggregates.length > 0" class="cpld-leaderboards">
           <!-- Top run scorers -->
@@ -1041,6 +1084,16 @@ const filteredTotalWickets = computed(() =>
 /** Simple heuristic: team appearing in most matches with the most total wins.
  * Since win/loss data is not available in the summary schema, return null. */
 const topTeamByWins = computed<string | null>(() => null)
+
+/** CPL matches with full delivery data. */
+const deliveryCompleteCount = computed(() =>
+  cplMatches.value.filter(m => m.has_delivery_data).length
+)
+
+/** CPL matches missing delivery data. */
+const missingDeliveryCount = computed(() =>
+  cplMatches.value.filter(m => !m.has_delivery_data).length
+)
 
 const filteredPlayers = computed(() => {
   // When filters narrow to specific team, only include that team's players.
@@ -2531,7 +2584,7 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-state--loading {
-  background: #f8fafc;
+  background: var(--color-surface, #f8fafc);
 }
 
 .cpld-state--error {
@@ -2540,12 +2593,12 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-state--empty {
-  background: #f8fafc;
+  background: var(--color-surface, #f8fafc);
   border: 1px dashed #cbd5e1;
 }
 
 .cpld-state--hint {
-  background: #f8fafc;
+  background: var(--color-surface, #f8fafc);
   border: 1px dashed #cbd5e1;
   padding: 1rem;
   text-align: left;
@@ -2565,8 +2618,8 @@ function downloadPodcastScriptMarkdown(): void {
 .cpld-retry-btn {
   margin-top: 0.75rem;
   padding: 0.375rem 0.75rem;
-  border: 1px solid #e2e8f0;
-  background: #fff;
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-bg, #fff);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.8rem;
@@ -2578,8 +2631,8 @@ function downloadPodcastScriptMarkdown(): void {
   flex-wrap: wrap;
   gap: 0.75rem;
   align-items: flex-end;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 6px;
   padding: 0.75rem 1rem;
 }
@@ -2600,10 +2653,11 @@ function downloadPodcastScriptMarkdown(): void {
 
 .cpld-select {
   padding: 0.35rem 0.6rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--color-border, #cbd5e1);
   border-radius: 4px;
   font-size: 0.825rem;
-  background: #fff;
+  background: var(--color-bg, #fff);
+  color: var(--color-text, #1e293b);
   min-width: 140px;
 }
 
@@ -2613,8 +2667,8 @@ function downloadPodcastScriptMarkdown(): void {
 
 .cpld-reset-btn {
   padding: 0.35rem 0.75rem;
-  border: 1px solid #e2e8f0;
-  background: #fff;
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-bg, #fff);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.8rem;
@@ -2623,8 +2677,8 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-export-pack {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 8px;
   padding: 0.85rem 1rem;
 }
@@ -2657,10 +2711,10 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-export-review {
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--color-border, #cbd5e1);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  background: #ffffff;
+  background: var(--color-bg, #ffffff);
 }
 
 .cpld-export-review p {
@@ -2696,9 +2750,9 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-export-btn--secondary {
-  border-color: #cbd5e1;
-  background: #ffffff;
-  color: #334155;
+  border-color: var(--color-border, #cbd5e1);
+  background: var(--color-bg, #ffffff);
+  color: var(--color-text, #334155);
 }
 
 .cpld-export-error {
@@ -2708,8 +2762,8 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-export-preview-wrap {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--color-bg, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 6px;
   padding: 0.65rem;
 }
@@ -2763,8 +2817,8 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--color-bg, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 8px;
   padding: 0.75rem 1rem;
   display: flex;
@@ -2773,7 +2827,7 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-card--muted {
-  background: #f8fafc;
+  background: var(--color-surface, #f8fafc);
 }
 
 .cpld-card-value {
@@ -2810,8 +2864,8 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-match-header {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 6px;
   padding: 0.75rem 1rem;
   margin-bottom: 0.75rem;
@@ -2870,8 +2924,8 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-innings-card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--color-bg, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 6px;
   padding: 0.75rem 1rem;
 }
@@ -3627,8 +3681,8 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-archive-item {
-  background: #ffffff;
-  border: 1px solid #dbe3ef;
+  background: var(--color-bg, #ffffff);
+  border: 1px solid var(--color-border, #dbe3ef);
   border-radius: 6px;
   padding: 0.7rem;
   display: flex;
@@ -3652,5 +3706,60 @@ function downloadPodcastScriptMarkdown(): void {
 
 .cpld-archive-meta--warn {
   color: #9a3412;
+}
+
+/* ── Data Completeness Diagnostics ──────────────────────────────────────── */
+
+.cpld-diagnostics {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-surface, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.cpld-diagnostics-title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text, #1e293b);
+}
+
+.cpld-diagnostics-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.cpld-diag-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.cpld-diag-val {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text, #1e293b);
+  line-height: 1.1;
+}
+
+.cpld-diag-val--warn {
+  color: #b45309;
+}
+
+.cpld-diag-lbl {
+  font-size: 0.68rem;
+  color: var(--color-text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cpld-diagnostics-note {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #b45309;
 }
 </style>

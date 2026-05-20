@@ -968,4 +968,65 @@ describe('CplPodcastDashboard', () => {
     expect(savedPackages[0].provenance.limitations.length).toBeGreaterThan(0);
     expect(revokeObjectURLSpy).toHaveBeenCalledTimes(2);
   });
+
+  it('shows all-time scope label in leaderboards when no season is selected', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    const lbSection = wrapper.find('[aria-label="Leaderboards"]');
+    expect(lbSection.exists()).toBe(true);
+    expect(lbSection.text()).toContain('All-time CPL');
+  });
+
+  it('shows selected season scope label in leaderboards when a season is active', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    // Select the 2023 season
+    const seasonSelect = wrapper.find('#cpld-season-select');
+    if (seasonSelect.exists()) {
+      await seasonSelect.setValue('2023');
+      await seasonSelect.trigger('change');
+      await flushPromises();
+      const lbSection = wrapper.find('[aria-label="Leaderboards"]');
+      expect(lbSection.text()).toContain('CPL 2023');
+    }
+  });
+
+  it('shows data completeness diagnostics panel in season summary', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    const diag = wrapper.find('.cpld-diagnostics');
+    expect(diag.exists()).toBe(true);
+    expect(diag.text()).toContain('Total CPL matches imported');
+    expect(diag.text()).toContain('Delivery-complete matches');
+    expect(diag.text()).toContain('Matches missing delivery data');
+    expect(diag.text()).toContain('Seasons represented');
+  });
+
+  it('diagnostics shows warning when some matches lack delivery data', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    const diag = wrapper.find('.cpld-diagnostics');
+    // cplSummary() has 1 match with delivery data and 1 without
+    const missingVal = wrapper.find('.cpld-diag-val--warn');
+    expect(missingVal.exists()).toBe(true);
+    expect(missingVal.text()).toBe('1');
+    expect(diag.text()).toContain('metadata-only');
+  });
+
+  it('shows all-time CPL scope label in season summary when no season selected', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    const seasonSection = wrapper.find('[aria-label="Season summary"]');
+    expect(seasonSection.text()).toContain('All-time CPL');
+  });
 });

@@ -933,18 +933,73 @@
               <div class="aw-table-header">
                 <h3>Players</h3>
                 <p class="aw-table-subtitle">
-                  Player-level aggregates for the current filters.
-                  <span class="aw-inline-completeness">
-                    Data completeness: {{ playerDataCompleteness }}
-                  </span>
+                  Player-level aggregates for the selected scope.
                 </p>
               </div>
+
+              <!-- Players scope filters -->
+              <div class="aw-player-filters">
+                <div class="aw-player-filter-row">
+                  <label class="aw-filter-label" for="player-comp-select">Competition</label>
+                  <select id="player-comp-select" v-model="playerCompetitionFilter" class="aw-select" aria-label="Filter by competition">
+                    <option value="all">All competitions</option>
+                    <option v-for="comp in competitionOptions" :key="comp" :value="comp">{{ comp }}</option>
+                  </select>
+                  <label class="aw-filter-label" for="player-season-select">Season</label>
+                  <select id="player-season-select" v-model="playerSeasonFilter" class="aw-select" aria-label="Filter by season">
+                    <option value="all">All seasons</option>
+                    <option v-for="s in playerSeasonOptions" :key="s" :value="s">{{ s }}</option>
+                  </select>
+                  <label class="aw-filter-label" for="player-view-toggle">View</label>
+                  <div class="aw-chip-row">
+                    <button
+                      class="aw-chip"
+                      :class="{ 'aw-chip--active': playerViewMode === 'all-time' }"
+                      :aria-pressed="playerViewMode === 'all-time'"
+                      @click="playerViewMode = 'all-time'"
+                    >All-time</button>
+                    <button
+                      class="aw-chip"
+                      :class="{ 'aw-chip--active': playerViewMode === 'season' }"
+                      :aria-pressed="playerViewMode === 'season'"
+                      @click="playerViewMode = 'season'"
+                    >Season scope</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Player completeness diagnostics -->
+              <div class="aw-diagnostics-row" role="note" aria-label="Data completeness diagnostics">
+                <span class="aw-diagnostics-item">
+                  <strong>{{ filteredPlayers.length }}</strong> players shown
+                </span>
+                <span class="aw-diagnostics-sep">·</span>
+                <span class="aw-diagnostics-item">
+                  Scope:
+                  <strong>{{
+                    playerViewMode === 'season' && playerSeasonFilter !== 'all'
+                      ? playerSeasonFilter
+                      : playerCompetitionFilter !== 'all'
+                        ? playerCompetitionFilter + ' (all seasons)'
+                        : 'All-time'
+                  }}</strong>
+                </span>
+                <span class="aw-diagnostics-sep">·</span>
+                <span class="aw-diagnostics-item">
+                  Completeness: <strong>{{ playerDataCompleteness }}</strong>
+                </span>
+                <span v-if="playerDataCompleteness === 'metadata_only'" class="aw-diagnostics-warn">
+                  ⚠ Totals reflect metadata-only matches. Import delivery data for full batting/bowling stats.
+                </span>
+              </div>
+
               <div class="aw-table-scroll">
                 <table class="aw-table">
                   <thead>
                     <tr>
                       <th>Player</th>
                       <th>Role</th>
+                      <th>Matches</th>
                       <th>Innings</th>
                       <th>Runs</th>
                       <th>SR</th>
@@ -956,6 +1011,7 @@
                     <tr v-for="player in filteredPlayers" :key="player.id">
                       <td>{{ player.name }}</td>
                       <td>{{ player.role }}</td>
+                      <td>{{ player.matches }}</td>
                       <td>{{ player.innings }}</td>
                       <td>{{ player.runs }}</td>
                       <td>{{ player.strikeRate }}</td>
@@ -963,7 +1019,7 @@
                       <td>{{ player.economy }}</td>
                     </tr>
                     <tr v-if="filteredPlayers.length === 0">
-                      <td colspan="7" class="aw-empty">
+                      <td colspan="8" class="aw-empty">
                         No players found for the current filters.
                       </td>
                     </tr>
@@ -977,48 +1033,120 @@
               <div class="aw-table-header">
                 <h3>Deliveries</h3>
                 <p class="aw-table-subtitle">
-                  Delivery-level rows from imported historical matches.
-                  <span class="aw-inline-completeness">
-                    Data completeness: {{ deliveryDataCompleteness }}
-                  </span>
+                  Select a match to view ball-by-ball delivery data.
                 </p>
               </div>
-              <div class="aw-table-scroll">
-                <table class="aw-table">
-                  <thead>
-                    <tr>
-                      <th>Over</th>
-                      <th>Innings</th>
-                      <th>Team</th>
-                      <th>Batter</th>
-                      <th>Bowler</th>
-                      <th>Runs</th>
-                      <th>Extras</th>
-                      <th>Wicket</th>
-                      <th>Dismissal</th>
-                      <th>Phase</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="delivery in filteredDeliveries" :key="delivery.id">
-                      <td>{{ delivery.overNumber }}.{{ delivery.ballNumber }}</td>
-                      <td>{{ delivery.innings ?? '—' }}</td>
-                      <td>{{ delivery.team || '—' }}</td>
-                      <td>{{ delivery.batter || '—' }}</td>
-                      <td>{{ delivery.bowler || '—' }}</td>
-                      <td>{{ delivery.runsOffBat }}</td>
-                      <td>{{ delivery.extraRuns }}<span v-if="delivery.extraType"> ({{ delivery.extraType }})</span></td>
-                      <td>{{ delivery.wicket ? 'Yes' : 'No' }}</td>
-                      <td>{{ delivery.dismissalType || '—' }}</td>
-                      <td>{{ delivery.phase || '—' }}</td>
-                    </tr>
-                    <tr v-if="filteredDeliveries.length === 0">
-                      <td colspan="10" class="aw-empty">
-                        No delivery rows found for the current filters.
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+
+              <!-- Deliveries match selector -->
+              <div class="aw-match-selector" role="group" aria-label="Select match for delivery data">
+                <div class="aw-match-selector-row">
+                  <div class="aw-match-selector-group">
+                    <label class="aw-filter-label" for="delivery-comp-select">Competition</label>
+                    <select
+                      id="delivery-comp-select"
+                      v-model="deliveryCompetitionFilter"
+                      class="aw-select"
+                      aria-label="Select competition"
+                      @change="deliverySeasonFilter = 'all'; deliveryFilterMatchId = ''"
+                    >
+                      <option value="all">All competitions</option>
+                      <option v-for="comp in competitionOptions" :key="comp" :value="comp">{{ comp }}</option>
+                    </select>
+                  </div>
+                  <div class="aw-match-selector-group">
+                    <label class="aw-filter-label" for="delivery-season-select">Season</label>
+                    <select
+                      id="delivery-season-select"
+                      v-model="deliverySeasonFilter"
+                      class="aw-select"
+                      aria-label="Select season"
+                      @change="deliveryFilterMatchId = ''"
+                    >
+                      <option value="all">All seasons</option>
+                      <option v-for="s in deliverySeasonOptions" :key="s" :value="s">{{ s }}</option>
+                    </select>
+                  </div>
+                  <div class="aw-match-selector-group">
+                    <label class="aw-filter-label" for="delivery-match-select">Match</label>
+                    <select
+                      id="delivery-match-select"
+                      v-model="deliveryFilterMatchId"
+                      class="aw-select aw-select--wide"
+                      aria-label="Select match"
+                      @change="onDeliveryMatchSelected"
+                    >
+                      <option value="">— select a match —</option>
+                      <option v-for="m in deliveryMatchOptions" :key="m.id" :value="m.id">
+                        {{ m.teams }}{{ m.date ? ' · ' + m.date : '' }}{{ m.season ? ' · ' + m.season : '' }}
+                      </option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Empty state: no match selected -->
+              <div v-if="!deliveryFilterMatchId" class="aw-delivery-empty-state" role="status">
+                <p class="aw-delivery-empty-msg">Select a match to view delivery-level data.</p>
+                <p class="aw-delivery-empty-hint">
+                  Use the dropdowns above to narrow by competition and season, then select a match.
+                </p>
+              </div>
+
+              <!-- Loading state -->
+              <div v-else-if="deliveriesLoading" class="aw-matches-loading" role="status" aria-live="polite">
+                <p>Loading deliveries…</p>
+              </div>
+
+              <!-- Deliveries table -->
+              <div v-else>
+                <div class="aw-diagnostics-row" role="note" aria-label="Delivery data completeness">
+                  <span class="aw-diagnostics-item">
+                    <strong>{{ filteredDeliveries.length }}</strong> deliveries
+                  </span>
+                  <span class="aw-diagnostics-sep">·</span>
+                  <span class="aw-diagnostics-item">
+                    Completeness: <strong>{{ deliveryDataCompleteness }}</strong>
+                  </span>
+                </div>
+                <div class="aw-table-scroll">
+                  <table class="aw-table">
+                    <thead>
+                      <tr>
+                        <th>Over.Ball</th>
+                        <th>Innings</th>
+                        <th>Batting team</th>
+                        <th>Batter</th>
+                        <th>Bowler</th>
+                        <th>Runs</th>
+                        <th>Extras</th>
+                        <th>Wicket</th>
+                        <th>Dismissal</th>
+                        <th>Phase</th>
+                        <th>Source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="delivery in filteredDeliveries" :key="delivery.id">
+                        <td>{{ delivery.overNumber }}.{{ delivery.ballNumber }}</td>
+                        <td>{{ delivery.innings ?? '—' }}</td>
+                        <td>{{ delivery.team || '—' }}</td>
+                        <td>{{ delivery.batter || '—' }}</td>
+                        <td>{{ delivery.bowler || '—' }}</td>
+                        <td>{{ delivery.runsOffBat }}</td>
+                        <td>{{ delivery.extraRuns }}<span v-if="delivery.extraType"> ({{ delivery.extraType }})</span></td>
+                        <td>{{ delivery.wicket ? 'Yes' : 'No' }}</td>
+                        <td>{{ delivery.dismissalType || '—' }}</td>
+                        <td>{{ delivery.phase || '—' }}</td>
+                        <td class="aw-dl-muted">{{ delivery.dataCompleteness || '—' }}</td>
+                      </tr>
+                      <tr v-if="filteredDeliveries.length === 0">
+                        <td colspan="11" class="aw-empty">
+                          No delivery rows found for the selected match.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                 </div>
               </div>
             </div>
 
@@ -1038,8 +1166,8 @@
               <div class="aw-table-header">
                 <h3>Data Library</h3>
                 <p class="aw-table-subtitle">
-                  Browse available match datasets for analysis. Historical imports are clearly
-                  identified. Select a match to open the analyst match detail view.
+                  Browse available match datasets organised by competition and season.
+                  Historical imports are clearly labelled. Select a match to open the case study.
                 </p>
               </div>
 
@@ -1106,6 +1234,21 @@
                       Oldest first
                     </button>
                   </div>
+                  <span class="aw-filter-label">View</span>
+                  <div class="aw-chip-row">
+                    <button
+                      class="aw-chip"
+                      :class="{ 'aw-chip--active': dlViewMode === 'collections' }"
+                      :aria-pressed="dlViewMode === 'collections'"
+                      @click="dlViewMode = 'collections'"
+                    >Collections</button>
+                    <button
+                      class="aw-chip"
+                      :class="{ 'aw-chip--active': dlViewMode === 'flat' }"
+                      :aria-pressed="dlViewMode === 'flat'"
+                      @click="dlViewMode = 'flat'"
+                    >Flat list</button>
+                  </div>
                 </div>
               </div>
 
@@ -1132,7 +1275,84 @@
                 </p>
               </div>
 
-              <!-- Data Library table -->
+              <!-- Collections view -->
+              <div v-else-if="dlViewMode === 'collections'" class="aw-dl-collections" role="tree" aria-label="Data library collections">
+                <div
+                  v-for="collection in libraryCollections"
+                  :key="collection.competition"
+                  class="aw-dl-collection"
+                  role="treeitem"
+                  :aria-expanded="!dlCollapsedCompetitions.has(collection.competition)"
+                >
+                  <!-- Competition header -->
+                  <button
+                    class="aw-dl-collection-header"
+                    :aria-expanded="!dlCollapsedCompetitions.has(collection.competition)"
+                    @click="toggleDlCompetition(collection.competition)"
+                  >
+                    <span class="aw-dl-collection-chevron">
+                      {{ dlCollapsedCompetitions.has(collection.competition) ? '▶' : '▼' }}
+                    </span>
+                    <span class="aw-dl-collection-name">{{ collection.competition }}</span>
+                    <span class="aw-dl-collection-count">{{ collection.totalMatches }} match{{ collection.totalMatches === 1 ? '' : 'es' }}</span>
+                  </button>
+
+                  <!-- Seasons under this competition -->
+                  <div v-if="!dlCollapsedCompetitions.has(collection.competition)" class="aw-dl-seasons">
+                    <div
+                      v-for="seasonGroup in collection.seasons"
+                      :key="seasonGroup.season"
+                      class="aw-dl-season"
+                      role="treeitem"
+                      :aria-expanded="!dlCollapsedSeasons.has(collection.competition + '::' + seasonGroup.season)"
+                    >
+                      <button
+                        class="aw-dl-season-header"
+                        :aria-expanded="!dlCollapsedSeasons.has(collection.competition + '::' + seasonGroup.season)"
+                        @click="toggleDlSeason(collection.competition, seasonGroup.season)"
+                      >
+                        <span class="aw-dl-season-chevron">
+                          {{ dlCollapsedSeasons.has(collection.competition + '::' + seasonGroup.season) ? '▶' : '▼' }}
+                        </span>
+                        <span class="aw-dl-season-name">{{ seasonGroup.season }}</span>
+                        <span class="aw-dl-season-count">{{ seasonGroup.matches.length }} match{{ seasonGroup.matches.length === 1 ? '' : 'es' }}</span>
+                      </button>
+
+                      <!-- Match list under this season -->
+                      <div v-if="!dlCollapsedSeasons.has(collection.competition + '::' + seasonGroup.season)" class="aw-dl-season-matches">
+                        <div
+                          v-for="match in seasonGroup.matches"
+                          :key="match.id"
+                          class="aw-dl-match-row"
+                          role="button"
+                          tabindex="0"
+                          :aria-label="'Open analyst detail for ' + match.teams"
+                          @click="openLibraryMatch(match.id)"
+                          @keydown.enter.prevent="openLibraryMatch(match.id)"
+                          @keydown.space.prevent="openLibraryMatch(match.id)"
+                        >
+                          <span class="aw-dl-match-teams">{{ match.teams }}</span>
+                          <span class="aw-dl-match-date">{{ match.date }}</span>
+                          <span v-if="match.venue" class="aw-dl-match-venue aw-dl-muted">{{ match.venue }}</span>
+                          <span
+                            class="aw-dl-badge"
+                            :class="match.isHistorical ? 'aw-dl-badge--imported' : 'aw-dl-badge--live'"
+                          >{{ match.isHistorical ? 'Imported' : 'Live' }}</span>
+                          <BaseButton
+                            variant="ghost"
+                            size="sm"
+                            class="aw-dl-match-open"
+                            :aria-label="'Open ' + match.teams"
+                            @click.stop="openLibraryMatch(match.id)"
+                          >View</BaseButton>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Flat list view -->
               <div v-else class="aw-dl-table-wrap">
                 <table class="aw-dl-table" aria-label="Data Library match list">
                   <thead>
@@ -1205,7 +1425,69 @@
 
             <!-- Analytics Tab -->
             <div v-else-if="activeTab === 'analytics'" class="aw-table-wrapper">
-              <AnalyticsTablesWidget :profile="null" />
+              <div class="aw-table-header">
+                <h3>Analytics</h3>
+                <p class="aw-table-subtitle">
+                  Select a match to generate phase-level analytics visuals.
+                </p>
+              </div>
+
+              <!-- Analytics match selector -->
+              <div class="aw-match-selector" role="group" aria-label="Select match for analytics">
+                <div class="aw-match-selector-row">
+                  <div class="aw-match-selector-group">
+                    <label class="aw-filter-label">Match source</label>
+                    <div class="aw-chip-row">
+                      <button
+                        class="aw-chip"
+                        :class="{ 'aw-chip--active': analyticsMatchSource === 'historical' }"
+                        :aria-pressed="analyticsMatchSource === 'historical'"
+                        @click="analyticsMatchSource = 'historical'; analyticsMatchId = ''"
+                      >Historical</button>
+                      <button
+                        class="aw-chip"
+                        :class="{ 'aw-chip--active': analyticsMatchSource === 'live' }"
+                        :aria-pressed="analyticsMatchSource === 'live'"
+                        @click="analyticsMatchSource = 'live'; analyticsMatchId = ''"
+                      >Live</button>
+                    </div>
+                  </div>
+                  <div class="aw-match-selector-group">
+                    <label class="aw-filter-label" for="analytics-match-select">Match</label>
+                    <select
+                      id="analytics-match-select"
+                      v-model="analyticsMatchId"
+                      class="aw-select aw-select--wide"
+                      aria-label="Select match for analytics"
+                    >
+                      <option value="">— select a match —</option>
+                      <option v-for="m in analyticsMatchOptions" :key="m.id" :value="m.id">
+                        {{ m.teams }}{{ m.date ? ' · ' + m.date : '' }}{{ m.season ? ' · ' + m.season : '' }}
+                      </option>
+                    </select>
+                  </div>
+                </div>
+                <p v-if="analyticsMatchOptions.length === 0 && analyticsMatchSource === 'live'" class="aw-match-selector-hint">
+                  No live-scored matches available.
+                </p>
+                <p v-else-if="analyticsMatchOptions.length === 0 && analyticsMatchSource === 'historical'" class="aw-match-selector-hint">
+                  No historical matches imported yet. Use the Import Data tab to add match data.
+                </p>
+              </div>
+
+              <!-- Empty state: no match selected -->
+              <div v-if="!analyticsMatchId" class="aw-delivery-empty-state" role="status">
+                <p class="aw-delivery-empty-msg">Select a match to generate analytics visuals.</p>
+                <p class="aw-delivery-empty-hint">
+                  Choose a match source above, then select a match to load phase-level visuals including
+                  Manhattan, Worm, and scoring-distribution charts.
+                </p>
+              </div>
+
+              <!-- Analytics visuals - shown once a match is selected -->
+              <div v-else class="aw-analytics-content">
+                <AnalyticsTablesWidget :profile="null" :match-id="analyticsMatchId" />
+              </div>
             </div>
 
             <!-- Import Data Tab -->
@@ -1371,6 +1653,24 @@ const dlSearch = ref('')
 const dlSourceFilter = ref<'all' | 'imported' | 'live'>('all')
 const dlFormatFilter = ref<'all' | 't20' | 'odi' | 'custom'>('all')
 const dlSortOrder = ref<'recent' | 'date-asc'>('recent')
+const dlViewMode = ref<'collections' | 'flat'>('collections')
+const dlCollapsedCompetitions = ref(new Set<string>())
+const dlCollapsedSeasons = ref(new Set<string>())
+
+// Players tab filters
+const playerCompetitionFilter = ref<string>('all')
+const playerSeasonFilter = ref<string>('all')
+const playerViewMode = ref<'all-time' | 'season'>('all-time')
+
+// Deliveries tab match selector state
+const deliveryCompetitionFilter = ref<string>('all')
+const deliverySeasonFilter = ref<string>('all')
+const deliveryFilterMatchId = ref<string>('')
+const deliveriesLoading = ref(false)
+
+// Analytics tab match selector state
+const analyticsMatchSource = ref<'historical' | 'live'>('historical')
+const analyticsMatchId = ref<string>('')
 
 // Match detail state - loaded when a match is selected
 const selectedMatchId = ref<string | null>(null)
@@ -1473,6 +1773,75 @@ const libraryMatches = computed(() => {
 })
 
 const exportContextMatchId = computed(() => filteredMatches.value[0]?.id ?? null)
+
+// Competition options derived from matches (for cross-tab filters)
+const competitionOptions = computed(() => {
+  const comps = new Set<string>()
+  matches.value.forEach(m => { if (m.eventName) comps.add(m.eventName) })
+  return [...comps].sort()
+})
+
+// Players tab: season options filtered by selected competition
+const playerSeasonOptions = computed(() => {
+  const seasons = new Set<string>()
+  matches.value
+    .filter(m => playerCompetitionFilter.value === 'all' || m.eventName === playerCompetitionFilter.value)
+    .forEach(m => { if (m.season) seasons.add(m.season) })
+  return [...seasons].sort().reverse()
+})
+
+// Deliveries tab: season options filtered by selected competition
+const deliverySeasonOptions = computed(() => {
+  const seasons = new Set<string>()
+  matches.value
+    .filter(m => deliveryCompetitionFilter.value === 'all' || m.eventName === deliveryCompetitionFilter.value)
+    .forEach(m => { if (m.season) seasons.add(m.season) })
+  return [...seasons].sort().reverse()
+})
+
+// Deliveries tab: match options filtered by competition and season
+const deliveryMatchOptions = computed(() =>
+  matches.value
+    .filter(m => {
+      if (deliveryCompetitionFilter.value !== 'all' && m.eventName !== deliveryCompetitionFilter.value) return false
+      if (deliverySeasonFilter.value !== 'all' && m.season !== deliverySeasonFilter.value) return false
+      return true
+    })
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+)
+
+// Analytics tab: match options based on source selection
+const analyticsMatchOptions = computed(() =>
+  matches.value
+    .filter(m => {
+      if (analyticsMatchSource.value === 'historical') return Boolean(m.isHistorical)
+      if (analyticsMatchSource.value === 'live') return !m.isHistorical
+      return true
+    })
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+)
+
+// Data Library: collections grouped by competition → season
+const libraryCollections = computed(() => {
+  const groups = new Map<string, Map<string, AnalystMatch[]>>()
+  for (const match of libraryMatches.value) {
+    const comp = match.eventName || 'Uncategorised'
+    const season = match.season || 'Unknown season'
+    if (!groups.has(comp)) groups.set(comp, new Map())
+    const compGroup = groups.get(comp)!
+    if (!compGroup.has(season)) compGroup.set(season, [])
+    compGroup.get(season)!.push(match)
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([competition, seasons]) => ({
+      competition,
+      totalMatches: [...seasons.values()].reduce((s, ms) => s + ms.length, 0),
+      seasons: [...seasons.entries()]
+        .sort(([a], [b]) => b.localeCompare(a))
+        .map(([season, ms]) => ({ season, matches: ms })),
+    }))
+})
 
 const currentPhaseLabel = computed(() => {
   const map: Record<string, string> = {
@@ -1668,9 +2037,15 @@ async function loadPlayers() {
   }
 }
 
-async function loadDeliveries() {
+async function loadDeliveries(matchId?: string) {
+  if (!matchId) {
+    deliveries.value = []
+    deliveryDataCompleteness.value = 'metadata_only'
+    return
+  }
+  deliveriesLoading.value = true
   try {
-    const response = await getAnalystDeliveries()
+    const response = await getAnalystDeliveries(matchId)
     deliveryDataCompleteness.value = response.data_completeness
     deliveries.value = response.items.map((row: AnalystDeliveryRow, index: number) => ({
       id: `${row.match_id}-${row.innings ?? 'x'}-${row.over_number ?? 0}-${row.ball_number ?? 0}-${index}`,
@@ -1697,8 +2072,41 @@ async function loadDeliveries() {
     console.error('[AnalystWorkspace] Failed to load deliveries:', err)
     deliveries.value = []
     deliveryDataCompleteness.value = 'metadata_only'
+  } finally {
+    deliveriesLoading.value = false
   }
 }
+
+async function onDeliveryMatchSelected() {
+  if (deliveryFilterMatchId.value) {
+    await loadDeliveries(deliveryFilterMatchId.value)
+  } else {
+    deliveries.value = []
+    deliveryDataCompleteness.value = 'metadata_only'
+  }
+}
+
+function toggleDlCompetition(competition: string) {
+  const next = new Set(dlCollapsedCompetitions.value)
+  if (next.has(competition)) {
+    next.delete(competition)
+  } else {
+    next.add(competition)
+  }
+  dlCollapsedCompetitions.value = next
+}
+
+function toggleDlSeason(competition: string, season: string) {
+  const key = `${competition}::${season}`
+  const next = new Set(dlCollapsedSeasons.value)
+  if (next.has(key)) {
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  dlCollapsedSeasons.value = next
+}
+
 
 async function selectMatch(matchId: string) {
   selectedMatchId.value = matchId
@@ -1840,7 +2248,11 @@ function openFullCaseStudy() {
 
 async function refreshData() {
   await loadMatches()
-  await Promise.all([loadPlayers(), loadDeliveries()])
+  await loadPlayers()
+  // Deliveries are loaded on demand via the match selector
+  if (deliveryFilterMatchId.value) {
+    await loadDeliveries(deliveryFilterMatchId.value)
+  }
 }
 
 function canCleanupImportedMatch(match: AnalystMatch): boolean {
@@ -1884,7 +2296,7 @@ async function cleanupImportedMatch(match: AnalystMatch) {
 function onImportDone(_gameId: string | null) {
   // Switch to the matches tab and refresh so the newly imported match appears
   activeTab.value = 'matches'
-  void Promise.all([loadMatches(), loadPlayers(), loadDeliveries()])
+  void Promise.all([loadMatches(), loadPlayers()])
 }
 
 function resetFilters() {
@@ -2126,7 +2538,7 @@ async function copyPodcastPrep() {
 
 // Lifecycle - load data on mount
 onMounted(() => {
-  void Promise.all([loadMatches(), loadPlayers(), loadDeliveries()])
+  void Promise.all([loadMatches(), loadPlayers()])
 })
 </script>
 
@@ -3301,4 +3713,275 @@ onMounted(() => {
   color: var(--color-text-muted);
   text-align: right;
 }
+
+/* =====================================================
+   DATA LIBRARY COLLECTIONS VIEW
+   ===================================================== */
+
+.aw-dl-collections {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.aw-dl-collection {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.aw-dl-collection-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3);
+  background: var(--color-surface-hover);
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+}
+
+.aw-dl-collection-header:hover {
+  background: var(--color-surface-raised, #f1f5f9);
+}
+
+.aw-dl-collection-chevron {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.aw-dl-collection-name {
+  flex: 1;
+}
+
+.aw-dl-collection-count {
+  font-size: var(--text-xs);
+  font-weight: var(--font-normal);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.aw-dl-seasons {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aw-dl-season {
+  border: 1px solid var(--color-border-subtle, var(--color-border));
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.aw-dl-season-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary, var(--color-text));
+}
+
+.aw-dl-season-header:hover {
+  background: var(--color-surface-hover);
+}
+
+.aw-dl-season-chevron {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.aw-dl-season-name {
+  flex: 1;
+}
+
+.aw-dl-season-count {
+  font-size: var(--text-xs);
+  font-weight: var(--font-normal);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.aw-dl-season-matches {
+  display: grid;
+  gap: 0;
+}
+
+.aw-dl-match-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--color-border-subtle, var(--color-border));
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  flex-wrap: wrap;
+}
+
+.aw-dl-match-row:hover {
+  background: var(--color-surface-hover);
+}
+
+.aw-dl-match-row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.aw-dl-match-teams {
+  flex: 1;
+  font-weight: var(--font-medium);
+  min-width: 0;
+}
+
+.aw-dl-match-date {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.aw-dl-match-venue {
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.aw-dl-match-open {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* =====================================================
+   PLAYERS TAB FILTERS & DIAGNOSTICS
+   ===================================================== */
+
+.aw-player-filters {
+  padding: var(--space-3);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.aw-player-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.aw-select {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg, #ffffff);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  min-width: 120px;
+}
+
+.aw-select--wide {
+  min-width: 260px;
+}
+
+.aw-diagnostics-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle, var(--color-border));
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.aw-diagnostics-item {
+  color: var(--color-text-muted);
+}
+
+.aw-diagnostics-sep {
+  color: var(--color-text-muted);
+  opacity: 0.4;
+}
+
+.aw-diagnostics-warn {
+  color: var(--color-warning, #ca8a04);
+  font-weight: var(--font-medium);
+}
+
+/* =====================================================
+   DELIVERIES TAB MATCH SELECTOR
+   ===================================================== */
+
+.aw-match-selector {
+  padding: var(--space-3);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aw-match-selector-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.aw-match-selector-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.aw-match-selector-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.aw-delivery-empty-state {
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.aw-delivery-empty-msg {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--color-text);
+}
+
+.aw-delivery-empty-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 440px;
+  margin-inline: auto;
+}
+
+/* =====================================================
+   ANALYTICS TAB
+   ===================================================== */
+
+.aw-analytics-content {
+  display: grid;
+  gap: var(--space-4);
+}
+
 </style>
