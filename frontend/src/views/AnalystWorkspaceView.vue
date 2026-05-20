@@ -1503,6 +1503,7 @@
                 <HistoricalImportPanel @import-done="onImportDone" />
                 <HistoricalImportBulkZipPanel @import-done="onImportDone" />
                 <HistoricalOcrReviewPanel />
+                <HistoricalSourcePayloadReattachPanel />
                 <HistoricalBackfillReprocessPanel />
               </div>
             </div>
@@ -1535,6 +1536,7 @@ import ExportUI from '@/components/ExportUI.vue'
 import HistoricalImportPanel from '@/components/HistoricalImportPanel.vue'
 import HistoricalImportBulkZipPanel from '@/components/HistoricalImportBulkZipPanel.vue'
 import HistoricalOcrReviewPanel from '@/components/HistoricalOcrReviewPanel.vue'
+import HistoricalSourcePayloadReattachPanel from '@/components/HistoricalSourcePayloadReattachPanel.vue'
 import HistoricalBackfillReprocessPanel from '@/components/HistoricalBackfillReprocessPanel.vue'
 import { readAiInsightCache, writeAiInsightCache } from '@/services/aiInsightCache'
 import { useAuthStore } from '@/stores/authStore'

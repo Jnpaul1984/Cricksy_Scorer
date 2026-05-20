@@ -662,3 +662,69 @@ class HistoricalBackfillApplyResponse(BaseModel):
     blocked_records: list[dict[str, str]] = Field(default_factory=list)
     results: list[HistoricalBackfillApplyMatchResult] = Field(default_factory=list)
     rollback_info: str = Field(default="")
+
+
+class HistoricalSourcePayloadReattachMetadata(BaseModel):
+    competition_name: str | None = None
+    season: str | None = None
+    match_number: int | None = None
+    date: str | None = None
+    teams: list[str] = Field(default_factory=list)
+    venue: str | None = None
+    city: str | None = None
+    source_filename: str | None = None
+    registry_people_available: bool = False
+    expected_deliveries: int = 0
+    expected_wickets: int = 0
+
+
+class HistoricalSourcePayloadReattachMatchCandidate(BaseModel):
+    match_id: str
+    batch_id: str
+    confidence: Literal["exact_match", "likely_match"]
+    matched_on: list[str] = Field(default_factory=list)
+    source_json_retained: bool = False
+    metadata: HistoricalSourcePayloadReattachMetadata
+
+
+class HistoricalSourcePayloadReattachDryRunFileResult(BaseModel):
+    file_name: str
+    status: Literal["ready", "invalid", "unsupported", "error"]
+    match_confidence: Literal["exact_match", "likely_match", "ambiguous", "no_match"]
+    blocked_from_apply: bool = True
+    message: str
+    metadata: HistoricalSourcePayloadReattachMetadata
+    matched_target: HistoricalSourcePayloadReattachMatchCandidate | None = None
+    candidate_matches: list[HistoricalSourcePayloadReattachMatchCandidate] = Field(
+        default_factory=list
+    )
+    warnings: list[str] = Field(default_factory=list)
+
+
+class HistoricalSourcePayloadReattachDryRunResponse(BaseModel):
+    status: Literal["preview_ready"]
+    source_filename: str | None = None
+    total_candidates: int = 0
+    ready_candidates: int = 0
+    blocked_candidates: int = 0
+    files: list[HistoricalSourcePayloadReattachDryRunFileResult] = Field(default_factory=list)
+
+
+class HistoricalSourcePayloadReattachApplyFileResult(BaseModel):
+    file_name: str
+    status: Literal["reattached", "skipped", "error"]
+    message: str
+    match_id: str | None = None
+    batch_id: str | None = None
+    match_confidence: Literal["exact_match", "likely_match"] | None = None
+
+
+class HistoricalSourcePayloadReattachApplyResponse(BaseModel):
+    status: Literal["applied", "partial", "failed"]
+    source_filename: str | None = None
+    selected_count: int = 0
+    reattached_count: int = 0
+    skipped_count: int = 0
+    error_count: int = 0
+    results: list[HistoricalSourcePayloadReattachApplyFileResult] = Field(default_factory=list)
+    follow_up_message: str = Field(default="")

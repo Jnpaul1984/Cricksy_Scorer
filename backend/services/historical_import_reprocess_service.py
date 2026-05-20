@@ -18,7 +18,9 @@ from backend.sql_app.models import Game, HistoricalImportBatch
 
 def _completeness(game: Game) -> str:
     phases = game.phases if isinstance(game.phases, dict) else {}
-    hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+    hist_meta = (
+        phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+    )
     has_innings = bool(phases.get("historical_innings_summary"))
     deliveries = game.deliveries if isinstance(game.deliveries, list) else []
     has_deliveries = bool(hist_meta.get("deliveries_imported")) or bool(deliveries)
@@ -38,9 +40,15 @@ def _completeness(game: Game) -> str:
 
 def _is_cpl(batch: HistoricalImportBatch, game: Game) -> bool:
     phases = game.phases if isinstance(game.phases, dict) else {}
-    hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+    hist_meta = (
+        phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+    )
     dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
-    canonical = dry_run.get("canonical_preview") if isinstance(dry_run.get("canonical_preview"), dict) else {}
+    canonical = (
+        dry_run.get("canonical_preview")
+        if isinstance(dry_run.get("canonical_preview"), dict)
+        else {}
+    )
     comp = (
         str(hist_meta.get("event_name") or "").lower(),
         str(hist_meta.get("competition_name") or "").lower(),
@@ -78,7 +86,18 @@ def _registry_people(parsed: dict[str, Any]) -> dict[str, str]:
 
 def _load_storage_ref(batch: HistoricalImportBatch) -> dict[str, Any] | None:
     dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
-    intake = dry_run.get("large_zip_intake") if isinstance(dry_run.get("large_zip_intake"), dict) else {}
+    reattach = (
+        dry_run.get("source_payload_reattach")
+        if isinstance(dry_run.get("source_payload_reattach"), dict)
+        else {}
+    )
+    reattach_storage = reattach.get("storage") if isinstance(reattach.get("storage"), dict) else {}
+    raw = reattach_storage.get("raw") if isinstance(reattach_storage.get("raw"), dict) else None
+    if raw is not None:
+        return raw
+    intake = (
+        dry_run.get("large_zip_intake") if isinstance(dry_run.get("large_zip_intake"), dict) else {}
+    )
     storage = intake.get("storage") if isinstance(intake.get("storage"), dict) else {}
     raw = storage.get("raw") if isinstance(storage.get("raw"), dict) else None
     return raw
@@ -134,11 +153,17 @@ async def _resolve_selected_pairs(
         game_rows = []
     for game in game_rows:
         phases = game.phases if isinstance(game.phases, dict) else {}
-        hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+        hist_meta = (
+            phases.get("historical_import")
+            if isinstance(phases.get("historical_import"), dict)
+            else {}
+        )
         batch_id = str(hist_meta.get("batch_id") or "").strip()
         if not batch_id:
             continue
-        batch = await db.scalar(select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_id))
+        batch = await db.scalar(
+            select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_id)
+        )
         if batch is None:
             continue
         key = (batch.id, game.id)
@@ -152,7 +177,9 @@ async def _resolve_selected_pairs(
                 await db.execute(
                     select(HistoricalImportBatch).where(HistoricalImportBatch.id.in_(batch_ids))
                 )
-            ).scalars().all()  # type: ignore[arg-type]
+            )
+            .scalars()
+            .all()  # type: ignore[arg-type]
         )
         for batch in batch_rows:
             if not batch.applied_game_id:
@@ -193,7 +220,9 @@ async def audit_delivery_backfill(
     pairs = await _resolve_selected_pairs(db, match_ids=match_ids, batch_ids=batch_ids)
     filtered_to_cpl = not match_ids and not batch_ids
     cpl_pairs = (
-        [(batch, game) for batch, game in pairs if _is_cpl(batch, game)] if filtered_to_cpl else pairs
+        [(batch, game) for batch, game in pairs if _is_cpl(batch, game)]
+        if filtered_to_cpl
+        else pairs
     )
     payload_overrides = source_payloads_by_batch or {}
 
@@ -225,7 +254,11 @@ async def audit_delivery_backfill(
         import_origin_counts[origin] = import_origin_counts.get(origin, 0) + 1
 
         phases = game.phases if isinstance(game.phases, dict) else {}
-        hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+        hist_meta = (
+            phases.get("historical_import")
+            if isinstance(phases.get("historical_import"), dict)
+            else {}
+        )
         deliveries = game.deliveries if isinstance(game.deliveries, list) else []
         duplicate_risk = bool(deliveries) or bool(hist_meta.get("deliveries_imported"))
 
@@ -248,7 +281,10 @@ async def audit_delivery_backfill(
                 innings = extract_normalized_innings(parsed)
                 expected_deliveries = sum(len(inn["deliveries"]) for inn in innings)
                 expected_wickets = sum(
-                    1 for inn in innings for delivery in inn["deliveries"] if delivery.get("is_wicket")
+                    1
+                    for inn in innings
+                    for delivery in inn["deliveries"]
+                    if delivery.get("is_wicket")
                 )
                 unique_players = {
                     str(delivery.get(key)).strip()
@@ -351,7 +387,9 @@ async def apply_delivery_backfill(
 
     batch_ids_to_process = [row["batch_id"] for row in audit["records"] if row["eligible"]]
     for batch_id in batch_ids_to_process:
-        batch = await db.scalar(select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_id))
+        batch = await db.scalar(
+            select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_id)
+        )
         if batch is None or not batch.applied_game_id:
             failed += 1
             blocked_records.append(
@@ -426,7 +464,9 @@ async def apply_delivery_backfill(
 
         dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
         canonical_preview = (
-            dry_run.get("canonical_preview") if isinstance(dry_run.get("canonical_preview"), dict) else {}
+            dry_run.get("canonical_preview")
+            if isinstance(dry_run.get("canonical_preview"), dict)
+            else {}
         )
         source_provenance = (
             canonical_preview.get("source_provenance")
@@ -443,8 +483,16 @@ async def apply_delivery_backfill(
             if isinstance(canonical_preview.get("squad_roster_snapshot"), list)
             else []
         )
-        metadata_preview = dry_run.get("metadata_preview") if isinstance(dry_run.get("metadata_preview"), dict) else {}
-        player_names = dry_run.get("player_names_found") if isinstance(dry_run.get("player_names_found"), list) else []
+        metadata_preview = (
+            dry_run.get("metadata_preview")
+            if isinstance(dry_run.get("metadata_preview"), dict)
+            else {}
+        )
+        player_names = (
+            dry_run.get("player_names_found")
+            if isinstance(dry_run.get("player_names_found"), list)
+            else []
+        )
 
         registry_summary = await register_historical_source_players(
             db,
@@ -464,8 +512,16 @@ async def apply_delivery_backfill(
         unresolved_players += int(registry_summary.get("unresolved_count") or 0)
 
         phases = game.phases if isinstance(game.phases, dict) else {}
-        hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
-        venue_resolution = hist_meta.get("venue_resolution") if isinstance(hist_meta.get("venue_resolution"), dict) else {}
+        hist_meta = (
+            phases.get("historical_import")
+            if isinstance(phases.get("historical_import"), dict)
+            else {}
+        )
+        venue_resolution = (
+            hist_meta.get("venue_resolution")
+            if isinstance(hist_meta.get("venue_resolution"), dict)
+            else {}
+        )
         unresolved_venue = int(not bool(venue_resolution.get("canonical_venue_id")))
         unresolved_venues += unresolved_venue
 
@@ -519,9 +575,7 @@ async def apply_delivery_backfill(
                 "deliveries_after": after_deliveries,
                 "wickets_before": before_wickets,
                 "wickets_after": after_wickets,
-                "player_mappings_updated": int(
-                    registry_summary.get("auto_resolved_count") or 0
-                )
+                "player_mappings_updated": int(registry_summary.get("auto_resolved_count") or 0)
                 + int(registry_summary.get("manually_resolved_count") or 0),
                 "unresolved_players": int(registry_summary.get("unresolved_count") or 0),
                 "unresolved_venues": unresolved_venue,

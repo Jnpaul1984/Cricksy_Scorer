@@ -57,6 +57,7 @@ const globalStubs = {
     emits: ['import-done'],
   },
   HistoricalOcrReviewPanel: { template: '<div class="ocr-review-panel-stub" />' },
+  HistoricalSourcePayloadReattachPanel: { template: '<div class="source-reattach-panel-stub" />' },
   HistoricalBackfillReprocessPanel: { template: '<div class="backfill-reprocess-panel-stub" />' },
 }
 

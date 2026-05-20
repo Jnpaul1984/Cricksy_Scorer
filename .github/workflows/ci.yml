@@ -105,7 +105,10 @@ jobs:
       - name: pip-audit (backend requirements)
         working-directory: backend
         run: |
-          pip-audit -r requirements.txt --progress-spinner off --ignore-vuln GHSA-wj6h-64fc-37mp --ignore-vuln GHSA-pwr2-4v36-6qpr
+          # joblib/PYSEC-2024-277 currently has no fixed upstream release; multiple current
+          # joblib versions still fail pip-audit, so revisit this ignore when a fixed version
+          # is published in the advisory database.
+          pip-audit -r requirements.txt --progress-spinner off --ignore-vuln GHSA-wj6h-64fc-37mp --ignore-vuln GHSA-pwr2-4v36-6qpr --ignore-vuln PYSEC-2024-277
 
       - name: Bandit (backend code)
         run: |

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import os
 import uuid
+import zipfile
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -105,7 +107,9 @@ def _cpl_payload_with_registry() -> dict[str, Any]:
     return payload
 
 
-def _create_and_apply_batch(client: TestClient, token: str, payload: dict[str, Any]) -> tuple[str, str]:
+def _create_and_apply_batch(
+    client: TestClient, token: str, payload: dict[str, Any]
+) -> tuple[str, str]:
     dry_run = client.post(
         "/api/historical-import/json/dry-run",
         headers=_auth_headers(token),
@@ -139,6 +143,36 @@ def _load_game(client: TestClient, game_id: str) -> models.Game:
             return result.scalar_one()
 
     return asyncio.get_event_loop().run_until_complete(_query())
+
+
+def _load_batch(client: TestClient, batch_id: str) -> models.HistoricalImportBatch:
+    async def _query() -> models.HistoricalImportBatch:
+        async with client.session_maker() as session:  # type: ignore[attr-defined]
+            result = await session.execute(
+                select(models.HistoricalImportBatch).where(
+                    models.HistoricalImportBatch.id == batch_id
+                )
+            )
+            return result.scalar_one()
+
+    return asyncio.get_event_loop().run_until_complete(_query())
+
+
+def _count_games(client: TestClient) -> int:
+    async def _query() -> int:
+        async with client.session_maker() as session:  # type: ignore[attr-defined]
+            result = await session.execute(select(models.Game))
+            return len(result.scalars().all())
+
+    return asyncio.get_event_loop().run_until_complete(_query())
+
+
+def _build_zip(entries: dict[str, bytes]) -> bytes:
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in entries.items():
+            archive.writestr(name, content)
+    return stream.getvalue()
 
 
 def test_backfill_audit_identifies_eligible_without_mutation(client: TestClient) -> None:
@@ -266,3 +300,165 @@ def test_backfill_apply_reflects_in_players_deliveries_dashboard_and_case_study(
         headers=_auth_headers(token),
     )
     assert case_study.status_code == 200, case_study.text
+
+
+def test_source_reattach_dry_run_matches_existing_historical_record(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, game_id = _create_and_apply_batch(client, token, payload)
+
+    response = client.post(
+        "/api/historical-import/json/source-reattach/dry-run",
+        headers=_auth_headers(token),
+        files={"file": ("repair.json", json.dumps(payload).encode("utf-8"), "application/json")},
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()["files"][0]
+    assert result["match_confidence"] == "exact_match"
+    assert result["blocked_from_apply"] is False
+    assert result["matched_target"]["batch_id"] == batch_id
+    assert result["matched_target"]["match_id"] == game_id
+    assert "teams" in result["matched_target"]["matched_on"]
+    assert result["metadata"]["registry_people_available"] is True
+    assert result["metadata"]["expected_deliveries"] > 0
+    assert result["metadata"]["expected_wickets"] > 0
+
+
+def test_source_reattach_dry_run_blocks_no_match_and_ambiguous_candidates(
+    client: TestClient,
+) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, _ = _create_and_apply_batch(client, token, payload)
+
+    no_match_payload = deepcopy(payload)
+    info = no_match_payload.setdefault("info", {})
+    assert isinstance(info, dict)
+    info["dates"] = ["2014-01-01"]
+    response = client.post(
+        "/api/historical-import/json/source-reattach/dry-run",
+        headers=_auth_headers(token),
+        files={
+            "file": (
+                "repair-no-match.json",
+                json.dumps(no_match_payload).encode("utf-8"),
+                "application/json",
+            )
+        },
+    )
+    assert response.status_code == 200, response.text
+    no_match_result = response.json()["files"][0]
+    assert no_match_result["match_confidence"] == "no_match"
+    assert no_match_result["blocked_from_apply"] is True
+
+    duplicate_payload = deepcopy(payload)
+    duplicate_payload["reattach_probe"] = "duplicate-target"
+    duplicate_batch_id, _ = _create_and_apply_batch(client, token, duplicate_payload)
+    assert duplicate_batch_id != batch_id
+
+    ambiguous_response = client.post(
+        "/api/historical-import/json/source-reattach/dry-run",
+        headers=_auth_headers(token),
+        files={
+            "file": (
+                "repair-ambiguous.json",
+                json.dumps(payload).encode("utf-8"),
+                "application/json",
+            )
+        },
+    )
+    assert ambiguous_response.status_code == 200, ambiguous_response.text
+    ambiguous_result = ambiguous_response.json()["files"][0]
+    assert ambiguous_result["match_confidence"] == "ambiguous"
+    assert ambiguous_result["blocked_from_apply"] is True
+    assert len(ambiguous_result["candidate_matches"]) >= 2
+
+
+def test_source_reattach_apply_attaches_provenance_without_duplicate_games(
+    client: TestClient,
+) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, game_id = _create_and_apply_batch(client, token, payload)
+    game_count_before = _count_games(client)
+    game_before = _load_game(client, game_id)
+    assert game_before.deliveries in (None, [])
+
+    dry_run = client.post(
+        "/api/historical-import/json/source-reattach/dry-run",
+        headers=_auth_headers(token),
+        files={"file": ("repair.json", json.dumps(payload).encode("utf-8"), "application/json")},
+    )
+    assert dry_run.status_code == 200, dry_run.text
+    selected = json.dumps([{"file_name": "repair.json", "batch_id": batch_id}])
+
+    apply = client.post(
+        "/api/historical-import/json/source-reattach/apply",
+        headers=_auth_headers(token),
+        files={"file": ("repair.json", json.dumps(payload).encode("utf-8"), "application/json")},
+        data={"confirm": "true", "selected_mappings": selected},
+    )
+    assert apply.status_code == 200, apply.text
+    body = apply.json()
+    assert body["status"] == "applied"
+    assert body["reattached_count"] == 1
+    assert body["results"][0]["status"] == "reattached"
+
+    batch_after = _load_batch(client, batch_id)
+    assert isinstance(batch_after.dry_run_summary, dict)
+    reattach = batch_after.dry_run_summary.get("source_payload_reattach")
+    assert isinstance(reattach, dict)
+    assert reattach["match_confidence"] == "exact_match"
+    assert isinstance(reattach["storage"]["raw"], dict)
+
+    game_after = _load_game(client, game_id)
+    assert game_after.deliveries in (None, [])
+    assert _count_games(client) == game_count_before
+    phases = game_after.phases if isinstance(game_after.phases, dict) else {}
+    hist_meta = (
+        phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+    )
+    assert hist_meta.get("source_json_retained") is True
+    assert isinstance(hist_meta.get("source_payload_reattach"), dict)
+
+    audit = client.post(
+        "/api/historical-import/json/backfill-reprocess/audit",
+        headers=_auth_headers(token),
+        json={"batch_ids": [batch_id], "max_batch_size": 25},
+    )
+    assert audit.status_code == 200, audit.text
+    record = audit.json()["records"][0]
+    assert record["source_json_retained"] is True
+    assert record["registry_people_available"] is True
+    assert record["eligible"] is True
+    assert record["expected_deliveries"] > 0
+
+    reprocess = client.post(
+        "/api/historical-import/json/backfill-reprocess/apply",
+        headers=_auth_headers(token),
+        json={"confirm": True, "batch_ids": [batch_id], "max_batch_size": 25},
+    )
+    assert reprocess.status_code == 200, reprocess.text
+    assert reprocess.json()["processed_matches"] == 1
+    assert len(_load_game(client, game_id).deliveries or []) > 0
+
+
+def test_source_reattach_apply_rejects_ambiguous_selection(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_a, _ = _create_and_apply_batch(client, token, payload)
+    duplicate_payload = deepcopy(payload)
+    duplicate_payload["reattach_probe"] = "duplicate-target"
+    _create_and_apply_batch(client, token, duplicate_payload)
+
+    response = client.post(
+        "/api/historical-import/json/source-reattach/apply",
+        headers=_auth_headers(token),
+        files={"file": ("repair.json", json.dumps(payload).encode("utf-8"), "application/json")},
+        data={
+            "confirm": "true",
+            "selected_mappings": json.dumps([{"file_name": "repair.json", "batch_id": batch_a}]),
+        },
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]

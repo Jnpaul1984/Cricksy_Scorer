@@ -1824,6 +1824,70 @@ export interface HistoricalBackfillApplyResponse {
   rollback_info: string;
 }
 
+export interface HistoricalSourcePayloadReattachMetadata {
+  competition_name?: string | null;
+  season?: string | null;
+  match_number?: number | null;
+  date?: string | null;
+  teams: string[];
+  venue?: string | null;
+  city?: string | null;
+  source_filename?: string | null;
+  registry_people_available: boolean;
+  expected_deliveries: number;
+  expected_wickets: number;
+}
+
+export interface HistoricalSourcePayloadReattachMatchCandidate {
+  match_id: string;
+  batch_id: string;
+  confidence: 'exact_match' | 'likely_match';
+  matched_on: string[];
+  source_json_retained: boolean;
+  metadata: HistoricalSourcePayloadReattachMetadata;
+}
+
+export interface HistoricalSourcePayloadReattachDryRunFileResult {
+  file_name: string;
+  status: 'ready' | 'invalid' | 'unsupported' | 'error';
+  match_confidence: 'exact_match' | 'likely_match' | 'ambiguous' | 'no_match';
+  blocked_from_apply: boolean;
+  message: string;
+  metadata: HistoricalSourcePayloadReattachMetadata;
+  matched_target?: HistoricalSourcePayloadReattachMatchCandidate | null;
+  candidate_matches: HistoricalSourcePayloadReattachMatchCandidate[];
+  warnings: string[];
+}
+
+export interface HistoricalSourcePayloadReattachDryRunResponse {
+  status: 'preview_ready';
+  source_filename?: string | null;
+  total_candidates: number;
+  ready_candidates: number;
+  blocked_candidates: number;
+  files: HistoricalSourcePayloadReattachDryRunFileResult[];
+}
+
+export interface HistoricalSourcePayloadReattachApplyFileResult {
+  file_name: string;
+  status: 'reattached' | 'skipped' | 'error';
+  message: string;
+  match_id?: string | null;
+  batch_id?: string | null;
+  match_confidence?: 'exact_match' | 'likely_match' | null;
+}
+
+export interface HistoricalSourcePayloadReattachApplyResponse {
+  status: 'applied' | 'partial' | 'failed';
+  source_filename?: string | null;
+  selected_count: number;
+  reattached_count: number;
+  skipped_count: number;
+  error_count: number;
+  results: HistoricalSourcePayloadReattachApplyFileResult[];
+  follow_up_message: string;
+}
+
 export type HistoricalOcrReviewStatus =
   | 'uploaded'
   | 'extracted'
@@ -2035,6 +2099,39 @@ export async function historicalBackfillReprocessApply(
         source_payloads_by_batch: payload.source_payloads_by_batch ?? {},
       }),
     },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/source-reattach/dry-run
+ * Runs deterministic dry-run matching for historical source payload reattach.
+ */
+export async function historicalSourcePayloadReattachDryRun(
+  file: File,
+): Promise<HistoricalSourcePayloadReattachDryRunResponse> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  return request<HistoricalSourcePayloadReattachDryRunResponse>(
+    '/api/historical-import/json/source-reattach/dry-run',
+    { method: 'POST', body: form },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/source-reattach/apply
+ * Reattaches retained source JSON onto existing historical import records.
+ */
+export async function historicalSourcePayloadReattachApply(
+  file: File,
+  selectedMappings: Array<{ file_name: string; batch_id: string }>,
+): Promise<HistoricalSourcePayloadReattachApplyResponse> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  form.append('confirm', 'true');
+  form.append('selected_mappings', JSON.stringify(selectedMappings));
+  return request<HistoricalSourcePayloadReattachApplyResponse>(
+    '/api/historical-import/json/source-reattach/apply',
+    { method: 'POST', body: form },
   );
 }
 
