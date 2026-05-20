@@ -169,7 +169,25 @@ No unrelated auto-format changes were kept.
 
 Use the governed dry-run/apply workflow below for previously imported CPL records:
 
-1. Dry-run audit (no writes):
+1. If a record is blocked with `missing_source_json`, reattach the original source payload first:
+
+```bash
+curl -X POST /api/historical-import/json/source-reattach/dry-run \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@match.json"
+```
+
+Apply only exact/likely dry-run results after explicit confirmation:
+
+```bash
+curl -X POST /api/historical-import/json/source-reattach/apply \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@match.json" \
+  -F 'selected_mappings=[{"file_name":"match.json","batch_id":"<batch-id>"}]' \
+  -F "confirm=true"
+```
+
+2. Dry-run audit (no writes):
 
 ```bash
 curl -X POST /api/historical-import/json/backfill-reprocess/audit \
@@ -177,7 +195,7 @@ curl -X POST /api/historical-import/json/backfill-reprocess/audit \
   -d '{"batch_ids":["<batch-id>"],"max_batch_size":25}'
 ```
 
-2. Controlled apply/reprocess (idempotent rebuild):
+3. Controlled apply/reprocess (idempotent rebuild):
 
 ```bash
 curl -X POST /api/historical-import/json/backfill-reprocess/apply \
@@ -185,7 +203,7 @@ curl -X POST /api/historical-import/json/backfill-reprocess/apply \
   -d '{"confirm":true,"batch_ids":["<batch-id>"],"max_batch_size":25}'
 ```
 
-3. Verify analyst/data surfaces:
+4. Verify analyst/data surfaces:
 
 - Players tab API: `GET /api/analyst/players`
 - Deliveries tab API: `GET /api/analyst/deliveries?match_id=<match-id>`

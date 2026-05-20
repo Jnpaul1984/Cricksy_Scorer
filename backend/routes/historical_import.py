@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import io
 import json
@@ -46,6 +47,12 @@ from backend.api.schemas.historical_import import (
     HistoricalBackfillApplyResponse,
     HistoricalBackfillAuditRequest,
     HistoricalBackfillAuditResponse,
+    HistoricalSourcePayloadReattachApplyFileResult,
+    HistoricalSourcePayloadReattachApplyResponse,
+    HistoricalSourcePayloadReattachDryRunFileResult,
+    HistoricalSourcePayloadReattachDryRunResponse,
+    HistoricalSourcePayloadReattachMatchCandidate,
+    HistoricalSourcePayloadReattachMetadata,
 )
 from backend.config import settings
 from backend.security import get_current_user_optional
@@ -75,6 +82,7 @@ from backend.services.historical_venue_intelligence_service import (
     list_venue_intelligence,
     list_venue_resolution_snapshots,
     list_venue_usage_stats,
+    normalize_venue_name,
 )
 from backend.services.pdf_extraction_service import PdfExtractionResult, extract_text_from_pdf
 from backend.services.s3_service import s3_service
@@ -82,7 +90,7 @@ from backend.sql_app import models
 from backend.sql_app.database import get_db as _base_get_db
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import logging
@@ -132,6 +140,25 @@ class _BulkJsonCandidate:
     duplicate_within_zip: bool = False
     duplicate_batch_id: str | None = None
     semantic_duplicate: bool = False
+
+
+@dataclass(slots=True)
+class _SourceReattachCandidate:
+    file_name: str
+    payload_bytes: bytes
+    dry_run: HistoricalImportDryRunResponse
+    metadata: HistoricalSourcePayloadReattachMetadata
+
+
+@dataclass(slots=True)
+class _HistoricalMatchTarget:
+    batch: models.HistoricalImportBatch
+    game: models.Game
+    metadata: HistoricalSourcePayloadReattachMetadata
+    venue_aliases: set[str]
+    competition_aliases: set[str]
+    source_dates: set[str]
+    innings_runs: tuple[int, ...]
 
 
 def _is_unsafe_zip_path(entry_name: str) -> bool:
@@ -501,6 +528,540 @@ def _store_bytes_with_fallback(
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_bytes(payload)
     return {"storage": "local", "path": str(target_path), "logical_key": normalized_key}
+
+
+def _normalize_match_text(value: object) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", str(value or "").strip().lower())).strip()
+
+
+def _source_file_label(file_name: str | None) -> str:
+    raw_name = str(file_name or "inline.json").strip().replace("\\", "/")
+    if PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR in raw_name:
+        raw_name = raw_name.split(PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR, 1)[1]
+    return raw_name or "inline.json"
+
+
+def _source_file_token(file_name: str | None) -> str:
+    return Path(_source_file_label(file_name)).name.lower()
+
+
+def _maybe_int(value: object) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _first_text(*values: object) -> str | None:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return None
+
+
+def _team_names_from_game(game: models.Game) -> list[str]:
+    teams: list[str] = []
+    for team_blob in (game.team_a, game.team_b):
+        if isinstance(team_blob, dict):
+            name = str(team_blob.get("name") or "").strip()
+            if name:
+                teams.append(name)
+    return teams
+
+
+def _team_signature(teams: list[str]) -> tuple[str, ...]:
+    return tuple(sorted(_normalize_match_text(team) for team in teams if _normalize_match_text(team)))
+
+
+def _innings_runs_from_preview(innings_preview: list[object]) -> tuple[int, ...]:
+    runs: list[int] = []
+    for inning in innings_preview:
+        if not isinstance(inning, dict):
+            continue
+        runs_value = _maybe_int(inning.get("runs"))
+        if runs_value is not None:
+            runs.append(runs_value)
+    return tuple(runs)
+
+
+def _candidate_payload_metadata(
+    *,
+    file_name: str,
+    payload_bytes: bytes,
+    dry_run: HistoricalImportDryRunResponse,
+) -> HistoricalSourcePayloadReattachMetadata:
+    canonical = dry_run.canonical_preview
+    competition_context = canonical.competition_context if canonical is not None else None
+    venue_context = canonical.venue_context if canonical is not None else None
+
+    expected_deliveries = 0
+    expected_wickets = 0
+    registry_people_available = False
+
+    try:
+        parsed = json.loads(payload_bytes.decode("utf-8"))
+        info = parsed.get("info") if isinstance(parsed, dict) and isinstance(parsed.get("info"), dict) else {}
+        registry = info.get("registry") if isinstance(info.get("registry"), dict) else {}
+        people = registry.get("people") if isinstance(registry.get("people"), dict) else {}
+        registry_people_available = bool(people)
+    except Exception:
+        parsed = None
+
+    try:
+        innings = extract_normalized_innings(parsed if isinstance(parsed, dict) else {})
+        expected_deliveries = sum(len(inn["deliveries"]) for inn in innings)
+        expected_wickets = sum(
+            1 for inn in innings for delivery in inn["deliveries"] if delivery.get("is_wicket")
+        )
+    except Exception:
+        expected_deliveries = dry_run.delivery_count
+        expected_wickets = sum(
+            _maybe_int(getattr(inning, "wickets", None) if not isinstance(inning, dict) else inning.get("wickets"))
+            or 0
+            for inning in dry_run.innings_preview
+        )
+
+    return HistoricalSourcePayloadReattachMetadata(
+        competition_name=_first_text(
+            competition_context.competition_name if competition_context is not None else None,
+            competition_context.tournament_name if competition_context is not None else None,
+            dry_run.metadata_preview.event_name,
+        ),
+        season=dry_run.metadata_preview.season,
+        match_number=dry_run.metadata_preview.match_number,
+        date=dry_run.metadata_preview.date,
+        teams=list(dry_run.teams_preview),
+        venue=_first_text(
+            dry_run.metadata_preview.venue,
+            venue_context.venue_name if venue_context is not None else None,
+        ),
+        city=venue_context.city if venue_context is not None else None,
+        source_filename=_source_file_label(file_name),
+        registry_people_available=registry_people_available,
+        expected_deliveries=expected_deliveries,
+        expected_wickets=expected_wickets,
+    )
+
+
+async def _load_historical_reattach_targets(
+    db: AsyncSession,
+) -> list[_HistoricalMatchTarget]:
+    rows = (
+        await db.execute(
+            select(models.HistoricalImportBatch, models.Game).join(
+                models.Game, models.HistoricalImportBatch.applied_game_id == models.Game.id
+            )
+        )
+    ).all()
+
+    targets: list[_HistoricalMatchTarget] = []
+    for batch, game in rows:
+        phases = game.phases if isinstance(game.phases, dict) else {}
+        hist_meta = phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+        if not hist_meta.get("is_historical"):
+            continue
+        venue_context = hist_meta.get("venue_context") if isinstance(hist_meta.get("venue_context"), dict) else {}
+        venue_resolution = (
+            hist_meta.get("venue_resolution") if isinstance(hist_meta.get("venue_resolution"), dict) else {}
+        )
+        target_metadata = HistoricalSourcePayloadReattachMetadata(
+            competition_name=_first_text(
+                hist_meta.get("competition_name"),
+                hist_meta.get("event_name"),
+                hist_meta.get("tournament_name"),
+            ),
+            season=_first_text(hist_meta.get("season")),
+            match_number=_maybe_int(hist_meta.get("match_number")),
+            date=_first_text(hist_meta.get("match_date"), *(hist_meta.get("source_dates") or [])),
+            teams=_team_names_from_game(game),
+            venue=_first_text(hist_meta.get("venue"), venue_context.get("venue_name")),
+            city=_first_text(venue_context.get("city")),
+            source_filename=batch.source_filename,
+            registry_people_available=False,
+            expected_deliveries=batch.delivery_count,
+            expected_wickets=sum(
+                (_maybe_int(inning.get("wickets")) or 0)
+                for inning in (phases.get("historical_innings_summary") or [])
+                if isinstance(inning, dict)
+            ),
+        )
+        venue_aliases = {
+            normalize_venue_name(value)
+            for value in (
+                target_metadata.venue,
+                venue_context.get("source_venue_raw"),
+                venue_resolution.get("canonical_name"),
+            )
+            if normalize_venue_name(value)
+        }
+        competition_aliases = {
+            _normalize_match_text(value)
+            for value in (
+                hist_meta.get("competition_name"),
+                hist_meta.get("event_name"),
+                hist_meta.get("tournament_name"),
+            )
+            if _normalize_match_text(value)
+        }
+        dry_run_summary = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
+        canonical_preview = (
+            dry_run_summary.get("canonical_preview")
+            if isinstance(dry_run_summary.get("canonical_preview"), dict)
+            else {}
+        )
+        competition_context = (
+            canonical_preview.get("competition_context")
+            if isinstance(canonical_preview.get("competition_context"), dict)
+            else {}
+        )
+        for value in (
+            competition_context.get("competition_name"),
+            competition_context.get("tournament_name"),
+        ):
+            normalized = _normalize_match_text(value)
+            if normalized:
+                competition_aliases.add(normalized)
+        targets.append(
+            _HistoricalMatchTarget(
+                batch=batch,
+                game=game,
+                metadata=target_metadata,
+                venue_aliases=venue_aliases,
+                competition_aliases=competition_aliases,
+                source_dates={
+                    str(value).strip()
+                    for value in [target_metadata.date, *(hist_meta.get("source_dates") or [])]
+                    if str(value or "").strip()
+                },
+                innings_runs=_innings_runs_from_preview(phases.get("historical_innings_summary") or []),
+            )
+        )
+    return targets
+
+
+def _build_reattach_match_candidate(
+    *,
+    candidate: _SourceReattachCandidate,
+    target: _HistoricalMatchTarget,
+) -> HistoricalSourcePayloadReattachMatchCandidate | None:
+    candidate_competition = _normalize_match_text(candidate.metadata.competition_name)
+    candidate_season = _normalize_match_text(candidate.metadata.season)
+    candidate_date = str(candidate.metadata.date or "").strip()
+    candidate_teams = _team_signature(candidate.metadata.teams)
+    candidate_venue = normalize_venue_name(candidate.metadata.venue)
+    candidate_city = _normalize_match_text(candidate.metadata.city)
+    candidate_match_number = candidate.metadata.match_number
+    candidate_source_filename = _source_file_token(candidate.file_name)
+    candidate_innings_runs = _innings_runs_from_preview(
+        [inning.model_dump(mode="python") for inning in candidate.dry_run.innings_preview]
+    )
+
+    teams_match = candidate_teams and candidate_teams == _team_signature(target.metadata.teams)
+    date_match = bool(candidate_date and candidate_date in target.source_dates)
+    competition_match = bool(
+        candidate_competition and candidate_competition in target.competition_aliases
+    )
+    season_match = bool(
+        candidate_season and candidate_season == _normalize_match_text(target.metadata.season)
+    )
+    if not (teams_match and date_match and competition_match and season_match):
+        return None
+
+    matched_on = ["date", "teams", "competition", "season"]
+    match_number_match = (
+        candidate_match_number is not None
+        and target.metadata.match_number is not None
+        and candidate_match_number == target.metadata.match_number
+    )
+    venue_match = bool(candidate_venue and candidate_venue in target.venue_aliases)
+    source_filename_match = bool(
+        candidate_source_filename
+        and candidate_source_filename == _source_file_token(target.metadata.source_filename)
+    )
+    innings_total_match = bool(candidate_innings_runs and candidate_innings_runs == target.innings_runs)
+    city_match = bool(
+        candidate_city and candidate_city == _normalize_match_text(target.metadata.city)
+    )
+
+    if match_number_match:
+        matched_on.append("match_number")
+    if venue_match:
+        matched_on.append("venue")
+    if source_filename_match:
+        matched_on.append("source_filename")
+    if innings_total_match:
+        matched_on.append("innings_totals")
+    if city_match:
+        matched_on.append("city")
+
+    confidence = "exact_match" if (match_number_match or venue_match) else "likely_match"
+    return HistoricalSourcePayloadReattachMatchCandidate(
+        match_id=target.game.id,
+        batch_id=target.batch.id,
+        confidence=cast("Literal['exact_match', 'likely_match']", confidence),
+        matched_on=matched_on,
+        source_json_retained=False,
+        metadata=target.metadata,
+    )
+
+
+def _batch_has_retained_source(batch: models.HistoricalImportBatch) -> bool:
+    dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
+    reattach = dry_run.get("source_payload_reattach") if isinstance(dry_run.get("source_payload_reattach"), dict) else {}
+    reattach_storage = reattach.get("storage") if isinstance(reattach.get("storage"), dict) else {}
+    if isinstance(reattach_storage.get("raw"), dict):
+        return True
+    intake = dry_run.get("large_zip_intake") if isinstance(dry_run.get("large_zip_intake"), dict) else {}
+    storage = intake.get("storage") if isinstance(intake.get("storage"), dict) else {}
+    return isinstance(storage.get("raw"), dict)
+
+
+def _source_reattach_file_result(
+    *,
+    file_name: str,
+    status: str,
+    match_confidence: str,
+    message: str,
+    metadata: HistoricalSourcePayloadReattachMetadata,
+    matched_target: HistoricalSourcePayloadReattachMatchCandidate | None = None,
+    candidate_matches: list[HistoricalSourcePayloadReattachMatchCandidate] | None = None,
+    warnings: list[str] | None = None,
+) -> HistoricalSourcePayloadReattachDryRunFileResult:
+    return HistoricalSourcePayloadReattachDryRunFileResult(
+        file_name=file_name,
+        status=cast("Literal['ready', 'invalid', 'unsupported', 'error']", status),
+        match_confidence=cast(
+            "Literal['exact_match', 'likely_match', 'ambiguous', 'no_match']",
+            match_confidence,
+        ),
+        blocked_from_apply=match_confidence in {"ambiguous", "no_match"} or status != "ready",
+        message=message,
+        metadata=metadata,
+        matched_target=matched_target,
+        candidate_matches=candidate_matches or [],
+        warnings=warnings or [],
+    )
+
+
+async def _build_source_reattach_preview(
+    *,
+    payload_bytes: bytes,
+    source_filename: str | None,
+    db: AsyncSession,
+) -> tuple[HistoricalSourcePayloadReattachDryRunResponse, dict[str, _SourceReattachCandidate]]:
+    targets = await _load_historical_reattach_targets(db)
+    file_results: list[HistoricalSourcePayloadReattachDryRunFileResult] = []
+    candidate_lookup: dict[str, _SourceReattachCandidate] = {}
+
+    def _evaluate_candidate(file_name: str, raw_payload: bytes) -> None:
+        status_code, dry_run = build_dry_run_response(raw_payload)
+        metadata = _candidate_payload_metadata(
+            file_name=file_name,
+            payload_bytes=raw_payload,
+            dry_run=dry_run,
+        )
+        warnings = [warning.message for warning in dry_run.warnings]
+        if status_code >= 400 or dry_run.status != "valid":
+            file_results.append(
+                _source_reattach_file_result(
+                    file_name=file_name,
+                    status="unsupported" if dry_run.status == "unsupported" else "invalid",
+                    match_confidence="no_match",
+                    message=(
+                        dry_run.errors[0].message
+                        if dry_run.errors
+                        else "Source payload could not be parsed for deterministic reattach."
+                    ),
+                    metadata=metadata,
+                    warnings=warnings,
+                )
+            )
+            return
+
+        candidate = _SourceReattachCandidate(
+            file_name=file_name,
+            payload_bytes=raw_payload,
+            dry_run=dry_run,
+            metadata=metadata,
+        )
+        matches = [
+            match
+            for target in targets
+            if (match := _build_reattach_match_candidate(candidate=candidate, target=target)) is not None
+        ]
+        matches.sort(
+            key=lambda item: (
+                1 if item.confidence == "exact_match" else 0,
+                len(item.matched_on),
+            ),
+            reverse=True,
+        )
+        if not matches:
+            file_results.append(
+                _source_reattach_file_result(
+                    file_name=file_name,
+                    status="ready",
+                    match_confidence="no_match",
+                    message=(
+                        "No safe historical match matched date + teams + competition + season."
+                    ),
+                    metadata=metadata,
+                    warnings=warnings,
+                )
+            )
+            candidate_lookup[file_name] = candidate
+            return
+
+        top_match = matches[0]
+        second_match = matches[1] if len(matches) > 1 else None
+        is_ambiguous = bool(
+            second_match is not None
+            and (
+                top_match.confidence == second_match.confidence
+                or top_match.confidence == "likely_match"
+            )
+        )
+        if is_ambiguous:
+            file_results.append(
+                _source_reattach_file_result(
+                    file_name=file_name,
+                    status="ready",
+                    match_confidence="ambiguous",
+                    message=(
+                        "Multiple historical matches satisfy the deterministic matching rules; "
+                        "apply is blocked."
+                    ),
+                    metadata=metadata,
+                    candidate_matches=matches[:5],
+                    warnings=warnings,
+                )
+            )
+            candidate_lookup[file_name] = candidate
+            return
+
+        top_target_batch = next(
+            (target.batch for target in targets if target.batch.id == top_match.batch_id),
+            None,
+        )
+        if top_target_batch is not None:
+            top_match.source_json_retained = _batch_has_retained_source(top_target_batch)
+
+        result = _source_reattach_file_result(
+            file_name=file_name,
+            status="ready",
+            match_confidence=top_match.confidence,
+            message=(
+                "Matching historical record already retains source JSON; overwrite is blocked."
+                if top_match.source_json_retained
+                else (
+                    "Deterministic exact match found."
+                    if top_match.confidence == "exact_match"
+                    else "Deterministic likely match found; operator confirmation required."
+                )
+            ),
+            metadata=metadata,
+            matched_target=top_match,
+            candidate_matches=matches[:5],
+            warnings=warnings,
+        )
+        if top_match.source_json_retained:
+            result.blocked_from_apply = True
+        else:
+            result.blocked_from_apply = False
+        file_results.append(result)
+        candidate_lookup[file_name] = candidate
+
+    is_zip_upload = bool(source_filename and source_filename.lower().endswith(".zip"))
+    if not is_zip_upload:
+        try:
+            is_zip_upload = zipfile.is_zipfile(io.BytesIO(payload_bytes))
+        except Exception:
+            is_zip_upload = False
+
+    if is_zip_upload:
+        members = _scan_zip_members(payload_bytes)
+        with zipfile.ZipFile(io.BytesIO(payload_bytes)) as archive:
+            for member in members:
+                if not member.filename.lower().endswith(".json"):
+                    file_results.append(
+                        _source_reattach_file_result(
+                            file_name=member.filename,
+                            status="unsupported",
+                            match_confidence="no_match",
+                            message="Ignored: only .json entries can be reattached from a ZIP repair payload.",
+                            metadata=HistoricalSourcePayloadReattachMetadata(
+                                source_filename=_source_file_label(member.filename)
+                            ),
+                        )
+                    )
+                    continue
+                with archive.open(member, "r") as fp:
+                    _evaluate_candidate(member.filename, fp.read(member.file_size))
+    else:
+        _evaluate_candidate(_source_file_label(source_filename), payload_bytes)
+
+    ready_candidates = sum(
+        1
+        for item in file_results
+        if item.status == "ready" and not item.blocked_from_apply and item.matched_target is not None
+    )
+    return (
+        HistoricalSourcePayloadReattachDryRunResponse(
+            status="preview_ready",
+            source_filename=source_filename,
+            total_candidates=len(file_results),
+            ready_candidates=ready_candidates,
+            blocked_candidates=max(len(file_results) - ready_candidates, 0),
+            files=file_results,
+        ),
+        candidate_lookup,
+    )
+
+
+def _parse_source_reattach_selection(selected_mappings: str) -> list[tuple[str, str]]:
+    try:
+        parsed = json.loads(selected_mappings)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="selected_mappings must be a JSON array of {file_name,batch_id} objects.",
+        ) from exc
+    if not isinstance(parsed, list):
+        raise HTTPException(
+            status_code=422,
+            detail="selected_mappings must be a JSON array of {file_name,batch_id} objects.",
+        )
+
+    mappings: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in parsed:
+        if not isinstance(item, dict):
+            raise HTTPException(
+                status_code=422,
+                detail="selected_mappings must contain only objects.",
+            )
+        file_name = _source_file_label(str(item.get("file_name") or "").strip())
+        batch_id = str(item.get("batch_id") or "").strip()
+        if not file_name or not batch_id:
+            raise HTTPException(
+                status_code=422,
+                detail="Each selected mapping must include non-empty file_name and batch_id.",
+            )
+        key = (file_name, batch_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        mappings.append(key)
+
+    if not mappings:
+        raise HTTPException(
+            status_code=422,
+            detail="Select at least one exact/likely reattach mapping before apply.",
+        )
+    return mappings
 
 
 async def _build_bulk_zip_preview(
@@ -2031,6 +2592,256 @@ async def apply_historical_delivery_backfill(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return HistoricalBackfillApplyResponse(**report)
+
+
+@router.post(
+    "/source-reattach/dry-run",
+    response_model=HistoricalSourcePayloadReattachDryRunResponse,
+    summary="Dry-run deterministic historical source payload reattach",
+)
+async def historical_source_payload_reattach_dry_run(
+    request: Request,
+    file: UploadFile | None = File(None),
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalSourcePayloadReattachDryRunResponse:
+    del current_user
+    payload_bytes: bytes
+    source_filename: str | None = None
+    if file is not None:
+        payload_bytes = await file.read()
+        source_filename = file.filename or None
+    else:
+        content_type = request.headers.get("content-type", "").lower()
+        if "application/json" not in content_type:
+            raise HTTPException(
+                status_code=415,
+                detail="Provide application/json payload or multipart JSON/ZIP upload.",
+            )
+        payload_bytes = await request.body()
+
+    preview, _ = await _build_source_reattach_preview(
+        payload_bytes=payload_bytes,
+        source_filename=source_filename,
+        db=db,
+    )
+    return preview
+
+
+@router.post(
+    "/source-reattach/apply",
+    response_model=HistoricalSourcePayloadReattachApplyResponse,
+    summary="Attach retained historical source JSON onto existing imported records",
+)
+async def historical_source_payload_reattach_apply(
+    file: UploadFile = File(...),
+    confirm: bool = Form(False),
+    selected_mappings: str = Form(...),
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalSourcePayloadReattachApplyResponse:
+    if not confirm:
+        raise HTTPException(
+            status_code=422,
+            detail="confirm must be true to apply source payload reattach.",
+        )
+
+    payload_bytes = await file.read()
+    source_filename = file.filename or None
+    preview, candidate_lookup = await _build_source_reattach_preview(
+        payload_bytes=payload_bytes,
+        source_filename=source_filename,
+        db=db,
+    )
+    preview_lookup: dict[str, HistoricalSourcePayloadReattachDryRunFileResult] = {}
+    for item in preview.files:
+        preview_lookup[item.file_name] = item
+        preview_lookup[_source_file_label(item.file_name)] = item
+    normalized_candidate_lookup: dict[str, _SourceReattachCandidate] = {}
+    for key, candidate in candidate_lookup.items():
+        normalized_candidate_lookup[key] = candidate
+        normalized_candidate_lookup[_source_file_label(key)] = candidate
+    mappings = _parse_source_reattach_selection(selected_mappings)
+
+    for file_name, batch_id in mappings:
+        preview_item = preview_lookup.get(file_name)
+        if preview_item is None or preview_item.matched_target is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Selected file '{file_name}' was not present in the reattach dry-run preview.",
+            )
+        if preview_item.status != "ready" or preview_item.blocked_from_apply:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Selected file '{file_name}' is blocked from apply ({preview_item.match_confidence}).",
+            )
+        if preview_item.matched_target.batch_id != batch_id:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Selected batch '{batch_id}' does not match dry-run target "
+                    f"'{preview_item.matched_target.batch_id}' for file '{file_name}'."
+                ),
+            )
+
+    owner_user_id = current_user.id if current_user else None
+    owner_org_id = current_user.org_id if current_user else None
+    owner_scope = _resolve_intake_owner(owner_user_id, owner_org_id)
+    results: list[HistoricalSourcePayloadReattachApplyFileResult] = []
+    reattached_count = 0
+    skipped_count = 0
+    error_count = 0
+    now = dt.datetime.now(dt.UTC).isoformat()
+
+    for file_name, batch_id in mappings:
+        preview_item = preview_lookup[file_name]
+        candidate = normalized_candidate_lookup.get(file_name)
+        if candidate is None or preview_item.matched_target is None:
+            error_count += 1
+            results.append(
+                HistoricalSourcePayloadReattachApplyFileResult(
+                    file_name=file_name,
+                    status="error",
+                    message="Dry-run candidate payload was not available for apply.",
+                    batch_id=batch_id,
+                )
+            )
+            continue
+
+        batch = await db.scalar(select(models.HistoricalImportBatch).where(models.HistoricalImportBatch.id == batch_id))
+        if batch is None or not batch.applied_game_id:
+            error_count += 1
+            results.append(
+                HistoricalSourcePayloadReattachApplyFileResult(
+                    file_name=file_name,
+                    status="error",
+                    message="Target historical import batch was not found.",
+                    batch_id=batch_id,
+                )
+            )
+            continue
+
+        game = await db.scalar(select(models.Game).where(models.Game.id == batch.applied_game_id))
+        if game is None:
+            error_count += 1
+            results.append(
+                HistoricalSourcePayloadReattachApplyFileResult(
+                    file_name=file_name,
+                    status="error",
+                    message="Target historical match was not found.",
+                    batch_id=batch_id,
+                )
+            )
+            continue
+
+        if _batch_has_retained_source(batch):
+            skipped_count += 1
+            results.append(
+                HistoricalSourcePayloadReattachApplyFileResult(
+                    file_name=file_name,
+                    status="skipped",
+                    message="Target already retains source JSON; overwrite is blocked.",
+                    match_id=game.id,
+                    batch_id=batch.id,
+                    match_confidence=preview_item.match_confidence,
+                )
+            )
+            continue
+
+        safe_file_name = _sanitize_storage_name(
+            file_name,
+            candidate.dry_run.duplicate_detection.source_hash_sha256,
+        )
+        base_key = f"historical-imports/{owner_scope}/{batch.id}/source-reattach"
+        raw_ref = _store_bytes_with_fallback(
+            key=f"{base_key}/raw/{safe_file_name}",
+            payload=candidate.payload_bytes,
+            content_type="application/json",
+        )
+        manifest_ref = _store_bytes_with_fallback(
+            key=f"{base_key}/manifest.json",
+            payload=json.dumps(
+                {
+                    "batch_id": batch.id,
+                    "match_id": game.id,
+                    "selected_file_name": file_name,
+                    "source_hash_sha256": candidate.dry_run.duplicate_detection.source_hash_sha256,
+                    "match_confidence": preview_item.match_confidence,
+                    "matched_on": preview_item.matched_target.matched_on,
+                    "attached_at": now,
+                },
+                separators=(",", ":"),
+            ).encode("utf-8"),
+            content_type="application/json",
+        )
+
+        reattach_summary = {
+            "attached_at": now,
+            "selected_file_name": file_name,
+            "source_hash_sha256": candidate.dry_run.duplicate_detection.source_hash_sha256,
+            "match_confidence": preview_item.match_confidence,
+            "matched_on": preview_item.matched_target.matched_on,
+            "storage": {
+                "raw": raw_ref,
+                "manifest": manifest_ref,
+            },
+            "registry_people_available": candidate.metadata.registry_people_available,
+            "expected_deliveries": candidate.metadata.expected_deliveries,
+            "expected_wickets": candidate.metadata.expected_wickets,
+        }
+
+        dry_run_summary = dict(batch.dry_run_summary) if isinstance(batch.dry_run_summary, dict) else {}
+        dry_run_summary["source_payload_reattach"] = reattach_summary
+        batch.dry_run_summary = dry_run_summary
+
+        phases = game.phases if isinstance(game.phases, dict) else {}
+        historical_meta = (
+            phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
+        )
+        historical_meta = dict(historical_meta)
+        historical_meta["source_payload_reattach"] = {
+            **reattach_summary,
+            "source_filename": batch.source_filename,
+        }
+        historical_meta["source_json_retained"] = True
+        game.phases = {**phases, "historical_import": historical_meta}
+
+        db.add(batch)
+        db.add(game)
+        reattached_count += 1
+        results.append(
+            HistoricalSourcePayloadReattachApplyFileResult(
+                file_name=file_name,
+                status="reattached",
+                message="Source payload reattached. Run delivery backfill/reprocess separately.",
+                match_id=game.id,
+                batch_id=batch.id,
+                match_confidence=preview_item.match_confidence,
+            )
+        )
+
+    if reattached_count > 0:
+        await db.commit()
+
+    status = "applied"
+    if error_count > 0 and reattached_count == 0:
+        status = "failed"
+    elif error_count > 0 or skipped_count > 0:
+        status = "partial"
+
+    return HistoricalSourcePayloadReattachApplyResponse(
+        status=cast("Literal['applied', 'partial', 'failed']", status),
+        source_filename=source_filename,
+        selected_count=len(mappings),
+        reattached_count=reattached_count,
+        skipped_count=skipped_count,
+        error_count=error_count,
+        results=results,
+        follow_up_message=(
+            "Source payload reattach does not run delivery reprocess automatically. "
+            "Use Historical Backfill Audit + Reprocess after successful reattach."
+        ),
+    )
 
 
 @router.post(

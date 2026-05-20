@@ -78,6 +78,15 @@ def _registry_people(parsed: dict[str, Any]) -> dict[str, str]:
 
 def _load_storage_ref(batch: HistoricalImportBatch) -> dict[str, Any] | None:
     dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
+    reattach = (
+        dry_run.get("source_payload_reattach")
+        if isinstance(dry_run.get("source_payload_reattach"), dict)
+        else {}
+    )
+    reattach_storage = reattach.get("storage") if isinstance(reattach.get("storage"), dict) else {}
+    raw = reattach_storage.get("raw") if isinstance(reattach_storage.get("raw"), dict) else None
+    if raw is not None:
+        return raw
     intake = dry_run.get("large_zip_intake") if isinstance(dry_run.get("large_zip_intake"), dict) else {}
     storage = intake.get("storage") if isinstance(intake.get("storage"), dict) else {}
     raw = storage.get("raw") if isinstance(storage.get("raw"), dict) else None
