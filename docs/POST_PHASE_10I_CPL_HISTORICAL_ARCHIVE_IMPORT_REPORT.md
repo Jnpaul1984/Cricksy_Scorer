@@ -204,11 +204,15 @@ curl -X POST /api/historical-import/json/backfill-reprocess/apply \
 Use Analyst Workspace UI instead of manual curl:
 
 1. Open **Analyst Workspace → Import Data**.
-2. In panel **Historical Backfill Audit + Reprocess**, run **Run dry-run audit**.
-3. Review eligibility, blocked reasons, source JSON retention, completeness counts, and expected delivery/wicket/player totals.
-4. Select only controlled ladder sizes (**1**, **3–5**, **10**, **20–25**).
-5. Confirm provenance/idempotency checkbox, then apply selected records.
-6. Use the built-in post-apply checklist:
+2. In panel **Historical Backfill Audit + Reprocess**, choose **Pre-audit scope controls** before running dry-run:
+   - Safe default: **Audit first eligible record** (`max_batch_size: 1`)
+   - Ladder presets: **3–5**, **10**, **20–25**
+   - Manual scopes: **batch IDs** or **match IDs** (paste one per line or comma-separated)
+3. Run **Run dry-run audit** only when selection size is valid (1, 3–5, 10, 20–25).
+4. Review eligibility, blocked reasons, source JSON retention, completeness counts, and expected delivery/wicket/player totals.
+5. Select only controlled ladder sizes (**1**, **3–5**, **10**, **20–25**).
+6. Confirm provenance/idempotency checkbox, then apply selected records.
+7. Use the built-in post-apply checklist:
    - Open Players tab
    - Open Deliveries tab
    - Open CPL Dashboard

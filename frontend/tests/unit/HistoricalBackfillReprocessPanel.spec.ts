@@ -7,6 +7,7 @@ import * as api from '@/services/api'
 vi.mock('@/services/api', () => ({
   historicalBackfillReprocessAudit: vi.fn(),
   historicalBackfillReprocessApply: vi.fn(),
+  historicalImportListBatches: vi.fn(),
 }))
 
 const flushPromises = async () => {
@@ -91,9 +92,102 @@ const auditResponse = {
   ],
 }
 
+const importBatches = Array.from({ length: 30 }, (_, idx) => ({
+  id: `batch-${idx + 1}`,
+  owner_user_id: null,
+  owner_org_id: null,
+  source_filename: `source-${idx + 1}.json`,
+  source_format: 'json',
+  source_hash_sha256: null,
+  semantic_key: null,
+  status: 'dry_run_passed',
+  error_count: 0,
+  warning_count: 0,
+  innings_count: 2,
+  delivery_count: 120,
+  is_finalized: true,
+  applied_game_id: `match-${idx + 1}`,
+  created_at: '2026-05-20T00:00:00Z',
+  updated_at: '2026-05-20T00:00:00Z',
+}))
+
 describe('HistoricalBackfillReprocessPanel', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    vi.mocked(api.historicalImportListBatches).mockResolvedValue(importBatches)
+  })
+
+  it('uses safe default audit scope and does not send an unfiltered all-record request', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(api.historicalImportListBatches).toHaveBeenCalledWith(1)
+    expect(api.historicalBackfillReprocessAudit).toHaveBeenCalledWith({
+      batch_ids: ['batch-1'],
+      match_ids: [],
+      max_batch_size: 1,
+    })
+  })
+
+  it('submits manual batch IDs for audit', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-audit-scope-mode"]').setValue('manual_batch_ids')
+    await wrapper.get('[data-testid="hbr-audit-manual-ids"]').setValue('batch-1')
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(api.historicalBackfillReprocessAudit).toHaveBeenCalledWith({
+      batch_ids: ['batch-1'],
+      match_ids: [],
+      max_batch_size: 1,
+    })
+  })
+
+  it('submits manual match IDs for audit', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-audit-scope-mode"]').setValue('manual_match_ids')
+    await wrapper.get('[data-testid="hbr-audit-manual-ids"]').setValue('match-1,match-2,match-3')
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(api.historicalBackfillReprocessAudit).toHaveBeenCalledWith({
+      batch_ids: [],
+      match_ids: ['match-1', 'match-2', 'match-3'],
+      max_batch_size: 5,
+    })
+  })
+
+  it('disables audit button for invalid manual selection count', async () => {
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-audit-scope-mode"]').setValue('manual_match_ids')
+    await wrapper.get('[data-testid="hbr-audit-manual-ids"]').setValue('match-1,match-2')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="hbr-run-audit-btn"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Audit selection size must be 1, 3–5, 10, or 20–25.')
+  })
+
+  it('enables audit button for valid ladder counts', async () => {
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    const runAuditButton = wrapper.get('[data-testid="hbr-run-audit-btn"]')
+    expect(runAuditButton.attributes('disabled')).toBeUndefined()
+
+    await wrapper.get('[data-testid="hbr-audit-scope-mode"]').setValue('first_3_5')
+    await wrapper.get('[data-testid="hbr-audit-scope-count"]').setValue('3')
+    await flushPromises()
+    expect(runAuditButton.attributes('disabled')).toBeUndefined()
+
+    await wrapper.get('[data-testid="hbr-audit-scope-mode"]').setValue('first_20_25')
+    await wrapper.get('[data-testid="hbr-audit-scope-count"]').setValue('25')
+    await flushPromises()
+    expect(runAuditButton.attributes('disabled')).toBeUndefined()
   })
 
   it('disables apply for invalid controlled selection size and enables with valid size + confirmation', async () => {
