@@ -57,6 +57,7 @@ const globalStubs = {
     emits: ['import-done'],
   },
   HistoricalOcrReviewPanel: { template: '<div class="ocr-review-panel-stub" />' },
+  HistoricalBackfillReprocessPanel: { template: '<div class="backfill-reprocess-panel-stub" />' },
 }
 
 const mockMatchList = {
