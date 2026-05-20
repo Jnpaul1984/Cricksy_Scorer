@@ -274,6 +274,15 @@ describe('Analyst Workspace data library gate', () => {
     cy.contains('button', 'Data Library').should('be.visible').click()
 
     cy.contains('h3', 'Data Library').should('be.visible')
+    cy.get('.aw-dl-filter-row .aw-chip-row')
+      .eq(3)
+      .contains('button', 'Collections')
+      .should('have.class', 'aw-chip--active')
+    cy.get('.aw-dl-collection').should('have.length', 3)
+    cy.get('.aw-dl-match-row').should('have.length', 3)
+    cy.contains('.aw-dl-collection-name', 'Premier League 2025').should('be.visible')
+
+    cy.get('.aw-dl-filter-row .aw-chip-row').eq(3).contains('button', 'Flat list').click()
     cy.get('.aw-dl-row').should('have.length', 3)
     cy.get('.aw-dl-row').first().should('contain.text', 'Tigers vs Eagles')
     cy.get('.aw-dl-badge--imported').should('exist')
