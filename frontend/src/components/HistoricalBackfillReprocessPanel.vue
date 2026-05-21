@@ -320,8 +320,8 @@
       <p v-if="selectedBatchIds.length > 0 && !selectionSizeAllowed" class="hbr-error" role="alert">
         Selection size must be 1, 3–5, 10, or 20–25.
       </p>
-      <p v-if="selectedBatchIds.length > 0 && !selectedBatchesDiagnosedSafe" class="hbr-error" role="alert">
-        Controlled apply stays disabled until diagnosis marks every selected record as safely reprocessable.
+      <p v-if="controlledApplyState.showSafetyWarning" class="hbr-error" role="alert">
+        Controlled apply stays disabled until every selected record is safely reprocessable.
       </p>
       <label class="hbr-confirm">
         <input v-model="confirmApply" type="checkbox" :disabled="loading" />
@@ -331,7 +331,7 @@
         type="button"
         class="hbr-btn hbr-btn--primary"
         data-testid="hbr-apply-btn"
-        :disabled="!canApply"
+        :disabled="!controlledApplyState.canApply"
         @click="applySelected"
       >
         {{ loading && loadingStep === 'apply' ? 'Applying selected…' : `Apply selected (${selectedBatchIds.length})` }}
@@ -464,26 +464,29 @@ function isAuditRecordSafelyReprocessable(record: HistoricalBackfillAuditRespons
   )
 }
 
-const selectedBatchesDiagnosedSafe = computed(() =>
-  selectedBatchIds.value.length > 0 &&
-  selectedBatchIds.value.every((batchId) => {
-    const diagnosisRecord = diagnosisByBatch.value.get(batchId)
-    if (diagnosisRecord) return diagnosisRecord.safely_reprocessable === true
-    const auditRecord = auditByBatch.value.get(batchId)
-    return auditRecord ? isAuditRecordSafelyReprocessable(auditRecord) : false
-  }),
-)
+const controlledApplyState = computed(() => {
+  const hasSelection = selectedBatchIds.value.length > 0
+  const allSelectedSafelyReprocessable =
+    hasSelection &&
+    selectedBatchIds.value.every((batchId) => {
+      const diagnosisRecord = diagnosisByBatch.value.get(batchId)
+      if (diagnosisRecord) return diagnosisRecord.safely_reprocessable === true
+      const auditRecord = auditByBatch.value.get(batchId)
+      return auditRecord ? isAuditRecordSafelyReprocessable(auditRecord) : false
+    })
 
-const canApply = computed(() =>
-  Boolean(
-    auditResult.value &&
-    selectedBatchIds.value.length > 0 &&
-    selectionSizeAllowed.value &&
-    selectedBatchesDiagnosedSafe.value &&
-    confirmApply.value &&
-    !loading.value,
-  ),
-)
+  return {
+    canApply: Boolean(
+      auditResult.value &&
+      hasSelection &&
+      selectionSizeAllowed.value &&
+      allSelectedSafelyReprocessable &&
+      confirmApply.value &&
+      !loading.value,
+    ),
+    showSafetyWarning: hasSelection && !allSelectedSafelyReprocessable,
+  }
+})
 
 const isManualScopeMode = computed(
   () => auditScopeMode.value === 'manual_batch_ids' || auditScopeMode.value === 'manual_match_ids',
@@ -689,7 +692,7 @@ async function runDiagnosis() {
 }
 
 async function applySelected() {
-  if (!canApply.value) return
+  if (!controlledApplyState.value.canApply) return
   loading.value = true
   loadingStep.value = 'apply'
   error.value = null
