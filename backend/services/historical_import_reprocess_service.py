@@ -1,22 +1,23 @@
 from __future__ import annotations
-# mypy: ignore-errors
 
+# mypy: ignore-errors
 import datetime as dt
 import json
 import logging
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-_log = logging.getLogger(__name__)
-
 from backend.services.historical_import_apply_service import apply_historical_deliveries
 from backend.services.historical_import_delivery_service import extract_normalized_innings
 from backend.services.historical_player_identity_service import register_historical_source_players
 from backend.services.s3_service import s3_service
 from backend.sql_app.models import Game, HistoricalImportBatch
+
+_log = logging.getLogger(__name__)
 
 
 def _completeness(game: Game) -> str:
@@ -978,7 +979,7 @@ async def apply_delivery_backfill(
             log_entries.append(
                 {
                     "batch_id": batch.id,
-                    "processed_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                    "processed_at": dt.datetime.now(dt.UTC).isoformat(),
                     "before": {
                         "completeness": before_completeness,
                         "deliveries": before_deliveries,
@@ -1024,16 +1025,14 @@ async def apply_delivery_backfill(
                 }
             )
 
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _log.exception(
                 "apply_delivery_backfill: unexpected error for batch",
                 extra={"batch_id": batch_id},
             )
             failed += 1
-            try:
+            with suppress(Exception):
                 await db.rollback()
-            except Exception:  # noqa: BLE001
-                pass
             results.append(
                 {
                     "match_id": game_id_for_result,
