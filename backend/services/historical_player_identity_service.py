@@ -5,9 +5,6 @@ import re
 from dataclasses import dataclass
 from typing import Any, TypedDict
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.sql_app.models import (
     HistoricalCompetitionRosterEntry,
     HistoricalCompetitionRosterStatus,
@@ -17,8 +14,10 @@ from backend.sql_app.models import (
     HistoricalSourcePlayerRegistry,
     Player,
 )
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-UTC = getattr(dt, "UTC", dt.timezone.utc)
+UTC = dt.UTC
 _NAME_STRIP_RE = re.compile(r"[^a-z0-9\s]")
 _MULTISPACE_RE = re.compile(r"\s+")
 
@@ -48,6 +47,12 @@ class _RegistrationSummary(TypedDict):
     metadata_conflicts: int
     roster_entries_upserted: int
     roster_conflicts: int
+    resolved_count: int
+    mapping_records_created: int
+    mapping_records_updated: int
+    missing_source_id_count: int
+    unresolved_reasons: list[dict[str, Any]]
+    ambiguous_reasons: list[dict[str, Any]]
 
 
 def normalize_source_player_name(name: str) -> str:
@@ -374,6 +379,25 @@ def _append_unique(sequence: list[Any], item: Any, key: str | None = None) -> li
     if isinstance(item, dict) and str(item.get(key)) not in keys:
         sequence.append(item)
     return sequence
+
+
+def _diagnostic_reason(
+    *,
+    resolution_state: HistoricalPlayerResolutionState,
+    queue_reason: str | None,
+    explicit_source_player_id: str | None,
+) -> str:
+    if resolution_state == HistoricalPlayerResolutionState.ambiguous:
+        return "ambiguous_match"
+    if resolution_state == HistoricalPlayerResolutionState.blocked:
+        return queue_reason or "blocked"
+    if not explicit_source_player_id:
+        return "missing_source_id"
+    if queue_reason == "deterministic_rules_no_match":
+        return "no_exact_match"
+    if queue_reason and queue_reason.startswith("multiple_"):
+        return "ambiguous_match"
+    return queue_reason or "no_exact_match"
 
 
 def _normalize_metadata_value(value: Any) -> str | None:
@@ -813,6 +837,12 @@ async def register_historical_source_players(
         "metadata_conflicts": 0,
         "roster_entries_upserted": 0,
         "roster_conflicts": 0,
+        "resolved_count": 0,
+        "mapping_records_created": 0,
+        "mapping_records_updated": 0,
+        "missing_source_id_count": 0,
+        "unresolved_reasons": [],
+        "ambiguous_reasons": [],
     }
 
     for entry in entries:
@@ -849,6 +879,7 @@ async def register_historical_source_players(
         style_confidence_status = "high" if style_source_status == "source" else "unknown"
         normalized_name = normalize_source_player_name(source_player_name)
         registry: HistoricalSourcePlayerRegistry | None = None
+        resolution_reason: str | None = None
         if explicit_source_player_id:
             registry_by_id_stmt = select(HistoricalSourcePlayerRegistry).where(
                 HistoricalSourcePlayerRegistry.source_system == source_system,
@@ -873,6 +904,7 @@ async def register_historical_source_players(
                 competition_context=competition_context,
                 team_name=team_name,
             )
+            resolution_reason = resolved.queue_reason
             create_kwargs: dict[str, Any] = {}
             if explicit_source_player_id:
                 create_kwargs["source_player_id"] = explicit_source_player_id
@@ -914,7 +946,9 @@ async def register_historical_source_players(
             db.add(registry)
             await db.flush()
             summary["registered_count"] += 1
+            summary["mapping_records_created"] += 1
         else:
+            summary["mapping_records_updated"] += 1
             registry.last_seen = now
             if explicit_source_player_id and registry.source_player_id != explicit_source_player_id:
                 registry.alias_references = _append_unique(
@@ -954,6 +988,7 @@ async def register_historical_source_players(
                     competition_context=competition_context,
                     team_name=team_name,
                 )
+                resolution_reason = refreshed.queue_reason
                 registry.resolution_state = refreshed.state
                 registry.canonical_player_id = refreshed.canonical_player_id
                 registry.confidence_score = refreshed.confidence_score
@@ -1016,6 +1051,7 @@ async def register_historical_source_players(
                         "batch_id": batch_id,
                         "game_id": game_id,
                         "team_name": team_name,
+                        "resolution_reason": resolution_reason,
                     },
                     last_seen=now,
                 )
@@ -1028,6 +1064,7 @@ async def register_historical_source_players(
                     "batch_id": batch_id,
                     "game_id": game_id,
                     "team_name": team_name,
+                    "resolution_reason": resolution_reason,
                 }
                 queue_row.last_seen = now
                 queue_row.resolved_at = None
@@ -1158,9 +1195,11 @@ async def register_historical_source_players(
         db.add(registry)
 
         summary["source_player_ids"].append(registry.source_player_id)
-        if registry.mapping_method:
-            if registry.mapping_method not in summary["deterministic_methods_used"]:
-                summary["deterministic_methods_used"].append(registry.mapping_method)
+        if (
+            registry.mapping_method
+            and registry.mapping_method not in summary["deterministic_methods_used"]
+        ):
+            summary["deterministic_methods_used"].append(registry.mapping_method)
 
         if registry.resolution_state == HistoricalPlayerResolutionState.auto_resolved:
             summary["auto_resolved_count"] += 1
@@ -1168,9 +1207,53 @@ async def register_historical_source_players(
             summary["manually_resolved_count"] += 1
         elif registry.resolution_state == HistoricalPlayerResolutionState.unresolved:
             summary["unresolved_count"] += 1
+            diagnostic_reason = _diagnostic_reason(
+                resolution_state=registry.resolution_state,
+                queue_reason=resolution_reason,
+                explicit_source_player_id=explicit_source_player_id,
+            )
+            if diagnostic_reason == "missing_source_id":
+                summary["missing_source_id_count"] += 1
+            summary["unresolved_reasons"].append(
+                {
+                    "source_player_name": source_player_name,
+                    "source_player_id": explicit_source_player_id or registry.source_player_id,
+                    "reason": diagnostic_reason,
+                    "resolution_state": registry.resolution_state.value,
+                }
+            )
         elif registry.resolution_state == HistoricalPlayerResolutionState.ambiguous:
             summary["ambiguous_count"] += 1
+            summary["ambiguous_reasons"].append(
+                {
+                    "source_player_name": source_player_name,
+                    "source_player_id": explicit_source_player_id or registry.source_player_id,
+                    "reason": _diagnostic_reason(
+                        resolution_state=registry.resolution_state,
+                        queue_reason=resolution_reason,
+                        explicit_source_player_id=explicit_source_player_id,
+                    ),
+                    "resolution_state": registry.resolution_state.value,
+                }
+            )
         elif registry.resolution_state == HistoricalPlayerResolutionState.blocked:
             summary["blocked_count"] += 1
+            diagnostic_reason = _diagnostic_reason(
+                resolution_state=registry.resolution_state,
+                queue_reason=resolution_reason,
+                explicit_source_player_id=explicit_source_player_id,
+            )
+            if diagnostic_reason == "missing_source_id":
+                summary["missing_source_id_count"] += 1
+            summary["unresolved_reasons"].append(
+                {
+                    "source_player_name": source_player_name,
+                    "source_player_id": explicit_source_player_id or registry.source_player_id,
+                    "reason": diagnostic_reason,
+                    "resolution_state": registry.resolution_state.value,
+                }
+            )
+
+        summary["resolved_count"] = summary["auto_resolved_count"] + summary["manually_resolved_count"]
 
     return summary

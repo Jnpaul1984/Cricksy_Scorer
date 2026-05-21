@@ -8,14 +8,13 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.services.historical_import_apply_service import apply_historical_deliveries
 from backend.services.historical_import_delivery_service import extract_normalized_innings
 from backend.services.historical_player_identity_service import register_historical_source_players
 from backend.services.s3_service import s3_service
 from backend.sql_app.models import Game, HistoricalImportBatch
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 _log = logging.getLogger(__name__)
 
@@ -85,6 +84,41 @@ def _registry_people(parsed: dict[str, Any]) -> dict[str, str]:
         str(name).strip(): str(source_id).strip()
         for name, source_id in people.items()
         if str(name).strip() and str(source_id or "").strip()
+    }
+
+
+def _extract_source_identity_inputs(parsed: dict[str, Any]) -> dict[str, Any]:
+    innings = extract_normalized_innings(parsed)
+    unique_players: set[str] = set()
+    for innings_row in innings:
+        deliveries = innings_row.get("deliveries")
+        if not isinstance(deliveries, list):
+            continue
+        for delivery in deliveries:
+            if not isinstance(delivery, dict):
+                continue
+            for key in ("batter", "bowler", "non_striker", "player_out"):
+                value = str(delivery.get(key) or "").strip()
+                if value:
+                    unique_players.add(value)
+            fielders = delivery.get("fielders")
+            if isinstance(fielders, list):
+                for fielder in fielders:
+                    if isinstance(fielder, str):
+                        value = fielder.strip()
+                    elif isinstance(fielder, dict):
+                        value = str(fielder.get("name") or "").strip()
+                    else:
+                        value = ""
+                    if value:
+                        unique_players.add(value)
+
+    info = parsed.get("info") if isinstance(parsed.get("info"), dict) else {}
+    source_venue_name = str(info.get("venue") or "").strip() or None
+    return {
+        "unique_players": sorted(unique_players),
+        "source_registry_people": _registry_people(parsed),
+        "source_venue_name": source_venue_name,
     }
 
 
@@ -785,7 +819,12 @@ async def apply_delivery_backfill(
     deliveries_rebuilt = 0
     wickets_rebuilt = 0
     mappings_updated = 0
+    mapping_records_updated = 0
+    mappings_created = 0
+    resolved_players = 0
     unresolved_players = 0
+    ambiguous_players = 0
+    resolved_venues = 0
     unresolved_venues = 0
     processed = 0
     skipped = 0
@@ -930,6 +969,32 @@ async def apply_delivery_backfill(
                 if isinstance(dry_run.get("player_names_found"), list)
                 else []
             )
+            parsed_payload: dict[str, Any] = {}
+            try:
+                parsed_any = json.loads(payload.decode("utf-8"))
+                if isinstance(parsed_any, dict):
+                    parsed_payload = parsed_any
+            except Exception:
+                parsed_payload = {}
+            source_identity_inputs = _extract_source_identity_inputs(parsed_payload)
+            source_registry_people = (
+                source_identity_inputs.get("source_registry_people")
+                if isinstance(source_identity_inputs.get("source_registry_people"), dict)
+                else {}
+            )
+            payload_player_names = (
+                source_identity_inputs.get("unique_players")
+                if isinstance(source_identity_inputs.get("unique_players"), list)
+                else []
+            )
+            source_venue_name = source_identity_inputs.get("source_venue_name")
+            combined_player_names = sorted(
+                {
+                    str(name).strip()
+                    for name in [*player_names, *payload_player_names]
+                    if isinstance(name, str) and str(name).strip()
+                }
+            )
 
             registry_summary = await register_historical_source_players(
                 db,
@@ -940,13 +1005,15 @@ async def apply_delivery_backfill(
                 source_provenance=source_provenance,
                 competition_context=competition_context,
                 roster_snapshot=roster_snapshot,
-                player_names=[str(name) for name in player_names if isinstance(name, str)],
+                player_names=combined_player_names,
                 match_date=str(metadata_preview.get("date") or ""),
             )
-            mappings_updated += int(registry_summary.get("auto_resolved_count") or 0) + int(
-                registry_summary.get("manually_resolved_count") or 0
-            )
+            mappings_updated += int(registry_summary.get("resolved_count") or 0)
+            mapping_records_updated += int(registry_summary.get("mapping_records_updated") or 0)
+            mappings_created += int(registry_summary.get("mapping_records_created") or 0)
+            resolved_players += int(registry_summary.get("resolved_count") or 0)
             unresolved_players += int(registry_summary.get("unresolved_count") or 0)
+            ambiguous_players += int(registry_summary.get("ambiguous_count") or 0)
 
             phases = game.phases if isinstance(game.phases, dict) else {}
             hist_meta = (
@@ -959,8 +1026,45 @@ async def apply_delivery_backfill(
                 if isinstance(hist_meta.get("venue_resolution"), dict)
                 else {}
             )
-            unresolved_venue = int(not bool(venue_resolution.get("canonical_venue_id")))
+            resolved_venue = int(bool(venue_resolution.get("canonical_venue_id")))
+            unresolved_venue = int(not bool(resolved_venue))
+            resolved_venues += resolved_venue
             unresolved_venues += unresolved_venue
+            unresolved_player_reasons = []
+            for item in registry_summary.get("unresolved_reasons") or []:
+                if not isinstance(item, dict):
+                    continue
+                source_name = str(item.get("source_player_name") or "").strip()
+                reason = str(item.get("reason") or "").strip() or "no_exact_match"
+                if (
+                    not source_registry_people.get(source_name)
+                    and reason == "no_exact_match"
+                ):
+                    reason = "missing_source_id"
+                unresolved_player_reasons.append(
+                    {
+                        "source_player_name": source_name,
+                        "source_player_id": item.get("source_player_id"),
+                        "reason": reason,
+                        "resolution_state": item.get("resolution_state"),
+                    }
+                )
+            ambiguous_player_reasons = [
+                item
+                for item in (registry_summary.get("ambiguous_reasons") or [])
+                if isinstance(item, dict)
+            ]
+            unresolved_venue_reasons = []
+            if unresolved_venue:
+                unresolved_venue_reasons.append(
+                    {
+                        "source_venue_name": source_venue_name
+                        or metadata_preview.get("venue")
+                        or venue_resolution.get("raw_imported_value"),
+                        "reason": venue_resolution.get("unresolved_reason")
+                        or "venue_alias_missing",
+                    }
+                )
 
             after_deliveries = len(game.deliveries) if isinstance(game.deliveries, list) else 0
             after_wickets = (
@@ -1017,11 +1121,18 @@ async def apply_delivery_backfill(
                     "wickets_before": before_wickets,
                     "wickets_after": after_wickets,
                     "player_mappings_updated": int(
-                        registry_summary.get("auto_resolved_count") or 0
-                    )
-                    + int(registry_summary.get("manually_resolved_count") or 0),
+                        registry_summary.get("resolved_count") or 0
+                    ),
+                    "mappings_updated": int(registry_summary.get("mapping_records_updated") or 0),
+                    "mappings_created": int(registry_summary.get("mapping_records_created") or 0),
+                    "resolved_players": int(registry_summary.get("resolved_count") or 0),
                     "unresolved_players": int(registry_summary.get("unresolved_count") or 0),
+                    "ambiguous_players": int(registry_summary.get("ambiguous_count") or 0),
+                    "resolved_venues": resolved_venue,
                     "unresolved_venues": unresolved_venue,
+                    "unresolved_player_reasons": unresolved_player_reasons,
+                    "ambiguous_player_reasons": ambiguous_player_reasons,
+                    "unresolved_venue_reasons": unresolved_venue_reasons,
                 }
             )
 
@@ -1046,8 +1157,15 @@ async def apply_delivery_backfill(
                     "wickets_before": before_wickets,
                     "wickets_after": before_wickets,
                     "player_mappings_updated": 0,
+                    "mappings_created": 0,
+                    "resolved_players": 0,
                     "unresolved_players": 0,
+                    "ambiguous_players": 0,
+                    "resolved_venues": 0,
                     "unresolved_venues": 0,
+                    "unresolved_player_reasons": [],
+                    "ambiguous_player_reasons": [],
+                    "unresolved_venue_reasons": [],
                 }
             )
 
@@ -1066,7 +1184,12 @@ async def apply_delivery_backfill(
         "deliveries_rebuilt": deliveries_rebuilt,
         "wickets_rebuilt": wickets_rebuilt,
         "player_mappings_updated": mappings_updated,
+        "mappings_updated": mapping_records_updated,
+        "mappings_created": mappings_created,
+        "resolved_players": resolved_players,
         "unresolved_players": unresolved_players,
+        "ambiguous_players": ambiguous_players,
+        "resolved_venues": resolved_venues,
         "unresolved_venues": unresolved_venues,
         "changed_match_ids": changed_match_ids,
         "blocked_records": blocked_records,

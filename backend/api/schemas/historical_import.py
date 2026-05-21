@@ -692,8 +692,16 @@ class HistoricalBackfillApplyMatchResult(BaseModel):
     wickets_before: int
     wickets_after: int
     player_mappings_updated: int = 0
+    mappings_updated: int = 0
+    mappings_created: int = 0
+    resolved_players: int = 0
     unresolved_players: int = 0
+    ambiguous_players: int = 0
+    resolved_venues: int = 0
     unresolved_venues: int = 0
+    unresolved_player_reasons: list[dict[str, object]] = Field(default_factory=list)
+    ambiguous_player_reasons: list[dict[str, object]] = Field(default_factory=list)
+    unresolved_venue_reasons: list[dict[str, object]] = Field(default_factory=list)
 
 
 class HistoricalBackfillApplyResponse(BaseModel):
@@ -704,7 +712,12 @@ class HistoricalBackfillApplyResponse(BaseModel):
     deliveries_rebuilt: int
     wickets_rebuilt: int
     player_mappings_updated: int
+    mappings_updated: int = 0
+    mappings_created: int = 0
+    resolved_players: int = 0
     unresolved_players: int
+    ambiguous_players: int = 0
+    resolved_venues: int = 0
     unresolved_venues: int
     changed_match_ids: list[str] = Field(default_factory=list)
     blocked_records: list[dict[str, str]] = Field(default_factory=list)
