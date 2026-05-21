@@ -361,6 +361,70 @@
         <li>Unresolved venues: {{ applyResult.unresolved_venues }}</li>
         <li>Changed match IDs: {{ applyResult.changed_match_ids.length ? applyResult.changed_match_ids.join(', ') : 'None' }}</li>
       </ul>
+      <section
+        v-if="hasDetailedMappingDiagnostics"
+        class="hbr-section hbr-mapping-diagnostics"
+        data-testid="hbr-mapping-diagnostics"
+      >
+        <h5 class="hbr-section-title">Historical identity mapping diagnostics</h5>
+        <p><strong>Aggregate:</strong></p>
+        <ul class="hbr-list">
+          <li>Resolved players: {{ applyResult.resolved_players ?? 0 }}</li>
+          <li>Unresolved players: {{ applyResult.unresolved_players }}</li>
+          <li>Ambiguous players: {{ applyResult.ambiguous_players ?? 0 }}</li>
+          <li>Resolved venues: {{ applyResult.resolved_venues ?? 0 }}</li>
+          <li>Unresolved venues: {{ applyResult.unresolved_venues }}</li>
+          <li>Mappings created: {{ applyResult.mappings_created ?? 0 }}</li>
+          <li>Mappings updated: {{ applyResult.mappings_updated ?? applyResult.player_mappings_updated }}</li>
+        </ul>
+        <div v-if="mappingDiagnosticResults.length" class="hbr-section">
+          <p><strong>Per-match:</strong></p>
+          <div
+            v-for="result in mappingDiagnosticResults"
+            :key="`mapping-diagnostics-${result.batch_id}-${result.match_id}`"
+            class="hbr-mapping-match"
+          >
+            <p class="hbr-mapping-match-title">
+              Match ID: {{ result.match_id }} · Batch ID: {{ result.batch_id }}
+            </p>
+            <div v-if="(result.unresolved_player_reasons?.length ?? 0) > 0" class="hbr-section">
+              <p><strong>Unresolved players:</strong></p>
+              <ul class="hbr-list">
+                <li v-for="(reasonRow, index) in result.unresolved_player_reasons" :key="`unresolved-player-${index}`">
+                  source_player_name: {{ displayReasonField(reasonRow.source_player_name) }}, source_player_id:
+                  {{ displayReasonField(reasonRow.source_player_id) }}, source_team:
+                  {{ displayReasonField(reasonRow.source_team) }}, reason: {{ displayReasonField(reasonRow.reason) }}
+                  <template v-if="typeof reasonRow.candidate_count === 'number'">
+                    , candidate_count: {{ reasonRow.candidate_count }}
+                  </template>
+                </li>
+              </ul>
+            </div>
+            <div v-if="(result.ambiguous_player_reasons?.length ?? 0) > 0" class="hbr-section">
+              <p><strong>Ambiguous players:</strong></p>
+              <ul class="hbr-list">
+                <li v-for="(reasonRow, index) in result.ambiguous_player_reasons" :key="`ambiguous-player-${index}`">
+                  source_player_name: {{ displayReasonField(reasonRow.source_player_name) }}, source_player_id:
+                  {{ displayReasonField(reasonRow.source_player_id) }}, source_team:
+                  {{ displayReasonField(reasonRow.source_team) }}, reason: {{ displayReasonField(reasonRow.reason) }}
+                  <template v-if="typeof reasonRow.candidate_count === 'number'">
+                    , candidate_count: {{ reasonRow.candidate_count }}
+                  </template>
+                </li>
+              </ul>
+            </div>
+            <div v-if="(result.unresolved_venue_reasons?.length ?? 0) > 0" class="hbr-section">
+              <p><strong>Unresolved venues:</strong></p>
+              <ul class="hbr-list">
+                <li v-for="(reasonRow, index) in result.unresolved_venue_reasons" :key="`unresolved-venue-${index}`">
+                  source_venue_name: {{ displayReasonField(reasonRow.source_venue_name) }}, reason:
+                  {{ displayReasonField(reasonRow.reason) }}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
       <h5 class="hbr-section-title">Completeness before/after (from apply results)</h5>
       <ul class="hbr-list">
         <li v-for="item in applyCompletenessSummary" :key="item.label">{{ item.label }}: {{ item.value }}</li>
@@ -385,9 +449,11 @@ import {
   historicalBackfillReprocessDiagnose,
   historicalBackfillReattachSourceJson,
   historicalImportListBatches,
+  type HistoricalBackfillApplyMatchResult,
   type HistoricalBackfillApplyResponse,
   type HistoricalBackfillAuditResponse,
   type HistoricalBackfillDiagnosisResponse,
+  type HistoricalBackfillMappingReason,
   type HistoricalBackfillSourceReattachResponse,
 } from '@/services/api'
 
@@ -552,6 +618,43 @@ const applyCompletenessSummary = computed(() => {
   }
   return [...summary.entries()].map(([label, value]) => ({ label, value }))
 })
+
+const hasDetailedMappingDiagnostics = computed(() => {
+  const result = applyResult.value
+  if (!result) return false
+  return (
+    result.mappings_created !== undefined ||
+    result.mappings_updated !== undefined ||
+    result.resolved_players !== undefined ||
+    result.ambiguous_players !== undefined ||
+    result.resolved_venues !== undefined ||
+    result.results.some((entry) => hasPerMatchMappingDiagnostics(entry))
+  )
+})
+
+const mappingDiagnosticResults = computed(() => {
+  const results = applyResult.value?.results ?? []
+  return results.filter((result) => hasPerMatchMappingDiagnostics(result))
+})
+
+function hasPerMatchMappingDiagnostics(result: HistoricalBackfillApplyMatchResult): boolean {
+  return (
+    result.mappings_created !== undefined ||
+    result.mappings_updated !== undefined ||
+    result.resolved_players !== undefined ||
+    result.ambiguous_players !== undefined ||
+    result.resolved_venues !== undefined ||
+    (result.unresolved_player_reasons?.length ?? 0) > 0 ||
+    (result.ambiguous_player_reasons?.length ?? 0) > 0 ||
+    (result.unresolved_venue_reasons?.length ?? 0) > 0
+  )
+}
+
+function displayReasonField(value: HistoricalBackfillMappingReason[string]): string {
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'string' && value.trim().length > 0) return value
+  return '—'
+}
 
 function getCompletenessCount(key: string): number {
   return auditResult.value?.completeness_counts?.[key] ?? 0
@@ -843,6 +946,20 @@ async function submitReattach() {
   padding-left: 1.1rem;
   display: grid;
   gap: 0.2rem;
+}
+
+.hbr-mapping-diagnostics {
+  margin-top: var(--space-2);
+}
+
+.hbr-mapping-match {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+}
+
+.hbr-mapping-match-title {
+  margin: 0;
 }
 
 .hbr-table-wrap {

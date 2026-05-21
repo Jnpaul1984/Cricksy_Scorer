@@ -400,9 +400,106 @@ describe('HistoricalBackfillReprocessPanel', () => {
     })
     expect(wrapper.text()).toContain('Changed match IDs: match-1')
     expect(wrapper.text()).toContain('Open CPL Dashboard')
+    expect(wrapper.find('[data-testid="hbr-mapping-diagnostics"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="hbr-apply-follow-up-message"]').text()).toContain(
       'Run dry-run audit again to verify post-apply completeness.',
     )
+  })
+
+  it('renders detailed mapping diagnostics from apply response when available', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+    vi.mocked(api.historicalBackfillReprocessApply).mockResolvedValue({
+      status: 'applied',
+      processed_matches: 1,
+      skipped_matches: 0,
+      failed_matches: 0,
+      deliveries_rebuilt: 120,
+      wickets_rebuilt: 8,
+      player_mappings_updated: 3,
+      mappings_updated: 3,
+      mappings_created: 2,
+      resolved_players: 18,
+      unresolved_players: 2,
+      ambiguous_players: 2,
+      resolved_venues: 0,
+      unresolved_venues: 1,
+      changed_match_ids: ['match-1'],
+      blocked_records: [],
+      results: [
+        {
+          match_id: 'f9261355-5662-4df8-b5e7-abe819989694',
+          batch_id: 'batch-1',
+          status: 'processed',
+          reason: null,
+          completeness_before: 'metadata_only',
+          completeness_after: 'phase_analytics_available',
+          deliveries_before: 0,
+          deliveries_after: 254,
+          wickets_before: 0,
+          wickets_after: 10,
+          player_mappings_updated: 3,
+          mappings_updated: 3,
+          mappings_created: 2,
+          resolved_players: 18,
+          unresolved_players: 2,
+          ambiguous_players: 2,
+          resolved_venues: 0,
+          unresolved_venues: 1,
+          unresolved_player_reasons: [
+            {
+              source_player_name: 'Unknown Batter',
+              source_player_id: 'source-p-1',
+              source_team: 'Barbados Tridents',
+              reason: 'missing_source_id',
+            },
+          ],
+          ambiguous_player_reasons: [
+            {
+              source_player_name: 'Chris Jordan',
+              source_player_id: 'source-p-2',
+              source_team: 'St Kitts and Nevis Patriots',
+              reason: 'ambiguous_match',
+              candidate_count: 2,
+            },
+          ],
+          unresolved_venue_reasons: [
+            {
+              source_venue_name: 'Unknown Ground',
+              reason: 'empty_raw_venue',
+            },
+          ],
+        },
+      ],
+      rollback_info: 'rollback info',
+    })
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[0].setValue(true)
+    await wrapper.get('.hbr-confirm input[type="checkbox"]').setValue(true)
+    await wrapper.get('[data-testid="hbr-apply-btn"]').trigger('click')
+    await flushPromises()
+
+    const diagnostics = wrapper.get('[data-testid="hbr-mapping-diagnostics"]')
+    expect(diagnostics.text()).toContain('Historical identity mapping diagnostics')
+    expect(diagnostics.text()).toContain('Resolved players: 18')
+    expect(diagnostics.text()).toContain('Unresolved players: 2')
+    expect(diagnostics.text()).toContain('Ambiguous players: 2')
+    expect(diagnostics.text()).toContain('Resolved venues: 0')
+    expect(diagnostics.text()).toContain('Unresolved venues: 1')
+    expect(diagnostics.text()).toContain('Mappings created: 2')
+    expect(diagnostics.text()).toContain('Mappings updated: 3')
+    expect(diagnostics.text()).toContain('Match ID: f9261355-5662-4df8-b5e7-abe819989694 · Batch ID: batch-1')
+    expect(diagnostics.text()).toContain('source_player_name: Unknown Batter')
+    expect(diagnostics.text()).toContain('reason: missing_source_id')
+    expect(diagnostics.text()).toContain('source_player_name: Chris Jordan')
+    expect(diagnostics.text()).toContain('reason: ambiguous_match')
+    expect(diagnostics.text()).toContain('candidate_count: 2')
+    expect(diagnostics.text()).toContain('source_venue_name: Unknown Ground')
+    expect(diagnostics.text()).toContain('reason: empty_raw_venue')
   })
 
   it('shows visible backend apply error details', async () => {
