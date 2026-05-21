@@ -650,3 +650,195 @@ async def list_venue_aliases(
     if venue_id:
         stmt = stmt.where(HistoricalVenueAlias.venue_id == venue_id)
     return (await db.execute(stmt.limit(limit))).scalars().all()
+
+
+# ---------------------------------------------------------------------------
+# Phase 10J - Venue Identity Mapping Review service functions
+# ---------------------------------------------------------------------------
+
+
+async def link_source_venue(
+    db: AsyncSession,
+    *,
+    queue_id: str,
+    canonical_venue_id: str,
+    reviewed_by: str | None = None,
+) -> tuple[HistoricalVenueResolutionQueue | None, bool, str]:
+    """Link an unresolved venue queue entry to an existing canonical Venue.
+
+    Returns (queue_row, idempotent, message).
+    """
+    queue_row = await db.get(HistoricalVenueResolutionQueue, queue_id)
+    if queue_row is None:
+        raise ValueError(f"Venue queue entry '{queue_id}' not found.")
+
+    canonical_venue = await db.get(HistoricalVenueIntelligence, canonical_venue_id)
+    if canonical_venue is None:
+        raise ValueError(f"Canonical venue '{canonical_venue_id}' not found.")
+
+    idempotent = False
+    if queue_row.queue_state == "resolved":
+        idempotent = True
+        return queue_row, idempotent, "Already resolved (idempotent)."
+
+    now = dt.datetime.now(UTC)
+    queue_row.queue_state = "resolved"
+    queue_row.review_required = False
+    queue_row.resolved_at = now
+    queue_row.last_seen = now
+    db.add(queue_row)
+
+    if queue_row.decision_id:
+        decision = await db.get(HistoricalVenueResolutionDecision, queue_row.decision_id)
+        if decision is not None:
+            decision.canonical_venue_id = canonical_venue_id
+            decision.resolution_state = HistoricalVenueResolutionState.resolved
+            decision.matched_by = "manual_link"
+            decision.review_required = False
+            decision.confidence_score = 1.0
+            db.add(decision)
+
+    await _upsert_alias(
+        db,
+        venue_id=canonical_venue_id,
+        alias_name=queue_row.raw_imported_value,
+        source_schema=queue_row.source_schema,
+        source_system=queue_row.source_system,
+        confidence_score=1.0,
+        provenance_reference={"reviewed_by": reviewed_by, "action": "manual_link"},
+        now=now,
+    )
+    canonical_venue.last_seen = now
+    db.add(canonical_venue)
+
+    await db.flush()
+    return queue_row, idempotent, f"Linked to venue '{canonical_venue.canonical_name}'."
+
+
+async def create_venue_alias_for_existing(
+    db: AsyncSession,
+    *,
+    queue_id: str,
+    canonical_venue_id: str,
+    reviewed_by: str | None = None,
+) -> tuple[HistoricalVenueResolutionQueue | None, bool, str]:
+    """Create a venue alias for an existing venue from an unresolved queue entry.
+
+    Returns (queue_row, idempotent, message).
+    """
+    # This is essentially the same as link - create alias and resolve the queue
+    return await link_source_venue(
+        db,
+        queue_id=queue_id,
+        canonical_venue_id=canonical_venue_id,
+        reviewed_by=reviewed_by,
+    )
+
+
+async def create_venue_from_queue(
+    db: AsyncSession,
+    *,
+    queue_id: str,
+    canonical_name: str,
+    city: str | None = None,
+    country: str | None = None,
+    notes: str | None = None,
+    reviewed_by: str | None = None,
+) -> tuple[HistoricalVenueIntelligence, HistoricalVenueResolutionQueue | None, bool, str]:
+    """Create a new Venue record from an unresolved venue queue entry.
+
+    Returns (new_venue, queue_row, idempotent, message).
+    """
+    queue_row = await db.get(HistoricalVenueResolutionQueue, queue_id)
+    if queue_row is None:
+        raise ValueError(f"Venue queue entry '{queue_id}' not found.")
+
+    if queue_row.queue_state == "resolved":
+        # Still look up the canonical venue if possible
+        if queue_row.decision_id:
+            decision = await db.get(HistoricalVenueResolutionDecision, queue_row.decision_id)
+            if decision is not None and decision.canonical_venue_id:
+                venue = await db.get(HistoricalVenueIntelligence, decision.canonical_venue_id)
+                if venue is not None:
+                    return venue, queue_row, True, "Already resolved (idempotent)."
+        raise ValueError("Queue entry is already resolved but canonical venue not found.")
+
+    now = dt.datetime.now(UTC)
+    normalized = normalize_venue_name(canonical_name)
+    new_venue = HistoricalVenueIntelligence(
+        canonical_name=canonical_name.strip(),
+        normalized_canonical_name=normalized,
+        city=city,
+        country=country,
+        verification_status=HistoricalVenueVerificationStatus.unverified,
+        source_type="manual_review",
+        created_from_import=True,
+        notes=notes or "Created via manual identity review.",
+        provenance_references=[
+            {
+                "queue_id": queue_id,
+                "raw_imported_value": queue_row.raw_imported_value,
+                "reviewed_by": reviewed_by,
+                "action": "manual_create",
+            }
+        ],
+        first_seen=now,
+        last_seen=now,
+    )
+    db.add(new_venue)
+    await db.flush()
+
+    queue_row.queue_state = "resolved"
+    queue_row.review_required = False
+    queue_row.resolved_at = now
+    queue_row.last_seen = now
+    db.add(queue_row)
+
+    if queue_row.decision_id:
+        decision = await db.get(HistoricalVenueResolutionDecision, queue_row.decision_id)
+        if decision is not None:
+            decision.canonical_venue_id = new_venue.id
+            decision.resolution_state = HistoricalVenueResolutionState.resolved
+            decision.matched_by = "manual_create"
+            decision.review_required = False
+            decision.confidence_score = 1.0
+            db.add(decision)
+
+    await _upsert_alias(
+        db,
+        venue_id=new_venue.id,
+        alias_name=queue_row.raw_imported_value,
+        source_schema=queue_row.source_schema,
+        source_system=queue_row.source_system,
+        confidence_score=1.0,
+        provenance_reference={"reviewed_by": reviewed_by, "action": "manual_create"},
+        now=now,
+    )
+    await db.flush()
+    return new_venue, queue_row, False, f"New venue '{canonical_name}' created (id={new_venue.id})."
+
+
+async def defer_venue_resolution(
+    db: AsyncSession,
+    *,
+    queue_id: str,
+    reason: str = "deferred",
+    reviewed_by: str | None = None,
+) -> tuple[HistoricalVenueResolutionQueue | None, bool, str]:
+    """Defer venue resolution without deleting the queue entry.
+
+    Returns (queue_row, idempotent, message).
+    """
+    queue_row = await db.get(HistoricalVenueResolutionQueue, queue_id)
+    if queue_row is None:
+        raise ValueError(f"Venue queue entry '{queue_id}' not found.")
+
+    if queue_row.queue_state == "deferred":
+        return queue_row, True, "Already deferred (idempotent)."
+
+    now = dt.datetime.now(UTC)
+    queue_row.queue_state = "deferred"
+    queue_row.last_seen = now
+    db.add(queue_row)
+    await db.flush()
+    return queue_row, False, f"Venue '{queue_row.raw_imported_value}' deferred: {reason}."

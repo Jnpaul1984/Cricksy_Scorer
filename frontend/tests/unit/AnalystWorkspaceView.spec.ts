@@ -59,6 +59,7 @@ const globalStubs = {
   HistoricalOcrReviewPanel: { template: '<div class="ocr-review-panel-stub" />' },
   HistoricalSourcePayloadReattachPanel: { template: '<div class="source-reattach-panel-stub" />' },
   HistoricalBackfillReprocessPanel: { template: '<div class="backfill-reprocess-panel-stub" />' },
+  HistoricalIdentityMappingReviewPanel: { template: '<div class="identity-mapping-review-panel-stub" />' },
 }
 
 const mockMatchList = {

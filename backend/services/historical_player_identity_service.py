@@ -1257,3 +1257,209 @@ async def register_historical_source_players(
         summary["resolved_count"] = summary["auto_resolved_count"] + summary["manually_resolved_count"]
 
     return summary
+
+
+# ---------------------------------------------------------------------------
+# Phase 10J - Identity Mapping Review service functions
+# ---------------------------------------------------------------------------
+
+
+async def list_unresolved_players(
+    db: AsyncSession,
+    *,
+    limit: int = 100,
+) -> list[HistoricalSourcePlayerRegistry]:
+    """Return unresolved/pending source player registry entries for review."""
+    stmt = (
+        select(HistoricalSourcePlayerRegistry)
+        .where(
+            HistoricalSourcePlayerRegistry.resolution_state.in_(
+                [
+                    HistoricalPlayerResolutionState.unresolved,
+                    HistoricalPlayerResolutionState.ambiguous,
+                ]
+            )
+        )
+        .order_by(HistoricalSourcePlayerRegistry.last_seen.desc())
+        .limit(limit)
+    )
+    return (await db.execute(stmt)).scalars().all()
+
+
+async def get_player_candidates(
+    db: AsyncSession,
+    registry: HistoricalSourcePlayerRegistry,
+) -> list[Player]:
+    """Return deterministic candidate Players for an unresolved source player."""
+    all_players = (await db.execute(select(Player).where(Player.name.is_not(None)))).scalars().all()
+    candidate_ids = _deterministic_alias_candidates(registry.normalized_name, all_players)
+    if not candidate_ids:
+        return []
+    return [p for p in all_players if p.id in candidate_ids]
+
+
+async def link_source_player(
+    db: AsyncSession,
+    *,
+    source_player_id: str,
+    canonical_player_id: int,
+    reviewed_by: str | None = None,
+) -> tuple[HistoricalSourcePlayerRegistry | None, bool, str]:
+    """Link a source player to an existing canonical Player.
+
+    Returns (registry_row, idempotent, message).
+    Raises ValueError on invalid input.
+    """
+    registry = await db.get(HistoricalSourcePlayerRegistry, source_player_id)
+    if registry is None:
+        raise ValueError(f"Source player '{source_player_id}' not found.")
+
+    canonical_player = await db.get(Player, canonical_player_id)
+    if canonical_player is None:
+        raise ValueError(f"Canonical player with id {canonical_player_id} not found.")
+
+    idempotent = False
+    if registry.canonical_player_id == canonical_player_id and registry.manual_override:
+        idempotent = True
+        return registry, idempotent, "Already linked (idempotent)."
+
+    now = dt.datetime.now(UTC)
+    registry.canonical_player_id = canonical_player_id
+    registry.resolution_state = HistoricalPlayerResolutionState.manually_resolved
+    registry.mapping_method = "manual_link"
+    registry.manual_override = True
+    registry.reviewed_by = reviewed_by
+    registry.reviewed_at = now
+    registry.last_seen = now
+    db.add(registry)
+
+    # Resolve pending queue entry if it exists.
+    queue_row = (
+        (
+            await db.execute(
+                select(HistoricalPlayerResolutionQueue).where(
+                    HistoricalPlayerResolutionQueue.source_player_id == source_player_id
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if queue_row is not None:
+        queue_row.queue_state = "resolved"
+        queue_row.resolved_at = now
+        queue_row.last_seen = now
+        db.add(queue_row)
+
+    await db.flush()
+    return registry, idempotent, f"Linked to '{canonical_player.name}' (id={canonical_player_id})."
+
+
+async def create_player_from_source(
+    db: AsyncSession,
+    *,
+    source_player_id: str,
+    name: str,
+    country: str | None = None,
+    role: str | None = None,
+    reviewed_by: str | None = None,
+) -> tuple[Player, HistoricalSourcePlayerRegistry | None, bool, str]:
+    """Create a new canonical Player from a source player identity.
+
+    Returns (new_player, registry_row, idempotent, message).
+    """
+    registry = await db.get(HistoricalSourcePlayerRegistry, source_player_id)
+    if registry is None:
+        raise ValueError(f"Source player '{source_player_id}' not found.")
+
+    # Guard against duplicate: check if a Player with this exact name already exists
+    existing_player = (
+        (await db.execute(select(Player).where(Player.name == name))).scalars().first()
+    )
+    if existing_player is not None and registry.canonical_player_id == existing_player.id:
+        return existing_player, registry, True, "Player already exists and is linked (idempotent)."
+
+    now = dt.datetime.now(UTC)
+    new_player = Player(name=name, country=country, role=role)
+    db.add(new_player)
+    await db.flush()  # get assigned id
+
+    registry.canonical_player_id = new_player.id
+    registry.resolution_state = HistoricalPlayerResolutionState.manually_resolved
+    registry.mapping_method = "manual_create"
+    registry.manual_override = True
+    registry.reviewed_by = reviewed_by
+    registry.reviewed_at = now
+    registry.last_seen = now
+    db.add(registry)
+
+    queue_row = (
+        (
+            await db.execute(
+                select(HistoricalPlayerResolutionQueue).where(
+                    HistoricalPlayerResolutionQueue.source_player_id == source_player_id
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if queue_row is not None:
+        queue_row.queue_state = "resolved"
+        queue_row.resolved_at = now
+        queue_row.last_seen = now
+        db.add(queue_row)
+
+    await db.flush()
+    return new_player, registry, False, f"New player '{name}' created (id={new_player.id})."
+
+
+async def defer_player_resolution(
+    db: AsyncSession,
+    *,
+    source_player_id: str,
+    reason: str = "deferred",
+    reviewed_by: str | None = None,
+) -> tuple[HistoricalSourcePlayerRegistry | None, bool, str]:
+    """Defer resolution of a source player without deleting any records.
+
+    The registry resolution_state is kept as-is; only the queue entry is marked
+    deferred so re-running backfill can still pick this player up.
+
+    Returns (registry_row, idempotent, message).
+    """
+    registry = await db.get(HistoricalSourcePlayerRegistry, source_player_id)
+    if registry is None:
+        raise ValueError(f"Source player '{source_player_id}' not found.")
+
+    now = dt.datetime.now(UTC)
+
+    queue_row = (
+        (
+            await db.execute(
+                select(HistoricalPlayerResolutionQueue).where(
+                    HistoricalPlayerResolutionQueue.source_player_id == source_player_id
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+
+    idempotent = False
+    if queue_row is not None and queue_row.queue_state == "deferred":
+        idempotent = True
+        return registry, idempotent, "Already deferred (idempotent)."
+
+    if queue_row is not None:
+        queue_row.queue_state = "deferred"
+        queue_row.last_seen = now
+        db.add(queue_row)
+
+    registry.reviewed_by = reviewed_by
+    registry.reviewed_at = now
+    registry.last_seen = now
+    db.add(registry)
+
+    await db.flush()
+    return registry, idempotent, f"Player '{registry.source_player_name}' deferred: {reason}."

@@ -58,6 +58,19 @@ from backend.api.schemas.historical_import import (
     HistoricalBulkZipSourcePayloadDryRunSummary,
     HistoricalBulkZipSourcePayloadDryRunResponse,
     HistoricalBulkZipSourcePayloadApplyResponse,
+    HistoricalIdentityReviewResponse,
+    HistoricalPlayerCandidateItem,
+    HistoricalPlayerReviewItem,
+    HistoricalVenueReviewItem,
+    PlayerActionResponse,
+    PlayerCreateRequest,
+    PlayerDeferRequest,
+    PlayerLinkRequest,
+    VenueActionResponse,
+    VenueCreateAliasRequest,
+    VenueCreateRequest,
+    VenueDeferRequest,
+    VenueLinkRequest,
 )
 from backend.config import settings
 from backend.security import get_current_user_optional
@@ -83,7 +96,19 @@ from backend.services.historical_import_service import (
     get_import_batch,
     list_import_batches,
 )
+from backend.services.historical_player_identity_service import (
+    create_player_from_source,
+    defer_player_resolution,
+    get_player_candidates,
+    link_source_player,
+    list_unresolved_players,
+    normalize_source_player_name,
+)
 from backend.services.historical_venue_intelligence_service import (
+    create_venue_alias_for_existing,
+    create_venue_from_queue,
+    defer_venue_resolution,
+    link_source_venue,
     list_unresolved_venues,
     list_venue_aliases,
     list_venue_intelligence,
@@ -3906,4 +3931,391 @@ async def repair_historical_import_metadata(
         fields_added=fields_added,
         warnings=warnings,
         detail=detail_text,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 10J - Historical Identity Mapping Review endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/identity-review/unresolved",
+    response_model=HistoricalIdentityReviewResponse,
+    summary="List unresolved historical player and venue identities for review",
+)
+async def list_identity_review_unresolved(
+    limit: int = Query(default=100, ge=1, le=500),
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalIdentityReviewResponse:
+    """Return all unresolved/ambiguous source players and pending venue queue entries."""
+    del current_user
+
+    player_rows = await list_unresolved_players(db, limit=limit)
+    venue_queue_rows = await list_unresolved_venues(db, limit=limit)
+
+    player_items: list[HistoricalPlayerReviewItem] = []
+    for reg in player_rows:
+        candidates = await get_player_candidates(db, reg)
+        candidate_items = [
+            HistoricalPlayerCandidateItem(
+                canonical_player_id=p.id,
+                canonical_player_name=p.name,
+                country=p.country,
+                role=p.role,
+                confidence=None,
+                match_reason="deterministic_alias",
+            )
+            for p in candidates
+        ]
+
+        # Determine reason from queue
+        from backend.sql_app.models import HistoricalPlayerResolutionQueue as _Queue
+
+        queue_row = (
+            (
+                await db.execute(
+                    select(_Queue).where(
+                        _Queue.source_player_id == reg.source_player_id
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        reason = queue_row.reason if queue_row else reg.resolution_state.value
+
+        player_items.append(
+            HistoricalPlayerReviewItem(
+                source_player_id=reg.source_player_id,
+                source_player_name=reg.source_player_name,
+                normalized_name=reg.normalized_name,
+                source_schema=reg.source_schema,
+                source_system=reg.source_system,
+                resolution_state=reg.resolution_state.value,
+                reason=reason,
+                queue_state=queue_row.queue_state if queue_row else "no_queue_entry",
+                review_required=reg.review_required,
+                match_references=list(reg.match_references or []),
+                competition_references=list(reg.competition_references or []),
+                provenance_references=list(reg.provenance_references or []),
+                candidates=candidate_items,
+                first_seen=reg.first_seen,
+                last_seen=reg.last_seen,
+            )
+        )
+
+    venue_items: list[HistoricalVenueReviewItem] = []
+    for q in venue_queue_rows:
+        # Fetch competition context from decision if available
+        competition_name: str | None = None
+        season: str | None = None
+        if q.decision_id:
+            from backend.sql_app.models import HistoricalVenueResolutionDecision as _Decision
+
+            decision = await db.get(_Decision, q.decision_id)
+            if decision:
+                competition_name = decision.competition_name
+                season = decision.season
+
+        venue_items.append(
+            HistoricalVenueReviewItem(
+                queue_id=q.id,
+                decision_id=q.decision_id,
+                raw_imported_value=q.raw_imported_value,
+                normalized_raw_value=q.normalized_raw_value,
+                source_schema=q.source_schema,
+                source_system=q.source_system,
+                queue_state=q.queue_state,
+                reason=q.reason,
+                review_required=q.review_required,
+                competition_name=competition_name,
+                season=season,
+                provenance_references=list(q.provenance_references or []),
+                candidate_venues=[],
+                first_seen=q.created_at,
+                last_seen=q.last_seen,
+            )
+        )
+
+    return HistoricalIdentityReviewResponse(
+        unresolved_players=player_items,
+        unresolved_venues=venue_items,
+        total_unresolved_players=len(player_items),
+        total_unresolved_venues=len(venue_items),
+    )
+
+
+@router.post(
+    "/identity-review/players/{source_player_id}/link",
+    response_model=PlayerActionResponse,
+    summary="Link a source player to an existing internal Player",
+)
+async def identity_review_player_link(
+    source_player_id: str,
+    body: PlayerLinkRequest,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> PlayerActionResponse:
+    """Explicitly link a source player to an existing canonical Player record."""
+    del current_user
+    try:
+        registry, idempotent, message = await link_source_player(
+            db,
+            source_player_id=source_player_id,
+            canonical_player_id=body.canonical_player_id,
+            reviewed_by=body.reviewed_by,
+        )
+        await db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        _log.exception("identity_review_player_link: unhandled error")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    canonical_player = await db.get(models.Player, body.canonical_player_id)
+    return PlayerActionResponse(
+        source_player_id=source_player_id,
+        action="linked",
+        canonical_player_id=body.canonical_player_id,
+        canonical_player_name=canonical_player.name if canonical_player else None,
+        status="ok",
+        message=message,
+        idempotent=idempotent,
+    )
+
+
+@router.post(
+    "/identity-review/players/{source_player_id}/create",
+    response_model=PlayerActionResponse,
+    summary="Create a new internal Player from a source player identity",
+)
+async def identity_review_player_create(
+    source_player_id: str,
+    body: PlayerCreateRequest,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> PlayerActionResponse:
+    """Create a canonical Player record from a source player identity, preserving provenance."""
+    del current_user
+    try:
+        new_player, _registry, idempotent, message = await create_player_from_source(
+            db,
+            source_player_id=source_player_id,
+            name=body.name,
+            country=body.country,
+            role=body.role,
+            reviewed_by=body.reviewed_by,
+        )
+        await db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        _log.exception("identity_review_player_create: unhandled error")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return PlayerActionResponse(
+        source_player_id=source_player_id,
+        action="created",
+        canonical_player_id=new_player.id,
+        canonical_player_name=new_player.name,
+        status="ok",
+        message=message,
+        idempotent=idempotent,
+    )
+
+
+@router.post(
+    "/identity-review/players/{source_player_id}/defer",
+    response_model=PlayerActionResponse,
+    summary="Defer resolution of an unresolved source player",
+)
+async def identity_review_player_defer(
+    source_player_id: str,
+    body: PlayerDeferRequest,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> PlayerActionResponse:
+    """Mark a source player as deferred without deleting any records."""
+    del current_user
+    try:
+        registry, idempotent, message = await defer_player_resolution(
+            db,
+            source_player_id=source_player_id,
+            reason=body.reason,
+            reviewed_by=body.reviewed_by,
+        )
+        await db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        _log.exception("identity_review_player_defer: unhandled error")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return PlayerActionResponse(
+        source_player_id=source_player_id,
+        action="deferred",
+        canonical_player_id=None,
+        canonical_player_name=None,
+        status="ok",
+        message=message,
+        idempotent=idempotent,
+    )
+
+
+@router.post(
+    "/identity-review/venues/link",
+    response_model=VenueActionResponse,
+    summary="Link an unresolved source venue to an existing Venue",
+)
+async def identity_review_venue_link(
+    body: VenueLinkRequest,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> VenueActionResponse:
+    """Link an unresolved venue to an existing HistoricalVenueIntelligence record."""
+    del current_user
+    try:
+        queue_row, idempotent, message = await link_source_venue(
+            db,
+            queue_id=body.queue_id,
+            canonical_venue_id=body.canonical_venue_id,
+            reviewed_by=body.reviewed_by,
+        )
+        await db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        _log.exception("identity_review_venue_link: unhandled error")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    from backend.sql_app.models import HistoricalVenueIntelligence as _VI
+
+    venue = await db.get(_VI, body.canonical_venue_id)
+    return VenueActionResponse(
+        queue_id=body.queue_id,
+        action="linked",
+        canonical_venue_id=body.canonical_venue_id,
+        canonical_venue_name=venue.canonical_name if venue else None,
+        status="ok",
+        message=message,
+        idempotent=idempotent,
+    )
+
+
+@router.post(
+    "/identity-review/venues/create-alias",
+    response_model=VenueActionResponse,
+    summary="Create a venue alias for an existing Venue from a source venue name",
+)
+async def identity_review_venue_create_alias(
+    body: VenueCreateAliasRequest,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> VenueActionResponse:
+    """Create an alias for an existing Venue from an unresolved queue entry."""
+    del current_user
+    try:
+        queue_row, idempotent, message = await create_venue_alias_for_existing(
+            db,
+            queue_id=body.queue_id,
+            canonical_venue_id=body.canonical_venue_id,
+            reviewed_by=body.reviewed_by,
+        )
+        await db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        _log.exception("identity_review_venue_create_alias: unhandled error")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    from backend.sql_app.models import HistoricalVenueIntelligence as _VI
+
+    venue = await db.get(_VI, body.canonical_venue_id)
+    return VenueActionResponse(
+        queue_id=body.queue_id,
+        action="alias_created",
+        canonical_venue_id=body.canonical_venue_id,
+        canonical_venue_name=venue.canonical_name if venue else None,
+        status="ok",
+        message=message,
+        idempotent=idempotent,
+    )
+
+
+@router.post(
+    "/identity-review/venues/create",
+    response_model=VenueActionResponse,
+    summary="Create a new Venue from a source venue identity",
+)
+async def identity_review_venue_create(
+    body: VenueCreateRequest,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> VenueActionResponse:
+    """Create a new HistoricalVenueIntelligence record from an unresolved queue entry."""
+    del current_user
+    try:
+        new_venue, _queue_row, idempotent, message = await create_venue_from_queue(
+            db,
+            queue_id=body.queue_id,
+            canonical_name=body.canonical_name,
+            city=body.city,
+            country=body.country,
+            notes=body.notes,
+            reviewed_by=body.reviewed_by,
+        )
+        await db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        _log.exception("identity_review_venue_create: unhandled error")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return VenueActionResponse(
+        queue_id=body.queue_id,
+        action="venue_created",
+        canonical_venue_id=new_venue.id,
+        canonical_venue_name=new_venue.canonical_name,
+        status="ok",
+        message=message,
+        idempotent=idempotent,
+    )
+
+
+@router.post(
+    "/identity-review/venues/defer",
+    response_model=VenueActionResponse,
+    summary="Defer resolution of an unresolved venue",
+)
+async def identity_review_venue_defer(
+    body: VenueDeferRequest,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> VenueActionResponse:
+    """Mark a venue queue entry as deferred without deleting any records."""
+    del current_user
+    try:
+        queue_row, idempotent, message = await defer_venue_resolution(
+            db,
+            queue_id=body.queue_id,
+            reason=body.reason,
+            reviewed_by=body.reviewed_by,
+        )
+        await db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        _log.exception("identity_review_venue_defer: unhandled error")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return VenueActionResponse(
+        queue_id=body.queue_id,
+        action="deferred",
+        canonical_venue_id=None,
+        canonical_venue_name=None,
+        status="ok",
+        message=message,
+        idempotent=idempotent,
     )

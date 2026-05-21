@@ -2504,3 +2504,232 @@ export async function submitAiInsightReview(
     { method: 'POST', body: JSON.stringify(payload) },
   );
 }
+
+
+// ---------------------------------------------------------------------------
+// Phase 10J — Historical Identity Mapping Review API types and functions
+// ---------------------------------------------------------------------------
+
+export interface HistoricalPlayerCandidateItem {
+  canonical_player_id: number;
+  canonical_player_name: string;
+  country: string | null;
+  role: string | null;
+  confidence: number | null;
+  match_reason: string | null;
+}
+
+export interface HistoricalPlayerReviewItem {
+  source_player_id: string;
+  source_player_name: string;
+  normalized_name: string;
+  source_schema: string | null;
+  source_system: string | null;
+  resolution_state: string;
+  reason: string | null;
+  queue_state: string;
+  review_required: boolean;
+  match_references: string[];
+  competition_references: Record<string, unknown>[];
+  provenance_references: Record<string, unknown>[];
+  candidates: HistoricalPlayerCandidateItem[];
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface HistoricalVenueReviewItem {
+  queue_id: string;
+  decision_id: string | null;
+  raw_imported_value: string;
+  normalized_raw_value: string;
+  source_schema: string | null;
+  source_system: string | null;
+  queue_state: string;
+  reason: string;
+  review_required: boolean;
+  competition_name: string | null;
+  season: string | null;
+  provenance_references: Record<string, unknown>[];
+  candidate_venues: Record<string, unknown>[];
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface HistoricalIdentityReviewResponse {
+  unresolved_players: HistoricalPlayerReviewItem[];
+  unresolved_venues: HistoricalVenueReviewItem[];
+  total_unresolved_players: number;
+  total_unresolved_venues: number;
+}
+
+export interface PlayerLinkRequest {
+  canonical_player_id: number;
+  reviewed_by?: string | null;
+}
+
+export interface PlayerCreateRequest {
+  name: string;
+  country?: string | null;
+  role?: string | null;
+  reviewed_by?: string | null;
+}
+
+export interface PlayerDeferRequest {
+  reason?: string;
+  reviewed_by?: string | null;
+}
+
+export interface PlayerActionResponse {
+  source_player_id: string;
+  action: 'linked' | 'created' | 'deferred' | 'ambiguous_blocked';
+  canonical_player_id: number | null;
+  canonical_player_name: string | null;
+  status: string;
+  message: string;
+  idempotent: boolean;
+}
+
+export interface VenueLinkRequest {
+  queue_id: string;
+  canonical_venue_id: string;
+  reviewed_by?: string | null;
+}
+
+export interface VenueCreateAliasRequest {
+  queue_id: string;
+  canonical_venue_id: string;
+  reviewed_by?: string | null;
+}
+
+export interface VenueCreateRequest {
+  queue_id: string;
+  canonical_name: string;
+  city?: string | null;
+  country?: string | null;
+  notes?: string | null;
+  reviewed_by?: string | null;
+}
+
+export interface VenueDeferRequest {
+  queue_id: string;
+  reason?: string;
+  reviewed_by?: string | null;
+}
+
+export interface VenueActionResponse {
+  queue_id: string;
+  action: 'linked' | 'alias_created' | 'venue_created' | 'deferred';
+  canonical_venue_id: string | null;
+  canonical_venue_name: string | null;
+  status: string;
+  message: string;
+  idempotent: boolean;
+}
+
+const IDENTITY_REVIEW_BASE = '/api/historical-import/json/identity-review';
+
+/**
+ * GET /api/historical-import/json/identity-review/unresolved
+ * Returns unresolved player and venue review items.
+ */
+export async function getIdentityReviewUnresolved(
+  limit = 100,
+): Promise<HistoricalIdentityReviewResponse> {
+  return request<HistoricalIdentityReviewResponse>(
+    `${IDENTITY_REVIEW_BASE}/unresolved?limit=${limit}`,
+  );
+}
+
+/**
+ * POST /api/historical-import/json/identity-review/players/{sourcePlayerId}/link
+ * Links a source player to an existing internal Player.
+ */
+export async function identityReviewPlayerLink(
+  sourcePlayerId: string,
+  payload: PlayerLinkRequest,
+): Promise<PlayerActionResponse> {
+  return request<PlayerActionResponse>(
+    `${IDENTITY_REVIEW_BASE}/players/${encodeURIComponent(sourcePlayerId)}/link`,
+    { method: 'POST', body: JSON.stringify(payload) },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/identity-review/players/{sourcePlayerId}/create
+ * Creates a new internal Player from a source player identity.
+ */
+export async function identityReviewPlayerCreate(
+  sourcePlayerId: string,
+  payload: PlayerCreateRequest,
+): Promise<PlayerActionResponse> {
+  return request<PlayerActionResponse>(
+    `${IDENTITY_REVIEW_BASE}/players/${encodeURIComponent(sourcePlayerId)}/create`,
+    { method: 'POST', body: JSON.stringify(payload) },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/identity-review/players/{sourcePlayerId}/defer
+ * Defers resolution of an unresolved source player.
+ */
+export async function identityReviewPlayerDefer(
+  sourcePlayerId: string,
+  payload: PlayerDeferRequest,
+): Promise<PlayerActionResponse> {
+  return request<PlayerActionResponse>(
+    `${IDENTITY_REVIEW_BASE}/players/${encodeURIComponent(sourcePlayerId)}/defer`,
+    { method: 'POST', body: JSON.stringify(payload) },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/identity-review/venues/link
+ * Links an unresolved venue to an existing canonical Venue.
+ */
+export async function identityReviewVenueLink(
+  payload: VenueLinkRequest,
+): Promise<VenueActionResponse> {
+  return request<VenueActionResponse>(`${IDENTITY_REVIEW_BASE}/venues/link`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * POST /api/historical-import/json/identity-review/venues/create-alias
+ * Creates a venue alias for an existing Venue.
+ */
+export async function identityReviewVenueCreateAlias(
+  payload: VenueCreateAliasRequest,
+): Promise<VenueActionResponse> {
+  return request<VenueActionResponse>(`${IDENTITY_REVIEW_BASE}/venues/create-alias`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * POST /api/historical-import/json/identity-review/venues/create
+ * Creates a new Venue from a source venue identity.
+ */
+export async function identityReviewVenueCreate(
+  payload: VenueCreateRequest,
+): Promise<VenueActionResponse> {
+  return request<VenueActionResponse>(`${IDENTITY_REVIEW_BASE}/venues/create`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * POST /api/historical-import/json/identity-review/venues/defer
+ * Defers resolution of an unresolved venue.
+ */
+export async function identityReviewVenueDefer(
+  payload: VenueDeferRequest,
+): Promise<VenueActionResponse> {
+  return request<VenueActionResponse>(`${IDENTITY_REVIEW_BASE}/venues/defer`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
