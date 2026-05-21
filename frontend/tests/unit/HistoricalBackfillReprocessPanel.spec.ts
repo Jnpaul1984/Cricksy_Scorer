@@ -17,6 +17,9 @@ const flushPromises = async () => {
   await Promise.resolve()
 }
 
+const CONTROLLED_APPLY_SAFETY_WARNING =
+  'Controlled apply stays disabled until every selected record is safely reprocessable.'
+
 const auditResponse = {
   total_imported_cpl_matches: 3,
   completeness_counts: {
@@ -401,9 +404,21 @@ describe('HistoricalBackfillReprocessPanel', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="hbr-apply-btn"]').attributes('disabled')).toBeUndefined()
-    expect(wrapper.text()).not.toContain(
-      'Controlled apply stays disabled until diagnosis marks every selected record as safely reprocessable.',
-    )
+    expect(wrapper.text()).not.toContain(CONTROLLED_APPLY_SAFETY_WARNING)
+  })
+
+  it('keeps apply disabled for eligible retained-source row without confirmation and does not show safety warning', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[0].setValue(true)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="hbr-apply-btn"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).not.toContain(CONTROLLED_APPLY_SAFETY_WARNING)
   })
 
   it('keeps apply disabled for selected missing-source records even when marked eligible', async () => {
@@ -425,6 +440,7 @@ describe('HistoricalBackfillReprocessPanel', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="hbr-apply-btn"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain(CONTROLLED_APPLY_SAFETY_WARNING)
   })
 
   it('keeps apply disabled for mixed safe + blocked selections', async () => {
@@ -445,6 +461,7 @@ describe('HistoricalBackfillReprocessPanel', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="hbr-apply-btn"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain(CONTROLLED_APPLY_SAFETY_WARNING)
   })
 
   it('keeps apply disabled for eligible rows with zero expected deliveries', async () => {
@@ -487,9 +504,25 @@ describe('HistoricalBackfillReprocessPanel', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="hbr-apply-btn"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.text()).toContain(
-      'Controlled apply stays disabled until diagnosis marks every selected record as safely reprocessable.',
-    )
+    expect(wrapper.text()).toContain(CONTROLLED_APPLY_SAFETY_WARNING)
+  })
+
+  it('enables apply when diagnosis explicitly marks selected record safe', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+    vi.mocked(api.historicalBackfillReprocessDiagnose).mockResolvedValue(diagnosisResponse)
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await wrapper.get('[data-testid="hbr-run-diagnosis-btn"]').trigger('click')
+    await flushPromises()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[0].setValue(true)
+    await wrapper.get('.hbr-confirm input[type="checkbox"]').setValue(true)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="hbr-apply-btn"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.text()).not.toContain(CONTROLLED_APPLY_SAFETY_WARNING)
   })
 
   it('shows per-record reattach action and successful upload details', async () => {
