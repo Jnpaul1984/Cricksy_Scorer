@@ -55,6 +55,9 @@ from backend.api.schemas.historical_import import (
     HistoricalSourcePayloadReattachMatchCandidate,
     HistoricalSourcePayloadReattachMetadata,
     HistoricalBackfillSourceReattachResponse,
+    HistoricalBulkZipSourcePayloadDryRunSummary,
+    HistoricalBulkZipSourcePayloadDryRunResponse,
+    HistoricalBulkZipSourcePayloadApplyResponse,
 )
 from backend.config import settings
 from backend.security import get_current_user_optional
@@ -163,6 +166,16 @@ class _HistoricalMatchTarget:
     competition_aliases: set[str]
     source_dates: set[str]
     innings_runs: tuple[int, ...]
+
+
+@dataclass(slots=True)
+class _ZipMemberScanEntry:
+    """Result of a soft (non-raising) ZIP member scan."""
+
+    filename: str
+    member: zipfile.ZipInfo | None
+    unsafe: bool = False
+    unsafe_reason: str = ""
 
 
 def _is_unsafe_zip_path(entry_name: str) -> bool:
@@ -353,6 +366,58 @@ def _scan_zip_members(payload_bytes: bytes) -> list[zipfile.ZipInfo]:
         raise HTTPException(
             status_code=415, detail="Only valid .zip uploads are supported."
         ) from exc
+
+
+def _scan_zip_members_soft(payload_bytes: bytes) -> list[_ZipMemberScanEntry]:
+    """Like _scan_zip_members but reports unsafe/oversized entries as entries rather than raising.
+
+    Raises HTTPException only for a completely unreadable ZIP.
+    """
+    entries: list[_ZipMemberScanEntry] = []
+    try:
+        with zipfile.ZipFile(io.BytesIO(payload_bytes)) as archive:
+            members = [m for m in archive.infolist() if not m.is_dir()]
+            for member in members:
+                filename = member.filename
+                if _is_unsafe_zip_path(filename):
+                    entries.append(
+                        _ZipMemberScanEntry(
+                            filename=filename,
+                            member=None,
+                            unsafe=True,
+                            unsafe_reason="path traversal or absolute path",
+                        )
+                    )
+                    continue
+                if (member.external_attr >> 16) & 0o170000 == 0o120000:
+                    entries.append(
+                        _ZipMemberScanEntry(
+                            filename=filename,
+                            member=None,
+                            unsafe=True,
+                            unsafe_reason="symlink entries are not allowed",
+                        )
+                    )
+                    continue
+                if member.file_size > PHASE_5L_MAX_FILE_SIZE_BYTES:
+                    entries.append(
+                        _ZipMemberScanEntry(
+                            filename=filename,
+                            member=member,
+                            unsafe=True,
+                            unsafe_reason=(
+                                f"entry exceeds max file size ({PHASE_5L_MAX_FILE_SIZE_BYTES} bytes)"
+                            ),
+                        )
+                    )
+                    continue
+                entries.append(_ZipMemberScanEntry(filename=filename, member=member))
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(
+            status_code=415,
+            detail="Only valid .zip uploads are supported for ZIP source payload reattach.",
+        ) from exc
+    return entries
 
 
 def _sanitize_storage_name(file_name: str, source_hash_sha256: str) -> str:
@@ -1192,6 +1257,220 @@ async def _build_source_reattach_preview(
             total_candidates=len(file_results),
             ready_candidates=ready_candidates,
             blocked_candidates=max(len(file_results) - ready_candidates, 0),
+            files=file_results,
+        ),
+        candidate_lookup,
+    )
+
+
+async def _build_source_zip_reattach_preview(
+    *,
+    payload_bytes: bytes,
+    source_filename: str | None,
+    db: AsyncSession,
+) -> tuple[HistoricalBulkZipSourcePayloadDryRunResponse, dict[str, _SourceReattachCandidate]]:
+    """Build a ZIP-only bulk source payload reattach dry-run with detailed summary counts.
+
+    Unlike _build_source_reattach_preview this function:
+    - Only processes ZIP files (raises 415 for non-ZIP input).
+    - Reports unsafe ZIP entries as file results instead of raising HTTP exceptions.
+    - Returns HistoricalBulkZipSourcePayloadDryRunResponse with granular summary counts.
+    """
+    targets = await _load_historical_reattach_targets(db)
+    file_results: list[HistoricalSourcePayloadReattachDryRunFileResult] = []
+    candidate_lookup: dict[str, _SourceReattachCandidate] = {}
+
+    # Running tally of summary counts
+    exact_match_count = 0
+    likely_match_count = 0
+    ambiguous_count = 0
+    no_match_count = 0
+    already_retained_count = 0
+    malformed_count = 0
+    unsafe_count = 0
+
+    def _evaluate_zip_candidate(file_name: str, raw_payload: bytes) -> None:
+        nonlocal exact_match_count, likely_match_count, ambiguous_count, no_match_count
+        nonlocal already_retained_count, malformed_count
+
+        status_code, dry_run = build_dry_run_response(raw_payload)
+        metadata = _candidate_payload_metadata(
+            file_name=file_name,
+            payload_bytes=raw_payload,
+            dry_run=dry_run,
+        )
+        warnings = [warning.message for warning in dry_run.warnings]
+        if status_code >= 400 or dry_run.status != "valid":
+            malformed_count += 1
+            file_results.append(
+                _source_reattach_file_result(
+                    file_name=file_name,
+                    status="unsupported" if dry_run.status == "unsupported" else "invalid",
+                    match_confidence="no_match",
+                    message=(
+                        dry_run.errors[0].message
+                        if dry_run.errors
+                        else "Source payload could not be parsed for deterministic reattach."
+                    ),
+                    metadata=metadata,
+                    warnings=warnings,
+                )
+            )
+            return
+
+        candidate = _SourceReattachCandidate(
+            file_name=file_name,
+            payload_bytes=raw_payload,
+            dry_run=dry_run,
+            metadata=metadata,
+        )
+        matches = [
+            match
+            for target in targets
+            if (match := _build_reattach_match_candidate(candidate=candidate, target=target))
+            is not None
+        ]
+        matches.sort(
+            key=lambda item: (
+                1 if item.confidence == "exact_match" else 0,
+                len(item.matched_on),
+            ),
+            reverse=True,
+        )
+        if not matches:
+            no_match_count += 1
+            file_results.append(
+                _source_reattach_file_result(
+                    file_name=file_name,
+                    status="ready",
+                    match_confidence="no_match",
+                    message="No safe historical match matched date + teams + competition + season.",
+                    metadata=metadata,
+                    warnings=warnings,
+                )
+            )
+            candidate_lookup[file_name] = candidate
+            return
+
+        top_match = matches[0]
+        second_match = matches[1] if len(matches) > 1 else None
+        is_ambiguous = bool(
+            second_match is not None
+            and (
+                top_match.confidence == second_match.confidence
+                or top_match.confidence == "likely_match"
+            )
+        )
+        if is_ambiguous:
+            ambiguous_count += 1
+            file_results.append(
+                _source_reattach_file_result(
+                    file_name=file_name,
+                    status="ready",
+                    match_confidence="ambiguous",
+                    message=(
+                        "Multiple historical matches satisfy the deterministic matching rules; "
+                        "apply is blocked."
+                    ),
+                    metadata=metadata,
+                    candidate_matches=matches[:5],
+                    warnings=warnings,
+                )
+            )
+            candidate_lookup[file_name] = candidate
+            return
+
+        top_target_batch = next(
+            (target.batch for target in targets if target.batch.id == top_match.batch_id),
+            None,
+        )
+        if top_target_batch is not None:
+            top_match.source_json_retained = _batch_has_retained_source(top_target_batch)
+
+        result = _source_reattach_file_result(
+            file_name=file_name,
+            status="ready",
+            match_confidence=top_match.confidence,
+            message=(
+                "Matching historical record already retains source JSON; overwrite is blocked."
+                if top_match.source_json_retained
+                else (
+                    "Deterministic exact match found."
+                    if top_match.confidence == "exact_match"
+                    else "Deterministic likely match found; operator confirmation required."
+                )
+            ),
+            metadata=metadata,
+            matched_target=top_match,
+            candidate_matches=matches[:5],
+            warnings=warnings,
+        )
+        if top_match.source_json_retained:
+            result.blocked_from_apply = True
+            already_retained_count += 1
+        else:
+            result.blocked_from_apply = False
+            if top_match.confidence == "exact_match":
+                exact_match_count += 1
+            else:
+                likely_match_count += 1
+        file_results.append(result)
+        candidate_lookup[file_name] = candidate
+
+    scan_entries = _scan_zip_members_soft(payload_bytes)
+    with zipfile.ZipFile(io.BytesIO(payload_bytes)) as archive:
+        for entry in scan_entries:
+            if entry.unsafe:
+                unsafe_count += 1
+                file_results.append(
+                    _source_reattach_file_result(
+                        file_name=entry.filename,
+                        status="unsupported",
+                        match_confidence="no_match",
+                        message=f"Unsafe ZIP entry rejected: {entry.unsafe_reason}.",
+                        metadata=HistoricalSourcePayloadReattachMetadata(
+                            source_filename=_source_file_label(entry.filename)
+                        ),
+                    )
+                )
+                continue
+            if not entry.filename.lower().endswith(".json"):
+                file_results.append(
+                    _source_reattach_file_result(
+                        file_name=entry.filename,
+                        status="unsupported",
+                        match_confidence="no_match",
+                        message=(
+                            "Ignored: only .json entries can be reattached from a ZIP source payload."
+                        ),
+                        metadata=HistoricalSourcePayloadReattachMetadata(
+                            source_filename=_source_file_label(entry.filename)
+                        ),
+                    )
+                )
+                continue
+            assert entry.member is not None
+            with archive.open(entry.member, "r") as fp:
+                _evaluate_zip_candidate(entry.filename, fp.read(entry.member.file_size))
+
+    candidate_json_count = sum(
+        1 for r in file_results if r.file_name.lower().endswith(".json") and r.status != "unsupported"
+    )
+    summary = HistoricalBulkZipSourcePayloadDryRunSummary(
+        candidate_json_count=candidate_json_count,
+        exact_match_count=exact_match_count,
+        likely_match_count=likely_match_count,
+        ambiguous_count=ambiguous_count,
+        no_match_count=no_match_count,
+        already_retained_count=already_retained_count,
+        malformed_count=malformed_count,
+        unsafe_count=unsafe_count,
+    )
+    return (
+        HistoricalBulkZipSourcePayloadDryRunResponse(
+            status="preview_ready",
+            source_filename=source_filename,
+            summary=summary,
             files=file_results,
         ),
         candidate_lookup,
@@ -3202,6 +3481,324 @@ async def historical_source_payload_reattach_apply(
         follow_up_message=(
             "Source payload reattach does not run delivery reprocess automatically. "
             "Use Historical Backfill Audit + Reprocess after successful reattach."
+        ),
+    )
+
+
+@router.post(
+    "/backfill/source-zip/dry-run",
+    response_model=HistoricalBulkZipSourcePayloadDryRunResponse,
+    summary="Bulk ZIP source payload reattach dry-run for historical CPL imports",
+    description=(
+        "Accepts a ZIP of original CPL JSON files. "
+        "Scans each entry, reports unsafe/malformed files, and matches safe JSON files "
+        "against existing historical import records. "
+        "Returns summary counts (exact_match, likely_match, ambiguous, no_match, "
+        "already_retained, malformed, unsafe) and a per-file candidate mapping table. "
+        "This is a read-only operation — nothing is mutated."
+    ),
+)
+async def historical_source_zip_reattach_dry_run(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalBulkZipSourcePayloadDryRunResponse:
+    """Bulk ZIP source payload dry-run: read-only match preview."""
+    del current_user
+
+    source_filename = file.filename or None
+    payload_bytes = await file.read()
+
+    # Reject non-ZIP uploads
+    is_zip = bool(source_filename and source_filename.lower().endswith(".zip"))
+    if not is_zip:
+        try:
+            is_zip = zipfile.is_zipfile(io.BytesIO(payload_bytes))
+        except Exception:
+            is_zip = False
+    if not is_zip:
+        raise HTTPException(
+            status_code=415,
+            detail="Only .zip uploads are accepted for bulk ZIP source payload reattach.",
+        )
+
+    preview, _candidates = await _build_source_zip_reattach_preview(
+        payload_bytes=payload_bytes,
+        source_filename=source_filename,
+        db=db,
+    )
+    return preview
+
+
+@router.post(
+    "/backfill/source-zip/apply",
+    response_model=HistoricalBulkZipSourcePayloadApplyResponse,
+    summary="Bulk ZIP source payload reattach apply for historical CPL imports",
+    description=(
+        "Accepts a ZIP of original CPL JSON files and an explicit list of selected "
+        "dry-run mappings to apply. "
+        "Only exact_match and likely_match mappings may be applied; "
+        "ambiguous, no_match, malformed, and unsafe entries are blocked. "
+        "Preserves idempotency: re-submitting an already-retained record is skipped. "
+        "Never inserts delivery rows or mutates player/stat tables. "
+        "Requires confirm=true."
+    ),
+)
+async def historical_source_zip_reattach_apply(
+    file: UploadFile = File(...),
+    confirm: bool = Form(False),
+    selected_mappings: str = Form(...),
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalBulkZipSourcePayloadApplyResponse:
+    """Bulk ZIP source payload apply: reattach selected exact/likely matches only."""
+    if not confirm:
+        raise HTTPException(
+            status_code=422,
+            detail="confirm must be true to apply bulk ZIP source payload reattach.",
+        )
+
+    source_filename = file.filename or None
+    payload_bytes = await file.read()
+
+    # Reject non-ZIP uploads
+    is_zip = bool(source_filename and source_filename.lower().endswith(".zip"))
+    if not is_zip:
+        try:
+            is_zip = zipfile.is_zipfile(io.BytesIO(payload_bytes))
+        except Exception:
+            is_zip = False
+    if not is_zip:
+        raise HTTPException(
+            status_code=415,
+            detail="Only .zip uploads are accepted for bulk ZIP source payload reattach.",
+        )
+
+    preview, candidate_lookup = await _build_source_zip_reattach_preview(
+        payload_bytes=payload_bytes,
+        source_filename=source_filename,
+        db=db,
+    )
+
+    # Build fast lookup by file_name (normalised) from the preview
+    preview_lookup: dict[str, HistoricalSourcePayloadReattachDryRunFileResult] = {}
+    for item in preview.files:
+        preview_lookup[item.file_name] = item
+        preview_lookup[_source_file_label(item.file_name)] = item
+    normalized_candidate_lookup: dict[str, _SourceReattachCandidate] = {}
+    for key, c in candidate_lookup.items():
+        normalized_candidate_lookup[key] = c
+        normalized_candidate_lookup[_source_file_label(key)] = c
+
+    mappings = _parse_source_reattach_selection(selected_mappings)
+
+    # Validate selected mappings before writing anything.
+    # Allow already-retained matches to pass pre-check (they will be skipped in the apply loop).
+    # Only block truly unsafe selections: ambiguous/no_match/missing match target.
+    for file_name, batch_id in mappings:
+        preview_item = preview_lookup.get(file_name)
+        if preview_item is None or preview_item.matched_target is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Selected file '{file_name}' was not present in the ZIP reattach preview.",
+            )
+        if preview_item.match_confidence in ("ambiguous", "no_match"):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Selected file '{file_name}' is blocked from apply "
+                    f"({preview_item.match_confidence})."
+                ),
+            )
+        if preview_item.status not in ("ready",):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Selected file '{file_name}' is blocked from apply (status: "
+                    f"{preview_item.status})."
+                ),
+            )
+        if preview_item.matched_target.batch_id != batch_id:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Selected batch '{batch_id}' does not match dry-run target "
+                    f"'{preview_item.matched_target.batch_id}' for file '{file_name}'."
+                ),
+            )
+
+    owner_user_id = current_user.id if current_user else None
+    owner_org_id = current_user.org_id if current_user else None
+    owner_scope = _resolve_intake_owner(owner_user_id, owner_org_id)
+
+    results: list[HistoricalSourcePayloadReattachApplyFileResult] = []
+    applied_count = 0
+    skipped_count = 0
+    error_count = 0
+    now = dt.datetime.now(dt.UTC).isoformat()
+
+    for file_name, batch_id in mappings:
+        preview_item = preview_lookup[file_name]
+        candidate: _SourceReattachCandidate | None = normalized_candidate_lookup.get(file_name)
+        if candidate is None or preview_item.matched_target is None:
+            error_count += 1
+            results.append(
+                HistoricalSourcePayloadReattachApplyFileResult(
+                    file_name=file_name,
+                    status="error",
+                    message="Dry-run candidate payload was not available for apply.",
+                    batch_id=batch_id,
+                )
+            )
+            continue
+
+        batch = await db.scalar(
+            select(models.HistoricalImportBatch).where(models.HistoricalImportBatch.id == batch_id)
+        )
+        if batch is None or not batch.applied_game_id:
+            error_count += 1
+            results.append(
+                HistoricalSourcePayloadReattachApplyFileResult(
+                    file_name=file_name,
+                    status="error",
+                    message="Target historical import batch was not found.",
+                    batch_id=batch_id,
+                )
+            )
+            continue
+
+        game = await db.scalar(select(models.Game).where(models.Game.id == batch.applied_game_id))
+        if game is None:
+            error_count += 1
+            results.append(
+                HistoricalSourcePayloadReattachApplyFileResult(
+                    file_name=file_name,
+                    status="error",
+                    message="Target historical match was not found.",
+                    batch_id=batch_id,
+                )
+            )
+            continue
+
+        if _batch_has_retained_source(batch):
+            skipped_count += 1
+            results.append(
+                HistoricalSourcePayloadReattachApplyFileResult(
+                    file_name=file_name,
+                    status="skipped",
+                    message="Target already retains source JSON; overwrite is blocked.",
+                    match_id=game.id,
+                    batch_id=batch.id,
+                    match_confidence=preview_item.match_confidence,
+                )
+            )
+            continue
+
+        safe_file_name = _sanitize_storage_name(
+            file_name,
+            candidate.dry_run.duplicate_detection.source_hash_sha256,
+        )
+        base_key = f"historical-imports/{owner_scope}/{batch.id}/source-zip-reattach"
+        raw_ref = _store_bytes_with_fallback(
+            key=f"{base_key}/raw/{safe_file_name}",
+            payload=candidate.payload_bytes,
+            content_type="application/json",
+        )
+        manifest_ref = _store_bytes_with_fallback(
+            key=f"{base_key}/manifest.json",
+            payload=json.dumps(
+                {
+                    "batch_id": batch.id,
+                    "match_id": game.id,
+                    "selected_file_name": file_name,
+                    "source_hash_sha256": candidate.dry_run.duplicate_detection.source_hash_sha256,
+                    "match_confidence": preview_item.match_confidence,
+                    "matched_on": preview_item.matched_target.matched_on,
+                    "attached_at": now,
+                    "workflow": "bulk_zip_source_reattach",
+                },
+                separators=(",", ":"),
+            ).encode("utf-8"),
+            content_type="application/json",
+        )
+
+        reattach_summary = {
+            "attached_at": now,
+            "selected_file_name": file_name,
+            "source_hash_sha256": candidate.dry_run.duplicate_detection.source_hash_sha256,
+            "match_confidence": preview_item.match_confidence,
+            "matched_on": preview_item.matched_target.matched_on,
+            "workflow": "bulk_zip_source_reattach",
+            "storage": {
+                "raw": raw_ref,
+                "manifest": manifest_ref,
+            },
+            "registry_people_available": candidate.metadata.registry_people_available,
+            "expected_deliveries": candidate.metadata.expected_deliveries,
+            "expected_wickets": candidate.metadata.expected_wickets,
+        }
+
+        batch_dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else None
+        dry_run_summary_update: dict[str, Any] = (
+            dict(batch_dry_run) if batch_dry_run is not None else {}
+        )
+        dry_run_summary_update["source_payload_reattach"] = reattach_summary
+        batch.dry_run_summary = dry_run_summary_update
+
+        phases = game.phases if isinstance(game.phases, dict) else {}
+        historical_meta_raw = phases.get("historical_import")
+        historical_meta: dict[str, Any] = (
+            dict(historical_meta_raw) if isinstance(historical_meta_raw, dict) else {}
+        )
+        historical_meta["source_payload_reattach"] = {
+            **reattach_summary,
+            "source_filename": batch.source_filename,
+        }
+        historical_meta["source_json_retained"] = True
+        game.phases = {**phases, "historical_import": historical_meta}
+
+        db.add(batch)
+        db.add(game)
+        applied_count += 1
+        results.append(
+            HistoricalSourcePayloadReattachApplyFileResult(
+                file_name=file_name,
+                status="reattached",
+                message="Source payload reattached. Run delivery backfill/reprocess separately.",
+                match_id=game.id,
+                batch_id=batch.id,
+                match_confidence=preview_item.match_confidence,
+            )
+        )
+
+    if applied_count > 0:
+        await db.commit()
+
+    # Compute aggregate counts from the full preview for reporting
+    ambiguous_count = preview.summary.ambiguous_count
+    no_match_count = preview.summary.no_match_count
+    malformed_count = preview.summary.malformed_count
+
+    apply_status = "applied"
+    if error_count > 0 and applied_count == 0:
+        apply_status = "failed"
+    elif error_count > 0 or skipped_count > 0:
+        apply_status = "partial"
+
+    return HistoricalBulkZipSourcePayloadApplyResponse(
+        status=cast(Literal["applied", "partial", "failed"], apply_status),
+        source_filename=source_filename,
+        selected_count=len(mappings),
+        applied_count=applied_count,
+        skipped_count=skipped_count,
+        ambiguous_count=ambiguous_count,
+        no_match_count=no_match_count,
+        malformed_count=malformed_count,
+        error_count=error_count,
+        results=results,
+        follow_up_message=(
+            "Source payload reattach does not run delivery reprocess automatically. "
+            "Run Historical Backfill Audit + Reprocess after successful reattach."
         ),
     )
 
