@@ -838,3 +838,130 @@ def test_backfill_record_source_reattach_makes_diagnosis_diagnosable_without_mut
     assert _count_delivery_rows(client) == before_deliveries
     assert _count_player_rows(client) == before_players
     assert list(_load_game(client, game_id).deliveries or []) == before_game_deliveries
+
+
+def test_backfill_apply_via_retained_json_is_idempotent(client: TestClient) -> None:
+    """Applying via retained JSON when deliveries were already imported must succeed
+    idempotently (allow_reprocess path) and must not create duplicate deliveries."""
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, game_id = _create_and_apply_batch(client, token, payload)
+
+    # Reattach source JSON so apply can load it from local storage.
+    reattach = client.post(
+        f"/api/historical-import/json/backfill/{batch_id}/reattach-source-json",
+        headers=_auth_headers(token),
+        files={"file": ("repair.json", json.dumps(payload).encode("utf-8"), "application/json")},
+    )
+    assert reattach.status_code == 200, reattach.text
+
+    # First apply via retained JSON (deliveries_imported=False at this point).
+    first = client.post(
+        "/api/historical-import/json/backfill-reprocess/apply",
+        headers=_auth_headers(token),
+        json={"confirm": True, "batch_ids": [batch_id], "max_batch_size": 25},
+    )
+    assert first.status_code == 200, first.text
+    first_data = first.json()
+    assert first_data["processed_matches"] == 1, first_data
+    first_count = len(_load_game(client, game_id).deliveries or [])
+    assert first_count > 0
+
+    # Second apply via retained JSON (deliveries_imported=True now — idempotent reprocess).
+    second = client.post(
+        "/api/historical-import/json/backfill-reprocess/apply",
+        headers=_auth_headers(token),
+        json={"confirm": True, "batch_ids": [batch_id], "max_batch_size": 25},
+    )
+    assert second.status_code == 200, second.text
+    second_data = second.json()
+    # The record must not produce a 500; it must be processed successfully.
+    assert second_data["processed_matches"] == 1, second_data
+    second_count = len(_load_game(client, game_id).deliveries or [])
+    # No duplicates: delivery count must stay the same.
+    assert second_count == first_count, (
+        f"Duplicate deliveries detected after idempotent reprocess: "
+        f"expected {first_count}, got {second_count}"
+    )
+
+
+def test_backfill_apply_returns_structured_error_on_unknown_batch(client: TestClient) -> None:
+    """Apply with an unknown batch_id must return a 200 with the record marked
+    failed (not a bare 500), and the response body must be structured JSON."""
+    token = _register_analyst(client)
+
+    resp = client.post(
+        "/api/historical-import/json/backfill-reprocess/apply",
+        headers=_auth_headers(token),
+        json={
+            "confirm": True,
+            "batch_ids": ["00000000-0000-0000-0000-000000000000"],
+            "max_batch_size": 25,
+        },
+    )
+    # Must be a valid structured response (not a bare 500).
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert "status" in data
+    assert "processed_matches" in data
+    # The unknown batch should be skipped/blocked, not crash the whole request.
+    assert data["processed_matches"] == 0
+
+
+def test_backfill_apply_no_duplicate_deliveries_after_reprocess(client: TestClient) -> None:
+    """Repeated applies of the same eligible record must never insert duplicate deliveries."""
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, game_id = _create_and_apply_batch(client, token, payload)
+
+    # Apply once via inline payload.
+    first = client.post(
+        "/api/historical-import/json/backfill-reprocess/apply",
+        headers=_auth_headers(token),
+        json={
+            "confirm": True,
+            "batch_ids": [batch_id],
+            "max_batch_size": 25,
+            "source_payloads_by_batch": {batch_id: payload},
+        },
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["processed_matches"] == 1
+    count_after_first = len(_load_game(client, game_id).deliveries or [])
+    assert count_after_first > 0
+
+    # Apply a second time (reprocess) via inline payload.
+    second = client.post(
+        "/api/historical-import/json/backfill-reprocess/apply",
+        headers=_auth_headers(token),
+        json={
+            "confirm": True,
+            "batch_ids": [batch_id],
+            "max_batch_size": 25,
+            "source_payloads_by_batch": {batch_id: payload},
+        },
+    )
+    assert second.status_code == 200, second.text
+    count_after_second = len(_load_game(client, game_id).deliveries or [])
+    assert count_after_second == count_after_first, (
+        f"Duplicate deliveries after reprocess: expected {count_after_first}, "
+        f"got {count_after_second}"
+    )
+
+    # Apply a third time — still no duplicates.
+    third = client.post(
+        "/api/historical-import/json/backfill-reprocess/apply",
+        headers=_auth_headers(token),
+        json={
+            "confirm": True,
+            "batch_ids": [batch_id],
+            "max_batch_size": 25,
+            "source_payloads_by_batch": {batch_id: payload},
+        },
+    )
+    assert third.status_code == 200, third.text
+    count_after_third = len(_load_game(client, game_id).deliveries or [])
+    assert count_after_third == count_after_first, (
+        f"Duplicate deliveries after third apply: expected {count_after_first}, "
+        f"got {count_after_third}"
+    )
