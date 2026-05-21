@@ -54,6 +54,7 @@ from backend.api.schemas.historical_import import (
     HistoricalSourcePayloadReattachDryRunResponse,
     HistoricalSourcePayloadReattachMatchCandidate,
     HistoricalSourcePayloadReattachMetadata,
+    HistoricalBackfillSourceReattachResponse,
 )
 from backend.config import settings
 from backend.security import get_current_user_optional
@@ -853,6 +854,143 @@ def _batch_has_retained_source(batch: models.HistoricalImportBatch) -> bool:
     storage_raw = intake.get("storage")
     storage: dict[str, Any] = storage_raw if isinstance(storage_raw, dict) else {}
     return isinstance(storage.get("raw"), dict)
+
+
+def _historical_import_source(batch: models.HistoricalImportBatch) -> str:
+    source_filename = str(batch.source_filename or "")
+    dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
+    if "::" in source_filename or "large_zip_intake" in dry_run:
+        return "bulk_zip_apply"
+    if source_filename:
+        return "single_json_apply"
+    return "unknown"
+
+
+def _target_source_reattach_metadata(
+    batch: models.HistoricalImportBatch,
+    game: models.Game,
+) -> HistoricalSourcePayloadReattachMetadata:
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    hist_meta_raw = phases.get("historical_import")
+    hist_meta: dict[str, Any] = hist_meta_raw if isinstance(hist_meta_raw, dict) else {}
+    venue_context_raw = hist_meta.get("venue_context")
+    venue_context: dict[str, Any] = venue_context_raw if isinstance(venue_context_raw, dict) else {}
+    source_dates_raw = hist_meta.get("source_dates")
+    source_dates = source_dates_raw if isinstance(source_dates_raw, list) else []
+    innings_summary_raw = phases.get("historical_innings_summary")
+    innings_summary = innings_summary_raw if isinstance(innings_summary_raw, list) else []
+    return HistoricalSourcePayloadReattachMetadata(
+        competition_name=_first_text(
+            hist_meta.get("competition_name"),
+            hist_meta.get("event_name"),
+            hist_meta.get("tournament_name"),
+        ),
+        season=_first_text(hist_meta.get("season")),
+        match_number=_maybe_int(hist_meta.get("match_number")),
+        date=_first_text(hist_meta.get("match_date"), *source_dates),
+        teams=_team_names_from_game(game),
+        venue=_first_text(hist_meta.get("venue"), venue_context.get("venue_name")),
+        city=_first_text(venue_context.get("city")),
+        source_filename=batch.source_filename,
+        registry_people_available=False,
+        expected_deliveries=batch.delivery_count,
+        expected_wickets=sum(
+            (_maybe_int(inning.get("wickets")) or 0)
+            for inning in innings_summary
+            if isinstance(inning, dict)
+        ),
+    )
+
+
+def _evaluate_record_reattach_confidence(
+    *,
+    candidate: HistoricalSourcePayloadReattachMetadata,
+    target: HistoricalSourcePayloadReattachMetadata,
+) -> tuple[Literal["exact_match", "probable_match", "mismatch", "insufficient_identity"], str, list[str], list[str]]:
+    matched: list[str] = []
+    warnings: list[str] = []
+    comparable = 0
+
+    candidate_teams = _team_signature(candidate.teams)
+    target_teams = _team_signature(target.teams)
+    if candidate_teams and target_teams:
+        comparable += 1
+        if candidate_teams == target_teams:
+            matched.append("teams")
+        else:
+            warnings.append("teams do not match selected historical record")
+
+    candidate_date = str(candidate.date or "").strip()
+    target_date = str(target.date or "").strip()
+    if candidate_date and target_date:
+        comparable += 1
+        if candidate_date == target_date:
+            matched.append("date")
+        else:
+            warnings.append("date does not match selected historical record")
+
+    candidate_comp = _normalize_match_text(candidate.competition_name)
+    target_comp = _normalize_match_text(target.competition_name)
+    if candidate_comp and target_comp:
+        comparable += 1
+        if candidate_comp == target_comp:
+            matched.append("competition")
+        else:
+            warnings.append("competition does not match selected historical record")
+
+    candidate_season = _normalize_match_text(candidate.season)
+    target_season = _normalize_match_text(target.season)
+    if candidate_season and target_season:
+        comparable += 1
+        if candidate_season == target_season:
+            matched.append("season")
+        else:
+            warnings.append("season does not match selected historical record")
+
+    candidate_venue = normalize_venue_name(candidate.venue)
+    target_venue = normalize_venue_name(target.venue)
+    if candidate_venue and target_venue:
+        comparable += 1
+        if candidate_venue == target_venue:
+            matched.append("venue")
+        else:
+            warnings.append("venue does not match selected historical record")
+
+    if (
+        candidate.match_number is not None
+        and target.match_number is not None
+        and candidate.match_number == target.match_number
+    ):
+        comparable += 1
+        matched.append("match_number")
+    elif candidate.match_number is not None and target.match_number is not None:
+        comparable += 1
+        warnings.append("match_number does not match selected historical record")
+
+    if warnings and (
+        "teams do not match selected historical record" in warnings
+        or "date does not match selected historical record" in warnings
+        or len(warnings) > 1
+    ):
+        return ("mismatch", "Uploaded JSON conflicts with selected record identity fields.", matched, warnings)
+
+    if comparable < 2:
+        return (
+            "insufficient_identity",
+            "Insufficient overlapping identity fields to safely confirm this source payload.",
+            matched,
+            warnings,
+        )
+
+    confidence: Literal["exact_match", "probable_match"] = (
+        "exact_match" if {"teams", "date", "competition", "season"}.issubset(set(matched)) else "probable_match"
+    )
+    reason = (
+        "Identity fields fully match selected record."
+        if confidence == "exact_match"
+        else "Core identity fields appear compatible with selected record."
+    )
+    return confidence, reason, matched, warnings
 
 
 def _source_reattach_file_result(
@@ -2655,6 +2793,164 @@ async def apply_historical_delivery_backfill(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return HistoricalBackfillApplyResponse(**report)
+
+
+@router.post(
+    "/backfill/{record_id}/reattach-source-json",
+    response_model=HistoricalBackfillSourceReattachResponse,
+    summary="Reattach source JSON for one blocked historical backfill record",
+)
+async def reattach_backfill_source_json(
+    record_id: str,
+    file: UploadFile = File(...),
+    allow_overwrite: bool = Form(False),
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalBackfillSourceReattachResponse:
+    payload_bytes = await file.read()
+    status_code, dry_run = build_dry_run_response(payload_bytes)
+    if status_code >= 400 or dry_run.status != "valid":
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                dry_run.errors[0].message
+                if dry_run.errors
+                else "Uploaded file is not a valid historical JSON source payload."
+            ),
+        )
+
+    batch = await db.scalar(
+        select(models.HistoricalImportBatch).where(models.HistoricalImportBatch.id == record_id)
+    )
+    if batch is None or not batch.applied_game_id:
+        raise HTTPException(status_code=404, detail="Historical import record was not found.")
+    game = await db.scalar(select(models.Game).where(models.Game.id == batch.applied_game_id))
+    if game is None:
+        raise HTTPException(status_code=404, detail="Historical match for record was not found.")
+
+    uploaded_filename = _source_file_label(file.filename or "reattach.json")
+    candidate_metadata = _candidate_payload_metadata(
+        file_name=uploaded_filename,
+        payload_bytes=payload_bytes,
+        dry_run=dry_run,
+    )
+    target_metadata = _target_source_reattach_metadata(batch, game)
+    confidence, validation_reason, matched_on, mismatch_warnings = (
+        _evaluate_record_reattach_confidence(candidate=candidate_metadata, target=target_metadata)
+    )
+
+    if confidence in {"mismatch", "insufficient_identity"}:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "record_id": record_id,
+                "validation_confidence": confidence,
+                "validation_reason": validation_reason,
+                "matched_identity_fields": matched_on,
+                "mismatch_warnings": mismatch_warnings,
+            },
+        )
+
+    source_hash = dry_run.duplicate_detection.source_hash_sha256
+    existing_summary_raw = (
+        batch.dry_run_summary.get("source_payload_reattach")
+        if isinstance(batch.dry_run_summary, dict)
+        else None
+    )
+    existing_summary = existing_summary_raw if isinstance(existing_summary_raw, dict) else {}
+    existing_hash = str(existing_summary.get("source_hash_sha256") or "").strip()
+    if _batch_has_retained_source(batch):
+        if existing_hash and existing_hash == source_hash:
+            return HistoricalBackfillSourceReattachResponse(
+                record_id=batch.id,
+                match_id=game.id,
+                retained=True,
+                status="already_retained",
+                validation_confidence=confidence,
+                validation_reason="Matching source payload already retained for this record.",
+                matched_identity_fields=matched_on,
+                mismatch_warnings=mismatch_warnings,
+                source_hash_sha256=source_hash,
+                uploaded_filename=uploaded_filename,
+                recommended_next_action="Run diagnosis again.",
+            )
+        if not allow_overwrite:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Record already retains a different source payload. "
+                    "Set allow_overwrite=true only after manual verification."
+                ),
+            )
+
+    now = dt.datetime.now(dt.UTC).isoformat()
+    owner_scope = _resolve_intake_owner(
+        current_user.id if current_user else None,
+        current_user.org_id if current_user else None,
+    )
+    safe_file_name = _sanitize_storage_name(uploaded_filename, source_hash)
+    base_key = f"historical-imports/{owner_scope}/{batch.id}/source-reattach"
+    raw_ref = _store_bytes_with_fallback(
+        key=f"{base_key}/raw/{safe_file_name}",
+        payload=payload_bytes,
+        content_type="application/json",
+    )
+    manifest_payload = {
+        "historical_import_record_id": batch.id,
+        "match_id": game.id,
+        "batch_id": batch.id,
+        "import_source": _historical_import_source(batch),
+        "uploaded_filename": uploaded_filename,
+        "source_hash_sha256": source_hash,
+        "reattached_at": now,
+        "reattached_by": current_user.id if current_user else None,
+        "validation_confidence": confidence,
+        "validation_reason": validation_reason,
+        "matched_identity_fields": matched_on,
+        "mismatch_warnings": mismatch_warnings,
+    }
+    manifest_ref = _store_bytes_with_fallback(
+        key=f"{base_key}/manifest.json",
+        payload=json.dumps(manifest_payload, separators=(",", ":")).encode("utf-8"),
+        content_type="application/json",
+    )
+    reattach_summary = {
+        **manifest_payload,
+        "storage": {"raw": raw_ref, "manifest": manifest_ref},
+        "registry_people_available": candidate_metadata.registry_people_available,
+        "expected_deliveries": candidate_metadata.expected_deliveries,
+        "expected_wickets": candidate_metadata.expected_wickets,
+    }
+
+    batch_dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
+    batch.dry_run_summary = {**batch_dry_run, "source_payload_reattach": reattach_summary}
+
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    historical_meta_raw = phases.get("historical_import")
+    historical_meta: dict[str, Any] = (
+        dict(historical_meta_raw) if isinstance(historical_meta_raw, dict) else {}
+    )
+    historical_meta["source_payload_reattach"] = reattach_summary
+    historical_meta["source_json_retained"] = True
+    game.phases = {**phases, "historical_import": historical_meta}
+
+    db.add(batch)
+    db.add(game)
+    await db.commit()
+
+    return HistoricalBackfillSourceReattachResponse(
+        record_id=batch.id,
+        match_id=game.id,
+        retained=True,
+        status="reattached",
+        validation_confidence=confidence,
+        validation_reason=validation_reason,
+        matched_identity_fields=matched_on,
+        mismatch_warnings=mismatch_warnings,
+        source_hash_sha256=source_hash,
+        uploaded_filename=uploaded_filename,
+        recommended_next_action="Run diagnosis again.",
+    )
 
 
 @router.post(

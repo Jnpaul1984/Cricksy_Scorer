@@ -176,6 +176,15 @@ def _count_delivery_rows(client: TestClient) -> int:
     return asyncio.get_event_loop().run_until_complete(_query())
 
 
+def _count_player_rows(client: TestClient) -> int:
+    async def _query() -> int:
+        async with client.session_maker() as session:  # type: ignore[attr-defined]
+            result = await session.execute(select(models.Player))
+            return len(result.scalars().all())
+
+    return asyncio.get_event_loop().run_until_complete(_query())
+
+
 def _build_zip(entries: dict[str, bytes]) -> bytes:
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -625,3 +634,134 @@ def test_source_reattach_apply_rejects_ambiguous_selection(client: TestClient) -
     )
     assert response.status_code == 422, response.text
     assert response.json()["detail"]
+
+
+def test_backfill_record_source_reattach_exact_match_and_idempotent(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, game_id = _create_and_apply_batch(client, token, payload)
+
+    first = client.post(
+        f"/api/historical-import/json/backfill/{batch_id}/reattach-source-json",
+        headers=_auth_headers(token),
+        files={"file": ("repair.json", json.dumps(payload).encode("utf-8"), "application/json")},
+    )
+    assert first.status_code == 200, first.text
+    first_body = first.json()
+    assert first_body["status"] == "reattached"
+    assert first_body["validation_confidence"] == "exact_match"
+    assert first_body["record_id"] == batch_id
+    assert first_body["match_id"] == game_id
+
+    second = client.post(
+        f"/api/historical-import/json/backfill/{batch_id}/reattach-source-json",
+        headers=_auth_headers(token),
+        files={"file": ("repair.json", json.dumps(payload).encode("utf-8"), "application/json")},
+    )
+    assert second.status_code == 200, second.text
+    second_body = second.json()
+    assert second_body["status"] == "already_retained"
+    assert second_body["source_hash_sha256"] == first_body["source_hash_sha256"]
+
+
+def test_backfill_record_source_reattach_probable_match(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, _ = _create_and_apply_batch(client, token, payload)
+
+    probable_payload = deepcopy(payload)
+    info = probable_payload.get("info")
+    assert isinstance(info, dict)
+    info.pop("event", None)
+
+    response = client.post(
+        f"/api/historical-import/json/backfill/{batch_id}/reattach-source-json",
+        headers=_auth_headers(token),
+        files={
+            "file": ("repair-probable.json", json.dumps(probable_payload).encode("utf-8"), "application/json")
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "reattached"
+    assert body["validation_confidence"] == "probable_match"
+
+
+def test_backfill_record_source_reattach_rejects_malformed_and_mismatch(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, _ = _create_and_apply_batch(client, token, payload)
+
+    malformed = client.post(
+        f"/api/historical-import/json/backfill/{batch_id}/reattach-source-json",
+        headers=_auth_headers(token),
+        files={"file": ("broken.json", b"{not-json", "application/json")},
+    )
+    assert malformed.status_code == 422, malformed.text
+
+    mismatch_payload = deepcopy(payload)
+    info = mismatch_payload.get("info")
+    assert isinstance(info, dict)
+    info["teams"] = ["Mismatch XI", "Other XI"]
+    mismatch = client.post(
+        f"/api/historical-import/json/backfill/{batch_id}/reattach-source-json",
+        headers=_auth_headers(token),
+        files={"file": ("mismatch.json", json.dumps(mismatch_payload).encode("utf-8"), "application/json")},
+    )
+    assert mismatch.status_code == 409, mismatch.text
+
+
+def test_backfill_record_source_reattach_overwrite_protection(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, _ = _create_and_apply_batch(client, token, payload)
+
+    first = client.post(
+        f"/api/historical-import/json/backfill/{batch_id}/reattach-source-json",
+        headers=_auth_headers(token),
+        files={"file": ("repair.json", json.dumps(payload).encode("utf-8"), "application/json")},
+    )
+    assert first.status_code == 200, first.text
+
+    changed_payload = deepcopy(payload)
+    changed_payload["reattach_probe"] = "different-hash"
+    second = client.post(
+        f"/api/historical-import/json/backfill/{batch_id}/reattach-source-json",
+        headers=_auth_headers(token),
+        files={"file": ("repair-2.json", json.dumps(changed_payload).encode("utf-8"), "application/json")},
+    )
+    assert second.status_code == 409, second.text
+    assert "already retains a different source payload" in second.text
+
+
+def test_backfill_record_source_reattach_makes_diagnosis_diagnosable_without_mutation(
+    client: TestClient,
+) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, game_id = _create_and_apply_batch(client, token, payload)
+    before_deliveries = _count_delivery_rows(client)
+    before_players = _count_player_rows(client)
+    before_game_deliveries = list(_load_game(client, game_id).deliveries or [])
+
+    reattach = client.post(
+        f"/api/historical-import/json/backfill/{batch_id}/reattach-source-json",
+        headers=_auth_headers(token),
+        files={"file": ("repair.json", json.dumps(payload).encode("utf-8"), "application/json")},
+    )
+    assert reattach.status_code == 200, reattach.text
+
+    diagnosis = client.post(
+        "/api/historical-import/json/backfill-reprocess/diagnose",
+        headers=_auth_headers(token),
+        json={"batch_ids": [batch_id], "max_batch_size": 25},
+    )
+    assert diagnosis.status_code == 200, diagnosis.text
+    record = diagnosis.json()["records"][0]
+    assert record["source_json_retained"] is True
+    assert record["skip_or_failure_reason"] != "missing_source_json"
+    assert record["expected_deliveries"] > 0
+
+    assert _count_delivery_rows(client) == before_deliveries
+    assert _count_player_rows(client) == before_players
+    assert list(_load_game(client, game_id).deliveries or []) == before_game_deliveries

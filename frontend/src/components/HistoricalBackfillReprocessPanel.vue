@@ -186,6 +186,7 @@
               <th>Expected players</th>
               <th>Duplicate delivery risk</th>
               <th>Apply deliveries previously run</th>
+              <th>Source reattach</th>
             </tr>
           </thead>
           <tbody>
@@ -211,6 +212,18 @@
               <td>{{ record.expected_players }}</td>
               <td>{{ record.duplicate_delivery_risk ? 'Yes' : 'No' }}</td>
               <td>{{ record.apply_deliveries_previously_run ? 'Yes' : 'No' }}</td>
+              <td>
+                <button
+                  v-if="record.missing_source_json"
+                  type="button"
+                  class="hbr-btn hbr-btn--ghost"
+                  :disabled="loading"
+                  @click="startReattach(record.batch_id)"
+                >
+                  Reattach Source JSON
+                </button>
+                <span v-else>—</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -223,11 +236,48 @@
       </p>
     </section>
 
+    <section v-if="reattachTargetBatchId" class="hbr-section">
+      <h4 class="hbr-section-title">Reattach source JSON (single record)</h4>
+      <p class="hbr-idempotency-note">Selected record: {{ reattachTargetBatchId }}</p>
+      <label class="hbr-field">
+        Source JSON file
+        <input
+          type="file"
+          accept=".json,application/json"
+          :disabled="loading"
+          data-testid="hbr-reattach-file-input"
+          @change="onReattachFileChange"
+        />
+      </label>
+      <button
+        type="button"
+        class="hbr-btn hbr-btn--primary"
+        data-testid="hbr-reattach-submit-btn"
+        :disabled="loading || !reattachFile"
+        @click="submitReattach"
+      >
+        Reattach Source JSON
+      </button>
+      <ul v-if="reattachResult" class="hbr-list">
+        <li>Validation confidence: {{ reattachResult.validation_confidence }}</li>
+        <li>Validation reason: {{ reattachResult.validation_reason }}</li>
+        <li>Matched identity fields: {{ reattachResult.matched_identity_fields.join(', ') || '—' }}</li>
+        <li v-if="reattachResult.mismatch_warnings.length">
+          Mismatch warnings: {{ reattachResult.mismatch_warnings.join('; ') }}
+        </li>
+        <li>Retained source hash: {{ reattachResult.source_hash_sha256 }}</li>
+        <li>Next action: {{ reattachResult.recommended_next_action }}</li>
+      </ul>
+    </section>
+
     <section v-if="auditResult" class="hbr-section">
       <h4 class="hbr-section-title">Controlled apply</h4>
       <p>Selected records: <strong>{{ selectedBatchIds.length }}</strong></p>
       <p v-if="selectedBatchIds.length > 0 && !selectionSizeAllowed" class="hbr-error" role="alert">
         Selection size must be 1, 3–5, 10, or 20–25.
+      </p>
+      <p v-if="selectedBatchIds.length > 0 && !selectedBatchesDiagnosedSafe" class="hbr-error" role="alert">
+        Controlled apply stays disabled until diagnosis marks every selected record as safely reprocessable.
       </p>
       <label class="hbr-confirm">
         <input v-model="confirmApply" type="checkbox" :disabled="loading" />
@@ -280,10 +330,12 @@ import {
   historicalBackfillReprocessApply,
   historicalBackfillReprocessAudit,
   historicalBackfillReprocessDiagnose,
+  historicalBackfillReattachSourceJson,
   historicalImportListBatches,
   type HistoricalBackfillApplyResponse,
   type HistoricalBackfillAuditResponse,
   type HistoricalBackfillDiagnosisResponse,
+  type HistoricalBackfillSourceReattachResponse,
 } from '@/services/api'
 
 const loading = ref(false)
@@ -294,6 +346,9 @@ const diagnosisResult = ref<HistoricalBackfillDiagnosisResponse | null>(null)
 const applyResult = ref<HistoricalBackfillApplyResponse | null>(null)
 const selectedBatchIds = ref<string[]>([])
 const confirmApply = ref(false)
+const reattachTargetBatchId = ref<string | null>(null)
+const reattachFile = ref<File | null>(null)
+const reattachResult = ref<HistoricalBackfillSourceReattachResponse | null>(null)
 const auditScopeMode = ref<
   'first_1' | 'first_3_5' | 'first_10' | 'first_20_25' | 'manual_batch_ids' | 'manual_match_ids'
 >('first_1')
@@ -337,11 +392,24 @@ const selectionSizeAllowed = computed(() => {
   return size === 1 || (size >= 3 && size <= 5) || size === 10 || (size >= 20 && size <= 25)
 })
 
+const diagnosisByBatch = computed(() => {
+  const records = diagnosisResult.value?.records ?? []
+  return new Map(records.map((record) => [record.batch_id, record]))
+})
+
+const selectedBatchesDiagnosedSafe = computed(() =>
+  selectedBatchIds.value.length > 0 &&
+  selectedBatchIds.value.every(
+    (batchId) => diagnosisByBatch.value.get(batchId)?.safely_reprocessable === true,
+  ),
+)
+
 const canApply = computed(() =>
   Boolean(
     auditResult.value &&
     selectedBatchIds.value.length > 0 &&
     selectionSizeAllowed.value &&
+    selectedBatchesDiagnosedSafe.value &&
     confirmApply.value &&
     !loading.value,
   ),
@@ -440,6 +508,17 @@ function toggleRecord(batchId: string, event: Event) {
   selectedBatchIds.value = [...current]
 }
 
+function startReattach(batchId: string) {
+  reattachTargetBatchId.value = batchId
+  reattachFile.value = null
+  reattachResult.value = null
+}
+
+function onReattachFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  reattachFile.value = input.files?.[0] ?? null
+}
+
 async function runAudit() {
   if (!canRunAudit.value || requestedAuditMaxBatchSize.value === null) return
   loading.value = true
@@ -517,6 +596,23 @@ async function applySelected() {
       batch_ids: selectedBatchIds.value,
       max_batch_size: 25,
     })
+  } catch (err) {
+    error.value = normalizeErrorMessage(err)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function submitReattach() {
+  if (!reattachTargetBatchId.value || !reattachFile.value) return
+  loading.value = true
+  error.value = null
+  reattachResult.value = null
+  try {
+    reattachResult.value = await historicalBackfillReattachSourceJson(
+      reattachTargetBatchId.value,
+      reattachFile.value,
+    )
   } catch (err) {
     error.value = normalizeErrorMessage(err)
   } finally {
