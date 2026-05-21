@@ -4,6 +4,7 @@ Endpoints tested:
   POST /api/historical-import/json/backfill/source-zip/dry-run
   POST /api/historical-import/json/backfill/source-zip/apply
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -378,9 +379,7 @@ def test_source_zip_dry_run_reports_unsafe_zip_entry(client: TestClient) -> None
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["summary"]["unsafe_count"] >= 1
-    unsafe_file = next(
-        (f for f in body["files"] if "unsafe" in f["message"].lower()), None
-    )
+    unsafe_file = next((f for f in body["files"] if "unsafe" in f["message"].lower()), None)
     assert unsafe_file is not None
     assert unsafe_file["blocked_from_apply"] is True
 

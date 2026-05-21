@@ -74,7 +74,13 @@ def _cricsheet_minimal_payload(event_name: str) -> dict[str, object]:
 
 
 @pytest.mark.parametrize(
-    ("fixture_path", "expected_teams", "expected_result", "expected_venue", "expected_match_number"),
+    (
+        "fixture_path",
+        "expected_teams",
+        "expected_result",
+        "expected_venue",
+        "expected_match_number",
+    ),
     [
         (
             CRICSHEET_635215_FIXTURE_PATH,
@@ -146,7 +152,9 @@ def test_dry_run_json_payload_valid_preview() -> None:
 
 def test_dry_run_sanitized_cricsheet_fixture_valid_preview() -> None:
     with TestClient(app) as client:
-        response = client.post("/api/historical-import/json/dry-run", json=_load_cricsheet_fixture())
+        response = client.post(
+            "/api/historical-import/json/dry-run", json=_load_cricsheet_fixture()
+        )
 
     assert response.status_code == 200, response.text
     data = response.json()
@@ -176,7 +184,9 @@ def test_dry_run_accepts_multipart_json_file() -> None:
     with TestClient(app) as client:
         response = client.post(
             "/api/historical-import/json/dry-run",
-            files={"file": ("simulated_t20_match.json", FIXTURE_PATH.read_bytes(), "application/json")},
+            files={
+                "file": ("simulated_t20_match.json", FIXTURE_PATH.read_bytes(), "application/json")
+            },
         )
 
     assert response.status_code == 200, response.text

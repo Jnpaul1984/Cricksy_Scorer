@@ -1,6 +1,6 @@
 # Frontend Truth & Consistency - Execution Plan
-**Date**: 2026-01-16  
-**Branch**: beta/audit-frontend-metrics-source-of-truth  
+**Date**: 2026-01-16
+**Branch**: beta/audit-frontend-metrics-source-of-truth
 **Engineer**: Frontend Truth & Consistency Engineer
 
 ---
@@ -26,18 +26,18 @@ export function useCanonicalMetrics(gameId: Ref<string> | string) {
     wickets: computed(() => number | null),
     overs: computed(() => string),  // "12.3" format
     ballsRemaining: computed(() => number | null),
-    
+
     // Run rates
     crr: computed(() => number | null),
     rrr: computed(() => number | null),
-    
+
     // Extras breakdown
     extras: computed(() => { total: number, wides: number, noBalls: number, byes: number, legByes: number }),
-    
+
     // Meta
     updatedAt: computed(() => Date | null),
     isStale: computed(() => boolean),  // > 30s since last update
-    
+
     // Refresh methods
     refresh: () => Promise<void>,
   }
@@ -178,7 +178,7 @@ const bowlerEcon = computed(() => {
 const keyPlayers = computed(() => {
   const batting = gameStore.currentGame?.batting_scorecard ?? {}
   const bowling = gameStore.currentGame?.bowling_scorecard ?? {}
-  
+
   return Object.entries(batting)
     .map(([id, stats]) => ({
       id,
@@ -311,12 +311,12 @@ const req = computed(() => {
 **Fixes**:
 ```typescript
 // B4: Balls remaining (line 613)
-const ballsRemaining = computed(() => 
+const ballsRemaining = computed(() =>
   gameStore.liveSnapshot?.balls_remaining ?? 0
 )
 
 // B7: Last delivery (line 475)
-const lastDelivery = computed(() => 
+const lastDelivery = computed(() =>
   gameStore.liveSnapshot?.last_delivery ?? null
 )
 // Use backend values directly, remove local calculations
@@ -351,7 +351,7 @@ const lastDelivery = computed(() =>
       <h3>Event Log</h3>
       <BaseButton @click="showAddEvent = true">+ Add Event</BaseButton>
     </div>
-    
+
     <div class="event-log-timeline">
       <div v-for="event in events" :key="event.id" class="event-item">
         <span class="event-time">{{ formatTime(event.timestamp) }}</span>
@@ -359,10 +359,10 @@ const lastDelivery = computed(() =>
         <span class="event-note">{{ event.note }}</span>
       </div>
     </div>
-    
-    <AddEventModal 
-      v-model:show="showAddEvent" 
-      @add="handleAddEvent" 
+
+    <AddEventModal
+      v-model:show="showAddEvent"
+      @add="handleAddEvent"
     />
   </div>
 </template>
@@ -493,8 +493,8 @@ Add status column to each finding:
 **Services**:
 13. `frontend/src/services/api.ts` - Add new API functions
 
-**Total Modified**: 13 files  
-**Total Created**: 4 files  
+**Total Modified**: 13 files
+**Total Created**: 4 files
 **Total Changes**: 17 files
 
 ---
@@ -524,5 +524,5 @@ Add status column to each finding:
 
 ---
 
-**Status**: Execution in progress  
+**Status**: Execution in progress
 **Next Step**: Implement PHASE 1 - Canonical metrics composable

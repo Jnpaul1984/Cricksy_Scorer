@@ -47,9 +47,7 @@ class TestAiBoundaryModule:
         from backend.domain.ai_boundary import OFFICIAL_TRUTH_FIELDS
 
         core = {"runs", "wickets", "balls", "result", "status", "batting_scorecard"}
-        assert core <= OFFICIAL_TRUTH_FIELDS, (
-            "Core scoring fields must be in OFFICIAL_TRUTH_FIELDS"
-        )
+        assert core <= OFFICIAL_TRUTH_FIELDS, "Core scoring fields must be in OFFICIAL_TRUTH_FIELDS"
 
     def test_official_truth_fields_contains_dls(self):
         from backend.domain.ai_boundary import OFFICIAL_TRUTH_FIELDS
@@ -365,8 +363,7 @@ class TestDeterministicSystemsAreAiIndependent:
         ]
         for ai_mod in ai_imports:
             assert ai_mod not in source, (
-                f"scoring_service must not import {ai_mod} — "
-                "scoring must remain AI-free"
+                f"scoring_service must not import {ai_mod} — " "scoring must remain AI-free"
             )
 
     def test_dls_module_does_not_import_ai_modules(self):
@@ -375,7 +372,9 @@ class TestDeterministicSystemsAreAiIndependent:
 
         spec = importlib.util.find_spec("backend.services.dls_service")
         if spec is None:
-            pytest.skip("backend.services.dls_service not found — skipping DLS AI-independence check")
+            pytest.skip(
+                "backend.services.dls_service not found — skipping DLS AI-independence check"
+            )
 
         source_path = spec.origin
         assert source_path is not None
@@ -388,9 +387,7 @@ class TestDeterministicSystemsAreAiIndependent:
             "ai_player_insights",
         ]
         for ai_mod in ai_imports:
-            assert ai_mod not in source, (
-                f"dls_service must not import {ai_mod}"
-            )
+            assert ai_mod not in source, f"dls_service must not import {ai_mod}"
 
     def test_domain_constants_does_not_import_ai_modules(self):
         """domain/constants.py must not import any AI-adjacent code."""

@@ -17,7 +17,6 @@ from backend.sql_app.schemas import TeamCreate, TeamRead, TeamUpdate
 from backend.services.org_stats import (
     calculate_org_stats,
     get_org_teams_stats,
-    get_tournament_leaderboards,
 )
 
 
@@ -199,6 +198,7 @@ async def delete_team(
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+
 # ==============================================================================
 # Organization Statistics Endpoints
 # ==============================================================================
@@ -226,7 +226,7 @@ async def get_organization_teams(
 ) -> dict[str, list[dict[str, Any]]]:
     """
     Get statistics for all teams in an organization.
-    
+
     Returns team records, win percentages, NRR, and average scores.
     """
     teams_stats = await get_org_teams_stats(db, org_id)

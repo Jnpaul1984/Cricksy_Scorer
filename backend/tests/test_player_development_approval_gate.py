@@ -17,7 +17,7 @@ async def _seed_review_data(db_session) -> dict[str, models.User | models.Player
     coach_pro_plus = models.User(
         id="coach-review-plus-001",
         email="coach-plus-review@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.coach_pro_plus,
         org_id="org-review-001",
         is_active=True,
@@ -25,7 +25,7 @@ async def _seed_review_data(db_session) -> dict[str, models.User | models.Player
     coach_pro = models.User(
         id="coach-review-pro-001",
         email="coach-pro-review@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.coach_pro,
         org_id="org-review-001",
         is_active=True,
@@ -33,7 +33,7 @@ async def _seed_review_data(db_session) -> dict[str, models.User | models.Player
     org_pro = models.User(
         id="org-review-001",
         email="org-review@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.org_pro,
         org_id="org-review-001",
         is_active=True,
@@ -41,7 +41,7 @@ async def _seed_review_data(db_session) -> dict[str, models.User | models.Player
     org_other = models.User(
         id="org-review-999",
         email="org-review-other@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.org_pro,
         org_id="org-review-999",
         is_active=True,
@@ -49,7 +49,7 @@ async def _seed_review_data(db_session) -> dict[str, models.User | models.Player
     player_pro = models.User(
         id="player-review-pro-001",
         email="player-review@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.player_pro,
         org_id="org-review-001",
         is_active=True,
@@ -57,7 +57,7 @@ async def _seed_review_data(db_session) -> dict[str, models.User | models.Player
     free_user = models.User(
         id="free-review-001",
         email="free-review@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.free,
         org_id="org-review-001",
         is_active=True,
@@ -65,7 +65,7 @@ async def _seed_review_data(db_session) -> dict[str, models.User | models.Player
     analyst_pro = models.User(
         id="analyst-review-001",
         email="analyst-review@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.analyst_pro,
         org_id="org-review-001",
         is_active=True,
@@ -373,4 +373,3 @@ async def test_review_action_does_not_mutate_evidence_ai_or_truth_fields(
     assert player_profile.total_wickets == total_wickets_before
     assert plan.ai_metadata.get("video_session_id") == "video-session-001"
     assert plan.ai_metadata.get("video_analysis_job_id") == "video-job-001"
-

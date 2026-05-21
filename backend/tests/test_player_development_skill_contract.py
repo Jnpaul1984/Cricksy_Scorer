@@ -99,9 +99,9 @@ class TestRequiredSkillsPresent:
             PLAYER_DEVELOPMENT_SKILL_REGISTRY,
         )
 
-        assert skill_id in PLAYER_DEVELOPMENT_SKILL_REGISTRY, (
-            f"Required skill '{skill_id}' is missing from the registry."
-        )
+        assert (
+            skill_id in PLAYER_DEVELOPMENT_SKILL_REGISTRY
+        ), f"Required skill '{skill_id}' is missing from the registry."
 
     def test_all_required_skills_present(self) -> None:
         from backend.domain.player_development_skill_contract import REQUIRED_SKILL_IDS
@@ -135,9 +135,7 @@ class TestRequiredFieldsPresent:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         missing = REQUIRED_CONTRACT_FIELDS - set(contract.keys())
-        assert not missing, (
-            f"Skill '{skill_id}' is missing required fields: {sorted(missing)}"
-        )
+        assert not missing, f"Skill '{skill_id}' is missing required fields: {sorted(missing)}"
 
 
 # ---------------------------------------------------------------------------
@@ -150,9 +148,9 @@ class TestVersionedSkillId:
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
     def test_skill_id_is_versioned(self, skill_id: str) -> None:
-        assert ".v" in skill_id, (
-            f"Skill ID '{skill_id}' does not follow the versioned format 'name.vN'."
-        )
+        assert (
+            ".v" in skill_id
+        ), f"Skill ID '{skill_id}' does not follow the versioned format 'name.vN'."
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
     def test_skill_id_matches_registry_key(self, skill_id: str) -> None:
@@ -161,9 +159,9 @@ class TestVersionedSkillId:
         )
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
-        assert contract["skill_id"] == skill_id, (
-            f"skill_id field '{contract['skill_id']}' does not match registry key '{skill_id}'."
-        )
+        assert (
+            contract["skill_id"] == skill_id
+        ), f"skill_id field '{contract['skill_id']}' does not match registry key '{skill_id}'."
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
     def test_version_field_is_present_and_string(self, skill_id: str) -> None:
@@ -172,9 +170,9 @@ class TestVersionedSkillId:
         )
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
-        assert isinstance(contract.get("version"), str), (
-            f"Skill '{skill_id}' version field must be a string."
-        )
+        assert isinstance(
+            contract.get("version"), str
+        ), f"Skill '{skill_id}' version field must be a string."
 
 
 # ---------------------------------------------------------------------------
@@ -193,9 +191,9 @@ class TestNoOfficialTruthMutationRule:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         rule = contract.get("no_official_truth_mutation_rule", "")
-        assert isinstance(rule, str) and len(rule) > 0, (
-            f"Skill '{skill_id}' must declare a non-empty no_official_truth_mutation_rule."
-        )
+        assert (
+            isinstance(rule, str) and len(rule) > 0
+        ), f"Skill '{skill_id}' must declare a non-empty no_official_truth_mutation_rule."
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
     def test_no_official_truth_mutation_rule_references_guard(self, skill_id: str) -> None:
@@ -211,9 +209,7 @@ class TestNoOfficialTruthMutationRule:
         )
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
-    def test_validation_rules_includes_no_official_truth_mutation_call(
-        self, skill_id: str
-    ) -> None:
+    def test_validation_rules_includes_no_official_truth_mutation_call(self, skill_id: str) -> None:
         from backend.domain.player_development_skill_contract import (
             PLAYER_DEVELOPMENT_SKILL_REGISTRY,
         )
@@ -233,9 +229,9 @@ class TestNoOfficialTruthMutationRule:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         meta = contract.get("ai_boundary_metadata", {})
-        assert meta.get("is_official_truth") is False, (
-            f"Skill '{skill_id}' ai_boundary_metadata.is_official_truth must be False."
-        )
+        assert (
+            meta.get("is_official_truth") is False
+        ), f"Skill '{skill_id}' ai_boundary_metadata.is_official_truth must be False."
 
 
 # ---------------------------------------------------------------------------
@@ -254,9 +250,9 @@ class TestNoFakeDataRule:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         rule = contract.get("no_fake_data_rule", "")
-        assert isinstance(rule, str) and len(rule) > 0, (
-            f"Skill '{skill_id}' must declare a non-empty no_fake_data_rule."
-        )
+        assert (
+            isinstance(rule, str) and len(rule) > 0
+        ), f"Skill '{skill_id}' must declare a non-empty no_fake_data_rule."
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
     def test_no_fake_data_rule_references_insufficient_data(self, skill_id: str) -> None:
@@ -266,9 +262,9 @@ class TestNoFakeDataRule:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         rule = contract.get("no_fake_data_rule", "")
-        assert "insufficient_data" in rule, (
-            f"Skill '{skill_id}' no_fake_data_rule must reference the insufficient_data fallback."
-        )
+        assert (
+            "insufficient_data" in rule
+        ), f"Skill '{skill_id}' no_fake_data_rule must reference the insufficient_data fallback."
 
 
 # ---------------------------------------------------------------------------
@@ -287,9 +283,9 @@ class TestYouthSafetyRules:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         rules = contract.get("youth_safety_rules")
-        assert isinstance(rules, list) and len(rules) > 0, (
-            f"Skill '{skill_id}' must declare a non-empty youth_safety_rules list."
-        )
+        assert (
+            isinstance(rules, list) and len(rules) > 0
+        ), f"Skill '{skill_id}' must declare a non-empty youth_safety_rules list."
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
     def test_youth_safety_rules_include_no_negative_labels(self, skill_id: str) -> None:
@@ -325,9 +321,9 @@ class TestEvidenceRefRequirements:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         req = contract.get("evidence_ref_requirements", "")
-        assert isinstance(req, str) and len(req) > 0, (
-            f"Skill '{skill_id}' must declare a non-empty evidence_ref_requirements."
-        )
+        assert (
+            isinstance(req, str) and len(req) > 0
+        ), f"Skill '{skill_id}' must declare a non-empty evidence_ref_requirements."
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
     def test_validation_rules_include_evidence_refs(self, skill_id: str) -> None:
@@ -337,9 +333,9 @@ class TestEvidenceRefRequirements:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         validation_rules = contract.get("validation_rules", [])
-        assert "must_include_evidence_refs" in validation_rules, (
-            f"Skill '{skill_id}' validation_rules must include 'must_include_evidence_refs'."
-        )
+        assert (
+            "must_include_evidence_refs" in validation_rules
+        ), f"Skill '{skill_id}' validation_rules must include 'must_include_evidence_refs'."
 
 
 # ---------------------------------------------------------------------------
@@ -358,9 +354,9 @@ class TestFallbackBehaviors:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         fallbacks = contract.get("fallback_behaviors")
-        assert isinstance(fallbacks, dict) and len(fallbacks) > 0, (
-            f"Skill '{skill_id}' must declare a non-empty fallback_behaviors dict."
-        )
+        assert (
+            isinstance(fallbacks, dict) and len(fallbacks) > 0
+        ), f"Skill '{skill_id}' must declare a non-empty fallback_behaviors dict."
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
     def test_all_required_fallback_states_covered(self, skill_id: str) -> None:
@@ -372,9 +368,9 @@ class TestFallbackBehaviors:
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         fallbacks = contract.get("fallback_behaviors", {})
         missing = REQUIRED_FALLBACK_STATES - set(fallbacks.keys())
-        assert not missing, (
-            f"Skill '{skill_id}' fallback_behaviors is missing states: {sorted(missing)}"
-        )
+        assert (
+            not missing
+        ), f"Skill '{skill_id}' fallback_behaviors is missing states: {sorted(missing)}"
 
 
 # ---------------------------------------------------------------------------
@@ -393,9 +389,9 @@ class TestForbiddenOutputs:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         forbidden = contract.get("forbidden_outputs")
-        assert isinstance(forbidden, list) and len(forbidden) > 0, (
-            f"Skill '{skill_id}' must declare a non-empty forbidden_outputs list."
-        )
+        assert (
+            isinstance(forbidden, list) and len(forbidden) > 0
+        ), f"Skill '{skill_id}' must declare a non-empty forbidden_outputs list."
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
     def test_forbidden_outputs_include_required_terms(self, skill_id: str) -> None:
@@ -443,9 +439,9 @@ class TestReviewAndApprovalRequirements:
         )
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
-        assert contract.get("review_required") is True, (
-            f"Skill '{skill_id}' review_required must be True."
-        )
+        assert (
+            contract.get("review_required") is True
+        ), f"Skill '{skill_id}' review_required must be True."
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
     def test_approval_required_before_activation_is_true(self, skill_id: str) -> None:
@@ -454,9 +450,9 @@ class TestReviewAndApprovalRequirements:
         )
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
-        assert contract.get("approval_required_before_activation") is True, (
-            f"Skill '{skill_id}' approval_required_before_activation must be True."
-        )
+        assert (
+            contract.get("approval_required_before_activation") is True
+        ), f"Skill '{skill_id}' approval_required_before_activation must be True."
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
     def test_ai_boundary_metadata_requires_review(self, skill_id: str) -> None:
@@ -466,9 +462,9 @@ class TestReviewAndApprovalRequirements:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         meta = contract.get("ai_boundary_metadata", {})
-        assert meta.get("requires_review") is True, (
-            f"Skill '{skill_id}' ai_boundary_metadata.requires_review must be True."
-        )
+        assert (
+            meta.get("requires_review") is True
+        ), f"Skill '{skill_id}' ai_boundary_metadata.requires_review must be True."
 
 
 # ---------------------------------------------------------------------------
@@ -487,9 +483,9 @@ class TestTestsRequired:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         tests_required = contract.get("tests_required")
-        assert isinstance(tests_required, list) and len(tests_required) > 0, (
-            f"Skill '{skill_id}' must declare a non-empty tests_required list."
-        )
+        assert (
+            isinstance(tests_required, list) and len(tests_required) > 0
+        ), f"Skill '{skill_id}' must declare a non-empty tests_required list."
 
     @pytest.mark.parametrize("skill_id", _all_skill_ids())
     def test_tests_required_includes_contract_validation_test(self, skill_id: str) -> None:
@@ -499,9 +495,9 @@ class TestTestsRequired:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         tests_required = contract.get("tests_required", [])
-        assert "contract_validation_test" in tests_required, (
-            f"Skill '{skill_id}' tests_required must include 'contract_validation_test'."
-        )
+        assert (
+            "contract_validation_test" in tests_required
+        ), f"Skill '{skill_id}' tests_required must include 'contract_validation_test'."
 
 
 # ---------------------------------------------------------------------------
@@ -520,9 +516,9 @@ class TestDeterministicDataDependencies:
 
         contract = PLAYER_DEVELOPMENT_SKILL_REGISTRY[skill_id]
         deps = contract.get("deterministic_data_dependencies")
-        assert isinstance(deps, list) and len(deps) > 0, (
-            f"Skill '{skill_id}' must declare non-empty deterministic_data_dependencies."
-        )
+        assert (
+            isinstance(deps, list) and len(deps) > 0
+        ), f"Skill '{skill_id}' must declare non-empty deterministic_data_dependencies."
 
 
 # ---------------------------------------------------------------------------

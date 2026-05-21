@@ -244,12 +244,12 @@ const req = computed(() => {
       remainingRuns: null as number | null,
     }
   }
-  
+
   // Use backend values - no local calculation
   const rrr = s.required_run_rate ?? null
   const remainingRuns = s.target - (s.total_runs ?? 0)
   const remainingOvers = (s.balls_remaining ?? 0) / 6
-  
+
   return { rrr, remainingOvers, remainingRuns }
 })
 

@@ -284,7 +284,7 @@ const lastSixBalls = computed(() => {
   // FIX A3: Use actual deliveries from liveSnapshot
   const deliveries = gameStore.liveSnapshot?.deliveries ?? []
   const lastSix = deliveries.slice(-6)
-  
+
   return lastSix.map((d: any) => {
     if (d.is_wicket) return 'W'
     if (d.runs_off_bat === 4) return '4'
@@ -320,7 +320,7 @@ const parVsCRR = computed(() => {
   // FIX B5: Calculate par vs CRR using snapshot values only
   const snapshot = gameStore.liveSnapshot
   if (!snapshot?.dls?.par || !snapshot?.current_run_rate) return null
-  
+
   const diff = snapshot.current_run_rate - snapshot.dls.par
   return diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)
 })

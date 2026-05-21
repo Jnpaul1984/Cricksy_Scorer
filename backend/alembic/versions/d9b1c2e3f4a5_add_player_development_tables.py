@@ -478,7 +478,9 @@ def downgrade() -> None:
         "ix_player_progress_checkpoints_player_profile_id",
         table_name="player_progress_checkpoints",
     )
-    op.drop_index("ix_player_progress_checkpoints_plan_id", table_name="player_progress_checkpoints")
+    op.drop_index(
+        "ix_player_progress_checkpoints_plan_id", table_name="player_progress_checkpoints"
+    )
     op.drop_table("player_progress_checkpoints")
 
     op.drop_index("ix_player_drill_assignments_status", table_name="player_drill_assignments")

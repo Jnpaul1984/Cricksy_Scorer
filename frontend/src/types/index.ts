@@ -157,10 +157,10 @@ export interface Snapshot {
 
   // Balls remaining (backend-calculated, no local fallback)
   balls_remaining?: number
-  
+
   // Extras breakdown
   extras?: ExtrasBreakdown
-  
+
   // Last update timestamp
   last_updated?: string  // ISO timestamp
 

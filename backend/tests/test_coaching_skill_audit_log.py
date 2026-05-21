@@ -48,7 +48,10 @@ async def test_review_decisions_write_governed_audit_events(
     response = await async_client.patch(
         f"/api/player-development/plans/{plan.id}/review",
         headers=_token_headers(coach),
-        json={"decision": decision, "reviewer_notes": "Internal review note that must not persist."},
+        json={
+            "decision": decision,
+            "reviewer_notes": "Internal review note that must not persist.",
+        },
     )
 
     assert response.status_code == 200, response.text

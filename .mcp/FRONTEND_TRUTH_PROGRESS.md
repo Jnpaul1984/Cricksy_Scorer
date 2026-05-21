@@ -1,12 +1,12 @@
 # Frontend Truth & Consistency - Progress Report
-**Date**: 2026-01-16  
-**Branch**: beta/audit-frontend-metrics-source-of-truth  
+**Date**: 2026-01-16
+**Branch**: beta/audit-frontend-metrics-source-of-truth
 
 ## Summary
-**Total Issues**: 37  
-**Fixed**: 14 ✅  
-**Blocked**: 3 🚧  
-**Remaining**: 20 ⏳  
+**Total Issues**: 37
+**Fixed**: 14 ✅
+**Blocked**: 3 🚧
+**Remaining**: 20 ⏳
 
 ## ✅ COMPLETED (14 fixes)
 
@@ -18,7 +18,7 @@
 ### HIGH Priority Drift
 4. B1: ScoreboardWidget CRR fallback removed
 5. B2: AnalyticsView CRR uses snapshot only
-6. B3: AnalyticsView RRR uses snapshot only  
+6. B3: AnalyticsView RRR uses snapshot only
 7. B4: GameScoringView balls_remaining from snapshot
 8. B7: GameScoringView last_delivery from snapshot
 9. B5: LiveMatchCardCoach par rate from snapshot

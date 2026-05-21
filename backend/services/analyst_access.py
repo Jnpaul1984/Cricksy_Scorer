@@ -8,7 +8,9 @@ from backend.sql_app.models import Game, User
 
 
 def match_access_clause(current_user: Any):
-    role_value = getattr(getattr(current_user, "role", None), "value", getattr(current_user, "role", None))
+    role_value = getattr(
+        getattr(current_user, "role", None), "value", getattr(current_user, "role", None)
+    )
     user_id = str(current_user.id)
     org_id = getattr(current_user, "org_id", None)
     if org_id:
@@ -20,6 +22,8 @@ def match_access_clause(current_user: Any):
 
 
 def scoped_games_stmt(current_user: Any):
-    return select(Game).outerjoin(User, User.id == Game.created_by_user_id).where(
-        match_access_clause(current_user)
+    return (
+        select(Game)
+        .outerjoin(User, User.id == Game.created_by_user_id)
+        .where(match_access_clause(current_user))
     )

@@ -12,7 +12,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.main import app
-from backend.services.historical_import_apply_service import apply_historical_batch, rollback_historical_batch
+from backend.services.historical_import_apply_service import (
+    apply_historical_batch,
+    rollback_historical_batch,
+)
 from backend.services.historical_import_service import create_import_batch
 from backend.sql_app.models import Delivery, Game, GameStatus, HistoricalImportBatch, Player, Team
 
@@ -109,7 +112,9 @@ async def _create_valid_batch(
 
 
 @pytest.mark.asyncio
-async def test_rollback_rejects_finalized_batch_without_applied_game_id(db_session: AsyncSession) -> None:
+async def test_rollback_rejects_finalized_batch_without_applied_game_id(
+    db_session: AsyncSession,
+) -> None:
     batch = await _create_valid_batch(db_session)
     batch.is_finalized = True
     batch.applied_game_id = None
@@ -146,11 +151,23 @@ async def test_rollback_deletes_only_applied_historical_game(db_session: AsyncSe
     assert rolled_back_id == game_a.id
 
     batch_a_after = (
-        await db_session.execute(select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_a.id))
-    ).scalars().first()
+        (
+            await db_session.execute(
+                select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_a.id)
+            )
+        )
+        .scalars()
+        .first()
+    )
     batch_b_after = (
-        await db_session.execute(select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_b.id))
-    ).scalars().first()
+        (
+            await db_session.execute(
+                select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch_b.id)
+            )
+        )
+        .scalars()
+        .first()
+    )
     assert batch_a_after is not None
     assert batch_b_after is not None
 
@@ -189,8 +206,14 @@ async def test_rollback_does_not_delete_live_games(db_session: AsyncSession) -> 
     )
 
     batch_after = (
-        await db_session.execute(select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch.id))
-    ).scalars().first()
+        (
+            await db_session.execute(
+                select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch.id)
+            )
+        )
+        .scalars()
+        .first()
+    )
     assert rolled_back_id is None
     assert error is not None
     assert "not completed" in error
@@ -202,12 +225,18 @@ async def test_rollback_does_not_delete_live_games(db_session: AsyncSession) -> 
 
 @pytest.mark.asyncio
 async def test_apply_rollback_roundtrip_preserves_non_game_rows(db_session: AsyncSession) -> None:
-    before_games = int((await db_session.execute(select(func.count()).select_from(Game))).scalar_one())
+    before_games = int(
+        (await db_session.execute(select(func.count()).select_from(Game))).scalar_one()
+    )
     before_deliveries = int(
         (await db_session.execute(select(func.count()).select_from(Delivery))).scalar_one()
     )
-    before_players = int((await db_session.execute(select(func.count()).select_from(Player))).scalar_one())
-    before_teams = int((await db_session.execute(select(func.count()).select_from(Team))).scalar_one())
+    before_players = int(
+        (await db_session.execute(select(func.count()).select_from(Player))).scalar_one()
+    )
+    before_teams = int(
+        (await db_session.execute(select(func.count()).select_from(Team))).scalar_one()
+    )
 
     batch = await _create_valid_batch(db_session)
     game, _, apply_error = await apply_historical_batch(db_session, batch_id=batch.id, confirm=True)
@@ -223,14 +252,26 @@ async def test_apply_rollback_roundtrip_preserves_non_game_rows(db_session: Asyn
     assert rolled_back_id == game.id
 
     batch_after = (
-        await db_session.execute(select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch.id))
-    ).scalars().first()
-    after_games = int((await db_session.execute(select(func.count()).select_from(Game))).scalar_one())
+        (
+            await db_session.execute(
+                select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch.id)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    after_games = int(
+        (await db_session.execute(select(func.count()).select_from(Game))).scalar_one()
+    )
     after_deliveries = int(
         (await db_session.execute(select(func.count()).select_from(Delivery))).scalar_one()
     )
-    after_players = int((await db_session.execute(select(func.count()).select_from(Player))).scalar_one())
-    after_teams = int((await db_session.execute(select(func.count()).select_from(Team))).scalar_one())
+    after_players = int(
+        (await db_session.execute(select(func.count()).select_from(Player))).scalar_one()
+    )
+    after_teams = int(
+        (await db_session.execute(select(func.count()).select_from(Team))).scalar_one()
+    )
 
     assert batch_after is not None
     assert batch_after.is_finalized is False
@@ -259,8 +300,14 @@ async def test_rollback_preserves_batch_audit_metadata(db_session: AsyncSession)
     assert rolled_back_id == game.id
 
     batch_after = (
-        await db_session.execute(select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch.id))
-    ).scalars().first()
+        (
+            await db_session.execute(
+                select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch.id)
+            )
+        )
+        .scalars()
+        .first()
+    )
     assert batch_after is not None
     assert isinstance(batch_after.dry_run_summary, dict)
     rollback_log = batch_after.dry_run_summary.get("_rollback_log")
@@ -293,8 +340,14 @@ async def test_rollback_rejects_unauthorized_owner(db_session: AsyncSession) -> 
     )
 
     batch_after = (
-        await db_session.execute(select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch.id))
-    ).scalars().first()
+        (
+            await db_session.execute(
+                select(HistoricalImportBatch).where(HistoricalImportBatch.id == batch.id)
+            )
+        )
+        .scalars()
+        .first()
+    )
 
     assert rolled_back_id is None
     assert rollback_error is not None

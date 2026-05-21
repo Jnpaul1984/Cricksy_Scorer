@@ -1,8 +1,8 @@
 # Phase 5K: Historical Data Backfill & Analyst UI Theme Fix — QA Document
 
-**Phase**: 5K  
-**Date**: 2026-05-11  
-**Status**: Complete  
+**Phase**: 5K
+**Date**: 2026-05-11
+**Status**: Complete
 
 ---
 
@@ -50,14 +50,14 @@ background: var(--color-surface-raised, #f8fafc);  /* falls back to light bg */
 
 Implements `repair_legacy_historical_metadata()` with the following safety gates:
 
-1. `confirm` must be `True` (accidental-write guard)  
-2. Batch must exist  
-3. Batch must be finalized with a non-null `applied_game_id`  
-4. The linked Game must exist  
-5. Game `status` must be `completed` (live/in-progress games are **never** touched)  
-6. Game must have `phases["historical_import"]` key (must be a historical import)  
-7. Phase 5J fields must **not** already be present (no overwrite of valid data)  
-8. Batch `dry_run_summary` must contain at least one Phase 5J field; otherwise the repair is refused with a message directing the operator to reimport  
+1. `confirm` must be `True` (accidental-write guard)
+2. Batch must exist
+3. Batch must be finalized with a non-null `applied_game_id`
+4. The linked Game must exist
+5. Game `status` must be `completed` (live/in-progress games are **never** touched)
+6. Game must have `phases["historical_import"]` key (must be a historical import)
+7. Phase 5J fields must **not** already be present (no overwrite of valid data)
+8. Batch `dry_run_summary` must contain at least one Phase 5J field; otherwise the repair is refused with a message directing the operator to reimport
 
 On success, the repair writes a `_repair_log` audit entry inside `phases["historical_import"]`.
 
@@ -88,10 +88,10 @@ Response:
 ```
 
 HTTP status codes:
-- `200` — success (repaired or already_complete)  
-- `404` — batch not found or linked game not found  
-- `409` — repair refused (reimport required, business logic refusal)  
-- `422` — `confirm` not provided or `confirm=false`  
+- `200` — success (repaired or already_complete)
+- `404` — batch not found or linked game not found
+- `409` — repair refused (reimport required, business logic refusal)
+- `422` — `confirm` not provided or `confirm=false`
 
 ### 2.3 Backend — New Schemas
 

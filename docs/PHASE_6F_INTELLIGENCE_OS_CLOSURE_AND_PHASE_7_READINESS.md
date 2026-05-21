@@ -1,7 +1,7 @@
 # Phase 6F — Intelligence OS Closure Audit + Phase 7 Readiness
 
-**Date:** 2026-05-14  
-**Scope:** Repo-grounded closure audit only. No Phase 7 implementation work.  
+**Date:** 2026-05-14
+**Scope:** Repo-grounded closure audit only. No Phase 7 implementation work.
 **Audit basis:** Current repository state, current tests/workflows, and recent merged PR evidence.
 
 > Note: the Master Checklist already uses **Phase 6F** for the confidence/uncertainty spec. This document is a closure-audit artifact for Issue #202 and does **not** rename or replace the checklist's existing Phase 6F–6H governance documents.
@@ -248,4 +248,3 @@ Reason:
 - preserve existing structured JSON import behavior;
 - add secure file validation, confidence labeling, failed-OCR handling, and manual correction flow;
 - add import/OCR-specific backend tests and a dedicated frontend smoke/E2E gate for the review workflow.
-

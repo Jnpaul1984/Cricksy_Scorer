@@ -1,8 +1,8 @@
 # Frontend Data Source Forensic Audit
 
-**Date:** January 17, 2026  
-**Auditor:** Forensic Engineer  
-**Scope:** Entire frontend repository (`frontend/src/`)  
+**Date:** January 17, 2026
+**Auditor:** Forensic Engineer
+**Scope:** Entire frontend repository (`frontend/src/`)
 **Objective:** Identify all non-backend-driven data sources
 
 ---
@@ -69,7 +69,7 @@ async function fetchPricing() {
   individualPlans.value = response.individual_plans
   venuePlans.value = response.venue_plans
   scoringIsFree.value = response.scoring_is_free
-  
+
   // Cache in localStorage for offline resilience
   localStorage.setItem('cricksy_pricing_cache', JSON.stringify(response))
 }
@@ -194,20 +194,20 @@ const hasActiveMatch = computed(() => !!currentGameId.value)
 const keyPlayers = computed(() => {
   const battingScorecard = gameStore.currentGame?.batting_scorecard ?? {}
   const bowlingScorecard = gameStore.currentGame?.bowling_scorecard ?? {}
-  
+
   // Combine batting and bowling stats for players
   const playerStats: Record<string, any> = {}
-  
+
   // Add batting stats
   Object.entries(battingScorecard).forEach(([id, stats]) => {
     playerStats[id] = { id, name: stats.player_name, runs: stats.runs, ... }
   })
-  
+
   // Add bowling stats
   Object.entries(bowlingScorecard).forEach(([id, stats]) => {
     playerStats[id].wickets = stats.wickets_taken
   })
-  
+
   return Object.values(playerStats).sort(...).slice(0, 6)
 })
 ```
@@ -239,7 +239,7 @@ function enrichPlayerData(player: PlayerProfile): PlayerWithMetadata {
         format: ['T20', 'ODI', 'Test'][Math.floor(Math.random() * 3)],
       }
     : undefined
-  
+
   return { ...player, nextMatch, ... }
 }
 ```
@@ -253,7 +253,7 @@ function enrichPlayerData(player: PlayerProfile): PlayerWithMetadata {
 
 **Expected API Endpoint:** `GET /players/{id}/upcoming-matches` or similar
 
-**Recommendation:** 
+**Recommendation:**
 1. Create backend endpoint for upcoming matches
 2. Remove random generation
 3. Display "No upcoming matches" if data unavailable
@@ -823,8 +823,8 @@ _DEFAULT_CORS = [
 
 ---
 
-**Report Completed:** January 17, 2026  
-**Total Audit Time:** 2 hours  
-**Files Reviewed:** 45+  
-**Critical Issues Found:** 5  
+**Report Completed:** January 17, 2026
+**Total Audit Time:** 2 hours
+**Files Reviewed:** 45+
+**Critical Issues Found:** 5
 **Status:** Ready for remediation

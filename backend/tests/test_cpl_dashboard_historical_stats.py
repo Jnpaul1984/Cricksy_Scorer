@@ -144,9 +144,7 @@ def _make_cpl_fixture(match_number: int = 1, season: str = "2023") -> dict[str, 
     return fixture
 
 
-def _apply_fixture(
-    client: TestClient, token: str, payload: dict[str, Any]
-) -> tuple[str, str]:
+def _apply_fixture(client: TestClient, token: str, payload: dict[str, Any]) -> tuple[str, str]:
     """Run dry-run + apply, return (batch_id, game_id)."""
     dry_run_resp = client.post(
         "/api/historical-import/json/dry-run",
@@ -296,9 +294,7 @@ def test_no_official_truth_mutation(client: TestClient) -> None:
 
     async def _read_game() -> dict[str, Any]:
         async with session_maker() as session:
-            result = await session.execute(
-                select(models.Game).where(models.Game.id == game_id)
-            )
+            result = await session.execute(select(models.Game).where(models.Game.id == game_id))
             game = result.scalar_one_or_none()
             assert game is not None
             return {
@@ -315,9 +311,9 @@ def test_no_official_truth_mutation(client: TestClient) -> None:
 
     after = asyncio.get_event_loop().run_until_complete(_read_game())
 
-    assert before == after, (
-        f"Game truth fields were mutated by stats endpoint!\nBefore: {before}\nAfter: {after}"
-    )
+    assert (
+        before == after
+    ), f"Game truth fields were mutated by stats endpoint!\nBefore: {before}\nAfter: {after}"
 
 
 def test_non_cpl_match_excluded_from_cpl_competition(client: TestClient) -> None:
@@ -336,13 +332,14 @@ def test_non_cpl_match_excluded_from_cpl_competition(client: TestClient) -> None
 
     # Either no competitions, or none of them are CPL
     cpl_competitions = [
-        c for c in data["competitions"]
+        c
+        for c in data["competitions"]
         if "caribbean premier league" in (c["competition"] or "").lower()
         or "cpl" in (c["competition"] or "").lower()
     ]
-    assert cpl_competitions == [], (
-        f"Non-CPL match should not appear in CPL competition list: {cpl_competitions}"
-    )
+    assert (
+        cpl_competitions == []
+    ), f"Non-CPL match should not appear in CPL competition list: {cpl_competitions}"
 
 
 def test_summary_note_field_is_deterministic(client: TestClient) -> None:
@@ -357,6 +354,6 @@ def test_summary_note_field_is_deterministic(client: TestClient) -> None:
     assert len(note) > 0
     # Must mention deterministic / historical import origin
     note_lower = note.lower()
-    assert "deterministic" in note_lower or "historical" in note_lower, (
-        f"Expected deterministic provenance note, got: {note!r}"
-    )
+    assert (
+        "deterministic" in note_lower or "historical" in note_lower
+    ), f"Expected deterministic provenance note, got: {note!r}"

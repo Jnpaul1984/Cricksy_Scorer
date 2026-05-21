@@ -234,7 +234,12 @@ async def _load_video_sessions(
     player_profile_id: str,
     coach_user: models.User,
 ) -> list[models.VideoSession]:
-    owner_filters = [and_(models.VideoSession.owner_type == models.OwnerTypeEnum.coach, models.VideoSession.owner_id == coach_user.id)]
+    owner_filters = [
+        and_(
+            models.VideoSession.owner_type == models.OwnerTypeEnum.coach,
+            models.VideoSession.owner_id == coach_user.id,
+        )
+    ]
     if coach_user.org_id:
         owner_filters.append(
             and_(
@@ -276,7 +281,9 @@ def _build_limitations(
 ) -> list[str]:
     limitations: list[str] = []
     if len(monthly_stats) < 2:
-        limitations.append("Limited month-over-month form data is available for measurable progress goals.")
+        limitations.append(
+            "Limited month-over-month form data is available for measurable progress goals."
+        )
     if not profile.coaching_notes:
         limitations.append("No coach notes were found, so coach-observed evidence is limited.")
     if not video_sessions:
@@ -340,7 +347,9 @@ def _build_plan_summary(
     weaknesses: list[str],
 ) -> str:
     build_on = strengths[0] if strengths else "existing strengths"
-    focus_area = _safe_development_phrase(weaknesses[0]) if weaknesses else "current coaching priorities"
+    focus_area = (
+        _safe_development_phrase(weaknesses[0]) if weaknesses else "current coaching priorities"
+    )
     return (
         f"Draft plan for {player_name} built from recorded player evidence. "
         f"Build on {build_on.lower()} while focusing on {focus_area.lower()}."
@@ -483,7 +492,9 @@ def _goal_from_metric(
             due_date=due_date,
             evidence_refs=evidence_refs,
         )
-    if metric_name == "batting_average" and (metric.trend == "declining" or metric.current_value < 30):
+    if metric_name == "batting_average" and (
+        metric.trend == "declining" or metric.current_value < 30
+    ):
         target_value = round(max(metric.previous_value, metric.current_value + 3), 2)
         if target_value <= metric.current_value:
             return None
@@ -515,10 +526,14 @@ def _goal_from_metric(
             due_date=due_date,
             evidence_refs=evidence_refs,
         )
-    if metric_name == "dismissal_rate" and metric.current_value > 0 and (
-        metric.trend == "declining" or metric.current_value > metric.previous_value
+    if (
+        metric_name == "dismissal_rate"
+        and metric.current_value > 0
+        and (metric.trend == "declining" or metric.current_value > metric.previous_value)
     ):
-        target_value = round(min(metric.previous_value or metric.current_value, metric.current_value * 0.9), 2)
+        target_value = round(
+            min(metric.previous_value or metric.current_value, metric.current_value * 0.9), 2
+        )
         if target_value >= metric.current_value:
             return None
         return models.PlayerDevelopmentGoal(
@@ -551,7 +566,11 @@ def _build_drill_assignments(
     drill_plan = TrainingDrillGenerator.generate_drills_for_player(
         player_id=profile.player_id,
         player_name=profile.player_name,
-        player_profile={"player_id": profile.player_id, "player_name": profile.player_name, **weakness_scores},
+        player_profile={
+            "player_id": profile.player_id,
+            "player_name": profile.player_name,
+            **weakness_scores,
+        },
         recent_dismissals=[],
     )
     due_date = dt.date.today() + dt.timedelta(days=21)
@@ -585,7 +604,9 @@ def _build_progress_checkpoints(
 ) -> list[models.PlayerProgressCheckpoint]:
     checkpoint_date: dt.date | None = None
     if profile.form_entries:
-        checkpoint_date = max(form.period_end for form in profile.form_entries) + dt.timedelta(days=30)
+        checkpoint_date = max(form.period_end for form in profile.form_entries) + dt.timedelta(
+            days=30
+        )
     elif profile.coaching_sessions:
         checkpoint_date = max(session.scheduled_at for session in profile.coaching_sessions).date()
 
@@ -593,7 +614,9 @@ def _build_progress_checkpoints(
         return []
 
     tracked_metrics = [metric.metric_name for metric in improvement_metrics.values()][:2]
-    metrics_phrase = ", ".join(tracked_metrics) if tracked_metrics else "tracked development evidence"
+    metrics_phrase = (
+        ", ".join(tracked_metrics) if tracked_metrics else "tracked development evidence"
+    )
     checkpoint = models.PlayerProgressCheckpoint(
         plan_id=plan.id,
         player_profile_id=profile.player_id,
@@ -624,7 +647,9 @@ def _build_monthly_stats(form_entries: list[models.PlayerForm]) -> list[MonthlyS
                 total_runs=entry.runs,
                 total_deliveries=deliveries,
                 matches_played=entry.matches_played,
-                innings_played=max(1, entry.matches_played) if entry.runs > 0 else entry.matches_played,
+                innings_played=max(1, entry.matches_played)
+                if entry.runs > 0
+                else entry.matches_played,
                 dismissals=dismissals,
                 boundaries_4=0,
                 boundaries_6=0,
@@ -640,7 +665,9 @@ def _build_monthly_stats(form_entries: list[models.PlayerForm]) -> list[MonthlyS
 def _build_improvement_metrics(monthly_stats: list[MonthlyStats]) -> dict[str, ImprovementMetrics]:
     if len(monthly_stats) < 2:
         return {}
-    return PlayerImprovementTracker.calculate_improvement_metrics(monthly_stats[-2], monthly_stats[-1])
+    return PlayerImprovementTracker.calculate_improvement_metrics(
+        monthly_stats[-2], monthly_stats[-1]
+    )
 
 
 def _base_profile_refs(profile: models.PlayerProfile) -> list[dict[str, Any]]:

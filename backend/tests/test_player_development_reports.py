@@ -8,6 +8,7 @@ from sqlalchemy import select
 from backend.security import create_access_token
 from backend.sql_app import models
 
+
 def _token_headers(user: models.User) -> dict[str, str]:
     token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
     return {"Authorization": f"Bearer {token}"}
@@ -19,7 +20,7 @@ async def _seed_report_data(
     assigned_coach = models.User(
         id="coach-report-001",
         email="coach-report@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.coach_pro,
         org_id="org-report-001",
         is_active=True,
@@ -27,7 +28,7 @@ async def _seed_report_data(
     unassigned_coach = models.User(
         id="coach-report-002",
         email="coach-report-unassigned@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.coach_pro_plus,
         org_id="org-report-001",
         is_active=True,
@@ -35,7 +36,7 @@ async def _seed_report_data(
     org_user = models.User(
         id="org-report-001-user",
         email="org-report@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.org_pro,
         org_id="org-report-001",
         is_active=True,
@@ -43,7 +44,7 @@ async def _seed_report_data(
     other_org_user = models.User(
         id="org-report-999-user",
         email="org-report-other@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.org_pro,
         org_id="org-report-999",
         is_active=True,
@@ -259,9 +260,13 @@ async def test_unassigned_coach_is_blocked_from_player_report(async_client, db_s
 
 @pytest.mark.asyncio
 async def test_org_user_can_generate_org_scoped_report(async_client, db_session) -> None:
-    _assigned_coach, _unassigned_coach, org_user, _other_org_user, _player = await _seed_report_data(
-        db_session
-    )
+    (
+        _assigned_coach,
+        _unassigned_coach,
+        org_user,
+        _other_org_user,
+        _player,
+    ) = await _seed_report_data(db_session)
 
     response = await async_client.get(
         "/api/player-development/reports/team-summary",
@@ -276,9 +281,13 @@ async def test_org_user_can_generate_org_scoped_report(async_client, db_session)
 
 @pytest.mark.asyncio
 async def test_cross_org_report_access_is_blocked(async_client, db_session) -> None:
-    _assigned_coach, _unassigned_coach, org_user, _other_org_user, _player = await _seed_report_data(
-        db_session
-    )
+    (
+        _assigned_coach,
+        _unassigned_coach,
+        org_user,
+        _other_org_user,
+        _player,
+    ) = await _seed_report_data(db_session)
 
     response = await async_client.get(
         "/api/player-development/reports/plans/plan-report-999",
@@ -290,12 +299,16 @@ async def test_cross_org_report_access_is_blocked(async_client, db_session) -> N
 
 
 @pytest.mark.asyncio
-async def test_report_routes_are_read_only_and_do_not_mutate_stats(async_client, db_session) -> None:
+async def test_report_routes_are_read_only_and_do_not_mutate_stats(
+    async_client, db_session
+) -> None:
     assigned_coach, _unassigned_coach, _org_user, _other_org_user, player = await _seed_report_data(
         db_session
     )
     before_plan = await db_session.execute(
-        select(models.PlayerDevelopmentPlan).where(models.PlayerDevelopmentPlan.id == "plan-report-001")
+        select(models.PlayerDevelopmentPlan).where(
+            models.PlayerDevelopmentPlan.id == "plan-report-001"
+        )
     )
     plan = before_plan.scalar_one()
     before_status = plan.status
@@ -350,7 +363,9 @@ async def test_report_uses_safe_development_labels(async_client, db_session) -> 
 
 
 @pytest.mark.asyncio
-async def test_report_includes_evidence_confidence_and_limitations(async_client, db_session) -> None:
+async def test_report_includes_evidence_confidence_and_limitations(
+    async_client, db_session
+) -> None:
     assigned_coach, _unassigned_coach, _org_user, _other_org_user, player = await _seed_report_data(
         db_session
     )
@@ -384,14 +399,22 @@ async def test_report_blocks_unsupported_improvement_claim_without_evidence(
     assert response.status_code == 200, response.text
     checkpoints = response.json()["checkpoint_review_summary"]["checkpoints"]
     assert checkpoints[0]["progress_status"] == "needs_evidence_review"
-    assert "More evidence would strengthen this recommendation" in checkpoints[0]["progress_statement"]
+    assert (
+        "More evidence would strengthen this recommendation" in checkpoints[0]["progress_statement"]
+    )
 
 
 @pytest.mark.asyncio
-async def test_team_summary_report_stays_scoped_to_visible_assignments(async_client, db_session) -> None:
-    _assigned_coach, _unassigned_coach, _org_user, other_org_user, _player = await _seed_report_data(
-        db_session
-    )
+async def test_team_summary_report_stays_scoped_to_visible_assignments(
+    async_client, db_session
+) -> None:
+    (
+        _assigned_coach,
+        _unassigned_coach,
+        _org_user,
+        other_org_user,
+        _player,
+    ) = await _seed_report_data(db_session)
 
     response = await async_client.get(
         "/api/player-development/reports/team-summary",

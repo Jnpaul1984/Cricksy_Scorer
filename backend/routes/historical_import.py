@@ -971,7 +971,12 @@ def _evaluate_record_reattach_confidence(
     *,
     candidate: HistoricalSourcePayloadReattachMetadata,
     target: HistoricalSourcePayloadReattachMetadata,
-) -> tuple[Literal["exact_match", "probable_match", "mismatch", "insufficient_identity"], str, list[str], list[str]]:
+) -> tuple[
+    Literal["exact_match", "probable_match", "mismatch", "insufficient_identity"],
+    str,
+    list[str],
+    list[str],
+]:
     matched: list[str] = []
     warnings: list[str] = []
     comparable = 0
@@ -1037,7 +1042,12 @@ def _evaluate_record_reattach_confidence(
         or "date does not match selected historical record" in warnings
         or len(warnings) > 1
     ):
-        return ("mismatch", "Uploaded JSON conflicts with selected record identity fields.", matched, warnings)
+        return (
+            "mismatch",
+            "Uploaded JSON conflicts with selected record identity fields.",
+            matched,
+            warnings,
+        )
 
     if comparable < 2:
         return (
@@ -1048,7 +1058,9 @@ def _evaluate_record_reattach_confidence(
         )
 
     confidence: Literal["exact_match", "probable_match"] = (
-        "exact_match" if {"teams", "date", "competition", "season"}.issubset(set(matched)) else "probable_match"
+        "exact_match"
+        if {"teams", "date", "competition", "season"}.issubset(set(matched))
+        else "probable_match"
     )
     reason = (
         "Identity fields fully match selected record."
@@ -1449,12 +1461,14 @@ async def _build_source_zip_reattach_preview(
                     )
                 )
                 continue
-            assert entry.member is not None
+            assert entry.member is not None  # noqa: S101 - safe: unsafe entries already skipped above
             with archive.open(entry.member, "r") as fp:
                 _evaluate_zip_candidate(entry.filename, fp.read(entry.member.file_size))
 
     candidate_json_count = sum(
-        1 for r in file_results if r.file_name.lower().endswith(".json") and r.status != "unsupported"
+        1
+        for r in file_results
+        if r.file_name.lower().endswith(".json") and r.status != "unsupported"
     )
     summary = HistoricalBulkZipSourcePayloadDryRunSummary(
         candidate_json_count=candidate_json_count,

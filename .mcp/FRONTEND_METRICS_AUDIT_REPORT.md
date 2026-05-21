@@ -1,6 +1,6 @@
 # Frontend Metrics Source-of-Truth Audit Report
-**Date**: 2026-01-16  
-**Branch**: beta/audit-frontend-metrics-source-of-truth  
+**Date**: 2026-01-16
+**Branch**: beta/audit-frontend-metrics-source-of-truth
 **Auditor**: AI Metrics Sniffer Dog 🐕‍🦺
 
 ---
@@ -19,8 +19,8 @@ This audit identified **37 instances** of frontend UI values that are **not driv
 ## A) Definitely Dummy/Placeholder Data
 
 ### 🔴 A1: PhaseAnalysisWidget - Complete Mock Phase Data
-**File**: `frontend/src/components/PhaseAnalysisWidget.vue`  
-**Lines**: 250-320  
+**File**: `frontend/src/components/PhaseAnalysisWidget.vue`
+**Lines**: 250-320
 **Severity**: CRITICAL
 
 **What displays in UI**:
@@ -40,8 +40,8 @@ death: { totalRuns: 56, avgPerOver: 14, fours: 3, sixes: 4, wickets: 1, sr: 186.
 ---
 
 ### 🔴 A2: PhaseAnalysisWidget - Fake Player Performance
-**File**: `frontend/src/components/PhaseAnalysisWidget.vue`  
-**Lines**: 254-262, 268-276  
+**File**: `frontend/src/components/PhaseAnalysisWidget.vue`
+**Lines**: 254-262, 268-276
 **Severity**: CRITICAL
 
 **What displays in UI**:
@@ -65,8 +65,8 @@ keyMoments: [
 ---
 
 ### 🔴 A3: LiveMatchCardCoach - Empty Last 6 Balls
-**File**: `frontend/src/components/LiveMatchCardCoach.vue`  
-**Lines**: 284-292  
+**File**: `frontend/src/components/LiveMatchCardCoach.vue`
+**Lines**: 284-292
 **Severity**: CRITICAL
 
 **What displays in UI**:
@@ -95,8 +95,8 @@ const lastSixBalls = computed(() => {
 ---
 
 ### 🔴 A4: OrgDashboardView - Complete Mock Organization Data
-**File**: `frontend/src/views/OrgDashboardView.vue`  
-**Lines**: 214-246  
+**File**: `frontend/src/views/OrgDashboardView.vue`
+**Lines**: 214-246
 **Severity**: CRITICAL
 
 **What displays in UI**:
@@ -120,8 +120,8 @@ orgAiCallouts: [...] // Derived from mock stats!
 ---
 
 ### 🔴 A5: CoachesDashboardView - Mock Key Players
-**File**: `frontend/src/views/CoachesDashboardView.vue`  
-**Lines**: 207-213  
+**File**: `frontend/src/views/CoachesDashboardView.vue`
+**Lines**: 207-213
 **Severity**: CRITICAL
 
 **What displays in UI**:
@@ -142,8 +142,8 @@ keyPlayers = [
 ---
 
 ### 🔴 A6: FanStatsWidget - Complete Random Stats Generator
-**File**: `frontend/src/components/FanStatsWidget.vue`  
-**Lines**: 330-360  
+**File**: `frontend/src/components/FanStatsWidget.vue`
+**Lines**: 330-360
 **Severity**: CRITICAL
 
 **What displays in UI**:
@@ -167,8 +167,8 @@ function generateBatters() {
 ---
 
 ### 🔴 A7: MatchCaseStudyView - Mock AI Summary
-**File**: `frontend/src/views/MatchCaseStudyView.vue`  
-**Lines**: 709-730  
+**File**: `frontend/src/views/MatchCaseStudyView.vue`
+**Lines**: 709-730
 **Severity**: CRITICAL
 
 **What displays in UI**:
@@ -192,8 +192,8 @@ const enrichedSummary = computed(() => {
 ---
 
 ### 🟠 A8: BaseInput - Math.random() ID Generation
-**File**: `frontend/src/components/BaseInput.vue`  
-**Line**: 60  
+**File**: `frontend/src/components/BaseInput.vue`
+**Line**: 60
 **Severity**: MEDIUM
 
 **What displays in UI**:
@@ -212,8 +212,8 @@ const inputId = computed(() => props.id ?? `input-${Math.random().toString(36).s
 ## B) Probably Wrong Source-of-Truth
 
 ### 🟠 B1: ScoreboardWidget - Local CRR Fallback
-**File**: `frontend/src/components/ScoreboardWidget.vue`  
-**Lines**: 394-404  
+**File**: `frontend/src/components/ScoreboardWidget.vue`
+**Lines**: 394-404
 **Severity**: HIGH
 
 **Current Code**:
@@ -222,10 +222,10 @@ const crr = computed(() => {
   // Prefer backend-calculated current_run_rate
   const backendCrr = liveSnapshot.value?.current_run_rate ?? currentGame.value?.current_run_rate
   if (backendCrr != null) return backendCrr.toFixed(2)
-  
+
   // Fallback to local calculation
-  return totalBallsThisInnings.value 
-    ? (runs.value / (totalBallsThisInnings.value / 6)).toFixed(2) 
+  return totalBallsThisInnings.value
+    ? (runs.value / (totalBallsThisInnings.value / 6)).toFixed(2)
     : '—'
 })
 ```
@@ -247,8 +247,8 @@ const crr = computed(() => {
 ---
 
 ### 🟠 B2: AnalyticsView - Redundant CRR Calculation
-**File**: `frontend/src/views/AnalyticsView.vue`  
-**Lines**: 216-226  
+**File**: `frontend/src/views/AnalyticsView.vue`
+**Lines**: 216-226
 **Severity**: HIGH
 
 **Current Code**:
@@ -272,8 +272,8 @@ const crr = computed(() => gameStore.liveSnapshot?.current_run_rate ?? 0)
 ---
 
 ### 🟠 B3: AnalyticsView - Required Run Rate (RRR) Calculation
-**File**: `frontend/src/views/AnalyticsView.vue`  
-**Lines**: 228-245  
+**File**: `frontend/src/views/AnalyticsView.vue`
+**Lines**: 228-245
 **Severity**: HIGH
 
 **Current Code**:
@@ -281,11 +281,11 @@ const crr = computed(() => gameStore.liveSnapshot?.current_run_rate ?? 0)
 const req = computed(() => {
   const target = snapshot.value?.target
   if (target == null) return { rrr: null, ... }
-  
+
   const remainingRuns = Math.max(0, Number(target) - currRuns.value)
   const remainingOvers = oversLimit.value - (ballsBowled.value / 6)
   const rrr = remainingOvers > 0 ? remainingRuns / remainingOvers : null
-  
+
   return { rrr, remainingOvers, remainingRuns }
 })
 ```
@@ -300,7 +300,7 @@ const req = computed(() => {
 const req = computed(() => {
   const backendRrr = snapshot.value?.required_run_rate
   const target = snapshot.value?.target
-  
+
   if (backendRrr != null && target != null) {
     return {
       rrr: backendRrr,
@@ -315,8 +315,8 @@ const req = computed(() => {
 ---
 
 ### 🟠 B4: GameScoringView - Local Balls Remaining
-**File**: `frontend/src/views/GameScoringView.vue`  
-**Lines**: 613-616  
+**File**: `frontend/src/views/GameScoringView.vue`
+**Lines**: 613-616
 **Severity**: MEDIUM
 
 **Current Code**:
@@ -333,7 +333,7 @@ const ballsRemaining = computed<number>(() => {
 
 **Proposed Fix**:
 ```typescript
-const ballsRemaining = computed(() => 
+const ballsRemaining = computed(() =>
   gameStore.liveSnapshot?.balls_remaining ?? 0
 )
 ```
@@ -341,8 +341,8 @@ const ballsRemaining = computed(() =>
 ---
 
 ### 🟠 B5: LiveMatchCardCoach - Par Run Rate Calculation
-**File**: `frontend/src/components/LiveMatchCardCoach.vue`  
-**Lines**: 307-315  
+**File**: `frontend/src/components/LiveMatchCardCoach.vue`
+**Lines**: 307-315
 **Severity**: MEDIUM
 
 **Current Code**:
@@ -371,7 +371,7 @@ const parVsCRR = computed(() => {
 const parVsCRR = computed(() => {
   const snapshot = gameStore.liveSnapshot
   if (!snapshot?.dls?.par || !snapshot?.current_run_rate) return null
-  
+
   const diff = snapshot.current_run_rate - snapshot.dls.par
   return diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)
 })
@@ -380,8 +380,8 @@ const parVsCRR = computed(() => {
 ---
 
 ### 🟠 B6: LiveMatchCardCoach - Bowler Economy Calculation
-**File**: `frontend/src/components/LiveMatchCardCoach.vue`  
-**Lines**: 272-278  
+**File**: `frontend/src/components/LiveMatchCardCoach.vue`
+**Lines**: 272-278
 **Severity**: MEDIUM
 
 **Current Code**:
@@ -411,8 +411,8 @@ const bowlerEcon = computed(() => {
 ---
 
 ### 🟡 B7: GameScoringView - Last Delivery Assembly
-**File**: `frontend/src/views/GameScoringView.vue`  
-**Lines**: 475-510  
+**File**: `frontend/src/views/GameScoringView.vue`
+**Lines**: 475-510
 **Severity**: MEDIUM
 
 **Current Code**:
@@ -431,7 +431,7 @@ let totalRuns = Number(last.runs_scored ?? last.runs_off_bat ?? 0) +
 
 **Proposed Fix**:
 ```typescript
-const lastDelivery = computed(() => 
+const lastDelivery = computed(() =>
   gameStore.liveSnapshot?.last_delivery ?? null
 )
 // Use backend-provided values directly, no local calculation
@@ -440,8 +440,8 @@ const lastDelivery = computed(() =>
 ---
 
 ### 🟡 B8: PhaseTimelineWidget - Mixed Data Sources
-**File**: `frontend/src/components/PhaseTimelineWidget.vue`  
-**Lines**: (needs inspection)  
+**File**: `frontend/src/components/PhaseTimelineWidget.vue`
+**Lines**: (needs inspection)
 **Severity**: MEDIUM
 
 **Issue**: Component might mix snapshot phase data with local calculations for timeline visualization.
@@ -451,7 +451,7 @@ const lastDelivery = computed(() =>
 ---
 
 ### 🟡 B9: PressureMapWidget - Local Pressure Calculation
-**File**: Likely exists in `components/` or embedded in AnalyticsView  
+**File**: Likely exists in `components/` or embedded in AnalyticsView
 **Severity**: HIGH
 
 **Issue**: If frontend recalculates pressure scores instead of using backend `GET /games/{id}/pressure-map`.
@@ -467,8 +467,8 @@ const lastDelivery = computed(() =>
 ## C) Inconsistent Theme/Styling (Hardcoded Colors)
 
 ### 🟡 C1: WinProbabilityChart - Hardcoded Green
-**File**: `frontend/src/components/WinProbabilityChart.vue`  
-**Line**: 308  
+**File**: `frontend/src/components/WinProbabilityChart.vue`
+**Line**: 308
 **Severity**: LOW
 
 ```css
@@ -480,8 +480,8 @@ color: #86efac; /* Hardcoded green instead of var(--ds-success) */
 ---
 
 ### 🟡 C2: PhaseTimelineWidget - Hardcoded Yellow
-**File**: `frontend/src/components/PhaseTimelineWidget.vue`  
-**Line**: 280  
+**File**: `frontend/src/components/PhaseTimelineWidget.vue`
+**Line**: 280
 **Severity**: LOW
 
 ```css
@@ -493,8 +493,8 @@ color: #ffc864; /* Hardcoded yellow */
 ---
 
 ### 🟡 C3: MatchCaseStudyView - Multiple Hardcoded Transition Timings
-**File**: `frontend/src/views/MatchCaseStudyView.vue`  
-**Lines**: 1581, 1594, 1601, 1638  
+**File**: `frontend/src/views/MatchCaseStudyView.vue`
+**Lines**: 1581, 1594, 1601, 1638
 **Severity**: LOW
 
 ```css
@@ -508,8 +508,8 @@ transition: box-shadow 160ms ease, transform 160ms ease;
 ## D) Quick Wins (Top 10 Changes)
 
 ### 🏆 D1: Remove PhaseAnalysisWidget Mock Data
-**Impact**: Removes 100+ lines of fake stats  
-**Effort**: 2 hours (connect to backend `/phase-analysis` endpoint)  
+**Impact**: Removes 100+ lines of fake stats
+**Effort**: 2 hours (connect to backend `/phase-analysis` endpoint)
 **File**: `PhaseAnalysisWidget.vue`
 
 **Change**:
@@ -527,8 +527,8 @@ onMounted(() => gameStore.fetchPhaseAnalysis(gameId.value))
 ---
 
 ### 🏆 D2: Fix LastSixBalls Empty Array
-**Impact**: Shows actual recent balls instead of 6 blanks  
-**Effort**: 15 minutes  
+**Impact**: Shows actual recent balls instead of 6 blanks
+**Effort**: 15 minutes
 **File**: `LiveMatchCardCoach.vue:284`
 
 **Change**:
@@ -548,8 +548,8 @@ const lastSixBalls = computed(() => {
 ---
 
 ### 🏆 D3: Remove CRR Local Calculation Fallback
-**Impact**: Single source of truth for run rate  
-**Effort**: 5 minutes  
+**Impact**: Single source of truth for run rate
+**Effort**: 5 minutes
 **Files**: `ScoreboardWidget.vue`, `AnalyticsView.vue`
 
 **Change**:
@@ -567,8 +567,8 @@ const crr = computed(() => gameStore.liveSnapshot?.current_run_rate ?? 0)
 ---
 
 ### 🏆 D4: Use Backend RRR Instead of Local Calc
-**Impact**: Fixes drift in required run rate  
-**Effort**: 10 minutes  
+**Impact**: Fixes drift in required run rate
+**Effort**: 10 minutes
 **File**: `AnalyticsView.vue:228`
 
 **Change**:
@@ -589,8 +589,8 @@ const req = computed(() => {
 ---
 
 ### 🏆 D5: Replace OrgDashboardView Mock Data with API
-**Impact**: Shows real organization stats  
-**Effort**: 3 hours (wire up backend endpoints)  
+**Impact**: Shows real organization stats
+**Effort**: 3 hours (wire up backend endpoints)
 **File**: `OrgDashboardView.vue:214`
 
 **Change**:
@@ -607,8 +607,8 @@ const { data: orgStats, isLoading } = useQuery({
 ---
 
 ### 🏆 D6: Use Backend Bowler Economy
-**Impact**: Fixes overs→balls conversion error  
-**Effort**: 5 minutes  
+**Impact**: Fixes overs→balls conversion error
+**Effort**: 5 minutes
 **File**: `LiveMatchCardCoach.vue:272`
 
 **Change**:
@@ -623,13 +623,13 @@ const bowlerEcon = computed(() => {
 ---
 
 ### 🏆 D7: Use Snapshot balls_remaining
-**Impact**: Removes redundant calculation  
-**Effort**: 2 minutes  
+**Impact**: Removes redundant calculation
+**Effort**: 2 minutes
 **File**: `GameScoringView.vue:613`
 
 **Change**:
 ```typescript
-const ballsRemaining = computed(() => 
+const ballsRemaining = computed(() =>
   gameStore.liveSnapshot?.balls_remaining ?? 0
 )
 ```
@@ -637,8 +637,8 @@ const ballsRemaining = computed(() =>
 ---
 
 ### 🏆 D8: Fix CoachesDashboard Key Players
-**Impact**: Shows real player stats instead of fake names  
-**Effort**: 1 hour  
+**Impact**: Shows real player stats instead of fake names
+**Effort**: 1 hour
 **File**: `CoachesDashboardView.vue:207`
 
 **Change**:
@@ -660,8 +660,8 @@ const keyPlayers = computed(() => {
 ---
 
 ### 🏆 D9: Replace FanStatsWidget Mock Generator
-**Impact**: Shows real tournament stats  
-**Effort**: 4 hours (connect to tournament leaderboards API)  
+**Impact**: Shows real tournament stats
+**Effort**: 4 hours (connect to tournament leaderboards API)
 **File**: `FanStatsWidget.vue:330`
 
 **Change**:
@@ -676,8 +676,8 @@ const { data: batters } = useQuery({
 ---
 
 ### 🏆 D10: Remove MatchCaseStudyView Mock AI Summary
-**Impact**: Shows real AI analysis  
-**Effort**: 2 hours  
+**Impact**: Shows real AI analysis
+**Effort**: 2 hours
 **File**: `MatchCaseStudyView.vue:709`
 
 **Change**:

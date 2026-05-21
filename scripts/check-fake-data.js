@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
  * CI/Pre-commit Guard: Detect Fake Data in Production Code
- * 
+ *
  * Fails if any of the following patterns exist in frontend source:
  * - Math.random() calls (indicates random data generation)
  * - Hardcoded celebrity/player names (e.g., Virat, Kohli, Dhoni)
  * - Hardcoded country opponent arrays (e.g., ['India', 'Australia', ...])
  * - generateMatchData(), generateManhattanData(), or similar mock generators
  * - Mock delivery/player object arrays
- * 
+ *
  * Usage:
  *   node scripts/check-fake-data.js
  *   Exit code 0 = clean, 1 = violations found
@@ -59,10 +59,10 @@ const FORBIDDEN_PATTERNS = [
 // File collection using native Node.js APIs
 function getAllFiles(dirPath, arrayOfFiles = [], extensions = ['.vue', '.ts', '.js']) {
   const files = fs.readdirSync(dirPath);
-  
+
   files.forEach(function(file) {
     const fullPath = path.join(dirPath, file);
-    
+
     if (fs.statSync(fullPath).isDirectory()) {
       // Skip test directories
       if (file === '__tests__' || file === 'node_modules' || file === 'dist') {
@@ -74,14 +74,14 @@ function getAllFiles(dirPath, arrayOfFiles = [], extensions = ['.vue', '.ts', '.
       if (file.endsWith('.spec.ts') || file.endsWith('.test.ts')) {
         return;
       }
-      
+
       // Include only specified extensions
       if (extensions.some(ext => file.endsWith(ext))) {
         arrayOfFiles.push(fullPath);
       }
     }
   });
-  
+
   return arrayOfFiles;
 }
 
@@ -89,24 +89,24 @@ function getAllFiles(dirPath, arrayOfFiles = [], extensions = ['.vue', '.ts', '.
 function scanFile(filePath) {
   const content = fs.readFileSync(filePath, 'utf-8');
   const violations = [];
-  
+
   FORBIDDEN_PATTERNS.forEach(({ pattern, description, severity }) => {
     const matches = content.matchAll(pattern);
-    
+
     for (const match of matches) {
       // Skip Math.random() if used for ID generation (legitimate use)
       if (description.includes('Math.random()')) {
         const beforeMatch = content.substring(Math.max(0, match.index - 400), match.index);
         const afterMatch = content.substring(match.index, match.index + 100);
         const context = beforeMatch + afterMatch;
-        
+
         // Legitimate uses: ID generation, BaseInput counter comment
-        if (context.includes('toString(36)') || 
+        if (context.includes('toString(36)') ||
             context.includes('Use counter instead') ||
             context.includes('deterministic')) {
           continue;
         }
-        
+
         // UI enhancement (non-critical): recentMatches performance indicators, developmentFocus
         // These are visual aids for coaches, not core data like opponents/players/scores
         if (context.includes('Recent matches: Generate random performance indicators') ||
@@ -116,11 +116,11 @@ function scanFile(filePath) {
           severity = 'WARNING';
         }
       }
-      
+
       // Calculate line number
       const beforeMatch = content.substring(0, match.index);
       const lineNumber = beforeMatch.split('\n').length;
-      
+
       violations.push({
         file: path.relative(process.cwd(), filePath),
         line: lineNumber,
@@ -130,36 +130,36 @@ function scanFile(filePath) {
       });
     }
   });
-  
+
   return violations;
 }
 
 // Main execution
 function main() {
   console.log('🔍 Scanning frontend for fake data patterns...\n');
-  
+
   const files = getAllFiles(FRONTEND_SRC);
   console.log(`📁 Scanning ${files.length} files in ${FRONTEND_SRC}\n`);
-  
+
   const allViolations = [];
-  
+
   files.forEach(file => {
     const violations = scanFile(file);
     allViolations.push(...violations);
   });
-  
+
   // Report findings
   if (allViolations.length === 0) {
     console.log('✅ PASS: No fake data patterns detected.\n');
     process.exit(0);
   }
-  
+
   console.error('❌ FAIL: Fake data patterns detected:\n');
-  
+
   // Group by severity
   const errors = allViolations.filter(v => v.severity === 'ERROR');
   const warnings = allViolations.filter(v => v.severity === 'WARNING');
-  
+
   if (errors.length > 0) {
     console.error(`🔴 ERRORS (${errors.length}):\n`);
     errors.forEach(v => {
@@ -168,7 +168,7 @@ function main() {
       console.error(`    Code: ${v.code}\n`);
     });
   }
-  
+
   if (warnings.length > 0) {
     console.warn(`⚠️  WARNINGS (${warnings.length}):\n`);
     warnings.forEach(v => {
@@ -177,9 +177,9 @@ function main() {
       console.warn(`    Code: ${v.code}\n`);
     });
   }
-  
+
   console.error(`\n📊 Summary: ${errors.length} errors, ${warnings.length} warnings`);
-  
+
   if (errors.length > 0) {
     console.error('\n💡 Fix required: Remove all fake/mock/random data from production code.');
     console.error('   Production must only render backend-driven data or explicit "Unavailable" states.\n');

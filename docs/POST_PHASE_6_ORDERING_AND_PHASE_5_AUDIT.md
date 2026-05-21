@@ -1,8 +1,8 @@
 # Post-Phase-6 Ordering + Incomplete Phase 5 Audit
 
-**Document type**: Docs/checklist-governance only  
-**Relates to**: GitHub Issue #190  
-**Date**: 2026-05-14  
+**Document type**: Docs/checklist-governance only
+**Relates to**: GitHub Issue #190
+**Date**: 2026-05-14
 **Status**: Audit complete — no runtime code changed, no migrations added, no dependencies added
 
 ---

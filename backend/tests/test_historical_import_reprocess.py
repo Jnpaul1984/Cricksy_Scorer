@@ -293,7 +293,9 @@ def test_backfill_audit_returns_null_identity_fields_when_unavailable(client: Te
     assert record["match_identity_label"] is None
 
 
-def test_backfill_diagnosis_reports_missing_source_json_without_mutation(client: TestClient) -> None:
+def test_backfill_diagnosis_reports_missing_source_json_without_mutation(
+    client: TestClient,
+) -> None:
     token = _register_analyst(client)
     payload = _cpl_payload_with_registry()
     batch_id, game_id = _create_and_apply_batch(client, token, payload)
@@ -733,7 +735,11 @@ def test_backfill_record_source_reattach_probable_match(client: TestClient) -> N
         f"/api/historical-import/json/backfill/{batch_id}/reattach-source-json",
         headers=_auth_headers(token),
         files={
-            "file": ("repair-probable.json", json.dumps(probable_payload).encode("utf-8"), "application/json")
+            "file": (
+                "repair-probable.json",
+                json.dumps(probable_payload).encode("utf-8"),
+                "application/json",
+            )
         },
     )
     assert response.status_code == 200, response.text
@@ -761,7 +767,13 @@ def test_backfill_record_source_reattach_rejects_malformed_and_mismatch(client: 
     mismatch = client.post(
         f"/api/historical-import/json/backfill/{batch_id}/reattach-source-json",
         headers=_auth_headers(token),
-        files={"file": ("mismatch.json", json.dumps(mismatch_payload).encode("utf-8"), "application/json")},
+        files={
+            "file": (
+                "mismatch.json",
+                json.dumps(mismatch_payload).encode("utf-8"),
+                "application/json",
+            )
+        },
     )
     assert mismatch.status_code == 409, mismatch.text
 
@@ -783,7 +795,13 @@ def test_backfill_record_source_reattach_overwrite_protection(client: TestClient
     second = client.post(
         f"/api/historical-import/json/backfill/{batch_id}/reattach-source-json",
         headers=_auth_headers(token),
-        files={"file": ("repair-2.json", json.dumps(changed_payload).encode("utf-8"), "application/json")},
+        files={
+            "file": (
+                "repair-2.json",
+                json.dumps(changed_payload).encode("utf-8"),
+                "application/json",
+            )
+        },
     )
     assert second.status_code == 409, second.text
     assert "already retains a different source payload" in second.text

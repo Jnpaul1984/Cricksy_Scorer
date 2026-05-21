@@ -1,8 +1,8 @@
 # Production Readiness QA Checklist
 ## Cricksy Scorer Frontend - Fake Data Remediation
 
-**Date:** 2026-01-17  
-**Engineer:** Frontend Remediation Engineer  
+**Date:** 2026-01-17
+**Engineer:** Frontend Remediation Engineer
 **Commit:** [To be filled after commit]
 
 ---
@@ -197,7 +197,7 @@ Acceptable UI enhancements (not core data):
 
 ## ✍️ Sign-Off
 
-**QA Engineer:** ________________  
-**Date:** ________________  
-**Production Ready:** [ ] YES [ ] NO  
+**QA Engineer:** ________________
+**Date:** ________________
+**Production Ready:** [ ] YES [ ] NO
 **Notes:**

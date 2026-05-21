@@ -1,9 +1,9 @@
 # Phase 8 — AI Analytics + Match Intelligence Audit and Spec Lock
 
-**Document status:** Locked  
-**Phase:** 8 (active)  
-**Repository:** `Jnpaul1984/Cricksy_Scorer`  
-**Preceding phase:** Phase 7 (governance-closed; OCR sub-phases deferred)  
+**Document status:** Locked
+**Phase:** 8 (active)
+**Repository:** `Jnpaul1984/Cricksy_Scorer`
+**Preceding phase:** Phase 7 (governance-closed; OCR sub-phases deferred)
 **Date:** 2026-05-15
 
 ---
@@ -70,7 +70,7 @@ has been identified and implemented:
 
 ### 3.3 Advisory AI systems (in scope for Phase 8 improvements)
 
-All outputs carry `ai_metadata.is_official_truth = False`.  
+All outputs carry `ai_metadata.is_official_truth = False`.
 AI services may explain, summarise, recommend, or communicate — not calculate official facts.
 
 ---

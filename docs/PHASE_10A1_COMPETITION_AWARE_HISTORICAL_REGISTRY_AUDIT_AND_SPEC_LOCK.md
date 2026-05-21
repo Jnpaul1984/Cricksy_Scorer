@@ -1,8 +1,8 @@
 # PHASE 10A.1 — Competition-Aware Historical Match Registry Audit + Spec Lock
 
-**Repository:** `Jnpaul1984/Cricksy_Scorer`  
-**Date:** 2026-05-17  
-**Phase:** 10A.1 (governance/audit/spec-lock only)  
+**Repository:** `Jnpaul1984/Cricksy_Scorer`
+**Date:** 2026-05-17
+**Phase:** 10A.1 (governance/audit/spec-lock only)
 **Scope:** Docs-only. No backend/frontend/tests/migrations/workflow/package implementation in this issue.
 
 ---
@@ -324,7 +324,7 @@ Grounding: `docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md:3199-3208, 3322-3328` and
 
 ## 27. Phase 10B implementation scope recommendation
 
-**Recommended issue title:**  
+**Recommended issue title:**
 `Phase 10B: Competition-Aware Historical JSON Import Foundation Implementation`
 
 MVP-bounded scope:

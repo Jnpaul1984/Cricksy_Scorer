@@ -1,10 +1,10 @@
 # PHASE 1A — Existing App Stabilization Audit + Spec Lock
 
-**Repository:** `Jnpaul1984/Cricksy_Scorer`  
-**Branch:** `agent/phase-1a-stabilization-audit-spec-lock`  
-**Checklist source:** `docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md`  
-**Baseline audit source:** `docs/PHASE_0_REPO_BASELINE_AUDIT.md`  
-**Audit date:** 2026-05-07  
+**Repository:** `Jnpaul1984/Cricksy_Scorer`
+**Branch:** `agent/phase-1a-stabilization-audit-spec-lock`
+**Checklist source:** `docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md`
+**Baseline audit source:** `docs/PHASE_0_REPO_BASELINE_AUDIT.md`
+**Audit date:** 2026-05-07
 **Scope:** Docs-only pre-phase audit and spec lock. No app code modified.
 
 ---
@@ -274,7 +274,7 @@ innings, overs_limit
 
 `scripts/check-fake-data.js` — invoked via `npm run guard:fake-data` from `frontend/`
 
-**Scans:** `frontend/src/**/*.vue`, `**/*.ts`, `**/*.js`  
+**Scans:** `frontend/src/**/*.vue`, `**/*.ts`, `**/*.js`
 **Excludes:** `**/*.spec.ts`, `**/*.test.ts`, `**/__tests__/**`
 
 ### ERROR-level Patterns (fail CI immediately)

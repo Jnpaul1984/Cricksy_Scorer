@@ -135,6 +135,7 @@ def _register_analyst(client: TestClient) -> str:
     email = f"phase5n-analyst-{_uuid.uuid4().hex[:8]}@example.com"
     user = register_user(client, email)
     import asyncio
+
     asyncio.get_event_loop().run_until_complete(
         set_role(client, user["email"], models.RoleEnum.analyst_pro)
     )
@@ -158,9 +159,7 @@ def test_match_aggregate_requires_analyst_role(client: TestClient) -> None:
     """Non-analyst roles must be denied access to the match aggregate endpoint."""
     user = register_user(client, "free-phase5n-match@example.com")
     token = login_user(client, user["email"])
-    resp = client.get(
-        "/analytics/historical-stats/match/nonexistent", headers=_auth_headers(token)
-    )
+    resp = client.get("/analytics/historical-stats/match/nonexistent", headers=_auth_headers(token))
     assert resp.status_code == 403, resp.text
 
 
@@ -350,9 +349,7 @@ def test_aggregation_does_not_mutate_game_fields(client: TestClient) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
 
     # Capture fields BEFORE aggregation
-    before = asyncio.get_event_loop().run_until_complete(
-        _get_game_fields(session_maker, game_id)
-    )
+    before = asyncio.get_event_loop().run_until_complete(_get_game_fields(session_maker, game_id))
 
     # Call aggregate endpoint
     resp = client.get(
@@ -365,14 +362,12 @@ def test_aggregation_does_not_mutate_game_fields(client: TestClient) -> None:
     client.get("/analytics/historical-stats/summary", headers=_auth_headers(token))
 
     # Capture fields AFTER aggregation
-    after = asyncio.get_event_loop().run_until_complete(
-        _get_game_fields(session_maker, game_id)
-    )
+    after = asyncio.get_event_loop().run_until_complete(_get_game_fields(session_maker, game_id))
 
     # All fields must be identical
-    assert before == after, (
-        f"Game fields were mutated by aggregation!\nBefore: {before}\nAfter: {after}"
-    )
+    assert (
+        before == after
+    ), f"Game fields were mutated by aggregation!\nBefore: {before}\nAfter: {after}"
 
 
 # ---------------------------------------------------------------------------
@@ -472,7 +467,9 @@ def test_summary_excludes_non_historical_games(client: TestClient) -> None:
 
     # Live game must not appear in match aggregates
     match_ids = [m["match_id"] for m in data["matches"]]
-    assert live_game_id not in match_ids, f"Live game {live_game_id} must not be in historical stats"
+    assert (
+        live_game_id not in match_ids
+    ), f"Live game {live_game_id} must not be in historical stats"
 
 
 def test_match_aggregate_live_game_returns_404(client: TestClient) -> None:
@@ -602,8 +599,13 @@ def test_match_aggregate_response_schema(client: TestClient) -> None:
 
     match = data["match"]
     for field in [
-        "match_id", "teams", "innings_count", "total_runs", "total_wickets",
-        "innings_totals", "has_delivery_data",
+        "match_id",
+        "teams",
+        "innings_count",
+        "total_runs",
+        "total_wickets",
+        "innings_totals",
+        "has_delivery_data",
     ]:
         assert field in match, f"Missing match field '{field}'"
 

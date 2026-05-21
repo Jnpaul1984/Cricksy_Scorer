@@ -249,7 +249,7 @@ const recentMatches = ref<any[]>([])
 const orgAiCallouts = computed<AiCallout[]>(() => {
   const stats = orgStats.value
   if (!stats) return []
-  
+
   const callouts: AiCallout[] = []
 
   // Only generate callouts from REAL data

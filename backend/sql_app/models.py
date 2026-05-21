@@ -1210,7 +1210,9 @@ class CoachingSkillAuditLog(Base):
     coach_approved_after: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     organization_id: Mapped[str | None] = mapped_column(String, nullable=True)
     input_summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
-    output_summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=_empty_dict, nullable=False)
+    output_summary: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=_empty_dict, nullable=False
+    )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
@@ -1234,7 +1236,9 @@ class PlayerDevelopmentGoal(Base):
     current_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[PlayerDevelopmentPlanStatus] = mapped_column(
-        SAEnum(PlayerDevelopmentPlanStatus, name="player_development_plan_status", create_type=False),
+        SAEnum(
+            PlayerDevelopmentPlanStatus, name="player_development_plan_status", create_type=False
+        ),
         default=PlayerDevelopmentPlanStatus.draft,
         server_default=PlayerDevelopmentPlanStatus.draft.value,
         nullable=False,
@@ -1284,7 +1288,9 @@ class PlayerWeaknessTag(Base):
     )
     confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     source_type: Mapped[PlayerDevelopmentSourceType] = mapped_column(
-        SAEnum(PlayerDevelopmentSourceType, name="player_development_source_type", create_type=False),
+        SAEnum(
+            PlayerDevelopmentSourceType, name="player_development_source_type", create_type=False
+        ),
         default=PlayerDevelopmentSourceType.manual,
         server_default=PlayerDevelopmentSourceType.manual.value,
         nullable=False,
@@ -1336,7 +1342,9 @@ class PlayerStrengthTag(Base):
     label: Mapped[str] = mapped_column(String(255), nullable=False)
     confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     source_type: Mapped[PlayerDevelopmentSourceType] = mapped_column(
-        SAEnum(PlayerDevelopmentSourceType, name="player_development_source_type", create_type=False),
+        SAEnum(
+            PlayerDevelopmentSourceType, name="player_development_source_type", create_type=False
+        ),
         default=PlayerDevelopmentSourceType.manual,
         server_default=PlayerDevelopmentSourceType.manual.value,
         nullable=False,
@@ -1385,7 +1393,9 @@ class PlayerDevelopmentIntervention(Base):
         index=True,
     )
     source_type: Mapped[PlayerDevelopmentSourceType] = mapped_column(
-        SAEnum(PlayerDevelopmentSourceType, name="player_development_source_type", create_type=False),
+        SAEnum(
+            PlayerDevelopmentSourceType, name="player_development_source_type", create_type=False
+        ),
         default=PlayerDevelopmentSourceType.manual,
         server_default=PlayerDevelopmentSourceType.manual.value,
         nullable=False,
@@ -1394,7 +1404,9 @@ class PlayerDevelopmentIntervention(Base):
     intervention_type: Mapped[str] = mapped_column(String(100), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    scheduled_for: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    scheduled_for: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, default=_empty_list, nullable=False
@@ -1440,7 +1452,9 @@ class PlayerDrillAssignment(Base):
     drill_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     frequency: Mapped[str | None] = mapped_column(String(100), nullable=True)
     status: Mapped[PlayerDevelopmentPlanStatus] = mapped_column(
-        SAEnum(PlayerDevelopmentPlanStatus, name="player_development_plan_status", create_type=False),
+        SAEnum(
+            PlayerDevelopmentPlanStatus, name="player_development_plan_status", create_type=False
+        ),
         default=PlayerDevelopmentPlanStatus.draft,
         server_default=PlayerDevelopmentPlanStatus.draft.value,
         nullable=False,
@@ -2900,7 +2914,9 @@ class HistoricalSourcePlayerRegistry(Base):
     metadata_conflicts: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, nullable=False, default=list
     )
-    career_profile_foundation: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    career_profile_foundation: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     review_required: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
@@ -3021,7 +3037,9 @@ class HistoricalCompetitionRosterEntry(Base):
         index=True,
     )
     source_player_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    normalized_source_player_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    normalized_source_player_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, index=True
+    )
     source_schema: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     source_system: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     batch_id: Mapped[str | None] = mapped_column(
@@ -3031,7 +3049,9 @@ class HistoricalCompetitionRosterEntry(Base):
     provenance_references: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, nullable=False, default=list
     )
-    conflict_references: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    conflict_references: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
     review_required: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
@@ -3089,7 +3109,9 @@ class HistoricalVenueIntelligence(Base):
     canonical_name: Mapped[str] = mapped_column(String(255), nullable=False)
     normalized_canonical_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     short_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    normalized_short_name: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    normalized_short_name: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, index=True
+    )
     alternate_names: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     city: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     region: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -3167,7 +3189,10 @@ class HistoricalVenueResolutionDecision(Base):
         String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
     )
     batch_id: Mapped[str | None] = mapped_column(
-        String, ForeignKey("historical_import_batches.id", ondelete="SET NULL"), nullable=True, index=True
+        String,
+        ForeignKey("historical_import_batches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     game_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("games.id", ondelete="SET NULL"), nullable=True, index=True
@@ -3279,7 +3304,9 @@ class HistoricalCompetitionVenueUsage(Base):
     season: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     source_schema: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source_system: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    matches_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    matches_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
     game_references: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     provenance_references: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, nullable=False, default=list
@@ -3412,6 +3439,4 @@ class AiInsightReview(Base):
         nullable=False,
     )
 
-    __table_args__ = (
-        Index("ix_ai_insight_review_type_id", "insight_type", "insight_id"),
-    )
+    __table_args__ = (Index("ix_ai_insight_review_type_id", "insight_type", "insight_id"),)

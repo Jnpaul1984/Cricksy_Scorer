@@ -877,10 +877,12 @@ async def test_delivery_correction_wide_to_legal(async_client, db_session):
     )
     if score_response.status_code != 200:
         print(f"[DEBUG] Failed with {score_response.status_code}: {score_response.text}")
-    assert score_response.status_code == 200, f"Expected 200, got {score_response.status_code}: {score_response.text}"
+    assert (
+        score_response.status_code == 200
+    ), f"Expected 200, got {score_response.status_code}: {score_response.text}"
     snapshot = score_response.json()
     assert snapshot["total_runs"] == 1
-    
+
     # Fetch full game state to get delivery ID (snapshot doesn't include deliveries array)
     game_state_response = await async_client.get(f"/games/{game_id}")
     assert game_state_response.status_code == 200
@@ -966,10 +968,12 @@ async def test_delivery_correction_runs_update(async_client, db_session):
     )
     if score_response.status_code != 200:
         print(f"[DEBUG] Failed with {score_response.status_code}: {score_response.text}")
-    assert score_response.status_code == 200, f"Expected 200, got {score_response.status_code}: {score_response.text}"
+    assert (
+        score_response.status_code == 200
+    ), f"Expected 200, got {score_response.status_code}: {score_response.text}"
     snapshot_after_score = score_response.json()
     assert snapshot_after_score["total_runs"] == 2
-    
+
     # Fetch full game state to get delivery ID (snapshot doesn't include deliveries array)
     game_state_response = await async_client.get(f"/games/{game_id}")
     assert game_state_response.status_code == 200

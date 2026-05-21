@@ -69,7 +69,9 @@ def upgrade() -> None:
         "coaching_skill_audit_logs",
         ["player_profile_id"],
     )
-    op.create_index("ix_coaching_skill_audit_logs_plan_id", "coaching_skill_audit_logs", ["plan_id"])
+    op.create_index(
+        "ix_coaching_skill_audit_logs_plan_id", "coaching_skill_audit_logs", ["plan_id"]
+    )
     op.create_index(
         "ix_coaching_skill_audit_logs_video_session_id",
         "coaching_skill_audit_logs",
@@ -94,7 +96,9 @@ def downgrade() -> None:
         "ix_coaching_skill_audit_logs_video_analysis_job_id",
         table_name="coaching_skill_audit_logs",
     )
-    op.drop_index("ix_coaching_skill_audit_logs_video_session_id", table_name="coaching_skill_audit_logs")
+    op.drop_index(
+        "ix_coaching_skill_audit_logs_video_session_id", table_name="coaching_skill_audit_logs"
+    )
     op.drop_index("ix_coaching_skill_audit_logs_plan_id", table_name="coaching_skill_audit_logs")
     op.drop_index(
         "ix_coaching_skill_audit_logs_player_profile_id",

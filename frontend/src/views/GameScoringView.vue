@@ -1907,10 +1907,10 @@ async function confirmChangeBowler(): Promise<void> {
              </span>
           </div>
           <div class="recent-balls">
-            <div 
-              v-for="(b, i) in recentBallSlots" 
-              :key="i" 
-              class="ball-badge" 
+            <div
+              v-for="(b, i) in recentBallSlots"
+              :key="i"
+              class="ball-badge"
               :class="b ? getBallClass(b) : 'empty'"
               @click="b ? openCorrectionModal(b) : null"
               :title="b ? 'Click to correct this delivery' : ''"

@@ -1,7 +1,7 @@
 # Event Log Tab Implementation - Complete
 
-**Date**: 2026-01-16  
-**Status**: ✅ COMPLETE (Type-check & build PASSED)  
+**Date**: 2026-01-16
+**Status**: ✅ COMPLETE (Type-check & build PASSED)
 **Branch**: beta/fix-extras-recentballs-correction-theme
 
 ---
@@ -20,10 +20,10 @@ New component that implements the complete Event Log feature with:
 
 #### Features:
 - **Timeline View**: Scrollable list combining:
-  - Deliveries from `liveSnapshot.deliveries` 
+  - Deliveries from `liveSnapshot.deliveries`
   - Non-delivery events (managed in component state)
 - **Event Types**: Drinks 🥤, Injury 🏥, Delay ⏸️, Ball Change ⚪, Other 📌
-- **Add Event Form**: 
+- **Add Event Form**:
   - Type selector with 5 preset options
   - Optional note field (max 200 chars)
   - Displays current user (from authStore) or 'Operator'

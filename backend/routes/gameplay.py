@@ -1482,21 +1482,23 @@ async def correct_delivery(
     deliveries: list[dict[str, Any]] = list(getattr(g, "deliveries", []) or [])
     if delivery_id < 0 or delivery_id >= len(deliveries):
         raise HTTPException(status_code=404, detail=f"Delivery {delivery_id} not found")
-    
+
     target_idx = delivery_id
 
     target_delivery = deliveries[target_idx]
 
     # Apply corrections to the delivery dict (only update fields that were provided)
     correction_data = correction.model_dump(exclude_unset=True)
-    
+
     if "runs_scored" in correction_data:
         target_delivery["runs_scored"] = correction.runs_scored
     if "runs_off_bat" in correction_data:
         target_delivery["runs_off_bat"] = correction.runs_off_bat
     if "extra" in correction_data:
         # Normalize extra code (None clears it to legal ball)
-        target_delivery["extra_type"] = _gh("_norm_extra", correction.extra) if correction.extra else None
+        target_delivery["extra_type"] = (
+            _gh("_norm_extra", correction.extra) if correction.extra else None
+        )
     if "is_wicket" in correction_data:
         target_delivery["is_wicket"] = correction.is_wicket
     if "dismissal_type" in correction_data:

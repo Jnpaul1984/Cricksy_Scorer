@@ -219,10 +219,10 @@ const matchStatusVariant = computed(() => {
 const keyPlayers = computed(() => {
   const battingScorecard = gameStore.currentGame?.batting_scorecard ?? {}
   const bowlingScorecard = gameStore.currentGame?.bowling_scorecard ?? {}
-  
+
   // Combine batting and bowling stats for players
   const playerStats: Record<string, any> = {}
-  
+
   // Add batting stats
   Object.entries(battingScorecard).forEach(([id, stats]) => {
     playerStats[id] = {
@@ -234,7 +234,7 @@ const keyPlayers = computed(() => {
       roles: [] as string[]
     }
   })
-  
+
   // Add bowling stats
   Object.entries(bowlingScorecard).forEach(([id, stats]) => {
     if (playerStats[id]) {
@@ -250,7 +250,7 @@ const keyPlayers = computed(() => {
       }
     }
   })
-  
+
   // Calculate average and sort by impact
   return Object.values(playerStats)
     .map(p => ({

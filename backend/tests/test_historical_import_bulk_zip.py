@@ -309,9 +309,9 @@ def test_bulk_zip_apply_only_applies_selected_valid_files() -> None:
     assert batches[0]["is_finalized"] is True
     assert batches[0]["applied_game_id"] == applied_game_id
     # Confirm the batch corresponds to the expected valid file, not bad.json.
-    assert batches[0]["source_filename"] == "matches.zip::ok.json", (
-        f"Batch must be for ok.json; got {batches[0]['source_filename']!r}"
-    )
+    assert (
+        batches[0]["source_filename"] == "matches.zip::ok.json"
+    ), f"Batch must be for ok.json; got {batches[0]['source_filename']!r}"
     # status=="valid" confirms the batch passed dry-run validation and was created via
     # the historical import path, not the live scoring engine.
     assert batches[0]["status"] == "valid", (
@@ -322,9 +322,9 @@ def test_bulk_zip_apply_only_applies_selected_valid_files() -> None:
     # bad.json is malformed (invalid JSON syntax), so it is skipped rather than
     # causing an apply error.  error_count must be zero because the only
     # non-applied file was handled by the skip path, not the error path.
-    assert data["error_count"] == 0, (
-        f"Expected error_count=0 (bad.json is skipped, not errored), got {data['error_count']}"
-    )
+    assert (
+        data["error_count"] == 0
+    ), f"Expected error_count=0 (bad.json is skipped, not errored), got {data['error_count']}"
 
 
 def test_bulk_zip_apply_large_zip_records_metadata_only_batches_not_training_eligible() -> None:

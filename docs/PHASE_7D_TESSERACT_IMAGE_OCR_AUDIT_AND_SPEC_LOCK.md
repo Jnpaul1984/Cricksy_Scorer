@@ -509,34 +509,34 @@ Do **not** include:
 
 ### Readiness answers
 
-1. **Is local Tesseract viable for the current backend deployment environment?**  
+1. **Is local Tesseract viable for the current backend deployment environment?**
    **Yes, technically.** The Docker/ECS model can support it, but it requires image and CI
    changes.
 
-2. **What Docker/system dependencies would be required?**  
+2. **What Docker/system dependencies would be required?**
    At minimum: `tesseract-ocr`, `tesseract-ocr-eng`, and a pinned Python wrapper
    (`pytesseract`). If scanned PDFs are later supported, add `pdf2image` + `poppler-utils`.
 
-3. **Can CI validate image OCR deterministically without brittle results?**  
+3. **Can CI validate image OCR deterministically without brittle results?**
    **Yes.** Prefer mocked OCR service tests and coarse metadata assertions over exact OCR text.
 
-4. **Should scanned PDF support be included with image OCR or deferred?**  
+4. **Should scanned PDF support be included with image OCR or deferred?**
    **Deferred.** Phase 7C already covers digital PDFs, and scanned PDF OCR adds more runtime
    complexity than the smallest safe slice should take on.
 
-5. **How should low-confidence image OCR be shown to operators?**  
+5. **How should low-confidence image OCR be shown to operators?**
    Via confidence band, uncertainty flags, warnings, and explicit non-authoritative copy in the
    review panel.
 
-6. **How should failed image OCR fall back to manual candidate JSON?**  
+6. **How should failed image OCR fall back to manual candidate JSON?**
    Candidate creation should still succeed with `ocr_text=null` or partial text, warnings, and
    low-confidence flags so the operator can continue manually.
 
-7. **What is the smallest safe implementation slice for Phase 7E?**  
+7. **What is the smallest safe implementation slice for Phase 7E?**
    Direct image upload → local Tesseract → raw OCR text + metadata only → operator manually
    produces structured JSON.
 
-8. **Should Phase 7E proceed or should image OCR be deferred?**  
+8. **Should Phase 7E proceed or should image OCR be deferred?**
    **Proceed only if the team wants the operator assist now; otherwise safe to defer.**
    The path is viable, but only as the narrow slice defined above.
 

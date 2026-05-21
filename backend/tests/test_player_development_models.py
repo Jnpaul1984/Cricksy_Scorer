@@ -38,7 +38,7 @@ def _make_coach() -> models.User:
     return models.User(
         id="coach-dev-001",
         email="coach-dev@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.coach_pro,
         org_id="org-dev-001",
         is_active=True,
@@ -133,9 +133,7 @@ async def test_player_development_model_relationships_and_ai_defaults(db_session
             summary="Early signs of improved balance on the back foot.",
             progress_status="on_track",
             confidence_score=0.68,
-            evidence_refs=[
-                {"type": "monthly_improvement", "player_id": player_profile.player_id}
-            ],
+            evidence_refs=[{"type": "monthly_improvement", "player_id": player_profile.player_id}],
             ai_metadata={"is_official_truth": False},
             coach_notes="Needs more evidence before claiming sustained improvement.",
         )
@@ -250,7 +248,9 @@ def test_player_development_migration_and_metadata_sanity() -> None:
         / "versions"
         / "d9b1c2e3f4a5_add_player_development_tables.py"
     )
-    spec = importlib.util.spec_from_file_location("phase9b_player_development_migration", migration_path)
+    spec = importlib.util.spec_from_file_location(
+        "phase9b_player_development_migration", migration_path
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

@@ -190,9 +190,9 @@ class TestAiBoundaryProtection:
         )
         payload_keys = set(payload.model_dump().keys())
         overlap = OFFICIAL_TRUTH_FIELDS & payload_keys
-        assert not overlap, (
-            f"Review submit payload unexpectedly overlaps official truth fields: {overlap}"
-        )
+        assert (
+            not overlap
+        ), f"Review submit payload unexpectedly overlaps official truth fields: {overlap}"
 
     def test_ai_insight_review_state_enum_values(self):
         """Enum values must match the spec lock."""
