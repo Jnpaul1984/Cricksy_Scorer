@@ -173,6 +173,7 @@
           <thead>
             <tr>
               <th>Select</th>
+              <th>Match identity</th>
               <th>Match ID</th>
               <th>Batch ID</th>
               <th>Import source</th>
@@ -186,11 +187,12 @@
               <th>Expected players</th>
               <th>Duplicate delivery risk</th>
               <th>Apply deliveries previously run</th>
-              <th>Source reattach</th>
+              <th>Details</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="record in auditResult.records" :key="record.batch_id">
+            <template v-for="record in auditResult.records" :key="record.batch_id">
+            <tr>
               <td>
                 <input
                   type="checkbox"
@@ -199,6 +201,7 @@
                   @change="toggleRecord(record.batch_id, $event)"
                 />
               </td>
+              <td>{{ record.match_identity_label || '—' }}</td>
               <td>{{ record.match_id }}</td>
               <td>{{ record.batch_id }}</td>
               <td>{{ record.import_source }}</td>
@@ -214,17 +217,58 @@
               <td>{{ record.apply_deliveries_previously_run ? 'Yes' : 'No' }}</td>
               <td>
                 <button
-                  v-if="record.missing_source_json"
                   type="button"
                   class="hbr-btn hbr-btn--ghost"
                   :disabled="loading"
-                  @click="startReattach(record.batch_id)"
+                  data-testid="hbr-view-identity-btn"
+                  @click="toggleIdentityDetails(record.batch_id)"
                 >
-                  Reattach Source JSON
+                  {{ expandedIdentityBatchIds.includes(record.batch_id) ? 'Hide details' : 'View identity' }}
                 </button>
-                <span v-else>—</span>
               </td>
             </tr>
+            <tr v-if="expandedIdentityBatchIds.includes(record.batch_id)">
+              <td colspan="16">
+                <div class="hbr-identity-details">
+                  <p v-if="record.missing_source_json" class="hbr-warning-banner">
+                    Use the match identity fields below to locate the original CPL JSON before reattaching source.
+                  </p>
+                  <ul class="hbr-list">
+                    <li>Match date: {{ displayIdentityValue(record.match_date) }}</li>
+                    <li>Team 1: {{ displayIdentityValue(record.team_1) }}</li>
+                    <li>Team 2: {{ displayIdentityValue(record.team_2) }}</li>
+                    <li>Venue: {{ displayIdentityValue(record.venue) }}</li>
+                    <li>
+                      Competition/season:
+                      {{ displayIdentityValue(combineCompetitionSeason(record.competition, record.season)) }}
+                    </li>
+                    <li>
+                      Result/status:
+                      {{ displayIdentityValue(combineResultStatus(record.result, record.status)) }}
+                    </li>
+                    <li>
+                      Innings summary:
+                      {{ displayIdentityValue(record.known_score_summary || combineInningsSummary(record)) }}
+                    </li>
+                    <li>
+                      Original filename/source hint:
+                      {{ displayIdentityValue(record.source_file_hint || record.original_filename || record.upload_filename) }}
+                    </li>
+                  </ul>
+                  <button
+                    v-if="record.missing_source_json"
+                    type="button"
+                    class="hbr-btn hbr-btn--ghost"
+                    :disabled="loading"
+                    data-testid="hbr-reattach-row-btn"
+                    @click="startReattach(record.batch_id)"
+                  >
+                    Reattach Source JSON
+                  </button>
+                </div>
+              </td>
+            </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -345,6 +389,7 @@ const auditResult = ref<HistoricalBackfillAuditResponse | null>(null)
 const diagnosisResult = ref<HistoricalBackfillDiagnosisResponse | null>(null)
 const applyResult = ref<HistoricalBackfillApplyResponse | null>(null)
 const selectedBatchIds = ref<string[]>([])
+const expandedIdentityBatchIds = ref<string[]>([])
 const confirmApply = ref(false)
 const reattachTargetBatchId = ref<string | null>(null)
 const reattachFile = ref<File | null>(null)
@@ -495,6 +540,31 @@ function clearSelection() {
   confirmApply.value = false
 }
 
+function displayIdentityValue(value: string | null | undefined): string {
+  return value && value.trim().length > 0 ? value : '—'
+}
+
+function combineCompetitionSeason(
+  competition: string | null | undefined,
+  season: string | null | undefined,
+): string | null {
+  const values = [competition?.trim(), season?.trim()].filter(Boolean)
+  return values.length ? values.join(' / ') : null
+}
+
+function combineResultStatus(result: string | null | undefined, status: string | null | undefined): string | null {
+  const values = [result?.trim(), status?.trim()].filter(Boolean)
+  return values.length ? values.join(' / ') : null
+}
+
+function combineInningsSummary(record: {
+  innings_1_summary?: string | null
+  innings_2_summary?: string | null
+}): string | null {
+  const values = [record.innings_1_summary?.trim(), record.innings_2_summary?.trim()].filter(Boolean)
+  return values.length ? values.join(' | ') : null
+}
+
 function selectAllEligible() {
   selectedBatchIds.value = eligibleRecords.value.map((record) => record.batch_id)
 }
@@ -506,6 +576,13 @@ function toggleRecord(batchId: string, event: Event) {
   if (nextChecked) current.add(batchId)
   else current.delete(batchId)
   selectedBatchIds.value = [...current]
+}
+
+function toggleIdentityDetails(batchId: string) {
+  const current = new Set(expandedIdentityBatchIds.value)
+  if (current.has(batchId)) current.delete(batchId)
+  else current.add(batchId)
+  expandedIdentityBatchIds.value = [...current]
 }
 
 function startReattach(batchId: string) {
@@ -525,6 +602,7 @@ async function runAudit() {
   loadingStep.value = 'audit'
   error.value = null
   applyResult.value = null
+  expandedIdentityBatchIds.value = []
   clearSelection()
   try {
     const payload = {
@@ -745,5 +823,10 @@ async function submitReattach() {
   font-size: 0.75rem;
   text-align: left;
   vertical-align: top;
+}
+
+.hbr-identity-details {
+  display: grid;
+  gap: var(--space-2);
 }
 </style>

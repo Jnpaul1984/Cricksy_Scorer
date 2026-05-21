@@ -127,6 +127,31 @@ def _create_and_apply_batch(
     return batch_id, apply.json()["applied_game_id"]
 
 
+def _create_sparse_historical_pair(client: TestClient) -> tuple[str, str]:
+    async def _create() -> tuple[str, str]:
+        async with client.session_maker() as session:  # type: ignore[attr-defined]
+            batch_id = str(uuid.uuid4())
+            game_id = str(uuid.uuid4())
+            game = models.Game(
+                id=game_id,
+                phases={"historical_import": {"batch_id": batch_id}},
+            )
+            batch = models.HistoricalImportBatch(
+                id=batch_id,
+                source_format="json",
+                source_hash_sha256=uuid.uuid4().hex,
+                status="valid",
+                is_finalized=True,
+                applied_game_id=game_id,
+            )
+            session.add(game)
+            session.add(batch)
+            await session.commit()
+            return batch_id, game_id
+
+    return asyncio.get_event_loop().run_until_complete(_create())
+
+
 def _register_analyst(client: TestClient) -> str:
     email = f"reprocess-{uuid.uuid4().hex[:8]}@example.com"
     user = register_user(client, email)
@@ -217,6 +242,15 @@ def test_backfill_audit_identifies_eligible_without_mutation(client: TestClient)
     assert record["eligible"] is True
     assert record["expected_deliveries"] > 0
     assert record["registry_people_available"] is True
+    assert record["team_1"]
+    assert record["team_2"]
+    assert record["match_date"]
+    assert record["venue"]
+    assert record["competition"]
+    assert record["season"]
+    assert record["known_score_summary"]
+    assert record["match_identity_label"]
+    assert "original_filename" in record
 
     after_game = _load_game(client, game_id)
     assert after_game.deliveries in (None, [])
@@ -236,6 +270,27 @@ def test_backfill_audit_blocks_when_source_json_missing(client: TestClient) -> N
     record = resp.json()["records"][0]
     assert record["eligible"] is False
     assert record["missing_source_json"] is True
+
+
+def test_backfill_audit_returns_null_identity_fields_when_unavailable(client: TestClient) -> None:
+    token = _register_analyst(client)
+    batch_id, _ = _create_sparse_historical_pair(client)
+
+    resp = client.post(
+        "/api/historical-import/json/backfill-reprocess/audit",
+        headers=_auth_headers(token),
+        json={"batch_ids": [batch_id], "max_batch_size": 25},
+    )
+    assert resp.status_code == 200, resp.text
+    record = resp.json()["records"][0]
+    assert record["team_1"] is None
+    assert record["team_2"] is None
+    assert record["match_date"] is None
+    assert record["venue"] is None
+    assert record["competition"] is None
+    assert record["season"] is None
+    assert record["known_score_summary"] is None
+    assert record["match_identity_label"] is None
 
 
 def test_backfill_diagnosis_reports_missing_source_json_without_mutation(client: TestClient) -> None:

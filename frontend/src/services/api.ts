@@ -1774,6 +1774,21 @@ export interface HistoricalBackfillAuditMatchRecord {
   expected_deliveries: number;
   expected_wickets: number;
   expected_players: number;
+  match_date?: string | null;
+  competition?: string | null;
+  season?: string | null;
+  team_1?: string | null;
+  team_2?: string | null;
+  venue?: string | null;
+  result?: string | null;
+  status?: string | null;
+  innings_1_summary?: string | null;
+  innings_2_summary?: string | null;
+  known_score_summary?: string | null;
+  original_filename?: string | null;
+  upload_filename?: string | null;
+  source_file_hint?: string | null;
+  match_identity_label?: string | null;
 }
 
 export interface HistoricalBackfillAuditResponse {
