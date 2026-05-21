@@ -167,6 +167,15 @@ def _count_games(client: TestClient) -> int:
     return asyncio.get_event_loop().run_until_complete(_query())
 
 
+def _count_delivery_rows(client: TestClient) -> int:
+    async def _query() -> int:
+        async with client.session_maker() as session:  # type: ignore[attr-defined]
+            result = await session.execute(select(models.Delivery))
+            return len(result.scalars().all())
+
+    return asyncio.get_event_loop().run_until_complete(_query())
+
+
 def _build_zip(entries: dict[str, bytes]) -> bytes:
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -218,6 +227,160 @@ def test_backfill_audit_blocks_when_source_json_missing(client: TestClient) -> N
     record = resp.json()["records"][0]
     assert record["eligible"] is False
     assert record["missing_source_json"] is True
+
+
+def test_backfill_diagnosis_reports_missing_source_json_without_mutation(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, game_id = _create_and_apply_batch(client, token, payload)
+    before_game = _load_game(client, game_id)
+    before_deliveries = list(before_game.deliveries or [])
+    before_delivery_rows = _count_delivery_rows(client)
+
+    resp = client.post(
+        "/api/historical-import/json/backfill-reprocess/diagnose",
+        headers=_auth_headers(token),
+        json={"batch_ids": [batch_id], "max_batch_size": 25},
+    )
+    assert resp.status_code == 200, resp.text
+    record = resp.json()["records"][0]
+    assert record["source_json_retained"] is False
+    assert record["skip_or_failure_reason"] == "missing_source_json"
+    assert record["recommended_next_action"] == (
+        "Source JSON missing. Reattach original JSON before delivery diagnosis or reprocess can run."
+    )
+
+    after_game = _load_game(client, game_id)
+    assert list(after_game.deliveries or []) == before_deliveries
+    assert _count_delivery_rows(client) == before_delivery_rows
+
+
+def test_backfill_diagnosis_detects_known_delivery_schema(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, _ = _create_and_apply_batch(client, token, payload)
+
+    resp = client.post(
+        "/api/historical-import/json/backfill-reprocess/diagnose",
+        headers=_auth_headers(token),
+        json={
+            "batch_ids": [batch_id],
+            "max_batch_size": 25,
+            "source_payloads_by_batch": {batch_id: payload},
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    record = resp.json()["records"][0]
+    assert record["delivery_path_detected"] is True
+    assert record["expected_deliveries"] > 0
+    assert record["detected_delivery_path"] in {
+        "innings[].overs[].deliveries[]",
+        "innings[].<team>.overs[].deliveries[]",
+    }
+
+
+def test_backfill_diagnosis_reports_no_delivery_path_detected(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    innings = payload.get("innings")
+    assert isinstance(innings, list)
+    for entry in innings:
+        if not isinstance(entry, dict):
+            continue
+        innings_obj = next(iter(entry.values()), {}) if len(entry) == 1 else entry
+        if isinstance(innings_obj, dict):
+            innings_obj.pop("overs", None)
+            innings_obj.pop("deliveries", None)
+            innings_obj.pop("balls", None)
+            innings_obj["wickets"] = 6
+            innings_obj["runs"] = 150
+    batch_id, _ = _create_and_apply_batch(client, token, _cpl_payload_with_registry())
+
+    resp = client.post(
+        "/api/historical-import/json/backfill-reprocess/diagnose",
+        headers=_auth_headers(token),
+        json={
+            "batch_ids": [batch_id],
+            "max_batch_size": 25,
+            "source_payloads_by_batch": {batch_id: payload},
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    record = resp.json()["records"][0]
+    assert record["delivery_path_detected"] is False
+    assert record["skip_or_failure_reason"] == "no_delivery_path_detected"
+    assert record["expected_wickets"] > 0
+
+
+def test_backfill_diagnosis_detects_alternate_overs_delivery_schema(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    info = payload.setdefault("info", {})
+    assert isinstance(info, dict)
+    info["teams"] = ["A", "B"]
+    payload["innings"] = [
+        {
+            "A": {
+                "team": "A",
+                "overs": [
+                    {
+                        "over": 0,
+                        "deliveries": [
+                            {
+                                "batter": "P1",
+                                "bowler": "P2",
+                                "non_striker": "P3",
+                                "runs": {"batter": 1, "extras": 0, "total": 1},
+                            }
+                        ],
+                    }
+                ],
+                "wickets": 0,
+            }
+        }
+    ]
+    batch_id, _ = _create_and_apply_batch(client, token, _cpl_payload_with_registry())
+
+    resp = client.post(
+        "/api/historical-import/json/backfill-reprocess/diagnose",
+        headers=_auth_headers(token),
+        json={
+            "batch_ids": [batch_id],
+            "max_batch_size": 25,
+            "source_payloads_by_batch": {batch_id: payload},
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    record = resp.json()["records"][0]
+    assert record["expected_deliveries"] == 1
+    assert record["delivery_path_detected"] is True
+    assert any(
+        candidate in record["delivery_path_candidates"]
+        for candidate in ["innings[].overs[].deliveries[]", "innings[].<team>.overs[].deliveries[]"]
+    )
+
+
+def test_backfill_diagnosis_is_read_only_for_delivery_rows(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, game_id = _create_and_apply_batch(client, token, payload)
+    before_delivery_rows = _count_delivery_rows(client)
+    before_game = _load_game(client, game_id)
+    assert before_game.deliveries in (None, [])
+
+    resp = client.post(
+        "/api/historical-import/json/backfill-reprocess/diagnose",
+        headers=_auth_headers(token),
+        json={
+            "batch_ids": [batch_id],
+            "max_batch_size": 25,
+            "source_payloads_by_batch": {batch_id: payload},
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["records"][0]["expected_deliveries"] > 0
+    assert _count_delivery_rows(client) == before_delivery_rows
+    assert _load_game(client, game_id).deliveries in (None, [])
 
 
 def test_backfill_apply_rebuilds_deliveries_and_is_idempotent(client: TestClient) -> None:

@@ -47,6 +47,7 @@ from backend.api.schemas.historical_import import (
     HistoricalBackfillApplyResponse,
     HistoricalBackfillAuditRequest,
     HistoricalBackfillAuditResponse,
+    HistoricalBackfillDiagnosisResponse,
     HistoricalSourcePayloadReattachApplyFileResult,
     HistoricalSourcePayloadReattachApplyResponse,
     HistoricalSourcePayloadReattachDryRunFileResult,
@@ -68,6 +69,7 @@ from backend.services.historical_import_backfill_service import (
 from backend.services.historical_import_reprocess_service import (
     apply_delivery_backfill,
     audit_delivery_backfill,
+    diagnose_delivery_backfill,
 )
 from backend.services.historical_import_preview import build_dry_run_response
 from backend.services.historical_import_service import (
@@ -2600,6 +2602,30 @@ async def audit_historical_delivery_backfill(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return HistoricalBackfillAuditResponse(**report)
+
+
+@router.post(
+    "/backfill-reprocess/diagnose",
+    response_model=HistoricalBackfillDiagnosisResponse,
+    summary="Read-only diagnosis for historical CPL delivery extraction readiness",
+)
+async def diagnose_historical_delivery_backfill(
+    body: HistoricalBackfillAuditRequest,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalBackfillDiagnosisResponse:
+    del current_user
+    try:
+        report = await diagnose_delivery_backfill(
+            db,
+            match_ids=body.match_ids,
+            batch_ids=body.batch_ids,
+            max_batch_size=body.max_batch_size,
+            source_payloads_by_batch=body.source_payloads_by_batch,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return HistoricalBackfillDiagnosisResponse(**report)
 
 
 @router.post(

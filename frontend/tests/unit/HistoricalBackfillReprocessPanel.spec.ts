@@ -5,6 +5,7 @@ import HistoricalBackfillReprocessPanel from '@/components/HistoricalBackfillRep
 import * as api from '@/services/api'
 
 vi.mock('@/services/api', () => ({
+  historicalBackfillReprocessDiagnose: vi.fn(),
   historicalBackfillReprocessAudit: vi.fn(),
   historicalBackfillReprocessApply: vi.fn(),
   historicalImportListBatches: vi.fn(),
@@ -92,6 +93,66 @@ const auditResponse = {
   ],
 }
 
+const diagnosisResponse = {
+  total_imported_cpl_matches: 3,
+  selected_matches: 3,
+  blocked_matches: 1,
+  records: [
+    {
+      match_id: 'match-1',
+      batch_id: 'batch-1',
+      import_source: 'bulk_zip_apply' as const,
+      completeness: 'metadata_only',
+      source_json_retained: true,
+      source_json_required: false,
+      schema_detected: 'overs_deliveries_schema',
+      innings_path_detected: true,
+      delivery_path_detected: true,
+      detected_delivery_path: 'innings[].overs[].deliveries[]',
+      delivery_path_candidates: ['innings[].overs[].deliveries[]'],
+      expected_deliveries: 120,
+      expected_wickets: 8,
+      registry_people_available: true,
+      batter_field_detected: true,
+      bowler_field_detected: true,
+      non_striker_field_detected: true,
+      runs_field_detected: true,
+      extras_field_detected: true,
+      wicket_field_detected: true,
+      skip_or_failure_reason: null,
+      safely_reprocessable: true,
+      recommended_next_action:
+        'Diagnosis indicates delivery extraction is possible. Keep controlled apply gate and proceed in staged batches.',
+    },
+    {
+      match_id: 'match-3',
+      batch_id: 'batch-3',
+      import_source: 'unknown' as const,
+      completeness: 'metadata_only',
+      source_json_retained: false,
+      source_json_required: true,
+      schema_detected: 'unknown_delivery_schema',
+      innings_path_detected: false,
+      delivery_path_detected: false,
+      detected_delivery_path: null,
+      delivery_path_candidates: [],
+      expected_deliveries: 0,
+      expected_wickets: 0,
+      registry_people_available: false,
+      batter_field_detected: false,
+      bowler_field_detected: false,
+      non_striker_field_detected: false,
+      runs_field_detected: false,
+      extras_field_detected: false,
+      wicket_field_detected: false,
+      skip_or_failure_reason: 'missing_source_json',
+      safely_reprocessable: false,
+      recommended_next_action:
+        'Source JSON missing. Reattach original JSON before delivery diagnosis or reprocess can run.',
+    },
+  ],
+}
+
 const importBatches = Array.from({ length: 30 }, (_, idx) => ({
   id: `batch-${idx + 1}`,
   owner_user_id: null,
@@ -118,6 +179,7 @@ describe('HistoricalBackfillReprocessPanel', () => {
   })
 
   it('uses safe default audit scope and does not send an unfiltered all-record request', async () => {
+    vi.mocked(api.historicalBackfillReprocessDiagnose).mockResolvedValue(diagnosisResponse)
     vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
 
     const wrapper = mount(HistoricalBackfillReprocessPanel)
@@ -133,6 +195,7 @@ describe('HistoricalBackfillReprocessPanel', () => {
   })
 
   it('submits manual batch IDs for audit', async () => {
+    vi.mocked(api.historicalBackfillReprocessDiagnose).mockResolvedValue(diagnosisResponse)
     vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
 
     const wrapper = mount(HistoricalBackfillReprocessPanel)
@@ -149,6 +212,7 @@ describe('HistoricalBackfillReprocessPanel', () => {
   })
 
   it('submits manual match IDs for audit', async () => {
+    vi.mocked(api.historicalBackfillReprocessDiagnose).mockResolvedValue(diagnosisResponse)
     vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
 
     const wrapper = mount(HistoricalBackfillReprocessPanel)
@@ -191,6 +255,7 @@ describe('HistoricalBackfillReprocessPanel', () => {
   })
 
   it('disables apply for invalid controlled selection size and enables with valid size + confirmation', async () => {
+    vi.mocked(api.historicalBackfillReprocessDiagnose).mockResolvedValue(diagnosisResponse)
     vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
 
     const wrapper = mount(HistoricalBackfillReprocessPanel)
@@ -220,6 +285,7 @@ describe('HistoricalBackfillReprocessPanel', () => {
   })
 
   it('submits apply only after valid audit selection and confirmation', async () => {
+    vi.mocked(api.historicalBackfillReprocessDiagnose).mockResolvedValue(diagnosisResponse)
     vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
     vi.mocked(api.historicalBackfillReprocessApply).mockResolvedValue({
       status: 'applied',
@@ -273,6 +339,7 @@ describe('HistoricalBackfillReprocessPanel', () => {
   })
 
   it('shows missing source JSON warning guidance', async () => {
+    vi.mocked(api.historicalBackfillReprocessDiagnose).mockResolvedValue(diagnosisResponse)
     vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
 
     const wrapper = mount(HistoricalBackfillReprocessPanel)
@@ -281,6 +348,24 @@ describe('HistoricalBackfillReprocessPanel', () => {
 
     expect(wrapper.text()).toContain(
       'Source JSON missing. This record requires a source-payload reattach workflow before delivery reprocess can run.',
+    )
+  })
+
+  it('runs diagnosis as read-only step and shows missing source guidance', async () => {
+    vi.mocked(api.historicalBackfillReprocessDiagnose).mockResolvedValue(diagnosisResponse)
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-diagnosis-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(api.historicalBackfillReprocessDiagnose).toHaveBeenCalledWith({
+      batch_ids: ['batch-1'],
+      match_ids: [],
+      max_batch_size: 1,
+    })
+    expect(wrapper.text()).toContain('Diagnosis summary (read-only)')
+    expect(wrapper.text()).toContain(
+      'Source JSON missing. Reattach original JSON before delivery diagnosis or reprocess can run.',
     )
   })
 })
