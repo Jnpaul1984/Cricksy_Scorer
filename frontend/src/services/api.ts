@@ -1840,6 +1840,16 @@ export interface HistoricalBackfillApplyRequest extends HistoricalBackfillAuditR
   confirm: boolean;
 }
 
+export interface HistoricalBackfillMappingReason {
+  source_player_name?: string;
+  source_player_id?: string;
+  source_team?: string;
+  source_venue_name?: string;
+  reason?: string;
+  candidate_count?: number;
+  [key: string]: unknown;
+}
+
 export interface HistoricalBackfillApplyMatchResult {
   match_id: string;
   batch_id: string;
@@ -1852,8 +1862,16 @@ export interface HistoricalBackfillApplyMatchResult {
   wickets_before: number;
   wickets_after: number;
   player_mappings_updated: number;
+  mappings_updated?: number;
+  mappings_created?: number;
+  resolved_players?: number;
   unresolved_players: number;
+  ambiguous_players?: number;
+  resolved_venues?: number;
   unresolved_venues: number;
+  unresolved_player_reasons?: HistoricalBackfillMappingReason[];
+  ambiguous_player_reasons?: HistoricalBackfillMappingReason[];
+  unresolved_venue_reasons?: HistoricalBackfillMappingReason[];
 }
 
 export interface HistoricalBackfillApplyResponse {
@@ -1864,7 +1882,12 @@ export interface HistoricalBackfillApplyResponse {
   deliveries_rebuilt: number;
   wickets_rebuilt: number;
   player_mappings_updated: number;
+  mappings_updated?: number;
+  mappings_created?: number;
+  resolved_players?: number;
   unresolved_players: number;
+  ambiguous_players?: number;
+  resolved_venues?: number;
   unresolved_venues: number;
   changed_match_ids: string[];
   blocked_records: Array<{ match_id: string; batch_id: string; reason: string }>;
