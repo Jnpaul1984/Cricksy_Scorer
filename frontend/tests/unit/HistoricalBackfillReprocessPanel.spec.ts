@@ -219,6 +219,8 @@ const importBatches = Array.from({ length: 30 }, (_, idx) => ({
   updated_at: '2026-05-20T00:00:00Z',
 }))
 
+const cloneAuditResponse = () => structuredClone(auditResponse)
+
 describe('HistoricalBackfillReprocessPanel', () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -387,7 +389,7 @@ describe('HistoricalBackfillReprocessPanel', () => {
     expect(wrapper.text()).toContain('Open CPL Dashboard')
   })
 
-  it('keeps controlled apply disabled until diagnosis marks selection safely reprocessable', async () => {
+  it('enables apply for eligible retained-source row after confirmation without requiring diagnosis', async () => {
     vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
     const wrapper = mount(HistoricalBackfillReprocessPanel)
     await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
@@ -395,6 +397,92 @@ describe('HistoricalBackfillReprocessPanel', () => {
 
     const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
     await rowChecks[0].setValue(true)
+    await wrapper.get('.hbr-confirm input[type="checkbox"]').setValue(true)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="hbr-apply-btn"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.text()).not.toContain(
+      'Controlled apply stays disabled until diagnosis marks every selected record as safely reprocessable.',
+    )
+  })
+
+  it('keeps apply disabled for selected missing-source records even when marked eligible', async () => {
+    const response = cloneAuditResponse()
+    response.records[2].eligible = true
+    response.records[2].blocked_reason = null
+    response.records[2].missing_source_json = true
+    response.records[2].source_json_retained = false
+    response.records[2].expected_deliveries = 120
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(response)
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[2].setValue(true)
+    await wrapper.get('.hbr-confirm input[type="checkbox"]').setValue(true)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="hbr-apply-btn"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('keeps apply disabled for mixed safe + blocked selections', async () => {
+    const response = cloneAuditResponse()
+    response.records[1].blocked_reason = 'missing_source_json'
+    response.records[1].missing_source_json = true
+    response.records[1].source_json_retained = false
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(response)
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[0].setValue(true)
+    await rowChecks[1].setValue(true)
+    await wrapper.get('.hbr-confirm input[type="checkbox"]').setValue(true)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="hbr-apply-btn"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('keeps apply disabled for eligible rows with zero expected deliveries', async () => {
+    const response = cloneAuditResponse()
+    response.records[0].expected_deliveries = 0
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(response)
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[0].setValue(true)
+    await wrapper.get('.hbr-confirm input[type="checkbox"]').setValue(true)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="hbr-apply-btn"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('keeps controlled apply disabled when diagnosis marks selected record unsafe', async () => {
+    const diagnosisUnsafe = structuredClone(diagnosisResponse)
+    diagnosisUnsafe.records.unshift({
+      ...diagnosisUnsafe.records[0],
+      match_id: 'match-2',
+      batch_id: 'batch-2',
+      safely_reprocessable: false,
+      skip_or_failure_reason: 'registry_people_missing',
+    })
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+    vi.mocked(api.historicalBackfillReprocessDiagnose).mockResolvedValue(diagnosisUnsafe)
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await wrapper.get('[data-testid="hbr-run-diagnosis-btn"]').trigger('click')
+    await flushPromises()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[1].setValue(true)
     await wrapper.get('.hbr-confirm input[type="checkbox"]').setValue(true)
     await flushPromises()
 
