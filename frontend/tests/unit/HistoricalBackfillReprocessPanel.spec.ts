@@ -17,6 +17,16 @@ const flushPromises = async () => {
   await Promise.resolve()
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 const CONTROLLED_APPLY_SAFETY_WARNING =
   'Controlled apply stays disabled until every selected record is safely reprocessable.'
 
@@ -390,6 +400,92 @@ describe('HistoricalBackfillReprocessPanel', () => {
     })
     expect(wrapper.text()).toContain('Changed match IDs: match-1')
     expect(wrapper.text()).toContain('Open CPL Dashboard')
+    expect(wrapper.get('[data-testid="hbr-apply-follow-up-message"]').text()).toContain(
+      'Run dry-run audit again to verify post-apply completeness.',
+    )
+  })
+
+  it('shows visible backend apply error details', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+    vi.mocked(api.historicalBackfillReprocessApply).mockRejectedValue(
+      new Error('{"detail":"confirm must be true to apply controlled delivery backfill."}'),
+    )
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[0].setValue(true)
+    await wrapper.get('.hbr-confirm input[type="checkbox"]').setValue(true)
+    await wrapper.get('[data-testid="hbr-apply-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="hbr-apply-error"]').text()).toContain(
+      'confirm must be true to apply controlled delivery backfill.',
+    )
+  })
+
+  it('shows visible network apply error details', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+    vi.mocked(api.historicalBackfillReprocessApply).mockRejectedValue(new TypeError('Failed to fetch'))
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[0].setValue(true)
+    await wrapper.get('.hbr-confirm input[type="checkbox"]').setValue(true)
+    await wrapper.get('[data-testid="hbr-apply-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="hbr-apply-error"]').text()).toContain('Failed to fetch')
+  })
+
+  it('prevents duplicate apply submits while loading and shows loading state', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+    const pendingApply = deferred<api.HistoricalBackfillApplyResponse>()
+    vi.mocked(api.historicalBackfillReprocessApply).mockReturnValue(pendingApply.promise)
+
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[0].setValue(true)
+    await wrapper.get('.hbr-confirm input[type="checkbox"]').setValue(true)
+    await flushPromises()
+
+    const applyButton = wrapper.get('[data-testid="hbr-apply-btn"]')
+    await applyButton.trigger('click')
+    await applyButton.trigger('click')
+    await flushPromises()
+
+    expect(api.historicalBackfillReprocessApply).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-testid="hbr-apply-loading"]').text()).toContain(
+      'Submitting controlled apply request…',
+    )
+    expect(wrapper.get('[data-testid="hbr-apply-btn"]').attributes('disabled')).toBeDefined()
+
+    pendingApply.resolve({
+      status: 'applied',
+      processed_matches: 1,
+      skipped_matches: 0,
+      failed_matches: 0,
+      deliveries_rebuilt: 120,
+      wickets_rebuilt: 8,
+      player_mappings_updated: 3,
+      unresolved_players: 0,
+      unresolved_venues: 0,
+      changed_match_ids: ['match-1'],
+      blocked_records: [],
+      results: [],
+      rollback_info: 'rollback info',
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="hbr-apply-loading"]').exists()).toBe(false)
   })
 
   it('enables apply for eligible retained-source row after confirmation without requiring diagnosis', async () => {

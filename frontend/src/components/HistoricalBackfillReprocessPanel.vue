@@ -336,6 +336,15 @@
       >
         {{ loading && loadingStep === 'apply' ? 'Applying selected…' : `Apply selected (${selectedBatchIds.length})` }}
       </button>
+      <p v-if="loading && loadingStep === 'apply'" class="hbr-idempotency-note" data-testid="hbr-apply-loading" role="status">
+        Submitting controlled apply request…
+      </p>
+      <p v-if="applyError" class="hbr-error" data-testid="hbr-apply-error" role="alert">
+        Apply failed: {{ applyError }}
+      </p>
+      <p v-if="applyResult" class="hbr-idempotency-note" data-testid="hbr-apply-follow-up-message">
+        Apply completed. Run dry-run audit again to verify post-apply completeness.
+      </p>
     </section>
 
     <section v-if="applyResult" class="hbr-section">
@@ -385,6 +394,7 @@ import {
 const loading = ref(false)
 const loadingStep = ref<'diagnose' | 'audit' | 'apply'>('audit')
 const error = ref<string | null>(null)
+const applyError = ref<string | null>(null)
 const auditResult = ref<HistoricalBackfillAuditResponse | null>(null)
 const diagnosisResult = ref<HistoricalBackfillDiagnosisResponse | null>(null)
 const applyResult = ref<HistoricalBackfillApplyResponse | null>(null)
@@ -692,10 +702,11 @@ async function runDiagnosis() {
 }
 
 async function applySelected() {
-  if (!controlledApplyState.value.canApply) return
+  if (!controlledApplyState.value.canApply || loading.value) return
   loading.value = true
   loadingStep.value = 'apply'
   error.value = null
+  applyError.value = null
   try {
     applyResult.value = await historicalBackfillReprocessApply({
       confirm: true,
@@ -703,7 +714,7 @@ async function applySelected() {
       max_batch_size: 25,
     })
   } catch (err) {
-    error.value = normalizeErrorMessage(err)
+    applyError.value = normalizeErrorMessage(err)
   } finally {
     loading.value = false
   }
