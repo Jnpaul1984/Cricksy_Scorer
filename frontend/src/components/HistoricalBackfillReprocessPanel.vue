@@ -442,11 +442,36 @@ const diagnosisByBatch = computed(() => {
   return new Map(records.map((record) => [record.batch_id, record]))
 })
 
+const auditByBatch = computed(() => {
+  const records = auditResult.value?.records ?? []
+  return new Map(records.map((record) => [record.batch_id, record]))
+})
+
+function hasBlockingReason(reason: string | null | undefined): boolean {
+  if (!reason) return false
+  const normalized = reason.trim()
+  return normalized.length > 0 && normalized !== '—'
+}
+
+function isAuditRecordSafelyReprocessable(record: HistoricalBackfillAuditResponse['records'][number]): boolean {
+  return (
+    record.eligible &&
+    !hasBlockingReason(record.blocked_reason) &&
+    !record.missing_source_json &&
+    record.source_json_retained &&
+    record.registry_people_available &&
+    record.expected_deliveries > 0
+  )
+}
+
 const selectedBatchesDiagnosedSafe = computed(() =>
   selectedBatchIds.value.length > 0 &&
-  selectedBatchIds.value.every(
-    (batchId) => diagnosisByBatch.value.get(batchId)?.safely_reprocessable === true,
-  ),
+  selectedBatchIds.value.every((batchId) => {
+    const diagnosisRecord = diagnosisByBatch.value.get(batchId)
+    if (diagnosisRecord) return diagnosisRecord.safely_reprocessable === true
+    const auditRecord = auditByBatch.value.get(batchId)
+    return auditRecord ? isAuditRecordSafelyReprocessable(auditRecord) : false
+  }),
 )
 
 const canApply = computed(() =>
