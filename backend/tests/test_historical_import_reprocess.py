@@ -503,6 +503,75 @@ def test_backfill_apply_rebuilds_deliveries_and_is_idempotent(client: TestClient
     assert second_count == first_count
 
 
+def test_cpl_reset_reimport_dry_run_returns_scope_without_mutation(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    _batch_id, game_id = _create_and_apply_batch(client, token, payload)
+    before_game = _load_game(client, game_id)
+    assert before_game.deliveries in (None, [])
+
+    zip_payload = _build_zip({"1019645.json": json.dumps(payload).encode("utf-8")})
+    resp = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/dry-run",
+        headers=_auth_headers(token),
+        files={"file": ("cpl.zip", zip_payload, "application/zip")},
+        data={"max_batch_size": "25"},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "preview_ready"
+    assert data["records_safe_to_reset"] >= 1
+    assert data["source_bundle_preview"] is not None
+    assert len(data["source_file_mapping"]) >= 1
+
+    after_game = _load_game(client, game_id)
+    assert after_game.deliveries in (None, [])
+
+
+def test_cpl_reset_reimport_apply_requires_confirm(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    zip_payload = _build_zip({"1019645.json": json.dumps(payload).encode("utf-8")})
+
+    resp = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/apply",
+        headers=_auth_headers(token),
+        files={"file": ("cpl.zip", zip_payload, "application/zip")},
+        data={"confirm": "false", "max_batch_size": "25"},
+    )
+    assert resp.status_code == 422, resp.text
+    assert "confirm must be true" in resp.text
+
+
+def test_cpl_reset_reimport_apply_from_zip_is_idempotent(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    _batch_id, game_id = _create_and_apply_batch(client, token, payload)
+    zip_payload = _build_zip({"1019645.json": json.dumps(payload).encode("utf-8")})
+
+    first = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/apply",
+        headers=_auth_headers(token),
+        files={"file": ("cpl.zip", zip_payload, "application/zip")},
+        data={"confirm": "true", "max_batch_size": "25"},
+    )
+    assert first.status_code == 200, first.text
+    first_game = _load_game(client, game_id)
+    first_count = len(first_game.deliveries or [])
+    assert first_count > 0
+    assert first.json()["reimport_report"]["selected_batches"] == 1
+
+    second = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/apply",
+        headers=_auth_headers(token),
+        files={"file": ("cpl.zip", zip_payload, "application/zip")},
+        data={"confirm": "true", "max_batch_size": "25"},
+    )
+    assert second.status_code == 200, second.text
+    second_game = _load_game(client, game_id)
+    assert len(second_game.deliveries or []) == first_count
+
+
 def test_backfill_apply_reflects_in_players_deliveries_dashboard_and_case_study(
     client: TestClient,
 ) -> None:

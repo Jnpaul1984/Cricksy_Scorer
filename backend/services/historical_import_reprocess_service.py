@@ -1136,7 +1136,7 @@ async def apply_delivery_backfill(
                 }
             )
 
-        except Exception as exc:
+        except Exception:
             _log.exception(
                 "apply_delivery_backfill: unexpected error for batch",
                 extra={"batch_id": batch_id},
@@ -1149,7 +1149,7 @@ async def apply_delivery_backfill(
                     "match_id": game_id_for_result,
                     "batch_id": batch_id,
                     "status": "failed",
-                    "reason": f"internal_error: {str(exc)[:300]}",
+                    "reason": "internal_error",
                     "completeness_before": before_completeness,
                     "completeness_after": before_completeness,
                     "deliveries_before": before_deliveries,

@@ -9,6 +9,7 @@ import tempfile
 import uuid
 import zipfile
 from collections.abc import AsyncGenerator
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Any, Literal, cast
@@ -1557,6 +1558,101 @@ def _parse_source_reattach_selection(selected_mappings: str) -> list[tuple[str, 
             detail="Select at least one exact/likely reattach mapping before apply.",
         )
     return mappings
+
+
+def _parse_id_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        with suppress(json.JSONDecodeError):
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+        return [token.strip() for token in re.split(r"[\n,]", text) if token.strip()]
+    return []
+
+
+def _parse_payload_overrides(value: Any) -> dict[str, dict[str, Any]]:
+    if isinstance(value, dict):
+        return {
+            str(key): cast(dict[str, Any], val)
+            for key, val in value.items()
+            if isinstance(val, dict) and str(key).strip()
+        }
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return {}
+        with suppress(json.JSONDecodeError):
+            parsed = json.loads(text)
+            return _parse_payload_overrides(parsed)
+    return {}
+
+
+def _parse_selected_mappings(value: Any) -> list[dict[str, str]]:
+    if isinstance(value, list):
+        parsed: list[dict[str, str]] = []
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            file_name = str(item.get("file_name") or "").strip()
+            batch_id = str(item.get("batch_id") or "").strip()
+            if file_name and batch_id:
+                parsed.append({"file_name": file_name, "batch_id": batch_id})
+        return parsed
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        with suppress(json.JSONDecodeError):
+            return _parse_selected_mappings(json.loads(text))
+    return []
+
+
+def _parse_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return False
+
+
+async def _parse_cpl_reset_reimport_request(
+    request: Request,
+) -> tuple[UploadFile | None, dict[str, Any]]:
+    content_type = request.headers.get("content-type", "").lower()
+    if "application/json" in content_type:
+        body = await request.json()
+        return None, body if isinstance(body, dict) else {}
+
+    form = await request.form()
+    file_part = form.get("file")
+    upload = (
+        cast(UploadFile, file_part)
+        if file_part is not None and hasattr(file_part, "read") and hasattr(file_part, "filename")
+        else None
+    )
+    payload: dict[str, Any] = {
+        "match_ids": _parse_id_list(form.get("match_ids")),
+        "batch_ids": _parse_id_list(form.get("batch_ids")),
+        "source_payloads_by_batch": _parse_payload_overrides(form.get("source_payloads_by_batch")),
+        "selected_mappings": _parse_selected_mappings(form.get("selected_mappings")),
+        "confirm": _parse_bool(form.get("confirm")),
+    }
+    max_batch_size_raw = form.get("max_batch_size")
+    if max_batch_size_raw is not None:
+        with suppress(ValueError, TypeError):
+            payload["max_batch_size"] = int(str(max_batch_size_raw))
+    return upload, payload
+
+
+def _to_upload_file(file_name: str, payload_bytes: bytes) -> UploadFile:
+    return UploadFile(filename=file_name, file=io.BytesIO(payload_bytes))
 
 
 async def _build_bulk_zip_preview(
@@ -3121,6 +3217,286 @@ async def apply_historical_delivery_backfill(
             },
         ) from exc
     return HistoricalBackfillApplyResponse(**report)
+
+
+@router.post(
+    "/cpl-reset-reimport/dry-run",
+    response_model=dict[str, Any],
+    summary="Dry-run clean historical CPL reset + reimport scope",
+)
+async def cpl_reset_reimport_dry_run(
+    request: Request,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> dict[str, Any]:
+    del current_user
+    upload, payload = await _parse_cpl_reset_reimport_request(request)
+
+    match_ids = _parse_id_list(payload.get("match_ids"))
+    batch_ids = _parse_id_list(payload.get("batch_ids"))
+    max_batch_size = int(payload.get("max_batch_size") or 25)
+    source_payloads_by_batch = _parse_payload_overrides(payload.get("source_payloads_by_batch"))
+
+    source_preview: HistoricalBulkZipSourcePayloadDryRunResponse | HistoricalSourcePayloadReattachDryRunResponse | None = None
+    inferred_batch_ids: list[str] = []
+    inferred_payloads_by_batch: dict[str, dict[str, Any]] = {}
+    source_file_mapping: list[dict[str, Any]] = []
+
+    if upload is not None:
+        file_name = upload.filename or "cpl-source-bundle.zip"
+        payload_bytes = await upload.read()
+        if zipfile.is_zipfile(io.BytesIO(payload_bytes)):
+            source_preview, candidate_lookup = await _build_source_zip_reattach_preview(
+                payload_bytes=payload_bytes,
+                source_filename=file_name,
+                db=db,
+            )
+            preview_rows = source_preview.files
+        else:
+            source_preview, candidate_lookup = await _build_source_reattach_preview(
+                payload_bytes=payload_bytes,
+                source_filename=file_name,
+                db=db,
+            )
+            preview_rows = source_preview.files
+
+        for item in preview_rows:
+            matched = item.matched_target
+            if matched is not None:
+                inferred_batch_ids.append(matched.batch_id)
+            source_file_mapping.append(
+                {
+                    "file_name": item.file_name,
+                    "status": item.status,
+                    "match_confidence": item.match_confidence,
+                    "blocked_from_apply": item.blocked_from_apply,
+                    "batch_id": matched.batch_id if matched is not None else None,
+                    "match_id": matched.match_id if matched is not None else None,
+                }
+            )
+            if (
+                matched is None
+                or item.match_confidence not in {"exact_match", "likely_match"}
+                or item.blocked_from_apply
+            ):
+                continue
+            candidate = candidate_lookup.get(item.file_name) or candidate_lookup.get(
+                _source_file_label(item.file_name)
+            )
+            if candidate is None:
+                continue
+            with suppress(json.JSONDecodeError, UnicodeDecodeError):
+                parsed = json.loads(candidate.payload_bytes.decode("utf-8"))
+                if isinstance(parsed, dict):
+                    inferred_payloads_by_batch[matched.batch_id] = parsed
+
+    final_batch_ids = batch_ids or (sorted(set(inferred_batch_ids)) if not match_ids else [])
+    merged_payloads = {**inferred_payloads_by_batch, **source_payloads_by_batch}
+
+    audit = await audit_delivery_backfill(
+        db,
+        match_ids=match_ids,
+        batch_ids=final_batch_ids,
+        max_batch_size=max_batch_size,
+        source_payloads_by_batch=merged_payloads,
+    )
+
+    records = audit.get("records", [])
+    expected_deliveries = sum(
+        int(record.get("expected_deliveries") or 0) for record in records if record.get("eligible")
+    )
+    expected_wickets = sum(
+        int(record.get("expected_wickets") or 0) for record in records if record.get("eligible")
+    )
+    expected_players = sum(
+        int(record.get("expected_players") or 0) for record in records if record.get("eligible")
+    )
+    duplicate_risks = sum(1 for record in records if record.get("duplicate_delivery_risk"))
+    blocked_records = [
+        {
+            "match_id": str(record.get("match_id") or ""),
+            "batch_id": str(record.get("batch_id") or ""),
+            "reason": str(record.get("blocked_reason") or "blocked"),
+        }
+        for record in records
+        if not record.get("eligible")
+    ]
+
+    return {
+        "status": "preview_ready",
+        "operation": "cpl_reset_reimport_dry_run",
+        "scope": {
+            "match_ids": match_ids,
+            "batch_ids": final_batch_ids,
+            "max_batch_size": max_batch_size,
+        },
+        "total_candidate_existing_historical_records": audit["total_imported_cpl_matches"],
+        "records_safe_to_reset": audit["eligible_matches"],
+        "records_blocked_from_reset": audit["blocked_matches"],
+        "expected_matches_to_import": audit["eligible_matches"],
+        "expected_deliveries": expected_deliveries,
+        "expected_wickets": expected_wickets,
+        "expected_players": expected_players,
+        "duplicate_risks": duplicate_risks,
+        "destructive_action_summary": {
+            "matches_to_reset": audit["eligible_matches"],
+            "historical_batches_in_scope": len(records),
+            "delivery_rows_to_rebuild": expected_deliveries,
+            "blocked_records": audit["blocked_matches"],
+        },
+        "blocked_records": blocked_records,
+        "source_bundle_preview": source_preview.model_dump() if source_preview is not None else None,
+        "source_file_mapping": source_file_mapping,
+        "audit": audit,
+    }
+
+
+@router.post(
+    "/cpl-reset-reimport/apply",
+    response_model=dict[str, Any],
+    summary="Apply clean historical CPL reset + reimport",
+)
+async def cpl_reset_reimport_apply(
+    request: Request,
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> dict[str, Any]:
+    upload, payload = await _parse_cpl_reset_reimport_request(request)
+    confirm = _parse_bool(payload.get("confirm"))
+    if not confirm:
+        raise HTTPException(
+            status_code=422,
+            detail="confirm must be true to apply historical CPL reset + reimport.",
+        )
+
+    match_ids = _parse_id_list(payload.get("match_ids"))
+    batch_ids = _parse_id_list(payload.get("batch_ids"))
+    max_batch_size = int(payload.get("max_batch_size") or 25)
+    source_payloads_by_batch = _parse_payload_overrides(payload.get("source_payloads_by_batch"))
+    selected_mappings = _parse_selected_mappings(payload.get("selected_mappings"))
+
+    inferred_batch_ids: list[str] = []
+    inferred_payloads_by_batch: dict[str, dict[str, Any]] = {}
+    reattach_summary: dict[str, Any] | None = None
+
+    if upload is not None:
+        file_name = upload.filename or "cpl-source-bundle.zip"
+        payload_bytes = await upload.read()
+        if zipfile.is_zipfile(io.BytesIO(payload_bytes)):
+            source_preview, candidate_lookup = await _build_source_zip_reattach_preview(
+                payload_bytes=payload_bytes,
+                source_filename=file_name,
+                db=db,
+            )
+            preview_rows = source_preview.files
+            auto_mappings = [
+                {"file_name": row.file_name, "batch_id": row.matched_target.batch_id}
+                for row in preview_rows
+                if row.matched_target is not None
+                and row.match_confidence in {"exact_match", "likely_match"}
+                and not row.blocked_from_apply
+            ]
+            mappings_to_apply = selected_mappings or auto_mappings
+            if mappings_to_apply:
+                reattach_result = await historical_source_zip_reattach_apply(
+                    file=_to_upload_file(file_name, payload_bytes),
+                    confirm=True,
+                    selected_mappings=json.dumps(mappings_to_apply),
+                    db=db,
+                    current_user=current_user,
+                )
+                reattach_summary = reattach_result.model_dump()
+            for row in preview_rows:
+                matched = row.matched_target
+                if matched is None or row.match_confidence not in {"exact_match", "likely_match"}:
+                    continue
+                inferred_batch_ids.append(matched.batch_id)
+                candidate = candidate_lookup.get(row.file_name) or candidate_lookup.get(
+                    _source_file_label(row.file_name)
+                )
+                if candidate is None:
+                    continue
+                with suppress(json.JSONDecodeError, UnicodeDecodeError):
+                    parsed = json.loads(candidate.payload_bytes.decode("utf-8"))
+                    if isinstance(parsed, dict):
+                        inferred_payloads_by_batch[matched.batch_id] = parsed
+        else:
+            source_preview, candidate_lookup = await _build_source_reattach_preview(
+                payload_bytes=payload_bytes,
+                source_filename=file_name,
+                db=db,
+            )
+            preview_rows = source_preview.files
+            auto_mappings = [
+                {"file_name": row.file_name, "batch_id": row.matched_target.batch_id}
+                for row in preview_rows
+                if row.matched_target is not None
+                and row.match_confidence in {"exact_match", "likely_match"}
+                and not row.blocked_from_apply
+            ]
+            mappings_to_apply = selected_mappings or auto_mappings
+            if mappings_to_apply:
+                reattach_result = await historical_source_payload_reattach_apply(
+                    file=_to_upload_file(file_name, payload_bytes),
+                    confirm=True,
+                    selected_mappings=json.dumps(mappings_to_apply),
+                    db=db,
+                    current_user=current_user,
+                )
+                reattach_summary = reattach_result.model_dump()
+            for row in preview_rows:
+                matched = row.matched_target
+                if matched is None or row.match_confidence not in {"exact_match", "likely_match"}:
+                    continue
+                inferred_batch_ids.append(matched.batch_id)
+                candidate = candidate_lookup.get(row.file_name) or candidate_lookup.get(
+                    _source_file_label(row.file_name)
+                )
+                if candidate is None:
+                    continue
+                with suppress(json.JSONDecodeError, UnicodeDecodeError):
+                    parsed = json.loads(candidate.payload_bytes.decode("utf-8"))
+                    if isinstance(parsed, dict):
+                        inferred_payloads_by_batch[matched.batch_id] = parsed
+
+    final_batch_ids = batch_ids or (sorted(set(inferred_batch_ids)) if not match_ids else [])
+    merged_payloads = {**inferred_payloads_by_batch, **source_payloads_by_batch}
+    await apply_delivery_backfill(
+        db,
+        match_ids=match_ids,
+        batch_ids=final_batch_ids,
+        max_batch_size=max_batch_size,
+        source_payloads_by_batch=merged_payloads,
+    )
+    sanitized_reattach_report = None
+    if isinstance(reattach_summary, dict):
+        sanitized_reattach_report = {
+            "status": reattach_summary.get("status"),
+            "reattached_count": reattach_summary.get("reattached_count"),
+            "skipped_count": reattach_summary.get("skipped_count"),
+            "error_count": reattach_summary.get("error_count"),
+        }
+    sanitized_reimport_report = {
+        "status": "applied",
+        "selected_batches": len(final_batch_ids),
+        "selected_matches": len(match_ids),
+    }
+
+    return {
+        "status": "applied",
+        "operation": "cpl_reset_reimport_apply",
+        "operation_id": str(uuid.uuid4()),
+        "scope": {
+            "match_ids": match_ids,
+            "batch_ids": final_batch_ids,
+            "max_batch_size": max_batch_size,
+        },
+        "source_payload_retention": {
+            "attempted": upload is not None,
+            "report": sanitized_reattach_report,
+        },
+        "reimport_report": sanitized_reimport_report,
+    }
 
 
 @router.post(
