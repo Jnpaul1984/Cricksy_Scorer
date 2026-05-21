@@ -3085,6 +3085,16 @@ async def apply_historical_delivery_backfill(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        _log.exception("apply_delivery_backfill: unhandled error")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "type": "server_error",
+                "message": "An unexpected error occurred while applying delivery backfill.",
+                "detail": str(exc),
+            },
+        ) from exc
     return HistoricalBackfillApplyResponse(**report)
 
 
