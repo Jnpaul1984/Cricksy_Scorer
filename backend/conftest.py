@@ -90,10 +90,25 @@ async def reset_db(_setup_db):
 @pytest_asyncio.fixture
 async def db_session(_setup_db):
     """Provide a database session for tests."""
+    from sqlalchemy.exc import OperationalError
+
     from backend.sql_app.database import get_session_local
 
-    async with get_session_local()() as session:
+    session = get_session_local()()
+    try:
         yield session
+    finally:
+        try:
+            await session.rollback()
+        except OperationalError as exc:
+            if "no active connection" not in str(exc).lower():
+                raise
+
+        try:
+            await session.close()
+        except OperationalError as exc:
+            if "no active connection" not in str(exc).lower():
+                raise
 
 
 @pytest_asyncio.fixture
