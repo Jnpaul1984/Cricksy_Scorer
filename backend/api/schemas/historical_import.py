@@ -848,3 +848,152 @@ class HistoricalBulkZipSourcePayloadApplyResponse(BaseModel):
             "Run Historical Backfill Audit + Reprocess after successful reattach."
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 10J - Historical Identity Mapping Review schemas
+# ---------------------------------------------------------------------------
+
+
+class HistoricalPlayerCandidateItem(BaseModel):
+    """A candidate internal Player that may match an unresolved source player."""
+
+    canonical_player_id: int
+    canonical_player_name: str
+    country: str | None = None
+    role: str | None = None
+    confidence: float | None = None
+    match_reason: str | None = None
+
+
+class HistoricalPlayerReviewItem(BaseModel):
+    """An unresolved source player awaiting identity review."""
+
+    source_player_id: str
+    source_player_name: str
+    normalized_name: str
+    source_schema: str | None = None
+    source_system: str | None = None
+    resolution_state: str
+    reason: str | None = None
+    queue_state: str
+    review_required: bool
+    match_references: list[str] = Field(default_factory=list)
+    competition_references: list[dict[str, Any]] = Field(default_factory=list)
+    provenance_references: list[dict[str, Any]] = Field(default_factory=list)
+    candidates: list[HistoricalPlayerCandidateItem] = Field(default_factory=list)
+    first_seen: dt.datetime
+    last_seen: dt.datetime
+
+
+class HistoricalVenueReviewItem(BaseModel):
+    """An unresolved venue awaiting identity review."""
+
+    queue_id: str
+    decision_id: str | None = None
+    raw_imported_value: str
+    normalized_raw_value: str
+    source_schema: str | None = None
+    source_system: str | None = None
+    queue_state: str
+    reason: str
+    review_required: bool
+    competition_name: str | None = None
+    season: str | None = None
+    provenance_references: list[dict[str, Any]] = Field(default_factory=list)
+    candidate_venues: list[dict[str, Any]] = Field(default_factory=list)
+    first_seen: dt.datetime
+    last_seen: dt.datetime
+
+
+class HistoricalIdentityReviewResponse(BaseModel):
+    """Combined unresolved player and venue review items."""
+
+    unresolved_players: list[HistoricalPlayerReviewItem] = Field(default_factory=list)
+    unresolved_venues: list[HistoricalVenueReviewItem] = Field(default_factory=list)
+    total_unresolved_players: int = 0
+    total_unresolved_venues: int = 0
+
+
+class PlayerLinkRequest(BaseModel):
+    """Link a source player to an existing internal Player."""
+
+    canonical_player_id: int = Field(..., description="The internal Player.id to link to.")
+    reviewed_by: str | None = Field(
+        default=None, description="Optional reviewer identifier for audit."
+    )
+
+
+class PlayerCreateRequest(BaseModel):
+    """Create a new internal Player from a source player identity."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    country: str | None = None
+    role: str | None = None
+    reviewed_by: str | None = None
+
+
+class PlayerDeferRequest(BaseModel):
+    """Mark a source player resolution as deferred."""
+
+    reason: str = Field(default="deferred", max_length=128)
+    reviewed_by: str | None = None
+
+
+class PlayerActionResponse(BaseModel):
+    """Response for a player identity review action."""
+
+    source_player_id: str
+    action: Literal["linked", "created", "deferred", "ambiguous_blocked"]
+    canonical_player_id: int | None = None
+    canonical_player_name: str | None = None
+    status: str
+    message: str
+    idempotent: bool = False
+
+
+class VenueLinkRequest(BaseModel):
+    """Link an unresolved source venue to an existing internal venue."""
+
+    queue_id: str = Field(..., description="The HistoricalVenueResolutionQueue.id to resolve.")
+    canonical_venue_id: str = Field(..., description="The HistoricalVenueIntelligence.id to link.")
+    reviewed_by: str | None = None
+
+
+class VenueCreateAliasRequest(BaseModel):
+    """Create an alias for an existing venue from a source venue name."""
+
+    queue_id: str
+    canonical_venue_id: str
+    reviewed_by: str | None = None
+
+
+class VenueCreateRequest(BaseModel):
+    """Create a new Venue from a source venue identity."""
+
+    queue_id: str
+    canonical_name: str = Field(..., min_length=1, max_length=255)
+    city: str | None = None
+    country: str | None = None
+    notes: str | None = None
+    reviewed_by: str | None = None
+
+
+class VenueDeferRequest(BaseModel):
+    """Defer venue resolution for later review."""
+
+    queue_id: str
+    reason: str = Field(default="deferred", max_length=128)
+    reviewed_by: str | None = None
+
+
+class VenueActionResponse(BaseModel):
+    """Response for a venue identity review action."""
+
+    queue_id: str
+    action: Literal["linked", "alias_created", "venue_created", "deferred"]
+    canonical_venue_id: str | None = None
+    canonical_venue_name: str | None = None
+    status: str
+    message: str
+    idempotent: bool = False
