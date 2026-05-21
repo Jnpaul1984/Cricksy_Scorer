@@ -761,3 +761,19 @@ class HistoricalSourcePayloadReattachApplyResponse(BaseModel):
     error_count: int = 0
     results: list[HistoricalSourcePayloadReattachApplyFileResult] = Field(default_factory=list)
     follow_up_message: str = Field(default="")
+
+
+class HistoricalBackfillSourceReattachResponse(BaseModel):
+    record_id: str
+    match_id: str
+    retained: bool
+    status: Literal["reattached", "already_retained"]
+    validation_confidence: Literal[
+        "exact_match", "probable_match", "mismatch", "insufficient_identity"
+    ]
+    validation_reason: str
+    matched_identity_fields: list[str] = Field(default_factory=list)
+    mismatch_warnings: list[str] = Field(default_factory=list)
+    source_hash_sha256: str
+    uploaded_filename: str
+    recommended_next_action: str

@@ -8,6 +8,7 @@ vi.mock('@/services/api', () => ({
   historicalBackfillReprocessDiagnose: vi.fn(),
   historicalBackfillReprocessAudit: vi.fn(),
   historicalBackfillReprocessApply: vi.fn(),
+  historicalBackfillReattachSourceJson: vi.fn(),
   historicalImportListBatches: vi.fn(),
 }))
 
@@ -260,6 +261,7 @@ describe('HistoricalBackfillReprocessPanel', () => {
 
     const wrapper = mount(HistoricalBackfillReprocessPanel)
     await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await wrapper.get('[data-testid="hbr-run-diagnosis-btn"]').trigger('click')
     await flushPromises()
 
     const applyButton = wrapper.get('[data-testid="hbr-apply-btn"]')
@@ -321,6 +323,7 @@ describe('HistoricalBackfillReprocessPanel', () => {
 
     const wrapper = mount(HistoricalBackfillReprocessPanel)
     await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await wrapper.get('[data-testid="hbr-run-diagnosis-btn"]').trigger('click')
     await flushPromises()
 
     const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
@@ -336,6 +339,85 @@ describe('HistoricalBackfillReprocessPanel', () => {
     })
     expect(wrapper.text()).toContain('Changed match IDs: match-1')
     expect(wrapper.text()).toContain('Open CPL Dashboard')
+  })
+
+  it('keeps controlled apply disabled until diagnosis marks selection safely reprocessable', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const rowChecks = wrapper.findAll('tbody input[type="checkbox"]')
+    await rowChecks[0].setValue(true)
+    await wrapper.get('.hbr-confirm input[type="checkbox"]').setValue(true)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="hbr-apply-btn"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain(
+      'Controlled apply stays disabled until diagnosis marks every selected record as safely reprocessable.',
+    )
+  })
+
+  it('shows per-record reattach action and successful upload details', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+    vi.mocked(api.historicalBackfillReattachSourceJson).mockResolvedValue({
+      record_id: 'batch-3',
+      match_id: 'match-3',
+      retained: true,
+      status: 'reattached',
+      validation_confidence: 'probable_match',
+      validation_reason: 'Core identity fields appear compatible with selected record.',
+      matched_identity_fields: ['teams', 'date', 'season'],
+      mismatch_warnings: [],
+      source_hash_sha256: 'abc123',
+      uploaded_filename: 'repair.json',
+      recommended_next_action: 'Run diagnosis again.',
+    })
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const actionButtons = wrapper.findAll('tbody .hbr-btn--ghost')
+    await actionButtons[actionButtons.length - 1].trigger('click')
+    const fileInput = wrapper.get('[data-testid="hbr-reattach-file-input"]').element as HTMLInputElement
+    Object.defineProperty(fileInput, 'files', {
+      configurable: true,
+      value: [new File(['{"ok":true}'], 'repair.json', { type: 'application/json' })],
+    })
+    await wrapper.get('[data-testid="hbr-reattach-file-input"]').trigger('change')
+    await wrapper.get('[data-testid="hbr-reattach-submit-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(api.historicalBackfillReattachSourceJson).toHaveBeenCalledWith(
+      'batch-3',
+      expect.any(File),
+    )
+    expect(wrapper.text()).toContain('Validation confidence: probable_match')
+    expect(wrapper.text()).toContain('Retained source hash: abc123')
+    expect(wrapper.text()).toContain('Next action: Run diagnosis again.')
+  })
+
+  it('surfaces safe mismatch/malformed reattach errors', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+    vi.mocked(api.historicalBackfillReattachSourceJson).mockRejectedValue(
+      new Error('{"detail":"Uploaded JSON does not match selected record."}'),
+    )
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const actionButtons = wrapper.findAll('tbody .hbr-btn--ghost')
+    await actionButtons[actionButtons.length - 1].trigger('click')
+    const fileInput = wrapper.get('[data-testid="hbr-reattach-file-input"]').element as HTMLInputElement
+    Object.defineProperty(fileInput, 'files', {
+      configurable: true,
+      value: [new File(['{"bad":true}'], 'mismatch.json', { type: 'application/json' })],
+    })
+    await wrapper.get('[data-testid="hbr-reattach-file-input"]').trigger('change')
+    await wrapper.get('[data-testid="hbr-reattach-submit-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Uploaded JSON does not match selected record.')
   })
 
   it('shows missing source JSON warning guidance', async () => {

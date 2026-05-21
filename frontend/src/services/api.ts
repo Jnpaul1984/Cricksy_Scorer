@@ -1921,6 +1921,20 @@ export interface HistoricalSourcePayloadReattachApplyResponse {
   follow_up_message: string;
 }
 
+export interface HistoricalBackfillSourceReattachResponse {
+  record_id: string;
+  match_id: string;
+  retained: boolean;
+  status: 'reattached' | 'already_retained';
+  validation_confidence: 'exact_match' | 'probable_match' | 'mismatch' | 'insufficient_identity';
+  validation_reason: string;
+  matched_identity_fields: string[];
+  mismatch_warnings: string[];
+  source_hash_sha256: string;
+  uploaded_filename: string;
+  recommended_next_action: string;
+}
+
 export type HistoricalOcrReviewStatus =
   | 'uploaded'
   | 'extracted'
@@ -2153,6 +2167,22 @@ export async function historicalBackfillReprocessApply(
         source_payloads_by_batch: payload.source_payloads_by_batch ?? {},
       }),
     },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/backfill/{recordId}/reattach-source-json
+ * Reattach source JSON to a single blocked historical backfill record.
+ */
+export async function historicalBackfillReattachSourceJson(
+  recordId: string,
+  file: File,
+): Promise<HistoricalBackfillSourceReattachResponse> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  return request<HistoricalBackfillSourceReattachResponse>(
+    `/api/historical-import/json/backfill/${encodeURIComponent(recordId)}/reattach-source-json`,
+    { method: 'POST', body: form },
   );
 }
 
