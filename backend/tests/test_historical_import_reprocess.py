@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from backend.main import fastapi_app
@@ -159,6 +159,19 @@ def _register_analyst(client: TestClient) -> str:
         _set_user_role(client.session_maker, user["email"], models.RoleEnum.analyst_pro)  # type: ignore[attr-defined]
     )
     return login_user(client, user["email"])
+
+
+def _seed_players(client: TestClient, names: list[str]) -> None:
+    async def _insert() -> None:
+        async with client.session_maker() as session:  # type: ignore[attr-defined]
+            max_player_id = (
+                await session.scalar(select(func.max(models.Player.id)))
+            ) or 0
+            for offset, name in enumerate(names, start=1):
+                session.add(models.Player(id=max_player_id + offset, name=name))
+            await session.commit()
+
+    asyncio.get_event_loop().run_until_complete(_insert())
 
 
 def _load_game(client: TestClient, game_id: str) -> models.Game:
@@ -529,6 +542,68 @@ def test_backfill_apply_reflects_in_players_deliveries_dashboard_and_case_study(
         headers=_auth_headers(token),
     )
     assert case_study.status_code == 200, case_study.text
+
+
+def test_backfill_apply_reports_mapping_breakdown_and_reasons(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    info = payload.setdefault("info", {})
+    assert isinstance(info, dict)
+    registry = info.setdefault("registry", {}).setdefault("people", {})
+    assert isinstance(registry, dict)
+    player_names = [name for name in registry if isinstance(name, str)]
+    assert len(player_names) >= 2
+    ambiguous_name = player_names[0]
+    missing_source_id_name = player_names[1]
+    registry.pop(missing_source_id_name, None)
+    info["venue"] = ""
+    _seed_players(client, [ambiguous_name, ambiguous_name])
+
+    batch_id, _ = _create_and_apply_batch(client, token, payload)
+    apply = client.post(
+        "/api/historical-import/json/backfill-reprocess/apply",
+        headers=_auth_headers(token),
+        json={
+            "confirm": True,
+            "batch_ids": [batch_id],
+            "max_batch_size": 25,
+            "source_payloads_by_batch": {batch_id: payload},
+        },
+    )
+    assert apply.status_code == 200, apply.text
+    data = apply.json()
+    assert data["processed_matches"] == 1
+    assert data["resolved_players"] >= 0
+    assert data["ambiguous_players"] >= 1
+    assert data["unresolved_venues"] == 1
+    result = data["results"][0]
+    assert result["ambiguous_players"] >= 1
+    assert any(
+        row.get("reason") == "ambiguous_match"
+        for row in result.get("ambiguous_player_reasons", [])
+        if isinstance(row, dict)
+    )
+    assert any(
+        row.get("source_player_name") == missing_source_id_name
+        and row.get("reason") == "missing_source_id"
+        for row in result.get("unresolved_player_reasons", [])
+        if isinstance(row, dict)
+    )
+    assert result["unresolved_venue_reasons"][0]["reason"] == "empty_raw_venue"
+
+    repeat = client.post(
+        "/api/historical-import/json/backfill-reprocess/apply",
+        headers=_auth_headers(token),
+        json={
+            "confirm": True,
+            "batch_ids": [batch_id],
+            "max_batch_size": 25,
+            "source_payloads_by_batch": {batch_id: payload},
+        },
+    )
+    assert repeat.status_code == 200, repeat.text
+    repeat_data = repeat.json()
+    assert repeat_data["mappings_created"] == 0
 
 
 def test_source_reattach_dry_run_matches_existing_historical_record(client: TestClient) -> None:
