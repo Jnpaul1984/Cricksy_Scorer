@@ -54,6 +54,22 @@ const auditResponse = {
       expected_deliveries: 120,
       expected_wickets: 8,
       expected_players: 22,
+      match_date: '2013-09-07',
+      competition: 'Caribbean Premier League',
+      season: '2013',
+      team_1: 'Trinbago Knight Riders',
+      team_2: 'Jamaica Tallawahs',
+      venue: 'Port of Spain',
+      result: 'TKR won by 5 wickets',
+      status: 'completed',
+      innings_1_summary: 'Jamaica Tallawahs 152/7 (20 ov)',
+      innings_2_summary: 'Trinbago Knight Riders 153/5 (19.2 ov)',
+      known_score_summary:
+        'Jamaica Tallawahs 152/7 (20 ov) | Trinbago Knight Riders 153/5 (19.2 ov)',
+      original_filename: 'cpl-2013-match-1.json',
+      upload_filename: null,
+      source_file_hint: 'cpl-2013-match-1.json',
+      match_identity_label: 'Trinbago Knight Riders vs Jamaica Tallawahs — 2013-09-07 — Port of Spain',
     },
     {
       match_id: 'match-2',
@@ -72,6 +88,21 @@ const auditResponse = {
       expected_deliveries: 118,
       expected_wickets: 7,
       expected_players: 21,
+      match_date: '2013-09-08',
+      competition: 'Caribbean Premier League',
+      season: '2013',
+      team_1: 'Guyana Amazon Warriors',
+      team_2: 'St Lucia Zouks',
+      venue: 'Providence',
+      result: null,
+      status: 'completed',
+      innings_1_summary: 'Guyana Amazon Warriors 148/8 (20 ov)',
+      innings_2_summary: 'St Lucia Zouks 140/9 (20 ov)',
+      known_score_summary: 'Guyana Amazon Warriors 148/8 (20 ov) | St Lucia Zouks 140/9 (20 ov)',
+      original_filename: 'cpl-2013-match-2.json',
+      upload_filename: null,
+      source_file_hint: 'cpl-2013-match-2.json',
+      match_identity_label: 'Guyana Amazon Warriors vs St Lucia Zouks — 2013-09-08 — Providence',
     },
     {
       match_id: 'match-3',
@@ -90,6 +121,21 @@ const auditResponse = {
       expected_deliveries: 0,
       expected_wickets: 0,
       expected_players: 0,
+      match_date: null,
+      competition: null,
+      season: null,
+      team_1: null,
+      team_2: null,
+      venue: null,
+      result: null,
+      status: null,
+      innings_1_summary: null,
+      innings_2_summary: null,
+      known_score_summary: null,
+      original_filename: null,
+      upload_filename: null,
+      source_file_hint: null,
+      match_identity_label: null,
     },
   ],
 }
@@ -377,8 +423,9 @@ describe('HistoricalBackfillReprocessPanel', () => {
     await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
     await flushPromises()
 
-    const actionButtons = wrapper.findAll('tbody .hbr-btn--ghost')
-    await actionButtons[actionButtons.length - 1].trigger('click')
+    const detailButtons = wrapper.findAll('[data-testid="hbr-view-identity-btn"]')
+    await detailButtons[detailButtons.length - 1].trigger('click')
+    await wrapper.get('[data-testid="hbr-reattach-row-btn"]').trigger('click')
     const fileInput = wrapper.get('[data-testid="hbr-reattach-file-input"]').element as HTMLInputElement
     Object.defineProperty(fileInput, 'files', {
       configurable: true,
@@ -406,8 +453,9 @@ describe('HistoricalBackfillReprocessPanel', () => {
     await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
     await flushPromises()
 
-    const actionButtons = wrapper.findAll('tbody .hbr-btn--ghost')
-    await actionButtons[actionButtons.length - 1].trigger('click')
+    const detailButtons = wrapper.findAll('[data-testid="hbr-view-identity-btn"]')
+    await detailButtons[detailButtons.length - 1].trigger('click')
+    await wrapper.get('[data-testid="hbr-reattach-row-btn"]').trigger('click')
     const fileInput = wrapper.get('[data-testid="hbr-reattach-file-input"]').element as HTMLInputElement
     Object.defineProperty(fileInput, 'files', {
       configurable: true,
@@ -418,6 +466,26 @@ describe('HistoricalBackfillReprocessPanel', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('Uploaded JSON does not match selected record.')
+  })
+
+  it('renders identity details and null-safe fallback values', async () => {
+    vi.mocked(api.historicalBackfillReprocessAudit).mockResolvedValue(auditResponse)
+    const wrapper = mount(HistoricalBackfillReprocessPanel)
+    await wrapper.get('[data-testid="hbr-run-audit-btn"]').trigger('click')
+    await flushPromises()
+
+    const detailButtons = wrapper.findAll('[data-testid="hbr-view-identity-btn"]')
+    await detailButtons[0].trigger('click')
+    await detailButtons[detailButtons.length - 1].trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Trinbago Knight Riders vs Jamaica Tallawahs — 2013-09-07 — Port of Spain')
+    expect(wrapper.text()).toContain('Competition/season: Caribbean Premier League / 2013')
+    expect(wrapper.text()).toContain('Original filename/source hint: cpl-2013-match-1.json')
+    expect(wrapper.text()).toContain(
+      'Use the match identity fields below to locate the original CPL JSON before reattaching source.',
+    )
+    expect(wrapper.text()).toContain('Match date: —')
   })
 
   it('shows missing source JSON warning guidance', async () => {

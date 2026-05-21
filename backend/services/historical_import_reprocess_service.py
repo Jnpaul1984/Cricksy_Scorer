@@ -197,6 +197,132 @@ def _recommended_next_action(reason: str | None, safely_reprocessable: bool) -> 
     return "Diagnosis incomplete. Review source JSON and parser compatibility before reprocess."
 
 
+def _clean_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _team_name(team_blob: Any) -> str | None:
+    if not isinstance(team_blob, dict):
+        return None
+    return _clean_text(team_blob.get("name"))
+
+
+def _formatted_match_date(value: Any) -> str | None:
+    if isinstance(value, dt.datetime):
+        return value.date().isoformat()
+    if isinstance(value, dt.date):
+        return value.isoformat()
+    text = _clean_text(value)
+    if text is None:
+        return None
+    if "T" in text:
+        return text.split("T", 1)[0] or text
+    return text
+
+
+def _summarize_innings(innings: Any) -> str | None:
+    if not isinstance(innings, dict):
+        return None
+    team = _clean_text(innings.get("team"))
+    runs = innings.get("runs")
+    wickets = innings.get("wickets")
+    overs = innings.get("overs")
+
+    score_parts: list[str] = []
+    if isinstance(runs, int):
+        score_parts.append(str(runs))
+        if isinstance(wickets, int):
+            score_parts[-1] = f"{score_parts[-1]}/{wickets}"
+    elif isinstance(wickets, int):
+        score_parts.append(f"-/{wickets}")
+
+    details: list[str] = []
+    if team:
+        details.append(team)
+    if score_parts:
+        details.append(score_parts[0])
+    if overs is not None and _clean_text(overs) is not None:
+        details.append(f"({_clean_text(overs)} ov)")
+    return " ".join(details) if details else None
+
+
+def _match_identity(batch: HistoricalImportBatch, game: Game) -> dict[str, str | None]:
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    hist_meta = (
+        phases.get("historical_import")
+        if isinstance(phases.get("historical_import"), dict)
+        else {}
+    )
+    innings_summary = (
+        phases.get("historical_innings_summary")
+        if isinstance(phases.get("historical_innings_summary"), list)
+        else []
+    )
+    inning_1 = innings_summary[0] if len(innings_summary) > 0 else None
+    inning_2 = innings_summary[1] if len(innings_summary) > 1 else None
+
+    match_date = _formatted_match_date(
+        hist_meta.get("match_date")
+        or (hist_meta.get("source_dates")[0] if isinstance(hist_meta.get("source_dates"), list) and hist_meta.get("source_dates") else None)
+    )
+    competition = _clean_text(
+        hist_meta.get("competition_name")
+        or hist_meta.get("tournament_name")
+        or hist_meta.get("event_name")
+    )
+    season = _clean_text(hist_meta.get("season"))
+    team_1 = _team_name(game.team_a) or _clean_text(game.batting_team_name)
+    team_2 = _team_name(game.team_b) or _clean_text(game.bowling_team_name)
+    venue_context = hist_meta.get("venue_context") if isinstance(hist_meta.get("venue_context"), dict) else {}
+    venue = _clean_text(hist_meta.get("venue") or venue_context.get("raw_venue"))
+    result = _clean_text(game.result)
+    status = _clean_text(getattr(game.status, "value", game.status))
+    innings_1_summary = _summarize_innings(
+        inning_1 if isinstance(inning_1, dict) else game.first_inning_summary
+    )
+    innings_2_summary = _summarize_innings(inning_2 if isinstance(inning_2, dict) else None)
+    known_score_summary = " | ".join(
+        summary
+        for summary in (innings_1_summary, innings_2_summary)
+        if summary
+    ) or None
+    original_filename = _clean_text(batch.source_filename)
+    reattach = (
+        batch.dry_run_summary.get("source_payload_reattach")
+        if isinstance(batch.dry_run_summary, dict)
+        and isinstance(batch.dry_run_summary.get("source_payload_reattach"), dict)
+        else {}
+    )
+    upload_filename = _clean_text(reattach.get("uploaded_filename"))
+    source_file_hint = _clean_text(
+        hist_meta.get("source_file_hint")
+        or original_filename
+        or upload_filename
+    )
+    label_parts = [part for part in (f"{team_1} vs {team_2}" if team_1 and team_2 else None, match_date, venue) if part]
+    match_identity_label = " — ".join(label_parts) if label_parts else None
+    return {
+        "match_date": match_date,
+        "competition": competition,
+        "season": season,
+        "team_1": team_1,
+        "team_2": team_2,
+        "venue": venue,
+        "result": result,
+        "status": status,
+        "innings_1_summary": innings_1_summary,
+        "innings_2_summary": innings_2_summary,
+        "known_score_summary": known_score_summary,
+        "original_filename": original_filename,
+        "upload_filename": upload_filename,
+        "source_file_hint": source_file_hint,
+        "match_identity_label": match_identity_label,
+    }
+
+
 def _load_storage_ref(batch: HistoricalImportBatch) -> dict[str, Any] | None:
     dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
     reattach = (
@@ -602,6 +728,7 @@ async def audit_delivery_backfill(
             "expected_wickets": expected_wickets,
             "expected_players": expected_players,
         }
+        row.update(_match_identity(batch, game))
         if row["eligible"]:
             eligible += 1
         else:

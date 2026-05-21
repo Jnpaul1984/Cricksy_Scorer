@@ -618,6 +618,21 @@ class HistoricalBackfillAuditMatchRecord(BaseModel):
     expected_deliveries: int = 0
     expected_wickets: int = 0
     expected_players: int = 0
+    match_date: str | None = None
+    competition: str | None = None
+    season: str | None = None
+    team_1: str | None = None
+    team_2: str | None = None
+    venue: str | None = None
+    result: str | None = None
+    status: str | None = None
+    innings_1_summary: str | None = None
+    innings_2_summary: str | None = None
+    known_score_summary: str | None = None
+    original_filename: str | None = None
+    upload_filename: str | None = None
+    source_file_hint: str | None = None
+    match_identity_label: str | None = None
 
 
 class HistoricalBackfillAuditResponse(BaseModel):
