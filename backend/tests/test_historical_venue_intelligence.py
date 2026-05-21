@@ -117,7 +117,9 @@ async def test_phase10h_exact_venue_resolution(db_session: AsyncSession) -> None
     db_session.add(venue)
     await db_session.flush()
     await _apply_batch_with_venue(db_session, venue="Kensington Oval")
-    decision = (await db_session.execute(select(HistoricalVenueResolutionDecision))).scalars().first()
+    decision = (
+        (await db_session.execute(select(HistoricalVenueResolutionDecision))).scalars().first()
+    )
     assert decision is not None
     assert decision.canonical_venue_id == venue.id
     assert decision.matched_by == "exact_match"
@@ -161,17 +163,25 @@ async def test_phase10h_alias_and_normalized_resolution(db_session: AsyncSession
     await _apply_batch_with_venue(db_session, venue="Kensington O.")
     await _apply_batch_with_venue(db_session, venue="kEnsington  oval!!", season="2014")
     rows = (
-        await db_session.execute(
-            select(HistoricalVenueResolutionDecision).order_by(HistoricalVenueResolutionDecision.created_at.asc())
+        (
+            await db_session.execute(
+                select(HistoricalVenueResolutionDecision).order_by(
+                    HistoricalVenueResolutionDecision.created_at.asc()
+                )
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 2
     assert rows[0].matched_by == "alias_match"
     assert rows[1].matched_by == "normalized_match"
 
 
 @pytest.mark.asyncio
-async def test_phase10h_unresolved_low_confidence_and_review_required(db_session: AsyncSession) -> None:
+async def test_phase10h_unresolved_low_confidence_and_review_required(
+    db_session: AsyncSession,
+) -> None:
     now = dt.datetime.now(getattr(dt, "UTC", dt.timezone.utc))
     db_session.add_all(
         [
@@ -208,10 +218,15 @@ async def test_phase10h_unresolved_low_confidence_and_review_required(db_session
     await db_session.commit()
 
     await _apply_batch_with_venue(db_session, venue="Providence")
-    decision = (await db_session.execute(select(HistoricalVenueResolutionDecision))).scalars().first()
+    decision = (
+        (await db_session.execute(select(HistoricalVenueResolutionDecision))).scalars().first()
+    )
     assert decision is not None
     assert decision.canonical_venue_id is None
-    assert decision.unresolved_reason in {"low_confidence_fuzzy_match", "deterministic_rules_no_match"}
+    assert decision.unresolved_reason in {
+        "low_confidence_fuzzy_match",
+        "deterministic_rules_no_match",
+    }
     assert decision.review_required is True
     queue = (await db_session.execute(select(HistoricalVenueResolutionQueue))).scalars().first()
     assert queue is not None
@@ -219,16 +234,22 @@ async def test_phase10h_unresolved_low_confidence_and_review_required(db_session
 
 
 @pytest.mark.asyncio
-async def test_phase10h_provenance_and_import_integration_preserved(db_session: AsyncSession) -> None:
+async def test_phase10h_provenance_and_import_integration_preserved(
+    db_session: AsyncSession,
+) -> None:
     batch_id, game_id = await _apply_batch_with_venue(db_session, venue="Sample Cricket Ground")
     decision = (
-        await db_session.execute(
-            select(HistoricalVenueResolutionDecision).where(
-                HistoricalVenueResolutionDecision.batch_id == batch_id,
-                HistoricalVenueResolutionDecision.game_id == game_id,
+        (
+            await db_session.execute(
+                select(HistoricalVenueResolutionDecision).where(
+                    HistoricalVenueResolutionDecision.batch_id == batch_id,
+                    HistoricalVenueResolutionDecision.game_id == game_id,
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     assert decision is not None
     assert decision.provenance_references
     provenance = decision.provenance_references[0]
@@ -252,12 +273,16 @@ async def test_phase10h_unresolved_never_blocks_import(db_session: AsyncSession)
     assert batch.is_finalized is True
     assert batch.applied_game_id == game_id
     decision = (
-        await db_session.execute(
-            select(HistoricalVenueResolutionDecision).where(
-                HistoricalVenueResolutionDecision.batch_id == batch_id
+        (
+            await db_session.execute(
+                select(HistoricalVenueResolutionDecision).where(
+                    HistoricalVenueResolutionDecision.batch_id == batch_id
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     assert decision is not None
     assert decision.review_required is True
 
@@ -268,9 +293,9 @@ async def test_phase10h_duplicate_prevention_and_usage_stats(db_session: AsyncSe
     await _apply_batch_with_venue(db_session, venue="Auto Create Stadium", competition_name="CPL")
 
     venue_count = await db_session.scalar(
-        select(func.count()).select_from(HistoricalVenueIntelligence).where(
-            HistoricalVenueIntelligence.normalized_canonical_name == "auto create stadium"
-        )
+        select(func.count())
+        .select_from(HistoricalVenueIntelligence)
+        .where(HistoricalVenueIntelligence.normalized_canonical_name == "auto create stadium")
     )
     assert venue_count == 1
 
@@ -319,7 +344,9 @@ async def test_phase10h_review_required_for_ambiguous_exact_match(db_session: As
     await db_session.commit()
 
     await _apply_batch_with_venue(db_session, venue="Shared Ground")
-    decision = (await db_session.execute(select(HistoricalVenueResolutionDecision))).scalars().first()
+    decision = (
+        (await db_session.execute(select(HistoricalVenueResolutionDecision))).scalars().first()
+    )
     assert decision is not None
     assert decision.resolution_state == HistoricalVenueResolutionState.review_required
     assert decision.unresolved_reason == "multiple_exact_candidates"

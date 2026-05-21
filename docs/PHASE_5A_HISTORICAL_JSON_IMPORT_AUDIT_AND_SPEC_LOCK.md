@@ -1,8 +1,8 @@
 # PHASE 5A — Historical JSON Match Import Audit and Spec Lock
 
-**Repository:** `Jnpaul1984/Cricksy_Scorer`  
-**Date:** 2026-05-10  
-**Phase:** 5A (governance/audit/spec-lock only)  
+**Repository:** `Jnpaul1984/Cricksy_Scorer`
+**Date:** 2026-05-10
+**Phase:** 5A (governance/audit/spec-lock only)
 **Scope:** Docs-only. No importer code, routes, migrations, or schema changes in this phase.
 
 ---
@@ -301,7 +301,7 @@ Protected/high-risk areas:
 
 ## 22) Recommended Phase 5B Implementation Issue
 
-**Recommended issue title:**  
+**Recommended issue title:**
 `Phase 5B: Historical JSON Importer (Dry-Run + Validation + Idempotent Commit)`
 
 **Required scope for Phase 5B issue:**
@@ -351,4 +351,3 @@ Rollback requirements for Phase 5B:
   - `backend/tests/simulated_t20_match.json`
   - `frontend/simulated_t20_match.json`
   - `backend/tests/ci_smoke/fixtures/first_innings_120.json`
-

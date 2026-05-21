@@ -24,7 +24,7 @@ def _make_coach(
     return models.User(
         id=coach_id,
         email=email,
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=role,
         org_id=org_id,
         is_active=True,
@@ -184,7 +184,9 @@ async def test_generate_player_development_draft_plan_from_available_evidence(db
             "next coaching target",
         )
     )
-    assert not any(term in label for label in safe_labels for term in ("liability", "weak link", "hopeless"))
+    assert not any(
+        term in label for label in safe_labels for term in ("liability", "weak link", "hopeless")
+    )
 
     drill_names = {drill.drill_name for drill in plan.drill_assignments}
     assert drill_names & {
@@ -192,7 +194,9 @@ async def test_generate_player_development_draft_plan_from_available_evidence(db
         "Fast Bowling Gauntlet",
         "Pace Variation Response",
     }
-    assert all(checkpoint.progress_status == "planned_review" for checkpoint in plan.progress_checkpoints)
+    assert all(
+        checkpoint.progress_status == "planned_review" for checkpoint in plan.progress_checkpoints
+    )
     assert all("coach" in checkpoint.summary.lower() for checkpoint in plan.progress_checkpoints)
 
 
@@ -226,10 +230,14 @@ async def test_generate_player_development_draft_plan_returns_insufficient_data_
     assert any("Insufficient" in limitation for limitation in result.limitations)
 
     plans = (
-        await db_session.execute(
-            select(models.PlayerDevelopmentPlan).where(
-                models.PlayerDevelopmentPlan.player_profile_id == profile.player_id
+        (
+            await db_session.execute(
+                select(models.PlayerDevelopmentPlan).where(
+                    models.PlayerDevelopmentPlan.player_profile_id == profile.player_id
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert list(plans) == []

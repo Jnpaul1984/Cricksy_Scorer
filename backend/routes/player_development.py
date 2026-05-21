@@ -354,10 +354,7 @@ async def get_player_development_player_report(
         await _ensure_plan_access(db, current_user, plan)
         if plan.player_profile_id != player_id:
             raise HTTPException(status_code=404, detail="Player development plan not found")
-        if (
-            not include_archived
-            and plan.status == models.PlayerDevelopmentPlanStatus.archived
-        ):
+        if not include_archived and plan.status == models.PlayerDevelopmentPlanStatus.archived:
             raise HTTPException(status_code=404, detail="Player development plan not found")
 
     try:

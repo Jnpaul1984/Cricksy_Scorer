@@ -176,7 +176,9 @@ def _apply_filters(
         return False
     if filters.season and str(hist_meta.get("season") or "") != filters.season:
         return False
-    return filters.competition is None or str(hist_meta.get("event_name") or "") == filters.competition
+    return (
+        filters.competition is None or str(hist_meta.get("event_name") or "") == filters.competition
+    )
 
 
 def _team_name(team_blob: Any) -> str | None:
@@ -243,7 +245,9 @@ def _group_exclusions(excluded: list[dict[str, Any]]) -> dict[str, int]:
 
 def _deterministic_fingerprint(payload: dict[str, Any]) -> str:
     digest = hashlib.sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(
+            "utf-8"
+        )
     ).hexdigest()
     return digest
 
@@ -312,7 +316,9 @@ async def build_model_training_dataset(
             continue
 
         pre_dedupe_candidates.append(
-            _EligibleMatch(game=game, batch=batch, hist_meta=hist_meta, innings_summary=innings_summary)
+            _EligibleMatch(
+                game=game, batch=batch, hist_meta=hist_meta, innings_summary=innings_summary
+            )
         )
 
     included_after_hash: list[_EligibleMatch] = []

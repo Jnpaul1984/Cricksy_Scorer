@@ -179,7 +179,10 @@ class TestWinProbabilityAdvisoryMetadata:
         from types import SimpleNamespace
 
         pytest.importorskip("numpy")  # prediction_service transitively requires numpy
-        from backend.routes.prediction import _build_prediction_grounding_summary, _build_prediction_source_refs
+        from backend.routes.prediction import (
+            _build_prediction_grounding_summary,
+            _build_prediction_source_refs,
+        )
 
         game = SimpleNamespace(
             batting_team_name="Lions",
@@ -291,9 +294,9 @@ class TestPredictionNoTruthMutation:
         )
         dumped = meta.model_dump()
         violations = OFFICIAL_TRUTH_FIELDS & set(dumped.keys())
-        assert not violations, (
-            f"ai_metadata dump must not contain official truth fields. Found: {violations}"
-        )
+        assert (
+            not violations
+        ), f"ai_metadata dump must not contain official truth fields. Found: {violations}"
 
     def test_validate_no_official_truth_mutation_on_ai_metadata(self):
         from backend.domain.ai_boundary import (

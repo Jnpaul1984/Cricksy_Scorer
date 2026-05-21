@@ -406,16 +406,20 @@ async def list_video_sessions(
         query = select(VideoSession).options(selectinload(VideoSession.analysis_jobs))
     elif current_user.role == RoleEnum.org_pro:
         # Org users see their org sessions plus personal fallback sessions.
-        query = select(VideoSession).where(
-            (
-                (VideoSession.owner_type == OwnerTypeEnum.org)
-                & (VideoSession.owner_id == current_user.org_id)
+        query = (
+            select(VideoSession)
+            .where(
+                (
+                    (VideoSession.owner_type == OwnerTypeEnum.org)
+                    & (VideoSession.owner_id == current_user.org_id)
+                )
+                | (
+                    (VideoSession.owner_type == OwnerTypeEnum.coach)
+                    & (VideoSession.owner_id == current_user.id)
+                )
             )
-            | (
-                (VideoSession.owner_type == OwnerTypeEnum.coach)
-                & (VideoSession.owner_id == current_user.id)
-            )
-        ).options(selectinload(VideoSession.analysis_jobs))
+            .options(selectinload(VideoSession.analysis_jobs))
+        )
     else:
         # Coach users see only their own sessions
         query = (

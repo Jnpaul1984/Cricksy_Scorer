@@ -1,8 +1,8 @@
 # Phase 9H.7 — Regression + Manual QA
 ## Closeout Evidence
 
-Date (UTC): 2026-05-17  
-Repository: `Jnpaul1984/Cricksy_Scorer`  
+Date (UTC): 2026-05-17
+Repository: `Jnpaul1984/Cricksy_Scorer`
 Issue: Phase 9H.7 — Regression + Manual QA
 
 ---

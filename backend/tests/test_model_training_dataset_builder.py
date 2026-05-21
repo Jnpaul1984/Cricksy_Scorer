@@ -175,7 +175,9 @@ async def _snapshot_truth(session_maker: async_sessionmaker, game_id: str) -> di
         }
 
 
-async def _build(session_maker: async_sessionmaker, *, generated_at: dt.datetime | None = None) -> dict[str, Any]:
+async def _build(
+    session_maker: async_sessionmaker, *, generated_at: dt.datetime | None = None
+) -> dict[str, Any]:
     async with session_maker() as session:
         return await build_model_training_dataset(
             session,
@@ -222,7 +224,9 @@ def test_excludes_invalid_and_duplicate_and_missing_innings(client: TestClient) 
     artifact = _run_async(_build(client.session_maker))  # type: ignore[attr-defined]
 
     assert artifact["included_match_count"] == 1
-    assert dup_game_a in artifact["included_match_ids"] or dup_game_b in artifact["included_match_ids"]
+    assert (
+        dup_game_a in artifact["included_match_ids"] or dup_game_b in artifact["included_match_ids"]
+    )
 
     reasons = artifact["exclusion_reasons"]
     assert reasons.get("invalid_status_invalid") == 1
@@ -256,7 +260,12 @@ def test_metadata_and_provenance_present(client: TestClient) -> None:
     assert artifact["build_fingerprint"]
     assert artifact["provenance"]["source"] == "historical_import_registry"
     assert artifact["provenance"]["read_only"] is True
-    assert set(artifact["parameters"].keys()) == {"source_format", "match_type", "season", "competition"}
+    assert set(artifact["parameters"].keys()) == {
+        "source_format",
+        "match_type",
+        "season",
+        "competition",
+    }
 
 
 def test_builder_does_not_mutate_official_match_truth(client: TestClient) -> None:

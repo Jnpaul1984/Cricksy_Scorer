@@ -72,13 +72,17 @@ async def _upsert_alias(
     if not normalized_alias:
         return
     existing = (
-        await db.execute(
-            select(HistoricalVenueAlias).where(
-                HistoricalVenueAlias.venue_id == venue_id,
-                HistoricalVenueAlias.normalized_alias == normalized_alias,
+        (
+            await db.execute(
+                select(HistoricalVenueAlias).where(
+                    HistoricalVenueAlias.venue_id == venue_id,
+                    HistoricalVenueAlias.normalized_alias == normalized_alias,
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if existing is None:
         db.add(
             HistoricalVenueAlias(
@@ -120,16 +124,20 @@ async def _upsert_usage(
     provenance_reference: dict[str, Any],
 ) -> None:
     usage = (
-        await db.execute(
-            select(HistoricalCompetitionVenueUsage).where(
-                HistoricalCompetitionVenueUsage.canonical_venue_id == venue_id,
-                HistoricalCompetitionVenueUsage.competition_name == competition_name,
-                HistoricalCompetitionVenueUsage.season == season,
-                HistoricalCompetitionVenueUsage.source_schema == source_schema,
-                HistoricalCompetitionVenueUsage.source_system == source_system,
+        (
+            await db.execute(
+                select(HistoricalCompetitionVenueUsage).where(
+                    HistoricalCompetitionVenueUsage.canonical_venue_id == venue_id,
+                    HistoricalCompetitionVenueUsage.competition_name == competition_name,
+                    HistoricalCompetitionVenueUsage.season == season,
+                    HistoricalCompetitionVenueUsage.source_schema == source_schema,
+                    HistoricalCompetitionVenueUsage.source_system == source_system,
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if usage is None:
         usage = HistoricalCompetitionVenueUsage(
             canonical_venue_id=venue_id,
@@ -144,8 +152,10 @@ async def _upsert_usage(
         db.add(usage)
         return
     usage.matches_count = int(usage.matches_count or 0) + 1
-    usage.game_references = _append_unique(list(usage.game_references or []), game_id) if game_id else list(
-        usage.game_references or []
+    usage.game_references = (
+        _append_unique(list(usage.game_references or []), game_id)
+        if game_id
+        else list(usage.game_references or [])
     )
     usage.provenance_references = _append_unique_dict_by_keys(
         list(usage.provenance_references or []),
@@ -168,15 +178,19 @@ async def _upsert_queue(
     now: dt.datetime,
 ) -> None:
     queue_row = (
-        await db.execute(
-            select(HistoricalVenueResolutionQueue).where(
-                HistoricalVenueResolutionQueue.normalized_raw_value == normalized_raw_value,
-                HistoricalVenueResolutionQueue.source_schema == source_schema,
-                HistoricalVenueResolutionQueue.source_system == source_system,
-                HistoricalVenueResolutionQueue.reason == reason,
+        (
+            await db.execute(
+                select(HistoricalVenueResolutionQueue).where(
+                    HistoricalVenueResolutionQueue.normalized_raw_value == normalized_raw_value,
+                    HistoricalVenueResolutionQueue.source_schema == source_schema,
+                    HistoricalVenueResolutionQueue.source_system == source_system,
+                    HistoricalVenueResolutionQueue.reason == reason,
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if queue_row is None:
         queue_row = HistoricalVenueResolutionQueue(
             decision_id=decision_id,
@@ -213,15 +227,19 @@ async def _mark_queue_resolved(
     now: dt.datetime,
 ) -> None:
     pending_rows = (
-        await db.execute(
-            select(HistoricalVenueResolutionQueue).where(
-                HistoricalVenueResolutionQueue.normalized_raw_value == normalized_raw_value,
-                HistoricalVenueResolutionQueue.source_schema == source_schema,
-                HistoricalVenueResolutionQueue.source_system == source_system,
-                HistoricalVenueResolutionQueue.queue_state == "pending",
+        (
+            await db.execute(
+                select(HistoricalVenueResolutionQueue).where(
+                    HistoricalVenueResolutionQueue.normalized_raw_value == normalized_raw_value,
+                    HistoricalVenueResolutionQueue.source_schema == source_schema,
+                    HistoricalVenueResolutionQueue.source_system == source_system,
+                    HistoricalVenueResolutionQueue.queue_state == "pending",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for row in pending_rows:
         row.queue_state = "resolved"
         row.review_required = False
@@ -258,12 +276,16 @@ async def resolve_historical_venue(
         review_required = True
     else:
         exact_candidates = (
-            await db.execute(
-                select(HistoricalVenueIntelligence).where(
-                    HistoricalVenueIntelligence.canonical_name.ilike(raw_value)
+            (
+                await db.execute(
+                    select(HistoricalVenueIntelligence).where(
+                        HistoricalVenueIntelligence.canonical_name.ilike(raw_value)
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if len(exact_candidates) == 1:
             canonical_venue = exact_candidates[0]
             matched_by = "exact_match"
@@ -273,13 +295,20 @@ async def resolve_historical_venue(
             review_required = True
         else:
             normalized_candidates = (
-                await db.execute(
-                    select(HistoricalVenueIntelligence).where(
-                        (HistoricalVenueIntelligence.normalized_canonical_name == normalized_raw)
-                        | (HistoricalVenueIntelligence.normalized_short_name == normalized_raw)
+                (
+                    await db.execute(
+                        select(HistoricalVenueIntelligence).where(
+                            (
+                                HistoricalVenueIntelligence.normalized_canonical_name
+                                == normalized_raw
+                            )
+                            | (HistoricalVenueIntelligence.normalized_short_name == normalized_raw)
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             if len(normalized_candidates) == 1:
                 canonical_venue = normalized_candidates[0]
                 matched_by = "normalized_match"
@@ -289,15 +318,21 @@ async def resolve_historical_venue(
                 review_required = True
             else:
                 alias_rows = (
-                    await db.execute(
-                        select(HistoricalVenueAlias).where(
-                            HistoricalVenueAlias.normalized_alias == normalized_raw
+                    (
+                        await db.execute(
+                            select(HistoricalVenueAlias).where(
+                                HistoricalVenueAlias.normalized_alias == normalized_raw
+                            )
                         )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
                 alias_venue_ids = {row.venue_id for row in alias_rows}
                 if len(alias_venue_ids) == 1:
-                    canonical_venue = await db.get(HistoricalVenueIntelligence, next(iter(alias_venue_ids)))
+                    canonical_venue = await db.get(
+                        HistoricalVenueIntelligence, next(iter(alias_venue_ids))
+                    )
                     matched_by = "alias_match"
                     confidence_score = 0.98
                 elif len(alias_venue_ids) > 1:
@@ -368,7 +403,9 @@ async def resolve_historical_venue(
                                 {
                                     "batch_id": batch_id,
                                     "game_id": game_id,
-                                    "source_hash_sha256": source_provenance.get("source_hash_sha256"),
+                                    "source_hash_sha256": source_provenance.get(
+                                        "source_hash_sha256"
+                                    ),
                                     "source_schema": source_schema,
                                     "source_system": source_system,
                                     "match_date": match_date,
@@ -402,7 +439,10 @@ async def resolve_historical_venue(
             },
             ("batch_id", "game_id", "source_hash_sha256"),
         )
-        if review_required and canonical_venue.verification_status == HistoricalVenueVerificationStatus.unverified:
+        if (
+            review_required
+            and canonical_venue.verification_status == HistoricalVenueVerificationStatus.unverified
+        ):
             canonical_venue.verification_status = HistoricalVenueVerificationStatus.review_required
         db.add(canonical_venue)
     else:
@@ -430,15 +470,19 @@ async def resolve_historical_venue(
     }
 
     decision = (
-        await db.execute(
-            select(HistoricalVenueResolutionDecision).where(
-                HistoricalVenueResolutionDecision.game_id == game_id,
-                HistoricalVenueResolutionDecision.normalized_raw_value == normalized_raw,
-                HistoricalVenueResolutionDecision.source_schema == source_schema,
-                HistoricalVenueResolutionDecision.source_system == source_system,
+        (
+            await db.execute(
+                select(HistoricalVenueResolutionDecision).where(
+                    HistoricalVenueResolutionDecision.game_id == game_id,
+                    HistoricalVenueResolutionDecision.normalized_raw_value == normalized_raw,
+                    HistoricalVenueResolutionDecision.source_schema == source_schema,
+                    HistoricalVenueResolutionDecision.source_system == source_system,
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if decision is None:
         decision = HistoricalVenueResolutionDecision(
             batch_id=batch_id,
@@ -528,27 +572,37 @@ async def resolve_historical_venue(
     }
 
 
-async def list_venue_intelligence(db: AsyncSession, *, limit: int = 100) -> list[HistoricalVenueIntelligence]:
+async def list_venue_intelligence(
+    db: AsyncSession, *, limit: int = 100
+) -> list[HistoricalVenueIntelligence]:
     return (
-        await db.execute(
-            select(HistoricalVenueIntelligence)
-            .order_by(HistoricalVenueIntelligence.updated_at.desc())
-            .limit(limit)
+        (
+            await db.execute(
+                select(HistoricalVenueIntelligence)
+                .order_by(HistoricalVenueIntelligence.updated_at.desc())
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
 
 async def list_unresolved_venues(
     db: AsyncSession, *, limit: int = 100
 ) -> list[HistoricalVenueResolutionQueue]:
     return (
-        await db.execute(
-            select(HistoricalVenueResolutionQueue)
-            .where(HistoricalVenueResolutionQueue.queue_state == "pending")
-            .order_by(HistoricalVenueResolutionQueue.created_at.desc())
-            .limit(limit)
+        (
+            await db.execute(
+                select(HistoricalVenueResolutionQueue)
+                .where(HistoricalVenueResolutionQueue.queue_state == "pending")
+                .order_by(HistoricalVenueResolutionQueue.created_at.desc())
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
 
 async def list_venue_resolution_snapshots(

@@ -89,10 +89,10 @@ export interface AllPricingResponse {
  */
 export async function getAllPricing(): Promise<AllPricingResponse> {
   const url = `${API_BASE}/pricing`;
-  
+
   // Production-grade logging
   console.log('🔍 Fetching pricing from:', url);
-  
+
   try {
     const response = await fetch(url, {
       method: 'GET',
@@ -107,32 +107,32 @@ export async function getAllPricing(): Promise<AllPricingResponse> {
       // Read response body for debugging
       const errorText = await response.text().catch(() => 'Unable to read response');
       const errorPreview = errorText.substring(0, 200);
-      
+
       console.error('❌ Pricing API error:', {
         status: response.status,
         statusText: response.statusText,
         url,
         preview: errorPreview
       });
-      
+
       throw new Error(
         `Pricing API returned ${response.status}: ${errorPreview}`
       );
     }
 
     const data = await response.json();
-    
+
     // Validate response shape
     if (!data.individual_plans || !Array.isArray(data.individual_plans)) {
       console.error('❌ Invalid pricing response - missing individual_plans array:', data);
       throw new Error('Invalid pricing response format');
     }
-    
+
     if (!data.venue_plans || !Array.isArray(data.venue_plans)) {
       console.error('❌ Invalid pricing response - missing venue_plans array:', data);
       throw new Error('Invalid pricing response format');
     }
-    
+
     console.log('✅ Pricing loaded:', {
       individualPlans: data.individual_plans.length,
       venuePlans: data.venue_plans.length,

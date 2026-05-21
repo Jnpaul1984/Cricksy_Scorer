@@ -283,7 +283,7 @@ git push origin main --force
 
 **Cause**: Pushed code without running mandatory pre-push validation checks
 
-**Impact**: 
+**Impact**:
 - Wastes CI/CD resources and time
 - Pollutes git history with "fix: ..." commits
 - Delays deployment of features

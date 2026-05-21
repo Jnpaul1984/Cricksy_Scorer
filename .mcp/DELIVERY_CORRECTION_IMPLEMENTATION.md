@@ -224,12 +224,12 @@ cd frontend && npm run dev
 
 ## Constraints Met
 
-✅ **Contract compatibility**: Uses same payload structure as POST /deliveries  
-✅ **Undo Last works**: Replay logic preserves undo functionality  
-✅ **Delivery.id as primary key**: Stable references across corrections  
-✅ **Extras totals consistent**: `snapshot_service.py` already includes extras_totals  
-✅ **Socket.IO emission**: All clients receive real-time updates  
-✅ **No breaking changes**: Existing scoring flow unchanged  
+✅ **Contract compatibility**: Uses same payload structure as POST /deliveries
+✅ **Undo Last works**: Replay logic preserves undo functionality
+✅ **Delivery.id as primary key**: Stable references across corrections
+✅ **Extras totals consistent**: `snapshot_service.py` already includes extras_totals
+✅ **Socket.IO emission**: All clients receive real-time updates
+✅ **No breaking changes**: Existing scoring flow unchanged
 
 ---
 

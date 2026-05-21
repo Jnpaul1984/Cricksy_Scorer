@@ -14,7 +14,9 @@ from backend.sql_app.models import (
 
 
 @pytest.mark.asyncio
-async def test_session_history_includes_metadata(async_client, db_session, auth_headers, test_user) -> None:
+async def test_session_history_includes_metadata(
+    async_client, db_session, auth_headers, test_user
+) -> None:
     session = VideoSession(
         owner_type=OwnerTypeEnum.coach,
         owner_id=test_user.id,
@@ -39,7 +41,9 @@ async def test_session_history_includes_metadata(async_client, db_session, auth_
     db_session.add_all([older_job, latest_job])
     await db_session.commit()
 
-    resp = await async_client.get("/api/coaches/plus/sessions?limit=10&offset=0", headers=auth_headers)
+    resp = await async_client.get(
+        "/api/coaches/plus/sessions?limit=10&offset=0", headers=auth_headers
+    )
     assert resp.status_code == 200, resp.text
 
     payload = resp.json()
@@ -103,7 +107,9 @@ async def test_unauthorized_user_cannot_access_other_coach_history(
 
 
 @pytest.mark.asyncio
-async def test_job_history_includes_artifact_availability(async_client, db_session, auth_headers, test_user) -> None:
+async def test_job_history_includes_artifact_availability(
+    async_client, db_session, auth_headers, test_user
+) -> None:
     session = VideoSession(
         owner_type=OwnerTypeEnum.coach,
         owner_id=test_user.id,

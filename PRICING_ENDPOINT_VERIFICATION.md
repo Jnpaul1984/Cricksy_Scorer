@@ -1,7 +1,7 @@
 # Pricing Endpoint Verification Report
 
-**Date:** January 17, 2026  
-**Engineer:** Cricksy Backend Billing Engineer  
+**Date:** January 17, 2026
+**Engineer:** Cricksy Backend Billing Engineer
 **Status:** ✅ **VERIFIED - Endpoint Working**
 
 ---
@@ -352,7 +352,7 @@ async def test_get_all_pricing(async_client: AsyncClient) -> None:
     """Test GET /pricing returns all plans."""
     response = await async_client.get("/pricing/")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert "individual_plans" in data
     assert "venue_plans" in data
@@ -364,7 +364,7 @@ async def test_scorers_pro_pricing(async_client: AsyncClient) -> None:
     """Test Scorers Pro has correct pricing and features."""
     response = await async_client.get("/pricing/individual/player_pro")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert data["pricing"]["name"] == "Scorers Pro"
     assert data["pricing"]["monthly_usd"] == "1.99"
@@ -441,20 +441,20 @@ async def test_scorers_pro_pricing(async_client: AsyncClient) -> None:
 ## 9. Troubleshooting
 
 ### Issue: Frontend shows "Unable to load pricing"
-**Cause:** Backend not running or CORS blocking request  
+**Cause:** Backend not running or CORS blocking request
 **Fix:**
 1. Verify backend is running: `curl http://localhost:8000/pricing`
 2. Check browser console for CORS errors
 3. Verify `BACKEND_CORS_ORIGINS` includes frontend URL
 
 ### Issue: Pricing data is stale
-**Cause:** Frontend cached old data  
+**Cause:** Frontend cached old data
 **Fix:**
 1. Clear localStorage: `localStorage.removeItem('pricing')`
 2. Refresh page to re-fetch from API
 
 ### Issue: Backend won't start
-**Cause:** Missing environment variables  
+**Cause:** Missing environment variables
 **Fix:**
 ```powershell
 $env:DATABASE_URL = "sqlite+aiosqlite:///./cricksy_dev.db"

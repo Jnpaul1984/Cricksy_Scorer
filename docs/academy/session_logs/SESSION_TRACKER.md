@@ -99,23 +99,23 @@ Copy this template for each new class session.
 
 ### Theory Covered
 
-- 
+-
 
 ### Real-World Example Discussed
 
-- 
+-
 
 ### Analyst Workflow Practiced
 
-- 
+-
 
 ### AI-Assisted Analysis Connection
 
-- 
+-
 
 ### Cricksy Feature Connection
 
-- 
+-
 
 ### Exercise / Practical Task
 
@@ -125,13 +125,13 @@ Copy this template for each new class session.
 
 ### Assessment Questions / Task
 
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ### Student Response Summary
 
-- 
+-
 
 ### Grade
 
@@ -148,15 +148,15 @@ Overall Grade: TBD
 
 ### Strengths
 
-- 
+-
 
 ### Weaknesses / Gaps
 
-- 
+-
 
 ### Teacher Feedback
 
-- 
+-
 
 ### Completion Decision
 
@@ -167,11 +167,11 @@ Overall Grade: TBD
 
 ### Notion Update Recommendation
 
-- 
+-
 
 ### Next Session Focus
 
-- 
+-
 ```
 
 ---

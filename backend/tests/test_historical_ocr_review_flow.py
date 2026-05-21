@@ -404,4 +404,3 @@ def test_existing_dry_run_handoff_unchanged_after_phase_7c() -> None:
     result = dry_run_resp.json()
     assert result["status"] == "dry_run_passed"
     assert result["dry_run_batch_id"] is not None
-

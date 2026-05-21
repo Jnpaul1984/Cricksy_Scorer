@@ -77,7 +77,9 @@ def test_completed_deep_job_evidence_maps_to_skill_input() -> None:
                     "head_stability_score": {
                         "threshold": 0.6,
                         "worst_frames": [{"frame_num": 11, "timestamp_s": 1.1, "score": 0.2}],
-                        "bad_segments": [{"start_frame": 10, "start_timestamp_s": 1.0, "min_score": 0.15}],
+                        "bad_segments": [
+                            {"start_frame": 10, "start_timestamp_s": 1.0, "min_score": 0.15}
+                        ],
                     }
                 }
             }
@@ -260,9 +262,7 @@ def test_no_valid_evidence_returns_controlled_insufficient_data_error() -> None:
     session = _session()
     job = _job(
         deep_results={
-            "evidence": {
-                "head_stability_score": {"worst_frames": [{"frame_num": 1, "score": 0.2}]}
-            }
+            "evidence": {"head_stability_score": {"worst_frames": [{"frame_num": 1, "score": 0.2}]}}
         }
     )
 
@@ -322,7 +322,9 @@ def test_mapper_does_not_mutate_job_session_or_truth_fields() -> None:
                 }
             }
         },
-        quick_results={"evidence": {"balance_drift_score": {"worst_frames": [{"timestamp_s": 9.9}]}}},
+        quick_results={
+            "evidence": {"balance_drift_score": {"worst_frames": [{"timestamp_s": 9.9}]}}
+        },
     )
 
     session_before = {

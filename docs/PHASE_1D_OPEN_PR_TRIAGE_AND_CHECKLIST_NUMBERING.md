@@ -1,7 +1,7 @@
 # PHASE 1D — Open PR Triage + Checklist Numbering Cleanup
 
-**Repository:** `Jnpaul1984/Cricksy_Scorer`  
-**Date:** 2026-05-10  
+**Repository:** `Jnpaul1984/Cricksy_Scorer`
+**Date:** 2026-05-10
 **Scope:** Governance/docs only. No app code, workflow, migration, or dependency edits in this phase.
 
 ---

@@ -10,11 +10,11 @@
       <div class="unavailable-icon">📊</div>
       <h3 class="unavailable-title">Phase Analysis Unavailable</h3>
       <p class="unavailable-message">
-        This feature requires backend endpoint: 
+        This feature requires backend endpoint:
         <code>{{ requiredEndpoint }}</code>
       </p>
       <p class="unavailable-detail">
-        Phase analysis will show powerplay, middle, and death overs performance 
+        Phase analysis will show powerplay, middle, and death overs performance
         once the backend analytics service is connected.
       </p>
     </div>

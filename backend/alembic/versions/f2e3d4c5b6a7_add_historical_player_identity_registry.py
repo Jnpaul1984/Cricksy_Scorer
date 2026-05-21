@@ -63,8 +63,12 @@ def upgrade() -> None:
         sa.Column("first_seen", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_seen", sa.DateTime(timezone=True), nullable=False),
         sa.Column("match_references", json_type, nullable=False, server_default=sa.text("'[]'")),
-        sa.Column("competition_references", json_type, nullable=False, server_default=sa.text("'[]'")),
-        sa.Column("provenance_references", json_type, nullable=False, server_default=sa.text("'[]'")),
+        sa.Column(
+            "competition_references", json_type, nullable=False, server_default=sa.text("'[]'")
+        ),
+        sa.Column(
+            "provenance_references", json_type, nullable=False, server_default=sa.text("'[]'")
+        ),
         sa.Column("alias_references", json_type, nullable=False, server_default=sa.text("'[]'")),
         sa.Column(
             "created_at",
@@ -111,7 +115,9 @@ def upgrade() -> None:
         sa.Column("normalized_alias", sa.String(length=255), nullable=False),
         sa.Column("source_schema", sa.String(length=64), nullable=False),
         sa.Column("source_system", sa.String(length=64), nullable=False),
-        sa.Column("provenance_reference", json_type, nullable=False, server_default=sa.text("'{}'")),
+        sa.Column(
+            "provenance_reference", json_type, nullable=False, server_default=sa.text("'{}'")
+        ),
         sa.Column("first_seen", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_seen", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
@@ -212,7 +218,9 @@ def downgrade() -> None:
         "ix_historical_source_player_registry_normalized_name",
         table_name="historical_source_player_registry",
     )
-    op.drop_index("ix_hist_source_player_unique_key", table_name="historical_source_player_registry")
+    op.drop_index(
+        "ix_hist_source_player_unique_key", table_name="historical_source_player_registry"
+    )
     op.drop_table("historical_source_player_registry")
 
     bind = op.get_bind()

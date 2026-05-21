@@ -792,3 +792,46 @@ class HistoricalBackfillSourceReattachResponse(BaseModel):
     source_hash_sha256: str
     uploaded_filename: str
     recommended_next_action: str
+
+
+class HistoricalBulkZipSourcePayloadDryRunSummary(BaseModel):
+    """Summary counts for the bulk ZIP source payload dry-run."""
+
+    candidate_json_count: int = 0
+    exact_match_count: int = 0
+    likely_match_count: int = 0
+    ambiguous_count: int = 0
+    no_match_count: int = 0
+    already_retained_count: int = 0
+    malformed_count: int = 0
+    unsafe_count: int = 0
+
+
+class HistoricalBulkZipSourcePayloadDryRunResponse(BaseModel):
+    """Response for bulk ZIP source payload dry-run (ZIP-only reattach preview)."""
+
+    status: Literal["preview_ready"]
+    source_filename: str | None = None
+    summary: HistoricalBulkZipSourcePayloadDryRunSummary
+    files: list[HistoricalSourcePayloadReattachDryRunFileResult] = Field(default_factory=list)
+
+
+class HistoricalBulkZipSourcePayloadApplyResponse(BaseModel):
+    """Response for bulk ZIP source payload apply."""
+
+    status: Literal["applied", "partial", "failed"]
+    source_filename: str | None = None
+    selected_count: int = 0
+    applied_count: int = 0
+    skipped_count: int = 0
+    ambiguous_count: int = 0
+    no_match_count: int = 0
+    malformed_count: int = 0
+    error_count: int = 0
+    results: list[HistoricalSourcePayloadReattachApplyFileResult] = Field(default_factory=list)
+    follow_up_message: str = Field(
+        default=(
+            "Source payload reattach does not run delivery reprocess automatically. "
+            "Run Historical Backfill Audit + Reprocess after successful reattach."
+        )
+    )

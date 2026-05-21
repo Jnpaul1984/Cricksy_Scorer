@@ -15,11 +15,13 @@ def _token_headers(user: models.User) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-async def _seed_route_data(db_session) -> tuple[models.User, models.User, models.User, models.PlayerProfile]:
+async def _seed_route_data(
+    db_session,
+) -> tuple[models.User, models.User, models.User, models.PlayerProfile]:
     assigned_coach = models.User(
         id="coach-route-001",
         email="assigned-coach@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.coach_pro,
         org_id="org-route-001",
         is_active=True,
@@ -27,7 +29,7 @@ async def _seed_route_data(db_session) -> tuple[models.User, models.User, models
     unassigned_coach = models.User(
         id="coach-route-002",
         email="unassigned-coach@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.coach_pro_plus,
         org_id="org-route-001",
         is_active=True,
@@ -35,7 +37,7 @@ async def _seed_route_data(db_session) -> tuple[models.User, models.User, models
     other_org_user = models.User(
         id="org-route-999",
         email="other-org@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.org_pro,
         org_id="org-route-999",
         is_active=True,
@@ -135,7 +137,9 @@ async def _create_plan(
         title=title,
         summary="Draft plan for listing scope checks.",
         source_type=models.PlayerDevelopmentSourceType.ai_insight,
-        evidence_refs=[{"type": "manual", "id": f"evidence-{plan_id}", "label": "Listing test evidence"}],
+        evidence_refs=[
+            {"type": "manual", "id": f"evidence-{plan_id}", "label": "Listing test evidence"}
+        ],
         ai_metadata={"is_official_truth": False, "requires_review": True},
     )
     db_session.add(plan)
@@ -150,7 +154,11 @@ async def test_assigned_coach_can_generate_and_fetch_draft_plan(async_client, db
     create_response = await async_client.post(
         f"/api/player-development/players/{profile.player_id}/draft-plan",
         headers=_token_headers(assigned_coach),
-        json={"additional_evidence_refs": [{"type": "manual", "id": "route-extra-001", "label": "Manual review note"}]},
+        json={
+            "additional_evidence_refs": [
+                {"type": "manual", "id": "route-extra-001", "label": "Manual review note"}
+            ]
+        },
     )
 
     assert create_response.status_code == 200, create_response.text
@@ -173,7 +181,9 @@ async def test_assigned_coach_can_generate_and_fetch_draft_plan(async_client, db
 
 
 @pytest.mark.asyncio
-async def test_unassigned_coach_is_blocked_from_generating_player_plan(async_client, db_session) -> None:
+async def test_unassigned_coach_is_blocked_from_generating_player_plan(
+    async_client, db_session
+) -> None:
     _assigned_coach, unassigned_coach, _other_org_user, profile = await _seed_route_data(db_session)
 
     response = await async_client.post(
@@ -187,7 +197,9 @@ async def test_unassigned_coach_is_blocked_from_generating_player_plan(async_cli
 
 
 @pytest.mark.asyncio
-async def test_cross_org_user_cannot_fetch_player_development_plan(async_client, db_session) -> None:
+async def test_cross_org_user_cannot_fetch_player_development_plan(
+    async_client, db_session
+) -> None:
     assigned_coach, _unassigned_coach, other_org_user, profile = await _seed_route_data(db_session)
 
     create_response = await async_client.post(
@@ -276,7 +288,7 @@ async def test_org_pro_can_list_org_scoped_plans_only(async_client, db_session) 
     org_user = models.User(
         id="org-route-001-user",
         email="org-user@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.org_pro,
         org_id="org-route-001",
         is_active=True,

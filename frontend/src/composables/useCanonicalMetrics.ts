@@ -1,11 +1,11 @@
 // frontend/src/composables/useCanonicalMetrics.ts
 /**
  * Canonical Metrics Composable
- * 
+ *
  * Single source of truth for all scoreboard-critical metrics.
  * Primary data source: Pinia gameStore.liveSnapshot (real-time Socket.IO)
  * Fallback: GET /games/{gameId} API call
- * 
+ *
  * NON-NEGOTIABLE RULE:
  * All UI scoreboard values MUST use this composable.
  * No local CRR/RRR/balls_remaining calculations allowed.
@@ -30,14 +30,14 @@ export interface CanonicalMetrics {
   wickets: number | null
   overs: string  // "12.3" format
   ballsRemaining: number | null
-  
+
   // Run rates
   crr: number | null
   rrr: number | null
-  
+
   // Extras breakdown
   extras: ExtrasBreakdown
-  
+
   // Meta
   updatedAt: Date | null
   isStale: boolean  // > 30s since last update
@@ -46,44 +46,44 @@ export interface CanonicalMetrics {
 export function useCanonicalMetrics(gameIdInput: Ref<string> | string) {
   const gameStore = useGameStore()
   const gameId = typeof gameIdInput === 'string' ? ref(gameIdInput) : gameIdInput
-  
+
   const isRefreshing = ref(false)
   const lastError = ref<string | null>(null)
-  
+
   // Primary source: liveSnapshot from Socket.IO
   const snapshot = computed(() => gameStore.liveSnapshot)
-  
+
   // Core scoreboard values
   const score = computed(() => snapshot.value?.total_runs ?? null)
-  
+
   const wickets = computed(() => snapshot.value?.total_wickets ?? null)
-  
+
   const overs = computed(() => {
     const oversCompleted = snapshot.value?.overs_completed ?? 0
     const ballsThisOver = snapshot.value?.balls_this_over ?? 0
     return `${oversCompleted}.${ballsThisOver}`
   })
-  
+
   const ballsRemaining = computed(() => {
     // ALWAYS use backend-calculated value
     return snapshot.value?.balls_remaining ?? null
   })
-  
+
   // Run rates - BACKEND ONLY
   const crr = computed(() => {
     // NO local fallback calculation allowed
     return snapshot.value?.current_run_rate ?? null
   })
-  
+
   const rrr = computed(() => {
     // NO local fallback calculation allowed
     return snapshot.value?.required_run_rate ?? null
   })
-  
+
   // Extras breakdown
   const extras = computed<ExtrasBreakdown>(() => {
     const extrasData = snapshot.value?.extras
-    
+
     if (extrasData && typeof extrasData === 'object') {
       return {
         total: extrasData.total ?? 0,
@@ -93,7 +93,7 @@ export function useCanonicalMetrics(gameIdInput: Ref<string> | string) {
         legByes: extrasData.leg_byes ?? 0,
       }
     }
-    
+
     // If backend doesn't provide extras breakdown, return zeros
     return {
       total: 0,
@@ -103,32 +103,32 @@ export function useCanonicalMetrics(gameIdInput: Ref<string> | string) {
       legByes: 0,
     }
   })
-  
+
   // Meta information
   const updatedAt = computed(() => {
     const timestamp = snapshot.value?.last_updated
     return timestamp ? new Date(timestamp) : null
   })
-  
+
   const isStale = computed(() => {
     const updated = updatedAt.value
     if (!updated) return true
-    
+
     const now = new Date()
     const ageMs = now.getTime() - updated.getTime()
     return ageMs > 30000 // 30 seconds
   })
-  
+
   // Refresh from API (fallback when socket data missing)
   async function refresh() {
     if (!gameId.value || isRefreshing.value) return
-    
+
     try {
       isRefreshing.value = true
       lastError.value = null
-      
+
       const game = await apiRequest<GameState>(`/games/${gameId.value}`)
-      
+
       // Store will be updated via normal mechanisms
       // This is just to trigger a fresh fetch
       console.info('[useCanonicalMetrics] Refreshed from API:', game.id)
@@ -139,7 +139,7 @@ export function useCanonicalMetrics(gameIdInput: Ref<string> | string) {
       isRefreshing.value = false
     }
   }
-  
+
   // Auto-refresh when snapshot becomes stale
   watch(isStale, (stale) => {
     if (stale && !isRefreshing.value) {
@@ -147,7 +147,7 @@ export function useCanonicalMetrics(gameIdInput: Ref<string> | string) {
       refresh()
     }
   })
-  
+
   // Composable return object
   return {
     // Core metrics
@@ -155,18 +155,18 @@ export function useCanonicalMetrics(gameIdInput: Ref<string> | string) {
     wickets,
     overs,
     ballsRemaining,
-    
+
     // Run rates
     crr,
     rrr,
-    
+
     // Extras
     extras,
-    
+
     // Meta
     updatedAt,
     isStale,
-    
+
     // Methods
     refresh,
     isRefreshing: computed(() => isRefreshing.value),

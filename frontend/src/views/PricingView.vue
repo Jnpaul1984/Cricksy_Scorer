@@ -26,10 +26,10 @@ const retryFetch = async () => {
 // Error message formatting
 const errorMessage = computed(() => {
   if (!pricingStore.error) return ''
-  
+
   const isDev = import.meta.env.DEV
   const status = pricingStore.httpStatus
-  
+
   if (isDev) {
     // Show technical details in dev
     return `Error ${status || 'Unknown'}: ${pricingStore.error}`
@@ -53,8 +53,8 @@ const isDevelopment = import.meta.env.DEV
 const isProduction = import.meta.env.PROD
 const isWindowOriginFallback = computed(() => {
   if (!isProduction) return false
-  const windowOrigin = typeof window !== 'undefined' 
-    ? `${window.location.protocol}//${window.location.host}` 
+  const windowOrigin = typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.host}`
     : ''
   return API_BASE === windowOrigin
 })
@@ -124,8 +124,8 @@ const scoringIsFreeBanner = computed(() => pricingStore.scoringIsFree)
     <div v-else-if="pricingStore.error" class="pricing-error">
       <div style="max-width: 600px; margin: 40px auto; text-align: center; padding: 20px;">
         <p style="font-size: 1.1em; color: #dc2626; margin-bottom: 16px;">{{ errorMessage }}</p>
-        <button 
-          @click="retryFetch" 
+        <button
+          @click="retryFetch"
           :disabled="pricingStore.loading"
           style="padding: 10px 24px; font-size: 1em; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;"
           :style="pricingStore.loading ? 'opacity: 0.6; cursor: not-allowed;' : ''"

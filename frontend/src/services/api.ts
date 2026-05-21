@@ -1950,6 +1950,38 @@ export interface HistoricalBackfillSourceReattachResponse {
   recommended_next_action: string;
 }
 
+export interface HistoricalBulkZipSourcePayloadDryRunSummary {
+  candidate_json_count: number;
+  exact_match_count: number;
+  likely_match_count: number;
+  ambiguous_count: number;
+  no_match_count: number;
+  already_retained_count: number;
+  malformed_count: number;
+  unsafe_count: number;
+}
+
+export interface HistoricalBulkZipSourcePayloadDryRunResponse {
+  status: 'preview_ready';
+  source_filename?: string | null;
+  summary: HistoricalBulkZipSourcePayloadDryRunSummary;
+  files: HistoricalSourcePayloadReattachDryRunFileResult[];
+}
+
+export interface HistoricalBulkZipSourcePayloadApplyResponse {
+  status: 'applied' | 'partial' | 'failed';
+  source_filename?: string | null;
+  selected_count: number;
+  applied_count: number;
+  skipped_count: number;
+  ambiguous_count: number;
+  no_match_count: number;
+  malformed_count: number;
+  error_count: number;
+  results: HistoricalSourcePayloadReattachApplyFileResult[];
+  follow_up_message: string;
+}
+
 export type HistoricalOcrReviewStatus =
   | 'uploaded'
   | 'extracted'
@@ -2230,6 +2262,42 @@ export async function historicalSourcePayloadReattachApply(
   form.append('selected_mappings', JSON.stringify(selectedMappings));
   return request<HistoricalSourcePayloadReattachApplyResponse>(
     '/api/historical-import/json/source-reattach/apply',
+    { method: 'POST', body: form },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/backfill/source-zip/dry-run
+ * Bulk ZIP source payload reattach dry-run for historical CPL imports.
+ * Accepts a ZIP, scans JSON entries, and returns mapping candidates with summary counts.
+ * Read-only — nothing is mutated.
+ */
+export async function historicalBulkZipSourcePayloadDryRun(
+  file: File,
+): Promise<HistoricalBulkZipSourcePayloadDryRunResponse> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  return request<HistoricalBulkZipSourcePayloadDryRunResponse>(
+    '/api/historical-import/json/backfill/source-zip/dry-run',
+    { method: 'POST', body: form },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/backfill/source-zip/apply
+ * Bulk ZIP source payload reattach apply for historical CPL imports.
+ * Applies only selected exact/likely mappings. Requires confirm=true.
+ */
+export async function historicalBulkZipSourcePayloadApply(
+  file: File,
+  selectedMappings: Array<{ file_name: string; batch_id: string }>,
+): Promise<HistoricalBulkZipSourcePayloadApplyResponse> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  form.append('confirm', 'true');
+  form.append('selected_mappings', JSON.stringify(selectedMappings));
+  return request<HistoricalBulkZipSourcePayloadApplyResponse>(
+    '/api/historical-import/json/backfill/source-zip/apply',
     { method: 'POST', body: form },
   );
 }

@@ -764,12 +764,12 @@ const aiSummaryData = computed<MatchAISummary | null>(() => {
 
   // Check if backend provides ai_summary structure
   const backendAiSummary = cs.ai?.match_summary
-  
+
   if (backendAiSummary && typeof backendAiSummary === 'object') {
     // Backend provides full AI summary structure - use it directly
     return backendAiSummary as MatchAISummary
   }
-  
+
   // If only text summary available, wrap it
   if (backendAiSummary && typeof backendAiSummary === 'string') {
     return {
@@ -780,7 +780,7 @@ const aiSummaryData = computed<MatchAISummary | null>(() => {
       player_highlights: []
     }
   }
-  
+
   // No AI summary available - return null to show "unavailable" UI state
   return null
 })

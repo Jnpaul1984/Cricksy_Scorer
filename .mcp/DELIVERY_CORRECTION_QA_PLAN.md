@@ -196,13 +196,13 @@ End-to-end delivery correction allows scorers to fix mistakes in previously scor
 
 ## Acceptance Criteria Summary
 
-✅ **All test cases pass**  
-✅ **Totals (runs, wickets, overs) recalculate correctly**  
-✅ **Scorecards (batting/bowling) update accurately**  
-✅ **CRR and analytics reflect corrected state**  
-✅ **Socket.IO emits updates to all clients**  
-✅ **Undo Last still functions correctly**  
-✅ **Error handling for edge cases**  
+✅ **All test cases pass**
+✅ **Totals (runs, wickets, overs) recalculate correctly**
+✅ **Scorecards (batting/bowling) update accurately**
+✅ **CRR and analytics reflect corrected state**
+✅ **Socket.IO emits updates to all clients**
+✅ **Undo Last still functions correctly**
+✅ **Error handling for edge cases**
 ✅ **UI is responsive and user-friendly**
 
 ---

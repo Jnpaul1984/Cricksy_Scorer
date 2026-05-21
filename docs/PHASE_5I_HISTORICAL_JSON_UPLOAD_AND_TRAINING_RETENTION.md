@@ -1,8 +1,8 @@
 # Phase 5I: Historical JSON Upload UI + Training Dataset Retention
 
-**Phase:** 5I  
-**Status:** Implemented  
-**Date:** 2026-05-11  
+**Phase:** 5I
+**Status:** Implemented
+**Date:** 2026-05-11
 **PR:** Phase 5I implementation
 
 ---

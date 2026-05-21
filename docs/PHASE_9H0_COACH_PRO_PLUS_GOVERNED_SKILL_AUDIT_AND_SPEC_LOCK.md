@@ -1,8 +1,8 @@
 # Phase 9H.0 — Coach Pro Plus Governed Skill Integration: Pre-Phase Audit + Spec Lock
 
-**Status:** AUDIT COMPLETE — SPEC LOCKED  
-**Date:** 2026-05-16  
-**Scope:** Audit only. No runtime code changed.  
+**Status:** AUDIT COMPLETE — SPEC LOCKED
+**Date:** 2026-05-16
+**Scope:** Audit only. No runtime code changed.
 **Author:** Copilot Agent (Phase 9H.0)
 
 ---
@@ -892,12 +892,12 @@ No other new tables are required for 9H.1–9H.5 (approval state already exists 
 | `docs/PHASE_9H0_COACH_PRO_PLUS_GOVERNED_SKILL_AUDIT_AND_SPEC_LOCK.md` | Created (this document) |
 | `docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md` | Phase 9H.0 status updated to `IN PROGRESS → COMPLETE`; audit evidence note added |
 
-**No backend runtime code was changed.**  
-**No frontend runtime code was changed.**  
-**No tests were changed.**  
-**No migrations were changed.**  
-**No CI workflows were changed.**  
-**No package files were changed.**  
+**No backend runtime code was changed.**
+**No frontend runtime code was changed.**
+**No tests were changed.**
+**No migrations were changed.**
+**No CI workflows were changed.**
+**No package files were changed.**
 **No infrastructure files were changed.**
 
 ---

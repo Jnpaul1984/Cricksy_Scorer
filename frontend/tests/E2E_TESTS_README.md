@@ -182,4 +182,3 @@ If E2E coverage is intentionally deferred, document the reason in the PR and ref
 
 - Some restricted sandboxes block `download.cypress.io`, so agents may need `CYPRESS_INSTALL_BINARY=0 npm ci` before running `npm run test:e2e`
 - Scoring, viewer, and import specs require a live backend. See `E2E_COVERAGE_MATRIX.md` for the full status of each workspace.
-

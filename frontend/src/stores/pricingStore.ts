@@ -143,15 +143,15 @@ export const usePricingStore = defineStore('pricing', () => {
       if (statusMatch) {
         httpStatus.value = parseInt(statusMatch[1]);
       }
-      
+
       error.value = errorMessage;
-      
+
       // Production-grade error logging
       console.error('❌ Pricing fetch failed:', err);
       console.error('Attempted endpoint: /pricing');
       console.error('API_BASE:', import.meta.env.VITE_API_BASE || 'not set');
       console.error('Last attempt:', lastFetchAttempt.value);
-      
+
       if (err instanceof Error) {
         console.error('Error details:', {
           message: err.message,

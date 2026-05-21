@@ -66,7 +66,9 @@ def _normalise_overs_completed(value: Any) -> int:
     return 0
 
 
-def _build_prediction_source_refs(game: Any, prediction: dict[str, Any], game_id: str) -> list[AiSourceReference]:
+def _build_prediction_source_refs(
+    game: Any, prediction: dict[str, Any], game_id: str
+) -> list[AiSourceReference]:
     """Build compact evidence references for the advisory prediction payload."""
     factors = prediction.get("factors")
     factor_map = factors if isinstance(factors, dict) else {}
@@ -83,7 +85,9 @@ def _build_prediction_source_refs(game: Any, prediction: dict[str, Any], game_id
         ),
     ]
 
-    phase_label = _derive_match_phase(_normalise_overs_completed(game.overs_completed), game.overs_limit)
+    phase_label = _derive_match_phase(
+        _normalise_overs_completed(game.overs_completed), game.overs_limit
+    )
     if phase_label:
         refs.append(
             AiSourceReference(

@@ -75,20 +75,30 @@ def _validate_context(
     if not video_session.id:
         raise VideoEvidenceSkillMappingError("Missing required context field: video_session.id")
     if not video_analysis_job.id:
-        raise VideoEvidenceSkillMappingError("Missing required context field: video_analysis_job.id")
+        raise VideoEvidenceSkillMappingError(
+            "Missing required context field: video_analysis_job.id"
+        )
 
 
-def _validate_job_ready(*, video_session: VideoSession, video_analysis_job: VideoAnalysisJob) -> None:
-    status_value = str(getattr(video_analysis_job.status, "value", video_analysis_job.status)).strip()
+def _validate_job_ready(
+    *, video_session: VideoSession, video_analysis_job: VideoAnalysisJob
+) -> None:
+    status_value = str(
+        getattr(video_analysis_job.status, "value", video_analysis_job.status)
+    ).strip()
     if status_value not in _COMPLETED_STATUSES:
         raise VideoEvidenceSkillMappingError(
             f"Video analysis job must be completed/done. Received status='{status_value}'."
         )
     if video_analysis_job.session_id != video_session.id:
-        raise VideoEvidenceSkillMappingError("VideoAnalysisJob.session_id must match VideoSession.id.")
+        raise VideoEvidenceSkillMappingError(
+            "VideoAnalysisJob.session_id must match VideoSession.id."
+        )
     analysis_mode = str(video_analysis_job.analysis_mode or "").strip()
     if not analysis_mode:
-        raise VideoEvidenceSkillMappingError("Video analysis job is missing required analysis_mode.")
+        raise VideoEvidenceSkillMappingError(
+            "Video analysis job is missing required analysis_mode."
+        )
 
 
 def _extract_markers_prefer_deep(video_analysis_job: VideoAnalysisJob) -> list[dict[str, object]]:
@@ -109,7 +119,9 @@ def _extract_markers_prefer_deep(video_analysis_job: VideoAnalysisJob) -> list[d
     return []
 
 
-def _extract_markers_from_source(source_name: str, payload: dict[str, Any]) -> list[dict[str, object]]:
+def _extract_markers_from_source(
+    source_name: str, payload: dict[str, Any]
+) -> list[dict[str, object]]:
     markers: list[dict[str, object]] = []
     raw_evidence = _extract_raw_evidence_payload(payload, source_name=source_name)
     if raw_evidence is not None:
@@ -180,7 +192,9 @@ def _extract_metric_markers(
 
     worst_frames = metric_payload.get("worst_frames")
     if worst_frames is not None:
-        if not isinstance(worst_frames, list) or not all(isinstance(item, dict) for item in worst_frames):
+        if not isinstance(worst_frames, list) or not all(
+            isinstance(item, dict) for item in worst_frames
+        ):
             raise VideoEvidenceSkillMappingError("Malformed worst_frames evidence payload.")
         for frame in worst_frames:
             marker = _marker_from_item(
@@ -196,7 +210,9 @@ def _extract_metric_markers(
 
     bad_segments = metric_payload.get("bad_segments")
     if bad_segments is not None:
-        if not isinstance(bad_segments, list) or not all(isinstance(item, dict) for item in bad_segments):
+        if not isinstance(bad_segments, list) or not all(
+            isinstance(item, dict) for item in bad_segments
+        ):
             raise VideoEvidenceSkillMappingError("Malformed bad_segments evidence payload.")
         for segment in bad_segments:
             marker = _marker_from_item(
@@ -232,7 +248,9 @@ def _extract_metric_markers(
     return markers
 
 
-def _extract_markers_from_marker_list(markers_payload: list[dict[str, Any]]) -> list[dict[str, object]]:
+def _extract_markers_from_marker_list(
+    markers_payload: list[dict[str, Any]],
+) -> list[dict[str, object]]:
     markers: list[dict[str, object]] = []
     for item in markers_payload:
         metric_name = _to_label(item.get("metric_name", item.get("metric", item.get("name"))))
@@ -258,10 +276,14 @@ def _extract_markers_from_findings(
     payload: dict[str, Any], *, source_name: str
 ) -> list[dict[str, object]]:
     findings_payload = payload.get("findings", payload)
-    findings_list: Any = findings_payload.get("findings") if isinstance(findings_payload, dict) else None
+    findings_list: Any = (
+        findings_payload.get("findings") if isinstance(findings_payload, dict) else None
+    )
     if findings_list is None:
         return []
-    if not isinstance(findings_list, list) or not all(isinstance(item, dict) for item in findings_list):
+    if not isinstance(findings_list, list) or not all(
+        isinstance(item, dict) for item in findings_list
+    ):
         raise VideoEvidenceSkillMappingError(
             f"Malformed findings structure in {source_name}; expected list[dict]."
         )
@@ -338,9 +360,13 @@ def _validate_output_contract(payload: dict[str, object]) -> None:
         "evidence_markers",
     ):
         if field not in required_inputs:
-            raise VideoEvidenceSkillMappingError(f"Skill contract missing required input '{field}'.")
+            raise VideoEvidenceSkillMappingError(
+                f"Skill contract missing required input '{field}'."
+            )
         if field not in payload:
-            raise VideoEvidenceSkillMappingError(f"Mapped payload missing required input '{field}'.")
+            raise VideoEvidenceSkillMappingError(
+                f"Mapped payload missing required input '{field}'."
+            )
 
 
 def _get_nested(payload: dict[str, Any], path: tuple[str, ...]) -> tuple[bool, Any]:

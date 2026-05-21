@@ -1,7 +1,7 @@
 # PHASE 0 — Repo Baseline Audit (CI/CD Lock)
 
-Repository: `Jnpaul1984/Cricksy_Scorer`  
-Default branch: `main`  
+Repository: `Jnpaul1984/Cricksy_Scorer`
+Default branch: `main`
 Checklist source: `docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md`
 
 This is a baseline audit for the **existing Cricksy application**. It is **not** a rebuild plan.

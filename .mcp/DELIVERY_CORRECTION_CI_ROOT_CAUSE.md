@@ -1,8 +1,8 @@
 # Delivery Correction Tests - CI Failure Root Cause Analysis
 
-**Date**: January 16, 2026  
-**Feature**: Delivery-level correction end-to-end  
-**CI Failures**: 5 rounds (Patterns 1-8)  
+**Date**: January 16, 2026
+**Feature**: Delivery-level correction end-to-end
+**CI Failures**: 5 rounds (Patterns 1-8)
 **Status**: ✅ RESOLVED
 
 ## Executive Summary
@@ -12,7 +12,7 @@ The delivery correction tests failed in CI with **422 Unprocessable Entity** err
 ## Timeline of Failures
 
 ### Round 1: Ruff + Schema Format (commit 603a2ed)
-- **Errors**: 
+- **Errors**:
   - Ruff F841 (unused `is_legal`, `is_wd` variables)
   - GameCreate schema (nested `team_a`/`team_b` dicts vs flat fields)
 - **Fix**: Removed unused variables, changed to flat schema fields
@@ -51,7 +51,7 @@ The delivery correction tests failed in CI with **422 Unprocessable Entity** err
   game_response = await async_client.get(f"/games/{game_id}")
   game_details = game_response.json()
   striker_id = game_details["team_a"]["players"][0]["id"]  # UUID, not "bat1"
-  non_striker_id = game_details["team_a"]["players"][1]["id"]  # UUID, not "bat2"  
+  non_striker_id = game_details["team_a"]["players"][1]["id"]  # UUID, not "bat2"
   bowler_id = game_details["team_b"]["players"][0]["id"]  # UUID, not "bowl1"
   ```
 - **Pattern**: 8 (String Literals vs Generated IDs)
@@ -167,5 +167,5 @@ Before writing any test that creates games and scores deliveries:
 - ScoreDelivery schema: `backend/sql_app/schemas.py:361-400`
 - Deployment protocol: `.mcp/DEPLOY_BACKEND_PROTOCOL.md`
 
-**Last Updated**: January 16, 2026  
+**Last Updated**: January 16, 2026
 **Status**: Tests should now pass in CI with proper player ID extraction

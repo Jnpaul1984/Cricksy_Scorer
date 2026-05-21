@@ -21,7 +21,9 @@ def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _register_and_login(client: TestClient, email: str, password: str = "secret123") -> dict[str, str]:
+def _register_and_login(
+    client: TestClient, email: str, password: str = "secret123"
+) -> dict[str, str]:
     register_response = client.post("/auth/register", json={"email": email, "password": password})
     assert register_response.status_code == 201, register_response.text
 
@@ -56,7 +58,9 @@ async def _ensure_player_profile(player_id: str) -> None:
     async with SessionLocal() as session:
         profile = await session.get(models.PlayerProfile, player_id)
         if profile is None:
-            session.add(models.PlayerProfile(player_id=player_id, player_name=f"Player {player_id}"))
+            session.add(
+                models.PlayerProfile(player_id=player_id, player_name=f"Player {player_id}")
+            )
             await session.commit()
 
 
@@ -109,7 +113,9 @@ async def test_submission_scoring_latest_profile_and_history(client: TestClient)
     player_id = "mental-player-001"
     await _ensure_player_profile(player_id)
 
-    template_response = client.get("/api/mental-questionnaires/template", headers=_auth_headers(token))
+    template_response = client.get(
+        "/api/mental-questionnaires/template", headers=_auth_headers(token)
+    )
     assert template_response.status_code == 200, template_response.text
     questions_by_category = _flatten_questions(template_response.json())
 
@@ -133,7 +139,9 @@ async def test_submission_scoring_latest_profile_and_history(client: TestClient)
     assert first_submit.status_code == 200, first_submit.text
     summary = first_submit.json()
 
-    category_scores = {item["category"]: item["average_score"] for item in summary["category_scores"]}
+    category_scores = {
+        item["category"]: item["average_score"] for item in summary["category_scores"]
+    }
     assert category_scores["Mental Toughness"] == 4.5
     assert category_scores["Pressure Handling"] == 2.5
     assert category_scores["Game Awareness / Cricket IQ"] == 4.0
@@ -161,7 +169,11 @@ async def test_submission_scoring_latest_profile_and_history(client: TestClient)
     assert latest.status_code == 200
     assert latest.json()["session_id"] == summary["session_id"]
 
-    second_payload = {"answers": [{"question_id": item["question_id"], "score": 4} for item in first_payload["answers"]]}
+    second_payload = {
+        "answers": [
+            {"question_id": item["question_id"], "score": 4} for item in first_payload["answers"]
+        ]
+    }
     second_submit = client.post(
         f"/api/mental-questionnaires/players/{player_id}/responses",
         headers=_auth_headers(token),
@@ -183,7 +195,9 @@ async def test_submission_scoring_latest_profile_and_history(client: TestClient)
 @pytest.mark.asyncio
 async def test_invalid_score_outside_likert_range_rejected(client: TestClient) -> None:
     token = await _coach_token(client)
-    template_response = client.get("/api/mental-questionnaires/template", headers=_auth_headers(token))
+    template_response = client.get(
+        "/api/mental-questionnaires/template", headers=_auth_headers(token)
+    )
     question_id = template_response.json()["categories"][0]["questions"][0]["id"]
 
     response = client.post(
@@ -199,7 +213,9 @@ async def test_permission_enforced_for_non_coach_roles(client: TestClient) -> No
     user = _register_and_login(client, f"free-{uuid.uuid4().hex[:8]}@example.com")
     token = user["token"]
 
-    template_response = client.get("/api/mental-questionnaires/template", headers=_auth_headers(token))
+    template_response = client.get(
+        "/api/mental-questionnaires/template", headers=_auth_headers(token)
+    )
     assert template_response.status_code == 403
     submit_response = client.post(
         "/api/mental-questionnaires/players/player-free/responses",

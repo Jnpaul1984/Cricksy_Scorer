@@ -11,13 +11,13 @@ Validates player-facing visibility enforcement:
 - Output filtering does not mutate plans, evidence_refs, video IDs, or
   official cricket truth fields.
 """
+
 from __future__ import annotations
 
 import copy
 import datetime as dt
 
 import pytest
-from sqlalchemy import select
 
 from backend.security import create_access_token
 from backend.sql_app import models
@@ -32,6 +32,7 @@ def _token_headers(user: models.User) -> dict[str, str]:
 # Seed helpers
 # ---------------------------------------------------------------------------
 
+
 async def _seed_output_data(
     db_session,
 ) -> tuple[models.User, models.User, models.PlayerProfile, dict[str, models.PlayerDevelopmentPlan]]:
@@ -41,7 +42,7 @@ async def _seed_output_data(
     coach = models.User(
         id="coach-output-001",
         email="coach-output@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.coach_pro_plus,
         org_id="org-output-001",
         is_active=True,
@@ -49,7 +50,7 @@ async def _seed_output_data(
     org_user = models.User(
         id="org-output-001",
         email="org-output@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.org_pro,
         org_id="org-output-001",
         is_active=True,
@@ -449,9 +450,7 @@ async def test_player_facing_output_does_not_mutate_plan_or_cricket_truth_fields
 
 
 @pytest.mark.asyncio
-async def test_player_facing_output_strips_internal_coach_notes(
-    async_client, db_session
-) -> None:
+async def test_player_facing_output_strips_internal_coach_notes(async_client, db_session) -> None:
     """Internal coach_notes on checkpoints must be stripped for player audience."""
     coach, _org, player, plans = await _seed_output_data(db_session)
 
@@ -465,17 +464,15 @@ async def test_player_facing_output_strips_internal_coach_notes(
     payload = response.json()
     checkpoints = payload["checkpoint_review_summary"]["checkpoints"]
     for checkpoint in checkpoints:
-        assert checkpoint.get("coach_notes") is None, (
-            "coach_notes must not be exposed in player-facing output"
-        )
+        assert (
+            checkpoint.get("coach_notes") is None
+        ), "coach_notes must not be exposed in player-facing output"
     # The raw note text must not appear anywhere in the response.
     assert "watch front-foot movement" not in response.text
 
 
 @pytest.mark.asyncio
-async def test_player_facing_output_has_empty_next_coach_actions(
-    async_client, db_session
-) -> None:
+async def test_player_facing_output_has_empty_next_coach_actions(async_client, db_session) -> None:
     """Internal coach workflow actions must not be surfaced to player audience."""
     coach, _org, player, plans = await _seed_output_data(db_session)
 
@@ -491,9 +488,7 @@ async def test_player_facing_output_has_empty_next_coach_actions(
 
 
 @pytest.mark.asyncio
-async def test_coach_output_exposes_full_evidence_refs_with_ids(
-    async_client, db_session
-) -> None:
+async def test_coach_output_exposes_full_evidence_refs_with_ids(async_client, db_session) -> None:
     """Coach audience evidence_refs may retain internal IDs for coaching review."""
     coach, _org, player, plans = await _seed_output_data(db_session)
 

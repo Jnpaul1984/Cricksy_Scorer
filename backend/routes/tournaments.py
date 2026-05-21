@@ -177,6 +177,7 @@ async def delete_fixture(
         raise HTTPException(status_code=404, detail="Fixture not found")
     return {"status": "deleted"}
 
+
 # ==============================================================================
 # Tournament Leaderboards Endpoint
 # ==============================================================================
@@ -191,14 +192,12 @@ async def get_tournament_leaderboards_endpoint(
 ) -> dict[str, Any]:
     """
     Get player leaderboards for a tournament.
-    
+
     Query Parameters:
     - type: "batting" (default), "bowling", or "all"
     - limit: Number of top players to return (default: 10)
-    
+
     Returns batting and/or bowling statistics ranked by performance.
     """
-    leaderboards = await get_tournament_leaderboards(
-        db, tournament_id, leaderboard_type, limit
-    )
+    leaderboards = await get_tournament_leaderboards(db, tournament_id, leaderboard_type, limit)
     return leaderboards

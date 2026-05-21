@@ -22,7 +22,7 @@ async def _seed_dashboard_data(
     coach_user = models.User(
         id="coach-dashboard-001",
         email="coach-dashboard@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.coach_pro,
         org_id="org-dashboard-001",
         is_active=True,
@@ -30,7 +30,7 @@ async def _seed_dashboard_data(
     org_user = models.User(
         id="org-dashboard-001-user",
         email="org-dashboard@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.org_pro,
         org_id="org-dashboard-001",
         is_active=True,
@@ -38,7 +38,7 @@ async def _seed_dashboard_data(
     org_coach_two = models.User(
         id="coach-dashboard-002",
         email="coach-dashboard-two@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.coach_pro_plus,
         org_id="org-dashboard-001",
         is_active=True,
@@ -46,7 +46,7 @@ async def _seed_dashboard_data(
     other_org_user = models.User(
         id="coach-dashboard-999",
         email="coach-dashboard-other@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.org_pro,
         org_id="org-dashboard-999",
         is_active=True,
@@ -416,7 +416,9 @@ async def test_coach_dashboard_only_shows_assigned_players(async_client, db_sess
     assert payload["players_without_plan_details"] == [
         {"player_profile_id": "player-dashboard-002", "player_name": "Ben Builder"}
     ]
-    assert [player["player_name"] for player in payload["review_required_players"]] == ["Ava Support"]
+    assert [player["player_name"] for player in payload["review_required_players"]] == [
+        "Ava Support"
+    ]
     assert [theme["safe_display_label"] for theme in payload["common_development_areas"]] == [
         "Batting tempo"
     ]
@@ -516,7 +518,9 @@ async def test_dashboard_aggregation_counts_real_plan_data(async_client, db_sess
 async def test_dashboard_route_is_read_only_for_plans(async_client, db_session) -> None:
     coach_user, _org_user, _org_coach_two, _other_org_user = await _seed_dashboard_data(db_session)
     before = await db_session.execute(
-        select(models.PlayerDevelopmentPlan).where(models.PlayerDevelopmentPlan.id == "plan-dashboard-001")
+        select(models.PlayerDevelopmentPlan).where(
+            models.PlayerDevelopmentPlan.id == "plan-dashboard-001"
+        )
     )
     plan_before = before.scalar_one()
     before_status = plan_before.status
@@ -536,7 +540,9 @@ async def test_dashboard_route_is_read_only_for_plans(async_client, db_session) 
 
 
 @pytest.mark.asyncio
-async def test_dashboard_route_does_not_mutate_official_player_stats(async_client, db_session) -> None:
+async def test_dashboard_route_does_not_mutate_official_player_stats(
+    async_client, db_session
+) -> None:
     coach_user, _org_user, _org_coach_two, _other_org_user = await _seed_dashboard_data(db_session)
     profile = await db_session.get(models.PlayerProfile, "player-dashboard-001")
     assert profile is not None
@@ -559,7 +565,7 @@ async def test_empty_dashboard_response_is_safe(async_client, db_session) -> Non
     coach_user = models.User(
         id="coach-dashboard-empty",
         email="coach-empty@example.com",
-        hashed_password="hashed",  # noqa: S106
+        hashed_password="hashed",
         role=models.RoleEnum.coach_pro_plus,
         org_id="org-dashboard-empty",
         is_active=True,

@@ -4,7 +4,7 @@ from collections import defaultdict
 from statistics import mean
 from typing import Any
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 

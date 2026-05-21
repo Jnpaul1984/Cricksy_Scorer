@@ -318,7 +318,9 @@ def _checkpoint_advisory_label(checkpoint_date: dt.date) -> str:
     return "Upcoming review"
 
 
-def _status_count_list(counter: Counter[str]) -> list[schemas.PlayerDevelopmentDashboardStatusCount]:
+def _status_count_list(
+    counter: Counter[str],
+) -> list[schemas.PlayerDevelopmentDashboardStatusCount]:
     return [
         schemas.PlayerDevelopmentDashboardStatusCount(
             status=models.PlayerDevelopmentPlanStatus(status),

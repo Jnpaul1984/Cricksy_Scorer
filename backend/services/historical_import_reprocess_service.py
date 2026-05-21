@@ -252,9 +252,7 @@ def _summarize_innings(innings: Any) -> str | None:
 def _match_identity(batch: HistoricalImportBatch, game: Game) -> dict[str, str | None]:
     phases = game.phases if isinstance(game.phases, dict) else {}
     hist_meta = (
-        phases.get("historical_import")
-        if isinstance(phases.get("historical_import"), dict)
-        else {}
+        phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
     )
     innings_summary = (
         phases.get("historical_innings_summary")
@@ -266,7 +264,11 @@ def _match_identity(batch: HistoricalImportBatch, game: Game) -> dict[str, str |
 
     match_date = _formatted_match_date(
         hist_meta.get("match_date")
-        or (hist_meta.get("source_dates")[0] if isinstance(hist_meta.get("source_dates"), list) and hist_meta.get("source_dates") else None)
+        or (
+            hist_meta.get("source_dates")[0]
+            if isinstance(hist_meta.get("source_dates"), list) and hist_meta.get("source_dates")
+            else None
+        )
     )
     competition = _clean_text(
         hist_meta.get("competition_name")
@@ -276,7 +278,9 @@ def _match_identity(batch: HistoricalImportBatch, game: Game) -> dict[str, str |
     season = _clean_text(hist_meta.get("season"))
     team_1 = _team_name(game.team_a) or _clean_text(game.batting_team_name)
     team_2 = _team_name(game.team_b) or _clean_text(game.bowling_team_name)
-    venue_context = hist_meta.get("venue_context") if isinstance(hist_meta.get("venue_context"), dict) else {}
+    venue_context = (
+        hist_meta.get("venue_context") if isinstance(hist_meta.get("venue_context"), dict) else {}
+    )
     venue = _clean_text(hist_meta.get("venue") or venue_context.get("raw_venue"))
     result = _clean_text(game.result)
     status = _clean_text(getattr(game.status, "value", game.status))
@@ -284,11 +288,9 @@ def _match_identity(batch: HistoricalImportBatch, game: Game) -> dict[str, str |
         inning_1 if isinstance(inning_1, dict) else game.first_inning_summary
     )
     innings_2_summary = _summarize_innings(inning_2 if isinstance(inning_2, dict) else None)
-    known_score_summary = " | ".join(
-        summary
-        for summary in (innings_1_summary, innings_2_summary)
-        if summary
-    ) or None
+    known_score_summary = (
+        " | ".join(summary for summary in (innings_1_summary, innings_2_summary) if summary) or None
+    )
     original_filename = _clean_text(batch.source_filename)
     reattach = (
         batch.dry_run_summary.get("source_payload_reattach")
@@ -298,11 +300,13 @@ def _match_identity(batch: HistoricalImportBatch, game: Game) -> dict[str, str |
     )
     upload_filename = _clean_text(reattach.get("uploaded_filename"))
     source_file_hint = _clean_text(
-        hist_meta.get("source_file_hint")
-        or original_filename
-        or upload_filename
+        hist_meta.get("source_file_hint") or original_filename or upload_filename
     )
-    label_parts = [part for part in (f"{team_1} vs {team_2}" if team_1 and team_2 else None, match_date, venue) if part]
+    label_parts = [
+        part
+        for part in (f"{team_1} vs {team_2}" if team_1 and team_2 else None, match_date, venue)
+        if part
+    ]
     match_identity_label = " — ".join(label_parts) if label_parts else None
     return {
         "match_date": match_date,
@@ -560,12 +564,15 @@ async def diagnose_delivery_backfill(
                     bool(delivery.get("extra_type")) or int(delivery.get("extra_runs") or 0) > 0
                     for delivery in normalized_deliveries
                 )
-                wicket_field_detected = any(
-                    bool(delivery.get("is_wicket"))
-                    or bool(delivery.get("dismissal_kind"))
-                    or bool(delivery.get("player_out"))
-                    for delivery in normalized_deliveries
-                ) or expected_wickets > 0
+                wicket_field_detected = (
+                    any(
+                        bool(delivery.get("is_wicket"))
+                        or bool(delivery.get("dismissal_kind"))
+                        or bool(delivery.get("player_out"))
+                        for delivery in normalized_deliveries
+                    )
+                    or expected_wickets > 0
+                )
 
                 if not innings_path_detected:
                     reason = "no_innings_path_detected"
@@ -595,7 +602,8 @@ async def diagnose_delivery_backfill(
             "source_json_required": payload is None,
             "schema_detected": schema_detected,
             "innings_path_detected": innings_path_detected,
-            "delivery_path_detected": detected_delivery_path is not None and expected_deliveries > 0,
+            "delivery_path_detected": detected_delivery_path is not None
+            and expected_deliveries > 0,
             "detected_delivery_path": detected_delivery_path,
             "delivery_path_candidates": delivery_path_candidates,
             "expected_deliveries": expected_deliveries,
