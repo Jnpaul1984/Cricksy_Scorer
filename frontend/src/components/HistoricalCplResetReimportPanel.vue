@@ -168,15 +168,17 @@
         <li>Operation ID: <strong>{{ applyResult.operation_id }}</strong></li>
         <li>Matches reset (selected batches): <strong>{{ applyResult.reimport_report.selected_batches }}</strong></li>
         <li>Matches imported (selected matches): <strong>{{ applyResult.reimport_report.selected_matches }}</strong></li>
-        <li>Deliveries imported/restored (expected): <strong>{{ dryRunResult?.expected_deliveries ?? 0 }}</strong></li>
-        <li>Wickets imported/restored (expected): <strong>{{ dryRunResult?.expected_wickets ?? 0 }}</strong></li>
-        <li>Players extracted (expected): <strong>{{ dryRunResult?.expected_players ?? 0 }}</strong></li>
-        <li>Venues extracted: <strong>{{ applyResult.source_payload_retention.report?.reattached_count ?? 0 }}</strong></li>
-        <li>Unresolved players: <strong>{{ dryRunResult?.audit?.records ? unresolvedPlayers : 0 }}</strong></li>
-        <li>Unresolved venues: <strong>{{ dryRunResult?.audit?.records ? unresolvedVenues : 0 }}</strong></li>
-        <li>Blocked records: <strong>{{ dryRunResult?.records_blocked_from_reset ?? 0 }}</strong></li>
-        <li>Skipped duplicate records: <strong>{{ dryRunResult?.duplicate_risks ?? 0 }}</strong></li>
-        <li>Errors: <strong>{{ applyResult.source_payload_retention.report?.error_count ?? 0 }}</strong></li>
+        <li>Source payloads reattached (apply report): <strong>{{ applyResult.source_payload_retention.report?.reattached_count ?? 0 }}</strong></li>
+        <li>Source payload apply skipped count: <strong>{{ applyResult.source_payload_retention.report?.skipped_count ?? 0 }}</strong></li>
+        <li>Source payload apply errors: <strong>{{ applyResult.source_payload_retention.report?.error_count ?? 0 }}</strong></li>
+        <li>Deliveries — Expected from dry-run: <strong>{{ dryRunResult?.expected_deliveries ?? 0 }}</strong></li>
+        <li>Wickets — Expected from dry-run: <strong>{{ dryRunResult?.expected_wickets ?? 0 }}</strong></li>
+        <li>Players — Expected from dry-run: <strong>{{ dryRunResult?.expected_players ?? 0 }}</strong></li>
+        <li>Unresolved players — Expected from dry-run audit: <strong>{{ dryRunResult?.audit?.records ? unresolvedPlayers : 0 }}</strong></li>
+        <li>Unresolved venues — Expected from dry-run audit: <strong>{{ dryRunResult?.audit?.records ? unresolvedVenues : 0 }}</strong></li>
+        <li>Blocked records — From dry-run preview: <strong>{{ dryRunResult?.records_blocked_from_reset ?? 0 }}</strong></li>
+        <li>Skipped duplicate risk — From dry-run preview: <strong>{{ dryRunResult?.duplicate_risks ?? 0 }}</strong></li>
+        <li>Venue extraction count: <strong>Not reported by current apply response</strong></li>
       </ul>
       <p class="hcrr-note">
         Verify now in Analyst Workspace tabs: Deliveries, Players, CPL Dashboard, and Case Studies.

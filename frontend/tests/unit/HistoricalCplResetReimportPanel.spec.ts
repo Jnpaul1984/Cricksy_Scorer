@@ -163,6 +163,12 @@ describe('HistoricalCplResetReimportPanel', () => {
     expect(wrapper.text()).toContain('Final import report')
     expect(wrapper.text()).toContain('Operation ID: op-123')
     expect(wrapper.text()).toContain('Matches reset (selected batches): 1')
+    expect(wrapper.text()).toContain('Deliveries — Expected from dry-run: 120')
+    expect(wrapper.text()).toContain('Players — Expected from dry-run: 22')
+    expect(wrapper.text()).toContain('Source payloads reattached (apply report): 1')
+    expect(wrapper.text()).toContain('Venue extraction count: Not reported by current apply response')
+    expect(wrapper.text()).not.toContain('Deliveries imported/restored (expected)')
+    expect(wrapper.text()).not.toContain('Venues extracted')
   })
 
   it('renders readable apply failure error', async () => {
