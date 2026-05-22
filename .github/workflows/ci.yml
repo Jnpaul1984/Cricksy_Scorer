@@ -193,12 +193,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
 
+      - name: Run deploy-parity migration verification (pre-upgrade)
+        env:
+          APP_SECRET_KEY: ci-test-secret-not-for-production
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python backend/scripts/check_alembic_single_head.py
+          python -m alembic -c backend/alembic.ini current
+          python -m alembic -c backend/alembic.ini heads
+          python backend/scripts/check_production_migration_state.py --label pre-upgrade
+
       - name: Run Alembic migrations
         env:
           APP_SECRET_KEY: ci-test-secret-not-for-production
           PYTHONPATH: ${{ github.workspace }}
         run: |
           alembic -c backend/alembic.ini upgrade head
+
+      - name: Run deploy-parity migration verification (post-upgrade)
+        env:
+          APP_SECRET_KEY: ci-test-secret-not-for-production
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python backend/scripts/check_alembic_single_head.py
+          python -m alembic -c backend/alembic.ini current
+          python -m alembic -c backend/alembic.ini heads
+          python backend/scripts/check_production_migration_state.py --label post-upgrade --require-at-head
 
       - name: Verify backend startup import
         env:

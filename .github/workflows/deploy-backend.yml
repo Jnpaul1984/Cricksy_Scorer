@@ -79,6 +79,7 @@ jobs:
         working-directory: .
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
+          APP_SECRET_KEY: ci-test-secret-not-for-production
           PYTHONPATH: ${{ github.workspace }}
         run: |
           alembic -c backend/alembic.ini upgrade head
