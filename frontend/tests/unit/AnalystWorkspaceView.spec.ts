@@ -56,6 +56,7 @@ const globalStubs = {
     template: '<button class="zip-import-done-btn" @click="$emit(\'import-done\', \'zip-game\')">zip import done</button>',
     emits: ['import-done'],
   },
+  HistoricalCplResetReimportPanel: { template: '<div class="cpl-reset-reimport-panel-stub" />' },
   HistoricalOcrReviewPanel: { template: '<div class="ocr-review-panel-stub" />' },
   HistoricalSourcePayloadReattachPanel: { template: '<div class="source-reattach-panel-stub" />' },
   HistoricalBackfillReprocessPanel: { template: '<div class="backfill-reprocess-panel-stub" />' },
