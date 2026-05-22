@@ -3461,13 +3461,82 @@ async def cpl_reset_reimport_apply(
 
     final_batch_ids = batch_ids or (sorted(set(inferred_batch_ids)) if not match_ids else [])
     merged_payloads = {**inferred_payloads_by_batch, **source_payloads_by_batch}
-    await apply_delivery_backfill(
+    reimport_report = await apply_delivery_backfill(
         db,
         match_ids=match_ids,
         batch_ids=final_batch_ids,
         max_batch_size=max_batch_size,
         source_payloads_by_batch=merged_payloads,
     )
+    audit_snapshot = (
+        reimport_report.get("audit_snapshot") if isinstance(reimport_report, dict) else {}
+    )
+    audit_records = (
+        list(audit_snapshot.values()) if isinstance(audit_snapshot, dict) else []
+    )
+    selected_match_ids = {
+        str(record.get("match_id") or "")
+        for record in audit_records
+        if isinstance(record, dict) and str(record.get("match_id") or "").strip()
+    }
+    expected_deliveries = sum(
+        int(record.get("expected_deliveries") or 0)
+        for record in audit_records
+        if isinstance(record, dict) and bool(record.get("eligible"))
+    )
+    expected_wickets = sum(
+        int(record.get("expected_wickets") or 0)
+        for record in audit_records
+        if isinstance(record, dict) and bool(record.get("eligible"))
+    )
+    expected_players = sum(
+        int(record.get("expected_players") or 0)
+        for record in audit_records
+        if isinstance(record, dict) and bool(record.get("eligible"))
+    )
+    deliveries_imported = int(reimport_report.get("deliveries_rebuilt") or 0)
+    wickets_imported = int(reimport_report.get("wickets_rebuilt") or 0)
+    players_extracted = int(reimport_report.get("resolved_players") or 0) + int(
+        reimport_report.get("unresolved_players") or 0
+    )
+    venues_extracted = int(reimport_report.get("resolved_venues") or 0) + int(
+        reimport_report.get("unresolved_venues") or 0
+    )
+    errors: list[str] = []
+    warnings: list[str] = []
+    for blocked in reimport_report.get("blocked_records") or []:
+        if not isinstance(blocked, dict):
+            continue
+        reason = str(blocked.get("reason") or "blocked")
+        batch_id = str(blocked.get("batch_id") or "")
+        match_id = str(blocked.get("match_id") or "")
+        errors.append(f"{reason} (batch_id={batch_id}, match_id={match_id})")
+
+    for result in reimport_report.get("results") or []:
+        if not isinstance(result, dict) or result.get("status") != "processed":
+            continue
+        batch_id = str(result.get("batch_id") or "")
+        audit_record = audit_snapshot.get(batch_id) if isinstance(audit_snapshot, dict) else None
+        if not isinstance(audit_record, dict) or not audit_record.get("eligible"):
+            continue
+        expected_for_batch = int(audit_record.get("expected_deliveries") or 0)
+        actual_for_batch = int(result.get("deliveries_after") or 0)
+        if expected_for_batch > 0 and actual_for_batch < expected_for_batch:
+            errors.append(
+                "delivery_rebuild_incomplete "
+                f"(batch_id={batch_id}, expected={expected_for_batch}, actual={actual_for_batch})"
+            )
+        expected_wickets_for_batch = int(audit_record.get("expected_wickets") or 0)
+        actual_wickets_for_batch = int(result.get("wickets_after") or 0)
+        if expected_wickets_for_batch > 0 and actual_wickets_for_batch < expected_wickets_for_batch:
+            warnings.append(
+                "wicket_rebuild_incomplete "
+                f"(batch_id={batch_id}, expected={expected_wickets_for_batch}, actual={actual_wickets_for_batch})"
+            )
+
+    status = str(reimport_report.get("status") or "failed")
+    if errors:
+        status = "partial" if int(reimport_report.get("processed_matches") or 0) > 0 else "failed"
     sanitized_reattach_report = None
     if isinstance(reattach_summary, dict):
         sanitized_reattach_report = {
@@ -3477,13 +3546,20 @@ async def cpl_reset_reimport_apply(
             "error_count": reattach_summary.get("error_count"),
         }
     sanitized_reimport_report = {
-        "status": "applied",
+        "status": status,
         "selected_batches": len(final_batch_ids),
-        "selected_matches": len(match_ids),
+        "selected_matches": len(selected_match_ids),
+        "processed_matches": int(reimport_report.get("processed_matches") or 0),
+        "skipped_matches": int(reimport_report.get("skipped_matches") or 0),
+        "failed_matches": int(reimport_report.get("failed_matches") or 0),
+        "deliveries_imported": deliveries_imported,
+        "wickets_imported": wickets_imported,
+        "players_extracted": players_extracted,
+        "venues_extracted": venues_extracted,
     }
 
     return {
-        "status": "applied",
+        "status": status,
         "operation": "cpl_reset_reimport_apply",
         "operation_id": str(uuid.uuid4()),
         "scope": {
@@ -3496,6 +3572,17 @@ async def cpl_reset_reimport_apply(
             "report": sanitized_reattach_report,
         },
         "reimport_report": sanitized_reimport_report,
+        "matches_reset": int(reimport_report.get("processed_matches") or 0),
+        "matches_imported": int(reimport_report.get("processed_matches") or 0),
+        "deliveries_imported": deliveries_imported,
+        "wickets_imported": wickets_imported,
+        "players_extracted": players_extracted,
+        "venues_extracted": venues_extracted,
+        "expected_deliveries": expected_deliveries,
+        "expected_wickets": expected_wickets,
+        "expected_players": expected_players,
+        "errors": errors,
+        "warnings": warnings,
     }
 
 

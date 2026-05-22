@@ -521,6 +521,7 @@ def test_cpl_reset_reimport_dry_run_returns_scope_without_mutation(client: TestC
     data = resp.json()
     assert data["status"] == "preview_ready"
     assert data["records_safe_to_reset"] >= 1
+    assert data["expected_deliveries"] > 0
     assert data["source_bundle_preview"] is not None
     assert len(data["source_file_mapping"]) >= 1
 
@@ -556,10 +557,15 @@ def test_cpl_reset_reimport_apply_from_zip_is_idempotent(client: TestClient) -> 
         data={"confirm": "true", "max_batch_size": "25"},
     )
     assert first.status_code == 200, first.text
+    first_data = first.json()
+    assert first_data["status"] == "applied"
+    assert first_data["matches_imported"] == 1
+    assert first_data["deliveries_imported"] > 0
+    assert first_data["reimport_report"]["selected_matches"] == 1
     first_game = _load_game(client, game_id)
     first_count = len(first_game.deliveries or [])
     assert first_count > 0
-    assert first.json()["reimport_report"]["selected_batches"] == 1
+    assert first_data["reimport_report"]["selected_batches"] == 1
 
     second = client.post(
         "/api/historical-import/json/cpl-reset-reimport/apply",
@@ -568,8 +574,39 @@ def test_cpl_reset_reimport_apply_from_zip_is_idempotent(client: TestClient) -> 
         data={"confirm": "true", "max_batch_size": "25"},
     )
     assert second.status_code == 200, second.text
+    second_data = second.json()
+    assert second_data["status"] == "applied"
     second_game = _load_game(client, game_id)
     assert len(second_game.deliveries or []) == first_count
+
+
+def test_cpl_reset_reimport_apply_reports_failed_when_rebuild_cannot_run(
+    client: TestClient,
+) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    _batch_id, game_id = _create_and_apply_batch(client, token, payload)
+
+    dry_run = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/dry-run",
+        headers=_auth_headers(token),
+        json={"match_ids": [game_id], "max_batch_size": 25},
+    )
+    assert dry_run.status_code == 200, dry_run.text
+    assert dry_run.json()["records_blocked_from_reset"] >= 1
+
+    apply = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/apply",
+        headers=_auth_headers(token),
+        json={"confirm": True, "match_ids": [game_id], "max_batch_size": 25},
+    )
+    assert apply.status_code == 200, apply.text
+    data = apply.json()
+    assert data["status"] == "failed"
+    assert data["deliveries_imported"] == 0
+    assert data["matches_imported"] == 0
+    assert any("missing_source_json" in err for err in data["errors"])
+    assert _load_game(client, game_id).deliveries in (None, [])
 
 
 def test_backfill_apply_reflects_in_players_deliveries_dashboard_and_case_study(
