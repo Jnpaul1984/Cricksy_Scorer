@@ -44,6 +44,28 @@ def verify_payload_hash(raw_payload: bytes, expected_hash: str) -> bool:
     return _hash_payload(raw_payload) == expected_hash
 
 
+def coerce_delivery_ledger(raw_deliveries: Any) -> list[dict[str, Any]]:
+    """Return deliveries as a list of dict rows.
+
+    Historical environments may surface JSON columns as text; accept both
+    native list payloads and JSON-string encoded arrays.
+    """
+    if isinstance(raw_deliveries, list):
+        return [row for row in raw_deliveries if isinstance(row, dict)]
+
+    if isinstance(raw_deliveries, str):
+        text = raw_deliveries.strip()
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return []
+        if isinstance(parsed, list):
+            return [row for row in parsed if isinstance(row, dict)]
+    return []
+
+
 def _safe_int(value: Any) -> int:
     if value is None:
         return 0
