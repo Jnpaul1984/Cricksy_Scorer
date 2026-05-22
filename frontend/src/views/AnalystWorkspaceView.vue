@@ -1502,6 +1502,7 @@
               <div class="aw-import-panels">
                 <HistoricalImportPanel @import-done="onImportDone" />
                 <HistoricalImportBulkZipPanel @import-done="onImportDone" />
+                <HistoricalCplResetReimportPanel />
                 <HistoricalOcrReviewPanel />
                 <HistoricalSourcePayloadReattachPanel />
                 <BulkZipSourcePayloadRecoveryPanel />
@@ -1537,6 +1538,7 @@ import CplPodcastDashboard from '@/components/CplPodcastDashboard.vue'
 import ExportUI from '@/components/ExportUI.vue'
 import HistoricalImportPanel from '@/components/HistoricalImportPanel.vue'
 import HistoricalImportBulkZipPanel from '@/components/HistoricalImportBulkZipPanel.vue'
+import HistoricalCplResetReimportPanel from '@/components/HistoricalCplResetReimportPanel.vue'
 import HistoricalOcrReviewPanel from '@/components/HistoricalOcrReviewPanel.vue'
 import HistoricalSourcePayloadReattachPanel from '@/components/HistoricalSourcePayloadReattachPanel.vue'
 import HistoricalBackfillReprocessPanel from '@/components/HistoricalBackfillReprocessPanel.vue'

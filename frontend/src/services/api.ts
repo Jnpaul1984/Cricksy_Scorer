@@ -1895,6 +1895,81 @@ export interface HistoricalBackfillApplyResponse {
   rollback_info: string;
 }
 
+export interface HistoricalCplResetReimportDryRunRequest {
+  file: File;
+  max_batch_size?: number;
+  match_ids?: string[];
+  batch_ids?: string[];
+  season?: string;
+}
+
+export interface HistoricalCplResetReimportSourceFileMapping {
+  file_name: string;
+  status: string;
+  match_confidence: 'exact_match' | 'likely_match' | 'ambiguous' | 'no_match';
+  blocked_from_apply: boolean;
+  batch_id?: string | null;
+  match_id?: string | null;
+}
+
+export interface HistoricalCplResetReimportDryRunResponse {
+  status: 'preview_ready';
+  operation: 'cpl_reset_reimport_dry_run';
+  scope: {
+    match_ids: string[];
+    batch_ids: string[];
+    max_batch_size: number;
+  };
+  total_candidate_existing_historical_records: number;
+  records_safe_to_reset: number;
+  records_blocked_from_reset: number;
+  expected_matches_to_import: number;
+  expected_deliveries: number;
+  expected_wickets: number;
+  expected_players: number;
+  duplicate_risks: number;
+  destructive_action_summary: {
+    matches_to_reset: number;
+    historical_batches_in_scope: number;
+    delivery_rows_to_rebuild: number;
+    blocked_records: number;
+  };
+  blocked_records: Array<{ match_id: string; batch_id: string; reason: string }>;
+  source_bundle_preview?: HistoricalBulkZipSourcePayloadDryRunResponse | HistoricalSourcePayloadReattachDryRunResponse | null;
+  source_file_mapping: HistoricalCplResetReimportSourceFileMapping[];
+  audit?: HistoricalBackfillAuditResponse;
+}
+
+export interface HistoricalCplResetReimportApplyRequest
+  extends HistoricalCplResetReimportDryRunRequest {
+  confirm: true;
+}
+
+export interface HistoricalCplResetReimportApplyResponse {
+  status: 'applied' | 'partial' | 'failed';
+  operation: 'cpl_reset_reimport_apply';
+  operation_id: string;
+  scope: {
+    match_ids: string[];
+    batch_ids: string[];
+    max_batch_size: number;
+  };
+  source_payload_retention: {
+    attempted: boolean;
+    report?: {
+      status?: string;
+      reattached_count?: number;
+      skipped_count?: number;
+      error_count?: number;
+    } | null;
+  };
+  reimport_report: {
+    status: string;
+    selected_batches: number;
+    selected_matches: number;
+  };
+}
+
 export interface HistoricalSourcePayloadReattachMetadata {
   competition_name?: string | null;
   season?: string | null;
@@ -2237,6 +2312,57 @@ export async function historicalBackfillReprocessApply(
         source_payloads_by_batch: payload.source_payloads_by_batch ?? {},
       }),
     },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/cpl-reset-reimport/dry-run
+ * Runs read-only dry-run for controlled historical CPL reset + reimport.
+ */
+export async function runCplResetReimportDryRun(
+  payload: HistoricalCplResetReimportDryRunRequest,
+): Promise<HistoricalCplResetReimportDryRunResponse> {
+  const form = new FormData();
+  form.append('file', payload.file, payload.file.name);
+  form.append('max_batch_size', String(payload.max_batch_size ?? 1));
+  if (payload.match_ids?.length) {
+    form.append('match_ids', JSON.stringify(payload.match_ids));
+  }
+  if (payload.batch_ids?.length) {
+    form.append('batch_ids', JSON.stringify(payload.batch_ids));
+  }
+  if (payload.season?.trim()) {
+    form.append('season', payload.season.trim());
+  }
+  return request<HistoricalCplResetReimportDryRunResponse>(
+    '/api/historical-import/json/cpl-reset-reimport/dry-run',
+    { method: 'POST', body: form },
+  );
+}
+
+/**
+ * POST /api/historical-import/json/cpl-reset-reimport/apply
+ * Applies controlled historical CPL reset + reimport after dry-run confirmation.
+ */
+export async function applyCplResetReimport(
+  payload: HistoricalCplResetReimportApplyRequest,
+): Promise<HistoricalCplResetReimportApplyResponse> {
+  const form = new FormData();
+  form.append('file', payload.file, payload.file.name);
+  form.append('confirm', 'true');
+  form.append('max_batch_size', String(payload.max_batch_size ?? 1));
+  if (payload.match_ids?.length) {
+    form.append('match_ids', JSON.stringify(payload.match_ids));
+  }
+  if (payload.batch_ids?.length) {
+    form.append('batch_ids', JSON.stringify(payload.batch_ids));
+  }
+  if (payload.season?.trim()) {
+    form.append('season', payload.season.trim());
+  }
+  return request<HistoricalCplResetReimportApplyResponse>(
+    '/api/historical-import/json/cpl-reset-reimport/apply',
+    { method: 'POST', body: form },
   );
 }
 
