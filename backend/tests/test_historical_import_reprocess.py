@@ -164,9 +164,7 @@ def _register_analyst(client: TestClient) -> str:
 def _seed_players(client: TestClient, names: list[str]) -> None:
     async def _insert() -> None:
         async with client.session_maker() as session:  # type: ignore[attr-defined]
-            max_player_id = (
-                await session.scalar(select(func.max(models.Player.id)))
-            ) or 0
+            max_player_id = (await session.scalar(select(func.max(models.Player.id)))) or 0
             for offset, name in enumerate(names, start=1):
                 session.add(models.Player(id=max_player_id + offset, name=name))
             await session.commit()
@@ -1146,3 +1144,210 @@ def test_backfill_apply_no_duplicate_deliveries_after_reprocess(client: TestClie
         f"Duplicate deliveries after third apply: expected {count_after_first}, "
         f"got {count_after_third}"
     )
+
+
+# ---------------------------------------------------------------------------
+# CPL reset/reimport status-honesty regression tests (Issue: false "applied"
+# when expected_deliveries > 0 but deliveries_imported == 0)
+# ---------------------------------------------------------------------------
+
+
+def test_cpl_reset_reimport_apply_status_applied_when_deliveries_present(
+    client: TestClient,
+) -> None:
+    """Applied zip with a valid CPL payload must return status=applied and deliveries_imported > 0."""
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    _batch_id, _game_id = _create_and_apply_batch(client, token, payload)
+    zip_payload = _build_zip({"1019645.json": json.dumps(payload).encode("utf-8")})
+
+    resp = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/apply",
+        headers=_auth_headers(token),
+        files={"file": ("cpl.zip", zip_payload, "application/zip")},
+        data={"confirm": "true", "max_batch_size": "25"},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "applied", (
+        f"Expected status=applied but got {data['status']!r}. "
+        f"errors={data.get('errors')}, deliveries_imported={data.get('deliveries_imported')}"
+    )
+    assert (
+        data["deliveries_imported"] > 0
+    ), "deliveries_imported must be > 0 for a valid reimport with expected deliveries"
+    assert data["errors"] == [], f"Expected no errors but got: {data['errors']}"
+
+
+def test_cpl_reset_reimport_apply_zero_deliveries_returns_failed_not_applied(
+    client: TestClient,
+) -> None:
+    """When expected_deliveries > 0 but the game has zero deliveries after the operation,
+    the response must be status=failed (not applied) with an explicit error.
+
+    Regression test for: CPL reset/reimport false applied status when actual delivery
+    count is zero.
+    """
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    _batch_id, game_id = _create_and_apply_batch(client, token, payload)
+
+    # Call apply WITHOUT a source payload so the backfill is blocked (missing_source_json).
+    # This produces: processed_matches=0, deliveries_imported=0, expected_deliveries>0.
+    # The endpoint must NOT return status=applied in this case.
+    apply = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/apply",
+        headers=_auth_headers(token),
+        json={"confirm": True, "match_ids": [game_id], "max_batch_size": 25},
+    )
+    assert apply.status_code == 200, apply.text
+    data = apply.json()
+
+    assert data["status"] == "failed", (
+        f"Expected status=failed when deliveries_imported=0 and expected_deliveries>0, "
+        f"but got status={data['status']!r}"
+    )
+    assert data["deliveries_imported"] == 0
+    assert (
+        len(data["errors"]) > 0
+    ), "errors must be non-empty when delivery rebuild produces zero rows"
+    # The response must contain an explicit error about zero rows or missing source.
+    errors_combined = " ".join(data["errors"])
+    assert (
+        "missing_source_json" in errors_combined or "delivery_rebuild_zero_rows" in errors_combined
+    ), f"Expected an explicit delivery or source error, got: {data['errors']}"
+    # The game must not have gained deliveries.
+    assert _load_game(client, game_id).deliveries in (None, [])
+
+
+def test_cpl_reset_reimport_apply_zero_deliveries_explicit_error_message(
+    client: TestClient,
+) -> None:
+    """When expected_deliveries > 0 and deliveries_imported == 0, the errors field must contain
+    an explicit error message (not be empty).
+
+    Uses a source_payloads_by_batch override that is structurally valid (has deliveries) but
+    whose hash does not match the stored batch hash. The audit marks the batch eligible
+    (expected_deliveries > 0) but apply_historical_deliveries fails the hash gate, leaving
+    deliveries_imported == 0. The endpoint must add a delivery_rebuild_zero_rows error.
+    """
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, _game_id = _create_and_apply_batch(client, token, payload)
+
+    # Build a structurally valid payload that differs from the original (different hash).
+    mismatch_payload = deepcopy(payload)
+    mismatch_payload.setdefault("info", {})["_test_marker"] = "hash_mismatch_sentinel"
+
+    apply = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/apply",
+        headers=_auth_headers(token),
+        json={
+            "confirm": True,
+            "batch_ids": [batch_id],
+            "max_batch_size": 25,
+            "source_payloads_by_batch": {batch_id: mismatch_payload},
+        },
+    )
+    assert apply.status_code == 200, apply.text
+    data = apply.json()
+
+    # Audit sees deliveries in mismatch_payload → expected_deliveries > 0
+    # Apply fails hash check → deliveries_imported == 0
+    assert (
+        data["expected_deliveries"] > 0
+    ), "Fixture must have expected_deliveries > 0 for this test to be meaningful"
+    assert (
+        data["deliveries_imported"] == 0
+    ), "Hash-mismatched payload must not result in any deliveries being imported"
+    # The key requirement: errors must be non-empty (not silently succeed)
+    assert data[
+        "errors"
+    ], "errors must be non-empty when expected_deliveries > 0 and deliveries_imported == 0"
+    assert data["status"] in (
+        "failed",
+        "partial",
+    ), f"status must be 'failed' or 'partial', not {data['status']!r}"
+
+
+def test_cpl_reset_reimport_apply_processed_matches_does_not_imply_success(
+    client: TestClient,
+) -> None:
+    """processed_matches > 0 must not by itself produce status=applied when deliveries are zero.
+
+    This test simulates the scenario where the apply path processes a match but the
+    game ends up with zero deliveries (e.g., source missing / blocked). The endpoint
+    must return status=failed or status=partial, never status=applied.
+    """
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    _batch_id, game_id = _create_and_apply_batch(client, token, payload)
+
+    # No source payload provided → batch is blocked; processed_matches stays 0.
+    apply = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/apply",
+        headers=_auth_headers(token),
+        json={"confirm": True, "match_ids": [game_id], "max_batch_size": 25},
+    )
+    assert apply.status_code == 200, apply.text
+    data = apply.json()
+
+    # Whether blocked (processed=0) or somehow processed with 0 deliveries, the rule holds:
+    # if expected > 0 and deliveries_imported == 0, status must not be "applied".
+    if data["expected_deliveries"] > 0 and data["deliveries_imported"] == 0:
+        assert data["status"] != "applied", (
+            "status must not be 'applied' when expected_deliveries > 0 and deliveries_imported == 0. "
+            f"Got status={data['status']!r}, errors={data.get('errors')}"
+        )
+
+
+def test_cpl_reset_reimport_apply_idempotent_second_run_reports_honest_count(
+    client: TestClient,
+) -> None:
+    """A second apply on the same game must still show deliveries_imported > 0 (total in game),
+    not 0 (delta), and status must be 'applied'.
+
+    This validates that the fix uses deliveries_after (total in game post-op) rather than
+    deliveries_rebuilt (delta), so a reimport of already-imported data is still honest.
+    """
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    _batch_id, game_id = _create_and_apply_batch(client, token, payload)
+    zip_payload = _build_zip({"1019645.json": json.dumps(payload).encode("utf-8")})
+
+    # First apply
+    first = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/apply",
+        headers=_auth_headers(token),
+        files={"file": ("cpl.zip", zip_payload, "application/zip")},
+        data={"confirm": "true", "max_batch_size": "25"},
+    )
+    assert first.status_code == 200, first.text
+    first_data = first.json()
+    assert first_data["status"] == "applied"
+    assert first_data["deliveries_imported"] > 0
+    first_game_count = len(_load_game(client, game_id).deliveries or [])
+    assert first_game_count > 0
+
+    # Second apply (reimport of the same game that already has deliveries)
+    second = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/apply",
+        headers=_auth_headers(token),
+        files={"file": ("cpl.zip", zip_payload, "application/zip")},
+        data={"confirm": "true", "max_batch_size": "25"},
+    )
+    assert second.status_code == 200, second.text
+    second_data = second.json()
+
+    # The second run must still report status=applied and deliveries_imported > 0
+    # (total in game, not delta which would be 0).
+    assert second_data["status"] == "applied", (
+        f"Second reimport must still be 'applied'. Got {second_data['status']!r}. "
+        f"errors={second_data.get('errors')}"
+    )
+    assert (
+        second_data["deliveries_imported"] > 0
+    ), "deliveries_imported must reflect total deliveries in game (not delta) on second apply"
+    # No new deliveries should have been created (idempotency).
+    second_game_count = len(_load_game(client, game_id).deliveries or [])
+    assert second_game_count == first_game_count

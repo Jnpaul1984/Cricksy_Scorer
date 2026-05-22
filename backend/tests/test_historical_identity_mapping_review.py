@@ -82,8 +82,20 @@ async def _make_player_batch(
             "teams_preview": ["Barbados Tridents", "St Kitts and Nevis Patriots"],
             "player_names_found": list(roster_names),
             "innings_preview": [
-                {"inning_no": 1, "team": "Barbados Tridents", "deliveries": 6, "runs": 10, "wickets": 1},
-                {"inning_no": 2, "team": "St Kitts and Nevis Patriots", "deliveries": 6, "runs": 8, "wickets": 2},
+                {
+                    "inning_no": 1,
+                    "team": "Barbados Tridents",
+                    "deliveries": 6,
+                    "runs": 10,
+                    "wickets": 1,
+                },
+                {
+                    "inning_no": 2,
+                    "team": "St Kitts and Nevis Patriots",
+                    "deliveries": 6,
+                    "runs": 8,
+                    "wickets": 2,
+                },
             ],
             "canonical_preview": {
                 "competition_context": {
@@ -95,7 +107,8 @@ async def _make_player_batch(
                     "source_schema": "cricsheet_json",
                     "source_hash_sha256": source_hash,
                 },
-                "squad_roster_snapshot": roster_entries or [
+                "squad_roster_snapshot": roster_entries
+                or [
                     {
                         "team_name": "Barbados Tridents",
                         "named_squad": list(roster_names),
@@ -120,6 +133,7 @@ async def _make_unresolved_venue_queue(
 ) -> tuple[str, str | None]:
     """Manually insert a venue resolution queue entry and return (queue_id, decision_id)."""
     import datetime as dt
+
     now = dt.datetime.now(dt.UTC)
 
     # Create decision first
@@ -948,9 +962,7 @@ async def test_link_player_to_nonexistent_canonical_raises_422(
 
     try:
         transport = ASGITransport(app=fastapi_app)
-        async with AsyncClient(
-            transport=transport, base_url="http://test", timeout=30.0
-        ) as client:
+        async with AsyncClient(transport=transport, base_url="http://test", timeout=30.0) as client:
             resp = await client.post(
                 f"/api/historical-import/json/identity-review/players/{source_player_id}/link",
                 json={"canonical_player_id": 99999},
