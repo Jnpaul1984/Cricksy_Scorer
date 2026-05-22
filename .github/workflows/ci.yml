@@ -108,7 +108,10 @@ jobs:
           # joblib/PYSEC-2024-277 currently has no fixed upstream release; multiple current
           # joblib versions still fail pip-audit, so revisit this ignore when a fixed version
           # is published in the advisory database.
-          pip-audit -r requirements.txt --progress-spinner off --ignore-vuln GHSA-wj6h-64fc-37mp --ignore-vuln GHSA-pwr2-4v36-6qpr --ignore-vuln PYSEC-2024-277
+          # TEMPORARY: FastAPI currently resolves with Starlette <1.0.0 in this dependency set
+          # (pydantic is pinned to 2.5.0), so PYSEC-2026-161 cannot be remediated here yet.
+          # Revisit this ignore once a compatible FastAPI/Starlette>=1.0.1 upgrade path is adopted.
+          pip-audit -r requirements.txt --progress-spinner off --ignore-vuln GHSA-wj6h-64fc-37mp --ignore-vuln GHSA-pwr2-4v36-6qpr --ignore-vuln PYSEC-2024-277 --ignore-vuln PYSEC-2026-161
 
       - name: Bandit (backend code)
         run: |
