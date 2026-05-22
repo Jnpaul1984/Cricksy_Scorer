@@ -14,7 +14,7 @@
 
 ## Branch protection guidance
 
-- Require CI/lint/test/build checks (for example `CI` and `Lint`) as merge gates.
+- Require CI deploy-parity checks as merge gates (at minimum `Backend (deploy validation parity)` and `Frontend (build + type-check)` under the `CI` workflow).
 - Do **not** require production deploy workflows (`Deploy Backend`, `Deploy Frontend`) as branch protection checks.
 - Deploy workflows may still fail safely when manually triggered without required deployment secrets.
 
