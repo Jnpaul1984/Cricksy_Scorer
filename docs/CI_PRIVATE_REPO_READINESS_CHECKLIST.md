@@ -4,11 +4,19 @@
 - [x] **Async DB teardown hardening**: backend `db_session` fixture now tolerates SQLite `"no active connection"` during teardown rollback/close.
 - [x] **Frontend build CI** disables Cypress binary install for non-E2E build jobs (`CYPRESS_INSTALL_BINARY=0`).
 - [x] **Frontend build dependencies** explicitly verify `sharp` is present in CI (`npm ls sharp --depth=0`).
-- [x] **Deploy Backend** fails early when required secrets are missing (`APP_SECRET_KEY`, `AWS_GITHUB_DEPLOY_ROLE_ARN`).
-- [x] **Deploy Frontend** fails early when `FIREBASE_TOKEN` is missing.
+- [x] **CI deploy-parity validation** runs branch-safe backend deploy checks (dependency install, Alembic upgrade, backend startup import, `pytest -v`) without production deploy secrets.
+- [x] **CI deploy-parity validation** runs branch-safe frontend deploy checks (`npm ci` with `CYPRESS_INSTALL_BINARY=0`, `npm run build`, and `frontend/dist/index.html` artifact validation).
+- [x] **Deploy Backend** secret validation is restricted to production mutation jobs (`build-and-scan` / `deploy`), not branch-safe validation jobs.
+- [x] **Deploy Frontend** secret validation is restricted to the Firebase deploy stage.
 - [x] **Deploy Frontend** validates build artifacts (`frontend/dist/index.html`) before deployment.
 - [x] **Workflow permissions** are explicit (`contents: read` on deploy frontend; backend deploy already declares permissions).
 - [x] **Manual trigger safety** exists for both deploy workflows (`workflow_dispatch` present).
+
+## Branch protection guidance
+
+- Require CI/lint/test/build checks (for example `CI` and `Lint`) as merge gates.
+- Do **not** require production deploy workflows (`Deploy Backend`, `Deploy Frontend`) as branch protection checks.
+- Deploy workflows may still fail safely when manually triggered without required deployment secrets.
 
 ## Required repository secrets
 

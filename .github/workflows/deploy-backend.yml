@@ -38,19 +38,9 @@ jobs:
           --health-retries=5
     env:
       DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/cricksy
-      APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Validate required deploy secrets
-        env:
-          APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
-          AWS_GITHUB_DEPLOY_ROLE_ARN: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN }}
-        run: |
-          set -euo pipefail
-          [ -n "${APP_SECRET_KEY}" ] || { echo "::error::Missing required secret APP_SECRET_KEY"; exit 1; }
-          [ -n "${AWS_GITHUB_DEPLOY_ROLE_ARN}" ] || { echo "::error::Missing required secret AWS_GITHUB_DEPLOY_ROLE_ARN"; exit 1; }
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -117,6 +107,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate required deploy secrets
+        env:
+          AWS_GITHUB_DEPLOY_ROLE_ARN: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          [ -n "${AWS_GITHUB_DEPLOY_ROLE_ARN}" ] || { echo "::error::Missing required secret AWS_GITHUB_DEPLOY_ROLE_ARN"; exit 1; }
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -233,6 +230,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate required deploy secrets
+        env:
+          APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
+          AWS_GITHUB_DEPLOY_ROLE_ARN: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          [ -n "${APP_SECRET_KEY}" ] || { echo "::error::Missing required secret APP_SECRET_KEY"; exit 1; }
+          [ -n "${AWS_GITHUB_DEPLOY_ROLE_ARN}" ] || { echo "::error::Missing required secret AWS_GITHUB_DEPLOY_ROLE_ARN"; exit 1; }
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
