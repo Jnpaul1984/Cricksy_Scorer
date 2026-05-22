@@ -33,7 +33,10 @@ from backend.api.schemas.analyst_matches import (
 )
 from backend.sql_app.match_ai import MatchAiSummaryResponse
 from backend.services.analyst_access import scoped_games_stmt
-from backend.services.historical_import_delivery_service import cricket_overs_from_legal_balls
+from backend.services.historical_import_delivery_service import (
+    coerce_delivery_ledger,
+    cricket_overs_from_legal_balls,
+)
 from backend.services.match_ai_service import MatchAiService
 from backend.services.match_context_service import (
     generate_match_context_package,
@@ -77,7 +80,7 @@ def _data_completeness_label(game: Game) -> str:
     hist_meta_value = phases.get("historical_import")
     hist_meta = hist_meta_value if isinstance(hist_meta_value, dict) else {}
     has_innings = bool(phases.get("historical_innings_summary"))
-    deliveries = game.deliveries if isinstance(game.deliveries, list) else []
+    deliveries = coerce_delivery_ledger(game.deliveries)
     has_deliveries = bool(hist_meta.get("deliveries_imported")) or len(deliveries) > 0
     if not has_innings:
         return "metadata_only"
@@ -130,7 +133,7 @@ def _match_innings_summaries(game: Game) -> list[AnalystMatchInningsSummary]:
     hist_innings = phases.get("historical_innings_summary") or []
     deliveries_imported = (
         isinstance(hist_meta, dict) and bool(hist_meta.get("deliveries_imported"))
-    ) or bool(isinstance(game.deliveries, list) and len(game.deliveries) > 0)
+    ) or bool(len(coerce_delivery_ledger(game.deliveries)) > 0)
 
     if hist_meta and hist_innings:
         for idx, inning in enumerate(hist_innings, start=1):
@@ -198,7 +201,7 @@ def _match_innings_summaries(game: Game) -> list[AnalystMatchInningsSummary]:
 
 def _delivery_rows_from_game(game: Game) -> list[AnalystDeliveryRow]:
     rows: list[AnalystDeliveryRow] = []
-    deliveries = game.deliveries if isinstance(game.deliveries, list) else []
+    deliveries = coerce_delivery_ledger(game.deliveries)
     completeness = _data_completeness_label(game)
     team_a_name = _team_name(game.team_a, "Team A")
     team_b_name = _team_name(game.team_b, "Team B")
@@ -257,7 +260,7 @@ def _delivery_rows_from_game(game: Game) -> list[AnalystDeliveryRow]:
 
 def _export_rows_for_game(game: Game) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    deliveries = game.deliveries if isinstance(game.deliveries, list) else []
+    deliveries = coerce_delivery_ledger(game.deliveries)
     team_a_name = _team_name(game.team_a, "Team A")
     team_b_name = _team_name(game.team_b, "Team B")
     created_at = getattr(game, "created_at", None)

@@ -1351,3 +1351,120 @@ def test_cpl_reset_reimport_apply_idempotent_second_run_reports_honest_count(
     # No new deliveries should have been created (idempotency).
     second_game_count = len(_load_game(client, game_id).deliveries or [])
     assert second_game_count == first_game_count
+
+
+def test_cpl_reset_reimport_apply_counts_stringified_delivery_json(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If DB returns deliveries as JSON text, apply must still report persisted counts."""
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, _game_id = _create_and_apply_batch(client, token, payload)
+
+    async def _fake_apply_historical_deliveries(
+        db: Any,
+        *,
+        batch_id: str,
+        confirm: bool,
+        raw_payload: bytes,
+        allow_reprocess: bool = False,
+    ) -> tuple[dict[str, Any] | None, list[str], str | None]:
+        from backend.services.historical_import_delivery_service import extract_normalized_innings
+
+        batch = await db.scalar(
+            select(models.HistoricalImportBatch).where(models.HistoricalImportBatch.id == batch_id)
+        )
+        assert batch is not None and batch.applied_game_id
+        game = await db.scalar(select(models.Game).where(models.Game.id == batch.applied_game_id))
+        assert game is not None
+        innings = extract_normalized_innings(json.loads(raw_payload.decode("utf-8")))
+        all_deliveries = [d for inn in innings for d in inn["deliveries"]]
+
+        phases = game.phases if isinstance(game.phases, dict) else {}
+        hist_meta = (
+            phases.get("historical_import")
+            if isinstance(phases.get("historical_import"), dict)
+            else {}
+        )
+        hist_meta["deliveries_imported"] = True
+        phases["historical_import"] = hist_meta
+        game.phases = phases
+        # Simulate legacy environments that surface JSON columns as text.
+        game.deliveries = json.dumps(all_deliveries)
+        db.add(game)
+        await db.commit()
+        return (
+            {
+                "game_id": game.id,
+                "deliveries_imported": len(all_deliveries),
+                "innings_processed": len(innings),
+                "totals_validation": [],
+            },
+            [],
+            None,
+        )
+
+    monkeypatch.setattr(
+        "backend.services.historical_import_reprocess_service.apply_historical_deliveries",
+        _fake_apply_historical_deliveries,
+    )
+
+    apply = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/apply",
+        headers=_auth_headers(token),
+        json={
+            "confirm": True,
+            "batch_ids": [batch_id],
+            "max_batch_size": 25,
+            "source_payloads_by_batch": {batch_id: payload},
+        },
+    )
+    assert apply.status_code == 200, apply.text
+    data = apply.json()
+
+    assert data["expected_deliveries"] > 0
+    assert data["status"] == "applied", data
+    assert data["deliveries_imported"] == data["expected_deliveries"], data
+    assert data["errors"] == [], data["errors"]
+
+
+def test_analyst_deliveries_reads_stringified_game_deliveries(client: TestClient) -> None:
+    token = _register_analyst(client)
+    payload = _cpl_payload_with_registry()
+    batch_id, game_id = _create_and_apply_batch(client, token, payload)
+
+    apply = client.post(
+        "/api/historical-import/json/cpl-reset-reimport/apply",
+        headers=_auth_headers(token),
+        json={
+            "confirm": True,
+            "batch_ids": [batch_id],
+            "max_batch_size": 25,
+            "source_payloads_by_batch": {batch_id: payload},
+        },
+    )
+    assert apply.status_code == 200, apply.text
+    apply_data = apply.json()
+    assert apply_data["status"] == "applied", apply_data
+
+    game = _load_game(client, game_id)
+    assert isinstance(game.deliveries, list) and len(game.deliveries) > 0
+
+    async def _stringify_deliveries() -> None:
+        async with client.session_maker() as session:  # type: ignore[attr-defined]
+            db_game = await session.scalar(select(models.Game).where(models.Game.id == game_id))
+            assert db_game is not None
+            db_game.deliveries = json.dumps(game.deliveries)
+            session.add(db_game)
+            await session.commit()
+
+    asyncio.get_event_loop().run_until_complete(_stringify_deliveries())
+
+    deliveries_resp = client.get(
+        "/api/analyst/deliveries",
+        headers=_auth_headers(token),
+        params={"match_id": game_id},
+    )
+    assert deliveries_resp.status_code == 200, deliveries_resp.text
+    deliveries_data = deliveries_resp.json()
+    assert deliveries_data["total"] == len(game.deliveries), deliveries_data

@@ -10,6 +10,7 @@ from backend.domain.constants import as_extra_code as norm_extra
 from backend.routes import games as _games_impl
 from backend.services import game_helpers as gh
 from backend.services import validation as validation_helpers
+from backend.services.historical_import_delivery_service import coerce_delivery_ledger
 from backend.services.live_bus import emit_state_update
 from backend.services.scoring_service import score_one as _score_one
 from backend.services.snapshot_service import build_snapshot as _snapshot_from_game
@@ -224,7 +225,7 @@ async def get_deliveries(
     g = cast(Any, game)
 
     # Read the raw ledger (combined across innings)
-    raw_seq: Sequence[Any] = getattr(g, "deliveries", []) or []
+    raw_seq: Sequence[Any] = coerce_delivery_ledger(getattr(g, "deliveries", []))
     rows: list[dict[str, Any]] = []
     for item in raw_seq:
         d = _model_to_dict(item)
@@ -958,7 +959,7 @@ async def get_recent_deliveries(
     g = cast(Any, game)
 
     # Slice last N from the authoritative ledger, newest-first
-    raw_seq: Sequence[Any] = getattr(g, "deliveries", []) or []
+    raw_seq: Sequence[Any] = coerce_delivery_ledger(getattr(g, "deliveries", []))
     tail: list[Any] = list(raw_seq)[-limit:][::-1]
 
     # Normalize each item to a dict

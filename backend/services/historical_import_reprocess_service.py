@@ -9,7 +9,10 @@ from pathlib import Path
 from typing import Any
 
 from backend.services.historical_import_apply_service import apply_historical_deliveries
-from backend.services.historical_import_delivery_service import extract_normalized_innings
+from backend.services.historical_import_delivery_service import (
+    coerce_delivery_ledger,
+    extract_normalized_innings,
+)
 from backend.services.historical_player_identity_service import register_historical_source_players
 from backend.services.s3_service import s3_service
 from backend.sql_app.models import Game, HistoricalImportBatch
@@ -25,7 +28,7 @@ def _completeness(game: Game) -> str:
         phases.get("historical_import") if isinstance(phases.get("historical_import"), dict) else {}
     )
     has_innings = bool(phases.get("historical_innings_summary"))
-    deliveries = game.deliveries if isinstance(game.deliveries, list) else []
+    deliveries = coerce_delivery_ledger(game.deliveries)
     has_deliveries = bool(hist_meta.get("deliveries_imported")) or bool(deliveries)
     if not has_innings:
         return "metadata_only"
@@ -710,7 +713,7 @@ async def audit_delivery_backfill(
             if isinstance(phases.get("historical_import"), dict)
             else {}
         )
-        deliveries = game.deliveries if isinstance(game.deliveries, list) else []
+        deliveries = coerce_delivery_ledger(game.deliveries)
         duplicate_risk = bool(deliveries) or bool(hist_meta.get("deliveries_imported"))
 
         override_payload = payload_overrides.get(batch.id)
@@ -878,12 +881,9 @@ async def apply_delivery_backfill(
             )
             continue
 
-        before_deliveries = len(game.deliveries) if isinstance(game.deliveries, list) else 0
-        before_wickets = (
-            sum(1 for d in (game.deliveries or []) if isinstance(d, dict) and d.get("is_wicket"))
-            if isinstance(game.deliveries, list)
-            else 0
-        )
+        before_delivery_rows = coerce_delivery_ledger(game.deliveries)
+        before_deliveries = len(before_delivery_rows)
+        before_wickets = sum(1 for d in before_delivery_rows if d.get("is_wicket"))
         before_completeness = _completeness(game)
         game_id_for_result = game.id
 
@@ -1063,14 +1063,12 @@ async def apply_delivery_backfill(
                     }
                 )
 
-            after_deliveries = len(game.deliveries) if isinstance(game.deliveries, list) else 0
-            after_wickets = (
-                sum(
-                    1 for d in (game.deliveries or []) if isinstance(d, dict) and d.get("is_wicket")
-                )
-                if isinstance(game.deliveries, list)
-                else 0
-            )
+            after_delivery_rows = coerce_delivery_ledger(game.deliveries)
+            if isinstance(game.deliveries, str) and after_delivery_rows:
+                game.deliveries = after_delivery_rows
+                db.add(game)
+            after_deliveries = len(after_delivery_rows)
+            after_wickets = sum(1 for d in after_delivery_rows if d.get("is_wicket"))
             after_completeness = _completeness(game)
 
             log = hist_meta.get("_delivery_backfill_log")
