@@ -103,7 +103,6 @@ from backend.services.historical_player_identity_service import (
     get_player_candidates,
     link_source_player,
     list_unresolved_players,
-    normalize_source_player_name,
 )
 from backend.services.historical_venue_intelligence_service import (
     create_venue_alias_for_existing,
@@ -3237,7 +3236,11 @@ async def cpl_reset_reimport_dry_run(
     max_batch_size = int(payload.get("max_batch_size") or 25)
     source_payloads_by_batch = _parse_payload_overrides(payload.get("source_payloads_by_batch"))
 
-    source_preview: HistoricalBulkZipSourcePayloadDryRunResponse | HistoricalSourcePayloadReattachDryRunResponse | None = None
+    source_preview: (
+        HistoricalBulkZipSourcePayloadDryRunResponse
+        | HistoricalSourcePayloadReattachDryRunResponse
+        | None
+    ) = None
     inferred_batch_ids: list[str] = []
     inferred_payloads_by_batch: dict[str, dict[str, Any]] = {}
     source_file_mapping: list[dict[str, Any]] = []
@@ -3345,7 +3348,9 @@ async def cpl_reset_reimport_dry_run(
             "blocked_records": audit["blocked_matches"],
         },
         "blocked_records": blocked_records,
-        "source_bundle_preview": source_preview.model_dump() if source_preview is not None else None,
+        "source_bundle_preview": source_preview.model_dump()
+        if source_preview is not None
+        else None,
         "source_file_mapping": source_file_mapping,
         "audit": audit,
     }
@@ -3471,9 +3476,7 @@ async def cpl_reset_reimport_apply(
     audit_snapshot = (
         reimport_report.get("audit_snapshot") if isinstance(reimport_report, dict) else {}
     )
-    audit_records = (
-        list(audit_snapshot.values()) if isinstance(audit_snapshot, dict) else []
-    )
+    audit_records = list(audit_snapshot.values()) if isinstance(audit_snapshot, dict) else []
     selected_match_ids = {
         str(record.get("match_id") or "")
         for record in audit_records
@@ -3545,16 +3548,13 @@ async def cpl_reset_reimport_apply(
     # Top-level guard: if deliveries were expected but none exist in any processed game, that is a
     # hard failure regardless of processed_matches count.
     if expected_deliveries > 0 and deliveries_imported == 0:
-        errors.append(
-            f"delivery_rebuild_zero_rows "
-            f"(expected={expected_deliveries}, actual=0)"
-        )
+        errors.append(f"delivery_rebuild_zero_rows " f"(expected={expected_deliveries}, actual=0)")
 
     processed_matches_count = int(reimport_report.get("processed_matches") or 0)
     status = str(reimport_report.get("status") or "failed")
     if errors:
         if expected_deliveries > 0 and deliveries_imported == 0:
-            # No deliveries at all despite expectation – full failure regardless of processed count
+            # No deliveries at all despite expectation - full failure regardless of processed count
             status = "failed"
         elif processed_matches_count > 0:
             status = "partial"
@@ -4462,9 +4462,7 @@ async def list_identity_review_unresolved(
         queue_row = (
             (
                 await db.execute(
-                    select(_Queue).where(
-                        _Queue.source_player_id == reg.source_player_id
-                    )
+                    select(_Queue).where(_Queue.source_player_id == reg.source_player_id)
                 )
             )
             .scalars()

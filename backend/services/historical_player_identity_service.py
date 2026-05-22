@@ -1254,7 +1254,9 @@ async def register_historical_source_players(
                 }
             )
 
-        summary["resolved_count"] = summary["auto_resolved_count"] + summary["manually_resolved_count"]
+        summary["resolved_count"] = (
+            summary["auto_resolved_count"] + summary["manually_resolved_count"]
+        )
 
     return summary
 

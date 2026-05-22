@@ -164,9 +164,7 @@ def _register_analyst(client: TestClient) -> str:
 def _seed_players(client: TestClient, names: list[str]) -> None:
     async def _insert() -> None:
         async with client.session_maker() as session:  # type: ignore[attr-defined]
-            max_player_id = (
-                await session.scalar(select(func.max(models.Player.id)))
-            ) or 0
+            max_player_id = (await session.scalar(select(func.max(models.Player.id)))) or 0
             for offset, name in enumerate(names, start=1):
                 session.add(models.Player(id=max_player_id + offset, name=name))
             await session.commit()
@@ -1175,9 +1173,9 @@ def test_cpl_reset_reimport_apply_status_applied_when_deliveries_present(
         f"Expected status=applied but got {data['status']!r}. "
         f"errors={data.get('errors')}, deliveries_imported={data.get('deliveries_imported')}"
     )
-    assert data["deliveries_imported"] > 0, (
-        "deliveries_imported must be > 0 for a valid reimport with expected deliveries"
-    )
+    assert (
+        data["deliveries_imported"] > 0
+    ), "deliveries_imported must be > 0 for a valid reimport with expected deliveries"
     assert data["errors"] == [], f"Expected no errors but got: {data['errors']}"
 
 
@@ -1210,12 +1208,14 @@ def test_cpl_reset_reimport_apply_zero_deliveries_returns_failed_not_applied(
         f"but got status={data['status']!r}"
     )
     assert data["deliveries_imported"] == 0
-    assert len(data["errors"]) > 0, "errors must be non-empty when delivery rebuild produces zero rows"
+    assert (
+        len(data["errors"]) > 0
+    ), "errors must be non-empty when delivery rebuild produces zero rows"
     # The response must contain an explicit error about zero rows or missing source.
     errors_combined = " ".join(data["errors"])
-    assert "missing_source_json" in errors_combined or "delivery_rebuild_zero_rows" in errors_combined, (
-        f"Expected an explicit delivery or source error, got: {data['errors']}"
-    )
+    assert (
+        "missing_source_json" in errors_combined or "delivery_rebuild_zero_rows" in errors_combined
+    ), f"Expected an explicit delivery or source error, got: {data['errors']}"
     # The game must not have gained deliveries.
     assert _load_game(client, game_id).deliveries in (None, [])
 
@@ -1254,19 +1254,20 @@ def test_cpl_reset_reimport_apply_zero_deliveries_explicit_error_message(
 
     # Audit sees deliveries in mismatch_payload → expected_deliveries > 0
     # Apply fails hash check → deliveries_imported == 0
-    assert data["expected_deliveries"] > 0, (
-        "Fixture must have expected_deliveries > 0 for this test to be meaningful"
-    )
-    assert data["deliveries_imported"] == 0, (
-        "Hash-mismatched payload must not result in any deliveries being imported"
-    )
+    assert (
+        data["expected_deliveries"] > 0
+    ), "Fixture must have expected_deliveries > 0 for this test to be meaningful"
+    assert (
+        data["deliveries_imported"] == 0
+    ), "Hash-mismatched payload must not result in any deliveries being imported"
     # The key requirement: errors must be non-empty (not silently succeed)
-    assert data["errors"], (
-        "errors must be non-empty when expected_deliveries > 0 and deliveries_imported == 0"
-    )
-    assert data["status"] in ("failed", "partial"), (
-        f"status must be 'failed' or 'partial', not {data['status']!r}"
-    )
+    assert data[
+        "errors"
+    ], "errors must be non-empty when expected_deliveries > 0 and deliveries_imported == 0"
+    assert data["status"] in (
+        "failed",
+        "partial",
+    ), f"status must be 'failed' or 'partial', not {data['status']!r}"
 
 
 def test_cpl_reset_reimport_apply_processed_matches_does_not_imply_success(
@@ -1344,9 +1345,9 @@ def test_cpl_reset_reimport_apply_idempotent_second_run_reports_honest_count(
         f"Second reimport must still be 'applied'. Got {second_data['status']!r}. "
         f"errors={second_data.get('errors')}"
     )
-    assert second_data["deliveries_imported"] > 0, (
-        "deliveries_imported must reflect total deliveries in game (not delta) on second apply"
-    )
+    assert (
+        second_data["deliveries_imported"] > 0
+    ), "deliveries_imported must reflect total deliveries in game (not delta) on second apply"
     # No new deliveries should have been created (idempotency).
     second_game_count = len(_load_game(client, game_id).deliveries or [])
     assert second_game_count == first_game_count

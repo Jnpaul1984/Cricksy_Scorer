@@ -1036,10 +1036,7 @@ async def apply_delivery_backfill(
                     continue
                 source_name = str(item.get("source_player_name") or "").strip()
                 reason = str(item.get("reason") or "").strip() or "no_exact_match"
-                if (
-                    not source_registry_people.get(source_name)
-                    and reason == "no_exact_match"
-                ):
+                if not source_registry_people.get(source_name) and reason == "no_exact_match":
                     reason = "missing_source_id"
                 unresolved_player_reasons.append(
                     {
@@ -1069,9 +1066,7 @@ async def apply_delivery_backfill(
             after_deliveries = len(game.deliveries) if isinstance(game.deliveries, list) else 0
             after_wickets = (
                 sum(
-                    1
-                    for d in (game.deliveries or [])
-                    if isinstance(d, dict) and d.get("is_wicket")
+                    1 for d in (game.deliveries or []) if isinstance(d, dict) and d.get("is_wicket")
                 )
                 if isinstance(game.deliveries, list)
                 else 0
@@ -1120,9 +1115,7 @@ async def apply_delivery_backfill(
                     "deliveries_after": after_deliveries,
                     "wickets_before": before_wickets,
                     "wickets_after": after_wickets,
-                    "player_mappings_updated": int(
-                        registry_summary.get("resolved_count") or 0
-                    ),
+                    "player_mappings_updated": int(registry_summary.get("resolved_count") or 0),
                     "mappings_updated": int(registry_summary.get("mapping_records_updated") or 0),
                     "mappings_created": int(registry_summary.get("mapping_records_created") or 0),
                     "resolved_players": int(registry_summary.get("resolved_count") or 0),
