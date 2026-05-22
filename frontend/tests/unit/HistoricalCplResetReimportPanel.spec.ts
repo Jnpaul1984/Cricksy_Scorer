@@ -171,6 +171,47 @@ describe('HistoricalCplResetReimportPanel', () => {
     expect(wrapper.text()).not.toContain('Venues extracted')
   })
 
+  it('uses dry-run scope values when calling apply', async () => {
+    const scopedDryRunResponse = {
+      ...dryRunResponse,
+      scope: {
+        match_ids: ['match-dry-run-1', 'match-dry-run-2'],
+        batch_ids: ['batch-dry-run-9'],
+        max_batch_size: 7,
+      },
+    }
+    vi.mocked(api.runCplResetReimportDryRun).mockResolvedValue(scopedDryRunResponse)
+    vi.mocked(api.applyCplResetReimport).mockResolvedValue({
+      status: 'applied',
+      operation: 'cpl_reset_reimport_apply',
+      operation_id: 'op-scope',
+      scope: scopedDryRunResponse.scope,
+      source_payload_retention: { attempted: true, report: { status: 'applied', reattached_count: 1, skipped_count: 0, error_count: 0 } },
+      reimport_report: { status: 'applied', selected_batches: 1, selected_matches: 2 },
+    })
+
+    const wrapper = mount(HistoricalCplResetReimportPanel)
+    await uploadFile(wrapper)
+    await wrapper.get('[data-testid="hcrr-max-records"]').setValue('3')
+    await wrapper.get('[data-testid="hcrr-dry-run-btn"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('.hcrr-confirm input[type="checkbox"]').setValue(true)
+    await wrapper.get('[data-testid="hcrr-confirmation-phrase"]').setValue(
+      'I confirm this controlled CPL reset/reimport operation',
+    )
+    await wrapper.get('[data-testid="hcrr-apply-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(api.applyCplResetReimport).toHaveBeenCalledWith({
+      confirm: true,
+      file: sourceFile,
+      match_ids: ['match-dry-run-1', 'match-dry-run-2'],
+      batch_ids: ['batch-dry-run-9'],
+      max_batch_size: 7,
+      season: '',
+    })
+  })
+
   it('renders readable apply failure error', async () => {
     vi.mocked(api.runCplResetReimportDryRun).mockResolvedValue(dryRunResponse)
     vi.mocked(api.applyCplResetReimport).mockRejectedValue(new Error('Request failed'))

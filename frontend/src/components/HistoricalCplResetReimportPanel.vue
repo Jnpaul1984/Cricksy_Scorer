@@ -312,15 +312,18 @@ async function runDryRun() {
 }
 
 async function applyResetReimport() {
-  if (!selectedFile.value || !canApply.value) return
+  if (!selectedFile.value || !canApply.value || !dryRunResult.value) return
   loading.value = true
   loadingStep.value = 'apply'
   error.value = null
   try {
+    const dryRunScope = dryRunResult.value.scope
     applyResult.value = await applyCplResetReimport({
       confirm: true,
       file: selectedFile.value,
-      max_batch_size: Math.max(1, Math.min(25, Number(maxRecords.value) || 1)),
+      match_ids: dryRunScope.match_ids,
+      batch_ids: dryRunScope.batch_ids,
+      max_batch_size: dryRunScope.max_batch_size,
       season: seasonFilter.value,
     })
   } catch (err) {
