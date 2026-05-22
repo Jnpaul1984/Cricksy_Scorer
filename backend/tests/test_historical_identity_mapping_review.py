@@ -912,27 +912,49 @@ async def test_link_invalid_player_raises_422(async_client, db_session: AsyncSes
 
 @pytest.mark.asyncio
 async def test_link_player_to_nonexistent_canonical_raises_422(
-    async_client, db_session: AsyncSession
+    _setup_db,
 ) -> None:
     """Linking a source player to a non-existent canonical player returns 422."""
-    await _make_player_batch(db_session, roster_names=["DC Thomas"])
-    await db_session.commit()
+    from httpx import ASGITransport, AsyncClient
 
-    reg = (
-        (
-            await db_session.execute(
-                select(HistoricalSourcePlayerRegistry).where(
-                    HistoricalSourcePlayerRegistry.source_player_name == "DC Thomas"
+    from backend.app import create_app
+    from backend.sql_app.database import get_db, get_session_local
+
+    async with get_session_local()() as setup_session:
+        await _make_player_batch(setup_session, roster_names=["DC Thomas"])
+        await setup_session.commit()
+
+        reg = (
+            (
+                await setup_session.execute(
+                    select(HistoricalSourcePlayerRegistry).where(
+                        HistoricalSourcePlayerRegistry.source_player_name == "DC Thomas"
+                    )
                 )
             )
+            .scalars()
+            .first()
         )
-        .scalars()
-        .first()
-    )
-    assert reg is not None
+        assert reg is not None
+        source_player_id = reg.source_player_id
 
-    resp = await async_client.post(
-        f"/api/historical-import/json/identity-review/players/{reg.source_player_id}/link",
-        json={"canonical_player_id": 99999},
-    )
-    assert resp.status_code == 422
+    _, fastapi_app = create_app()
+
+    async def _override_get_db():
+        async with get_session_local()() as request_session:
+            yield request_session
+
+    fastapi_app.dependency_overrides[get_db] = _override_get_db
+
+    try:
+        transport = ASGITransport(app=fastapi_app)
+        async with AsyncClient(
+            transport=transport, base_url="http://test", timeout=30.0
+        ) as client:
+            resp = await client.post(
+                f"/api/historical-import/json/identity-review/players/{source_player_id}/link",
+                json={"canonical_player_id": 99999},
+            )
+        assert resp.status_code == 422
+    finally:
+        fastapi_app.dependency_overrides.clear()
