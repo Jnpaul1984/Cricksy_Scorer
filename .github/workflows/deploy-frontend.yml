@@ -24,13 +24,6 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Validate required deploy secrets
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-        run: |
-          set -euo pipefail
-          [ -n "${FIREBASE_TOKEN}" ] || { echo "::error::Missing required secret FIREBASE_TOKEN"; exit 1; }
-
       - name: Install dependencies
         working-directory: frontend
         env:
@@ -52,6 +45,13 @@ jobs:
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
+
+      - name: Validate required deploy secrets
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${FIREBASE_TOKEN}" ] || { echo "::error::Missing required secret FIREBASE_TOKEN"; exit 1; }
 
       - name: Deploy to Firebase Hosting
         env:
