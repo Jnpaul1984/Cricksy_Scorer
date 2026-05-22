@@ -3494,8 +3494,16 @@ async def cpl_reset_reimport_apply(
         for record in audit_records
         if isinstance(record, dict) and bool(record.get("eligible"))
     )
-    deliveries_imported = int(reimport_report.get("deliveries_rebuilt") or 0)
-    wickets_imported = int(reimport_report.get("wickets_rebuilt") or 0)
+    # Use the total deliveries/wickets present in the game after the operation (deliveries_after),
+    # not the delta (deliveries_rebuilt). This gives an honest count for reimport cases where the
+    # game already had deliveries: delta = 0, but the game correctly has all deliveries.
+    processed_results = [
+        r
+        for r in (reimport_report.get("results") or [])
+        if isinstance(r, dict) and r.get("status") == "processed"
+    ]
+    deliveries_imported = sum(int(r.get("deliveries_after") or 0) for r in processed_results)
+    wickets_imported = sum(int(r.get("wickets_after") or 0) for r in processed_results)
     players_extracted = int(reimport_report.get("resolved_players") or 0) + int(
         reimport_report.get("unresolved_players") or 0
     )
@@ -3534,9 +3542,24 @@ async def cpl_reset_reimport_apply(
                 f"(batch_id={batch_id}, expected={expected_wickets_for_batch}, actual={actual_wickets_for_batch})"
             )
 
+    # Top-level guard: if deliveries were expected but none exist in any processed game, that is a
+    # hard failure regardless of processed_matches count.
+    if expected_deliveries > 0 and deliveries_imported == 0:
+        errors.append(
+            f"delivery_rebuild_zero_rows "
+            f"(expected={expected_deliveries}, actual=0)"
+        )
+
+    processed_matches_count = int(reimport_report.get("processed_matches") or 0)
     status = str(reimport_report.get("status") or "failed")
     if errors:
-        status = "partial" if int(reimport_report.get("processed_matches") or 0) > 0 else "failed"
+        if expected_deliveries > 0 and deliveries_imported == 0:
+            # No deliveries at all despite expectation – full failure regardless of processed count
+            status = "failed"
+        elif processed_matches_count > 0:
+            status = "partial"
+        else:
+            status = "failed"
     sanitized_reattach_report = None
     if isinstance(reattach_summary, dict):
         sanitized_reattach_report = {
