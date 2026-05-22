@@ -163,11 +163,9 @@ jobs:
 
       - name: Validate required deploy secrets
         env:
-          APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
           AWS_GITHUB_DEPLOY_ROLE_ARN: ${{ secrets.AWS_GITHUB_DEPLOY_ROLE_ARN }}
         run: |
           set -euo pipefail
-          [ -n "${APP_SECRET_KEY}" ] || { echo "::error::Missing required secret APP_SECRET_KEY"; exit 1; }
           [ -n "${AWS_GITHUB_DEPLOY_ROLE_ARN}" ] || { echo "::error::Missing required secret AWS_GITHUB_DEPLOY_ROLE_ARN"; exit 1; }
 
       - name: Configure AWS credentials
