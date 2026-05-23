@@ -152,6 +152,89 @@ def _create_sparse_historical_pair(client: TestClient) -> tuple[str, str]:
     return asyncio.get_event_loop().run_until_complete(_create())
 
 
+def _create_historical_pair(
+    client: TestClient,
+    *,
+    deliveries: Any,
+    competition: str = "Caribbean Premier League",
+    season: str = "2013",
+    source_filename: str = "635234.json",
+    source_payload_available: bool = True,
+) -> tuple[str, str]:
+    async def _create() -> tuple[str, str]:
+        async with client.session_maker() as session:  # type: ignore[attr-defined]
+            batch_id = str(uuid.uuid4())
+            game_id = str(uuid.uuid4())
+            game = models.Game(
+                id=game_id,
+                team_a={"name": "Team A"},
+                team_b={"name": "Team B"},
+                phases={
+                    "historical_import": {
+                        "batch_id": batch_id,
+                        "competition_name": competition,
+                        "season": season,
+                        "match_date": "2013-09-07",
+                        "venue": "Port of Spain",
+                    },
+                    "historical_innings_summary": [
+                        {"inning_no": 1, "team": "Team A", "runs": 152, "wickets": 8, "overs": 20}
+                    ],
+                },
+                deliveries=deliveries,
+            )
+            dry_run_summary: dict[str, Any] = {}
+            if source_payload_available:
+                dry_run_summary = {
+                    "source_payload_reattach": {
+                        "storage": {
+                            "raw": {
+                                "storage": "s3",
+                                "bucket": "historical",
+                                "key": f"{batch_id}.json",
+                            }
+                        }
+                    }
+                }
+            batch = models.HistoricalImportBatch(
+                id=batch_id,
+                source_filename=source_filename,
+                source_format="json",
+                source_hash_sha256=uuid.uuid4().hex,
+                status="valid",
+                is_finalized=True,
+                applied_game_id=game_id,
+                delivery_count=120,
+                dry_run_summary=dry_run_summary,
+            )
+            session.add(game)
+            session.add(batch)
+            await session.commit()
+            return batch_id, game_id
+
+    return asyncio.get_event_loop().run_until_complete(_create())
+
+
+def _create_live_user_game(client: TestClient) -> str:
+    async def _create() -> str:
+        async with client.session_maker() as session:  # type: ignore[attr-defined]
+            game_id = str(uuid.uuid4())
+            session.add(
+                models.Game(
+                    id=game_id,
+                    created_by_user_id=str(uuid.uuid4()),
+                    team_a={"name": "Live A"},
+                    team_b={"name": "Live B"},
+                    phases={},
+                    deliveries=[],
+                )
+            )
+            await session.commit()
+            return game_id
+
+    return asyncio.get_event_loop().run_until_complete(_create())
+
+
 def _register_analyst(client: TestClient) -> str:
     email = f"reprocess-{uuid.uuid4().hex[:8]}@example.com"
     user = register_user(client, email)
@@ -219,6 +302,68 @@ def _count_player_rows(client: TestClient) -> int:
             return len(result.scalars().all())
 
     return asyncio.get_event_loop().run_until_complete(_query())
+
+
+def test_metadata_only_matches_endpoint_returns_expected_historical_records(
+    client: TestClient,
+) -> None:
+    token = _register_analyst(client)
+    expected_batch_id, expected_match_id = _create_historical_pair(
+        client,
+        deliveries=[],
+        source_filename="635234.json",
+        source_payload_available=True,
+    )
+    _create_historical_pair(client, deliveries=[{"ball": 1, "is_wicket": True}])
+    _create_historical_pair(client, deliveries='[{"ball": 1, "is_wicket": false}]')
+    _create_live_user_game(client)
+
+    response = client.get(
+        "/api/historical-import/json/metadata-only-matches",
+        headers=_auth_headers(token),
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["total"] == 1
+    item = data["items"][0]
+    assert item["match_id"] == expected_match_id
+    assert item["batch_id"] == expected_batch_id
+    assert item["source_filename"] == "635234.json"
+    assert item["actual_deliveries"] == 0
+    assert item["expected_deliveries"] == 120
+    assert item["expected_wickets"] == 8
+    assert item["source_payload_available"] is True
+    assert item["recommended_action"] == "reimport_from_source_json"
+
+
+def test_metadata_only_matches_endpoint_supports_competition_and_season_filters(
+    client: TestClient,
+) -> None:
+    token = _register_analyst(client)
+    _create_historical_pair(
+        client,
+        deliveries=[],
+        competition="Caribbean Premier League",
+        season="2013",
+    )
+    _create_historical_pair(
+        client,
+        deliveries=[],
+        competition="Big Bash League",
+        season="2013",
+    )
+
+    response = client.get(
+        "/api/historical-import/json/metadata-only-matches",
+        headers=_auth_headers(token),
+        params={"competition": "Caribbean Premier League", "season": "2013"},
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["total"] == 1
+    assert data["items"][0]["competition"] == "Caribbean Premier League"
+    assert data["items"][0]["season"] == "2013"
 
 
 def _build_zip(entries: dict[str, bytes]) -> bytes:

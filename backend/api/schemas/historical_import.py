@@ -163,6 +163,31 @@ class HistoricalImportBatchRecord(BaseModel):
     updated_at: dt.datetime
 
 
+class HistoricalMetadataOnlyMatchItem(BaseModel):
+    match_id: str
+    batch_id: str
+    source_filename: str | None = None
+    team_a: str | None = None
+    team_b: str | None = None
+    match_date: str | None = None
+    venue: str | None = None
+    competition: str | None = None
+    season: str | None = None
+    completeness_status: str = "metadata_only"
+    expected_deliveries: int | None = None
+    actual_deliveries: int = 0
+    expected_wickets: int | None = None
+    actual_wickets: int = 0
+    source_payload_available: bool = False
+    recommended_action: str = "reimport_from_source_json"
+
+
+class HistoricalMetadataOnlyMatchesResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    total: int = 0
+    items: list[HistoricalMetadataOnlyMatchItem] = Field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # Phase 10H - Venue intelligence access schemas
 # ---------------------------------------------------------------------------
