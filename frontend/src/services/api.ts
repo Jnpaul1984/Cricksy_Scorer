@@ -1639,6 +1639,31 @@ export interface HistoricalImportBatchRecord {
   updated_at: string;
 }
 
+export interface HistoricalMetadataOnlyMatchItem {
+  match_id: string;
+  batch_id: string;
+  source_filename?: string | null;
+  team_a?: string | null;
+  team_b?: string | null;
+  match_date?: string | null;
+  venue?: string | null;
+  competition?: string | null;
+  season?: string | null;
+  completeness_status: string;
+  expected_deliveries?: number | null;
+  actual_deliveries: number;
+  expected_wickets?: number | null;
+  actual_wickets: number;
+  source_payload_available: boolean;
+  recommended_action: string;
+}
+
+export interface HistoricalMetadataOnlyMatchesResponse {
+  status: 'ok';
+  total: number;
+  items: HistoricalMetadataOnlyMatchItem[];
+}
+
 export interface HistoricalImportApplyResponse {
   batch_id: string;
   applied_game_id?: string | null;
@@ -2158,6 +2183,31 @@ export async function historicalImportListBatches(
 ): Promise<HistoricalImportBatchRecord[]> {
   return request<HistoricalImportBatchRecord[]>(
     `/api/historical-import/json/batches?limit=${limit}`,
+  );
+}
+
+/**
+ * GET /api/historical-import/json/metadata-only-matches
+ * Returns historical matches with metadata but no delivery ledger rows.
+ */
+export async function historicalImportListMetadataOnlyMatches(params?: {
+  competition?: string;
+  season?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<HistoricalMetadataOnlyMatchesResponse> {
+  const query = new URLSearchParams();
+  if (params?.competition?.trim()) {
+    query.set('competition', params.competition.trim());
+  }
+  if (params?.season?.trim()) {
+    query.set('season', params.season.trim());
+  }
+  query.set('limit', String(params?.limit ?? 100));
+  query.set('offset', String(params?.offset ?? 0));
+  const qs = query.toString();
+  return request<HistoricalMetadataOnlyMatchesResponse>(
+    `/api/historical-import/json/metadata-only-matches${qs ? `?${qs}` : ''}`,
   );
 }
 

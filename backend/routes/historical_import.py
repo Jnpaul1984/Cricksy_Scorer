@@ -19,6 +19,8 @@ from backend.api.schemas.historical_import import (
     HistoricalImportApplyRequest,
     HistoricalImportApplyResponse,
     HistoricalImportBatchRecord,
+    HistoricalMetadataOnlyMatchItem,
+    HistoricalMetadataOnlyMatchesResponse,
     HistoricalImportBulkZipApplyFileResult,
     HistoricalImportBulkZipApplyResponse,
     HistoricalImportBulkZipDryRunResponse,
@@ -80,7 +82,10 @@ from backend.services.historical_import_apply_service import (
     apply_historical_deliveries,
     rollback_historical_batch,
 )
-from backend.services.historical_import_delivery_service import extract_normalized_innings
+from backend.services.historical_import_delivery_service import (
+    coerce_delivery_ledger,
+    extract_normalized_innings,
+)
 from backend.services.historical_import_backfill_service import (
     repair_legacy_historical_metadata,
 )
@@ -954,6 +959,62 @@ def _historical_import_source(batch: models.HistoricalImportBatch) -> str:
     if source_filename:
         return "single_json_apply"
     return "unknown"
+
+
+def _historical_completeness(game: models.Game) -> str:
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    hist_meta = (
+        phases.get("historical_import")
+        if isinstance(phases.get("historical_import"), dict)
+        else {}
+    )
+    has_innings = bool(phases.get("historical_innings_summary"))
+    deliveries = coerce_delivery_ledger(game.deliveries)
+    has_deliveries = bool(hist_meta.get("deliveries_imported")) or len(deliveries) > 0
+    if not has_innings:
+        return "metadata_only"
+    if not has_deliveries:
+        return "innings_totals_only"
+    return "delivery_data_available"
+
+
+def _source_payload_reference_available(batch: models.HistoricalImportBatch) -> bool:
+    if not _batch_has_retained_source(batch):
+        return False
+    dry_run = batch.dry_run_summary if isinstance(batch.dry_run_summary, dict) else {}
+    reattach_raw = dry_run.get("source_payload_reattach")
+    reattach = reattach_raw if isinstance(reattach_raw, dict) else {}
+    reattach_storage_raw = reattach.get("storage")
+    reattach_storage = reattach_storage_raw if isinstance(reattach_storage_raw, dict) else {}
+    raw_ref = reattach_storage.get("raw") if isinstance(reattach_storage.get("raw"), dict) else None
+    if raw_ref is None:
+        intake_raw = dry_run.get("large_zip_intake")
+        intake = intake_raw if isinstance(intake_raw, dict) else {}
+        storage_raw = intake.get("storage")
+        storage = storage_raw if isinstance(storage_raw, dict) else {}
+        raw_ref = storage.get("raw") if isinstance(storage.get("raw"), dict) else None
+    if not isinstance(raw_ref, dict):
+        return False
+    storage = str(raw_ref.get("storage") or "").strip().lower()
+    if storage == "local":
+        path = str(raw_ref.get("path") or "").strip()
+        return bool(path and Path(path).exists())
+    if storage == "s3":
+        return bool(str(raw_ref.get("bucket") or "").strip() and str(raw_ref.get("key") or "").strip())
+    return False
+
+
+def _is_historical_import_game(batch: models.HistoricalImportBatch, game: models.Game) -> bool:
+    if batch.applied_game_id != game.id:
+        return False
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    hist_meta = (
+        phases.get("historical_import")
+        if isinstance(phases.get("historical_import"), dict)
+        else {}
+    )
+    batch_id = str(hist_meta.get("batch_id") or "").strip()
+    return bool(batch_id == batch.id or hist_meta or _historical_import_source(batch) != "unknown")
 
 
 def _target_source_reattach_metadata(
@@ -2691,6 +2752,105 @@ async def list_historical_import_batches(
         )
         for b in batches
     ]
+
+
+@router.get(
+    "/metadata-only-matches",
+    response_model=HistoricalMetadataOnlyMatchesResponse,
+    summary="List historical matches that still have metadata but no usable delivery rows",
+)
+async def list_metadata_only_historical_matches(
+    competition: str | None = Query(default=None, description="Optional competition name filter"),
+    season: str | None = Query(default=None, description="Optional season filter"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(_get_import_db),
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
+) -> HistoricalMetadataOnlyMatchesResponse:
+    del current_user
+
+    rows = (
+        await db.execute(
+            select(models.HistoricalImportBatch, models.Game).join(
+                models.Game, models.HistoricalImportBatch.applied_game_id == models.Game.id
+            )
+        )
+    ).all()
+    competition_filter = str(competition or "").strip().lower()
+    season_filter = str(season or "").strip().lower()
+    items: list[HistoricalMetadataOnlyMatchItem] = []
+
+    for batch, game in rows:
+        if not _is_historical_import_game(batch, game):
+            continue
+
+        deliveries = coerce_delivery_ledger(game.deliveries)
+        actual_deliveries = len(deliveries)
+        if actual_deliveries > 0:
+            continue
+
+        metadata = _target_source_reattach_metadata(batch, game)
+        competition_name = _first_text(metadata.competition_name)
+        season_name = _first_text(metadata.season)
+        if competition_filter and str(competition_name or "").strip().lower() != competition_filter:
+            continue
+        if season_filter and str(season_name or "").strip().lower() != season_filter:
+            continue
+
+        if not any(
+            (
+                metadata.teams,
+                metadata.date,
+                metadata.venue,
+                metadata.competition_name,
+                metadata.season,
+            )
+        ):
+            continue
+
+        expected_deliveries = (
+            int(metadata.expected_deliveries)
+            if isinstance(metadata.expected_deliveries, int) and metadata.expected_deliveries > 0
+            else None
+        )
+        expected_wickets = (
+            int(metadata.expected_wickets)
+            if isinstance(metadata.expected_wickets, int) and metadata.expected_wickets > 0
+            else None
+        )
+        source_payload_available = _source_payload_reference_available(batch)
+        items.append(
+            HistoricalMetadataOnlyMatchItem(
+                match_id=game.id,
+                batch_id=batch.id,
+                source_filename=_first_text(batch.source_filename, metadata.source_filename),
+                team_a=metadata.teams[0] if len(metadata.teams) > 0 else None,
+                team_b=metadata.teams[1] if len(metadata.teams) > 1 else None,
+                match_date=metadata.date,
+                venue=metadata.venue,
+                competition=competition_name,
+                season=season_name,
+                completeness_status=_historical_completeness(game),
+                expected_deliveries=expected_deliveries,
+                actual_deliveries=actual_deliveries,
+                expected_wickets=expected_wickets,
+                actual_wickets=0,
+                source_payload_available=source_payload_available,
+                recommended_action=(
+                    "reimport_from_source_json"
+                    if source_payload_available
+                    else "reattach_source_json_then_reimport"
+                ),
+            )
+        )
+
+    items.sort(key=lambda row: (row.match_date or "", row.batch_id), reverse=True)
+    total = len(items)
+    return HistoricalMetadataOnlyMatchesResponse(
+        status="ok",
+        total=total,
+        items=items[offset : offset + limit],
+    )
 
 
 @router.get("/venues/intelligence", response_model=list[HistoricalVenueIntelligenceRecord])
