@@ -963,11 +963,8 @@ def _historical_import_source(batch: models.HistoricalImportBatch) -> str:
 
 def _historical_completeness(game: models.Game) -> str:
     phases = game.phases if isinstance(game.phases, dict) else {}
-    hist_meta = (
-        phases.get("historical_import")
-        if isinstance(phases.get("historical_import"), dict)
-        else {}
-    )
+    hist_meta_raw = phases.get("historical_import")
+    hist_meta: dict[str, Any] = hist_meta_raw if isinstance(hist_meta_raw, dict) else {}
     has_innings = bool(phases.get("historical_innings_summary"))
     deliveries = coerce_delivery_ledger(game.deliveries)
     has_deliveries = bool(hist_meta.get("deliveries_imported")) or len(deliveries) > 0
@@ -995,12 +992,14 @@ def _source_payload_reference_available(batch: models.HistoricalImportBatch) -> 
         raw_ref = storage.get("raw") if isinstance(storage.get("raw"), dict) else None
     if not isinstance(raw_ref, dict):
         return False
-    storage = str(raw_ref.get("storage") or "").strip().lower()
-    if storage == "local":
+    storage_type = str(raw_ref.get("storage") or "").strip().lower()
+    if storage_type == "local":
         path = str(raw_ref.get("path") or "").strip()
         return bool(path and Path(path).exists())
-    if storage == "s3":
-        return bool(str(raw_ref.get("bucket") or "").strip() and str(raw_ref.get("key") or "").strip())
+    if storage_type == "s3":
+        return bool(
+            str(raw_ref.get("bucket") or "").strip() and str(raw_ref.get("key") or "").strip()
+        )
     return False
 
 
@@ -1008,11 +1007,8 @@ def _is_historical_import_game(batch: models.HistoricalImportBatch, game: models
     if batch.applied_game_id != game.id:
         return False
     phases = game.phases if isinstance(game.phases, dict) else {}
-    hist_meta = (
-        phases.get("historical_import")
-        if isinstance(phases.get("historical_import"), dict)
-        else {}
-    )
+    hist_meta_raw = phases.get("historical_import")
+    hist_meta: dict[str, Any] = hist_meta_raw if isinstance(hist_meta_raw, dict) else {}
     batch_id = str(hist_meta.get("batch_id") or "").strip()
     return bool(batch_id == batch.id or hist_meta or _historical_import_source(batch) != "unknown")
 

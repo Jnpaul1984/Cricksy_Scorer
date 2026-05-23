@@ -188,7 +188,11 @@ def _create_historical_pair(
                 dry_run_summary = {
                     "source_payload_reattach": {
                         "storage": {
-                            "raw": {"storage": "s3", "bucket": "historical", "key": f"{batch_id}.json"}
+                            "raw": {
+                                "storage": "s3",
+                                "bucket": "historical",
+                                "key": f"{batch_id}.json",
+                            }
                         }
                     }
                 }
@@ -300,7 +304,9 @@ def _count_player_rows(client: TestClient) -> int:
     return asyncio.get_event_loop().run_until_complete(_query())
 
 
-def test_metadata_only_matches_endpoint_returns_expected_historical_records(client: TestClient) -> None:
+def test_metadata_only_matches_endpoint_returns_expected_historical_records(
+    client: TestClient,
+) -> None:
     token = _register_analyst(client)
     expected_batch_id, expected_match_id = _create_historical_pair(
         client,

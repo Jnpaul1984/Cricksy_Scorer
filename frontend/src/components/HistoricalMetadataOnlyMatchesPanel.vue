@@ -190,7 +190,7 @@ function exportCsv() {
       item.batch_id,
       item.match_id,
     ]
-      .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+      .map((value) => `"${String(value).replace(/"/g, '""')}"`)
       .join(','),
   )
   const csv = [header.join(','), ...rows].join('\n')
