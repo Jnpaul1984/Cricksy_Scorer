@@ -1,0 +1,76 @@
+name: Docs Check
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**/*.md'
+      - 'docs/**'
+      - '.mcp/**'
+      - '**/*checklist*'
+      - '.github/workflows/docs-check.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docs-only-guard:
+    name: Docs-only governance guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: List changed files
+        id: changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          echo "Comparing $BASE_SHA..$HEAD_SHA"
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" | tee changed_files.txt
+
+      - name: Enforce docs-only scope
+        run: |
+          set -euo pipefail
+
+          if [ ! -s changed_files.txt ]; then
+            echo "No changed files detected."
+            exit 0
+          fi
+
+          disallowed=0
+          while IFS= read -r file; do
+            if [[ "$file" == backend/* ]] || \
+               [[ "$file" == frontend/* ]] || \
+               [[ "$file" == infra/* ]] || \
+               [[ "$file" == backend/alembic/versions/* ]] || \
+               [[ "$file" == package.json ]] || \
+               [[ "$file" == package-lock.json ]] || \
+               [[ "$file" == frontend/package.json ]] || \
+               [[ "$file" == frontend/package-lock.json ]] || \
+               [[ "$file" == backend/requirements.txt ]] || \
+               [[ "$file" == backend/requirements-dev.txt ]] || \
+               [[ "$file" == backend/requirements-test.txt ]] || \
+               [[ "$file" == .github/workflows/ci.yml ]] || \
+               [[ "$file" == .github/workflows/deploy-backend.yml ]] || \
+               [[ "$file" == .github/workflows/deploy-frontend.yml ]] || \
+               [[ "$file" == .github/workflows/release.yml ]]; then
+              echo "Disallowed non-doc/runtime change detected: $file"
+              disallowed=1
+            fi
+          done < changed_files.txt
+
+          if [ "$disallowed" -ne 0 ]; then
+            echo "Docs-check failed: PR includes non-doc/runtime changes."
+            exit 1
+          fi
+
+          echo "Docs-check passed: changes are within docs/checklist governance scope."
