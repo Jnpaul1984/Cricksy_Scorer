@@ -3979,190 +3979,6 @@ approved and merged with green CI, with large-scale imports still gated by expli
 
 ---
 
-# Phase 16 — Scorer Workspace Resume + Multi-Day Recovery
-
-## Purpose
-
-- Give scorers a clean landing workspace after login with two primary actions:
-  - Create New Match
-  - Continue Scoring
-- Make active, interrupted, innings-break, and multi-day matches easy to find and resume.
-- Support recovery after device restart, browser refresh, temporary internet loss, or
-  weekend-spanning multi-day games.
-
-## Pre-Phase Audit
-
-Audit:
-
-- `backend/sql_app/models.py`
-- `backend/sql_app/crud.py`
-- `backend/routes/games.py`
-- `backend/routes/gameplay.py`
-- `backend/services/game_service.py`
-- `backend/services/scoring_service.py`
-- `backend/services/snapshot_service.py`
-- `frontend/src/stores/gameStore.ts`
-- frontend router/views/components related to game creation and scoring
-- current auth/RBAC access for games and contributors
-- current offline queue behavior in frontend localStorage
-- current tests for scoring, results, game loading, and frontend scoring views
-
-## Strict Scope (Future Implementation)
-
-- Add resumable-match listing/query path.
-- Add scorer workspace UI that shows Create New Match and Continue Scoring.
-- Reuse existing `loadGame`, snapshot, recent deliveries, and live socket flow.
-- Preserve existing scoring rules and delivery behavior.
-
-## Gates
-
-- No scoring truth mutation outside existing scoring services.
-- Resume must rebuild from persisted game/snapshot/deliveries, not fake state.
-- A scorer must only see matches they are allowed to score or access.
-- Existing scoring, DLS, results, and live socket behavior must not regress.
-- Multi-day support must preserve innings, score, striker/non-striker, bowler, overs,
-  wickets, and recent delivery context.
-
-## Future Tests
-
-- Backend resumable-match contract tests.
-- Permission tests for scorer/contributor/org boundaries.
-- Resume-from-active-match tests.
-- Resume-from-innings-break tests.
-- Resume after scored deliveries tests.
-- Frontend workspace rendering tests.
-- Frontend resume button flow tests.
-- Existing scoring/DLS/results regression tests.
-
-## Completion Criteria
-
-Scorer can log in, choose Create New Match or Continue Scoring, find active/resumable matches,
-resume a selected match, and continue scoring from authoritative persisted state.
-
----
-
-# Phase 17 — External Identity Provider Login + Account Mapping
-
-## Purpose
-
-- Add governed support for Google/Microsoft-style login using an external identity provider or
-  OAuth/OIDC provider.
-- Reduce password custody risk by allowing users to authenticate through trusted providers.
-- Keep Cricksy responsible for app authorization: role, tier, org, contributor assignments,
-  match access, and safety boundaries.
-
-## Pre-Phase Audit
-
-Audit:
-
-- Existing auth routes and login/register flow.
-- `backend/sql_app/models.py` `User` model fields.
-- Password/JWT/session handling.
-- RBAC/tier enforcement.
-- frontend auth store/login UI.
-- environment/secrets handling.
-- deployment environment variables.
-- security tests.
-- existing `GameContributor` and org access patterns.
-
-## Strict Scope (Future Implementation)
-
-- Add provider-authenticated login path.
-- Map verified provider identity to local Cricksy user account.
-- Store only minimal provider account mapping required for login and audit.
-- Do not remove existing email/password login unless separately approved.
-- Do not store provider passwords.
-- Do not bypass backend RBAC.
-
-## Recommended Architecture Note
-
-- Prefer a managed identity layer such as Firebase Auth, Clerk, Auth0, or equivalent OIDC
-  provider after audit/spec lock.
-- Direct provider OAuth may be considered only if audit proves it is safer/simpler for this
-  repo.
-
-## Gates
-
-- Backend must verify provider tokens server-side.
-- Email verification state must be respected.
-- Local Cricksy roles/org/tier/access remain authoritative.
-- No role escalation from provider claims unless explicitly mapped by Cricksy admin logic.
-- Secrets must not be committed.
-- Existing login flow must not regress.
-
-## Future Tests
-
-- Token verification tests with mocked provider token validation.
-- First-login account creation/mapping tests.
-- Existing-user account linking tests.
-- Rejected invalid token tests.
-- RBAC/tier enforcement tests after social login.
-- Frontend login UI tests.
-- Security regression tests.
-
-## Completion Criteria
-
-Users can authenticate through approved external identity provider flow, Cricksy creates/maps the
-local account safely, and all existing role/org/tier permissions remain enforced by the backend.
-
----
-
-# Phase 18 — Organization Invitations + Match Access Assignment
-
-## Purpose
-
-- Let schools/clubs/organizations invite scorers, coaches, analysts, and admins by email and
-  assign match access safely.
-- Ensure social-login users only see the matches and workspaces they are authorized to access.
-- Connect scorer resume workspace to governed match access assignments.
-
-## Pre-Phase Audit
-
-Audit:
-
-- `GameContributor` model and contributor roles.
-- Existing user/org model fields.
-- Current role/tier enforcement.
-- Current match creation/ownership behavior.
-- frontend admin/coach/scorer workspace surfaces.
-- email/invitation capability if any.
-- tests around org isolation and permissions.
-
-## Strict Scope (Future Implementation)
-
-- Invitation and assignment governance only.
-- Define org admin invite flow.
-- Define match contributor assignment flow.
-- Connect assigned scorer access to Continue Scoring list.
-- Do not expose cross-org match data.
-- Do not add public registration loopholes.
-
-## Gates
-
-- Organization boundary enforced server-side.
-- Invitee can only receive intended role/access.
-- Match access requires explicit assignment or authorized org role.
-- Revoked users lose access.
-- Scorer workspace only lists authorized matches.
-- Audit trail exists for invitations and assignment changes.
-
-## Future Tests
-
-- Invite creation tests.
-- Invite acceptance/account mapping tests.
-- Match contributor assignment tests.
-- Revocation tests.
-- Cross-org denial tests.
-- Scorer workspace authorized-match filtering tests.
-- Frontend invitation/admin UI tests if implemented.
-
-## Completion Criteria
-
-Organizations can invite users, assign match/scorer access, revoke access, and ensure each user’s
-workspace only shows permitted matches.
-
----
-
 # Phase 11 — Organization Pro + League Operations
 
 ## Purpose
@@ -4434,6 +4250,190 @@ Lock:
 ## Completion Criteria
 
 Cricksy is operationally ready for wider adoption and heavier usage.
+
+---
+
+# Phase 16 — Scorer Workspace Resume + Multi-Day Recovery
+
+## Purpose
+
+- Give scorers a clean landing workspace after login with two primary actions:
+  - Create New Match
+  - Continue Scoring
+- Make active, interrupted, innings-break, and multi-day matches easy to find and resume.
+- Support recovery after device restart, browser refresh, temporary internet loss, or
+  weekend-spanning multi-day games.
+
+## Pre-Phase Audit
+
+Audit:
+
+- `backend/sql_app/models.py`
+- `backend/sql_app/crud.py`
+- `backend/routes/games.py`
+- `backend/routes/gameplay.py`
+- `backend/services/game_service.py`
+- `backend/services/scoring_service.py`
+- `backend/services/snapshot_service.py`
+- `frontend/src/stores/gameStore.ts`
+- frontend router/views/components related to game creation and scoring
+- current auth/RBAC access for games and contributors
+- current offline queue behavior in frontend localStorage
+- current tests for scoring, results, game loading, and frontend scoring views
+
+## Strict Scope (Future Implementation)
+
+- Add resumable-match listing/query path.
+- Add scorer workspace UI that shows Create New Match and Continue Scoring.
+- Reuse existing `loadGame`, snapshot, recent deliveries, and live socket flow.
+- Preserve existing scoring rules and delivery behavior.
+
+## Gates
+
+- No scoring truth mutation outside existing scoring services.
+- Resume must rebuild from persisted game/snapshot/deliveries, not fake state.
+- A scorer must only see matches they are allowed to score or access.
+- Existing scoring, DLS, results, and live socket behavior must not regress.
+- Multi-day support must preserve innings, score, striker/non-striker, bowler, overs,
+  wickets, and recent delivery context.
+
+## Future Tests
+
+- Backend resumable-match contract tests.
+- Permission tests for scorer/contributor/org boundaries.
+- Resume-from-active-match tests.
+- Resume-from-innings-break tests.
+- Resume after scored deliveries tests.
+- Frontend workspace rendering tests.
+- Frontend resume button flow tests.
+- Existing scoring/DLS/results regression tests.
+
+## Completion Criteria
+
+Scorer can log in, choose Create New Match or Continue Scoring, find active/resumable matches,
+resume a selected match, and continue scoring from authoritative persisted state.
+
+---
+
+# Phase 17 — External Identity Provider Login + Account Mapping
+
+## Purpose
+
+- Add governed support for Google/Microsoft-style login using an external identity provider or
+  OAuth/OIDC provider.
+- Reduce password custody risk by allowing users to authenticate through trusted providers.
+- Keep Cricksy responsible for app authorization: role, tier, org, contributor assignments,
+  match access, and safety boundaries.
+
+## Pre-Phase Audit
+
+Audit:
+
+- Existing auth routes and login/register flow.
+- `backend/sql_app/models.py` `User` model fields.
+- Password/JWT/session handling.
+- RBAC/tier enforcement.
+- frontend auth store/login UI.
+- environment/secrets handling.
+- deployment environment variables.
+- security tests.
+- existing `GameContributor` and org access patterns.
+
+## Strict Scope (Future Implementation)
+
+- Add provider-authenticated login path.
+- Map verified provider identity to local Cricksy user account.
+- Store only minimal provider account mapping required for login and audit.
+- Do not remove existing email/password login unless separately approved.
+- Do not store provider passwords.
+- Do not bypass backend RBAC.
+
+## Recommended Architecture Note
+
+- Prefer a managed identity layer such as Firebase Auth, Clerk, Auth0, or equivalent OIDC
+  provider after audit/spec lock.
+- Direct provider OAuth may be considered only if audit proves it is safer/simpler for this
+  repo.
+
+## Gates
+
+- Backend must verify provider tokens server-side.
+- Email verification state must be respected.
+- Local Cricksy roles/org/tier/access remain authoritative.
+- No role escalation from provider claims unless explicitly mapped by Cricksy admin logic.
+- Secrets must not be committed.
+- Existing login flow must not regress.
+
+## Future Tests
+
+- Token verification tests with mocked provider token validation.
+- First-login account creation/mapping tests.
+- Existing-user account linking tests.
+- Rejected invalid token tests.
+- RBAC/tier enforcement tests after social login.
+- Frontend login UI tests.
+- Security regression tests.
+
+## Completion Criteria
+
+Users can authenticate through approved external identity provider flow, Cricksy creates/maps the
+local account safely, and all existing role/org/tier permissions remain enforced by the backend.
+
+---
+
+# Phase 18 — Organization Invitations + Match Access Assignment
+
+## Purpose
+
+- Let schools/clubs/organizations invite scorers, coaches, analysts, and admins by email and
+  assign match access safely.
+- Ensure social-login users only see the matches and workspaces they are authorized to access.
+- Connect scorer resume workspace to governed match access assignments.
+
+## Pre-Phase Audit
+
+Audit:
+
+- `GameContributor` model and contributor roles.
+- Existing user/org model fields.
+- Current role/tier enforcement.
+- Current match creation/ownership behavior.
+- frontend admin/coach/scorer workspace surfaces.
+- email/invitation capability if any.
+- tests around org isolation and permissions.
+
+## Strict Scope (Future Implementation)
+
+- Invitation and assignment governance only.
+- Define org admin invite flow.
+- Define match contributor assignment flow.
+- Connect assigned scorer access to Continue Scoring list.
+- Do not expose cross-org match data.
+- Do not add public registration loopholes.
+
+## Gates
+
+- Organization boundary enforced server-side.
+- Invitee can only receive intended role/access.
+- Match access requires explicit assignment or authorized org role.
+- Revoked users lose access.
+- Scorer workspace only lists authorized matches.
+- Audit trail exists for invitations and assignment changes.
+
+## Future Tests
+
+- Invite creation tests.
+- Invite acceptance/account mapping tests.
+- Match contributor assignment tests.
+- Revocation tests.
+- Cross-org denial tests.
+- Scorer workspace authorized-match filtering tests.
+- Frontend invitation/admin UI tests if implemented.
+
+## Completion Criteria
+
+Organizations can invite users, assign match/scorer access, revoke access, and ensure each user’s
+workspace only shows permitted matches.
 
 ---
 
