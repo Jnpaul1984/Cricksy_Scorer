@@ -78,6 +78,18 @@ function cplSummary(): HistoricalStatsSummaryResponse {
         innings_count: 2,
         total_runs: 320,
         total_wickets: 14,
+        winner_team: 'Trinbago Knight Riders',
+        winner_team_canonical: 'Trinbago Knight Riders',
+        winner_source: 'result_text',
+        winner_confidence: 'high',
+        wicket_derivation_source: 'deliveries',
+        phase_breakdown: {
+          powerplay: { runs: 48, wickets: 2, legal_balls: 36, overs: 6.0, deliveries: 36 },
+          middle: { runs: 72, wickets: 1, legal_balls: 48, overs: 8.0, deliveries: 48 },
+          death: { runs: 55, wickets: 3, legal_balls: 36, overs: 6.0, deliveries: 36 },
+        },
+        team_a_canonical: 'Trinbago Knight Riders',
+        team_b_canonical: 'Barbados Royals',
         innings_totals: [
           { inning_no: 1, team: 'Trinbago Knight Riders', runs: 175, wickets: 6, overs: 20.0, extras: 8 },
           { inning_no: 2, team: 'Barbados Royals', runs: 145, wickets: 8, overs: 19.3, extras: 5 },
@@ -100,6 +112,14 @@ function cplSummary(): HistoricalStatsSummaryResponse {
         innings_count: 1,
         total_runs: 160,
         total_wickets: 5,
+        winner_team: null,
+        winner_team_canonical: null,
+        winner_source: null,
+        winner_confidence: 'none',
+        wicket_derivation_source: 'scorecard',
+        phase_breakdown: {},
+        team_a_canonical: 'Guyana Amazon Warriors',
+        team_b_canonical: 'Jamaica Tallawahs',
         innings_totals: [
           { inning_no: 1, team: 'Guyana Amazon Warriors', runs: 160, wickets: 5, overs: 20.0, extras: 10 },
         ],
@@ -181,6 +201,31 @@ function cplSummary(): HistoricalStatsSummaryResponse {
     ],
     seasons: [
       { season: '2023', match_count: 2, avg_total_runs: 240.0, avg_wickets: 9.5 },
+    ],
+    diagnostics: {
+      matches_imported: 2,
+      matches_with_parsed_winner: 1,
+      matches_missing_winner_or_result: 1,
+      delivery_complete_matches: 1,
+      delivery_derived_wicket_matches: 1,
+      scorecard_derived_wicket_matches: 1,
+      canonical_teams_represented: 4,
+      venues_represented: 2,
+    },
+    top_team_by_wins: {
+      team_name: 'Trinbago Knight Riders',
+      wins: 1,
+      source: 'parsed_result_text',
+      confidence: 'medium',
+    },
+    case_studies: [
+      {
+        id: 'high_scoring_match',
+        title: 'High-scoring match',
+        insight: 'Trinbago Knight Riders vs Barbados Royals produced 320 runs in total.',
+        source: 'match:cpl-match-1',
+        context: 'Derived from innings total runs in validated historical imports.',
+      },
     ],
     generated_at: '2026-01-01T00:00:00Z',
     note: 'Deterministic on-demand aggregation from validated historical match data only.',
@@ -342,6 +387,26 @@ describe('CplPodcastDashboard', () => {
     expect(wrapper.text()).toContain('Podcast Prep Panel');
     expect(wrapper.text()).toContain('Matches imported');
     expect(wrapper.text()).toContain('Total runs in dataset');
+  });
+
+  it('renders deterministic case studies from historical analytics', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Case Studies');
+    expect(wrapper.text()).toContain('High-scoring match');
+    expect(wrapper.text()).toContain('Source: match:cpl-match-1');
+  });
+
+  it('renders top team by wins from parsed winner diagnostics', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Top team (most wins)');
+    expect(wrapper.text()).toContain('Trinbago Knight Riders (1)');
+    expect(wrapper.text()).toContain('confidence: medium');
   });
 
   it('renders AI Talking-Point Assistant panel with fact bundle preview', async () => {
@@ -1005,7 +1070,8 @@ describe('CplPodcastDashboard', () => {
     expect(diag.text()).toContain('Total CPL matches imported');
     expect(diag.text()).toContain('Delivery-complete matches');
     expect(diag.text()).toContain('Matches missing delivery data');
-    expect(diag.text()).toContain('Seasons represented');
+    expect(diag.text()).toContain('Canonical teams represented');
+    expect(diag.text()).toContain('Venues represented');
   });
 
   it('diagnostics shows warning when some matches lack delivery data', async () => {

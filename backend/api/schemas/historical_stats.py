@@ -10,7 +10,7 @@ No live scoring truth is mutated by these schemas.
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -54,6 +54,16 @@ class MatchAggregate(BaseModel):
     total_runs: int
     total_wickets: int
     innings_totals: list[InningsAggregate] = Field(default_factory=list)
+    winner_team: str | None = None
+    winner_team_canonical: str | None = None
+    winner_source: str | None = None
+    winner_confidence: Literal["high", "medium", "low", "none"] = "none"
+    wicket_derivation_source: Literal["deliveries", "innings_summary", "scorecard", "missing"] = (
+        "missing"
+    )
+    phase_breakdown: dict[str, dict[str, int | float]] = Field(default_factory=dict)
+    team_a_canonical: str | None = None
+    team_b_canonical: str | None = None
 
     # Whether delivery-level data has been imported (Phase 5F)
     has_delivery_data: bool = False
@@ -90,6 +100,8 @@ class TeamAggregate(BaseModel):
     """Aggregate stats for a team across historical matches."""
 
     team_name: str
+    canonical_team_name: str | None = None
+    continuity_group: str | None = None
     matches_played: int
     innings_batted: int = 0
     avg_score: float = 0.0
@@ -149,6 +161,9 @@ class HistoricalStatsSummaryResponse(BaseModel):
     venues: list[VenueAggregate] = Field(default_factory=list)
     competitions: list[CompetitionAggregate] = Field(default_factory=list)
     seasons: list[SeasonAggregate] = Field(default_factory=list)
+    diagnostics: dict[str, int] = Field(default_factory=dict)
+    top_team_by_wins: dict[str, Any] | None = None
+    case_studies: list[dict[str, Any]] = Field(default_factory=list)
 
     generated_at: dt.datetime = Field(default_factory=lambda: dt.datetime.now(dt.UTC))
     note: str = (

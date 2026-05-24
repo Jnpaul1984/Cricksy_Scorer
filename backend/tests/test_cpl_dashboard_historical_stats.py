@@ -124,7 +124,14 @@ def _load_fixture() -> dict[str, Any]:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
-def _make_cpl_fixture(match_number: int = 1, season: str = "2023") -> dict[str, Any]:
+def _make_cpl_fixture(
+    match_number: int = 1,
+    season: str = "2023",
+    *,
+    team_a: str = "Team Alpha",
+    team_b: str = "Team Beta",
+    winner: str | None = None,
+) -> dict[str, Any]:
     """Return a CPL-tagged fixture variant.
 
     Sets event.name to 'Caribbean Premier League' and a unique match_number
@@ -139,8 +146,18 @@ def _make_cpl_fixture(match_number: int = 1, season: str = "2023") -> dict[str, 
         event["match_number"] = match_number
         event["name"] = "Caribbean Premier League"
     info["season"] = season
+    if winner:
+        info["outcome"] = {"winner": winner, "by": {"wickets": 5}}
+        fixture["result"] = {"winner": winner, "summary": f"{winner} won by 5 wickets"}
     # Unique dates to avoid collision
     info["dates"] = [f"2023-08-{(match_number % 28) + 1:02d}"]
+    fixture["teams"] = [team_a, team_b]
+    innings = fixture.get("innings")
+    if isinstance(innings, list):
+        if len(innings) > 0 and isinstance(innings[0], dict):
+            innings[0]["team"] = team_a
+        if len(innings) > 1 and isinstance(innings[1], dict):
+            innings[1]["team"] = team_b
     return fixture
 
 
@@ -357,3 +374,75 @@ def test_summary_note_field_is_deterministic(client: TestClient) -> None:
     assert (
         "deterministic" in note_lower or "historical" in note_lower
     ), f"Expected deterministic provenance note, got: {note!r}"
+
+
+def test_summary_top_team_by_wins_uses_alias_continuity(client: TestClient) -> None:
+    token = _analyst_token(client)
+    for match_number in range(31, 37):
+        _apply_fixture(
+            client,
+            token,
+            _make_cpl_fixture(
+                match_number=match_number,
+                season="2023" if match_number % 2 else "2024",
+                team_a="Barbados Tridents" if match_number % 2 else "Barbados Royals",
+                team_b="Jamaica Tallawahs" if match_number % 2 else "Guyana Amazon Warriors",
+                winner="Barbados Tridents" if match_number % 2 else "Barbados Royals",
+            ),
+        )
+
+    resp = client.get("/analytics/historical-stats/summary", headers=_auth_headers(token))
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    leader = data.get("top_team_by_wins")
+    assert leader is not None
+    assert leader["team_name"] == "Barbados Royals"
+    assert leader["wins"] >= 6
+    assert data["diagnostics"]["matches_with_parsed_winner"] >= 6
+
+
+def test_summary_scorecard_wicket_fallback_is_reported(client: TestClient) -> None:
+    import asyncio
+
+    token = _analyst_token(client)
+    _batch_id, game_id = _apply_fixture(client, token, _make_cpl_fixture(match_number=40))
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+
+    async def _mutate_game_for_scorecard_fallback() -> None:
+        async with session_maker() as session:
+            result = await session.execute(select(models.Game).where(models.Game.id == game_id))
+            game = result.scalar_one()
+            phases = dict(game.phases or {})
+            innings = phases.get("historical_innings_summary") or []
+            if isinstance(innings, list) and len(innings) > 0 and isinstance(innings[0], dict):
+                innings[0]["wickets"] = None
+                innings[0]["score"] = "157/6"
+            phases["historical_innings_summary"] = innings
+            hist_meta = dict(phases.get("historical_import") or {})
+            hist_meta["deliveries_imported"] = False
+            phases["historical_import"] = hist_meta
+            game.phases = phases
+            game.deliveries = []
+            await session.commit()
+
+    asyncio.get_event_loop().run_until_complete(_mutate_game_for_scorecard_fallback())
+
+    resp = client.get("/analytics/historical-stats/summary", headers=_auth_headers(token))
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    match = next(m for m in data["matches"] if m["match_id"] == game_id)
+    assert match["total_wickets"] > 0
+    assert match["wicket_derivation_source"] == "scorecard"
+    assert data["diagnostics"]["scorecard_derived_wicket_matches"] >= 1
+
+
+def test_summary_includes_deterministic_case_studies(client: TestClient) -> None:
+    token = _analyst_token(client)
+    _apply_fixture(client, token, _make_cpl_fixture(match_number=51, season="2023"))
+
+    resp = client.get("/analytics/historical-stats/summary", headers=_auth_headers(token))
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    case_ids = {entry["id"] for entry in data.get("case_studies", [])}
+    assert "high_scoring_match" in case_ids
+    assert "venue_scoring_pattern" in case_ids
