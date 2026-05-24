@@ -23,6 +23,7 @@ match result, official player stats) are mutated.
 from __future__ import annotations
 
 import datetime as dt
+import re
 from collections import defaultdict
 from typing import Any
 
@@ -38,6 +39,7 @@ from backend.api.schemas.historical_stats import (
     VenueAggregate,
 )
 from backend.services.cpl_team_alias_registry import canonicalize_team_name, normalize_team_name
+from backend.services.cpl_venue_alias_registry import canonicalize_venue_name
 from backend.services.analyst_access import scoped_games_stmt
 from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 from sqlalchemy import select
@@ -47,6 +49,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 _METADATA_ONLY_STATUSES: frozenset[str] = frozenset(
     {"scanned", "metadata_extracted", "pending_full_import"}
 )
+_SEASON_YEAR_RE = re.compile(r"(?:19|20)\d{2}")
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +125,24 @@ def _parse_scorecard_wickets(score_text: str | None) -> int | None:
     if not wickets_text:
         return None
     return int(wickets_text)
+
+
+def _derive_canonical_season(meta: dict[str, Any]) -> tuple[str | None, str | None, str]:
+    raw_season_value = meta.get("season")
+    if isinstance(raw_season_value, str) and raw_season_value.strip():
+        season_raw = raw_season_value.strip()
+        year_match = _SEASON_YEAR_RE.search(season_raw)
+        if year_match:
+            return year_match.group(0), season_raw, "metadata"
+        return season_raw, season_raw, "metadata"
+
+    match_date_value = meta.get("match_date")
+    if isinstance(match_date_value, str) and match_date_value.strip():
+        year_match = _SEASON_YEAR_RE.search(match_date_value.strip())
+        if year_match:
+            return year_match.group(0), None, "match_date"
+
+    return None, None, "missing"
 
 
 def _extract_scorecard_text(innings_payload: dict[str, Any]) -> str | None:
@@ -281,6 +302,9 @@ def _build_match_aggregate(
     )
     team_a_canonical, _ = canonicalize_team_name(team_a_name)
     team_b_canonical, _ = canonicalize_team_name(team_b_name)
+    season, season_raw, season_source = _derive_canonical_season(meta)
+    venue_raw = str(meta.get("venue")).strip() if meta.get("venue") else None
+    venue_canonical, venue_continuity_group = canonicalize_venue_name(venue_raw)
 
     phases = game.phases if isinstance(game.phases, dict) else {}
     phase_breakdown: dict[str, dict[str, int | float]] = {}
@@ -313,8 +337,13 @@ def _build_match_aggregate(
         source_filename=batch.source_filename,
         source_format=batch.source_format,
         competition=meta.get("event_name"),
-        season=meta.get("season"),
-        venue=meta.get("venue"),
+        season=season,
+        season_raw=season_raw,
+        season_source=season_source,
+        venue=venue_canonical,
+        venue_raw=venue_raw,
+        venue_canonical=venue_canonical,
+        venue_continuity_group=venue_continuity_group,
         match_date=meta.get("match_date"),
         match_type=game.match_type,
         innings_count=len(innings_aggregates),
@@ -539,17 +568,24 @@ def _build_venue_aggregates(
             "second_innings_runs": [],
             "total_runs": [],
             "total_wickets": [],
+            "raw_venues": set(),
+            "canonical_venue": None,
+            "continuity_group": None,
         }
     )
 
     for _game, _batch, meta in eligible_games:
-        venue = meta.get("venue")
-        if not venue or not str(venue).strip():
+        venue_raw = str(meta.get("venue")).strip() if meta.get("venue") else None
+        if not venue_raw:
             continue
-        venue_key = str(venue).strip()
+        canonical_venue, continuity_group = canonicalize_venue_name(venue_raw)
+        venue_key = canonical_venue or venue_raw
 
         innings_list = _innings_summary(_game)
         acc = venue_acc[venue_key]
+        acc["raw_venues"].add(venue_raw)
+        acc["canonical_venue"] = canonical_venue or venue_key
+        acc["continuity_group"] = continuity_group
         acc["match_count"] += 1
 
         match_runs = 0
@@ -591,6 +627,9 @@ def _build_venue_aggregates(
         result.append(
             VenueAggregate(
                 venue=venue_name,
+                canonical_venue=acc.get("canonical_venue"),
+                continuity_group=acc.get("continuity_group"),
+                raw_venues=sorted(acc["raw_venues"]),
                 match_count=match_count,
                 avg_first_innings_score=avg_first,
                 avg_second_innings_score=avg_second,
@@ -660,10 +699,10 @@ def _build_season_aggregates(
     )
 
     for game, _batch, meta in eligible_games:
-        season = meta.get("season")
-        if not season or not str(season).strip():
+        season, _season_raw, _season_source = _derive_canonical_season(meta)
+        if not season:
             continue
-        season_key = str(season).strip()
+        season_key = season
 
         innings_list = _innings_summary(game)
         acc = season_acc[season_key]
@@ -907,6 +946,13 @@ async def get_historical_stats_summary(
         if name
     }
     venues_represented = len({m.venue for m in match_aggregates if m.venue})
+    season_grouped_from_metadata = sum(
+        1 for match in match_aggregates if match.season_source == "metadata"
+    )
+    season_grouped_from_match_date = sum(
+        1 for match in match_aggregates if match.season_source == "match_date"
+    )
+    season_grouped_missing = sum(1 for match in match_aggregates if match.season_source == "missing")
     diagnostics = {
         "matches_imported": len(match_aggregates),
         "matches_with_parsed_winner": matches_with_parsed_winner,
@@ -916,6 +962,9 @@ async def get_historical_stats_summary(
         "scorecard_derived_wicket_matches": scorecard_derived_wicket_matches,
         "canonical_teams_represented": len(canonical_teams),
         "venues_represented": venues_represented,
+        "season_grouped_from_metadata": season_grouped_from_metadata,
+        "season_grouped_from_match_date": season_grouped_from_match_date,
+        "season_grouped_missing": season_grouped_missing,
     }
 
     return HistoricalStatsSummaryResponse(
@@ -996,8 +1045,11 @@ async def get_single_match_aggregate(
         ),
         "imported_at": batch.created_at.isoformat() if batch.created_at else None,
         "competition": meta.get("event_name"),
-        "season": meta.get("season"),
-        "venue": meta.get("venue"),
+        "season": match_agg.season,
+        "season_source": match_agg.season_source,
+        "season_raw": match_agg.season_raw,
+        "venue": match_agg.venue,
+        "venue_raw": match_agg.venue_raw,
         "match_date": meta.get("match_date"),
     }
 

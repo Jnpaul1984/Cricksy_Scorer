@@ -126,11 +126,13 @@ def _load_fixture() -> dict[str, Any]:
 
 def _make_cpl_fixture(
     match_number: int = 1,
-    season: str = "2023",
+    season: str | None = "2023",
     *,
     team_a: str = "Team Alpha",
     team_b: str = "Team Beta",
     winner: str | None = None,
+    venue: str | None = None,
+    match_date: str | None = None,
 ) -> dict[str, Any]:
     """Return a CPL-tagged fixture variant.
 
@@ -145,12 +147,22 @@ def _make_cpl_fixture(
     if isinstance(event, dict):
         event["match_number"] = match_number
         event["name"] = "Caribbean Premier League"
-    info["season"] = season
+    if season is None:
+        info.pop("season", None)
+        fixture.pop("season", None)
+    else:
+        info["season"] = season
+        fixture["season"] = season
+    if venue:
+        info["venue"] = venue
+        fixture["venue"] = venue
     if winner:
         info["outcome"] = {"winner": winner, "by": {"wickets": 5}}
         fixture["result"] = {"winner": winner, "summary": f"{winner} won by 5 wickets"}
     # Unique dates to avoid collision
-    info["dates"] = [f"2023-08-{(match_number % 28) + 1:02d}"]
+    resolved_date = match_date or f"2023-08-{(match_number % 28) + 1:02d}"
+    info["dates"] = [resolved_date]
+    fixture["date"] = resolved_date
     fixture["teams"] = [team_a, team_b]
     innings = fixture.get("innings")
     if isinstance(innings, list):
@@ -446,3 +458,79 @@ def test_summary_includes_deterministic_case_studies(client: TestClient) -> None
     case_ids = {entry["id"] for entry in data.get("case_studies", [])}
     assert "high_scoring_match" in case_ids
     assert "venue_scoring_pattern" in case_ids
+
+
+def test_summary_canonicalizes_known_venue_aliases(client: TestClient) -> None:
+    token = _analyst_token(client)
+    _apply_fixture(
+        client,
+        token,
+        _make_cpl_fixture(
+            match_number=61,
+            season="2023",
+            venue="Brian Lara Stadium, Tarouba",
+        ),
+    )
+    _apply_fixture(
+        client,
+        token,
+        _make_cpl_fixture(
+            match_number=62,
+            season="2023",
+            venue="Brian Lara Stadium, Tarouba, Trinidad",
+        ),
+    )
+
+    resp = client.get("/analytics/historical-stats/summary", headers=_auth_headers(token))
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+
+    venue_rows = [v for v in data["venues"] if v["venue"] == "Brian Lara Stadium, Tarouba"]
+    assert len(venue_rows) == 1
+    assert venue_rows[0]["match_count"] == 2
+    assert sorted(venue_rows[0]["raw_venues"]) == [
+        "Brian Lara Stadium, Tarouba",
+        "Brian Lara Stadium, Tarouba, Trinidad",
+    ]
+
+    match_raw_venues = {m["venue_raw"] for m in data["matches"]}
+    assert "Brian Lara Stadium, Tarouba" in match_raw_venues
+    assert "Brian Lara Stadium, Tarouba, Trinidad" in match_raw_venues
+
+
+def test_summary_season_grouping_prefers_metadata_then_match_date_fallback(client: TestClient) -> None:
+    token = _analyst_token(client)
+    _batch_id_meta, game_id_meta = _apply_fixture(
+        client,
+        token,
+        _make_cpl_fixture(
+            match_number=71,
+            season="2023/24",
+            match_date="2025-08-10",
+        ),
+    )
+    _batch_id_fallback, game_id_fallback = _apply_fixture(
+        client,
+        token,
+        _make_cpl_fixture(
+            match_number=72,
+            season=None,
+            match_date="2026-08-11",
+        ),
+    )
+
+    resp = client.get("/analytics/historical-stats/summary", headers=_auth_headers(token))
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+
+    by_id = {m["match_id"]: m for m in data["matches"]}
+    assert by_id[game_id_meta]["season"] == "2023"
+    assert by_id[game_id_meta]["season_source"] == "metadata"
+    assert by_id[game_id_fallback]["season"] == "2026"
+    assert by_id[game_id_fallback]["season_source"] == "match_date"
+
+    seasons = {entry["season"] for entry in data["seasons"]}
+    assert "2023" in seasons
+    assert "2026" in seasons
+    assert data["diagnostics"]["season_grouped_from_metadata"] >= 1
+    assert data["diagnostics"]["season_grouped_from_match_date"] >= 1
