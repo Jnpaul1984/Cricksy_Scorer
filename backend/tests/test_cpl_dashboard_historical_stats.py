@@ -149,15 +149,20 @@ def _make_cpl_fixture(
         event["name"] = "Caribbean Premier League"
     if season is None:
         info.pop("season", None)
+        fixture.pop("season", None)
     else:
         info["season"] = season
+        fixture["season"] = season
     if venue:
         info["venue"] = venue
+        fixture["venue"] = venue
     if winner:
         info["outcome"] = {"winner": winner, "by": {"wickets": 5}}
         fixture["result"] = {"winner": winner, "summary": f"{winner} won by 5 wickets"}
     # Unique dates to avoid collision
-    info["dates"] = [match_date or f"2023-08-{(match_number % 28) + 1:02d}"]
+    resolved_date = match_date or f"2023-08-{(match_number % 28) + 1:02d}"
+    info["dates"] = [resolved_date]
+    fixture["date"] = resolved_date
     fixture["teams"] = [team_a, team_b]
     innings = fixture.get("innings")
     if isinstance(innings, list):
