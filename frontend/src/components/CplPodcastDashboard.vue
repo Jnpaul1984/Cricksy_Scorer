@@ -73,6 +73,13 @@
             <option v-for="v in availableVenues" :key="v" :value="v">{{ v }}</option>
           </select>
         </div>
+        <div class="cpld-filter-group">
+          <label class="cpld-filter-label" for="cpld-name-mode">Display mode</label>
+          <select id="cpld-name-mode" v-model="continuityDisplayMode" class="cpld-select" aria-label="Select continuity display mode">
+            <option value="canonical">Canonical continuity view</option>
+            <option value="raw">Raw imported view</option>
+          </select>
+        </div>
         <button class="cpld-reset-btn" @click="resetFilters">Reset filters</button>
       </section>
 
@@ -180,6 +187,10 @@
         <div v-if="exportPreviewUrl" class="cpld-export-preview-wrap">
           <p class="cpld-export-preview-label">Preview (review before download)</p>
           <img class="cpld-export-preview" :src="exportPreviewUrl" alt="Export preview image" />
+        </div>
+        <div v-else class="cpld-export-preview-empty" role="note">
+          <p class="cpld-export-preview-label">Preview (review before download)</p>
+          <p>{{ exportPreviewEmptyReason }}</p>
         </div>
       </section>
 
@@ -397,6 +408,9 @@
           <span v-if="selectedTeam !== 'all'"> · Team: <strong>{{ selectedTeam }}</strong></span>
           · From delivery-complete matches only
         </p>
+        <p v-if="selectedTeam !== 'all'" class="cpld-lb-note">
+          Note: player leaderboards are still global to the current season/venue filters and are not team-scoped yet.
+        </p>
 
         <div v-if="filteredPlayers.length > 0 || filteredTeamAggregates.length > 0" class="cpld-leaderboards">
           <!-- Top run scorers -->
@@ -464,19 +478,24 @@
           <!-- Team win/loss summary -->
           <div class="cpld-lb-panel">
             <h5 class="cpld-subsection-title">Team Averages</h5>
+            <p v-if="continuityDisplayMode === 'canonical'" class="cpld-lb-note">
+              Canonical continuity view merges franchise aliases for cleaner historical storytelling.
+            </p>
             <div v-if="filteredTeamAggregates.length > 0" class="cpld-lb-table-wrap">
               <table class="cpld-lb-table" aria-label="Team averages">
                 <thead>
                   <tr>
                     <th>Team</th>
+                    <th v-if="continuityDisplayMode === 'canonical'">Raw aliases</th>
                     <th>Matches</th>
                     <th>Avg Score</th>
                     <th>Total Runs</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="t in filteredTeamAggregates" :key="t.team_name">
-                    <td>{{ t.team_name }}</td>
+                  <tr v-for="t in filteredTeamAggregates" :key="`${t.team_name}-${t.canonical_team_name ?? 'raw'}`">
+                    <td>{{ continuityDisplayMode === 'canonical' ? (t.canonical_team_name ?? t.team_name) : t.team_name }}</td>
+                    <td v-if="continuityDisplayMode === 'canonical'" class="cpld-lb-muted">{{ canonicalTeamRawAliasText(t) }}</td>
                     <td class="cpld-lb-stat">{{ t.matches_played }}</td>
                     <td class="cpld-lb-muted">{{ t.avg_score > 0 ? t.avg_score.toFixed(1) : '—' }}</td>
                     <td class="cpld-lb-muted">{{ t.total_runs }}</td>
@@ -501,15 +520,22 @@
       <!-- ── 4. Venue Intelligence ── -->
       <section ref="venueRef" class="cpld-section" aria-label="Venue intelligence">
         <h4 class="cpld-section-title">📍 Venue Intelligence</h4>
+        <p class="cpld-section-scope">
+          Showing <strong>{{ continuityDisplayMode === 'canonical' ? 'canonical venue continuity' : 'raw imported venue names' }}</strong>
+          for the current season/team/venue filters.
+        </p>
 
-        <div v-if="cplVenues.length > 0" class="cpld-venue-grid">
+        <div v-if="filteredVenueIntelligence.length > 0" class="cpld-venue-grid">
           <div
-            v-for="v in cplVenues"
-            :key="v.venue"
+            v-for="v in filteredVenueIntelligence"
+            :key="`${v.venue}-${v.raw_venues?.join('|') ?? ''}`"
             class="cpld-venue-card"
             :class="{ 'cpld-venue-card--selected': selectedVenue === v.venue }"
           >
             <div class="cpld-venue-name">{{ v.venue }}</div>
+            <p v-if="continuityDisplayMode === 'canonical' && (v.raw_venues?.length ?? 0) > 1" class="cpld-venue-raw-note">
+              Raw aliases: {{ v.raw_venues?.join(' · ') }}
+            </p>
             <div class="cpld-venue-stats">
               <div class="cpld-venue-stat">
                 <span class="cpld-venue-stat-val">{{ v.match_count }}</span>
@@ -534,7 +560,7 @@
           </div>
         </div>
         <div v-else class="cpld-insufficient">
-          No venue data available for imported CPL matches.
+          No venue data is available for the current filters.
         </div>
       </section>
 
@@ -975,6 +1001,7 @@ const selectedSeason = ref('all')
 const selectedTeam = ref('all')
 const selectedVenue = ref('all')
 const selectedMatchId = ref('')
+const continuityDisplayMode = ref<'canonical' | 'raw'>('canonical')
 
 const seasonSummaryRef = ref<HTMLElement | null>(null)
 const matchStoryRef = ref<HTMLElement | null>(null)
@@ -1071,6 +1098,20 @@ const cplVenues = computed<HistoricalVenueAggregate[]>(() => {
   return summary.value.venues.filter(v => cplVenueNames.value.has(v.venue))
 })
 
+function teamNameForMode(match: HistoricalMatchAggregate, side: 'a' | 'b'): string | null {
+  const rawName = side === 'a' ? match.team_a : match.team_b
+  if (continuityDisplayMode.value === 'raw') return rawName ?? null
+  const canonicalName = side === 'a' ? match.team_a_canonical : match.team_b_canonical
+  return canonicalName ?? rawName ?? null
+}
+
+function venueNameForMode(match: HistoricalMatchAggregate): string | null {
+  if (continuityDisplayMode.value === 'raw') {
+    return match.venue_raw ?? match.venue ?? null
+  }
+  return match.venue ?? match.venue_raw ?? null
+}
+
 // ---------------------------------------------------------------------------
 // Filter options
 // ---------------------------------------------------------------------------
@@ -1081,8 +1122,25 @@ const availableSeasons = computed(() => {
   return [...seasons].sort().reverse()
 })
 
-const availableTeams = computed(() => [...cplTeamNames.value].sort())
-const availableVenues = computed(() => [...cplVenueNames.value].sort())
+const availableTeams = computed(() => {
+  const teams = new Set<string>()
+  cplMatches.value.forEach(match => {
+    const a = teamNameForMode(match, 'a')
+    const b = teamNameForMode(match, 'b')
+    if (a) teams.add(a)
+    if (b) teams.add(b)
+  })
+  return [...teams].sort()
+})
+
+const availableVenues = computed(() => {
+  const venues = new Set<string>()
+  cplMatches.value.forEach(match => {
+    const venue = venueNameForMode(match)
+    if (venue) venues.add(venue)
+  })
+  return [...venues].sort()
+})
 
 // ---------------------------------------------------------------------------
 // Filtered data
@@ -1091,8 +1149,12 @@ const availableVenues = computed(() => [...cplVenueNames.value].sort())
 const filteredMatches = computed(() => {
   return cplMatches.value.filter(m => {
     if (selectedSeason.value !== 'all' && m.season !== selectedSeason.value) return false
-    if (selectedTeam.value !== 'all' && m.team_a !== selectedTeam.value && m.team_b !== selectedTeam.value) return false
-    if (selectedVenue.value !== 'all' && m.venue !== selectedVenue.value) return false
+    if (
+      selectedTeam.value !== 'all'
+      && teamNameForMode(m, 'a') !== selectedTeam.value
+      && teamNameForMode(m, 'b') !== selectedTeam.value
+    ) return false
+    if (selectedVenue.value !== 'all' && venueNameForMode(m) !== selectedVenue.value) return false
     return true
   })
 })
@@ -1100,15 +1162,20 @@ const filteredMatches = computed(() => {
 const filteredTeamNames = computed(() => {
   const names = new Set<string>()
   filteredMatches.value.forEach(m => {
-    if (m.team_a) names.add(m.team_a)
-    if (m.team_b) names.add(m.team_b)
+    const a = teamNameForMode(m, 'a')
+    const b = teamNameForMode(m, 'b')
+    if (a) names.add(a)
+    if (b) names.add(b)
   })
   return names
 })
 
 const filteredVenueNames = computed(() => {
   const names = new Set<string>()
-  filteredMatches.value.forEach(m => { if (m.venue) names.add(m.venue) })
+  filteredMatches.value.forEach(m => {
+    const venue = venueNameForMode(m)
+    if (venue) names.add(venue)
+  })
   return names
 })
 
@@ -1122,8 +1189,9 @@ const filteredTotalWickets = computed(() =>
 /** Simple heuristic: team appearing in most matches with the most total wins.
  * Uses parsed winner metadata from backend summary when available. */
 const topTeamByWinsMeta = computed(() => {
+  const usingAllFilters = selectedSeason.value === 'all' && selectedTeam.value === 'all' && selectedVenue.value === 'all'
   const declared = summary.value?.top_team_by_wins
-  if (declared?.team_name) return declared
+  if (usingAllFilters && declared?.team_name) return declared
   const wins = new Map<string, number>()
   for (const match of filteredMatches.value) {
     const winner = match.winner_team_canonical || match.winner_team
@@ -1172,8 +1240,9 @@ const cplDiagnostics = computed(() => {
 })
 
 const cplCaseStudies = computed(() => {
+  const usingAllFilters = selectedSeason.value === 'all' && selectedTeam.value === 'all' && selectedVenue.value === 'all'
   const backendStudies = summary.value?.case_studies ?? []
-  if (backendStudies.length > 0) {
+  if (usingAllFilters && backendStudies.length > 0) {
     return backendStudies
   }
   const studies: Array<{ id: string; title: string; insight: string; source: string; context: string }> = []
@@ -1186,6 +1255,17 @@ const cplCaseStudies = computed(() => {
     source: `match:${high.match_id}`,
     context: 'Derived from deterministic innings totals.',
   })
+  if (filteredVenueIntelligence.value.length > 0) {
+    const venuePattern = [...filteredVenueIntelligence.value]
+      .sort((a, b) => b.avg_total_runs - a.avg_total_runs || b.match_count - a.match_count)[0]
+    studies.push({
+      id: 'venue-scoring-pattern',
+      title: 'Venue scoring pattern',
+      insight: `${venuePattern.venue} averages ${venuePattern.avg_total_runs.toFixed(1)} total runs in current filter scope.`,
+      source: `venue:${venuePattern.venue}`,
+      context: 'Derived from filtered venue intelligence aggregates.',
+    })
+  }
   return studies
 })
 
@@ -1199,11 +1279,93 @@ const filteredPlayers = computed(() => {
 })
 
 const filteredTeamAggregates = computed<HistoricalTeamAggregate[]>(() => {
+  if (continuityDisplayMode.value === 'canonical') {
+    const grouped = new Map<string, HistoricalTeamAggregate & { raw_aliases: string[] }>()
+    cplTeamAggregates.value.forEach(team => {
+      const canonicalKey = team.canonical_team_name ?? team.team_name
+      const existing = grouped.get(canonicalKey)
+      if (existing) {
+        existing.matches_played += team.matches_played
+        existing.innings_batted += team.innings_batted
+        existing.total_runs += team.total_runs
+        existing.total_wickets += team.total_wickets
+        existing.avg_score = existing.innings_batted > 0
+          ? Number((existing.total_runs / existing.innings_batted).toFixed(2))
+          : 0
+        existing.avg_wickets = existing.innings_batted > 0
+          ? Number((existing.total_wickets / existing.innings_batted).toFixed(2))
+          : 0
+        if (!existing.raw_aliases.includes(team.team_name)) {
+          existing.raw_aliases.push(team.team_name)
+        }
+      } else {
+        grouped.set(canonicalKey, {
+          ...team,
+          canonical_team_name: canonicalKey,
+          raw_aliases: [team.team_name],
+        })
+      }
+    })
+
+    const canonicalRows = [...grouped.values()]
+    if (selectedTeam.value !== 'all') {
+      return canonicalRows.filter(t => (t.canonical_team_name ?? t.team_name) === selectedTeam.value)
+    }
+    return canonicalRows.filter(t => filteredTeamNames.value.has(t.canonical_team_name ?? t.team_name))
+  }
+
   if (selectedTeam.value !== 'all') {
     return cplTeamAggregates.value.filter(t => t.team_name === selectedTeam.value)
   }
   // Filter by teams present in filtered matches
   return cplTeamAggregates.value.filter(t => filteredTeamNames.value.has(t.team_name))
+})
+
+function canonicalTeamRawAliasText(team: HistoricalTeamAggregate & { raw_aliases?: string[] }): string {
+  if (!team.raw_aliases || team.raw_aliases.length === 0) {
+    return team.team_name
+  }
+  return team.raw_aliases.join(' · ')
+}
+
+const filteredVenueIntelligence = computed<HistoricalVenueAggregate[]>(() => {
+  const venueLookup = new Map(cplVenues.value.map(v => [v.venue, v]))
+  const fromMatches = new Set(filteredMatches.value.map(m => venueNameForMode(m)).filter(Boolean))
+  const records: HistoricalVenueAggregate[] = []
+  fromMatches.forEach(venueName => {
+    if (!venueName) return
+    if (continuityDisplayMode.value === 'canonical') {
+      const record = venueLookup.get(venueName)
+      if (record) {
+        records.push(record)
+        return
+      }
+    }
+    const matchesAtVenue = filteredMatches.value.filter(match => venueNameForMode(match) === venueName)
+    if (matchesAtVenue.length === 0) return
+    const firstInningsScores = matchesAtVenue
+      .map(match => match.innings_totals.find(innings => innings.inning_no === 1)?.runs ?? null)
+      .filter((value): value is number => value !== null)
+    const secondInningsScores = matchesAtVenue
+      .map(match => match.innings_totals.find(innings => innings.inning_no === 2)?.runs ?? null)
+      .filter((value): value is number => value !== null)
+    records.push({
+      venue: venueName,
+      canonical_venue: continuityDisplayMode.value === 'canonical' ? venueName : null,
+      continuity_group: continuityDisplayMode.value === 'canonical' ? venueName.toLowerCase() : null,
+      raw_venues: continuityDisplayMode.value === 'raw' ? [venueName] : [],
+      match_count: matchesAtVenue.length,
+      avg_first_innings_score: firstInningsScores.length > 0
+        ? Number((firstInningsScores.reduce((sum, value) => sum + value, 0) / firstInningsScores.length).toFixed(2))
+        : 0,
+      avg_second_innings_score: secondInningsScores.length > 0
+        ? Number((secondInningsScores.reduce((sum, value) => sum + value, 0) / secondInningsScores.length).toFixed(2))
+        : null,
+      avg_total_runs: Number((matchesAtVenue.reduce((sum, match) => sum + match.total_runs, 0) / matchesAtVenue.length).toFixed(2)),
+      avg_wickets: Number((matchesAtVenue.reduce((sum, match) => sum + match.total_wickets, 0) / matchesAtVenue.length).toFixed(2)),
+    })
+  })
+  return records.sort((a, b) => b.match_count - a.match_count || a.venue.localeCompare(b.venue))
 })
 
 // ---------------------------------------------------------------------------
@@ -1342,8 +1504,8 @@ const podcastFacts = computed<PodcastFact[]>(() => {
   }
 
   // Venue facts
-  if (cplVenues.value.length > 0 && selectedVenue.value !== 'all') {
-    const v = cplVenues.value.find(x => x.venue === selectedVenue.value)
+  if (filteredVenueIntelligence.value.length > 0 && selectedVenue.value !== 'all') {
+    const v = filteredVenueIntelligence.value.find(x => x.venue === selectedVenue.value)
     if (v) {
       facts.push({
         label: 'Venue avg first innings',
@@ -1454,7 +1616,7 @@ const activeExportAvailability = computed<{ available: boolean; reason: string }
       }
       return { available: true, reason: '' }
     case 'venue_intelligence':
-      if (cplVenues.value.length === 0) {
+      if (filteredVenueIntelligence.value.length === 0) {
         return { available: false, reason: 'Export disabled: venue intelligence data is unavailable.' }
       }
       return { available: true, reason: '' }
@@ -1491,7 +1653,7 @@ const templateRequirementAvailability = computed<{ available: boolean; reason: s
         }
         break
       case 'venue_data':
-        if (cplVenues.value.length === 0) {
+        if (filteredVenueIntelligence.value.length === 0) {
           return { available: false, reason: 'Template requires venue intelligence data.' }
         }
         break
@@ -1525,10 +1687,47 @@ const exportReviewLabel = computed(() => {
   return parts.join(' · ')
 })
 
+const exportPreviewEmptyReason = computed(() => {
+  if (exportError.value) return `Preview failed: ${exportError.value}`
+  if (!activeExportAvailability.value.available) return activeExportAvailability.value.reason
+  if (!templateRequirementAvailability.value.available) return templateRequirementAvailability.value.reason
+  return 'Generate preview to render the selected template, filter context, and deterministic stats.'
+})
+
+const exportPreviewSummaryLines = computed(() => {
+  const topSeason = selectedSeason.value !== 'all' ? selectedSeason.value : (availableSeasons.value[0] ?? 'all seasons')
+  const topVenue = selectedVenue.value !== 'all' ? selectedVenue.value : (filteredVenueIntelligence.value[0]?.venue ?? 'all venues')
+  const topTeam = selectedTeam.value !== 'all' ? selectedTeam.value : (topTeamByWinsMeta.value?.team_name ?? 'all teams')
+  const deterministicStats = [
+    `Matches in scope: ${filteredMatches.value.length}`,
+    `Total runs: ${filteredTotalRuns.value.toLocaleString()}`,
+    `Total wickets: ${filteredTotalWickets.value}`,
+    topRunScorers.value[0] ? `Top run scorer: ${topRunScorers.value[0].player_name} (${topRunScorers.value[0].runs_scored})` : null,
+    topWicketTakers.value[0] ? `Top wicket taker: ${topWicketTakers.value[0].player_name} (${topWicketTakers.value[0].wickets})` : null,
+  ].filter(Boolean) as string[]
+  return [
+    `Template: ${activeExportTemplate.value?.label ?? 'Unavailable'}`,
+    `Season context: ${topSeason}`,
+    `Team context: ${topTeam}`,
+    `Venue context: ${topVenue}`,
+    ...deterministicStats,
+    'Source note: Imported CPL historical data (validated deterministic aggregates only).',
+  ]
+})
+
 watch(exportTarget, () => {
   const nextTemplate = availableExportTemplates.value[0]
   if (nextTemplate) {
     exportTemplateId.value = nextTemplate.id
+  }
+})
+
+watch(continuityDisplayMode, () => {
+  if (selectedTeam.value !== 'all' && !availableTeams.value.includes(selectedTeam.value)) {
+    selectedTeam.value = 'all'
+  }
+  if (selectedVenue.value !== 'all' && !availableVenues.value.includes(selectedVenue.value)) {
+    selectedVenue.value = 'all'
   }
 })
 
@@ -1544,6 +1743,7 @@ watch(
     selectedVenue,
     selectedMatchId,
     selectedTeam,
+    continuityDisplayMode,
   ],
   () => {
     exportPreviewUrl.value = null
@@ -1560,6 +1760,7 @@ function resetFilters() {
   selectedTeam.value = 'all'
   selectedVenue.value = 'all'
   selectedMatchId.value = ''
+  continuityDisplayMode.value = 'canonical'
 }
 
 async function load() {
@@ -1574,7 +1775,7 @@ async function load() {
   }
 }
 
-function buildExportFrame(targetNode: HTMLElement, width: number, height: number): HTMLDivElement {
+function buildExportFrame(width: number, height: number): HTMLDivElement {
   const activeTemplate = activeExportTemplate.value
   const spacing = templateFormatSpacing(exportFormat.value)
   const variant = activeTemplate?.variant ?? 'clean_broadcast'
@@ -1584,14 +1785,15 @@ function buildExportFrame(targetNode: HTMLElement, width: number, height: number
   wrapper.style.top = '0'
   wrapper.style.width = `${width}px`
   wrapper.style.height = `${height}px`
-  wrapper.style.background = variant === 'bold_social' ? '#0f172a' : '#ffffff'
+  const darkVariant = variant === 'bold_social' || variant === 'data_desk' || variant === 'minimal_stat_card'
+  wrapper.style.background = darkVariant ? '#0f172a' : '#0b1220'
   wrapper.style.padding = spacing.wrapperPadding
   wrapper.style.display = 'flex'
   wrapper.style.flexDirection = 'column'
   wrapper.style.gap = '14px'
   wrapper.style.boxSizing = 'border-box'
   wrapper.style.fontFamily = 'Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
-  wrapper.style.color = variant === 'bold_social' ? '#f8fafc' : '#0f172a'
+  wrapper.style.color = '#f8fafc'
 
   const header = document.createElement('div')
   header.style.display = 'flex'
@@ -1602,7 +1804,7 @@ function buildExportFrame(targetNode: HTMLElement, width: number, height: number
   const title = document.createElement('div')
   title.style.fontSize = spacing.titleSize
   title.style.fontWeight = variant === 'minimal_stat_card' ? '600' : '700'
-  title.style.color = variant === 'bold_social' ? '#f8fafc' : '#0f172a'
+  title.style.color = '#f8fafc'
   title.textContent = activeExportTarget.value?.label ?? 'CPL export'
 
   const brand = document.createElement('div')
@@ -1610,9 +1812,9 @@ function buildExportFrame(targetNode: HTMLElement, width: number, height: number
   brand.style.fontWeight = '600'
   brand.style.padding = '4px 10px'
   brand.style.borderRadius = '999px'
-  brand.style.border = variant === 'bold_social' ? '1px solid #38bdf8' : '1px solid #cbd5e1'
-  brand.style.background = variant === 'bold_social' ? 'rgba(14, 165, 233, 0.18)' : '#f8fafc'
-  brand.style.color = variant === 'bold_social' ? '#7dd3fc' : '#0f172a'
+  brand.style.border = '1px solid #38bdf8'
+  brand.style.background = 'rgba(14, 165, 233, 0.18)'
+  brand.style.color = '#7dd3fc'
   brand.textContent = 'Cricksy · CPL Visuals'
 
   header.append(title, brand)
@@ -1620,22 +1822,33 @@ function buildExportFrame(targetNode: HTMLElement, width: number, height: number
   const content = document.createElement('div')
   content.style.flex = '1'
   content.style.overflow = 'hidden'
-  content.style.border = variant === 'bold_social' ? '1px solid #334155' : '1px solid #e2e8f0'
+  content.style.border = '1px solid #334155'
   content.style.borderRadius = '8px'
   content.style.padding = spacing.contentPadding
   content.style.boxSizing = 'border-box'
-  content.style.background = variant === 'bold_social' ? '#0b1220' : '#ffffff'
+  content.style.background = '#0b1220'
+  content.style.display = 'flex'
+  content.style.flexDirection = 'column'
+  content.style.gap = '10px'
 
-  const clone = targetNode.cloneNode(true) as HTMLElement
-  clone.style.margin = '0'
-  clone.style.maxHeight = '100%'
-  clone.style.overflow = 'hidden'
-  if (variant === 'minimal_stat_card') {
-    clone.style.transform = 'scale(0.96)'
-    clone.style.transformOrigin = 'top left'
-    clone.style.width = '104%'
+  if (exportPreviewSummaryLines.value.length === 0) {
+    const emptyState = document.createElement('p')
+    emptyState.style.margin = '0'
+    emptyState.style.fontSize = '16px'
+    emptyState.style.color = '#cbd5e1'
+    emptyState.textContent = exportPreviewEmptyReason.value
+    content.appendChild(emptyState)
+  } else {
+    for (const line of exportPreviewSummaryLines.value) {
+      const lineNode = document.createElement('p')
+      lineNode.style.margin = '0'
+      lineNode.style.fontSize = '16px'
+      lineNode.style.lineHeight = '1.5'
+      lineNode.style.color = '#e2e8f0'
+      lineNode.textContent = line
+      content.appendChild(lineNode)
+    }
   }
-  content.appendChild(clone)
 
   if (exportIncludePoweredBy.value && activeTemplate?.watermarkPlacement === 'overlay') {
     const overlayWatermark = document.createElement('div')
@@ -1645,7 +1858,7 @@ function buildExportFrame(targetNode: HTMLElement, width: number, height: number
     overlayWatermark.style.fontSize = '13px'
     overlayWatermark.style.fontWeight = '600'
     overlayWatermark.style.opacity = '0.7'
-    overlayWatermark.style.color = variant === 'bold_social' ? '#bae6fd' : '#334155'
+    overlayWatermark.style.color = '#bae6fd'
     overlayWatermark.textContent = 'Powered by Cricksy'
     wrapper.appendChild(overlayWatermark)
   }
@@ -1660,13 +1873,13 @@ function buildExportFrame(targetNode: HTMLElement, width: number, height: number
   const provenance = document.createElement('div')
   provenance.style.fontSize = spacing.footerSize
   provenance.style.lineHeight = '1.4'
-  provenance.style.color = variant === 'bold_social' ? '#cbd5e1' : '#334155'
+  provenance.style.color = '#cbd5e1'
   provenance.textContent = exportReviewLabel.value
 
   const watermark = document.createElement('div')
   watermark.style.fontSize = spacing.footerSize
   watermark.style.fontWeight = '600'
-  watermark.style.color = variant === 'bold_social' ? '#7dd3fc' : '#0f172a'
+  watermark.style.color = '#7dd3fc'
   watermark.textContent = exportIncludePoweredBy.value ? 'Powered by Cricksy' : ''
 
   if (!exportIncludePoweredBy.value || activeTemplate?.watermarkPlacement === 'overlay') {
@@ -1700,16 +1913,12 @@ async function generateExportPreview() {
 
   let frame: HTMLDivElement | null = null
   try {
-    frame = buildExportFrame(
-      activeExportNode.value,
-      activeExportFormat.value.width,
-      activeExportFormat.value.height
-    )
+    frame = buildExportFrame(activeExportFormat.value.width, activeExportFormat.value.height)
     exportPreviewUrl.value = await toPng(frame, {
       cacheBust: true,
       canvasWidth: activeExportFormat.value.width,
       canvasHeight: activeExportFormat.value.height,
-      backgroundColor: '#ffffff',
+      backgroundColor: '#0f172a',
       pixelRatio: 1,
     })
   } catch (e: unknown) {
@@ -2856,10 +3065,19 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-export-preview-wrap {
-  background: var(--color-bg, #ffffff);
+  background: var(--color-surface, #0f172a);
   border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 6px;
   padding: 0.65rem;
+}
+
+.cpld-export-preview-empty {
+  background: var(--color-surface, #0f172a);
+  border: 1px dashed var(--color-border, #334155);
+  border-radius: 6px;
+  padding: 0.65rem;
+  color: var(--color-text-muted, #cbd5e1);
+  font-size: 0.78rem;
 }
 
 .cpld-export-preview-label {
@@ -3208,6 +3426,12 @@ function downloadPodcastScriptMarkdown(): void {
   font-size: 0.68rem;
   color: #b45309;
   margin-top: 0.5rem;
+}
+
+.cpld-venue-raw-note {
+  margin: 0 0 0.35rem;
+  font-size: 0.68rem;
+  color: var(--color-text-muted, #64748b);
 }
 
 /* Podcast panel */
@@ -3662,8 +3886,8 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-script-panel {
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
+  background: var(--color-surface, #0f172a);
+  border: 1px solid var(--color-border, #334155);
   border-radius: 8px;
   padding: 1rem;
   margin-top: 1rem;
@@ -3682,13 +3906,13 @@ function downloadPodcastScriptMarkdown(): void {
 .cpld-script-panel-title {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--color-text, #e2e8f0);
 }
 
 .cpld-script-desc {
   margin: 0;
   font-size: 0.75rem;
-  color: #475569;
+  color: var(--color-text-muted, #94a3b8);
 }
 
 .cpld-script-actions {
@@ -3706,19 +3930,19 @@ function downloadPodcastScriptMarkdown(): void {
 .cpld-script-textarea {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #475569;
   border-radius: 6px;
   padding: 0.65rem;
   font-size: 0.8rem;
   line-height: 1.45;
   resize: vertical;
-  background: #ffffff;
-  color: #0f172a;
+  background: #0b1220;
+  color: #e2e8f0;
 }
 
 .cpld-script-needs-review {
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
+  background: color-mix(in srgb, #f59e0b 15%, #0b1220);
+  border: 1px solid #b45309;
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
 }
@@ -3738,7 +3962,7 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-episode-archive {
-  border-top: 1px solid #cbd5e1;
+  border-top: 1px solid #334155;
   padding-top: 0.85rem;
   display: flex;
   flex-direction: column;
@@ -3762,7 +3986,7 @@ function downloadPodcastScriptMarkdown(): void {
 .cpld-archive-note {
   margin: 0;
   font-size: 0.75rem;
-  color: #b45309;
+  color: #f59e0b;
 }
 
 .cpld-archive-list {
@@ -3775,8 +3999,8 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-archive-item {
-  background: var(--color-bg, #ffffff);
-  border: 1px solid var(--color-border, #dbe3ef);
+  background: #0b1220;
+  border: 1px solid #334155;
   border-radius: 6px;
   padding: 0.7rem;
   display: flex;
@@ -3795,11 +4019,17 @@ function downloadPodcastScriptMarkdown(): void {
 .cpld-archive-meta {
   margin: 0;
   font-size: 0.73rem;
-  color: #475569;
+  color: #94a3b8;
 }
 
 .cpld-archive-meta--warn {
-  color: #9a3412;
+  color: #f59e0b;
+}
+
+.cpld-script-panel .cpld-ai-generate-btn--secondary {
+  background: #0b1220;
+  color: #cbd5e1;
+  border: 1px solid #475569;
 }
 
 /* ── Data Completeness Diagnostics ──────────────────────────────────────── */

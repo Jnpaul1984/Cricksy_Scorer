@@ -181,6 +181,9 @@ function cplSummary(): HistoricalStatsSummaryResponse {
     venues: [
       {
         venue: "Queen's Park Oval",
+        canonical_venue: "Queen's Park Oval",
+        continuity_group: 'queens_park_oval',
+        raw_venues: ["Queen's Park Oval"],
         match_count: 1,
         avg_first_innings_score: 175.0,
         avg_second_innings_score: 145.0,
@@ -189,6 +192,9 @@ function cplSummary(): HistoricalStatsSummaryResponse {
       },
       {
         venue: 'Providence Stadium',
+        canonical_venue: 'Providence Stadium',
+        continuity_group: 'providence_stadium',
+        raw_venues: ['Providence Stadium'],
         match_count: 1,
         avg_first_innings_score: 0,
         avg_second_innings_score: null,
@@ -230,6 +236,40 @@ function cplSummary(): HistoricalStatsSummaryResponse {
     generated_at: '2026-01-01T00:00:00Z',
     note: 'Deterministic on-demand aggregation from validated historical match data only.',
   };
+}
+
+function cplSummaryWithVenueAliases(): HistoricalStatsSummaryResponse {
+  const summary = cplSummary();
+  summary.matches = [
+    {
+      ...summary.matches[0],
+      venue: 'Brian Lara Stadium, Tarouba',
+      venue_raw: 'Brian Lara Stadium, Tarouba',
+      venue_canonical: 'Brian Lara Stadium, Tarouba',
+      venue_continuity_group: 'brian_lara_stadium_tarouba',
+    },
+    {
+      ...summary.matches[1],
+      venue: 'Brian Lara Stadium, Tarouba',
+      venue_raw: 'Brian Lara Stadium, Tarouba, Trinidad',
+      venue_canonical: 'Brian Lara Stadium, Tarouba',
+      venue_continuity_group: 'brian_lara_stadium_tarouba',
+    },
+  ];
+  summary.venues = [
+    {
+      venue: 'Brian Lara Stadium, Tarouba',
+      canonical_venue: 'Brian Lara Stadium, Tarouba',
+      continuity_group: 'brian_lara_stadium_tarouba',
+      raw_venues: ['Brian Lara Stadium, Tarouba', 'Brian Lara Stadium, Tarouba, Trinidad'],
+      match_count: 2,
+      avg_first_innings_score: 167.5,
+      avg_second_innings_score: 145.0,
+      avg_total_runs: 240.0,
+      avg_wickets: 9.5,
+    },
+  ];
+  return summary;
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -321,6 +361,18 @@ describe('CplPodcastDashboard', () => {
 
     expect(wrapper.text()).toContain("Queen's Park Oval");
     expect(wrapper.text()).toContain('Providence Stadium');
+  });
+
+  it('supports canonical and raw continuity display modes for venue naming', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummaryWithVenueAliases());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Raw aliases: Brian Lara Stadium, Tarouba · Brian Lara Stadium, Tarouba, Trinidad');
+
+    await wrapper.find('[aria-label="Select continuity display mode"]').setValue('raw');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Brian Lara Stadium, Tarouba, Trinidad');
   });
 
   it('renders venue with missing avg score warning', async () => {
@@ -773,6 +825,7 @@ describe('CplPodcastDashboard', () => {
     const previewButton = wrapper.find('[aria-label="Generate export preview"]');
     expect(previewButton.attributes('disabled')).toBeDefined();
     expect(wrapper.text()).toContain('select a match before exporting match story');
+    expect(wrapper.find('.cpld-export-preview-empty').text()).toContain('select a match before exporting match story');
   });
 
   it('generates export preview and enables download', async () => {

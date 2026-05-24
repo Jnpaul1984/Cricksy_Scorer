@@ -45,7 +45,12 @@ class MatchAggregate(BaseModel):
     source_format: str | None = None
     competition: str | None = None
     season: str | None = None
+    season_raw: str | None = None
+    season_source: Literal["metadata", "match_date", "missing"] = "missing"
     venue: str | None = None
+    venue_raw: str | None = None
+    venue_canonical: str | None = None
+    venue_continuity_group: str | None = None
     match_date: str | None = None
     match_type: str | None = None
 
@@ -114,6 +119,9 @@ class VenueAggregate(BaseModel):
     """Aggregate stats for matches played at a specific venue."""
 
     venue: str
+    canonical_venue: str | None = None
+    continuity_group: str | None = None
+    raw_venues: list[str] = Field(default_factory=list)
     match_count: int
     avg_first_innings_score: float = 0.0
     avg_second_innings_score: float | None = None

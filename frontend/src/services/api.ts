@@ -961,7 +961,12 @@ export interface HistoricalMatchAggregate {
   source_format: string | null;
   competition: string | null;
   season: string | null;
+  season_raw?: string | null;
+  season_source?: 'metadata' | 'match_date' | 'missing';
   venue: string | null;
+  venue_raw?: string | null;
+  venue_canonical?: string | null;
+  venue_continuity_group?: string | null;
   match_date: string | null;
   match_type: string | null;
   innings_count: number;
@@ -1012,6 +1017,9 @@ export interface HistoricalTeamAggregate {
 /** Venue aggregate across historical matches. */
 export interface HistoricalVenueAggregate {
   venue: string;
+  canonical_venue?: string | null;
+  continuity_group?: string | null;
+  raw_venues?: string[];
   match_count: number;
   avg_first_innings_score: number;
   avg_second_innings_score: number | null;
