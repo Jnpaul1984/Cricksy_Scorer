@@ -37,6 +37,7 @@ from backend.api.schemas.historical_stats import (
     TeamAggregate,
     VenueAggregate,
 )
+from backend.services.cpl_team_alias_registry import canonicalize_team_name, normalize_team_name
 from backend.services.analyst_access import scoped_games_stmt
 from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 from sqlalchemy import select
@@ -97,6 +98,71 @@ def _is_eligible_for_aggregation(batch: HistoricalImportBatch) -> bool:
     return batch.error_count == 0
 
 
+def _safe_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if text.isdigit():
+            return int(text)
+    return None
+
+
+def _parse_scorecard_wickets(score_text: str | None) -> int | None:
+    if not score_text:
+        return None
+    parts = score_text.strip().split("/")
+    if len(parts) < 2:
+        return None
+    wickets_text = "".join(ch for ch in parts[1] if ch.isdigit())
+    if not wickets_text:
+        return None
+    return int(wickets_text)
+
+
+def _extract_scorecard_text(innings_payload: dict[str, Any]) -> str | None:
+    for key in ("score", "score_summary", "summary", "inning_summary", "scorecard"):
+        value = innings_payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+def _derive_winner(
+    result_text: str | None,
+    team_a_name: str,
+    team_b_name: str,
+) -> tuple[str | None, str | None, str]:
+    if not result_text:
+        return None, None, "none"
+    lowered = result_text.lower()
+    if any(token in lowered for token in ("tie", "draw", "abandon", "no result")):
+        return None, None, "high"
+
+    team_a_norm = normalize_team_name(team_a_name)
+    team_b_norm = normalize_team_name(team_b_name)
+
+    if team_a_norm and team_a_norm in normalize_team_name(result_text):
+        return team_a_name, canonicalize_team_name(team_a_name)[0], "high"
+    if team_b_norm and team_b_norm in normalize_team_name(result_text):
+        return team_b_name, canonicalize_team_name(team_b_name)[0], "high"
+
+    for marker in (" won", " beat", " defeated"):
+        idx = lowered.find(marker)
+        if idx <= 0:
+            continue
+        candidate = result_text[:idx].strip(" ,.;:")
+        if candidate:
+            candidate_canonical, _ = canonicalize_team_name(candidate)
+            return candidate, candidate_canonical, "medium"
+
+    return None, None, "none"
+
+
 def _build_innings_aggregates(
     innings_list: list[dict[str, Any]],
 ) -> list[InningsAggregate]:
@@ -140,7 +206,66 @@ def _build_match_aggregate(
     team_b_name = team_b_data.get("name") or "Team B"
 
     innings_list = _innings_summary(game)
-    innings_aggregates = _build_innings_aggregates(innings_list)
+    deliveries = game.deliveries if isinstance(game.deliveries, list) else []
+    deliveries_by_inning: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for delivery in deliveries:
+        if not isinstance(delivery, dict):
+            continue
+        inning_no = _safe_int(delivery.get("inning"))
+        if inning_no is None:
+            continue
+        deliveries_by_inning[inning_no].append(delivery)
+
+    first_inning_summary = (
+        game.first_inning_summary if isinstance(game.first_inning_summary, dict) else {}
+    )
+
+    innings_aggregates: list[InningsAggregate] = []
+    wicket_sources: set[str] = set()
+    for inn in innings_list:
+        inning_no = _safe_int(inn.get("inning_no")) or 0
+        inning_deliveries = deliveries_by_inning.get(inning_no, [])
+        runs_value = _safe_int(inn.get("runs"))
+        wickets_value = _safe_int(inn.get("wickets"))
+        if inning_deliveries:
+            runs_value = sum(
+                int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0)
+                for d in inning_deliveries
+            )
+            wickets_value = sum(1 for d in inning_deliveries if d.get("is_wicket"))
+            wicket_sources.add("deliveries")
+        elif wickets_value is not None:
+            wicket_sources.add("innings_summary")
+        else:
+            scorecard_text = _extract_scorecard_text(inn)
+            if not scorecard_text and inning_no == 1:
+                scorecard_text = str(first_inning_summary.get("score") or "")
+                if not scorecard_text:
+                    fir_wkts = _safe_int(first_inning_summary.get("wickets"))
+                    if fir_wkts is not None:
+                        wickets_value = fir_wkts
+                        wicket_sources.add("scorecard")
+            parsed_wickets = _parse_scorecard_wickets(scorecard_text)
+            if wickets_value is None and parsed_wickets is not None:
+                wickets_value = parsed_wickets
+                wicket_sources.add("scorecard")
+            if runs_value is None and scorecard_text and "/" in scorecard_text:
+                runs_text = "".join(ch for ch in scorecard_text.split("/", 1)[0] if ch.isdigit())
+                if runs_text:
+                    runs_value = int(runs_text)
+        runs = runs_value if runs_value is not None else 0
+        wickets = wickets_value if wickets_value is not None else 0
+        overs_raw = inn.get("overs")
+        overs = float(overs_raw) if overs_raw is not None else 0.0
+        innings_aggregates.append(
+            InningsAggregate(
+                inning_no=inning_no,
+                team=str(inn.get("team")) if inn.get("team") else None,
+                runs=runs,
+                wickets=wickets,
+                overs=overs,
+            )
+        )
 
     total_runs = sum(i.runs for i in innings_aggregates)
     total_wickets = sum(i.wickets for i in innings_aggregates)
@@ -148,6 +273,36 @@ def _build_match_aggregate(
     has_delivery_data = bool(meta.get("deliveries_imported")) or bool(
         isinstance(game.deliveries, list) and len(game.deliveries) > 0
     )
+
+    winner_team, winner_team_canonical, winner_confidence = _derive_winner(
+        game.result if isinstance(game.result, str) else None,
+        team_a_name,
+        team_b_name,
+    )
+    team_a_canonical, _ = canonicalize_team_name(team_a_name)
+    team_b_canonical, _ = canonicalize_team_name(team_b_name)
+
+    phases = game.phases if isinstance(game.phases, dict) else {}
+    phase_breakdown: dict[str, dict[str, int | float]] = {}
+    for phase_name in ("powerplay", "middle", "death"):
+        phase_payload = phases.get(phase_name)
+        if not isinstance(phase_payload, dict):
+            continue
+        phase_breakdown[phase_name] = {
+            "runs": int(phase_payload.get("runs") or 0),
+            "wickets": int(phase_payload.get("wickets") or 0),
+            "legal_balls": int(phase_payload.get("legal_balls") or 0),
+            "overs": float(phase_payload.get("overs") or 0.0),
+            "deliveries": int(phase_payload.get("deliveries") or 0),
+        }
+
+    wicket_derivation_source = "missing"
+    if "deliveries" in wicket_sources:
+        wicket_derivation_source = "deliveries"
+    elif "scorecard" in wicket_sources:
+        wicket_derivation_source = "scorecard"
+    elif "innings_summary" in wicket_sources:
+        wicket_derivation_source = "innings_summary"
 
     return MatchAggregate(
         match_id=game.id,
@@ -166,6 +321,14 @@ def _build_match_aggregate(
         total_runs=total_runs,
         total_wickets=total_wickets,
         innings_totals=innings_aggregates,
+        winner_team=winner_team,
+        winner_team_canonical=winner_team_canonical,
+        winner_source="result_text" if winner_team else None,
+        winner_confidence=winner_confidence,
+        wicket_derivation_source=wicket_derivation_source,
+        phase_breakdown=phase_breakdown,
+        team_a_canonical=team_a_canonical,
+        team_b_canonical=team_b_canonical,
         has_delivery_data=has_delivery_data,
     )
 
@@ -347,9 +510,12 @@ def _build_team_aggregates(
         avg_score = round(total_runs / innings_batted, 2) if innings_batted > 0 else 0.0
         avg_wickets = round(total_wickets / innings_batted, 2) if innings_batted > 0 else 0.0
 
+        canonical_team_name, continuity_group = canonicalize_team_name(team_name)
         result.append(
             TeamAggregate(
                 team_name=team_name,
+                canonical_team_name=canonical_team_name,
+                continuity_group=continuity_group,
                 matches_played=matches_played,
                 innings_batted=innings_batted,
                 avg_score=avg_score,
@@ -534,6 +700,104 @@ def _build_season_aggregates(
     return result
 
 
+def _build_case_studies(
+    matches: list[MatchAggregate],
+    venues: list[VenueAggregate],
+) -> list[dict[str, Any]]:
+    studies: list[dict[str, Any]] = []
+    if not matches:
+        return studies
+
+    high_scoring = max(matches, key=lambda m: (m.total_runs, m.match_id))
+    studies.append(
+        {
+            "id": "high_scoring_match",
+            "title": "High-scoring match",
+            "insight": (
+                f"{high_scoring.teams} produced {high_scoring.total_runs} runs in total "
+                f"({high_scoring.match_date or 'date unknown'})."
+            ),
+            "source": f"match:{high_scoring.match_id}",
+            "context": "Derived from innings total runs in validated historical imports.",
+        }
+    )
+
+    powerplay_candidates = [
+        m
+        for m in matches
+        if isinstance(m.phase_breakdown.get("powerplay"), dict)
+        and int(m.phase_breakdown["powerplay"].get("legal_balls") or 0) > 0
+    ]
+    if powerplay_candidates:
+        def _pp_run_rate(match: MatchAggregate) -> float:
+            phase = match.phase_breakdown["powerplay"]
+            legal_balls = int(phase.get("legal_balls") or 0)
+            if legal_balls <= 0:
+                return 0.0
+            return float(phase.get("runs") or 0) / (legal_balls / 6)
+
+        struggle = min(powerplay_candidates, key=lambda m: (_pp_run_rate(m), m.match_id))
+        phase = struggle.phase_breakdown["powerplay"]
+        studies.append(
+            {
+                "id": "powerplay_struggle",
+                "title": "Powerplay struggle",
+                "insight": (
+                    f"{struggle.teams} scored {int(phase.get('runs') or 0)} runs in the powerplay "
+                    f"across {int(phase.get('legal_balls') or 0)} legal balls."
+                ),
+                "source": f"match:{struggle.match_id}:powerplay",
+                "context": "Derived from delivery phase breakdown.",
+            }
+        )
+
+    death_candidates = [
+        m
+        for m in matches
+        if isinstance(m.phase_breakdown.get("death"), dict)
+        and int(m.phase_breakdown["death"].get("legal_balls") or 0) > 0
+    ]
+    if death_candidates:
+        death_match = max(
+            death_candidates,
+            key=lambda m: (
+                int(m.phase_breakdown["death"].get("runs") or 0),
+                int(m.phase_breakdown["death"].get("wickets") or 0),
+                m.match_id,
+            ),
+        )
+        phase = death_match.phase_breakdown["death"]
+        studies.append(
+            {
+                "id": "death_over_impact",
+                "title": "Death-over impact",
+                "insight": (
+                    f"{death_match.teams} generated {int(phase.get('runs') or 0)} death-over runs "
+                    f"with {int(phase.get('wickets') or 0)} wickets in that phase."
+                ),
+                "source": f"match:{death_match.match_id}:death",
+                "context": "Derived from delivery phase breakdown.",
+            }
+        )
+
+    if venues:
+        venue_pattern = max(venues, key=lambda v: (v.avg_total_runs, v.match_count, v.venue))
+        studies.append(
+            {
+                "id": "venue_scoring_pattern",
+                "title": "Venue scoring pattern",
+                "insight": (
+                    f"{venue_pattern.venue} shows an average total of "
+                    f"{venue_pattern.avg_total_runs:.1f} across {venue_pattern.match_count} match(es)."
+                ),
+                "source": f"venue:{venue_pattern.venue}",
+                "context": "Derived from venue aggregate totals.",
+            }
+        )
+
+    return studies
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -613,6 +877,46 @@ async def get_historical_stats_summary(
     venue_aggregates = _build_venue_aggregates(eligible_games)
     competition_aggregates = _build_competition_aggregates(eligible_games)
     season_aggregates = _build_season_aggregates(eligible_games)
+    case_studies = _build_case_studies(match_aggregates, venue_aggregates)
+
+    winner_counts: dict[str, int] = defaultdict(int)
+    for match in match_aggregates:
+        if match.winner_team_canonical:
+            winner_counts[match.winner_team_canonical] += 1
+    top_team_by_wins: dict[str, Any] | None = None
+    if winner_counts:
+        best_team, wins = sorted(winner_counts.items(), key=lambda item: (-item[1], item[0]))[0]
+        top_team_by_wins = {
+            "team_name": best_team,
+            "wins": wins,
+            "source": "parsed_result_text",
+            "confidence": "medium",
+        }
+
+    matches_with_parsed_winner = sum(1 for match in match_aggregates if match.winner_team is not None)
+    scorecard_derived_wicket_matches = sum(
+        1 for match in match_aggregates if match.wicket_derivation_source == "scorecard"
+    )
+    delivery_derived_wicket_matches = sum(
+        1 for match in match_aggregates if match.wicket_derivation_source == "deliveries"
+    )
+    canonical_teams = {
+        name
+        for match in match_aggregates
+        for name in (match.team_a_canonical, match.team_b_canonical)
+        if name
+    }
+    venues_represented = len({m.venue for m in match_aggregates if m.venue})
+    diagnostics = {
+        "matches_imported": len(match_aggregates),
+        "matches_with_parsed_winner": matches_with_parsed_winner,
+        "matches_missing_winner_or_result": len(match_aggregates) - matches_with_parsed_winner,
+        "delivery_complete_matches": sum(1 for match in match_aggregates if match.has_delivery_data),
+        "delivery_derived_wicket_matches": delivery_derived_wicket_matches,
+        "scorecard_derived_wicket_matches": scorecard_derived_wicket_matches,
+        "canonical_teams_represented": len(canonical_teams),
+        "venues_represented": venues_represented,
+    }
 
     return HistoricalStatsSummaryResponse(
         total_eligible_matches=len(eligible_games),
@@ -624,6 +928,9 @@ async def get_historical_stats_summary(
         venues=venue_aggregates,
         competitions=competition_aggregates,
         seasons=season_aggregates,
+        diagnostics=diagnostics,
+        top_team_by_wins=top_team_by_wins,
+        case_studies=case_studies,
         generated_at=dt.datetime.now(dt.UTC),
     )
 

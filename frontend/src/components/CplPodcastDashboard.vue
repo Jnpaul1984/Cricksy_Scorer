@@ -227,7 +227,10 @@
           <div class="cpld-card" :class="{ 'cpld-card--muted': !topTeamByWins }">
             <p class="cpld-card-value">{{ topTeamByWins ?? '—' }}</p>
             <p class="cpld-card-label">Top team (most wins)</p>
-            <p v-if="!topTeamByWins" class="cpld-card-warn">Win data not available in current imports</p>
+            <p v-if="topTeamByWinsMeta" class="cpld-card-note">
+              Source: {{ topTeamByWinsMeta.source || 'result parsing' }} · confidence: {{ topTeamByWinsMeta.confidence || 'medium' }}
+            </p>
+            <p v-else class="cpld-card-warn">Win data parsing incomplete for current imports</p>
           </div>
         </div>
 
@@ -236,20 +239,40 @@
           <p class="cpld-diagnostics-title">📋 Data Completeness Diagnostics</p>
           <div class="cpld-diagnostics-grid">
             <div class="cpld-diag-item">
-              <span class="cpld-diag-val">{{ cplMatches.length }}</span>
+              <span class="cpld-diag-val">{{ cplDiagnostics.matchesImported }}</span>
               <span class="cpld-diag-lbl">Total CPL matches imported</span>
             </div>
             <div class="cpld-diag-item">
-              <span class="cpld-diag-val">{{ deliveryCompleteCount }}</span>
+              <span class="cpld-diag-val">{{ cplDiagnostics.deliveryComplete }}</span>
               <span class="cpld-diag-lbl">Delivery-complete matches</span>
+            </div>
+            <div class="cpld-diag-item">
+              <span class="cpld-diag-val cpld-diag-val--warn">{{ cplDiagnostics.matchesMissingWinner }}</span>
+              <span class="cpld-diag-lbl">Matches missing winner/result</span>
+            </div>
+            <div class="cpld-diag-item">
+              <span class="cpld-diag-val">{{ cplDiagnostics.matchesWithParsedWinner }}</span>
+              <span class="cpld-diag-lbl">Matches with parsed winner</span>
+            </div>
+            <div class="cpld-diag-item">
+              <span class="cpld-diag-val">{{ cplDiagnostics.scorecardDerivedWickets }}</span>
+              <span class="cpld-diag-lbl">Scorecard-derived wicket matches</span>
+            </div>
+            <div class="cpld-diag-item">
+              <span class="cpld-diag-val">{{ cplDiagnostics.deliveryDerivedWickets }}</span>
+              <span class="cpld-diag-lbl">Delivery-derived wicket matches</span>
             </div>
             <div class="cpld-diag-item">
               <span class="cpld-diag-val cpld-diag-val--warn">{{ missingDeliveryCount }}</span>
               <span class="cpld-diag-lbl">Matches missing delivery data</span>
             </div>
             <div class="cpld-diag-item">
-              <span class="cpld-diag-val">{{ availableSeasons.length }}</span>
-              <span class="cpld-diag-lbl">Seasons represented</span>
+              <span class="cpld-diag-val">{{ cplDiagnostics.canonicalTeams }}</span>
+              <span class="cpld-diag-lbl">Canonical teams represented</span>
+            </div>
+            <div class="cpld-diag-item">
+              <span class="cpld-diag-val">{{ cplDiagnostics.venues }}</span>
+              <span class="cpld-diag-lbl">Venues represented</span>
             </div>
           </div>
           <p v-if="missingDeliveryCount > 0" class="cpld-diagnostics-note">
@@ -257,6 +280,21 @@
             Player batting/bowling totals are derived from delivery-complete matches only and may appear lower than expected.
             Import delivery data via the Import tab to improve completeness.
           </p>
+        </div>
+      </section>
+
+      <section class="cpld-section" aria-label="Deterministic case studies">
+        <h4 class="cpld-section-title">🧠 Case Studies</h4>
+        <div v-if="cplCaseStudies.length > 0" class="cpld-case-grid">
+          <article v-for="study in cplCaseStudies" :key="study.id" class="cpld-case-card">
+            <p class="cpld-case-title">{{ study.title }}</p>
+            <p class="cpld-case-insight">{{ study.insight }}</p>
+            <p class="cpld-case-meta">Source: {{ study.source }}</p>
+            <p class="cpld-case-meta">{{ study.context }}</p>
+          </article>
+        </div>
+        <div v-else class="cpld-insufficient">
+          Deterministic case studies are unavailable for the current CPL filters.
         </div>
       </section>
 
@@ -1082,8 +1120,23 @@ const filteredTotalWickets = computed(() =>
 )
 
 /** Simple heuristic: team appearing in most matches with the most total wins.
- * Since win/loss data is not available in the summary schema, return null. */
-const topTeamByWins = computed<string | null>(() => null)
+ * Uses parsed winner metadata from backend summary when available. */
+const topTeamByWinsMeta = computed(() => {
+  const declared = summary.value?.top_team_by_wins
+  if (declared?.team_name) return declared
+  const wins = new Map<string, number>()
+  for (const match of filteredMatches.value) {
+    const winner = match.winner_team_canonical || match.winner_team
+    if (!winner) continue
+    wins.set(winner, (wins.get(winner) ?? 0) + 1)
+  }
+  if (wins.size === 0) return null
+  const [team_name, winsTotal] = [...wins.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]
+  return { team_name, wins: winsTotal, source: 'result parsing', confidence: 'medium' }
+})
+const topTeamByWins = computed<string | null>(() => (
+  topTeamByWinsMeta.value ? `${topTeamByWinsMeta.value.team_name} (${topTeamByWinsMeta.value.wins})` : null
+))
 
 /** CPL matches with full delivery data. */
 const deliveryCompleteCount = computed(() =>
@@ -1094,6 +1147,47 @@ const deliveryCompleteCount = computed(() =>
 const missingDeliveryCount = computed(() =>
   cplMatches.value.filter(m => !m.has_delivery_data).length
 )
+
+const cplDiagnostics = computed(() => {
+  const matchesImported = cplMatches.value.length
+  const matchesWithParsedWinner = cplMatches.value.filter(m => Boolean(m.winner_team || m.winner_team_canonical)).length
+  const scorecardDerivedWickets = cplMatches.value.filter(m => m.wicket_derivation_source === 'scorecard').length
+  const deliveryDerivedWickets = cplMatches.value.filter(m => m.wicket_derivation_source === 'deliveries').length
+  const canonicalTeams = new Set<string>()
+  cplMatches.value.forEach(m => {
+    if (m.team_a_canonical) canonicalTeams.add(m.team_a_canonical)
+    if (m.team_b_canonical) canonicalTeams.add(m.team_b_canonical)
+  })
+  const venues = new Set(cplMatches.value.map(m => m.venue).filter(Boolean)).size
+  return {
+    matchesImported,
+    matchesWithParsedWinner,
+    matchesMissingWinner: Math.max(matchesImported - matchesWithParsedWinner, 0),
+    deliveryComplete: deliveryCompleteCount.value,
+    scorecardDerivedWickets,
+    deliveryDerivedWickets,
+    canonicalTeams: canonicalTeams.size || filteredTeamNames.value.size,
+    venues,
+  }
+})
+
+const cplCaseStudies = computed(() => {
+  const backendStudies = summary.value?.case_studies ?? []
+  if (backendStudies.length > 0) {
+    return backendStudies
+  }
+  const studies: Array<{ id: string; title: string; insight: string; source: string; context: string }> = []
+  if (filteredMatches.value.length === 0) return studies
+  const high = [...filteredMatches.value].sort((a, b) => b.total_runs - a.total_runs)[0]
+  studies.push({
+    id: 'high-scoring-match',
+    title: 'High-scoring match',
+    insight: `${high.teams} produced ${high.total_runs} total runs.`,
+    source: `match:${high.match_id}`,
+    context: 'Derived from deterministic innings totals.',
+  })
+  return studies
+})
 
 const filteredPlayers = computed(() => {
   // When filters narrow to specific team, only include that team's players.
@@ -2593,8 +2687,8 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-state--empty {
-  background: var(--color-surface, #f8fafc);
-  border: 1px dashed #cbd5e1;
+  background: var(--color-surface, #0f172a);
+  border: 1px dashed var(--color-border, #334155);
 }
 
 .cpld-state--hint {
@@ -2979,12 +3073,12 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-insufficient {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  background: var(--color-surface, #1e293b);
+  border: 1px solid var(--color-border, #475569);
   border-radius: 6px;
   padding: 0.75rem 1rem;
   font-size: 0.8rem;
-  color: #92400e;
+  color: var(--color-text-muted, #cbd5e1);
 }
 
 .cpld-insufficient--warn {
@@ -3068,15 +3162,15 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-venue-card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--color-bg, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 6px;
   padding: 0.75rem 1rem;
 }
 
 .cpld-venue-card--selected {
   border-color: #3b82f6;
-  background: #eff6ff;
+  background: color-mix(in srgb, #3b82f6 18%, var(--color-bg, #ffffff));
 }
 
 .cpld-venue-name {
@@ -3118,8 +3212,8 @@ function downloadPodcastScriptMarkdown(): void {
 
 /* Podcast panel */
 .cpld-podcast-panel {
-  background: #fafaf9;
-  border: 1px solid #e7e5e4;
+  background: var(--color-surface, #111827);
+  border: 1px solid var(--color-border, #334155);
   border-radius: 8px;
   padding: 1rem;
 }
@@ -3137,8 +3231,8 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-fact-card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--color-bg, #ffffff);
+  border: 1px solid var(--color-border, #334155);
   border-radius: 6px;
   padding: 0.6rem 0.8rem;
 }
@@ -3196,8 +3290,8 @@ function downloadPodcastScriptMarkdown(): void {
 
 /* AI Talking-Point Panel */
 .cpld-ai-panel {
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
+  background: color-mix(in srgb, #0ea5e9 15%, var(--color-surface, #111827));
+  border: 1px solid color-mix(in srgb, #38bdf8 45%, var(--color-border, #334155));
   border-radius: 8px;
   padding: 1rem;
   margin-top: 1rem;
@@ -3251,8 +3345,8 @@ function downloadPodcastScriptMarkdown(): void {
 
 /* Fact bundle */
 .cpld-ai-bundle {
-  background: #ffffff;
-  border: 1px solid #bae6fd;
+  background: var(--color-bg, #ffffff);
+  border: 1px solid color-mix(in srgb, #38bdf8 45%, var(--color-border, #334155));
   border-radius: 6px;
   padding: 0.65rem 0.85rem;
 }
@@ -3274,8 +3368,8 @@ function downloadPodcastScriptMarkdown(): void {
 
 .cpld-ai-bundle-tag {
   display: inline-block;
-  background: #e0f2fe;
-  color: #0369a1;
+  background: color-mix(in srgb, #0ea5e9 24%, var(--color-bg, #ffffff));
+  color: var(--color-text, #0369a1);
   border-radius: 4px;
   padding: 0.15rem 0.5rem;
   font-size: 0.72rem;
@@ -3718,6 +3812,41 @@ function downloadPodcastScriptMarkdown(): void {
   border-radius: 6px;
   display: grid;
   gap: 0.5rem;
+}
+
+.cpld-case-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+
+.cpld-case-card {
+  background: var(--color-bg, #ffffff);
+  border: 1px solid var(--color-border, #334155);
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.cpld-case-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--color-text, #e2e8f0);
+}
+
+.cpld-case-insight {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text, #cbd5e1);
+}
+
+.cpld-case-meta {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--color-text-muted, #94a3b8);
 }
 
 .cpld-diagnostics-title {

@@ -968,6 +968,14 @@ export interface HistoricalMatchAggregate {
   total_runs: number;
   total_wickets: number;
   innings_totals: InningsAggregate[];
+  winner_team?: string | null;
+  winner_team_canonical?: string | null;
+  winner_source?: string | null;
+  winner_confidence?: 'high' | 'medium' | 'low' | 'none';
+  wicket_derivation_source?: 'deliveries' | 'innings_summary' | 'scorecard' | 'missing';
+  phase_breakdown?: Record<string, { runs: number; wickets: number; legal_balls: number; overs: number; deliveries: number }>;
+  team_a_canonical?: string | null;
+  team_b_canonical?: string | null;
   has_delivery_data: boolean;
 }
 
@@ -991,6 +999,8 @@ export interface HistoricalPlayerAggregate {
 /** Team aggregate across historical matches. */
 export interface HistoricalTeamAggregate {
   team_name: string;
+  canonical_team_name?: string | null;
+  continuity_group?: string | null;
   matches_played: number;
   innings_batted: number;
   avg_score: number;
@@ -1040,6 +1050,20 @@ export interface HistoricalStatsSummaryResponse {
   venues: HistoricalVenueAggregate[];
   competitions: HistoricalCompetitionAggregate[];
   seasons: HistoricalSeasonAggregate[];
+  diagnostics?: Record<string, number>;
+  top_team_by_wins?: {
+    team_name: string;
+    wins: number;
+    source?: string;
+    confidence?: string;
+  } | null;
+  case_studies?: Array<{
+    id: string;
+    title: string;
+    insight: string;
+    source: string;
+    context: string;
+  }>;
   generated_at: string;
   note: string;
 }
