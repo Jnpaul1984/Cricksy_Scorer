@@ -1,14 +1,19 @@
 <template>
   <div class="analytics-tables-widget">
     <div class="analytics-header">
-      <h3 class="analytics-title">📊 Analytics Tables</h3>
-      <div class="analytics-controls">
+      <div>
+        <h3 class="analytics-title">Analytics Lab</h3>
+        <p class="analytics-subtitle">Registry-selected match analysis with completeness-aware fallbacks.</p>
+      </div>
+      <div class="analytics-controls" role="tablist" aria-label="Select analytics chart">
         <button
           v-for="chart in chartTypes"
           :key="chart.id"
           class="chart-tab"
           :class="{ active: activeChart === chart.id }"
           :title="chart.description"
+          :aria-selected="activeChart === chart.id"
+          role="tab"
           @click="activeChart = chart.id"
         >
           {{ chart.label }}
@@ -16,277 +21,781 @@
       </div>
     </div>
 
-    <!-- Manhattan Plot -->
-    <div v-if="activeChart === 'manhattan'" class="chart-container">
-      <div class="chart-info">
-        <h4>Manhattan Plot</h4>
-        <p>Runs scored per delivery in the innings</p>
+    <div class="analytics-context" role="status" aria-live="polite">
+      <div>
+        <p class="analytics-context-label">Selected match</p>
+        <h4 class="analytics-context-title">{{ displayMatchTitle }}</h4>
+        <p class="analytics-context-meta">
+          {{ displayMatchDate }} · {{ sourceLabel }} · {{ completenessLabel(displayCompleteness) }}
+        </p>
       </div>
-      <div class="manhattan-plot">
-        <div class="manhattan-axis-y">
-          <span v-for="i in 5" :key="`y-${i}`" class="y-label">{{ (5 - i) * 2 }}</span>
-        </div>
-        <div class="manhattan-area">
-          <div v-for="(delivery, idx) in manhattan" :key="`delivery-${idx}`" class="delivery-bar-wrapper">
+      <p v-if="result" class="analytics-context-result">{{ result }}</p>
+    </div>
+
+    <p v-if="statusMessage" class="analytics-status" :class="{ 'analytics-status--error': Boolean(error) }">
+      {{ statusMessage }}
+    </p>
+
+    <div class="analytics-summary-grid">
+      <article v-for="metric in summaryMetrics" :key="metric.label" class="analytics-summary-card">
+        <p class="analytics-summary-label">{{ metric.label }}</p>
+        <p class="analytics-summary-value">{{ metric.value }}</p>
+        <p class="analytics-summary-note">{{ metric.note }}</p>
+      </article>
+    </div>
+
+    <div class="chart-container">
+      <div class="chart-info">
+        <h4>{{ currentChartMeta.title }}</h4>
+        <p>{{ currentChartMeta.description }}</p>
+      </div>
+
+      <div v-if="loading" class="analytics-state" role="status">Loading selected-match analytics…</div>
+      <div v-else-if="currentChartMode === 'metadata_only'" class="analytics-state" role="status">
+        This registry entry only has metadata. Import deliveries, phases, or innings totals to render this graph.
+      </div>
+
+      <template v-else-if="activeChart === 'manhattan'">
+        <div class="analytics-chart-frame">
+          <div class="analytics-chart-scale">
+            <span>{{ chartMaxValue(manhattanBars) }}</span>
+            <span>0</span>
+          </div>
+          <div class="analytics-bar-chart" aria-label="Manhattan plot">
             <div
-              class="delivery-bar"
-              :style="{
-                height: (delivery.runs / 10) * 100 + '%',
-                backgroundColor: getRunColor(delivery.runs),
-              }"
-              :title="`Ball ${idx + 1}: ${delivery.runs} runs (${delivery.type})`"
-              @mouseenter="hoverDelivery = idx"
-              @mouseleave="hoverDelivery = null"
+              v-for="bar in manhattanBars"
+              :key="bar.key"
+              class="analytics-bar-chart__column"
+              :title="bar.tooltip"
             >
-              <span v-if="hoverDelivery === idx" class="hover-label">{{ delivery.runs }}</span>
+              <span v-if="bar.wickets > 0" class="analytics-bar-chart__marker">W{{ bar.wickets }}</span>
+              <div class="analytics-bar-chart__track">
+                <div
+                  class="analytics-bar-chart__bar"
+                  :style="{
+                    height: `${barHeight(bar.value, manhattanBars)}%`,
+                    background: bar.color,
+                  }"
+                />
+              </div>
+              <span class="analytics-bar-chart__label">{{ bar.shortLabel }}</span>
             </div>
           </div>
         </div>
-        <div class="manhattan-axis-x">Deliveries</div>
-      </div>
-      <div class="chart-legend">
-        <div class="legend-item">
-          <span class="color-dot" style="background: #10b981"></span>
-          <span>0-1 runs (singles)</span>
-        </div>
-        <div class="legend-item">
-          <span class="color-dot" style="background: #f59e0b"></span>
-          <span>2 runs (doubles)</span>
-        </div>
-        <div class="legend-item">
-          <span class="color-dot" style="background: #ef4444"></span>
-          <span>3-6 runs (boundaries)</span>
-        </div>
-        <div class="legend-item">
-          <span class="color-dot" style="background: #8b5cf6"></span>
-          <span>Wicket</span>
-        </div>
-      </div>
-    </div>
+        <p class="analytics-fallback-note">{{ currentModeNote('manhattan') }}</p>
+      </template>
 
-    <!-- Worm Chart -->
-    <div v-else-if="activeChart === 'worm'" class="chart-container">
-      <div class="chart-info">
-        <h4>Worm Chart</h4>
-        <p>Cumulative runs progression throughout the innings</p>
-      </div>
-      <div class="worm-chart-wrapper">
-        <svg class="worm-chart" :viewBox="`0 0 ${wormChartWidth} ${wormChartHeight}`">
-          <!-- Grid lines -->
-          <g class="grid">
-            <line
-v-for="i in 5" :key="`grid-h-${i}`" :x1="0" :y1="(i / 5) * wormChartHeight"
-                  :x2="wormChartWidth" :y2="(i / 5) * wormChartHeight" stroke="#e5e7eb" stroke-width="1" />
-            <line
-v-for="i in 10" :key="`grid-v-${i}`" :x1="(i / 10) * wormChartWidth" :y1="0"
-                  :x2="(i / 10) * wormChartWidth" :y2="wormChartHeight" stroke="#e5e7eb" stroke-width="1" />
-          </g>
+      <template v-else-if="activeChart === 'worm'">
+        <template v-if="wormSeries.length > 0">
+          <div class="analytics-svg-frame">
+            <svg class="analytics-svg" viewBox="0 0 640 240" aria-label="Worm chart">
+              <g class="analytics-grid">
+                <line v-for="i in 5" :key="`worm-h-${i}`" :x1="48" :y1="20 + i * 36" x2="612" :y2="20 + i * 36" />
+                <line v-for="i in 5" :key="`worm-v-${i}`" :x1="48 + i * 112.8" y1="20" :x2="48 + i * 112.8" y2="200" />
+              </g>
 
-          <!-- Cumulative runs line -->
-          <polyline :points="wormLinePoints" class="worm-line" />
+              <template v-for="series in wormSeries" :key="series.key">
+                <polyline :points="series.path" class="analytics-line" :style="{ stroke: series.color }" />
+                <circle
+                  v-for="point in series.points"
+                  :key="point.key"
+                  :cx="point.x"
+                  :cy="point.y"
+                  r="4"
+                  :fill="series.color"
+                >
+                  <title>{{ point.tooltip }}</title>
+                </circle>
+              </template>
 
-          <!-- Data points -->
-          <circle
-v-for="(point, idx) in wormPoints" :key="`point-${idx}`" :cx="point.x" :cy="point.y"
-                  r="3" class="worm-point" :class="{ 'worm-point-wicket': point.isWicket }"
-                  :title="`Ball ${idx + 1}: ${point.cumulativeRuns} runs (${point.deliveryType})`"
-                  @mouseenter="hoverWormBall = idx"
-                  @mouseleave="hoverWormBall = null" />
+              <text x="48" y="14" class="analytics-axis-label">Cumulative runs</text>
+              <text x="612" y="224" class="analytics-axis-label" text-anchor="end">{{ wormXAxisLabel }}</text>
+            </svg>
+          </div>
 
-          <!-- Hover label -->
-          <g v-if="hoverWormBall !== null" class="hover-info">
-            <circle
-:cx="wormPoints[hoverWormBall].x" :cy="wormPoints[hoverWormBall].y" r="5"
-                    fill="none" stroke="#3b82f6" stroke-width="2" />
-            <text
-:x="wormPoints[hoverWormBall].x" :y="wormPoints[hoverWormBall].y - 15"
-                  text-anchor="middle" class="worm-hover-text">
-              {{ wormPoints[hoverWormBall].cumulativeRuns }}
-            </text>
-          </g>
-
-          <!-- Axes labels -->
-          <text x="10" y="20" class="axis-label">Runs</text>
-          <text :x="wormChartWidth - 50" :y="wormChartHeight - 5" class="axis-label">Deliveries</text>
-        </svg>
-      </div>
-      <div class="worm-stats">
-        <div class="stat">
-          <span class="stat-label">Total Runs:</span>
-          <span class="stat-value">{{ totalRuns }}</span>
+          <div class="analytics-legend">
+            <div v-for="series in wormSeries" :key="series.key" class="analytics-legend__item">
+              <span class="analytics-legend__swatch" :style="{ background: series.color }" />
+              <span>{{ series.label }}</span>
+            </div>
+          </div>
+        </template>
+        <div v-else class="analytics-state" role="status">
+          No cumulative progression is available for this match yet.
         </div>
-        <div class="stat">
-          <span class="stat-label">Deliveries:</span>
-          <span class="stat-value">{{ totalDeliveries }}</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Run Rate:</span>
-          <span class="stat-value">{{ runRate.toFixed(2) }}</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Wickets:</span>
-          <span class="stat-value">{{ totalWickets }}</span>
-        </div>
-      </div>
-    </div>
+        <p class="analytics-fallback-note">{{ currentModeNote('worm') }}</p>
+      </template>
 
-    <!-- Scatter Plot: Runs vs Balls -->
-    <div v-else-if="activeChart === 'scatter'" class="chart-container">
-      <div class="chart-info">
-        <h4>Performance Scatter</h4>
-        <p>Strike rate and consistency analysis</p>
-      </div>
-      <div class="scatter-wrapper">
-        <svg class="scatter-chart" :viewBox="`0 0 ${scatterWidth} ${scatterHeight}`">
-          <!-- Grid -->
-          <g class="grid">
-            <line
-v-for="i in 4" :key="`sgrid-h-${i}`" :x1="0" :y1="(i / 4) * scatterHeight"
-                  :x2="scatterWidth" :y2="(i / 4) * scatterHeight" stroke="#e5e7eb" stroke-width="1" />
-            <line
-v-for="i in 4" :key="`sgrid-v-${i}`" :x1="(i / 4) * scatterWidth" :y1="0"
-                  :x2="(i / 4) * scatterWidth" :y2="scatterHeight" stroke="#e5e7eb" stroke-width="1" />
-          </g>
+      <template v-else>
+        <template v-if="scatterPoints.length > 0">
+          <div class="analytics-svg-frame">
+            <svg class="analytics-svg" viewBox="0 0 640 240" aria-label="Scatter plot">
+              <g class="analytics-grid">
+                <line v-for="i in 5" :key="`scatter-h-${i}`" :x1="48" :y1="20 + i * 36" x2="612" :y2="20 + i * 36" />
+                <line v-for="i in 5" :key="`scatter-v-${i}`" :x1="48 + i * 112.8" y1="20" :x2="48 + i * 112.8" y2="200" />
+              </g>
 
-          <!-- Dots -->
-          <circle
-v-for="(point, idx) in scatterPoints" :key="`scatter-${idx}`" :cx="point.x"
-                  :cy="point.y" :r="4" :class="['scatter-dot', point.colorClass]"
-                  :title="`Match ${idx + 1}: ${point.balls} balls, ${point.runs} runs (SR: ${point.sr.toFixed(0)})`"
-                  @mouseenter="hoverScatterMatch = idx"
-                  @mouseleave="hoverScatterMatch = null" />
+              <circle
+                v-for="point in scatterPoints"
+                :key="point.key"
+                :cx="point.x"
+                :cy="point.y"
+                :r="point.radius"
+                :fill="point.color"
+                fill-opacity="0.82"
+              >
+                <title>{{ point.tooltip }}</title>
+              </circle>
 
-          <!-- Hover info -->
-          <g v-if="hoverScatterMatch !== null" class="scatter-hover">
-            <circle
-:cx="scatterPoints[hoverScatterMatch].x"
-                    :cy="scatterPoints[hoverScatterMatch].y" r="6"
-                    fill="none" stroke="#3b82f6" stroke-width="2" />
-            <text
-:x="scatterPoints[hoverScatterMatch].x" :y="scatterPoints[hoverScatterMatch].y - 15"
-                  text-anchor="middle" class="scatter-hover-text">
-              SR: {{ scatterPoints[hoverScatterMatch].sr.toFixed(0) }}
-            </text>
-          </g>
+              <text x="48" y="14" class="analytics-axis-label">{{ scatterYAxisLabel }}</text>
+              <text x="612" y="224" class="analytics-axis-label" text-anchor="end">{{ scatterXAxisLabel }}</text>
+            </svg>
+          </div>
 
-          <!-- Axis labels -->
-          <text x="10" y="20" class="axis-label">Runs</text>
-          <text :x="scatterWidth - 50" :y="scatterHeight - 5" class="axis-label">Balls</text>
-        </svg>
-      </div>
-      <div class="chart-legend">
-        <div class="legend-item">
-          <span class="color-dot" style="background: #10b981"></span>
-          <span>High SR (&gt; 120)</span>
+          <div class="analytics-legend">
+            <div class="analytics-legend__item">
+              <span class="analytics-legend__swatch" style="background: #38bdf8" />
+              <span>Innings 1 / attacking</span>
+            </div>
+            <div class="analytics-legend__item">
+              <span class="analytics-legend__swatch" style="background: #34d399" />
+              <span>Innings 2 / stable</span>
+            </div>
+            <div class="analytics-legend__item">
+              <span class="analytics-legend__swatch" style="background: #f59e0b" />
+              <span>Phase fallback</span>
+            </div>
+          </div>
+        </template>
+        <div v-else class="analytics-state" role="status">
+          No scatter points are available for this match yet.
         </div>
-        <div class="legend-item">
-          <span class="color-dot" style="background: #f59e0b"></span>
-          <span>Normal SR (90-120)</span>
-        </div>
-        <div class="legend-item">
-          <span class="color-dot" style="background: #ef4444"></span>
-          <span>Low SR (&lt; 90)</span>
-        </div>
-      </div>
+        <p class="analytics-fallback-note">{{ currentModeNote('scatter') }}</p>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { defineProps, ref, computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
+import {
+  getAnalystDeliveries,
+  getMatchCaseStudy,
+  type AnalystDeliveryRow,
+  type AnalystRegistryEntry,
+  type MatchCaseStudyResponse,
+} from '@/services/api'
 import type { PlayerProfile } from '@/types/player'
 
-interface DeliveryData {
-  runs: number
-  type: string // 'dot', 'single', 'double', 'boundary', 'wicket'
+type AnalyticsChart = 'manhattan' | 'worm' | 'scatter'
+type AnalyticsCompleteness = 'delivery_complete' | 'phase_level' | 'innings_totals' | 'metadata_only'
+
+interface SummaryMetric {
+  label: string
+  value: string
+  note: string
+}
+
+interface ChartBar {
+  key: string
+  shortLabel: string
+  value: number
+  wickets: number
+  tooltip: string
+  color: string
 }
 
 interface WormPoint {
+  key: string
   x: number
   y: number
-  cumulativeRuns: number
-  deliveryType: string
-  isWicket: boolean
+  tooltip: string
+}
+
+interface WormSeries {
+  key: string
+  label: string
+  color: string
+  path: string
+  points: WormPoint[]
 }
 
 interface ScatterPoint {
+  key: string
   x: number
   y: number
-  balls: number
+  radius: number
+  tooltip: string
+  color: string
+}
+
+interface DeliveryBucket {
+  key: string
+  innings: number
+  label: string
+  shortLabel: string
   runs: number
-  sr: number
-  colorClass: string
+  wickets: number
+  legalBalls: number
+}
+
+interface PhaseBucket {
+  key: string
+  label: string
+  runs: number
+  wickets: number
+  overs: number
+}
+
+interface InningsBucket {
+  key: string
+  innings: number
+  label: string
+  runs: number
+  wickets: number
+  overs: number | null
 }
 
 const props = defineProps<{
   profile: PlayerProfile | null
+  matchId: string
+  matchSource?: 'historical' | 'live'
+  matchTitle?: string | null
+  matchDate?: string | null
+  result?: string | null
+  dataCompleteness?: string | null
+  registryEntry?: AnalystRegistryEntry | null
 }>()
 
-const activeChart = ref<'manhattan' | 'worm' | 'scatter'>('manhattan')
-const hoverDelivery = ref<number | null>(null)
-const hoverWormBall = ref<number | null>(null)
-const hoverScatterMatch = ref<number | null>(null)
-
-// Chart type options
 const chartTypes = [
-  { id: 'manhattan' as const, label: '📊 Manhattan', description: 'Runs per delivery' },
+  { id: 'manhattan' as const, label: '📊 Manhattan', description: 'Runs by delivery/over with fallbacks' },
   { id: 'worm' as const, label: '🐛 Worm', description: 'Cumulative progression' },
-  { id: 'scatter' as const, label: '⚡ Scatter', description: 'Strike rate analysis' },
+  { id: 'scatter' as const, label: '⚡ Scatter', description: 'Performance scatter analysis' },
 ]
 
-// Delivery data - NO FAKE DATA
-// Required: GET /games/{id}/deliveries with proper aggregation
-const manhattan = ref<DeliveryData[]>([])
+const activeChart = ref<AnalyticsChart>('manhattan')
+const loading = ref(false)
+const error = ref<string | null>(null)
+const deliveries = ref<AnalystDeliveryRow[]>([])
+const deliveryCompleteness = ref<AnalyticsCompleteness>('metadata_only')
+const caseStudy = ref<MatchCaseStudyResponse | null>(null)
 
-// Worm chart data (cumulative)
-const wormChartWidth = 600
-const wormChartHeight = 250
-const maxRuns = computed(() => {
-  const total = manhattan.value.reduce((sum, d) => sum + d.runs, 0)
-  return Math.ceil(total / 10) * 10
-})
+const displayMatchTitle = computed(() => props.matchTitle || props.registryEntry?.match_title || 'Selected match')
+const displayMatchDate = computed(() => props.matchDate || props.registryEntry?.match_date || 'Date unavailable')
+const result = computed(() => props.result || props.registryEntry?.result || null)
+const sourceLabel = computed(() => (props.matchSource === 'live' ? 'Live / scored' : 'Historical import'))
 
-const wormPoints = computed((): WormPoint[] => {
-  let cumulativeRuns = 0
-  return manhattan.value.map((delivery, idx) => {
-    cumulativeRuns += delivery.runs
-    const x = ((idx + 1) / manhattan.value.length) * wormChartWidth
-    const y = wormChartHeight - (cumulativeRuns / maxRuns.value) * wormChartHeight * 0.85
-    return {
-      x,
-      y,
-      cumulativeRuns,
-      deliveryType: delivery.type,
-      isWicket: delivery.type === 'wicket',
-    }
-  })
-})
-
-const wormLinePoints = computed(() => {
-  return wormPoints.value.map((p) => `${p.x},${p.y}`).join(' ')
-})
-
-const totalRuns = computed(() => manhattan.value.reduce((sum, d) => sum + d.runs, 0))
-const totalDeliveries = computed(() => manhattan.value.length)
-const totalWickets = computed(() => manhattan.value.filter((d) => d.type === 'wicket').length)
-const runRate = computed(() => (totalRuns.value / totalDeliveries.value) * 6)
-
-// Scatter chart dimensions (layout constants, not data)
-const scatterWidth = 500
-const scatterHeight = 300
-
-// Scatter chart data - NO FAKE DATA
-// Required: GET /games/{id}/deliveries aggregated by match
-const scatterPoints = ref<ScatterPoint[]>([])
-
-// Color mapping
-function getRunColor(runs: number): string {
-  if (runs === 0) return '#6b7280' // gray for dot
-  if (runs === 1) return '#10b981' // green for single
-  if (runs === 2) return '#f59e0b' // amber for double
-  return '#ef4444' // red for boundary/wicket
+function normalizeCompleteness(value: string | null | undefined): AnalyticsCompleteness {
+  if (value === 'delivery_complete' || value === 'phase_level' || value === 'innings_totals') {
+    return value
+  }
+  return 'metadata_only'
 }
+
+function completenessLabel(value: AnalyticsCompleteness): string {
+  return value.replace(/_/g, ' ')
+}
+
+function phaseOvers(startOver?: number | null, endOver?: number | null): number {
+  if (typeof startOver !== 'number' || typeof endOver !== 'number' || endOver < startOver) return 0
+  return endOver - startOver + 1
+}
+
+function oversToBalls(overs: number | null | undefined): number | null {
+  if (typeof overs !== 'number' || Number.isNaN(overs)) return null
+  const wholeOvers = Math.trunc(overs)
+  const partialBalls = Math.round((overs - wholeOvers) * 10)
+  return wholeOvers * 6 + Math.max(partialBalls, 0)
+}
+
+function runsColor(index: number, innings: number): string {
+  if (innings === 2) return '#34d399'
+  return index % 2 === 0 ? '#38bdf8' : '#60a5fa'
+}
+
+function phaseColor(label: string): string {
+  const normalized = label.toLowerCase()
+  if (normalized.includes('power')) return '#f59e0b'
+  if (normalized.includes('death')) return '#f472b6'
+  return '#2dd4bf'
+}
+
+function isLegalDelivery(row: AnalystDeliveryRow): boolean {
+  const extraType = (row.extra_type || '').toLowerCase()
+  return !['wd', 'wide', 'nb', 'noball', 'no_ball', 'no ball'].includes(extraType)
+}
+
+const inningsTotals = computed<InningsBucket[]>(() =>
+  (caseStudy.value?.match.innings || []).map((innings, index) => ({
+    key: `innings-${index + 1}`,
+    innings: index + 1,
+    label: innings.team || `Innings ${index + 1}`,
+    runs: innings.runs ?? 0,
+    wickets: innings.wickets ?? 0,
+    overs: typeof innings.overs === 'number' ? innings.overs : null,
+  })),
+)
+
+const phaseBuckets = computed<PhaseBucket[]>(() =>
+  (caseStudy.value?.phases || [])
+    .filter(phase => (phase.runs ?? 0) > 0 || (phase.wickets ?? 0) > 0)
+    .map(phase => ({
+      key: phase.id,
+      label: phase.label,
+      runs: phase.runs ?? 0,
+      wickets: phase.wickets ?? 0,
+      overs: phase.run_rate && phase.run_rate > 0
+        ? Number((phase.runs / phase.run_rate).toFixed(2))
+        : phaseOvers(phase.start_over, phase.end_over),
+    })),
+)
+
+const deliveryBuckets = computed<DeliveryBucket[]>(() => {
+  const grouped = new Map<string, DeliveryBucket>()
+  const rows = [...deliveries.value].sort((a, b) => {
+    const inningsDelta = (a.innings ?? 0) - (b.innings ?? 0)
+    if (inningsDelta !== 0) return inningsDelta
+    const overDelta = (a.over_number ?? 0) - (b.over_number ?? 0)
+    if (overDelta !== 0) return overDelta
+    return (a.ball_number ?? 0) - (b.ball_number ?? 0)
+  })
+
+  rows.forEach((row) => {
+    const innings = row.innings ?? 1
+    const over = row.over_number ?? 0
+    const key = `${innings}-${over}`
+    const label = `Innings ${innings} · Over ${over || 1}`
+    const shortLabel = `I${innings} O${over || 1}`
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        key,
+        innings,
+        label,
+        shortLabel,
+        runs: 0,
+        wickets: 0,
+        legalBalls: 0,
+      })
+    }
+    const bucket = grouped.get(key)!
+    bucket.runs += row.total_runs ?? 0
+    bucket.wickets += row.wicket ? 1 : 0
+    if (isLegalDelivery(row)) bucket.legalBalls += 1
+  })
+
+  return [...grouped.values()]
+})
+
+const availableCompleteness = computed<AnalyticsCompleteness>(() => {
+  if (deliveryBuckets.value.length > 0) return 'delivery_complete'
+  if (phaseBuckets.value.length > 0) return 'phase_level'
+  if (inningsTotals.value.length > 0) return 'innings_totals'
+  return 'metadata_only'
+})
+
+const displayCompleteness = computed<AnalyticsCompleteness>(() => {
+  const declared = normalizeCompleteness(
+    props.dataCompleteness || props.registryEntry?.data_completeness || deliveryCompleteness.value,
+  )
+  const rank: Record<AnalyticsCompleteness, number> = {
+    metadata_only: 0,
+    innings_totals: 1,
+    phase_level: 2,
+    delivery_complete: 3,
+  }
+  return rank[availableCompleteness.value] >= rank[declared] ? availableCompleteness.value : declared
+})
+
+const summaryTotals = computed(() => {
+  if (deliveryBuckets.value.length > 0) {
+    const totalRuns = deliveryBuckets.value.reduce((sum, bucket) => sum + bucket.runs, 0)
+    const wickets = deliveryBuckets.value.reduce((sum, bucket) => sum + bucket.wickets, 0)
+    const legalBalls = deliveryBuckets.value.reduce((sum, bucket) => sum + bucket.legalBalls, 0)
+    const deliveriesCount = deliveries.value.length
+    return {
+      totalRuns,
+      wickets,
+      legalBalls,
+      deliveriesCount,
+      source: 'From delivery records',
+    }
+  }
+
+  if (phaseBuckets.value.length > 0) {
+    const totalRuns = phaseBuckets.value.reduce((sum, phase) => sum + phase.runs, 0)
+    const wickets = phaseBuckets.value.reduce((sum, phase) => sum + phase.wickets, 0)
+    const legalBalls = phaseBuckets.value.reduce((sum, phase) => sum + Math.round(phase.overs * 6), 0)
+    return {
+      totalRuns,
+      wickets,
+      legalBalls,
+      deliveriesCount: legalBalls,
+      source: 'Derived from phase summaries',
+    }
+  }
+
+  if (inningsTotals.value.length > 0) {
+    const totalRuns = inningsTotals.value.reduce((sum, innings) => sum + innings.runs, 0)
+    const wickets = inningsTotals.value.reduce((sum, innings) => sum + innings.wickets, 0)
+    const legalBalls = inningsTotals.value.reduce((sum, innings) => sum + (oversToBalls(innings.overs) ?? 0), 0)
+    return {
+      totalRuns,
+      wickets,
+      legalBalls,
+      deliveriesCount: legalBalls,
+      source: 'Derived from innings totals',
+    }
+  }
+
+  return {
+    totalRuns: null,
+    wickets: null,
+    legalBalls: null,
+    deliveriesCount: null,
+    source: 'Unavailable',
+  }
+})
+
+const runRate = computed<number | null>(() => {
+  const totalRuns = summaryTotals.value.totalRuns
+  const legalBalls = summaryTotals.value.legalBalls
+  if (typeof totalRuns !== 'number' || typeof legalBalls !== 'number' || legalBalls <= 0) return null
+  return (totalRuns * 6) / legalBalls
+})
+
+const summaryMetrics = computed<SummaryMetric[]>(() => [
+  {
+    label: 'Total Runs',
+    value: typeof summaryTotals.value.totalRuns === 'number' ? String(summaryTotals.value.totalRuns) : 'Unavailable',
+    note: summaryTotals.value.source,
+  },
+  {
+    label: 'Deliveries',
+    value: typeof summaryTotals.value.deliveriesCount === 'number' ? String(summaryTotals.value.deliveriesCount) : 'Unavailable',
+    note: deliveryBuckets.value.length > 0 ? 'Recorded deliveries' : summaryTotals.value.source,
+  },
+  {
+    label: 'Run Rate',
+    value: typeof runRate.value === 'number' ? runRate.value.toFixed(2) : 'Unavailable',
+    note: typeof runRate.value === 'number' ? summaryTotals.value.source : 'Not enough overs data',
+  },
+  {
+    label: 'Wickets',
+    value: typeof summaryTotals.value.wickets === 'number' ? String(summaryTotals.value.wickets) : 'Unavailable',
+    note: summaryTotals.value.source,
+  },
+])
+
+const manhattanMode = computed<AnalyticsCompleteness>(() => {
+  if (deliveryBuckets.value.length > 0) return 'delivery_complete'
+  if (phaseBuckets.value.length > 0) return 'phase_level'
+  if (inningsTotals.value.length > 0) return 'innings_totals'
+  return 'metadata_only'
+})
+
+const wormMode = computed<AnalyticsCompleteness>(() => manhattanMode.value)
+const scatterMode = computed<AnalyticsCompleteness>(() => manhattanMode.value)
+
+const manhattanBars = computed<ChartBar[]>(() => {
+  if (manhattanMode.value === 'delivery_complete') {
+    return deliveryBuckets.value.map((bucket, index) => ({
+      key: bucket.key,
+      shortLabel: bucket.shortLabel,
+      value: bucket.runs,
+      wickets: bucket.wickets,
+      tooltip: `${bucket.label}: ${bucket.runs} runs, ${bucket.wickets} wickets`,
+      color: runsColor(index, bucket.innings),
+    }))
+  }
+
+  if (manhattanMode.value === 'phase_level') {
+    return phaseBuckets.value.map(phase => ({
+      key: phase.key,
+      shortLabel: phase.label,
+      value: phase.runs,
+      wickets: phase.wickets,
+      tooltip: `${phase.label}: ${phase.runs} runs, ${phase.wickets} wickets`,
+      color: phaseColor(phase.label),
+    }))
+  }
+
+  if (manhattanMode.value === 'innings_totals') {
+    return inningsTotals.value.map((innings, index) => ({
+      key: innings.key,
+      shortLabel: `Inn ${innings.innings}`,
+      value: innings.runs,
+      wickets: innings.wickets,
+      tooltip: `${innings.label}: ${innings.runs}/${innings.wickets}`,
+      color: runsColor(index, innings.innings),
+    }))
+  }
+
+  return []
+})
+
+const wormSeries = computed<WormSeries[]>(() => {
+  if (wormMode.value === 'delivery_complete') {
+    const seriesMap = new Map<number, DeliveryBucket[]>()
+    deliveryBuckets.value.forEach((bucket) => {
+      if (!seriesMap.has(bucket.innings)) seriesMap.set(bucket.innings, [])
+      seriesMap.get(bucket.innings)!.push(bucket)
+    })
+
+    const maxRuns = Math.max(
+      1,
+      ...[...seriesMap.values()].flatMap(series => {
+        let cumulative = 0
+        return series.map(bucket => {
+          cumulative += bucket.runs
+          return cumulative
+        })
+      }),
+    )
+
+    return [...seriesMap.entries()].map(([innings, buckets]) => {
+      let cumulativeRuns = 0
+      const points = buckets.map((bucket, index) => {
+        cumulativeRuns += bucket.runs
+        const denominator = Math.max(buckets.length - 1, 1)
+        const x = 48 + (index / denominator) * 564
+        const y = 200 - (cumulativeRuns / maxRuns) * 160
+        return {
+          key: `${bucket.key}-worm`,
+          x,
+          y,
+          tooltip: `${bucket.label}: ${cumulativeRuns} cumulative runs`,
+        }
+      })
+
+      return {
+        key: `innings-${innings}`,
+        label: `Innings ${innings}`,
+        color: innings === 2 ? '#34d399' : '#38bdf8',
+        path: points.map(point => `${point.x},${point.y}`).join(' '),
+        points,
+      }
+    })
+  }
+
+  if (wormMode.value === 'phase_level') {
+    let cumulativeRuns = 0
+    const maxRuns = Math.max(1, phaseBuckets.value.reduce((sum, phase) => sum + phase.runs, 0))
+    const points = phaseBuckets.value.map((phase, index) => {
+      cumulativeRuns += phase.runs
+      const denominator = Math.max(phaseBuckets.value.length - 1, 1)
+      const x = 48 + (index / denominator) * 564
+      const y = 200 - (cumulativeRuns / maxRuns) * 160
+      return {
+        key: `${phase.key}-worm`,
+        x,
+        y,
+        tooltip: `${phase.label}: ${cumulativeRuns} cumulative runs`,
+      }
+    })
+    return [{
+      key: 'phases',
+      label: 'Phase progression',
+      color: '#f59e0b',
+      path: points.map(point => `${point.x},${point.y}`).join(' '),
+      points,
+    }]
+  }
+
+  if (wormMode.value === 'innings_totals') {
+    let cumulativeRuns = 0
+    const maxRuns = Math.max(1, inningsTotals.value.reduce((sum, innings) => sum + innings.runs, 0))
+    const points = inningsTotals.value.map((innings, index) => {
+      cumulativeRuns += innings.runs
+      const denominator = Math.max(inningsTotals.value.length - 1, 1)
+      const x = 48 + (index / denominator) * 564
+      const y = 200 - (cumulativeRuns / maxRuns) * 160
+      return {
+        key: `${innings.key}-worm`,
+        x,
+        y,
+        tooltip: `${innings.label}: ${cumulativeRuns} cumulative runs`,
+      }
+    })
+    return [{
+      key: 'innings',
+      label: 'Innings totals progression',
+      color: '#a78bfa',
+      path: points.map(point => `${point.x},${point.y}`).join(' '),
+      points,
+    }]
+  }
+
+  return []
+})
+
+const wormXAxisLabel = computed(() => {
+  if (wormMode.value === 'delivery_complete') return 'Overs'
+  if (wormMode.value === 'phase_level') return 'Phases'
+  if (wormMode.value === 'innings_totals') return 'Innings'
+  return 'Unavailable'
+})
+
+const scatterPoints = computed<ScatterPoint[]>(() => {
+  if (scatterMode.value === 'delivery_complete') {
+    const maxRuns = Math.max(1, ...deliveryBuckets.value.map(bucket => bucket.runs))
+    const maxOver = Math.max(1, deliveryBuckets.value.length)
+    return deliveryBuckets.value.map((bucket, index) => ({
+      key: `${bucket.key}-scatter`,
+      x: 48 + ((index + 1) / maxOver) * 540,
+      y: 200 - (bucket.runs / maxRuns) * 160,
+      radius: 5 + bucket.wickets * 2,
+      tooltip: `${bucket.label}: ${bucket.runs} runs, ${bucket.wickets} wickets`,
+      color: bucket.innings === 2 ? '#34d399' : '#38bdf8',
+    }))
+  }
+
+  if (scatterMode.value === 'phase_level') {
+    const maxRunRate = Math.max(1, ...phaseBuckets.value.map(phase => (phase.overs > 0 ? phase.runs / phase.overs : 0)))
+    const maxWickets = Math.max(1, ...phaseBuckets.value.map(phase => phase.wickets))
+    return phaseBuckets.value.map((phase) => {
+      const runRateValue = phase.overs > 0 ? phase.runs / phase.overs : 0
+      return {
+        key: `${phase.key}-scatter`,
+        x: 48 + (runRateValue / maxRunRate) * 540,
+        y: 200 - ((phase.wickets || 0) / maxWickets) * 160,
+        radius: 7,
+        tooltip: `${phase.label}: ${runRateValue.toFixed(2)} run rate, ${phase.wickets} wickets`,
+        color: '#f59e0b',
+      }
+    })
+  }
+
+  if (scatterMode.value === 'innings_totals') {
+    const maxRuns = Math.max(1, ...inningsTotals.value.map(innings => innings.runs))
+    const maxWickets = Math.max(1, ...inningsTotals.value.map(innings => innings.wickets))
+    return inningsTotals.value.map((innings, index) => ({
+      key: `${innings.key}-scatter`,
+      x: 48 + (innings.runs / maxRuns) * 540,
+      y: 200 - ((innings.wickets || 0) / maxWickets) * 160,
+      radius: 7,
+      tooltip: `${innings.label}: ${innings.runs} runs, ${innings.wickets} wickets`,
+      color: index === 0 ? '#38bdf8' : '#34d399',
+    }))
+  }
+
+  return []
+})
+
+const scatterXAxisLabel = computed(() => {
+  if (scatterMode.value === 'delivery_complete') return 'Over bins'
+  if (scatterMode.value === 'phase_level') return 'Run rate'
+  if (scatterMode.value === 'innings_totals') return 'Runs'
+  return 'Unavailable'
+})
+
+const scatterYAxisLabel = computed(() => {
+  if (scatterMode.value === 'delivery_complete') return 'Runs'
+  return 'Wickets'
+})
+
+const currentChartMode = computed<AnalyticsCompleteness>(() => {
+  if (activeChart.value === 'worm') return wormMode.value
+  if (activeChart.value === 'scatter') return scatterMode.value
+  return manhattanMode.value
+})
+
+const currentChartMeta = computed(() => {
+  if (activeChart.value === 'worm') {
+    return {
+      title: 'Worm Chart',
+      description: 'Cumulative run progression from deliveries, phases, or innings totals.',
+    }
+  }
+  if (activeChart.value === 'scatter') {
+    return {
+      title: 'Performance Scatter',
+      description: 'Runs, run rate, and wickets rendered from the best available selected-match data.',
+    }
+  }
+  return {
+    title: 'Manhattan Plot',
+    description: 'Runs by over, phase, or innings total depending on selected-match completeness.',
+  }
+})
+
+const statusMessage = computed(() => {
+  if (loading.value) return 'Loading deterministic match data…'
+  if (error.value && availableCompleteness.value !== 'metadata_only') {
+    return `${error.value} Showing the best available fallback from selected-match summary data.`
+  }
+  if (error.value) return error.value
+  if (displayCompleteness.value !== availableCompleteness.value) {
+    return `Registry marked this match as ${completenessLabel(displayCompleteness.value)}; rendering ${completenessLabel(availableCompleteness.value)} data that is currently available.`
+  }
+  return null
+})
+
+function currentModeNote(chart: AnalyticsChart): string {
+  const mode = chart === 'worm' ? wormMode.value : chart === 'scatter' ? scatterMode.value : manhattanMode.value
+  if (mode === 'delivery_complete') return 'Using over-level delivery records for full graph rendering.'
+  if (mode === 'phase_level') return 'Using phase summaries because delivery records are unavailable.'
+  if (mode === 'innings_totals') return 'Using innings totals because only innings-level scoring is available.'
+  return 'Insufficient data for graph rendering.'
+}
+
+function chartMaxValue(bars: ChartBar[]): number {
+  return Math.max(1, ...bars.map(bar => bar.value))
+}
+
+function barHeight(value: number, bars: ChartBar[]): number {
+  return Math.max(6, (value / chartMaxValue(bars)) * 100)
+}
+
+async function loadAnalytics() {
+  if (!props.matchId) {
+    deliveries.value = []
+    caseStudy.value = null
+    deliveryCompleteness.value = 'metadata_only'
+    error.value = null
+    return
+  }
+
+  loading.value = true
+  error.value = null
+
+  const [deliveriesResult, caseStudyResult] = await Promise.allSettled([
+    getAnalystDeliveries(props.matchId),
+    getMatchCaseStudy(props.matchId),
+  ])
+
+  if (deliveriesResult.status === 'fulfilled') {
+    deliveries.value = deliveriesResult.value.items || []
+    deliveryCompleteness.value = normalizeCompleteness(deliveriesResult.value.data_completeness)
+  } else {
+    deliveries.value = []
+    deliveryCompleteness.value = 'metadata_only'
+  }
+
+  if (caseStudyResult.status === 'fulfilled') {
+    caseStudy.value = caseStudyResult.value
+  } else {
+    caseStudy.value = null
+  }
+
+  if (deliveriesResult.status === 'rejected' && caseStudyResult.status === 'rejected') {
+    error.value = 'Unable to load selected-match analytics data.'
+  } else if (deliveriesResult.status === 'rejected') {
+    error.value = 'Delivery data could not be loaded.'
+  } else if (caseStudyResult.status === 'rejected') {
+    error.value = 'Match summary data could not be loaded.'
+  }
+
+  loading.value = false
+}
+
+watch(
+  () => props.matchId,
+  () => {
+    void loadAnalytics()
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>
@@ -297,326 +806,246 @@ function getRunColor(runs: number): string {
   padding: var(--space-4);
 }
 
-/* Header */
 .analytics-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-4);
+  flex-wrap: wrap;
 }
 
-.analytics-title {
+.analytics-title,
+.analytics-context-title {
   margin: 0;
-  font-size: var(--h3-size);
-  font-weight: var(--h3-weight);
   color: var(--color-text);
+}
+
+.analytics-subtitle,
+.analytics-context-meta,
+.analytics-summary-note,
+.analytics-fallback-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
 .analytics-controls {
   display: flex;
   gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .chart-tab {
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(148, 163, 184, 0.3);
   border-radius: var(--radius-sm);
-  background: var(--color-bg);
+  background: rgba(15, 23, 42, 0.75);
   color: var(--color-text);
-  font-size: var(--text-sm);
-  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.chart-tab:hover {
-  border-color: var(--color-primary);
-  background: var(--color-bg-secondary);
 }
 
 .chart-tab.active {
-  background: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
+  border-color: rgba(56, 189, 248, 0.9);
+  background: rgba(14, 116, 144, 0.35);
 }
 
-/* Container */
+.analytics-context,
+.analytics-summary-card,
+.chart-container {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: var(--radius-lg);
+  background: rgba(15, 23, 42, 0.72);
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.2);
+}
+
+.analytics-context {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.analytics-context-label,
+.analytics-summary-label {
+  margin: 0 0 var(--space-1) 0;
+  color: #7dd3fc;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+}
+
+.analytics-context-result {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.analytics-status,
+.analytics-state {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: rgba(15, 23, 42, 0.56);
+  color: var(--color-text-muted);
+}
+
+.analytics-status--error {
+  border: 1px solid rgba(248, 113, 113, 0.32);
+}
+
+.analytics-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+}
+
+.analytics-summary-card {
+  padding: var(--space-4);
+}
+
+.analytics-summary-value {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
 .chart-container {
   padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-secondary);
-}
-
-.chart-info {
-  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .chart-info h4 {
   margin: 0 0 var(--space-1) 0;
-  font-size: var(--h4-size);
-  font-weight: 600;
   color: var(--color-text);
 }
 
 .chart-info p {
   margin: 0;
-  font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
 
-/* Manhattan Plot */
-.manhattan-plot {
-  display: flex;
-  gap: var(--space-2);
-  height: 200px;
-  align-items: flex-end;
-  margin: var(--space-4) 0;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
+.analytics-chart-frame {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-3);
+  align-items: stretch;
 }
 
-.manhattan-axis-y {
-  display: flex;
-  flex-direction: column-reverse;
-  justify-content: space-around;
-  width: 40px;
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  padding-right: var(--space-2);
-  border-right: 1px solid var(--color-border);
-}
-
-.y-label {
-  text-align: right;
-}
-
-.manhattan-area {
-  flex: 1;
-  display: flex;
-  gap: 2px;
-  align-items: flex-end;
-  max-height: 180px;
-}
-
-.delivery-bar-wrapper {
-  flex: 1;
-  height: 100%;
+.analytics-chart-scale {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  position: relative;
-  min-width: 2px;
-}
-
-.delivery-bar {
-  width: 100%;
-  min-height: 2px;
-  border-radius: var(--radius-sm);
-  transition: all 0.2s ease;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.delivery-bar:hover {
-  filter: brightness(1.2);
-}
-
-.hover-label {
-  font-size: var(--text-xs);
-  font-weight: 700;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-.manhattan-axis-x {
-  position: absolute;
-  bottom: -25px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: var(--text-xs);
+  justify-content: space-between;
   color: var(--color-text-muted);
+  font-size: 0.75rem;
 }
 
-/* Worm Chart */
-.worm-chart-wrapper {
-  margin: var(--space-4) 0;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
+.analytics-bar-chart {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(52px, 1fr);
+  gap: var(--space-2);
+  overflow-x: auto;
+  align-items: end;
+  min-height: 220px;
+}
+
+.analytics-bar-chart__column {
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  gap: var(--space-2);
+  min-width: 52px;
+}
+
+.analytics-bar-chart__marker {
+  align-self: center;
+  color: #fda4af;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.analytics-bar-chart__track {
+  height: 168px;
   border-radius: var(--radius-md);
-  background: var(--color-bg);
+  background: rgba(30, 41, 59, 0.9);
+  display: flex;
+  align-items: end;
+  overflow: hidden;
 }
 
-.worm-chart {
+.analytics-bar-chart__bar {
+  width: 100%;
+  min-height: 10px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.analytics-bar-chart__label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.analytics-svg-frame {
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.analytics-svg {
   width: 100%;
   height: auto;
-  max-height: 300px;
 }
 
-.worm-line {
+.analytics-grid line {
+  stroke: rgba(148, 163, 184, 0.22);
+  stroke-width: 1;
+}
+
+.analytics-line {
   fill: none;
-  stroke: var(--color-primary);
-  stroke-width: 2;
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.worm-point {
-  fill: var(--color-primary);
-  opacity: 0.6;
-  cursor: pointer;
-  transition: opacity 0.2s ease;
-}
-
-.worm-point:hover {
-  opacity: 1;
-}
-
-.worm-point-wicket {
-  fill: #ef4444;
-}
-
-.worm-hover-text {
-  font-size: 12px;
-  font-weight: 600;
-  fill: var(--color-primary);
-}
-
-.axis-label {
-  font-size: 12px;
+.analytics-axis-label {
   fill: var(--color-text-muted);
-  font-weight: 500;
-}
-
-.worm-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-  padding: var(--space-3);
-  background: var(--color-bg);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.stat-label {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  font-weight: 500;
-}
-
-.stat-value {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-/* Scatter Chart */
-.scatter-wrapper {
-  margin: var(--space-4) 0;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
-}
-
-.scatter-chart {
-  width: 100%;
-  height: auto;
-  max-height: 350px;
-}
-
-.scatter-dot {
-  cursor: pointer;
-  transition: r 0.2s ease;
-}
-
-.scatter-dot.high {
-  fill: #10b981;
-  opacity: 0.7;
-}
-
-.scatter-dot.normal {
-  fill: #f59e0b;
-  opacity: 0.7;
-}
-
-.scatter-dot.low {
-  fill: #ef4444;
-  opacity: 0.7;
-}
-
-.scatter-dot:hover {
-  r: 6;
-  opacity: 1;
-}
-
-.scatter-hover-text {
   font-size: 12px;
-  font-weight: 600;
-  fill: var(--color-primary);
 }
 
-/* Legend */
-.chart-legend {
+.analytics-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
-  padding: var(--space-3);
-  background: var(--color-bg);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
+  gap: var(--space-3);
 }
 
-.legend-item {
-  display: flex;
+.analytics-legend__item {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: var(--text-sm);
   color: var(--color-text);
+  font-size: var(--text-sm);
 }
 
-.color-dot {
-  display: inline-block;
+.analytics-legend__swatch {
   width: 12px;
   height: 12px;
-  border-radius: 2px;
-  flex-shrink: 0;
+  border-radius: 999px;
+  display: inline-block;
 }
 
-/* Responsive */
 @media (max-width: 768px) {
-  .analytics-controls {
-    flex-wrap: wrap;
+  .analytics-chart-frame {
+    grid-template-columns: 1fr;
   }
 
-  .chart-tab {
-    padding: var(--space-1) var(--space-2);
-    font-size: var(--text-xs);
-  }
-
-  .manhattan-plot {
-    height: 150px;
-  }
-
-  .worm-stats {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .chart-legend {
-    flex-direction: column;
-    gap: var(--space-2);
+  .analytics-chart-scale {
+    flex-direction: row;
   }
 }
 </style>

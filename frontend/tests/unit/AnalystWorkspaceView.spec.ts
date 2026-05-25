@@ -49,7 +49,10 @@ const globalStubs = {
       </div>
     `,
   },
-  AnalyticsTablesWidget: { template: '<div class="analytics-tables-stub" />' },
+  AnalyticsTablesWidget: {
+    props: ['matchId', 'matchSource', 'dataCompleteness', 'matchTitle'],
+    template: '<div class="analytics-tables-stub">{{ matchId }}|{{ matchSource }}|{{ dataCompleteness }}|{{ matchTitle }}</div>',
+  },
   ExportUI: { template: '<div class="export-ui-stub" />' },
   HistoricalImportPanel: {
     template: '<button class="json-import-done-btn" @click="$emit(\'import-done\', \'json-game\')">json import done</button>',
@@ -2203,6 +2206,7 @@ describe('AnalystWorkspaceView', () => {
     expect(wrapper.find('.analytics-tables-stub').exists()).toBe(true)
     const analyticsSelect = wrapper.find('#analytics-match-select')
     expect((analyticsSelect.element as HTMLSelectElement).value).toBe('match-001')
+    expect(wrapper.find('.analytics-tables-stub').text()).toContain('match-001|historical|phase_level|Lions vs Falcons')
 
     const registryTabAgain = wrapper.findAll('button.base-button-stub').find((b) => b.text().includes('Match Registry'))
     await registryTabAgain!.trigger('click')
