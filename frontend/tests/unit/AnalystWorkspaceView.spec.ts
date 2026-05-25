@@ -22,9 +22,12 @@ vi.mock('@/stores/authStore', () => ({
 // Mock the api module
 vi.mock('@/services/api', () => ({
   getAnalystMatches: vi.fn(),
+  getAnalystPlayers: vi.fn(),
+  getAnalystDeliveries: vi.fn(),
   getMatchCaseStudy: vi.fn(),
   getMatchAiSummary: vi.fn(),
   getMatchRegistry: vi.fn(),
+  getAnalystRegistry: vi.fn(),
   getAnalystExportData: vi.fn(),
   historicalImportRollback: vi.fn(),
 }))
@@ -273,11 +276,114 @@ const mockMatchAiSummary = {
   },
 }
 
+const mockAnalystRegistry = {
+  entries: [
+    {
+      match_id: 'match-001',
+      match_title: 'Lions vs Falcons',
+      team_a: 'Lions',
+      team_b: 'Falcons',
+      canonical_team_a: 'Lions',
+      canonical_team_b: 'Falcons',
+      competition_name: 'Women\'s Caribbean Premier League',
+      competition_code: 'WCPL',
+      season: '2025',
+      season_year: 2025,
+      gender_category: 'women',
+      age_category: 'senior',
+      format: 'T20',
+      venue_raw: 'Kensington Oval',
+      venue_canonical: 'Kensington Oval',
+      match_date: '2025-01-10',
+      source_type: 'historical_import',
+      data_completeness: 'phase_level',
+      has_delivery_data: false,
+      has_phase_data: true,
+      has_scorecard_data: true,
+      result: 'Lions won by 18 runs',
+      analyst_ready: true,
+    },
+    {
+      match_id: 'match-002',
+      match_title: 'Tigers vs Eagles',
+      team_a: 'Tigers',
+      team_b: 'Eagles',
+      canonical_team_a: 'Tigers',
+      canonical_team_b: 'Eagles',
+      competition_name: 'Caribbean Premier League',
+      competition_code: 'CPL_MEN',
+      season: '2024',
+      season_year: 2024,
+      gender_category: 'men',
+      age_category: 'senior',
+      format: 'ODI',
+      venue_raw: 'Brian Lara Cricket Academy',
+      venue_canonical: 'Brian Lara Cricket Academy',
+      match_date: '2025-01-05',
+      source_type: 'cricksy_completed_scored',
+      data_completeness: 'delivery_complete',
+      has_delivery_data: true,
+      has_phase_data: true,
+      has_scorecard_data: true,
+      result: 'Tigers won by 5 wickets',
+      analyst_ready: true,
+    },
+    {
+      match_id: 'match-003',
+      match_title: 'Comets vs Rockets',
+      team_a: 'Comets',
+      team_b: 'Rockets',
+      canonical_team_a: 'Comets',
+      canonical_team_b: 'Rockets',
+      competition_name: 'Super50 Cup',
+      competition_code: 'unknown',
+      season: '2023',
+      season_year: 2023,
+      gender_category: 'unknown',
+      age_category: 'unknown',
+      format: 'T20',
+      venue_raw: null,
+      venue_canonical: null,
+      match_date: null,
+      source_type: 'historical_import',
+      data_completeness: 'metadata_only',
+      has_delivery_data: false,
+      has_phase_data: false,
+      has_scorecard_data: false,
+      result: null,
+      analyst_ready: false,
+    },
+  ],
+  total: 3,
+  diagnostics: {
+    total: 3,
+    CPL_MEN: 1,
+    WCPL: 1,
+    unknown_competition: 1,
+    delivery_complete: 1,
+    phase_level: 1,
+    metadata_only: 1,
+    analyst_ready: 2,
+  },
+}
+
 describe('AnalystWorkspaceView', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     __resetAiInsightCacheForTests()
     pushMock.mockReset()
+    vi.mocked(api.getAnalystMatches).mockResolvedValue({ items: [], total: 0 } as never)
+    vi.mocked(api.getAnalystPlayers).mockResolvedValue({
+      items: [],
+      total: 0,
+      data_completeness: 'metadata_only',
+    } as never)
+    vi.mocked(api.getAnalystDeliveries).mockResolvedValue({
+      items: [],
+      total: 0,
+      data_completeness: 'metadata_only',
+    } as never)
+    vi.mocked(api.getAnalystRegistry).mockResolvedValue(mockAnalystRegistry as never)
   })
 
   it('renders real API match list data', async () => {
@@ -2015,5 +2121,99 @@ describe('AnalystWorkspaceView', () => {
     expect(diagnostics.text()).toContain('players shown')
     expect(diagnostics.text()).toContain('Scope:')
     expect(diagnostics.text()).toContain('Completeness:')
+  })
+
+  it('Match Registry sorts rows and keeps filters applied', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    vi.mocked(api.getAnalystRegistry).mockResolvedValue({
+      ...mockAnalystRegistry,
+      entries: [
+        mockAnalystRegistry.entries[2],
+        mockAnalystRegistry.entries[0],
+        mockAnalystRegistry.entries[1],
+      ],
+    } as never)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const registryTab = wrapper.findAll('button.base-button-stub').find((b) => b.text().includes('Match Registry'))
+    await registryTab!.trigger('click')
+    await nextTick()
+
+    const titles = () => wrapper.findAll('.aw-registry-match-title').map(node => node.text())
+    expect(titles()).toEqual([
+      'Lions vs Falcons',
+      'Tigers vs Eagles',
+      'Comets vs Rockets',
+    ])
+
+    const sortSelect = wrapper.find('#reg-sort-filter')
+    expect(sortSelect.text()).toContain('Newest first')
+    expect(sortSelect.text()).toContain('Oldest first')
+    expect(sortSelect.text()).toContain('Competition')
+    expect(sortSelect.text()).toContain('Season')
+    expect(sortSelect.text()).toContain('Data completeness')
+
+    await sortSelect.setValue('oldest')
+    await nextTick()
+    expect(titles()).toEqual([
+      'Tigers vs Eagles',
+      'Lions vs Falcons',
+      'Comets vs Rockets',
+    ])
+
+    await sortSelect.setValue('competition')
+    await nextTick()
+    expect(titles()[0]).toBe('Tigers vs Eagles')
+
+    await sortSelect.setValue('season')
+    await nextTick()
+    expect(titles()[0]).toBe('Lions vs Falcons')
+
+    await sortSelect.setValue('completeness')
+    await nextTick()
+    expect(titles()[0]).toBe('Tigers vs Eagles')
+
+    await wrapper.find('#reg-source-filter').setValue('historical_import')
+    await nextTick()
+    expect(titles()).toEqual([
+      'Lions vs Falcons',
+      'Comets vs Rockets',
+    ])
+  })
+
+  it('Match Registry row actions navigate analysts into analytics and match story flows', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const registryTab = wrapper.findAll('button.base-button-stub').find((b) => b.text().includes('Match Registry'))
+    await registryTab!.trigger('click')
+    await nextTick()
+
+    const analyticsButtons = wrapper.findAll('.aw-registry-action--analytics')
+    expect(analyticsButtons.length).toBeGreaterThan(0)
+    await analyticsButtons[0].trigger('click')
+    await nextTick()
+
+    expect(wrapper.find('.analytics-tables-stub').exists()).toBe(true)
+    const analyticsSelect = wrapper.find('#analytics-match-select')
+    expect((analyticsSelect.element as HTMLSelectElement).value).toBe('match-001')
+
+    const registryTabAgain = wrapper.findAll('button.base-button-stub').find((b) => b.text().includes('Match Registry'))
+    await registryTabAgain!.trigger('click')
+    await nextTick()
+
+    const storyButtons = wrapper.findAll('.aw-registry-action--story')
+    await storyButtons[0].trigger('click')
+
+    expect(pushMock).toHaveBeenCalledWith({
+      name: 'MatchCaseStudy',
+      params: { matchId: 'match-001' },
+    })
   })
 })

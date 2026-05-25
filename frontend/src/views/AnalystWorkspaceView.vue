@@ -1631,6 +1631,17 @@
                       </select>
                     </div>
 
+                    <div class="aw-registry-filter-group">
+                      <label class="aw-filter-label" for="reg-sort-filter">Sort by</label>
+                      <select id="reg-sort-filter" class="aw-select" v-model="registrySortOrder" aria-label="Sort registry rows">
+                        <option value="newest">Newest first</option>
+                        <option value="oldest">Oldest first</option>
+                        <option value="competition">Competition</option>
+                        <option value="season">Season</option>
+                        <option value="completeness">Data completeness</option>
+                      </select>
+                    </div>
+
                     <div class="aw-registry-filter-group aw-registry-filter-group--reset">
                       <BaseButton
                         variant="ghost"
@@ -1652,13 +1663,14 @@
                   <table class="aw-registry-table" role="table" aria-label="Match registry">
                     <thead>
                       <tr>
-                        <th>Match</th>
+                        <th class="aw-registry-col-match">Match</th>
                         <th>Competition</th>
                         <th>Season</th>
                         <th>Gender</th>
                         <th>Source</th>
                         <th>Completeness</th>
                         <th>Analyst ready</th>
+                        <th class="aw-registry-col-actions">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1667,13 +1679,14 @@
                         :key="entry.match_id"
                         class="aw-registry-row"
                       >
-                        <td class="aw-registry-cell-main">
+                        <td class="aw-registry-cell-main aw-registry-col-match">
                           <span class="aw-registry-match-title">{{ entry.match_title }}</span>
-                          <span v-if="entry.match_date" class="aw-registry-match-date">{{ entry.match_date }}</span>
+                          <span class="aw-registry-match-date">{{ entry.match_date || 'Date unavailable' }}</span>
+                          <span v-if="entry.result" class="aw-registry-match-result">{{ entry.result }}</span>
                         </td>
                         <td>
                           <span class="aw-registry-badge" :class="`aw-registry-badge--${entry.competition_code.toLowerCase()}`">
-                            {{ entry.competition_code === 'CPL_MEN' ? 'CPL Men' : entry.competition_code === 'WCPL' ? 'WCPL' : entry.competition_name || 'unknown' }}
+                            {{ registryCompetitionLabel(entry) }}
                           </span>
                         </td>
                         <td>{{ entry.season || '—' }}</td>
@@ -1683,16 +1696,51 @@
                           </span>
                         </td>
                         <td>
-                          <span class="aw-registry-source">{{ entry.source_type.replace(/_/g, ' ') }}</span>
+                          <span class="aw-registry-source">{{ registrySourceLabel(entry.source_type) }}</span>
                         </td>
                         <td>
                           <span class="aw-registry-completeness" :class="`aw-registry-completeness--${entry.data_completeness.replace(/_/g, '-')}`">
-                            {{ entry.data_completeness.replace(/_/g, ' ') }}
+                            {{ registryCompletenessLabel(entry.data_completeness) }}
                           </span>
                         </td>
                         <td>
                           <span v-if="entry.analyst_ready" class="aw-registry-ready aw-registry-ready--yes">✓ Ready</span>
                           <span v-else class="aw-registry-ready aw-registry-ready--no">—</span>
+                        </td>
+                        <td class="aw-registry-actions">
+                          <BaseButton
+                            variant="ghost"
+                            size="sm"
+                            class="aw-registry-action aw-registry-action--analytics"
+                            @click.stop="openRegistryAnalytics(entry)"
+                          >
+                            View in Analytics
+                          </BaseButton>
+                          <BaseButton
+                            variant="ghost"
+                            size="sm"
+                            class="aw-registry-action aw-registry-action--story"
+                            @click.stop="openRegistryMatchStory(entry)"
+                          >
+                            View Match Story
+                          </BaseButton>
+                          <BaseButton
+                            variant="ghost"
+                            size="sm"
+                            class="aw-registry-action aw-registry-action--dashboard"
+                            :disabled="!canOpenRegistryDashboard(entry)"
+                            @click.stop="openRegistryDashboard(entry)"
+                          >
+                            CPL Dashboard
+                          </BaseButton>
+                          <BaseButton
+                            variant="ghost"
+                            size="sm"
+                            class="aw-registry-action aw-registry-action--case-study"
+                            disabled
+                          >
+                            Case study next
+                          </BaseButton>
                         </td>
                       </tr>
                     </tbody>
@@ -1763,6 +1811,7 @@ const authStore = useAuthStore()
 
 // Types
 type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics' | 'import' | 'data-library' | 'cpl-dashboard' | 'registry'
+type RegistrySortOption = 'newest' | 'oldest' | 'competition' | 'season' | 'completeness'
 
 // State
 const activeTab = ref<AnalystTab>('matches')
@@ -1905,6 +1954,7 @@ const registryFilterSeason = ref<string>('all')
 const registryFilterGender = ref<string>('all')
 const registryFilterSource = ref<string>('all')
 const registryFilterCompleteness = ref<string>('all')
+const registrySortOrder = ref<RegistrySortOption>('newest')
 // Players list - NO FAKE DATA
 // Required: GET /analyst/players
 const players = ref<Array<{ id: string; name: string; role: string; innings: number; runs: number; strikeRate: number; wickets: number; economy: number; matches: number }>>([])
@@ -2083,9 +2133,49 @@ const registrySeasonOptions = computed(() => {
   return [...seasons].sort().reverse()
 })
 
+function registryCompetitionLabel(entry: AnalystRegistryEntry): string {
+  if (entry.competition_code === 'CPL_MEN') return 'CPL Men'
+  if (entry.competition_code === 'WCPL') return 'WCPL'
+  return entry.competition_name || 'unknown'
+}
+
+function registrySourceLabel(sourceType: string): string {
+  return sourceType.replace(/_/g, ' ')
+}
+
+function registryCompletenessLabel(completeness: string): string {
+  return completeness.replace(/_/g, ' ')
+}
+
+function registryDateSortValue(entry: AnalystRegistryEntry): number | null {
+  if (!entry.match_date) return null
+  const parsed = Date.parse(`${entry.match_date}T00:00:00Z`)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+function registrySeasonSortValue(entry: AnalystRegistryEntry): number {
+  if (typeof entry.season_year === 'number') return entry.season_year
+  if (!entry.season) return Number.MIN_SAFE_INTEGER
+  const numericSeason = Number.parseInt(entry.season, 10)
+  return Number.isNaN(numericSeason) ? Number.MIN_SAFE_INTEGER : numericSeason
+}
+
+function compareRegistryDates(
+  a: AnalystRegistryEntry,
+  b: AnalystRegistryEntry,
+  direction: 'asc' | 'desc',
+): number {
+  const aDate = registryDateSortValue(a)
+  const bDate = registryDateSortValue(b)
+  if (aDate === null && bDate === null) return 0
+  if (aDate === null) return 1
+  if (bDate === null) return -1
+  return direction === 'asc' ? aDate - bDate : bDate - aDate
+}
+
 const registryFilteredEntries = computed<AnalystRegistryEntry[]>(() => {
   if (!matchRegistry.value) return []
-  return matchRegistry.value.entries.filter(e => {
+  const filtered = matchRegistry.value.entries.filter(e => {
     if (registryFilterCompetition.value !== 'all' && e.competition_code !== registryFilterCompetition.value) return false
     if (registryFilterSeason.value !== 'all' && e.season !== registryFilterSeason.value) return false
     if (registryFilterGender.value !== 'all' && e.gender_category !== registryFilterGender.value) return false
@@ -2093,6 +2183,31 @@ const registryFilteredEntries = computed<AnalystRegistryEntry[]>(() => {
     if (registryFilterCompleteness.value !== 'all' && e.data_completeness !== registryFilterCompleteness.value) return false
     return true
   })
+  const completenessRank: Record<string, number> = {
+    delivery_complete: 0,
+    phase_level: 1,
+    innings_totals: 2,
+    metadata_only: 3,
+  }
+  const sorted = [...filtered]
+  sorted.sort((a, b) => {
+    if (registrySortOrder.value === 'oldest') {
+      return compareRegistryDates(a, b, 'asc')
+    }
+    if (registrySortOrder.value === 'competition') {
+      return registryCompetitionLabel(a).localeCompare(registryCompetitionLabel(b))
+    }
+    if (registrySortOrder.value === 'season') {
+      const seasonDelta = registrySeasonSortValue(b) - registrySeasonSortValue(a)
+      if (seasonDelta !== 0) return seasonDelta
+      return (b.season || '').localeCompare(a.season || '')
+    }
+    if (registrySortOrder.value === 'completeness') {
+      return (completenessRank[a.data_completeness] ?? 99) - (completenessRank[b.data_completeness] ?? 99)
+    }
+    return compareRegistryDates(a, b, 'desc')
+  })
+  return sorted
 })
 
 
@@ -2495,6 +2610,36 @@ async function loadAnalystRegistry() {
   } finally {
     matchRegistryLoading.value = false
   }
+}
+
+function registryMatchSource(entry: AnalystRegistryEntry): 'historical' | 'live' {
+  const linkedMatch = matches.value.find(match => match.id === entry.match_id)
+  if (linkedMatch) {
+    return linkedMatch.isHistorical ? 'historical' : 'live'
+  }
+  return entry.source_type === 'historical_import' ? 'historical' : 'live'
+}
+
+function canOpenRegistryDashboard(entry: AnalystRegistryEntry): boolean {
+  return entry.competition_code === 'CPL_MEN' || entry.competition_code === 'WCPL'
+}
+
+function openRegistryAnalytics(entry: AnalystRegistryEntry) {
+  selectedMatchId.value = entry.match_id
+  analyticsMatchSource.value = registryMatchSource(entry)
+  analyticsMatchId.value = entry.match_id
+  activeTab.value = 'analytics'
+}
+
+function openRegistryMatchStory(entry: AnalystRegistryEntry) {
+  selectedMatchId.value = entry.match_id
+  router.push({ name: 'MatchCaseStudy', params: { matchId: entry.match_id } })
+}
+
+function openRegistryDashboard(entry: AnalystRegistryEntry) {
+  if (!canOpenRegistryDashboard(entry)) return
+  selectedMatchId.value = entry.match_id
+  activeTab.value = 'cpl-dashboard'
 }
 
 
@@ -4245,7 +4390,7 @@ onMounted(() => {
 
 /* ── Match Registry (Phase 10M) ─────────────────────────── */
 .aw-registry-diagnostics {
-  background: var(--color-surface-elevated, #f8f9fa);
+  background: color-mix(in srgb, var(--color-surface-elevated, #f8f9fa) 90%, transparent);
   border: 1px solid var(--color-border, #dee2e6);
   border-radius: var(--radius-md, 8px);
   padding: var(--space-3, 12px) var(--space-4, 16px);
@@ -4308,6 +4453,9 @@ onMounted(() => {
 }
 
 .aw-registry-table-wrap {
+  border: 1px solid var(--color-border, #dee2e6);
+  border-radius: var(--radius-md, 8px);
+  background: color-mix(in srgb, var(--color-surface, #fff) 94%, transparent);
   overflow-x: auto;
 }
 
@@ -4315,13 +4463,15 @@ onMounted(() => {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
+  min-width: 980px;
 }
 
 .aw-registry-table th,
 .aw-registry-table td {
-  padding: var(--space-2, 8px) var(--space-3, 12px);
+  padding: var(--space-3, 12px) var(--space-3, 12px);
   text-align: left;
   border-bottom: 1px solid var(--color-border, #dee2e6);
+  vertical-align: top;
 }
 
 .aw-registry-table th {
@@ -4330,21 +4480,25 @@ onMounted(() => {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  background: var(--color-surface-elevated, #f8f9fa);
+  background: color-mix(in srgb, var(--color-surface-elevated, #f8f9fa) 92%, transparent);
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .aw-registry-row:hover {
-  background: var(--color-surface-hover, #f1f3f5);
+  background: color-mix(in srgb, var(--color-surface-hover, #f1f3f5) 88%, transparent);
 }
 
 .aw-registry-cell-main {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .aw-registry-match-title {
-  font-weight: 500;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .aw-registry-match-date {
@@ -4352,33 +4506,43 @@ onMounted(() => {
   color: var(--color-text-muted, #6c757d);
 }
 
+.aw-registry-match-result {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary, #495057);
+}
+
+.aw-registry-col-match {
+  min-width: 260px;
+  width: 30%;
+}
+
 .aw-registry-badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 1px 8px;
   border-radius: 100px;
   font-size: 0.72rem;
   font-weight: 600;
-  background: var(--color-surface-elevated, #f8f9fa);
+  background: color-mix(in srgb, var(--color-surface-elevated, #f8f9fa) 92%, transparent);
   color: var(--color-text-secondary, #495057);
   border: 1px solid var(--color-border, #dee2e6);
 }
 
 .aw-registry-badge--cpl_men {
-  background: #e8f4fd;
-  color: #0066cc;
-  border-color: #a8cfee;
+  background: rgba(0, 102, 204, 0.12);
+  color: #6eb6ff;
+  border-color: rgba(0, 102, 204, 0.32);
 }
 
 .aw-registry-badge--wcpl {
-  background: #fdf0fb;
-  color: #8b008b;
-  border-color: #e0a8d8;
+  background: rgba(168, 58, 159, 0.16);
+  color: #f0a6f3;
+  border-color: rgba(168, 58, 159, 0.3);
 }
 
 .aw-registry-badge--unknown {
-  background: #f5f5f5;
-  color: #777;
-  border-color: #ccc;
+  background: rgba(108, 117, 125, 0.14);
+  color: var(--color-text-muted, #6c757d);
+  border-color: rgba(108, 117, 125, 0.28);
 }
 
 .aw-registry-gender {
@@ -4398,39 +4562,58 @@ onMounted(() => {
 
 .aw-registry-completeness {
   display: inline-block;
-  padding: 2px 7px;
+  padding: 1px 7px;
   border-radius: 4px;
   font-size: 0.72rem;
   font-weight: 500;
+  border: 1px solid transparent;
 }
 
 .aw-registry-completeness--delivery-complete {
-  background: #d4edda;
-  color: #155724;
+  background: rgba(46, 160, 67, 0.14);
+  color: #8dde9d;
+  border-color: rgba(46, 160, 67, 0.28);
 }
 
 .aw-registry-completeness--phase-level {
-  background: #d1ecf1;
-  color: #0c5460;
+  background: rgba(56, 139, 253, 0.14);
+  color: #7fc7ff;
+  border-color: rgba(56, 139, 253, 0.28);
 }
 
 .aw-registry-completeness--innings-totals {
-  background: #fff3cd;
-  color: #856404;
+  background: rgba(210, 153, 34, 0.16);
+  color: #f0c46c;
+  border-color: rgba(210, 153, 34, 0.28);
 }
 
 .aw-registry-completeness--metadata-only {
-  background: #f5f5f5;
-  color: #666;
+  background: rgba(108, 117, 125, 0.14);
+  color: var(--color-text-muted, #6c757d);
+  border-color: rgba(108, 117, 125, 0.28);
 }
 
 .aw-registry-ready--yes {
-  color: #155724;
+  color: #8dde9d;
   font-weight: 600;
 }
 
 .aw-registry-ready--no {
   color: var(--color-text-muted, #6c757d);
+}
+
+.aw-registry-col-actions {
+  min-width: 260px;
+}
+
+.aw-registry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.aw-registry-action {
+  white-space: nowrap;
 }
 
 </style>
