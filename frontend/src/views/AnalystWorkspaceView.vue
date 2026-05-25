@@ -1486,7 +1486,16 @@
 
               <!-- Analytics visuals - shown once a match is selected -->
               <div v-else class="aw-analytics-content">
-                <AnalyticsTablesWidget :profile="null" :match-id="analyticsMatchId" />
+                <AnalyticsTablesWidget
+                  :profile="null"
+                  :match-id="analyticsMatchId"
+                  :match-source="analyticsMatchSource"
+                  :match-title="analyticsSelectedMatch?.teams ?? analyticsSelectedRegistryEntry?.match_title ?? null"
+                  :match-date="analyticsSelectedMatch?.date ?? analyticsSelectedRegistryEntry?.match_date ?? null"
+                  :result="analyticsSelectedMatch?.result ?? analyticsSelectedRegistryEntry?.result ?? null"
+                  :data-completeness="analyticsSelectedRegistryEntry?.data_completeness ?? null"
+                  :registry-entry="analyticsSelectedRegistryEntry ?? null"
+                />
               </div>
             </div>
 
@@ -1768,7 +1777,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { BaseCard, BaseButton, BaseBadge, BaseInput, ImpactBar, MiniSparkline, AiCalloutsPanel, AiInsightReviewCard, MatchInsightEvidence } from '@/components'
@@ -2088,6 +2097,14 @@ const analyticsMatchOptions = computed(() =>
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 )
 
+const analyticsSelectedMatch = computed(() =>
+  matches.value.find(match => match.id === analyticsMatchId.value) ?? null
+)
+
+const analyticsSelectedRegistryEntry = computed(() =>
+  matchRegistry.value?.entries.find(entry => entry.match_id === analyticsMatchId.value) ?? null
+)
+
 // Data Library: collections grouped by competition → season
 const libraryCollections = computed(() => {
   const groups = new Map<string, Map<string, AnalystMatch[]>>()
@@ -2331,6 +2348,10 @@ const workspaceCallouts = computed<AiCallout[]>(() => {
   }
 
   return list
+})
+
+watch(analyticsMatchId, (matchId) => {
+  selectedMatchId.value = matchId || null
 })
 
 // Actions
