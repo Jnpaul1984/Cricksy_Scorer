@@ -350,67 +350,156 @@
         </div>
 
         <div v-if="selectedMatch">
-          <!-- Innings comparison -->
           <div class="cpld-match-header">
-            <div class="cpld-match-teams">{{ selectedMatch.teams }}</div>
+            <div class="cpld-match-teams">{{ selectedMatch.team_a ?? 'Team A' }} vs {{ selectedMatch.team_b ?? 'Team B' }}</div>
             <div class="cpld-match-meta">
-              <span v-if="selectedMatch.venue">📍 {{ selectedMatch.venue }}</span>
               <span v-if="selectedMatch.match_date">📅 {{ selectedMatch.match_date }}</span>
+              <span v-if="selectedMatch.venue">📍 {{ selectedMatch.venue }}</span>
+              <span v-if="selectedMatch.season">🏆 Season {{ selectedMatch.season }}</span>
               <span v-if="selectedMatch.match_type">🏏 {{ selectedMatch.match_type }}</span>
+            </div>
+            <div class="cpld-match-context-grid">
+              <div class="cpld-match-context-item">
+                <span class="cpld-match-context-label">Score</span>
+                <span class="cpld-match-context-value">{{ selectedMatchScoreline }}</span>
+              </div>
+              <div class="cpld-match-context-item">
+                <span class="cpld-match-context-label">Result</span>
+                <span class="cpld-match-context-value">{{ selectedMatchResult }}</span>
+              </div>
+              <div class="cpld-match-context-item">
+                <span class="cpld-match-context-label">Data level</span>
+                <span class="cpld-match-context-value">{{ selectedMatchDataLevel }}</span>
+              </div>
+              <div class="cpld-match-context-item">
+                <span class="cpld-match-context-label">Wicket source</span>
+                <span class="cpld-match-context-value">{{ selectedMatchWicketSource }}</span>
+              </div>
             </div>
             <div class="cpld-match-provenance">
               <span class="cpld-badge cpld-badge--imported">Imported</span>
-              <span v-if="selectedMatch.source_filename" class="cpld-provenance-file">
-                Source: {{ selectedMatch.source_filename }}
-              </span>
+              <span v-if="selectedMatch.source_filename" class="cpld-provenance-file">Source: {{ selectedMatch.source_filename }}</span>
             </div>
+            <p class="cpld-provenance-file cpld-provenance-file--note">{{ selectedMatchCompletenessNote }}</p>
           </div>
 
-          <!-- Innings totals -->
-          <div v-if="selectedMatch.innings_totals.length > 0" class="cpld-innings-section">
-            <h5 class="cpld-subsection-title">Innings Comparison</h5>
-            <div class="cpld-innings-comparison">
-              <div
-                v-for="inn in selectedMatch.innings_totals"
-                :key="inn.inning_no"
-                class="cpld-innings-card"
-              >
-                <div class="cpld-innings-label">
-                  Innings {{ inn.inning_no }}
-                  <span v-if="inn.team" class="cpld-innings-team">· {{ inn.team }}</span>
-                </div>
-                <div class="cpld-innings-score">
-                  <span class="cpld-innings-runs">{{ inn.runs }}/{{ inn.wickets }}</span>
-                  <span class="cpld-innings-overs">({{ inn.overs }} ov)</span>
-                </div>
-                <!-- Simple run-rate bar -->
-                <div class="cpld-rr-bar-wrap" aria-label="Run rate bar">
-                  <div
-                    class="cpld-rr-bar"
-                    :style="{ width: Math.min((inn.runs / Math.max(maxInningsRuns, 1)) * 100, 100) + '%' }"
-                    :title="`${inn.runs} runs`"
-                  />
-                </div>
-                <div class="cpld-innings-rr">
-                  RR: {{ inn.overs > 0 ? (inn.runs / inn.overs).toFixed(2) : '—' }}
+          <div class="cpld-match-analytics-grid">
+            <article class="cpld-match-graph-card">
+              <h5 class="cpld-subsection-title">Innings progression</h5>
+              <div v-if="selectedMatchOverProgression.length > 0" class="cpld-over-progression">
+                <div v-for="point in selectedMatchOverProgression" :key="`${point.inning_no}-${point.over}`" class="cpld-over-row">
+                  <span class="cpld-over-label">Inns {{ point.inning_no }} · Ov {{ point.over }}</span>
+                  <div class="cpld-over-bar-wrap">
+                    <div
+                      class="cpld-over-bar"
+                      :style="{ width: Math.min((point.cumulative_runs / Math.max(selectedMatchMaxCumulativeRuns, 1)) * 100, 100) + '%' }"
+                    />
+                  </div>
+                  <span class="cpld-over-value">{{ point.cumulative_runs }}</span>
                 </div>
               </div>
-            </div>
+              <div v-else-if="selectedMatch.innings_totals.length > 0" class="cpld-fallback-block">
+                <div v-for="inn in selectedMatch.innings_totals" :key="`innings-fallback-${inn.inning_no}`" class="cpld-over-row">
+                  <span class="cpld-over-label">Innings {{ inn.inning_no }}</span>
+                  <div class="cpld-over-bar-wrap">
+                    <div class="cpld-over-bar" :style="{ width: Math.min((inn.runs / Math.max(maxInningsRuns, 1)) * 100, 100) + '%' }" />
+                  </div>
+                  <span class="cpld-over-value">{{ inn.runs }}/{{ inn.wickets }}</span>
+                </div>
+                <p class="cpld-graph-note">Over-by-over progression is unavailable; showing innings totals only.</p>
+              </div>
+              <div v-else class="cpld-insufficient">
+                No innings totals were imported, so progression visuals cannot be computed.
+              </div>
+            </article>
+
+            <article class="cpld-match-graph-card">
+              <h5 class="cpld-subsection-title">Run rate by phase or over</h5>
+              <div v-if="selectedMatchPhaseRows.length > 0">
+                <div v-for="phase in selectedMatchPhaseRows" :key="`rr-${phase.key}`" class="cpld-over-row">
+                  <span class="cpld-over-label">{{ phase.label }}</span>
+                  <div class="cpld-over-bar-wrap">
+                    <div class="cpld-over-bar cpld-over-bar--run-rate" :style="{ width: Math.min((phase.runRate / Math.max(selectedMatchMaxPhaseRunRate, 1)) * 100, 100) + '%' }" />
+                  </div>
+                  <span class="cpld-over-value">{{ phase.runRate.toFixed(2) }}</span>
+                </div>
+                <p class="cpld-graph-note">Phase run rates are calculated from imported legal-ball totals.</p>
+              </div>
+              <div v-else-if="selectedMatch.innings_totals.length > 0" class="cpld-fallback-block">
+                <div v-for="inn in selectedMatch.innings_totals" :key="`rr-innings-${inn.inning_no}`" class="cpld-over-row">
+                  <span class="cpld-over-label">Innings {{ inn.inning_no }}</span>
+                  <span class="cpld-over-value">RR {{ inn.overs > 0 ? (inn.runs / inn.overs).toFixed(2) : '—' }}</span>
+                </div>
+                <p class="cpld-graph-note">Phase or over-level run rate data is missing; only innings-level rates are available.</p>
+              </div>
+              <div v-else class="cpld-insufficient">
+                Run-rate analytics unavailable because no innings totals are present.
+              </div>
+            </article>
+
+            <article class="cpld-match-graph-card">
+              <h5 class="cpld-subsection-title">Wickets timeline / by phase</h5>
+              <div v-if="selectedMatchWicketTimeline.length > 0">
+                <div v-for="entry in selectedMatchWicketTimeline" :key="`${entry.inning_no}-${entry.over}`" class="cpld-over-row">
+                  <span class="cpld-over-label">Inns {{ entry.inning_no }} · Ov {{ entry.over }}</span>
+                  <span class="cpld-over-value">{{ entry.wickets }} wicket{{ entry.wickets === 1 ? '' : 's' }}</span>
+                </div>
+                <p class="cpld-graph-note">Timeline uses overs where wicket events are present.</p>
+              </div>
+              <div v-else-if="selectedMatchPhaseRows.length > 0">
+                <div v-for="phase in selectedMatchPhaseRows" :key="`wk-${phase.key}`" class="cpld-over-row">
+                  <span class="cpld-over-label">{{ phase.label }}</span>
+                  <div class="cpld-over-bar-wrap">
+                    <div class="cpld-over-bar cpld-over-bar--wickets" :style="{ width: Math.min((phase.wickets / Math.max(selectedMatchMaxPhaseWickets, 1)) * 100, 100) + '%' }" />
+                  </div>
+                  <span class="cpld-over-value">{{ phase.wickets }}</span>
+                </div>
+                <p class="cpld-graph-note">Phase wicket distribution shown because over-level wicket timeline is unavailable.</p>
+              </div>
+              <div v-else-if="selectedMatch.innings_totals.length > 0" class="cpld-fallback-block">
+                <div v-for="inn in selectedMatch.innings_totals" :key="`wk-innings-${inn.inning_no}`" class="cpld-over-row">
+                  <span class="cpld-over-label">Innings {{ inn.inning_no }}</span>
+                  <span class="cpld-over-value">{{ inn.wickets }} wickets</span>
+                </div>
+                <p class="cpld-graph-note">Only innings wicket totals are available for this match.</p>
+              </div>
+              <div v-else class="cpld-insufficient">
+                Wicket analytics unavailable because no wicket totals were imported.
+              </div>
+            </article>
+
+            <article class="cpld-match-graph-card">
+              <h5 class="cpld-subsection-title">Match phase comparison</h5>
+              <table v-if="selectedMatchPhaseRows.length > 0" class="cpld-phase-table" aria-label="Match phase comparison">
+                <thead>
+                  <tr>
+                    <th>Phase</th>
+                    <th>Runs</th>
+                    <th>Wkts</th>
+                    <th>RR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="phase in selectedMatchPhaseRows" :key="`phase-table-${phase.key}`">
+                    <td>{{ phase.label }}</td>
+                    <td>{{ phase.runs }}</td>
+                    <td>{{ phase.wickets }}</td>
+                    <td>{{ phase.runRate.toFixed(2) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-else class="cpld-insufficient">
+                Powerplay/middle/death comparison needs phase data from delivery imports.
+              </div>
+            </article>
           </div>
 
-          <!-- No innings data warning -->
-          <div v-else class="cpld-insufficient">
-            ⚠ No innings data available for this match.
-            This match may be metadata-only or innings data was not imported.
-          </div>
-
-          <!-- Delivery data state -->
-          <div v-if="!selectedMatch.has_delivery_data" class="cpld-insufficient cpld-insufficient--warn">
-            ⚠ Ball-by-ball delivery data not imported for this match.
-            Phase breakdown (powerplay/middle/death) requires delivery data import.
-          </div>
-          <div v-else class="cpld-delivery-note">
-            ✓ Ball-by-ball delivery data available for this match.
+          <div class="cpld-interpret-grid" aria-label="Deterministic match interpretation">
+            <article v-for="insight in selectedMatchInterpretations" :key="insight.label" class="cpld-interpret-card">
+              <p class="cpld-interpret-label">{{ insight.label }}</p>
+              <p class="cpld-interpret-value">{{ insight.value }}</p>
+              <p v-if="insight.note" class="cpld-graph-note">{{ insight.note }}</p>
+            </article>
           </div>
         </div>
 
@@ -1406,6 +1495,207 @@ const selectedMatch = computed<HistoricalMatchAggregate | null>(() =>
 const maxInningsRuns = computed(() => {
   if (!selectedMatch.value) return 1
   return Math.max(...selectedMatch.value.innings_totals.map(i => i.runs), 1)
+})
+
+interface MatchPhaseRow {
+  key: string
+  label: string
+  runs: number
+  wickets: number
+  runRate: number
+  overs: number
+}
+
+interface MatchInterpretation {
+  label: string
+  value: string
+  note?: string
+}
+
+function formatPhaseLabel(phase: string): string {
+  switch (phase.toLowerCase()) {
+    case 'powerplay':
+      return 'Powerplay'
+    case 'middle':
+      return 'Middle overs'
+    case 'death':
+      return 'Death overs'
+    default:
+      return phase
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase())
+  }
+}
+
+const selectedMatchPhaseRows = computed<MatchPhaseRow[]>(() => {
+  if (!selectedMatch.value?.phase_breakdown) return []
+  const orderedPhases = ['powerplay', 'middle', 'death']
+  const seen = new Set<string>()
+  const rows: MatchPhaseRow[] = []
+  orderedPhases.forEach(phaseKey => {
+    const phase = selectedMatch.value?.phase_breakdown?.[phaseKey]
+    if (!phase || phase.legal_balls <= 0) return
+    rows.push({
+      key: phaseKey,
+      label: formatPhaseLabel(phaseKey),
+      runs: phase.runs,
+      wickets: phase.wickets,
+      runRate: phase.legal_balls > 0 ? (phase.runs * 6) / phase.legal_balls : 0,
+      overs: phase.legal_balls / 6,
+    })
+    seen.add(phaseKey)
+  })
+  Object.entries(selectedMatch.value.phase_breakdown).forEach(([phaseKey, phase]) => {
+    if (seen.has(phaseKey) || phase.legal_balls <= 0) return
+    rows.push({
+      key: phaseKey,
+      label: formatPhaseLabel(phaseKey),
+      runs: phase.runs,
+      wickets: phase.wickets,
+      runRate: phase.legal_balls > 0 ? (phase.runs * 6) / phase.legal_balls : 0,
+      overs: phase.legal_balls / 6,
+    })
+  })
+  return rows
+})
+
+const selectedMatchOverProgression = computed(() =>
+  (selectedMatch.value?.over_progression ?? [])
+    .filter(point => Number.isFinite(point.over) && Number.isFinite(point.cumulative_runs))
+    .sort((a, b) => a.inning_no - b.inning_no || a.over - b.over)
+)
+
+const selectedMatchWicketTimeline = computed(() =>
+  selectedMatchOverProgression.value.filter(point => point.wickets > 0)
+)
+
+const selectedMatchMaxCumulativeRuns = computed(() =>
+  Math.max(...selectedMatchOverProgression.value.map(point => point.cumulative_runs), 1)
+)
+
+const selectedMatchMaxPhaseRunRate = computed(() =>
+  Math.max(...selectedMatchPhaseRows.value.map(phase => phase.runRate), 1)
+)
+
+const selectedMatchMaxPhaseWickets = computed(() =>
+  Math.max(...selectedMatchPhaseRows.value.map(phase => phase.wickets), 1)
+)
+
+const selectedMatchScoreline = computed(() => {
+  if (!selectedMatch.value || selectedMatch.value.innings_totals.length === 0) return 'Score unavailable'
+  return selectedMatch.value.innings_totals
+    .map(inn => `${inn.team ?? `Innings ${inn.inning_no}`} ${inn.runs}/${inn.wickets}`)
+    .join(' · ')
+})
+
+const selectedMatchResult = computed(() => {
+  if (!selectedMatch.value) return 'Result unavailable'
+  if (selectedMatch.value.winner_team) {
+    return `${selectedMatch.value.winner_team} won`
+  }
+  return 'Result unavailable from imported record'
+})
+
+const selectedMatchDataLevel = computed(() => {
+  if (!selectedMatch.value) return 'Unknown'
+  if (selectedMatchOverProgression.value.length > 0) return 'Over + delivery timeline'
+  if (selectedMatchPhaseRows.value.length > 0) return 'Phase-level (powerplay/middle/death)'
+  if (selectedMatch.value.innings_totals.length > 0) return 'Innings totals only'
+  return 'Metadata-only snapshot'
+})
+
+const selectedMatchWicketSource = computed(() => {
+  if (!selectedMatch.value?.wicket_derivation_source) return 'Unknown'
+  switch (selectedMatch.value.wicket_derivation_source) {
+    case 'deliveries':
+      return 'Delivery-derived'
+    case 'innings_summary':
+      return 'Innings-summary derived'
+    case 'scorecard':
+      return 'Scorecard derived'
+    default:
+      return 'Missing'
+  }
+})
+
+const selectedMatchCompletenessNote = computed(() => {
+  if (!selectedMatch.value) return 'No match selected.'
+  if (selectedMatchOverProgression.value.length > 0) {
+    return 'Delivery-complete timeline available: over progression, run-rate, and wicket timeline cards are fully populated.'
+  }
+  if (selectedMatchPhaseRows.value.length > 0) {
+    return 'Delivery records are partially available: phase cards are populated, but over-by-over progression is unavailable.'
+  }
+  if (selectedMatch.value.innings_totals.length > 0) {
+    return 'Scorecard-only record: innings totals are available, but phase and over timeline analytics cannot be derived.'
+  }
+  return 'Metadata-only record: no innings totals were imported for this match.'
+})
+
+const selectedMatchInterpretations = computed<MatchInterpretation[]>(() => {
+  if (!selectedMatch.value) return []
+  const interpretations: MatchInterpretation[] = []
+
+  if (selectedMatchPhaseRows.value.length > 0) {
+    const strongestPhase = [...selectedMatchPhaseRows.value].sort((a, b) => b.runs - a.runs)[0]
+    const weakestPhase = [...selectedMatchPhaseRows.value].sort((a, b) => a.runs - b.runs)[0]
+    const highestRunRatePhase = [...selectedMatchPhaseRows.value].sort((a, b) => b.runRate - a.runRate)[0]
+    const wicketHeavyPhase = [...selectedMatchPhaseRows.value].sort((a, b) => b.wickets - a.wickets)[0]
+
+    interpretations.push({
+      label: 'Strongest phase',
+      value: `${strongestPhase.label} (${strongestPhase.runs} runs)`,
+      note: `Derived from phase runs across ${selectedMatchPhaseRows.value.length} imported phase segment(s).`,
+    })
+    interpretations.push({
+      label: 'Weakest phase',
+      value: `${weakestPhase.label} (${weakestPhase.runs} runs)`,
+    })
+    interpretations.push({
+      label: 'Highest run-rate segment',
+      value: `${highestRunRatePhase.label} (${highestRunRatePhase.runRate.toFixed(2)} RR)`,
+    })
+    interpretations.push({
+      label: 'Wicket-heavy phase',
+      value: `${wicketHeavyPhase.label} (${wicketHeavyPhase.wickets} wicket${wicketHeavyPhase.wickets === 1 ? '' : 's'})`,
+    })
+  } else {
+    interpretations.push({
+      label: 'Strongest phase',
+      value: 'Unavailable — phase breakdown not imported',
+    })
+    interpretations.push({
+      label: 'Highest run-rate segment',
+      value: 'Unavailable — only innings-level aggregates are available',
+    })
+  }
+
+  const innings = selectedMatch.value.innings_totals
+  if (innings.length >= 2) {
+    const inn1 = innings[0]
+    const inn2 = innings[1]
+    const target = inn1.runs + 1
+    if (inn2.runs >= target) {
+      interpretations.push({
+        label: 'Chase pressure indicator',
+        value: `Chase absorbed pressure (target ${target}, reached ${inn2.runs}/${inn2.wickets} in ${inn2.overs} ov)`,
+      })
+    } else {
+      const shortBy = target - inn2.runs
+      const pressureLabel = shortBy <= 10 ? 'High pressure finish' : 'Sustained chase pressure'
+      interpretations.push({
+        label: 'Chase pressure indicator',
+        value: `${pressureLabel} (${shortBy} runs short of ${target})`,
+      })
+    }
+  } else {
+    interpretations.push({
+      label: 'Chase pressure indicator',
+      value: 'Unavailable — second innings data not imported',
+    })
+  }
+
+  return interpretations
 })
 
 // ---------------------------------------------------------------------------
@@ -3306,25 +3596,59 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-match-header {
-  background: var(--color-surface, #f8fafc);
-  border: 1px solid var(--color-border, #e2e8f0);
-  border-radius: 6px;
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.75rem;
+  background: var(--color-surface, #0f172a);
+  border: 1px solid var(--color-border, #334155);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
 .cpld-match-teams {
   font-size: 1rem;
   font-weight: 700;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0;
+  color: var(--color-text, #e2e8f0);
 }
 
 .cpld-match-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.6rem;
   font-size: 0.78rem;
-  color: var(--color-text-muted, #64748b);
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.cpld-match-context-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.55rem;
+}
+
+.cpld-match-context-item {
+  border: 1px solid color-mix(in srgb, #475569 55%, transparent);
+  background: color-mix(in srgb, #1e293b 85%, transparent);
+  border-radius: 6px;
+  padding: 0.45rem 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.cpld-match-context-label {
+  font-size: 0.64rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.cpld-match-context-value {
+  font-size: 0.8rem;
+  color: #e2e8f0;
+  font-weight: 600;
 }
 
 .cpld-match-provenance {
@@ -3345,13 +3669,136 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-badge--imported {
-  background: #e0f2fe;
-  color: #0369a1;
+  background: color-mix(in srgb, #0ea5e9 24%, #0f172a);
+  color: #bae6fd;
 }
 
 .cpld-provenance-file {
   font-size: 0.72rem;
-  color: var(--color-text-muted, #64748b);
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.cpld-provenance-file--note {
+  margin: 0;
+}
+
+.cpld-match-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.cpld-match-graph-card {
+  background: var(--color-surface, #0f172a);
+  border: 1px solid var(--color-border, #334155);
+  border-radius: 8px;
+  padding: 0.7rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.cpld-over-progression,
+.cpld-fallback-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+}
+
+.cpld-over-row {
+  display: grid;
+  grid-template-columns: minmax(70px, 1fr) 1.2fr auto;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.cpld-over-label {
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+.cpld-over-bar-wrap {
+  height: 7px;
+  border-radius: 999px;
+  background: #1e293b;
+  overflow: hidden;
+}
+
+.cpld-over-bar {
+  height: 100%;
+  background: #38bdf8;
+  border-radius: 999px;
+}
+
+.cpld-over-bar--run-rate {
+  background: #a78bfa;
+}
+
+.cpld-over-bar--wickets {
+  background: #f97316;
+}
+
+.cpld-over-value {
+  font-size: 0.72rem;
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.cpld-graph-note {
+  margin: 0;
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.cpld-phase-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.cpld-phase-table th {
+  text-align: left;
+  color: #94a3b8;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #334155;
+  padding: 0.24rem 0.25rem 0.3rem;
+}
+
+.cpld-phase-table td {
+  padding: 0.32rem 0.25rem;
+  border-bottom: 1px solid #1e293b;
+  color: #e2e8f0;
+}
+
+.cpld-interpret-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.65rem;
+}
+
+.cpld-interpret-card {
+  border: 1px solid #334155;
+  background: var(--color-surface, #0f172a);
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+}
+
+.cpld-interpret-label {
+  margin: 0 0 0.25rem;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.cpld-interpret-value {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #e2e8f0;
+  font-weight: 600;
 }
 
 /* Innings section */
@@ -3366,8 +3813,8 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-innings-card {
-  background: var(--color-bg, #fff);
-  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-bg, #0f172a);
+  border: 1px solid var(--color-border, #334155);
   border-radius: 6px;
   padding: 0.75rem 1rem;
 }
@@ -3401,7 +3848,7 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-rr-bar-wrap {
-  background: #f1f5f9;
+  background: #1e293b;
   border-radius: 2px;
   height: 6px;
   margin-bottom: 0.3rem;
@@ -3430,17 +3877,8 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-insufficient--warn {
-  background: #fff7ed;
-  border-color: #fed7aa;
-}
-
-.cpld-delivery-note {
-  font-size: 0.78rem;
-  color: #15803d;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: 4px;
-  padding: 0.4rem 0.75rem;
+  background: color-mix(in srgb, #7c2d12 26%, var(--color-surface, #0f172a));
+  border-color: color-mix(in srgb, #ea580c 35%, var(--color-border, #334155));
 }
 
 /* Leaderboards */

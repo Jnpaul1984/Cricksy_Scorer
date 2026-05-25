@@ -88,6 +88,14 @@ function cplSummary(): HistoricalStatsSummaryResponse {
           middle: { runs: 72, wickets: 1, legal_balls: 48, overs: 8.0, deliveries: 48 },
           death: { runs: 55, wickets: 3, legal_balls: 36, overs: 6.0, deliveries: 36 },
         },
+        over_progression: [
+          { inning_no: 1, over: 1, runs: 9, cumulative_runs: 9, wickets: 0 },
+          { inning_no: 1, over: 6, runs: 8, cumulative_runs: 48, wickets: 2 },
+          { inning_no: 1, over: 20, runs: 12, cumulative_runs: 175, wickets: 6 },
+          { inning_no: 2, over: 1, runs: 6, cumulative_runs: 6, wickets: 0 },
+          { inning_no: 2, over: 10, runs: 7, cumulative_runs: 82, wickets: 4 },
+          { inning_no: 2, over: 20, runs: 9, cumulative_runs: 145, wickets: 8 },
+        ],
         team_a_canonical: 'Trinbago Knight Riders',
         team_b_canonical: 'Barbados Royals',
         innings_totals: [
@@ -403,7 +411,7 @@ describe('CplPodcastDashboard', () => {
     expect(wrapper.text()).toContain('3');
   });
 
-  it('shows delivery-data warning for match without delivery data', async () => {
+  it('shows data-level fallback note for match without delivery data', async () => {
     mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
     const wrapper = mount(CplPodcastDashboard);
     await flushPromises();
@@ -413,10 +421,11 @@ describe('CplPodcastDashboard', () => {
     await select.setValue('cpl-match-2');
     await flushPromises();
 
-    expect(wrapper.text()).toContain('Ball-by-ball delivery data not imported');
+    expect(wrapper.text()).toContain('Scorecard-only record');
+    expect(wrapper.text()).toContain('Powerplay/middle/death comparison needs phase data');
   });
 
-  it('renders innings comparison for selected match with data', async () => {
+  it('renders match story graph cards and deterministic interpretation labels for selected match', async () => {
     mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
     const wrapper = mount(CplPodcastDashboard);
     await flushPromises();
@@ -426,9 +435,29 @@ describe('CplPodcastDashboard', () => {
     await select.setValue('cpl-match-1');
     await flushPromises();
 
-    expect(wrapper.text()).toContain('Innings Comparison');
-    expect(wrapper.text()).toContain('175/6');
-    expect(wrapper.text()).toContain('145/8');
+    expect(wrapper.text()).toContain('Innings progression');
+    expect(wrapper.text()).toContain('Run rate by phase or over');
+    expect(wrapper.text()).toContain('Wickets timeline / by phase');
+    expect(wrapper.text()).toContain('Match phase comparison');
+    expect(wrapper.text()).toContain('Strongest phase');
+    expect(wrapper.text()).toContain('Highest run-rate segment');
+    expect(wrapper.text()).toContain('Chase pressure indicator');
+    expect(wrapper.text()).toContain('Inns 1 · Ov 1');
+  });
+
+  it('renders innings-only progression fallback when over timeline is unavailable', async () => {
+    const summary = cplSummary();
+    summary.matches[0].over_progression = [];
+    mockGetHistoricalStatsSummary.mockResolvedValue(summary);
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    const select = wrapper.find('[aria-label="Select match for story view"]');
+    await select.setValue('cpl-match-1');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Over-by-over progression is unavailable; showing innings totals only.');
+    expect(wrapper.text()).toContain('Trinbago Knight Riders won');
   });
 
   it('renders podcast prep panel with deterministic facts', async () => {

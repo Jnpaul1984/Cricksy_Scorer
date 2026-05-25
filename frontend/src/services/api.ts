@@ -979,6 +979,13 @@ export interface HistoricalMatchAggregate {
   winner_confidence?: 'high' | 'medium' | 'low' | 'none';
   wicket_derivation_source?: 'deliveries' | 'innings_summary' | 'scorecard' | 'missing';
   phase_breakdown?: Record<string, { runs: number; wickets: number; legal_balls: number; overs: number; deliveries: number }>;
+  over_progression?: Array<{
+    inning_no: number;
+    over: number;
+    runs: number;
+    cumulative_runs: number;
+    wickets: number;
+  }>;
   team_a_canonical?: string | null;
   team_b_canonical?: string | null;
   has_delivery_data: boolean;
