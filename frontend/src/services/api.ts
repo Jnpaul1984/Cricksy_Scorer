@@ -904,6 +904,56 @@ export async function getMatchRegistry(matchId: string): Promise<MatchRegistryRe
   );
 }
 
+/* ------------------- Analyst Match Registry (Phase 10M) ------------------- */
+
+/**
+ * A single entry in the unified Analyst Match Registry.
+ * Mirrors backend AnalystRegistryEntry schema.
+ */
+export interface AnalystRegistryEntry {
+  match_id: string;
+  match_title: string;
+  team_a: string;
+  team_b: string;
+  canonical_team_a: string | null;
+  canonical_team_b: string | null;
+  competition_name: string | null;
+  competition_code: string; // CPL_MEN | WCPL | unknown
+  season: string | null;
+  season_year: number | null;
+  gender_category: string; // men | women | mixed | unknown
+  age_category: string; // senior | youth | school | unknown
+  format: string; // T20 | ODI | TEST | custom | unknown
+  venue_raw: string | null;
+  venue_canonical: string | null;
+  match_date: string | null;
+  source_type: string; // historical_import | cricksy_completed_scored | unknown
+  data_completeness: string; // metadata_only | innings_totals | phase_level | delivery_complete
+  has_delivery_data: boolean;
+  has_phase_data: boolean;
+  has_scorecard_data: boolean;
+  result: string | null;
+  analyst_ready: boolean;
+}
+
+/**
+ * Response from GET /analytics/matches/registry (Phase 10M).
+ */
+export interface AnalystMatchRegistryListResponse {
+  entries: AnalystRegistryEntry[];
+  total: number;
+  diagnostics: Record<string, number>;
+}
+
+/**
+ * GET /analytics/matches/registry
+ * Returns the unified Analyst Match Registry for the authenticated user.
+ * Phase 10M: Analyst Data Registry + Unified Match Intelligence Foundation.
+ */
+export async function getAnalystRegistry(): Promise<AnalystMatchRegistryListResponse> {
+  return request<AnalystMatchRegistryListResponse>('/analytics/matches/registry');
+}
+
 export interface AnalystExportFilters {
   dateFrom?: string;
   dateTo?: string;

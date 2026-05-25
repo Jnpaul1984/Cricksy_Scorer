@@ -20,8 +20,10 @@ from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 from backend.api.schemas.analyst_matches import (
     AnalystMatchListItem,
     AnalystMatchListResponse,
+    AnalystMatchRegistryListResponse,
     MatchRegistryResponse,
 )
+from backend.services.analyst_registry_service import build_analyst_registry
 from backend.api.schemas.case_study import MatchCaseStudyResponse
 from backend.services.analyst_access import scoped_games_stmt
 from backend.services.ai_match_summary import MatchAiSummary, build_match_ai_summary
@@ -198,6 +200,27 @@ async def get_match_ai_summary(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc) or "Match not found",
         ) from None
+
+
+@router.get("/registry", response_model=AnalystMatchRegistryListResponse)
+async def get_analyst_match_registry(
+    current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    db: AsyncSession = Depends(get_db),
+) -> AnalystMatchRegistryListResponse:
+    """Return the unified Analyst Match Registry (Phase 10M).
+
+    Every completed match visible to the authenticated user is returned with:
+    - competition classification (CPL_MEN / WCPL / unknown)
+    - gender classification (men / women / unknown)
+    - source type (historical_import / cricksy_completed_scored / unknown)
+    - data completeness (delivery_complete / phase_level / innings_totals / metadata_only)
+    - analyst_ready flag
+
+    Unknown values remain explicit — they are never silently coerced.
+    Women's records are never mixed into men's analysis.
+    Count diagnostics are included for filter UI initialisation.
+    """
+    return await build_analyst_registry(current_user, db)
 
 
 @router.get("/{match_id}/registry", response_model=MatchRegistryResponse)

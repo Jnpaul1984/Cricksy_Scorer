@@ -144,6 +144,67 @@ class AnalystDeliveriesResponse(BaseModel):
     data_completeness: str = "metadata_only"
 
 
+class AnalystRegistryEntry(BaseModel):
+    """A single entry in the unified Analyst Match Registry.
+
+    Returned by GET /analytics/registry (Phase 10M).
+
+    Every completed match in the system gets exactly one entry,
+    classified by competition, gender, source type, and data completeness.
+    Unknown values are always explicit — never silently coerced.
+    """
+
+    match_id: str
+    match_title: str  # "Team A vs Team B"
+    team_a: str
+    team_b: str
+    canonical_team_a: str | None = None
+    canonical_team_b: str | None = None
+
+    competition_name: str | None = None  # raw event_name
+    competition_code: str = "unknown"  # CPL_MEN | WCPL | unknown
+
+    season: str | None = None
+    season_year: int | None = None
+
+    gender_category: str = "unknown"  # men | women | mixed | unknown
+    age_category: str = "unknown"  # senior | youth | school | unknown
+
+    format: str = "unknown"  # T20 | ODI | TEST | custom | unknown
+
+    venue_raw: str | None = None
+    venue_canonical: str | None = None
+
+    match_date: str | None = None
+
+    source_type: str = "unknown"
+    # historical_import | cricksy_completed_scored | cricksy_live_scored |
+    # csv_import | scorecard_import | unknown
+
+    data_completeness: str = "metadata_only"
+    # metadata_only | innings_totals | phase_level | delivery_complete
+
+    has_delivery_data: bool = False
+    has_phase_data: bool = False
+    has_scorecard_data: bool = False
+
+    result: str | None = None  # winner / result text when available
+    analyst_ready: bool = False
+
+
+class AnalystMatchRegistryListResponse(BaseModel):
+    """Response model for GET /analytics/registry (Phase 10M).
+
+    Returns all completed matches visible to the authenticated user,
+    each classified by competition, gender, source type, and data completeness.
+    Also includes count diagnostics for filter UI initialisation.
+    """
+
+    entries: list[AnalystRegistryEntry]
+    total: int
+    diagnostics: dict[str, int] = Field(default_factory=dict)
+
+
 class MatchRegistryResponse(BaseModel):
     """Registry metadata, provenance, and training eligibility for a match.
 

@@ -1512,6 +1512,197 @@
               </div>
             </div>
 
+            <!-- Match Registry Tab (Phase 10M) -->
+            <div v-else-if="activeTab === 'registry'" class="aw-table-wrapper">
+              <div class="aw-table-header">
+                <h3>Match Registry</h3>
+                <p class="aw-table-subtitle">
+                  Unified registry of all available matches classified by competition, gender,
+                  source type, and data completeness. Use filters to explore the data foundation.
+                </p>
+              </div>
+
+              <!-- Loading state -->
+              <div v-if="matchRegistryLoading" class="aw-matches-loading" role="status" aria-live="polite">
+                <p>Loading match registry…</p>
+              </div>
+
+              <!-- Error state -->
+              <div v-else-if="matchRegistryError" class="aw-matches-error" role="alert">
+                <p>Unable to load match registry.</p>
+                <p class="aw-inline-error-detail">{{ matchRegistryError }}</p>
+                <BaseButton variant="ghost" size="sm" @click="loadAnalystRegistry">Retry</BaseButton>
+              </div>
+
+              <template v-else>
+                <!-- Diagnostics panel -->
+                <div v-if="matchRegistry" class="aw-registry-diagnostics" aria-label="Registry diagnostics">
+                  <div class="aw-registry-diag-grid">
+                    <div class="aw-registry-diag-item">
+                      <span class="aw-registry-diag-label">Total matches</span>
+                      <span class="aw-registry-diag-val">{{ matchRegistry.diagnostics.total ?? 0 }}</span>
+                    </div>
+                    <div class="aw-registry-diag-item">
+                      <span class="aw-registry-diag-label">Historical imports</span>
+                      <span class="aw-registry-diag-val">{{ matchRegistry.diagnostics.historical_import ?? 0 }}</span>
+                    </div>
+                    <div class="aw-registry-diag-item">
+                      <span class="aw-registry-diag-label">Live scored</span>
+                      <span class="aw-registry-diag-val">{{ matchRegistry.diagnostics.cricksy_completed_scored ?? 0 }}</span>
+                    </div>
+                    <div class="aw-registry-diag-item">
+                      <span class="aw-registry-diag-label">CPL Men</span>
+                      <span class="aw-registry-diag-val">{{ matchRegistry.diagnostics.CPL_MEN ?? 0 }}</span>
+                    </div>
+                    <div class="aw-registry-diag-item">
+                      <span class="aw-registry-diag-label">WCPL (Women)</span>
+                      <span class="aw-registry-diag-val">{{ matchRegistry.diagnostics.WCPL ?? 0 }}</span>
+                    </div>
+                    <div class="aw-registry-diag-item">
+                      <span class="aw-registry-diag-label">Unknown competition</span>
+                      <span class="aw-registry-diag-val">{{ matchRegistry.diagnostics.unknown_competition ?? 0 }}</span>
+                    </div>
+                    <div class="aw-registry-diag-item">
+                      <span class="aw-registry-diag-label">Delivery complete</span>
+                      <span class="aw-registry-diag-val">{{ matchRegistry.diagnostics.delivery_complete ?? 0 }}</span>
+                    </div>
+                    <div class="aw-registry-diag-item">
+                      <span class="aw-registry-diag-label">Analyst ready</span>
+                      <span class="aw-registry-diag-val">{{ matchRegistry.diagnostics.analyst_ready ?? 0 }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Registry Filters -->
+                <div class="aw-registry-filters" role="group" aria-label="Registry filters">
+                  <div class="aw-registry-filter-row">
+                    <div class="aw-registry-filter-group">
+                      <label class="aw-filter-label" for="reg-competition-filter">Competition</label>
+                      <select id="reg-competition-filter" class="aw-select" v-model="registryFilterCompetition">
+                        <option value="all">All competitions</option>
+                        <option value="CPL_MEN">CPL Men</option>
+                        <option value="WCPL">WCPL (Women)</option>
+                        <option value="unknown">Unknown</option>
+                        <option
+                          v-for="code in registryCompetitionOptions.filter(c => !['CPL_MEN','WCPL','unknown'].includes(c))"
+                          :key="code"
+                          :value="code"
+                        >{{ code }}</option>
+                      </select>
+                    </div>
+
+                    <div class="aw-registry-filter-group">
+                      <label class="aw-filter-label" for="reg-season-filter">Season</label>
+                      <select id="reg-season-filter" class="aw-select" v-model="registryFilterSeason">
+                        <option value="all">All seasons</option>
+                        <option v-for="season in registrySeasonOptions" :key="season" :value="season">{{ season }}</option>
+                      </select>
+                    </div>
+
+                    <div class="aw-registry-filter-group">
+                      <label class="aw-filter-label" for="reg-gender-filter">Gender</label>
+                      <select id="reg-gender-filter" class="aw-select" v-model="registryFilterGender">
+                        <option value="all">All</option>
+                        <option value="men">Men</option>
+                        <option value="women">Women</option>
+                        <option value="mixed">Mixed</option>
+                        <option value="unknown">Unknown</option>
+                      </select>
+                    </div>
+
+                    <div class="aw-registry-filter-group">
+                      <label class="aw-filter-label" for="reg-source-filter">Source</label>
+                      <select id="reg-source-filter" class="aw-select" v-model="registryFilterSource">
+                        <option value="all">All sources</option>
+                        <option value="historical_import">Historical import</option>
+                        <option value="cricksy_completed_scored">Cricksy scored</option>
+                        <option value="unknown">Unknown</option>
+                      </select>
+                    </div>
+
+                    <div class="aw-registry-filter-group">
+                      <label class="aw-filter-label" for="reg-completeness-filter">Data completeness</label>
+                      <select id="reg-completeness-filter" class="aw-select" v-model="registryFilterCompleteness">
+                        <option value="all">All levels</option>
+                        <option value="delivery_complete">Delivery complete</option>
+                        <option value="phase_level">Phase level</option>
+                        <option value="innings_totals">Innings totals</option>
+                        <option value="metadata_only">Metadata only</option>
+                      </select>
+                    </div>
+
+                    <div class="aw-registry-filter-group aw-registry-filter-group--reset">
+                      <BaseButton
+                        variant="ghost"
+                        size="sm"
+                        @click="registryFilterCompetition = 'all'; registryFilterSeason = 'all'; registryFilterGender = 'all'; registryFilterSource = 'all'; registryFilterCompleteness = 'all'"
+                      >
+                        Reset filters
+                      </BaseButton>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Registry Table -->
+                <div v-if="registryFilteredEntries.length === 0" class="aw-matches-empty">
+                  <p>No matches match the current registry filters.</p>
+                </div>
+
+                <div v-else class="aw-registry-table-wrap">
+                  <table class="aw-registry-table" role="table" aria-label="Match registry">
+                    <thead>
+                      <tr>
+                        <th>Match</th>
+                        <th>Competition</th>
+                        <th>Season</th>
+                        <th>Gender</th>
+                        <th>Source</th>
+                        <th>Completeness</th>
+                        <th>Analyst ready</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="entry in registryFilteredEntries"
+                        :key="entry.match_id"
+                        class="aw-registry-row"
+                      >
+                        <td class="aw-registry-cell-main">
+                          <span class="aw-registry-match-title">{{ entry.match_title }}</span>
+                          <span v-if="entry.match_date" class="aw-registry-match-date">{{ entry.match_date }}</span>
+                        </td>
+                        <td>
+                          <span class="aw-registry-badge" :class="`aw-registry-badge--${entry.competition_code.toLowerCase()}`">
+                            {{ entry.competition_code === 'CPL_MEN' ? 'CPL Men' : entry.competition_code === 'WCPL' ? 'WCPL' : entry.competition_name || 'unknown' }}
+                          </span>
+                        </td>
+                        <td>{{ entry.season || '—' }}</td>
+                        <td>
+                          <span class="aw-registry-gender" :class="`aw-registry-gender--${entry.gender_category}`">
+                            {{ entry.gender_category }}
+                          </span>
+                        </td>
+                        <td>
+                          <span class="aw-registry-source">{{ entry.source_type.replace(/_/g, ' ') }}</span>
+                        </td>
+                        <td>
+                          <span class="aw-registry-completeness" :class="`aw-registry-completeness--${entry.data_completeness.replace(/_/g, '-')}`">
+                            {{ entry.data_completeness.replace(/_/g, ' ') }}
+                          </span>
+                        </td>
+                        <td>
+                          <span v-if="entry.analyst_ready" class="aw-registry-ready aw-registry-ready--yes">✓ Ready</span>
+                          <span v-else class="aw-registry-ready aw-registry-ready--no">—</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p class="aw-dl-count">Showing {{ registryFilteredEntries.length }} of {{ matchRegistry?.total ?? 0 }} match{{ (matchRegistry?.total ?? 0) === 1 ? '' : 'es' }}</p>
+                </div>
+              </template>
+            </div>
+
+
             <!-- Default fallback -->
             <div v-else class="aw-table-wrapper">
               <div class="aw-empty-large">
@@ -1555,6 +1746,7 @@ import {
   getMatchCaseStudy,
   getMatchAiSummary,
   getMatchRegistry,
+  getAnalystRegistry,
   historicalImportRollback,
   type AnalystDeliveryRow,
   type AnalystMatchListItem,
@@ -1562,13 +1754,15 @@ import {
   type MatchCaseStudyResponse,
   type MatchAiSummary,
   type MatchRegistryResponse,
+  type AnalystRegistryEntry,
+  type AnalystMatchRegistryListResponse,
 } from '@/services/api'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 // Types
-type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics' | 'import' | 'data-library' | 'cpl-dashboard'
+type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics' | 'import' | 'data-library' | 'cpl-dashboard' | 'registry'
 
 // State
 const activeTab = ref<AnalystTab>('matches')
@@ -1608,6 +1802,7 @@ const tabs: { value: AnalystTab; label: string }[] = [
   { value: 'case-studies', label: 'Case studies' },
   { value: 'analytics', label: 'Analytics' },
   { value: 'cpl-dashboard', label: 'CPL Dashboard' },
+  { value: 'registry', label: 'Match Registry' },
   { value: 'import', label: 'Import Data' }
 ]
 
@@ -1700,6 +1895,16 @@ const matchAiCacheStatus = ref<'none' | 'live' | 'cached' | 'stale' | 'fallback'
 const registryData = ref<MatchRegistryResponse | null>(null)
 const registryLoading = ref(false)
 
+// Match Registry (Phase 10M) — unified registry with classification metadata
+const matchRegistry = ref<AnalystMatchRegistryListResponse | null>(null)
+const matchRegistryLoading = ref(false)
+const matchRegistryError = ref<string | null>(null)
+// Registry filters
+const registryFilterCompetition = ref<string>('all')
+const registryFilterSeason = ref<string>('all')
+const registryFilterGender = ref<string>('all')
+const registryFilterSource = ref<string>('all')
+const registryFilterCompleteness = ref<string>('all')
 // Players list - NO FAKE DATA
 // Required: GET /analyst/players
 const players = ref<Array<{ id: string; name: string; role: string; innings: number; runs: number; strikeRate: number; wickets: number; economy: number; matches: number }>>([])
@@ -1864,6 +2069,32 @@ const currentPhaseLabel = computed(() => {
   }
   return map[filters.phase] ?? 'All phases'
 })
+
+// Match Registry (Phase 10M) computed properties
+const registryCompetitionOptions = computed(() => {
+  const codes = new Set<string>()
+  matchRegistry.value?.entries.forEach(e => { if (e.competition_code) codes.add(e.competition_code) })
+  return [...codes].sort()
+})
+
+const registrySeasonOptions = computed(() => {
+  const seasons = new Set<string>()
+  matchRegistry.value?.entries.forEach(e => { if (e.season) seasons.add(e.season) })
+  return [...seasons].sort().reverse()
+})
+
+const registryFilteredEntries = computed<AnalystRegistryEntry[]>(() => {
+  if (!matchRegistry.value) return []
+  return matchRegistry.value.entries.filter(e => {
+    if (registryFilterCompetition.value !== 'all' && e.competition_code !== registryFilterCompetition.value) return false
+    if (registryFilterSeason.value !== 'all' && e.season !== registryFilterSeason.value) return false
+    if (registryFilterGender.value !== 'all' && e.gender_category !== registryFilterGender.value) return false
+    if (registryFilterSource.value !== 'all' && e.source_type !== registryFilterSource.value) return false
+    if (registryFilterCompleteness.value !== 'all' && e.data_completeness !== registryFilterCompleteness.value) return false
+    return true
+  })
+})
+
 
 const currentTabLabel = computed(() => {
   const tab = tabs.find((t) => t.value === activeTab.value)
@@ -2252,6 +2483,21 @@ async function loadMatchRegistry(matchId: string) {
   }
 }
 
+// Phase 10M: load unified analyst match registry
+async function loadAnalystRegistry() {
+  matchRegistryLoading.value = true
+  matchRegistryError.value = null
+  try {
+    matchRegistry.value = await getAnalystRegistry()
+  } catch (err) {
+    matchRegistryError.value = err instanceof Error ? err.message : 'Unable to load match registry'
+    matchRegistry.value = null
+  } finally {
+    matchRegistryLoading.value = false
+  }
+}
+
+
 function openFullCaseStudy() {
   if (selectedMatchId.value) {
     router.push({ name: 'MatchCaseStudy', params: { matchId: selectedMatchId.value } })
@@ -2261,6 +2507,7 @@ function openFullCaseStudy() {
 async function refreshData() {
   await loadMatches()
   await loadPlayers()
+  await loadAnalystRegistry()
   // Deliveries are loaded on demand via the match selector
   if (deliveryFilterMatchId.value) {
     await loadDeliveries(deliveryFilterMatchId.value)
@@ -2550,7 +2797,7 @@ async function copyPodcastPrep() {
 
 // Lifecycle - load data on mount
 onMounted(() => {
-  void Promise.all([loadMatches(), loadPlayers()])
+  void Promise.all([loadMatches(), loadPlayers(), loadAnalystRegistry()])
 })
 </script>
 
@@ -3994,6 +4241,196 @@ onMounted(() => {
 .aw-analytics-content {
   display: grid;
   gap: var(--space-4);
+}
+
+/* ── Match Registry (Phase 10M) ─────────────────────────── */
+.aw-registry-diagnostics {
+  background: var(--color-surface-elevated, #f8f9fa);
+  border: 1px solid var(--color-border, #dee2e6);
+  border-radius: var(--radius-md, 8px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  margin-bottom: var(--space-4, 16px);
+}
+
+.aw-registry-diag-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3, 12px);
+}
+
+.aw-registry-diag-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 110px;
+}
+
+.aw-registry-diag-label {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #6c757d);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.aw-registry-diag-val {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #212529);
+}
+
+.aw-registry-filters {
+  margin-bottom: var(--space-4, 16px);
+}
+
+.aw-registry-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3, 12px);
+  align-items: flex-end;
+}
+
+.aw-registry-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+}
+
+.aw-registry-filter-group--reset {
+  justify-content: flex-end;
+}
+
+.aw-select {
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  border: 1px solid var(--color-border, #dee2e6);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-surface, #fff);
+  font-size: 0.875rem;
+  color: var(--color-text-primary, #212529);
+}
+
+.aw-registry-table-wrap {
+  overflow-x: auto;
+}
+
+.aw-registry-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.aw-registry-table th,
+.aw-registry-table td {
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border, #dee2e6);
+}
+
+.aw-registry-table th {
+  font-weight: 600;
+  color: var(--color-text-muted, #6c757d);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--color-surface-elevated, #f8f9fa);
+}
+
+.aw-registry-row:hover {
+  background: var(--color-surface-hover, #f1f3f5);
+}
+
+.aw-registry-cell-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.aw-registry-match-title {
+  font-weight: 500;
+}
+
+.aw-registry-match-date {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #6c757d);
+}
+
+.aw-registry-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--color-surface-elevated, #f8f9fa);
+  color: var(--color-text-secondary, #495057);
+  border: 1px solid var(--color-border, #dee2e6);
+}
+
+.aw-registry-badge--cpl_men {
+  background: #e8f4fd;
+  color: #0066cc;
+  border-color: #a8cfee;
+}
+
+.aw-registry-badge--wcpl {
+  background: #fdf0fb;
+  color: #8b008b;
+  border-color: #e0a8d8;
+}
+
+.aw-registry-badge--unknown {
+  background: #f5f5f5;
+  color: #777;
+  border-color: #ccc;
+}
+
+.aw-registry-gender {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.aw-registry-gender--men { color: #0066cc; }
+.aw-registry-gender--women { color: #8b008b; }
+.aw-registry-gender--unknown,
+.aw-registry-gender--mixed { color: var(--color-text-muted, #6c757d); }
+
+.aw-registry-source {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #495057);
+}
+
+.aw-registry-completeness {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.aw-registry-completeness--delivery-complete {
+  background: #d4edda;
+  color: #155724;
+}
+
+.aw-registry-completeness--phase-level {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.aw-registry-completeness--innings-totals {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.aw-registry-completeness--metadata-only {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.aw-registry-ready--yes {
+  color: #155724;
+  font-weight: 600;
+}
+
+.aw-registry-ready--no {
+  color: var(--color-text-muted, #6c757d);
 }
 
 </style>
