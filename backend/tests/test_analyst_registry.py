@@ -38,9 +38,10 @@ from backend.main import fastapi_app
 from backend.sql_app import models
 from backend.sql_app.database import get_db
 from backend.services.analyst_registry_service import (
+    classify_age_category,
     classify_competition,
-    classify_gender,
     classify_data_completeness,
+    classify_gender,
 )
 
 # ---------------------------------------------------------------------------
@@ -133,6 +134,54 @@ class TestGenderClassification:
         # WCPL always means women regardless of metadata
         assert classify_gender("WCPL", "men") == "women"
         assert classify_gender("CPL_MEN", "female") == "men"
+
+
+class TestAgeClassification:
+    """Unit tests for classify_age_category — conservative, no fabrication."""
+
+    def test_none_hist_meta_is_unknown(self) -> None:
+        assert classify_age_category(None) == "unknown"
+
+    def test_empty_dict_is_unknown(self) -> None:
+        assert classify_age_category({}) == "unknown"
+
+    def test_missing_key_is_unknown(self) -> None:
+        assert classify_age_category({"event_name": "CPL 2024"}) == "unknown"
+
+    def test_none_value_is_unknown(self) -> None:
+        assert classify_age_category({"age_category": None}) == "unknown"
+
+    def test_empty_string_is_unknown(self) -> None:
+        assert classify_age_category({"age_category": ""}) == "unknown"
+
+    def test_whitespace_only_is_unknown(self) -> None:
+        assert classify_age_category({"age_category": "   "}) == "unknown"
+
+    def test_unrecognised_value_is_unknown(self) -> None:
+        assert classify_age_category({"age_category": "adult"}) == "unknown"
+        assert classify_age_category({"age_category": "open"}) == "unknown"
+        assert classify_age_category({"age_category": "u19"}) == "unknown"
+
+    def test_explicit_senior(self) -> None:
+        assert classify_age_category({"age_category": "senior"}) == "senior"
+
+    def test_explicit_senior_case_insensitive(self) -> None:
+        assert classify_age_category({"age_category": "Senior"}) == "senior"
+        assert classify_age_category({"age_category": "SENIOR"}) == "senior"
+
+    def test_explicit_youth(self) -> None:
+        assert classify_age_category({"age_category": "youth"}) == "youth"
+        assert classify_age_category({"age_category": "Youth"}) == "youth"
+
+    def test_explicit_school(self) -> None:
+        assert classify_age_category({"age_category": "school"}) == "school"
+        assert classify_age_category({"age_category": "School"}) == "school"
+
+    def test_does_not_infer_senior_by_default(self) -> None:
+        # The critical invariant: absence of metadata must not produce "senior"
+        for meta in (None, {}, {"event_name": "CPL 2024"}, {"age_category": None}):
+            result = classify_age_category(meta)
+            assert result != "senior", f"Wrongly inferred 'senior' from {meta!r}"
 
 
 class TestDataCompletenessClassification:

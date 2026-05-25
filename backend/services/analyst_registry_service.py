@@ -106,6 +106,33 @@ def classify_gender(
 
 
 # ---------------------------------------------------------------------------
+# Age category classification
+# ---------------------------------------------------------------------------
+
+_KNOWN_AGE_CATEGORIES: frozenset[str] = frozenset({"senior", "youth", "school"})
+
+
+def classify_age_category(hist_meta: dict[str, Any] | None) -> str:
+    """Return age_category: 'senior', 'youth', 'school', or 'unknown'.
+
+    Rules (conservative):
+    - Only returns a non-unknown value when hist_meta explicitly contains a
+      recognised age_category value ('senior', 'youth', or 'school').
+    - Any absent, None, empty, or unrecognised value → 'unknown'.
+    - Never infers 'senior' by default.
+    """
+    if not hist_meta:
+        return "unknown"
+    raw = hist_meta.get("age_category")
+    if not raw or not isinstance(raw, str):
+        return "unknown"
+    normalised = raw.strip().lower()
+    if normalised in _KNOWN_AGE_CATEGORIES:
+        return normalised
+    return "unknown"
+
+
+# ---------------------------------------------------------------------------
 # Source type classification
 # ---------------------------------------------------------------------------
 
@@ -267,6 +294,7 @@ async def build_analyst_registry(
             competition_code,
             hist_meta.get("gender") if hist_meta else None,
         )
+        age_category = classify_age_category(hist_meta)
         source_type = classify_source_type(hist_meta, batch)
         data_completeness = classify_data_completeness(game, hist_meta)
 
@@ -305,7 +333,7 @@ async def build_analyst_registry(
                 season=season,
                 season_year=_season_year(season),
                 gender_category=gender_category,
-                age_category="unknown",  # no age metadata available; default to unknown
+                age_category=age_category,
                 format=match_format,
                 venue_raw=venue_raw,
                 venue_canonical=venue_canonical,
