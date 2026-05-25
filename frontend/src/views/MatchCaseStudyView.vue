@@ -685,7 +685,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { BaseCard, BaseButton, BaseBadge, ImpactBar, MiniSparkline, AiCalloutsPanel, AiInsightReviewCard, MatchInsightEvidence } from '@/components'
 import type { AiCallout, CalloutSeverity } from '@/components'
 import { readAiInsightCache, writeAiInsightCache } from '@/services/aiInsightCache'
-import { useAuthStore } from '@/stores/authStore'
 import {
   getMatchCaseStudy,
   getMatchAiSummary,
@@ -694,6 +693,7 @@ import {
   type CaseStudyPhase as ApiCaseStudyPhase,
   type CaseStudyKeyPlayer
 } from '@/services/api'
+import { useAuthStore } from '@/stores/authStore'
 
 // Extend CaseStudyPhase with optional fields (backend may add these later)
 type CaseStudyPhase = ApiCaseStudyPhase & {

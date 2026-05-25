@@ -2,8 +2,8 @@ import { mount } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
 
-import * as mentalApi from '@/services/mentalQuestionnaireApi'
 import MentalProfilePanel from '@/components/MentalProfilePanel.vue'
+import * as mentalApi from '@/services/mentalQuestionnaireApi'
 
 vi.mock('@/services/mentalQuestionnaireApi')
 

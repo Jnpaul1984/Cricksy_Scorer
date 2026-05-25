@@ -542,7 +542,7 @@
 
             <!-- Player Summary Toggle -->
             <div v-if="playerSummary" class="player-summary-toggle" style="margin-top: 1rem;">
-              <button @click="togglePlayerSummary" class="btn-toggle-summary">
+              <button class="btn-toggle-summary" @click="togglePlayerSummary">
                 {{ showPlayerSummary ? '🙈 Hide' : '👤 Show' }} Player Summary
               </button>
             </div>
@@ -735,12 +735,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 
-import GoalSetter from '@/components/GoalSetter.vue';
-import OutcomesViewer from '@/components/OutcomesViewer.vue';
-import SessionComparison from '@/components/SessionComparison.vue';
 import CoachSuggestionsPanel from '@/components/CoachSuggestionsPanel.vue';
 import CoachingSkillRecommendationReviewCard from '@/components/CoachingSkillRecommendationReviewCard.vue';
+import GoalSetter from '@/components/GoalSetter.vue';
+import OutcomesViewer from '@/components/OutcomesViewer.vue';
 import PlayerSummaryCard from '@/components/PlayerSummaryCard.vue';
+import SessionComparison from '@/components/SessionComparison.vue';
 import type {
   VideoAnalysisJob,
   OutcomesResponse,

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import AiInsightReviewCard from './AiInsightReviewCard.vue'
 import BaseBadge from './BaseBadge.vue'
 import BaseCard from './BaseCard.vue'
-import AiInsightReviewCard from './AiInsightReviewCard.vue'
 
 import type { PlayerAIInsights } from '@/services/api'
 

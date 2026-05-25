@@ -12,8 +12,9 @@
  */
 
 import { computed, ref, watch, type Ref } from 'vue'
-import { useGameStore } from '@/stores/gameStore'
+
 import { apiRequest } from '@/services/api'
+import { useGameStore } from '@/stores/gameStore'
 import type { GameState } from '@/types'
 
 export interface ExtrasBreakdown {

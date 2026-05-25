@@ -460,13 +460,13 @@ import StrengthWeaknessWidget from '@/components/StrengthWeaknessWidget.vue'
 import { readAiInsightCache, writeAiInsightCache } from '@/services/aiInsightCache'
 import { apiService, getErrorMessage, getPlayerAIInsights } from '@/services/api'
 import type { FanFavoriteRead, PlayerAIInsights } from '@/services/api'
+import { getPlayerProfile } from '@/services/playerApi'
 import {
   generateDraftPlayerDevelopmentPlan,
   listPlayerDevelopmentPlans,
   PlayerDevelopmentApiError,
 } from '@/services/playerDevelopmentApi'
 import type { PlayerDevelopmentPlanDraftBundle } from '@/services/playerDevelopmentApi'
-import { getPlayerProfile } from '@/services/playerApi'
 import { useAuthStore } from '@/stores/authStore'
 import type { PlayerProfile } from '@/types/player'
 
