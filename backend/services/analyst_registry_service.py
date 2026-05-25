@@ -16,6 +16,7 @@ Never fabricates metadata.
 from __future__ import annotations
 
 import re
+from datetime import date, datetime, timezone
 from typing import Any
 
 from backend.api.schemas.analyst_matches import (
@@ -226,6 +227,38 @@ def _season_year(season: str | None) -> int | None:
     return int(m.group(0)) if m else None
 
 
+def _parse_registry_match_date(value: str | None) -> date | None:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
+def _normalize_sort_datetime(value: datetime | None) -> datetime:
+    if value is None:
+        return datetime.min
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _registry_sort_key(
+    entry: AnalystRegistryEntry,
+    *,
+    game_created_at: datetime | None,
+    batch_created_at: datetime | None,
+) -> tuple[int, date, datetime, str]:
+    parsed_match_date = _parse_registry_match_date(entry.match_date)
+    return (
+        1 if parsed_match_date is not None else 0,
+        parsed_match_date or date.min,
+        _normalize_sort_datetime(batch_created_at or game_created_at),
+        entry.match_id,
+    )
+
+
 async def build_analyst_registry(
     current_user: Any,
     db: AsyncSession,
@@ -262,12 +295,15 @@ async def build_analyst_registry(
         for batch in batch_result.scalars().all():
             batches_by_id[str(batch.id)] = batch
 
-    entries: list[AnalystRegistryEntry] = []
+    entries_with_sort: list[
+        tuple[tuple[int, date, datetime, str], AnalystRegistryEntry]
+    ] = []
 
     for game in games:
         hist_meta = _hist_meta_from_game(game)
         batch_id = hist_meta.get("batch_id") if hist_meta else None
         batch = batches_by_id.get(str(batch_id)) if batch_id else None
+        created_at = getattr(game, "created_at", None)
 
         team_a_name = _team_name(game.team_a, "Team A")
         team_b_name = _team_name(game.team_b, "Team B")
@@ -277,11 +313,11 @@ async def build_analyst_registry(
         # Basic metadata
         match_date: str | None = None
         if hist_meta:
-            match_date = hist_meta.get("match_date")
-        if not match_date:
-            created_at = getattr(game, "created_at", None)
-            if created_at:
-                match_date = created_at.date().isoformat()
+            raw_match_date = hist_meta.get("match_date")
+            if isinstance(raw_match_date, str) and raw_match_date.strip():
+                match_date = raw_match_date.strip()
+        elif created_at:
+            match_date = created_at.date().isoformat()
 
         event_name: str | None = hist_meta.get("event_name") if hist_meta else None
         season: str | None = hist_meta.get("season") if hist_meta else None
@@ -320,33 +356,43 @@ async def build_analyst_registry(
         if match_format not in ("T20", "ODI", "TEST"):
             match_format = "custom" if match_format not in ("", "UNKNOWN") else "unknown"
 
-        entries.append(
-            AnalystRegistryEntry(
-                match_id=game.id,
-                match_title=f"{team_a_name} vs {team_b_name}",
-                team_a=team_a_name,
-                team_b=team_b_name,
-                canonical_team_a=team_a_canonical,
-                canonical_team_b=team_b_canonical,
-                competition_name=event_name,
-                competition_code=competition_code,
-                season=season,
-                season_year=_season_year(season),
-                gender_category=gender_category,
-                age_category=age_category,
-                format=match_format,
-                venue_raw=venue_raw,
-                venue_canonical=venue_canonical,
-                match_date=match_date,
-                source_type=source_type,
-                data_completeness=data_completeness,
-                has_delivery_data=has_delivery_data,
-                has_phase_data=has_phase_data,
-                has_scorecard_data=has_scorecard_data,
-                result=game.result,
-                analyst_ready=analyst_ready,
+        entry = AnalystRegistryEntry(
+            match_id=game.id,
+            match_title=f"{team_a_name} vs {team_b_name}",
+            team_a=team_a_name,
+            team_b=team_b_name,
+            canonical_team_a=team_a_canonical,
+            canonical_team_b=team_b_canonical,
+            competition_name=event_name,
+            competition_code=competition_code,
+            season=season,
+            season_year=_season_year(season),
+            gender_category=gender_category,
+            age_category=age_category,
+            format=match_format,
+            venue_raw=venue_raw,
+            venue_canonical=venue_canonical,
+            match_date=match_date,
+            source_type=source_type,
+            data_completeness=data_completeness,
+            has_delivery_data=has_delivery_data,
+            has_phase_data=has_phase_data,
+            has_scorecard_data=has_scorecard_data,
+            result=game.result,
+            analyst_ready=analyst_ready,
+        )
+        entries_with_sort.append(
+            (
+                _registry_sort_key(
+                    entry,
+                    game_created_at=created_at,
+                    batch_created_at=getattr(batch, "created_at", None),
+                ),
+                entry,
             )
         )
+
+    entries = [entry for _, entry in sorted(entries_with_sort, key=lambda item: item[0], reverse=True)]
 
     # Build diagnostics
     diagnostics: dict[str, int] = {

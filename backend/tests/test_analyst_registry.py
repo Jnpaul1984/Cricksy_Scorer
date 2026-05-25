@@ -22,6 +22,7 @@ import json
 import os
 import uuid as _uuid
 from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -268,6 +269,8 @@ def _make_cpl_fixture(
     season: str | None = "2023",
     *,
     competition: str = "Caribbean Premier League",
+    match_date: str | None = None,
+    include_date: bool = True,
 ) -> dict[str, Any]:
     fixture = deepcopy(_load_fixture())
     info = fixture.setdefault("info", {})
@@ -280,7 +283,10 @@ def _make_cpl_fixture(
             info.pop("season", None)
         else:
             info["season"] = season
-        info["dates"] = [f"2023-08-{(match_number % 28) + 1:02d}"]
+        if include_date:
+            info["dates"] = [match_date or f"2023-08-{(match_number % 28) + 1:02d}"]
+        else:
+            info.pop("dates", None)
     return fixture
 
 
@@ -325,6 +331,25 @@ async def _set_user_role(
         result = await session.execute(select(models.User).where(models.User.email == email))
         user = result.scalar_one()
         user.role = role
+        await session.commit()
+
+
+async def _set_registry_created_at(
+    session_maker: async_sessionmaker,
+    *,
+    batch_id: str | None = None,
+    game_id: str | None = None,
+    created_at: datetime,
+) -> None:
+    async with session_maker() as session:
+        if batch_id:
+            batch = await session.get(models.HistoricalImportBatch, batch_id)
+            assert batch is not None
+            batch.created_at = created_at
+        if game_id:
+            game = await session.get(models.Game, game_id)
+            assert game is not None
+            game.created_at = created_at
         await session.commit()
 
 
@@ -540,3 +565,90 @@ class TestAnalystRegistryEndpoint:
         cpl_entries = [e for e in data["entries"] if e.get("season") == "2024"]
         if cpl_entries:
             assert cpl_entries[0]["season_year"] == 2024
+
+    def test_registry_orders_by_match_date_newest_first(self, client: TestClient) -> None:
+        token = _analyst_token(client)
+        _, newest_game_id = _apply_fixture(
+            client,
+            token,
+            _make_cpl_fixture(match_number=13, match_date="2023-08-15"),
+        )
+        _, oldest_game_id = _apply_fixture(
+            client,
+            token,
+            _make_cpl_fixture(match_number=14, match_date="2023-07-30"),
+        )
+        _, middle_game_id = _apply_fixture(
+            client,
+            token,
+            _make_cpl_fixture(match_number=15, match_date="2023-08-07"),
+        )
+
+        resp = client.get("/analytics/matches/registry", headers=_auth_headers(token))
+        assert resp.status_code == 200, resp.text
+        entries = resp.json()["entries"]
+        ordered_ids = [entry["match_id"] for entry in entries[:3]]
+        assert ordered_ids == [newest_game_id, middle_game_id, oldest_game_id]
+
+    def test_registry_places_missing_match_dates_after_dated_entries(self, client: TestClient) -> None:
+        token = _analyst_token(client)
+        _, dated_game_id = _apply_fixture(
+            client,
+            token,
+            _make_cpl_fixture(match_number=16, match_date="2023-08-20"),
+        )
+        undated_batch_id, undated_game_id = _apply_fixture(
+            client,
+            token,
+            _make_cpl_fixture(match_number=17, include_date=False),
+        )
+        asyncio.get_event_loop().run_until_complete(
+            _set_registry_created_at(
+                client.session_maker,  # type: ignore[attr-defined]
+                batch_id=undated_batch_id,
+                game_id=undated_game_id,
+                created_at=datetime(2025, 1, 20, 12, 0, tzinfo=timezone.utc),
+            )
+        )
+
+        resp = client.get("/analytics/matches/registry", headers=_auth_headers(token))
+        assert resp.status_code == 200, resp.text
+        entries = resp.json()["entries"]
+
+        assert entries[0]["match_id"] == dated_game_id
+        assert entries[-1]["match_id"] == undated_game_id
+        assert entries[-1]["match_date"] is None
+
+    def test_registry_uses_created_at_fallback_for_undated_entries(self, client: TestClient) -> None:
+        token = _analyst_token(client)
+        older_batch_id, older_game_id = _apply_fixture(
+            client,
+            token,
+            _make_cpl_fixture(match_number=18, include_date=False),
+        )
+        newer_batch_id, newer_game_id = _apply_fixture(
+            client,
+            token,
+            _make_cpl_fixture(match_number=19, include_date=False),
+        )
+        asyncio.get_event_loop().run_until_complete(
+            _set_registry_created_at(
+                client.session_maker,  # type: ignore[attr-defined]
+                batch_id=older_batch_id,
+                game_id=older_game_id,
+                created_at=datetime(2024, 1, 5, 9, 0, tzinfo=timezone.utc),
+            )
+        )
+        asyncio.get_event_loop().run_until_complete(
+            _set_registry_created_at(
+                client.session_maker,  # type: ignore[attr-defined]
+                batch_id=newer_batch_id,
+                game_id=newer_game_id,
+                created_at=datetime(2024, 2, 5, 9, 0, tzinfo=timezone.utc),
+            )
+        )
+
+        resp = client.get("/analytics/matches/registry", headers=_auth_headers(token))
+        assert resp.status_code == 200, resp.text
+        undated_entries = [entry for entry in resp.json()["entries"] if entry["match_date"] is None]
+        assert [entry["match_id"] for entry in undated_entries[:2]] == [newer_game_id, older_game_id]
