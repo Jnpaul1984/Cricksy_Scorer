@@ -28,18 +28,18 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("APP_SECRET_KEY", "test-secret-key")
 os.environ.setdefault("CRICKSY_IN_MEMORY_DB", "1")
 
-from backend.main import fastapi_app  # noqa: E402
-from backend.sql_app import models  # noqa: E402
-from backend.sql_app.database import get_db  # noqa: E402
-from backend.services.analyst_registry_service import (  # noqa: E402
+from backend.main import fastapi_app
+from backend.sql_app import models
+from backend.sql_app.database import get_db
+from backend.services.analyst_registry_service import (
     classify_competition,
     classify_gender,
-    classify_source_type,
     classify_data_completeness,
 )
 
@@ -140,6 +140,7 @@ class TestDataCompletenessClassification:
 
     class _MockGame:
         """Minimal Game-like object for testing."""
+
         def __init__(
             self,
             phases: dict | None = None,
@@ -173,9 +174,7 @@ class TestDataCompletenessClassification:
 
     def test_innings_totals_via_historical_innings_summary(self) -> None:
         game = self._MockGame(
-            phases={
-                "historical_innings_summary": [{"inning_no": 1, "runs": 180}]
-            }
+            phases={"historical_innings_summary": [{"inning_no": 1, "runs": 180}]}
         )
         result = classify_data_completeness(game, None)  # type: ignore[arg-type]
         assert result == "innings_totals"
@@ -388,9 +387,9 @@ class TestAnalystRegistryEndpoint:
         assert resp.status_code == 200, resp.text
         data = resp.json()
         wcpl_entries = [e for e in data["entries"] if e["competition_code"] == "WCPL"]
-        assert all(e["gender_category"] == "women" for e in wcpl_entries), (
-            "WCPL matches must always have gender_category='women'"
-        )
+        assert all(
+            e["gender_category"] == "women" for e in wcpl_entries
+        ), "WCPL matches must always have gender_category='women'"
 
     def test_women_not_mixed_into_men(self, client: TestClient) -> None:
         token = _analyst_token(client)
@@ -411,10 +410,7 @@ class TestAnalystRegistryEndpoint:
 
         resp = client.get("/analytics/matches/registry", headers=_auth_headers(token))
         data = resp.json()
-        assert all(
-            e["source_type"] == "historical_import"
-            for e in data["entries"]
-        )
+        assert all(e["source_type"] == "historical_import" for e in data["entries"])
 
     def test_registry_has_diagnostics(self, client: TestClient) -> None:
         token = _analyst_token(client)
@@ -441,7 +437,10 @@ class TestAnalystRegistryEndpoint:
         data = resp.json()
         for entry in data["entries"]:
             assert entry["data_completeness"] in (
-                "metadata_only", "innings_totals", "phase_level", "delivery_complete"
+                "metadata_only",
+                "innings_totals",
+                "phase_level",
+                "delivery_complete",
             ), f"Unexpected completeness: {entry['data_completeness']}"
 
     def test_entry_has_all_required_fields(self, client: TestClient) -> None:
@@ -451,10 +450,19 @@ class TestAnalystRegistryEndpoint:
         resp = client.get("/analytics/matches/registry", headers=_auth_headers(token))
         data = resp.json()
         required = {
-            "match_id", "match_title", "team_a", "team_b",
-            "competition_code", "gender_category", "age_category",
-            "format", "source_type", "data_completeness",
-            "has_delivery_data", "has_phase_data", "has_scorecard_data",
+            "match_id",
+            "match_title",
+            "team_a",
+            "team_b",
+            "competition_code",
+            "gender_category",
+            "age_category",
+            "format",
+            "source_type",
+            "data_completeness",
+            "has_delivery_data",
+            "has_phase_data",
+            "has_scorecard_data",
             "analyst_ready",
         }
         for entry in data["entries"]:

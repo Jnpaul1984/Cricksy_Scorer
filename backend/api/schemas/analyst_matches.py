@@ -3,10 +3,11 @@ Pydantic schemas for the Analyst Workspace Match List API.
 
 Response models for:
   GET /analytics/matches
+  GET /analytics/matches/registry
   GET /analytics/matches/{match_id}/registry
 
-Powers the AnalystWorkspaceView.vue "Matches" tab table and the
-"Registry & Provenance" detail panel.
+Powers the AnalystWorkspaceView.vue "Matches" tab table, the unified
+Match Registry tab (Phase 10M), and the "Registry & Provenance" detail panel.
 """
 
 from datetime import date, datetime
@@ -147,7 +148,7 @@ class AnalystDeliveriesResponse(BaseModel):
 class AnalystRegistryEntry(BaseModel):
     """A single entry in the unified Analyst Match Registry.
 
-    Returned by GET /analytics/registry (Phase 10M).
+    Returned by GET /analytics/matches/registry (Phase 10M).
 
     Every completed match in the system gets exactly one entry,
     classified by competition, gender, source type, and data completeness.
@@ -193,7 +194,7 @@ class AnalystRegistryEntry(BaseModel):
 
 
 class AnalystMatchRegistryListResponse(BaseModel):
-    """Response model for GET /analytics/registry (Phase 10M).
+    """Response model for GET /analytics/matches/registry (Phase 10M).
 
     Returns all completed matches visible to the authenticated user,
     each classified by competition, gender, source type, and data completeness.

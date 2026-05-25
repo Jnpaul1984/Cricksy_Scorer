@@ -154,8 +154,7 @@ def classify_data_completeness(
     # phase_level: powerplay/middle/death breakdown present
     phases = game.phases if isinstance(game.phases, dict) else {}
     has_phases = any(
-        isinstance(phases.get(p), dict) and phases.get(p)
-        for p in ("powerplay", "middle", "death")
+        isinstance(phases.get(p), dict) and phases.get(p) for p in ("powerplay", "middle", "death")
     )
     if has_phases:
         return "phase_level"
@@ -306,7 +305,7 @@ async def build_analyst_registry(
                 season=season,
                 season_year=_season_year(season),
                 gender_category=gender_category,
-                age_category="senior",  # no age metadata available; default to senior
+                age_category="unknown",  # no age metadata available; default to unknown
                 format=match_format,
                 venue_raw=venue_raw,
                 venue_canonical=venue_canonical,
@@ -325,7 +324,9 @@ async def build_analyst_registry(
     diagnostics: dict[str, int] = {
         "total": len(entries),
         "historical_import": sum(1 for e in entries if e.source_type == "historical_import"),
-        "cricksy_completed_scored": sum(1 for e in entries if e.source_type == "cricksy_completed_scored"),
+        "cricksy_completed_scored": sum(
+            1 for e in entries if e.source_type == "cricksy_completed_scored"
+        ),
         "unknown_source": sum(1 for e in entries if e.source_type == "unknown"),
         "CPL_MEN": sum(1 for e in entries if e.competition_code == "CPL_MEN"),
         "WCPL": sum(1 for e in entries if e.competition_code == "WCPL"),
