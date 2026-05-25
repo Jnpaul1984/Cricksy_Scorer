@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
 
 import { __resetAiInsightCacheForTests } from '@/services/aiInsightCache'
 import * as playerApi from '@/services/playerApi'

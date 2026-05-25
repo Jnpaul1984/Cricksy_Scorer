@@ -2,7 +2,7 @@
   <div class="coach-suggestions-panel">
     <div v-if="!suggestions" class="empty-state">
       <p>No coaching suggestions generated yet.</p>
-      <button class="btn-generate" @click="$emit('generate')">
+      <button @click="$emit('generate')" class="btn-generate">
         🤖 Generate AI Suggestions
       </button>
     </div>
@@ -83,7 +83,7 @@
           </div>
         </div>
         <p class="goal-rationale"><em>{{ suggestions.rationale }}</em></p>
-        <button class="btn-approve" @click="$emit('approve-goal', suggestions.proposed_next_goal)">
+        <button @click="$emit('approve-goal', suggestions.proposed_next_goal)" class="btn-approve">
           ✅ Approve as Next Session Goal
         </button>
       </section>

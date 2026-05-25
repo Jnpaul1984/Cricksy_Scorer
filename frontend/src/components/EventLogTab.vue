@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia'
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
-
-import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
+import { useAuthStore } from '@/stores/authStore'
+import { storeToRefs } from 'pinia'
 
 type EventType = 'drinks' | 'injury' | 'delay' | 'ball_change' | 'other'
 type TimelineItem = {
@@ -255,7 +254,7 @@ function formatTime(isoString: string): string {
       </div>
       <div class="form-actions">
         <button class="btn-cancel" @click="showAddEvent = false">Cancel</button>
-        <button class="btn-submit" :disabled="!newEventType" @click="addEvent">
+        <button class="btn-submit" @click="addEvent" :disabled="!newEventType">
           Add Event
         </button>
       </div>
@@ -269,8 +268,8 @@ function formatTime(isoString: string): string {
         <button
           v-if="overSummaryText !== 'Unavailable'"
           class="btn-copy"
-          title="Copy to clipboard"
           @click="copyOverSummary"
+          title="Copy to clipboard"
         >
           📋 Copy
         </button>

@@ -42,8 +42,8 @@
     </div>
 
     <div class="card-footer">
-      <button class="btn-close" @click="$emit('close')">Close</button>
-      <button class="btn-copy" @click="copyToClipboard">📋 Copy Summary</button>
+      <button @click="$emit('close')" class="btn-close">Close</button>
+      <button @click="copyToClipboard" class="btn-copy">📋 Copy Summary</button>
     </div>
   </div>
 </template>

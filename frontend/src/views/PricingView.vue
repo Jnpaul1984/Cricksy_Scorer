@@ -2,8 +2,8 @@
 import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { API_BASE } from '@/services/api'
 import { usePricingStore } from '@/stores/pricingStore'
+import { API_BASE } from '@/services/api'
 
 // ============================================================================
 // Pricing Store - Single Source of Truth
@@ -125,10 +125,10 @@ const scoringIsFreeBanner = computed(() => pricingStore.scoringIsFree)
       <div style="max-width: 600px; margin: 40px auto; text-align: center; padding: 20px;">
         <p style="font-size: 1.1em; color: #dc2626; margin-bottom: 16px;">{{ errorMessage }}</p>
         <button
+          @click="retryFetch"
           :disabled="pricingStore.loading"
           style="padding: 10px 24px; font-size: 1em; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;"
           :style="pricingStore.loading ? 'opacity: 0.6; cursor: not-allowed;' : ''"
-          @click="retryFetch"
         >
           {{ pricingStore.loading ? 'Retrying...' : '🔄 Retry' }}
         </button>
