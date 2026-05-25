@@ -838,8 +838,27 @@ describe('CplPodcastDashboard', () => {
     await flushPromises();
 
     expect(mockToPng).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[aria-label="Rendered export preview layout"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('Matches in scope: 2');
+    expect(wrapper.text()).toContain('Powered by Cricksy');
     expect(wrapper.find('img[alt="Export preview image"]').exists()).toBe(true);
     expect(wrapper.find('[aria-label="Download export image"]').attributes('disabled')).toBeUndefined();
+  });
+
+  it('keeps rendered export layout visible when png payload is invalid', async () => {
+    mockToPng.mockResolvedValue('invalid-preview-data-url');
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Generate export preview"]').trigger('click');
+    await flushPromises();
+
+    expect(mockToPng).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[aria-label="Rendered export preview layout"]').exists()).toBe(true);
+    expect(wrapper.find('img[alt="Export preview image"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain('PNG preview generation returned an invalid image payload.');
+    expect(wrapper.find('[aria-label="Download export image"]').attributes('disabled')).toBeDefined();
   });
 
   it('applies selected template variant styling to export frame', async () => {
@@ -873,6 +892,25 @@ describe('CplPodcastDashboard', () => {
 
     expect(wrapper.find('[aria-label="Generate export preview"]').attributes('disabled')).toBeDefined();
     expect(wrapper.text()).toContain('leaderboard data is unavailable');
+  });
+
+  it('renders talking-point, script, and archive surfaces for dark workspace sections', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    await wrapper.find('[aria-label="Generate AI talking points"]').trigger('click');
+    await new Promise(r => setTimeout(r, 10));
+    await flushPromises();
+    await wrapper.find('[aria-label="Approve talking point 1"]').trigger('click');
+    await wrapper.find('[aria-label="Generate podcast script"]').trigger('click');
+    await wrapper.find('[aria-label="Save episode package"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('.cpld-ai-limitations').exists()).toBe(true);
+    expect(wrapper.find('.cpld-tp-card').exists()).toBe(true);
+    expect(wrapper.find('.cpld-script-panel').exists()).toBe(true);
+    expect(wrapper.find('.cpld-archive-item').exists()).toBe(true);
   });
 
   it('builds editable podcast script draft with provenance and required sections', async () => {

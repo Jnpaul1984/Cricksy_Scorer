@@ -184,9 +184,34 @@
 
         <p v-if="exportError" class="cpld-export-error" role="alert">⚠ {{ exportError }}</p>
 
-        <div v-if="exportPreviewUrl" class="cpld-export-preview-wrap">
+        <div v-if="exportPreviewReady" class="cpld-export-preview-wrap">
           <p class="cpld-export-preview-label">Preview (review before download)</p>
-          <img class="cpld-export-preview" :src="exportPreviewUrl" alt="Export preview image" />
+          <div class="cpld-export-preview-frame" aria-label="Rendered export preview layout">
+            <div class="cpld-export-preview-frame-top">
+              <p class="cpld-export-preview-title">{{ activeExportTarget?.label ?? 'CPL export' }}</p>
+              <p class="cpld-export-preview-template">{{ activeExportTemplate?.label ?? 'Template unavailable' }}</p>
+            </div>
+            <p class="cpld-export-preview-context">
+              Season: {{ exportPreviewSeasonContext }} · Team: {{ exportPreviewTeamContext }} · Venue: {{ exportPreviewVenueContext }}
+            </p>
+            <ul class="cpld-export-preview-stats">
+              <li v-for="statLine in exportPreviewDeterministicStats.slice(0, 5)" :key="statLine">{{ statLine }}</li>
+            </ul>
+            <p class="cpld-export-preview-source">
+              Source note: Imported CPL historical data (validated deterministic aggregates only).
+            </p>
+            <p v-if="exportIncludePoweredBy" class="cpld-export-preview-powered">Powered by Cricksy</p>
+          </div>
+          <img
+            v-if="exportPreviewUrl"
+            class="cpld-export-preview"
+            :src="exportPreviewUrl"
+            alt="Export preview image"
+            @error="onExportPreviewImageError"
+          />
+          <p v-else class="cpld-export-preview-note">
+            PNG image preview unavailable in this browser context. Use the rendered preview layout above for review.
+          </p>
         </div>
         <div v-else class="cpld-export-preview-empty" role="note">
           <p class="cpld-export-preview-label">Preview (review before download)</p>
@@ -720,7 +745,7 @@
               </div>
 
               <!-- Review controls -->
-              <div class="cpld-tp-actions" v-if="tp.status !== 'rejected'">
+              <div v-if="tp.status !== 'rejected'" class="cpld-tp-actions">
                 <button
                   v-if="tp.status !== 'approved'"
                   class="cpld-tp-btn cpld-tp-btn--approve"
@@ -969,16 +994,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { toPng } from 'html-to-image'
-import {
-  getHistoricalStatsSummary,
-  type HistoricalStatsSummaryResponse,
-  type HistoricalMatchAggregate,
-  type HistoricalPlayerAggregate,
-  type HistoricalTeamAggregate,
-  type HistoricalVenueAggregate,
-} from '@/services/api'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+
 import {
   cplVisualTemplates,
   templateFamilyByTarget,
@@ -988,6 +1006,14 @@ import {
   type ExportFormat,
   type ExportTarget,
 } from '@/components/cplVisualTemplates'
+import {
+  getHistoricalStatsSummary,
+  type HistoricalStatsSummaryResponse,
+  type HistoricalMatchAggregate,
+  type HistoricalPlayerAggregate,
+  type HistoricalTeamAggregate,
+  type HistoricalVenueAggregate,
+} from '@/services/api'
 
 // ---------------------------------------------------------------------------
 // State
@@ -1018,6 +1044,7 @@ const exportIncludeContextLabel = ref(true)
 const exportPreviewUrl = ref<string | null>(null)
 const exportError = ref<string | null>(null)
 const exportBusy = ref(false)
+const hasGeneratedPreview = ref(false)
 
 const exportTargets = [
   { value: 'season_summary', label: 'Season summary cards' },
@@ -1695,25 +1722,45 @@ const exportPreviewEmptyReason = computed(() => {
 })
 
 const exportPreviewSummaryLines = computed(() => {
-  const topSeason = selectedSeason.value !== 'all' ? selectedSeason.value : (availableSeasons.value[0] ?? 'all seasons')
-  const topVenue = selectedVenue.value !== 'all' ? selectedVenue.value : (filteredVenueIntelligence.value[0]?.venue ?? 'all venues')
-  const topTeam = selectedTeam.value !== 'all' ? selectedTeam.value : (topTeamByWinsMeta.value?.team_name ?? 'all teams')
-  const deterministicStats = [
+  const deterministicStats = exportPreviewDeterministicStats.value
+  return [
+    `Template: ${activeExportTemplate.value?.label ?? 'Unavailable'}`,
+    `Season context: ${exportPreviewSeasonContext.value}`,
+    `Team context: ${exportPreviewTeamContext.value}`,
+    `Venue context: ${exportPreviewVenueContext.value}`,
+    ...deterministicStats,
+    'Source note: Imported CPL historical data (validated deterministic aggregates only).',
+  ]
+})
+
+const exportPreviewSeasonContext = computed(() =>
+  selectedSeason.value !== 'all' ? selectedSeason.value : (availableSeasons.value[0] ?? 'all seasons')
+)
+
+const exportPreviewVenueContext = computed(() =>
+  selectedVenue.value !== 'all' ? selectedVenue.value : (filteredVenueIntelligence.value[0]?.venue ?? 'all venues')
+)
+
+const exportPreviewTeamContext = computed(() =>
+  selectedTeam.value !== 'all' ? selectedTeam.value : (topTeamByWinsMeta.value?.team_name ?? 'all teams')
+)
+
+const exportPreviewDeterministicStats = computed(() => (
+  [
     `Matches in scope: ${filteredMatches.value.length}`,
     `Total runs: ${filteredTotalRuns.value.toLocaleString()}`,
     `Total wickets: ${filteredTotalWickets.value}`,
     topRunScorers.value[0] ? `Top run scorer: ${topRunScorers.value[0].player_name} (${topRunScorers.value[0].runs_scored})` : null,
     topWicketTakers.value[0] ? `Top wicket taker: ${topWicketTakers.value[0].player_name} (${topWicketTakers.value[0].wickets})` : null,
   ].filter(Boolean) as string[]
-  return [
-    `Template: ${activeExportTemplate.value?.label ?? 'Unavailable'}`,
-    `Season context: ${topSeason}`,
-    `Team context: ${topTeam}`,
-    `Venue context: ${topVenue}`,
-    ...deterministicStats,
-    'Source note: Imported CPL historical data (validated deterministic aggregates only).',
-  ]
-})
+))
+
+const exportPreviewReady = computed(() =>
+  hasGeneratedPreview.value
+  && activeExportAvailability.value.available
+  && templateRequirementAvailability.value.available
+  && exportPreviewDeterministicStats.value.length >= 3
+)
 
 watch(exportTarget, () => {
   const nextTemplate = availableExportTemplates.value[0]
@@ -1748,6 +1795,7 @@ watch(
   () => {
     exportPreviewUrl.value = null
     exportError.value = null
+    hasGeneratedPreview.value = false
   }
 )
 
@@ -1898,6 +1946,15 @@ function buildExportFrame(width: number, height: number): HTMLDivElement {
   return wrapper
 }
 
+function isPngDataUrl(value: string): boolean {
+  return /^data:image\/png;base64,/i.test(value)
+}
+
+function onExportPreviewImageError(): void {
+  exportError.value = 'Preview image could not be rendered. Review the visible export layout and download PNG for external validation.'
+  exportPreviewUrl.value = null
+}
+
 async function generateExportPreview() {
   if (
     !activeExportAvailability.value.available ||
@@ -1907,6 +1964,7 @@ async function generateExportPreview() {
   ) {
     return
   }
+  hasGeneratedPreview.value = true
   exportBusy.value = true
   exportError.value = null
   exportPreviewUrl.value = null
@@ -1914,13 +1972,17 @@ async function generateExportPreview() {
   let frame: HTMLDivElement | null = null
   try {
     frame = buildExportFrame(activeExportFormat.value.width, activeExportFormat.value.height)
-    exportPreviewUrl.value = await toPng(frame, {
+    const generatedPreview = await toPng(frame, {
       cacheBust: true,
       canvasWidth: activeExportFormat.value.width,
       canvasHeight: activeExportFormat.value.height,
       backgroundColor: '#0f172a',
       pixelRatio: 1,
     })
+    if (!isPngDataUrl(generatedPreview)) {
+      throw new Error('PNG preview generation returned an invalid image payload.')
+    }
+    exportPreviewUrl.value = generatedPreview
   } catch (e: unknown) {
     exportError.value = e instanceof Error ? e.message : 'Unable to generate export preview.'
   } finally {
@@ -3066,7 +3128,7 @@ function downloadPodcastScriptMarkdown(): void {
 
 .cpld-export-preview-wrap {
   background: var(--color-surface, #0f172a);
-  border: 1px solid var(--color-border, #e2e8f0);
+  border: 1px solid var(--color-border, #334155);
   border-radius: 6px;
   padding: 0.65rem;
 }
@@ -3080,16 +3142,84 @@ function downloadPodcastScriptMarkdown(): void {
   font-size: 0.78rem;
 }
 
+.cpld-export-preview-frame {
+  background: linear-gradient(160deg, #0b1220 0%, #111827 100%);
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.65rem 0.75rem;
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.5rem;
+}
+
+.cpld-export-preview-frame-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.cpld-export-preview-title {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.cpld-export-preview-template {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #93c5fd;
+}
+
+.cpld-export-preview-context {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+.cpld-export-preview-stats {
+  margin: 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.74rem;
+  color: #e2e8f0;
+}
+
+.cpld-export-preview-source {
+  margin: 0;
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.cpld-export-preview-powered {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #7dd3fc;
+}
+
+.cpld-export-preview-note {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
 .cpld-export-preview-label {
   margin: 0 0 0.35rem;
   font-size: 0.74rem;
-  color: var(--color-text-muted, #64748b);
+  color: var(--color-text-muted, #94a3b8);
 }
 
 .cpld-export-preview {
   width: 100%;
   border-radius: 4px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #334155;
 }
 
 /* Section */
@@ -3534,42 +3664,42 @@ function downloadPodcastScriptMarkdown(): void {
 .cpld-ai-panel-title {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #0c4a6e;
+  color: #e2e8f0;
 }
 
 .cpld-ai-disclaimer {
   font-size: 0.75rem;
-  color: #075985;
+  color: #cbd5e1;
   margin: 0;
-  background: #e0f2fe;
-  border: 1px solid #bae6fd;
+  background: #0b1220;
+  border: 1px solid #334155;
   border-radius: 4px;
   padding: 0.5rem 0.75rem;
 }
 
 .cpld-badge--review {
-  background: #fef3c7;
-  color: #92400e;
+  background: #3f3f46;
+  color: #fde68a;
 }
 
 .cpld-badge--needs-review {
-  background: #fff7ed;
-  color: #9a3412;
+  background: #422006;
+  color: #fdba74;
 }
 
 .cpld-badge--approved {
-  background: #dcfce7;
-  color: #166534;
+  background: #052e16;
+  color: #86efac;
 }
 
 .cpld-badge--rejected {
-  background: #fee2e2;
-  color: #991b1b;
+  background: #450a0a;
+  color: #fca5a5;
 }
 
 /* Fact bundle */
 .cpld-ai-bundle {
-  background: var(--color-bg, #ffffff);
+  background: #0b1220;
   border: 1px solid color-mix(in srgb, #38bdf8 45%, var(--color-border, #334155));
   border-radius: 6px;
   padding: 0.65rem 0.85rem;
@@ -3580,7 +3710,7 @@ function downloadPodcastScriptMarkdown(): void {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #0369a1;
+  color: #7dd3fc;
   margin: 0 0 0.4rem;
 }
 
@@ -3592,8 +3722,8 @@ function downloadPodcastScriptMarkdown(): void {
 
 .cpld-ai-bundle-tag {
   display: inline-block;
-  background: color-mix(in srgb, #0ea5e9 24%, var(--color-bg, #ffffff));
-  color: var(--color-text, #0369a1);
+  background: color-mix(in srgb, #0ea5e9 24%, #0b1220);
+  color: #bae6fd;
   border-radius: 4px;
   padding: 0.15rem 0.5rem;
   font-size: 0.72rem;
@@ -3608,12 +3738,12 @@ function downloadPodcastScriptMarkdown(): void {
 
 /* Insufficient warning */
 .cpld-ai-insufficient {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  background: #2b1c08;
+  border: 1px solid #b45309;
   border-radius: 4px;
   padding: 0.5rem 0.75rem;
   font-size: 0.75rem;
-  color: #92400e;
+  color: #fdba74;
 }
 
 /* Generate row */
@@ -3640,9 +3770,9 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-ai-generate-btn--secondary {
-  background: #ffffff;
-  color: #0369a1;
-  border: 1px solid #bae6fd;
+  background: #0b1220;
+  color: #cbd5e1;
+  border: 1px solid #475569;
 }
 
 .cpld-ai-error {
@@ -3669,8 +3799,8 @@ function downloadPodcastScriptMarkdown(): void {
 
 /* Limitations */
 .cpld-ai-limitations {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  background: #2b1c08;
+  border: 1px solid #b45309;
   border-radius: 6px;
   padding: 0.6rem 0.8rem;
 }
@@ -3679,20 +3809,20 @@ function downloadPodcastScriptMarkdown(): void {
   font-size: 0.75rem;
   font-weight: 700;
   margin: 0 0 0.3rem;
-  color: #92400e;
+  color: #fdba74;
 }
 
 .cpld-ai-limitations-list {
   margin: 0;
   padding-left: 1.2rem;
   font-size: 0.75rem;
-  color: #92400e;
+  color: #fdba74;
 }
 
 /* Talking point cards */
 .cpld-tp-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: #0b1220;
+  border: 1px solid #334155;
   border-radius: 8px;
   padding: 0.85rem 1rem;
   display: flex;
@@ -3701,13 +3831,13 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-tp-card--approved {
-  border-color: #86efac;
-  background: #f0fdf4;
+  border-color: #166534;
+  background: #052e16;
 }
 
 .cpld-tp-card--rejected {
-  border-color: #fca5a5;
-  background: #fff5f5;
+  border-color: #991b1b;
+  background: #3f0d12;
   opacity: 0.75;
 }
 
@@ -3728,7 +3858,7 @@ function downloadPodcastScriptMarkdown(): void {
 
 .cpld-tp-confidence {
   font-size: 0.7rem;
-  color: var(--color-text-muted, #64748b);
+  color: var(--color-text-muted, #94a3b8);
   margin-left: auto;
 }
 
@@ -3736,12 +3866,12 @@ function downloadPodcastScriptMarkdown(): void {
   font-size: 0.88rem;
   font-weight: 700;
   margin: 0;
-  color: var(--color-text, #1e293b);
+  color: var(--color-text, #e2e8f0);
 }
 
 .cpld-tp-text {
   font-size: 0.82rem;
-  color: var(--color-text, #1e293b);
+  color: var(--color-text, #e2e8f0);
   margin: 0;
   line-height: 1.5;
 }
@@ -3754,13 +3884,15 @@ function downloadPodcastScriptMarkdown(): void {
 
 .cpld-tp-edit-area {
   width: 100%;
-  border: 1px solid #bae6fd;
+  border: 1px solid #475569;
   border-radius: 4px;
   padding: 0.4rem 0.6rem;
   font-size: 0.82rem;
   line-height: 1.5;
   resize: vertical;
   box-sizing: border-box;
+  background: #020617;
+  color: #e2e8f0;
 }
 
 .cpld-tp-edit-actions {
@@ -3786,8 +3918,8 @@ function downloadPodcastScriptMarkdown(): void {
 
 .cpld-tp-source-tag {
   display: inline-block;
-  background: #f1f5f9;
-  color: #475569;
+  background: #1e293b;
+  color: #cbd5e1;
   border-radius: 3px;
   padding: 0.1rem 0.4rem;
   font-size: 0.68rem;
@@ -3812,50 +3944,50 @@ function downloadPodcastScriptMarkdown(): void {
 }
 
 .cpld-tp-btn--approve {
-  background: #dcfce7;
-  color: #166534;
-  border-color: #86efac;
+  background: #052e16;
+  color: #86efac;
+  border-color: #166534;
 }
 
 .cpld-tp-btn--unapprove {
-  background: #f1f5f9;
-  color: #475569;
-  border-color: #cbd5e1;
+  background: #1e293b;
+  color: #cbd5e1;
+  border-color: #475569;
 }
 
 .cpld-tp-btn--edit {
-  background: #e0f2fe;
-  color: #0369a1;
-  border-color: #bae6fd;
+  background: #0c4a6e;
+  color: #bae6fd;
+  border-color: #0369a1;
 }
 
 .cpld-tp-btn--save {
-  background: #dcfce7;
-  color: #166534;
-  border-color: #86efac;
+  background: #052e16;
+  color: #86efac;
+  border-color: #166534;
 }
 
 .cpld-tp-btn--cancel {
-  background: #f1f5f9;
-  color: #475569;
-  border-color: #cbd5e1;
+  background: #1e293b;
+  color: #cbd5e1;
+  border-color: #475569;
 }
 
 .cpld-tp-btn--copy {
-  background: #f8fafc;
-  color: #334155;
-  border-color: #e2e8f0;
+  background: #0b1220;
+  color: #cbd5e1;
+  border-color: #475569;
 }
 
 .cpld-tp-btn--reject {
-  background: #fee2e2;
-  color: #991b1b;
-  border-color: #fca5a5;
+  background: #450a0a;
+  color: #fca5a5;
+  border-color: #991b1b;
 }
 
 .cpld-tp-rejected-note {
   font-size: 0.72rem;
-  color: #991b1b;
+  color: #fca5a5;
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -3864,12 +3996,12 @@ function downloadPodcastScriptMarkdown(): void {
 
 /* Review summary */
 .cpld-ai-review-summary {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #0b1220;
+  border: 1px solid #334155;
   border-radius: 6px;
   padding: 0.5rem 0.75rem;
   font-size: 0.75rem;
-  color: var(--color-text-muted, #64748b);
+  color: var(--color-text-muted, #cbd5e1);
   display: flex;
   gap: 0.5rem;
   align-items: center;
@@ -3878,11 +4010,11 @@ function downloadPodcastScriptMarkdown(): void {
 
 .cpld-ai-review-note {
   font-weight: 500;
-  color: #b45309;
+  color: #fdba74;
 }
 
 .cpld-ai-review-note--ok {
-  color: #166534;
+  color: #86efac;
 }
 
 .cpld-script-panel {
@@ -3951,14 +4083,14 @@ function downloadPodcastScriptMarkdown(): void {
   margin: 0 0 0.3rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #9a3412;
+  color: #fdba74;
 }
 
 .cpld-script-needs-review-list {
   margin: 0;
   padding-left: 1.1rem;
   font-size: 0.74rem;
-  color: #9a3412;
+  color: #fdba74;
 }
 
 .cpld-episode-archive {
@@ -3986,7 +4118,7 @@ function downloadPodcastScriptMarkdown(): void {
 .cpld-archive-note {
   margin: 0;
   font-size: 0.75rem;
-  color: #f59e0b;
+  color: #fbbf24;
 }
 
 .cpld-archive-list {
@@ -4030,6 +4162,27 @@ function downloadPodcastScriptMarkdown(): void {
   background: #0b1220;
   color: #cbd5e1;
   border: 1px solid #475569;
+}
+
+.cpld-script-panel .cpld-select,
+.cpld-script-panel .cpld-archive-input {
+  background: #020617;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+.cpld-script-panel .cpld-select:disabled,
+.cpld-script-panel .cpld-archive-input:disabled,
+.cpld-script-panel .cpld-script-textarea:disabled,
+.cpld-script-panel .cpld-ai-generate-btn:disabled {
+  background: #111827;
+  color: #64748b;
+  border-color: #334155;
+}
+
+.cpld-script-panel .cpld-archive-input::placeholder,
+.cpld-script-panel .cpld-script-textarea::placeholder {
+  color: #64748b;
 }
 
 /* ── Data Completeness Diagnostics ──────────────────────────────────────── */
