@@ -17,6 +17,10 @@ import sys
 import pytest
 import pytest_asyncio
 
+# Compatibility fallback for sync tests that still call asyncio.get_event_loop()
+# under Python 3.12+ where no default loop is created automatically.
+_fallback_event_loop: asyncio.AbstractEventLoop | None = None
+
 # Force AnyIO to use asyncio backend unless explicitly overridden.
 os.environ.setdefault("ANYIO_BACKEND", "asyncio")
 
@@ -63,6 +67,20 @@ def event_loop():
     asyncio.set_event_loop(loop)
     yield loop
     loop.close()
+
+
+@pytest.fixture(autouse=True)
+def ensure_sync_tests_have_event_loop():
+    """Ensure sync tests can call asyncio.get_event_loop() safely."""
+    global _fallback_event_loop
+    if _fallback_event_loop is None or _fallback_event_loop.is_closed():
+        _fallback_event_loop = asyncio.new_event_loop()
+
+    with contextlib.suppress(RuntimeError):
+        asyncio.get_event_loop()
+        return
+
+    asyncio.set_event_loop(_fallback_event_loop)
 
 
 @pytest_asyncio.fixture(scope="session")
