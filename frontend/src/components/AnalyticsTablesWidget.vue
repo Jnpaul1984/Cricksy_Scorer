@@ -21,6 +21,54 @@
       </div>
     </div>
 
+    <div class="analytics-filter-row">
+      <label class="analytics-filter">
+        <span class="analytics-filter__label">Innings</span>
+        <select v-model="inningsFilter" class="analytics-select" aria-label="Select innings">
+          <option value="all">All innings</option>
+          <option
+            v-for="innings in [1, 2]"
+            :key="`innings-option-${innings}`"
+            :value="String(innings)"
+            :disabled="!availableInningsSet.has(innings)"
+          >
+            Innings {{ innings }}
+          </option>
+        </select>
+      </label>
+
+      <label class="analytics-filter">
+        <span class="analytics-filter__label">Color theme</span>
+        <select v-model="colorTheme" class="analytics-select" aria-label="Select chart color theme">
+          <option value="default">Default</option>
+          <option value="high_contrast">High contrast</option>
+          <option value="podcast_bright">Podcast bright</option>
+        </select>
+      </label>
+
+      <label v-if="activeChart === 'manhattan'" class="analytics-filter">
+        <span class="analytics-filter__label">Manhattan mode</span>
+        <select v-model="manhattanViewMode" class="analytics-select" aria-label="Select Manhattan mode">
+          <option value="over">Runs by over</option>
+          <option value="delivery" :disabled="manhattanMode !== 'delivery_complete'">Runs by delivery</option>
+        </select>
+      </label>
+
+      <label v-if="activeChart === 'scatter'" class="analytics-filter">
+        <span class="analytics-filter__label">Scatter mode</span>
+        <select v-model="scatterViewMode" class="analytics-select" aria-label="Select Scatter mode">
+          <option
+            v-for="option in scatterModeOptions"
+            :key="option.value"
+            :value="option.value"
+            :disabled="option.disabled"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+    </div>
+
     <div class="analytics-context" role="status" aria-live="polite">
       <div>
         <p class="analytics-context-label">Selected match</p>
@@ -82,6 +130,20 @@
             </div>
           </div>
         </div>
+        <div class="analytics-legend">
+          <div v-if="manhattanViewMode === 'delivery'" class="analytics-legend__item">
+            <span class="analytics-legend__hint">Delivery mode plots runs ball-by-ball.</span>
+          </div>
+          <div v-else class="analytics-legend__item">
+            <span class="analytics-legend__hint">Over mode plots total runs scored each over.</span>
+          </div>
+          <div class="analytics-legend__item">
+            <span class="analytics-legend__hint">W markers indicate wickets in that period.</span>
+          </div>
+        </div>
+        <p class="analytics-howto">
+          How to read this: Manhattan shows runs in each period with wicket markers for collapse pressure.
+        </p>
         <p class="analytics-fallback-note">{{ currentModeNote('manhattan') }}</p>
       </template>
 
@@ -92,6 +154,29 @@
               <g class="analytics-grid">
                 <line v-for="i in 5" :key="`worm-h-${i}`" :x1="48" :y1="20 + i * 36" x2="612" :y2="20 + i * 36" />
                 <line v-for="i in 5" :key="`worm-v-${i}`" :x1="48 + i * 112.8" y1="20" :x2="48 + i * 112.8" y2="200" />
+              </g>
+
+              <g class="analytics-axis-ticks">
+                <text
+                  v-for="tick in wormYAxisTicks"
+                  :key="`worm-y-${tick.value}`"
+                  x="42"
+                  :y="tick.y + 4"
+                  class="analytics-axis-tick"
+                  text-anchor="end"
+                >
+                  {{ tick.label }}
+                </text>
+                <text
+                  v-for="tick in wormXAxisTicks"
+                  :key="`worm-x-${tick.key}`"
+                  :x="tick.x"
+                  y="216"
+                  class="analytics-axis-tick"
+                  text-anchor="middle"
+                >
+                  {{ tick.label }}
+                </text>
               </g>
 
               <template v-for="series in wormSeries" :key="series.key">
@@ -106,6 +191,14 @@
                 >
                   <title>{{ point.tooltip }}</title>
                 </circle>
+                <text
+                  :x="series.finalLabelX"
+                  :y="series.finalLabelY"
+                  class="analytics-final-label"
+                  text-anchor="start"
+                >
+                  {{ series.finalLabel }}
+                </text>
               </template>
 
               <text x="48" y="14" class="analytics-axis-label">Cumulative runs</text>
@@ -119,6 +212,9 @@
               <span>{{ series.label }}</span>
             </div>
           </div>
+          <p class="analytics-howto">
+            How to read this: Worm tracks cumulative runs over time to compare control, pressure, and chase shape.
+          </p>
         </template>
         <div v-else class="analytics-state" role="status">
           No cumulative progression is available for this match yet.
@@ -133,6 +229,29 @@
               <g class="analytics-grid">
                 <line v-for="i in 5" :key="`scatter-h-${i}`" :x1="48" :y1="20 + i * 36" x2="612" :y2="20 + i * 36" />
                 <line v-for="i in 5" :key="`scatter-v-${i}`" :x1="48 + i * 112.8" y1="20" :x2="48 + i * 112.8" y2="200" />
+              </g>
+
+              <g class="analytics-axis-ticks">
+                <text
+                  v-for="tick in scatterYAxisTicks"
+                  :key="`scatter-y-${tick.value}`"
+                  x="42"
+                  :y="tick.y + 4"
+                  class="analytics-axis-tick"
+                  text-anchor="end"
+                >
+                  {{ tick.label }}
+                </text>
+                <text
+                  v-for="tick in scatterXAxisTicks"
+                  :key="`scatter-x-${tick.value}`"
+                  :x="tick.x"
+                  y="216"
+                  class="analytics-axis-tick"
+                  text-anchor="middle"
+                >
+                  {{ tick.label }}
+                </text>
               </g>
 
               <circle
@@ -153,19 +272,17 @@
           </div>
 
           <div class="analytics-legend">
-            <div class="analytics-legend__item">
-              <span class="analytics-legend__swatch" style="background: #38bdf8" />
-              <span>Innings 1 / attacking</span>
+            <div v-for="item in scatterLegend" :key="item.label" class="analytics-legend__item">
+              <span class="analytics-legend__swatch" :style="{ background: item.color }" />
+              <span>{{ item.label }}</span>
             </div>
             <div class="analytics-legend__item">
-              <span class="analytics-legend__swatch" style="background: #34d399" />
-              <span>Innings 2 / stable</span>
-            </div>
-            <div class="analytics-legend__item">
-              <span class="analytics-legend__swatch" style="background: #f59e0b" />
-              <span>Phase fallback</span>
+              <span class="analytics-legend__hint">Larger points indicate higher wicket impact.</span>
             </div>
           </div>
+          <p class="analytics-howto">
+            How to read this: Scatter highlights scoring bursts and pressure clusters by selected axis mode.
+          </p>
         </template>
         <div v-else class="analytics-state" role="status">
           No scatter points are available for this match yet.
@@ -173,6 +290,14 @@
         <p class="analytics-fallback-note">{{ currentModeNote('scatter') }}</p>
       </template>
     </div>
+
+    <section class="analytics-insights" aria-label="Deterministic match insights">
+      <article v-for="insight in deterministicInsights" :key="insight.title" class="analytics-insight-card">
+        <p class="analytics-insight-title">{{ insight.title }}</p>
+        <p class="analytics-insight-value">{{ insight.value }}</p>
+        <p class="analytics-summary-note">{{ insight.note }}</p>
+      </article>
+    </section>
   </div>
 </template>
 
@@ -190,6 +315,10 @@ import type { PlayerProfile } from '@/types/player'
 
 type AnalyticsChart = 'manhattan' | 'worm' | 'scatter'
 type AnalyticsCompleteness = 'delivery_complete' | 'phase_level' | 'innings_totals' | 'metadata_only'
+type InningsFilter = 'all' | '1' | '2'
+type ColorTheme = 'default' | 'high_contrast' | 'podcast_bright'
+type ManhattanViewMode = 'over' | 'delivery'
+type ScatterViewMode = 'over_vs_runs' | 'run_rate_vs_wickets' | 'delivery_index_vs_runs'
 
 interface SummaryMetric {
   label: string
@@ -219,12 +348,17 @@ interface WormSeries {
   color: string
   path: string
   points: WormPoint[]
+  finalLabel: string
+  finalLabelX: number
+  finalLabelY: number
 }
 
 interface ScatterPoint {
   key: string
   x: number
   y: number
+  xValue: number
+  yValue: number
   radius: number
   tooltip: string
   color: string
@@ -233,11 +367,23 @@ interface ScatterPoint {
 interface DeliveryBucket {
   key: string
   innings: number
+  over: number
   label: string
   shortLabel: string
   runs: number
   wickets: number
   legalBalls: number
+}
+
+interface ScatterLegendItem {
+  label: string
+  color: string
+}
+
+interface InsightCard {
+  title: string
+  value: string
+  note: string
 }
 
 interface PhaseBucket {
@@ -275,6 +421,10 @@ const chartTypes = [
 ]
 
 const activeChart = ref<AnalyticsChart>('manhattan')
+const inningsFilter = ref<InningsFilter>('all')
+const colorTheme = ref<ColorTheme>('default')
+const manhattanViewMode = ref<ManhattanViewMode>('over')
+const scatterViewMode = ref<ScatterViewMode>('over_vs_runs')
 const loading = ref(false)
 const error = ref<string | null>(null)
 const deliveries = ref<AnalystDeliveryRow[]>([])
@@ -309,15 +459,40 @@ function oversToBalls(overs: number | null | undefined): number | null {
   return wholeOvers * 6 + Math.max(partialBalls, 0)
 }
 
-function runsColor(index: number, innings: number): string {
-  if (innings === 2) return '#34d399'
-  return index % 2 === 0 ? '#38bdf8' : '#60a5fa'
+const themePalette = computed(() => {
+  if (colorTheme.value === 'high_contrast') {
+    return {
+      innings1: '#22d3ee',
+      innings2: '#f97316',
+      phase: '#facc15',
+      neutral: '#c084fc',
+    }
+  }
+  if (colorTheme.value === 'podcast_bright') {
+    return {
+      innings1: '#60a5fa',
+      innings2: '#f472b6',
+      phase: '#34d399',
+      neutral: '#f59e0b',
+    }
+  }
+  return {
+    innings1: '#38bdf8',
+    innings2: '#34d399',
+    phase: '#f59e0b',
+    neutral: '#a78bfa',
+  }
+})
+
+function inningsColor(innings: number): string {
+  if (innings === 2) return themePalette.value.innings2
+  return themePalette.value.innings1
 }
 
 function phaseColor(label: string): string {
   const normalized = label.toLowerCase()
-  if (normalized.includes('power')) return '#f59e0b'
-  if (normalized.includes('death')) return '#f472b6'
+  if (normalized.includes('power')) return themePalette.value.phase
+  if (normalized.includes('death')) return themePalette.value.neutral
   return '#2dd4bf'
 }
 
@@ -337,6 +512,28 @@ const inningsTotals = computed<InningsBucket[]>(() =>
   })),
 )
 
+const availableInningsSet = computed(() => {
+  const inningsSet = new Set<number>()
+  deliveries.value.forEach((row) => {
+    if (row.innings === 1 || row.innings === 2) inningsSet.add(row.innings)
+  })
+  inningsTotals.value.forEach((innings) => {
+    if (innings.innings === 1 || innings.innings === 2) inningsSet.add(innings.innings)
+  })
+  return inningsSet
+})
+
+const selectedInnings = computed<number | null>(() => {
+  if (inningsFilter.value === '1') return 1
+  if (inningsFilter.value === '2') return 2
+  return null
+})
+
+const filteredInningsTotals = computed<InningsBucket[]>(() => {
+  if (!selectedInnings.value) return inningsTotals.value
+  return inningsTotals.value.filter(innings => innings.innings === selectedInnings.value)
+})
+
 const phaseBuckets = computed<PhaseBucket[]>(() =>
   (caseStudy.value?.phases || [])
     .filter(phase => (phase.runs ?? 0) > 0 || (phase.wickets ?? 0) > 0)
@@ -351,9 +548,14 @@ const phaseBuckets = computed<PhaseBucket[]>(() =>
     })),
 )
 
+const filteredDeliveries = computed<AnalystDeliveryRow[]>(() => {
+  if (!selectedInnings.value) return deliveries.value
+  return deliveries.value.filter(row => row.innings === selectedInnings.value)
+})
+
 const deliveryBuckets = computed<DeliveryBucket[]>(() => {
   const grouped = new Map<string, DeliveryBucket>()
-  const rows = [...deliveries.value].sort((a, b) => {
+  const rows = [...filteredDeliveries.value].sort((a, b) => {
     const inningsDelta = (a.innings ?? 0) - (b.innings ?? 0)
     if (inningsDelta !== 0) return inningsDelta
     const overDelta = (a.over_number ?? 0) - (b.over_number ?? 0)
@@ -371,6 +573,7 @@ const deliveryBuckets = computed<DeliveryBucket[]>(() => {
       grouped.set(key, {
         key,
         innings,
+        over: over || 1,
         label,
         shortLabel,
         runs: 0,
@@ -390,7 +593,7 @@ const deliveryBuckets = computed<DeliveryBucket[]>(() => {
 const availableCompleteness = computed<AnalyticsCompleteness>(() => {
   if (deliveryBuckets.value.length > 0) return 'delivery_complete'
   if (phaseBuckets.value.length > 0) return 'phase_level'
-  if (inningsTotals.value.length > 0) return 'innings_totals'
+  if (filteredInningsTotals.value.length > 0) return 'innings_totals'
   return 'metadata_only'
 })
 
@@ -412,7 +615,7 @@ const summaryTotals = computed(() => {
     const totalRuns = deliveryBuckets.value.reduce((sum, bucket) => sum + bucket.runs, 0)
     const wickets = deliveryBuckets.value.reduce((sum, bucket) => sum + bucket.wickets, 0)
     const legalBalls = deliveryBuckets.value.reduce((sum, bucket) => sum + bucket.legalBalls, 0)
-    const deliveriesCount = deliveries.value.length
+    const deliveriesCount = filteredDeliveries.value.length
     return {
       totalRuns,
       wickets,
@@ -435,10 +638,10 @@ const summaryTotals = computed(() => {
     }
   }
 
-  if (inningsTotals.value.length > 0) {
-    const totalRuns = inningsTotals.value.reduce((sum, innings) => sum + innings.runs, 0)
-    const wickets = inningsTotals.value.reduce((sum, innings) => sum + innings.wickets, 0)
-    const legalBalls = inningsTotals.value.reduce((sum, innings) => sum + (oversToBalls(innings.overs) ?? 0), 0)
+  if (filteredInningsTotals.value.length > 0) {
+    const totalRuns = filteredInningsTotals.value.reduce((sum, innings) => sum + innings.runs, 0)
+    const wickets = filteredInningsTotals.value.reduce((sum, innings) => sum + innings.wickets, 0)
+    const legalBalls = filteredInningsTotals.value.reduce((sum, innings) => sum + (oversToBalls(innings.overs) ?? 0), 0)
     return {
       totalRuns,
       wickets,
@@ -490,7 +693,7 @@ const summaryMetrics = computed<SummaryMetric[]>(() => [
 const manhattanMode = computed<AnalyticsCompleteness>(() => {
   if (deliveryBuckets.value.length > 0) return 'delivery_complete'
   if (phaseBuckets.value.length > 0) return 'phase_level'
-  if (inningsTotals.value.length > 0) return 'innings_totals'
+  if (filteredInningsTotals.value.length > 0) return 'innings_totals'
   return 'metadata_only'
 })
 
@@ -499,13 +702,38 @@ const scatterMode = computed<AnalyticsCompleteness>(() => manhattanMode.value)
 
 const manhattanBars = computed<ChartBar[]>(() => {
   if (manhattanMode.value === 'delivery_complete') {
+    if (manhattanViewMode.value === 'delivery') {
+      return filteredDeliveries.value
+        .slice()
+        .sort((a, b) => {
+          const inningsDelta = (a.innings ?? 0) - (b.innings ?? 0)
+          if (inningsDelta !== 0) return inningsDelta
+          const overDelta = (a.over_number ?? 0) - (b.over_number ?? 0)
+          if (overDelta !== 0) return overDelta
+          return (a.ball_number ?? 0) - (b.ball_number ?? 0)
+        })
+        .map((row, index) => {
+          const innings = row.innings ?? 1
+          const over = row.over_number ?? 1
+          const ball = row.ball_number ?? 1
+          return {
+            key: `delivery-${innings}-${over}-${ball}-${index}`,
+            shortLabel: `${over}.${ball}`,
+            value: row.total_runs ?? 0,
+            wickets: row.wicket ? 1 : 0,
+            tooltip: `Innings ${innings} · Over ${over}.${ball}: ${row.total_runs ?? 0} runs, wicket ${row.wicket ? 'yes' : 'no'}`,
+            color: inningsColor(innings),
+          }
+        })
+    }
+
     return deliveryBuckets.value.map((bucket, index) => ({
       key: bucket.key,
       shortLabel: bucket.shortLabel,
       value: bucket.runs,
       wickets: bucket.wickets,
-      tooltip: `${bucket.label}: ${bucket.runs} runs, ${bucket.wickets} wickets`,
-      color: runsColor(index, bucket.innings),
+      tooltip: `${bucket.label}: ${bucket.runs} runs, ${bucket.wickets} wickets, RR ${bucket.legalBalls > 0 ? ((bucket.runs * 6) / bucket.legalBalls).toFixed(2) : 'n/a'}`,
+      color: inningsColor(bucket.innings || index + 1),
     }))
   }
 
@@ -521,13 +749,13 @@ const manhattanBars = computed<ChartBar[]>(() => {
   }
 
   if (manhattanMode.value === 'innings_totals') {
-    return inningsTotals.value.map((innings, index) => ({
+    return filteredInningsTotals.value.map((innings, index) => ({
       key: innings.key,
       shortLabel: `Inn ${innings.innings}`,
       value: innings.runs,
       wickets: innings.wickets,
-      tooltip: `${innings.label}: ${innings.runs}/${innings.wickets}`,
-      color: runsColor(index, innings.innings),
+      tooltip: `${innings.label}: ${innings.runs}/${innings.wickets}, RR ${innings.overs && innings.overs > 0 ? (innings.runs / innings.overs).toFixed(2) : 'n/a'}`,
+      color: inningsColor(innings.innings || index + 1),
     }))
   }
 
@@ -542,38 +770,37 @@ const wormSeries = computed<WormSeries[]>(() => {
       seriesMap.get(bucket.innings)!.push(bucket)
     })
 
-    const maxRuns = Math.max(
-      1,
-      ...[...seriesMap.values()].flatMap(series => {
-        let cumulative = 0
-        return series.map(bucket => {
-          cumulative += bucket.runs
-          return cumulative
-        })
-      }),
-    )
+    const maxRuns = Math.max(1, ...[...seriesMap.values()].map(series => series.reduce((sum, bucket) => sum + bucket.runs, 0)))
+    const maxOver = Math.max(1, ...deliveryBuckets.value.map(bucket => bucket.over))
 
     return [...seriesMap.entries()].map(([innings, buckets]) => {
       let cumulativeRuns = 0
+      let cumulativeWickets = 0
       const points = buckets.map((bucket, index) => {
         cumulativeRuns += bucket.runs
-        const denominator = Math.max(buckets.length - 1, 1)
-        const x = 48 + (index / denominator) * 564
+        cumulativeWickets += bucket.wickets
+        const x = 48 + (bucket.over / maxOver) * 564
         const y = 200 - (cumulativeRuns / maxRuns) * 160
         return {
           key: `${bucket.key}-worm`,
           x,
           y,
-          tooltip: `${bucket.label}: ${cumulativeRuns} cumulative runs`,
+          tooltip: `${bucket.label}: ${cumulativeRuns} cumulative runs, ${cumulativeWickets} wickets`,
         }
       })
+      const lastPoint = points[points.length - 1]
+      const finalRuns = buckets.reduce((sum, bucket) => sum + bucket.runs, 0)
+      const finalWickets = buckets.reduce((sum, bucket) => sum + bucket.wickets, 0)
 
       return {
         key: `innings-${innings}`,
         label: `Innings ${innings}`,
-        color: innings === 2 ? '#34d399' : '#38bdf8',
+        color: inningsColor(innings),
         path: points.map(point => `${point.x},${point.y}`).join(' '),
         points,
+        finalLabel: `${finalRuns}/${finalWickets}`,
+        finalLabelX: Math.min(610, (lastPoint?.x ?? 600) + 6),
+        finalLabelY: Math.max(16, (lastPoint?.y ?? 30) - 6),
       }
     })
   }
@@ -596,18 +823,21 @@ const wormSeries = computed<WormSeries[]>(() => {
     return [{
       key: 'phases',
       label: 'Phase progression',
-      color: '#f59e0b',
+      color: themePalette.value.phase,
       path: points.map(point => `${point.x},${point.y}`).join(' '),
       points,
+      finalLabel: `${cumulativeRuns} runs`,
+      finalLabelX: 606,
+      finalLabelY: points.length ? Math.max(16, points[points.length - 1].y - 6) : 24,
     }]
   }
 
   if (wormMode.value === 'innings_totals') {
     let cumulativeRuns = 0
-    const maxRuns = Math.max(1, inningsTotals.value.reduce((sum, innings) => sum + innings.runs, 0))
-    const points = inningsTotals.value.map((innings, index) => {
+    const maxRuns = Math.max(1, filteredInningsTotals.value.reduce((sum, innings) => sum + innings.runs, 0))
+    const points = filteredInningsTotals.value.map((innings, index) => {
       cumulativeRuns += innings.runs
-      const denominator = Math.max(inningsTotals.value.length - 1, 1)
+      const denominator = Math.max(filteredInningsTotals.value.length - 1, 1)
       const x = 48 + (index / denominator) * 564
       const y = 200 - (cumulativeRuns / maxRuns) * 160
       return {
@@ -620,9 +850,12 @@ const wormSeries = computed<WormSeries[]>(() => {
     return [{
       key: 'innings',
       label: 'Innings totals progression',
-      color: '#a78bfa',
+      color: themePalette.value.neutral,
       path: points.map(point => `${point.x},${point.y}`).join(' '),
       points,
+      finalLabel: `${cumulativeRuns} runs`,
+      finalLabelX: 606,
+      finalLabelY: points.length ? Math.max(16, points[points.length - 1].y - 6) : 24,
     }]
   }
 
@@ -636,17 +869,133 @@ const wormXAxisLabel = computed(() => {
   return 'Unavailable'
 })
 
+const wormMaxYValue = computed(() => {
+  if (wormMode.value === 'delivery_complete') {
+    const bySeries = new Map<number, number>()
+    deliveryBuckets.value.forEach((bucket) => {
+      bySeries.set(bucket.innings, (bySeries.get(bucket.innings) || 0) + bucket.runs)
+    })
+    return Math.max(1, ...bySeries.values())
+  }
+  if (wormMode.value === 'phase_level') return Math.max(1, phaseBuckets.value.reduce((sum, phase) => sum + phase.runs, 0))
+  if (wormMode.value === 'innings_totals') return Math.max(1, filteredInningsTotals.value.reduce((sum, innings) => sum + innings.runs, 0))
+  return 1
+})
+
+function buildTicks(max: number, count = 4): number[] {
+  return Array.from({ length: count + 1 }, (_, index) => (max / count) * index)
+}
+
+const wormYAxisTicks = computed(() =>
+  buildTicks(wormMaxYValue.value).map((value) => ({
+    value,
+    label: Math.round(value).toString(),
+    y: 200 - (value / wormMaxYValue.value) * 160,
+  })),
+)
+
+const wormXAxisTicks = computed(() => {
+  if (wormMode.value === 'delivery_complete') {
+    const maxOver = Math.max(1, ...deliveryBuckets.value.map(bucket => bucket.over))
+    return buildTicks(maxOver).map((value, index) => ({
+      key: `over-${index}`,
+      label: `Ov ${Math.round(value)}`,
+      x: 48 + (value / maxOver) * 564,
+    }))
+  }
+  if (wormMode.value === 'phase_level') {
+    return phaseBuckets.value.map((phase, index) => ({
+      key: phase.key,
+      label: phase.label,
+      x: 48 + (index / Math.max(phaseBuckets.value.length - 1, 1)) * 564,
+    }))
+  }
+  if (wormMode.value === 'innings_totals') {
+    return filteredInningsTotals.value.map((innings, index) => ({
+      key: innings.key,
+      label: `Inn ${innings.innings}`,
+      x: 48 + (index / Math.max(filteredInningsTotals.value.length - 1, 1)) * 564,
+    }))
+  }
+  return []
+})
+
+const scatterModeOptions = computed(() => [
+  {
+    value: 'over_vs_runs' as const,
+    label: 'Over vs runs',
+    disabled: scatterMode.value !== 'delivery_complete',
+  },
+  {
+    value: 'run_rate_vs_wickets' as const,
+    label: 'Run rate vs wickets',
+    disabled: scatterMode.value === 'metadata_only',
+  },
+  {
+    value: 'delivery_index_vs_runs' as const,
+    label: 'Delivery index vs runs',
+    disabled: scatterMode.value !== 'delivery_complete',
+  },
+])
+
 const scatterPoints = computed<ScatterPoint[]>(() => {
-  if (scatterMode.value === 'delivery_complete') {
+  if (scatterMode.value === 'metadata_only') return []
+
+  if (scatterViewMode.value === 'delivery_index_vs_runs' && scatterMode.value === 'delivery_complete') {
+    const maxRuns = Math.max(1, ...filteredDeliveries.value.map(row => row.total_runs ?? 0))
+    const maxIndex = Math.max(1, filteredDeliveries.value.length)
+    return filteredDeliveries.value.map((row, index) => {
+      const innings = row.innings ?? 1
+      const over = row.over_number ?? 1
+      const ball = row.ball_number ?? 1
+      const runs = row.total_runs ?? 0
+      return {
+        key: `scatter-delivery-${innings}-${over}-${ball}-${index}`,
+        x: 48 + ((index + 1) / maxIndex) * 540,
+        y: 200 - (runs / maxRuns) * 160,
+        xValue: index + 1,
+        yValue: runs,
+        radius: row.wicket ? 9 : 6,
+        tooltip: `Innings ${innings} · Over ${over}.${ball}: ${runs} runs${row.wicket ? ', wicket' : ''}`,
+        color: inningsColor(innings),
+      }
+    })
+  }
+
+  if (scatterViewMode.value === 'over_vs_runs' && scatterMode.value === 'delivery_complete') {
     const maxRuns = Math.max(1, ...deliveryBuckets.value.map(bucket => bucket.runs))
-    const maxOver = Math.max(1, deliveryBuckets.value.length)
-    return deliveryBuckets.value.map((bucket, index) => ({
-      key: `${bucket.key}-scatter`,
-      x: 48 + ((index + 1) / maxOver) * 540,
+    const maxOver = Math.max(1, ...deliveryBuckets.value.map(bucket => bucket.over))
+    return deliveryBuckets.value.map((bucket) => ({
+      key: `${bucket.key}-scatter-over`,
+      x: 48 + (bucket.over / maxOver) * 540,
       y: 200 - (bucket.runs / maxRuns) * 160,
-      radius: 5 + bucket.wickets * 2,
+      xValue: bucket.over,
+      yValue: bucket.runs,
+      radius: 6 + bucket.wickets * 2,
       tooltip: `${bucket.label}: ${bucket.runs} runs, ${bucket.wickets} wickets`,
-      color: bucket.innings === 2 ? '#34d399' : '#38bdf8',
+      color: inningsColor(bucket.innings),
+    }))
+  }
+
+  if (scatterMode.value === 'delivery_complete') {
+    const overStats = deliveryBuckets.value.map(bucket => ({
+      key: bucket.key,
+      innings: bucket.innings,
+      label: bucket.label,
+      runRate: bucket.legalBalls > 0 ? (bucket.runs * 6) / bucket.legalBalls : 0,
+      wickets: bucket.wickets,
+    }))
+    const maxRunRate = Math.max(1, ...overStats.map(stat => stat.runRate))
+    const maxWickets = Math.max(1, ...overStats.map(stat => stat.wickets))
+    return overStats.map((stat) => ({
+      key: `${stat.key}-scatter-rr`,
+      x: 48 + (stat.runRate / maxRunRate) * 540,
+      y: 200 - ((stat.wickets || 0) / maxWickets) * 160,
+      xValue: stat.runRate,
+      yValue: stat.wickets,
+      radius: 7,
+      tooltip: `${stat.label}: RR ${stat.runRate.toFixed(2)}, ${stat.wickets} wickets`,
+      color: inningsColor(stat.innings),
     }))
   }
 
@@ -659,40 +1008,83 @@ const scatterPoints = computed<ScatterPoint[]>(() => {
         key: `${phase.key}-scatter`,
         x: 48 + (runRateValue / maxRunRate) * 540,
         y: 200 - ((phase.wickets || 0) / maxWickets) * 160,
+        xValue: runRateValue,
+        yValue: phase.wickets,
         radius: 7,
         tooltip: `${phase.label}: ${runRateValue.toFixed(2)} run rate, ${phase.wickets} wickets`,
-        color: '#f59e0b',
+        color: themePalette.value.phase,
       }
     })
   }
 
-  if (scatterMode.value === 'innings_totals') {
-    const maxRuns = Math.max(1, ...inningsTotals.value.map(innings => innings.runs))
-    const maxWickets = Math.max(1, ...inningsTotals.value.map(innings => innings.wickets))
-    return inningsTotals.value.map((innings, index) => ({
+  const maxRunRate = Math.max(
+    1,
+    ...filteredInningsTotals.value.map(innings => (innings.overs && innings.overs > 0 ? innings.runs / innings.overs : 0)),
+  )
+  const maxWickets = Math.max(1, ...filteredInningsTotals.value.map(innings => innings.wickets))
+  return filteredInningsTotals.value.map((innings, index) => {
+    const runRateValue = innings.overs && innings.overs > 0 ? innings.runs / innings.overs : 0
+    return {
       key: `${innings.key}-scatter`,
-      x: 48 + (innings.runs / maxRuns) * 540,
+      x: 48 + (runRateValue / maxRunRate) * 540,
       y: 200 - ((innings.wickets || 0) / maxWickets) * 160,
+      xValue: runRateValue,
+      yValue: innings.wickets,
       radius: 7,
-      tooltip: `${innings.label}: ${innings.runs} runs, ${innings.wickets} wickets`,
-      color: index === 0 ? '#38bdf8' : '#34d399',
-    }))
-  }
-
-  return []
+      tooltip: `${innings.label}: RR ${runRateValue.toFixed(2)}, ${innings.wickets} wickets`,
+      color: inningsColor(innings.innings || index + 1),
+    }
+  })
 })
 
 const scatterXAxisLabel = computed(() => {
-  if (scatterMode.value === 'delivery_complete') return 'Over bins'
-  if (scatterMode.value === 'phase_level') return 'Run rate'
-  if (scatterMode.value === 'innings_totals') return 'Runs'
-  return 'Unavailable'
+  if (scatterViewMode.value === 'delivery_index_vs_runs') return 'Delivery index'
+  if (scatterViewMode.value === 'over_vs_runs') return 'Over'
+  return 'Run rate'
 })
 
 const scatterYAxisLabel = computed(() => {
-  if (scatterMode.value === 'delivery_complete') return 'Runs'
+  if (scatterViewMode.value === 'delivery_index_vs_runs' || scatterViewMode.value === 'over_vs_runs') return 'Runs'
   return 'Wickets'
 })
+
+const scatterLegend = computed<ScatterLegendItem[]>(() => {
+  if (scatterMode.value === 'phase_level') {
+    return [{ label: 'Phase points', color: themePalette.value.phase }]
+  }
+  if (scatterMode.value === 'innings_totals') {
+    return filteredInningsTotals.value.map((innings) => ({
+      label: `Innings ${innings.innings}`,
+      color: inningsColor(innings.innings),
+    }))
+  }
+  return [
+    { label: 'Innings 1', color: inningsColor(1) },
+    { label: 'Innings 2', color: inningsColor(2) },
+  ]
+})
+
+const scatterAxisExtents = computed(() => {
+  const maxX = Math.max(1, ...scatterPoints.value.map(point => point.xValue))
+  const maxY = Math.max(1, ...scatterPoints.value.map(point => point.yValue))
+  return { maxX, maxY }
+})
+
+const scatterXAxisTicks = computed(() =>
+  buildTicks(scatterAxisExtents.value.maxX).map((value) => ({
+    value,
+    label: Number.isInteger(value) ? String(value) : value.toFixed(1),
+    x: 48 + (value / scatterAxisExtents.value.maxX) * 540,
+  })),
+)
+
+const scatterYAxisTicks = computed(() =>
+  buildTicks(scatterAxisExtents.value.maxY).map((value) => ({
+    value,
+    label: Number.isInteger(value) ? String(value) : value.toFixed(1),
+    y: 200 - (value / scatterAxisExtents.value.maxY) * 160,
+  })),
+)
 
 const currentChartMode = computed<AnalyticsCompleteness>(() => {
   if (activeChart.value === 'worm') return wormMode.value
@@ -733,11 +1125,106 @@ const statusMessage = computed(() => {
 
 function currentModeNote(chart: AnalyticsChart): string {
   const mode = chart === 'worm' ? wormMode.value : chart === 'scatter' ? scatterMode.value : manhattanMode.value
-  if (mode === 'delivery_complete') return 'Using over-level delivery records for full graph rendering.'
-  if (mode === 'phase_level') return 'Using phase summaries because delivery records are unavailable.'
-  if (mode === 'innings_totals') return 'Using innings totals because only innings-level scoring is available.'
+  const inningsNote = selectedInnings.value ? ` for innings ${selectedInnings.value}` : ''
+  if (mode === 'delivery_complete') {
+    if (chart === 'manhattan' && manhattanViewMode.value === 'delivery') {
+      return `Using delivery-by-delivery records${inningsNote} for full graph rendering.`
+    }
+    return `Using over-level delivery records${inningsNote} for full graph rendering.`
+  }
+  if (mode === 'phase_level') return `Using phase summaries${inningsNote} because delivery records are unavailable.`
+  if (mode === 'innings_totals') return `Using innings totals${inningsNote} because only innings-level scoring is available.`
   return 'Insufficient data for graph rendering.'
 }
+
+const deterministicInsights = computed<InsightCard[]>(() => {
+  const insights: InsightCard[] = []
+  if (manhattanBars.value.length > 0) {
+    const best = [...manhattanBars.value].sort((a, b) => b.value - a.value)[0]
+    const slowest = [...manhattanBars.value].sort((a, b) => a.value - b.value)[0]
+    const wicketHeavy = [...manhattanBars.value].sort((a, b) => b.wickets - a.wickets)[0]
+
+    insights.push({
+      title: 'Best scoring period',
+      value: `${best.shortLabel} · ${best.value} runs`,
+      note: 'Derived from visible Manhattan bars.',
+    })
+    insights.push({
+      title: 'Slowest scoring period',
+      value: `${slowest.shortLabel} · ${slowest.value} runs`,
+      note: 'Derived from visible Manhattan bars.',
+    })
+    insights.push({
+      title: 'Wicket-heavy period',
+      value: wicketHeavy.wickets > 0 ? `${wicketHeavy.shortLabel} · ${wicketHeavy.wickets} wickets` : 'No wickets recorded',
+      note: 'Derived from period wicket markers.',
+    })
+  } else {
+    insights.push({
+      title: 'Best scoring period',
+      value: 'Unavailable',
+      note: 'Insufficient data for deterministic period ranking.',
+    })
+  }
+
+  if (deliveryBuckets.value.length >= 2) {
+    let accelerationLabel = 'Unavailable'
+    let maxLift = Number.NEGATIVE_INFINITY
+    for (let index = 1; index < deliveryBuckets.value.length; index += 1) {
+      const prev = deliveryBuckets.value[index - 1]
+      const current = deliveryBuckets.value[index]
+      const lift = current.runs - prev.runs
+      if (lift > maxLift) {
+        maxLift = lift
+        accelerationLabel = `${current.shortLabel} · Δ ${lift >= 0 ? '+' : ''}${lift}`
+      }
+    }
+    insights.push({
+      title: 'Acceleration period',
+      value: accelerationLabel,
+      note: 'Largest over-to-over run jump in selected innings filter.',
+    })
+  } else {
+    insights.push({
+      title: 'Acceleration period',
+      value: 'Unavailable',
+      note: 'Need at least two over buckets.',
+    })
+  }
+
+  const inningsOne = deliveryBuckets.value.filter(bucket => bucket.innings === 1)
+  const inningsTwo = deliveryBuckets.value.filter(bucket => bucket.innings === 2)
+  if (!selectedInnings.value && inningsOne.length > 0 && inningsTwo.length > 0) {
+    const cumulativeByOver = new Map<number, { first: number; second: number }>()
+    let firstTotal = 0
+    inningsOne.forEach((bucket) => {
+      firstTotal += bucket.runs
+      cumulativeByOver.set(bucket.over, { first: firstTotal, second: cumulativeByOver.get(bucket.over)?.second ?? 0 })
+    })
+    let secondTotal = 0
+    inningsTwo.forEach((bucket) => {
+      secondTotal += bucket.runs
+      const existing = cumulativeByOver.get(bucket.over)
+      cumulativeByOver.set(bucket.over, { first: existing?.first ?? firstTotal, second: secondTotal })
+    })
+    const turningOver = [...cumulativeByOver.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .find(([, totals]) => totals.second >= totals.first)
+    insights.push({
+      title: 'Chase turning point',
+      value: turningOver ? `Over ${turningOver[0]} · chase caught up` : 'No catch-up point in available overs',
+      note: 'Compares cumulative innings 2 vs innings 1 over progression.',
+    })
+  } else {
+    insights.push({
+      title: 'Chase turning point',
+      value: 'Unavailable',
+      note: 'Needs both innings in over-level data with all-innings view.',
+    })
+  }
+
+  return insights
+})
 
 function chartMaxValue(bars: ChartBar[]): number {
   return Math.max(1, ...bars.map(bar => bar.value))
@@ -790,6 +1277,33 @@ async function loadAnalytics() {
 }
 
 watch(
+  availableInningsSet,
+  (set) => {
+    if (inningsFilter.value !== 'all' && !set.has(Number(inningsFilter.value))) {
+      inningsFilter.value = 'all'
+    }
+  },
+  { immediate: true },
+)
+
+watch(manhattanMode, (mode) => {
+  if (mode !== 'delivery_complete' && manhattanViewMode.value === 'delivery') {
+    manhattanViewMode.value = 'over'
+  }
+})
+
+watch(
+  scatterModeOptions,
+  (options) => {
+    if (!options.some(option => option.value === scatterViewMode.value && !option.disabled)) {
+      const fallback = options.find(option => !option.disabled)
+      scatterViewMode.value = fallback?.value ?? 'run_rate_vs_wickets'
+    }
+  },
+  { immediate: true },
+)
+
+watch(
   () => props.matchId,
   () => {
     void loadAnalytics()
@@ -833,6 +1347,34 @@ watch(
   display: flex;
   gap: var(--space-2);
   flex-wrap: wrap;
+}
+
+.analytics-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.analytics-filter {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.analytics-filter__label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.analytics-select {
+  min-width: 160px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: var(--radius-sm);
+  background: rgba(15, 23, 42, 0.85);
+  color: var(--color-text);
+  padding: 6px 8px;
 }
 
 .chart-tab {
@@ -1018,6 +1560,17 @@ watch(
   font-size: 12px;
 }
 
+.analytics-axis-tick {
+  fill: rgba(226, 232, 240, 0.82);
+  font-size: 11px;
+}
+
+.analytics-final-label {
+  fill: var(--color-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .analytics-legend {
   display: flex;
   flex-wrap: wrap;
@@ -1037,6 +1590,42 @@ watch(
   height: 12px;
   border-radius: 999px;
   display: inline-block;
+}
+
+.analytics-legend__hint {
+  color: var(--color-text-muted);
+}
+
+.analytics-howto {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: var(--text-sm);
+}
+
+.analytics-insights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-3);
+}
+
+.analytics-insight-card {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: rgba(15, 23, 42, 0.62);
+}
+
+.analytics-insight-title {
+  margin: 0 0 var(--space-1) 0;
+  color: #7dd3fc;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.analytics-insight-value {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 700;
 }
 
 @media (max-width: 768px) {

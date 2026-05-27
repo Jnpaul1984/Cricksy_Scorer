@@ -66,13 +66,18 @@ describe('AnalyticsTablesWidget', () => {
         { match_id: 'match-001', innings: 1, over_number: 1, ball_number: 4, total_runs: 2, wicket: false, extra_type: null },
         { match_id: 'match-001', innings: 1, over_number: 2, ball_number: 1, total_runs: 3, wicket: false, extra_type: null },
         { match_id: 'match-001', innings: 1, over_number: 2, ball_number: 2, total_runs: 6, wicket: false, extra_type: null },
+        { match_id: 'match-001', innings: 2, over_number: 1, ball_number: 1, total_runs: 2, wicket: false, extra_type: null },
+        { match_id: 'match-001', innings: 2, over_number: 1, ball_number: 2, total_runs: 1, wicket: false, extra_type: null },
+        { match_id: 'match-001', innings: 2, over_number: 2, ball_number: 1, total_runs: 4, wicket: true, extra_type: null },
+        { match_id: 'match-001', innings: 2, over_number: 2, ball_number: 2, total_runs: 1, wicket: false, extra_type: null },
       ],
-      total: 6,
+      total: 10,
       data_completeness: 'delivery_complete',
     })
     mockGetMatchCaseStudy.mockResolvedValue(buildCaseStudy({
       innings: [
         { team: 'Lions', runs: 16, wickets: 1, overs: 1, run_rate: 16 },
+        { team: 'Falcons', runs: 8, wickets: 1, overs: 1, run_rate: 8 },
       ],
       phases: [
         { id: 'powerplay', label: 'Powerplay', start_over: 1, end_over: 6, runs: 16, wickets: 1, run_rate: 16 },
@@ -93,14 +98,22 @@ describe('AnalyticsTablesWidget', () => {
 
     expect(wrapper.text()).toContain('Lions vs Falcons')
     expect(wrapper.text()).toContain('Total Runs')
-    expect(wrapper.text()).toContain('16')
+    expect(wrapper.text()).toContain('24')
     expect(wrapper.text()).toContain('Deliveries')
-    expect(wrapper.text()).toContain('6')
+    expect(wrapper.text()).toContain('10')
     expect(wrapper.text()).toContain('Run Rate')
-    expect(wrapper.text()).toContain('16.00')
+    expect(wrapper.text()).toContain('14.40')
     expect(wrapper.text()).toContain('Wickets')
-    expect(wrapper.text()).toContain('1')
+    expect(wrapper.text()).toContain('2')
+    expect(wrapper.text()).toContain('How to read this:')
+    expect(wrapper.text()).toContain('Best scoring period')
     expect(wrapper.text()).not.toContain('NaN')
+    expect(wrapper.findAll('.analytics-bar-chart__column')).toHaveLength(4)
+
+    const inningsSelect = wrapper.find('select[aria-label="Select innings"]')
+    await inningsSelect.setValue('1')
+    await nextTick()
+    expect(wrapper.text()).toContain('16')
     expect(wrapper.findAll('.analytics-bar-chart__column')).toHaveLength(2)
 
     const tabs = wrapper.findAll('.chart-tab')
@@ -111,6 +124,11 @@ describe('AnalyticsTablesWidget', () => {
     await tabs[2].trigger('click')
     await nextTick()
     expect(wrapper.findAll('circle').length).toBeGreaterThan(0)
+
+    const scatterModeSelect = wrapper.find('select[aria-label="Select Scatter mode"]')
+    await scatterModeSelect.setValue('delivery_index_vs_runs')
+    await nextTick()
+    expect(wrapper.text()).toContain('Delivery index')
   })
 
   it('falls back to phase-level analytics when delivery data is unavailable', async () => {
@@ -145,6 +163,9 @@ describe('AnalyticsTablesWidget', () => {
     expect(wrapper.findAll('.analytics-bar-chart__column')).toHaveLength(3)
     expect(wrapper.text()).toContain('Using phase summaries because delivery records are unavailable.')
     expect(wrapper.text()).not.toContain('NaN')
+
+    const inningsTwoOption = wrapper.find('select[aria-label="Select innings"] option[value="2"]')
+    expect((inningsTwoOption.element as HTMLOptionElement).disabled).toBe(true)
   })
 
   it('falls back to innings totals when only innings-level data exists', async () => {
