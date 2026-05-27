@@ -147,6 +147,59 @@ class SeasonAggregate(BaseModel):
     avg_wickets: float = 0.0
 
 
+class SeasonOutcomeStageMatch(BaseModel):
+    """Detected playoff/final-stage match metadata within a season."""
+
+    match_id: str
+    match_title: str
+    match_date: str | None = None
+    stage_label: str
+    result: str | None = None
+    winner_team_raw: str | None = None
+    winner_team_canonical: str | None = None
+    winner_confidence: Literal["high", "medium", "low", "none"] = "none"
+
+
+class SeasonOutcomeAggregate(BaseModel):
+    """Deterministic tournament season outcome intelligence."""
+
+    competition_code: str
+    competition_name: str
+    season: str | None = None
+    season_year: int | None = None
+    gender_category: str
+    champion_team_raw: str | None = None
+    champion_team_canonical: str | None = None
+    runner_up_team_raw: str | None = None
+    runner_up_team_canonical: str | None = None
+    final_match_id: str | None = None
+    final_match_title: str | None = None
+    final_match_date: str | None = None
+    final_result: str | None = None
+    league_table_leader_raw: str | None = None
+    league_table_leader_canonical: str | None = None
+    playoff_stage_matches_detected: list[SeasonOutcomeStageMatch] = Field(default_factory=list)
+    total_matches_in_season: int
+    outcome_source: str
+    confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    unresolved_reason: str | None = None
+
+
+class TrophySummaryAggregate(BaseModel):
+    """Deterministic trophy/finals summary by canonical franchise/team."""
+
+    canonical_team: str
+    raw_team_names_seen: list[str] = Field(default_factory=list)
+    trophies_detected: int = 0
+    finals_appearances_detected: int = 0
+    runner_up_finishes_detected: int = 0
+    seasons_won: list[str] = Field(default_factory=list)
+    competitions: list[str] = Field(default_factory=list)
+    competition_codes: list[str] = Field(default_factory=list)
+    gender_categories: list[str] = Field(default_factory=list)
+    confidence_notes: list[str] = Field(default_factory=list)
+
+
 class HistoricalStatsSummaryResponse(BaseModel):
     """Full deterministic historical stats summary.
 
@@ -172,6 +225,9 @@ class HistoricalStatsSummaryResponse(BaseModel):
     diagnostics: dict[str, int] = Field(default_factory=dict)
     top_team_by_wins: dict[str, Any] | None = None
     case_studies: list[dict[str, Any]] = Field(default_factory=list)
+    season_outcomes: list[SeasonOutcomeAggregate] = Field(default_factory=list)
+    trophy_summary: list[TrophySummaryAggregate] = Field(default_factory=list)
+    deterministic_outcome_insights: list[str] = Field(default_factory=list)
 
     generated_at: dt.datetime = Field(default_factory=lambda: dt.datetime.now(dt.UTC))
     note: str = (

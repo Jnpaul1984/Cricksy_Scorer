@@ -74,6 +74,34 @@
           </select>
         </div>
         <div class="cpld-filter-group">
+          <label class="cpld-filter-label" for="cpld-outcome-competition-select">Outcome competition</label>
+          <select
+            id="cpld-outcome-competition-select"
+            v-model="selectedOutcomeCompetition"
+            class="cpld-select"
+            aria-label="Filter outcome section by competition"
+          >
+            <option value="all">All competitions</option>
+            <option v-for="competition in availableOutcomeCompetitions" :key="competition" :value="competition">
+              {{ competition }}
+            </option>
+          </select>
+        </div>
+        <div class="cpld-filter-group">
+          <label class="cpld-filter-label" for="cpld-outcome-gender-select">Outcome gender</label>
+          <select
+            id="cpld-outcome-gender-select"
+            v-model="selectedOutcomeGender"
+            class="cpld-select"
+            aria-label="Filter outcome section by gender"
+          >
+            <option value="all">All categories</option>
+            <option v-for="gender in availableOutcomeGenders" :key="gender" :value="gender">
+              {{ gender }}
+            </option>
+          </select>
+        </div>
+        <div class="cpld-filter-group">
           <label class="cpld-filter-label" for="cpld-name-mode">Display mode</label>
           <select id="cpld-name-mode" v-model="continuityDisplayMode" class="cpld-select" aria-label="Select continuity display mode">
             <option value="canonical">Canonical continuity view</option>
@@ -317,6 +345,81 @@
             Import delivery data via the Import tab to improve completeness.
           </p>
         </div>
+      </section>
+
+      <section class="cpld-section" aria-label="Season outcome intelligence">
+        <h4 class="cpld-section-title">🏁 Season Outcome Intelligence</h4>
+        <p class="cpld-lb-note">Most wins is not automatically treated as champion.</p>
+
+        <div v-if="filteredSeasonOutcomes.length > 0" class="cpld-lb-table-wrap">
+          <table class="cpld-lb-table" aria-label="Season outcomes table">
+            <thead>
+              <tr>
+                <th>Competition</th>
+                <th>Season</th>
+                <th>Gender</th>
+                <th>Champion</th>
+                <th>Runner-up</th>
+                <th>Final</th>
+                <th>Source</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="outcome in filteredSeasonOutcomes" :key="`${outcome.competition_code}-${outcome.season ?? 'unknown'}`">
+                <td>{{ outcome.competition_name }}</td>
+                <td>{{ outcome.season ?? 'Unknown' }}</td>
+                <td>{{ outcome.gender_category }}</td>
+                <td>{{ outcome.champion_team_canonical ?? 'Unknown' }}</td>
+                <td>{{ outcome.runner_up_team_canonical ?? '—' }}</td>
+                <td>{{ outcome.final_match_title ?? 'Not detected' }}</td>
+                <td>{{ outcome.outcome_source }}</td>
+                <td>
+                  <span class="cpld-badge cpld-badge--imported">
+                    {{ outcome.confidence }}
+                  </span>
+                  <div v-if="outcome.unresolved_reason" class="cpld-lb-note">
+                    {{ outcome.unresolved_reason }}
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="cpld-insufficient">
+          No season outcomes available for current filters.
+        </div>
+
+        <h5 class="cpld-subsection-title">🏆 Trophy Summary</h5>
+        <div v-if="filteredTrophySummary.length > 0" class="cpld-lb-table-wrap">
+          <table class="cpld-lb-table" aria-label="Trophy summary table">
+            <thead>
+              <tr>
+                <th>Team</th>
+                <th>Trophies</th>
+                <th>Finals</th>
+                <th>Runner-up</th>
+                <th>Seasons won</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in filteredTrophySummary" :key="`${row.canonical_team}-${row.competition_codes.join(',')}-${row.gender_categories.join(',')}`">
+                <td>{{ row.canonical_team }}</td>
+                <td class="cpld-lb-stat">{{ row.trophies_detected }}</td>
+                <td class="cpld-lb-stat">{{ row.finals_appearances_detected }}</td>
+                <td class="cpld-lb-stat">{{ row.runner_up_finishes_detected }}</td>
+                <td class="cpld-lb-muted">{{ row.seasons_won.join(' · ') || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="cpld-insufficient">
+          Trophy summary unavailable for current filters.
+        </div>
+
+        <ul v-if="filteredOutcomeInsights.length > 0" class="cpld-fact-list">
+          <li v-for="insight in filteredOutcomeInsights" :key="insight">{{ insight }}</li>
+        </ul>
       </section>
 
       <section class="cpld-section" aria-label="Deterministic case studies">
@@ -1100,7 +1203,9 @@ import {
   type HistoricalStatsSummaryResponse,
   type HistoricalMatchAggregate,
   type HistoricalPlayerAggregate,
+  type HistoricalSeasonOutcomeAggregate,
   type HistoricalTeamAggregate,
+  type HistoricalTrophySummaryAggregate,
   type HistoricalVenueAggregate,
 } from '@/services/api'
 
@@ -1115,6 +1220,8 @@ const summary = ref<HistoricalStatsSummaryResponse | null>(null)
 const selectedSeason = ref('all')
 const selectedTeam = ref('all')
 const selectedVenue = ref('all')
+const selectedOutcomeCompetition = ref('all')
+const selectedOutcomeGender = ref('all')
 const selectedMatchId = ref('')
 const continuityDisplayMode = ref<'canonical' | 'raw'>('canonical')
 
@@ -1214,6 +1321,18 @@ const cplVenues = computed<HistoricalVenueAggregate[]>(() => {
   return summary.value.venues.filter(v => cplVenueNames.value.has(v.venue))
 })
 
+const cplSeasonOutcomes = computed<HistoricalSeasonOutcomeAggregate[]>(() => {
+  if (!summary.value) return []
+  return (summary.value.season_outcomes ?? []).filter(outcome => isCplCompetition(outcome.competition_name))
+})
+
+const cplTrophySummary = computed<HistoricalTrophySummaryAggregate[]>(() => {
+  if (!summary.value) return []
+  return (summary.value.trophy_summary ?? []).filter(row =>
+    row.competitions.some(competition => isCplCompetition(competition))
+  )
+})
+
 function teamNameForMode(match: HistoricalMatchAggregate, side: 'a' | 'b'): string | null {
   const rawName = side === 'a' ? match.team_a : match.team_b
   if (continuityDisplayMode.value === 'raw') return rawName ?? null
@@ -1258,6 +1377,22 @@ const availableVenues = computed(() => {
   return [...venues].sort()
 })
 
+const availableOutcomeCompetitions = computed(() => {
+  const competitions = new Set<string>()
+  cplSeasonOutcomes.value.forEach(outcome => {
+    if (outcome.competition_name) competitions.add(outcome.competition_name)
+  })
+  return [...competitions].sort()
+})
+
+const availableOutcomeGenders = computed(() => {
+  const genders = new Set<string>()
+  cplSeasonOutcomes.value.forEach(outcome => {
+    if (outcome.gender_category) genders.add(outcome.gender_category)
+  })
+  return [...genders].sort()
+})
+
 // ---------------------------------------------------------------------------
 // Filtered data
 // ---------------------------------------------------------------------------
@@ -1272,6 +1407,71 @@ const filteredMatches = computed(() => {
     ) return false
     if (selectedVenue.value !== 'all' && venueNameForMode(m) !== selectedVenue.value) return false
     return true
+  })
+})
+
+const filteredSeasonOutcomes = computed(() => {
+  return cplSeasonOutcomes.value.filter(outcome => {
+    if (selectedSeason.value !== 'all' && outcome.season !== selectedSeason.value) return false
+    if (selectedOutcomeCompetition.value !== 'all' && outcome.competition_name !== selectedOutcomeCompetition.value) return false
+    if (selectedOutcomeGender.value !== 'all' && outcome.gender_category !== selectedOutcomeGender.value) return false
+    if (selectedTeam.value !== 'all') {
+      const names = [
+        outcome.champion_team_canonical,
+        outcome.champion_team_raw,
+        outcome.runner_up_team_canonical,
+        outcome.runner_up_team_raw,
+        outcome.league_table_leader_canonical,
+        outcome.league_table_leader_raw,
+      ].filter(Boolean)
+      if (!names.includes(selectedTeam.value)) return false
+    }
+    return true
+  })
+})
+
+const filteredTrophySummary = computed(() => {
+  const seasonScopedTeams = new Set<string>()
+  filteredSeasonOutcomes.value.forEach(outcome => {
+    if (outcome.champion_team_canonical) seasonScopedTeams.add(outcome.champion_team_canonical)
+    if (outcome.runner_up_team_canonical) seasonScopedTeams.add(outcome.runner_up_team_canonical)
+  })
+  return cplTrophySummary.value.filter(row => {
+    if (
+      selectedOutcomeCompetition.value !== 'all'
+      && !row.competitions.includes(selectedOutcomeCompetition.value)
+    ) return false
+    if (selectedOutcomeGender.value !== 'all' && !row.gender_categories.includes(selectedOutcomeGender.value)) return false
+    if (selectedTeam.value !== 'all') {
+      if (row.canonical_team !== selectedTeam.value && !row.raw_team_names_seen.includes(selectedTeam.value)) {
+        return false
+      }
+    }
+    if (selectedSeason.value !== 'all' && seasonScopedTeams.size > 0 && !seasonScopedTeams.has(row.canonical_team)) {
+      return false
+    }
+    return true
+  })
+})
+
+const filteredOutcomeInsights = computed(() => {
+  const backendInsights = summary.value?.deterministic_outcome_insights ?? []
+  if (selectedSeason.value === 'all' && selectedTeam.value === 'all' && selectedOutcomeCompetition.value === 'all' && selectedOutcomeGender.value === 'all') {
+    return backendInsights
+  }
+  return filteredSeasonOutcomes.value.flatMap(outcome => {
+    const label = `${outcome.competition_name} ${outcome.season ?? 'unknown season'}`
+    if (outcome.champion_team_canonical) {
+      const lines = [`Champion detected from final match result for ${label}.`]
+      if (
+        outcome.league_table_leader_canonical
+        && outcome.league_table_leader_canonical !== outcome.champion_team_canonical
+      ) {
+        lines.push(`Most wins and detected champion differ for ${label}.`)
+      }
+      return lines
+    }
+    return [`Champion unknown for ${label} because ${outcome.unresolved_reason ?? 'insufficient final-stage evidence.'}`]
   })
 })
 
@@ -2097,6 +2297,8 @@ function resetFilters() {
   selectedSeason.value = 'all'
   selectedTeam.value = 'all'
   selectedVenue.value = 'all'
+  selectedOutcomeCompetition.value = 'all'
+  selectedOutcomeGender.value = 'all'
   selectedMatchId.value = ''
   continuityDisplayMode.value = 'canonical'
 }

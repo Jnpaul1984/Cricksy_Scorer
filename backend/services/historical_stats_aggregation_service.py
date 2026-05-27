@@ -35,9 +35,13 @@ from backend.api.schemas.historical_stats import (
     MatchAggregate,
     PlayerAggregate,
     SeasonAggregate,
+    SeasonOutcomeAggregate,
+    SeasonOutcomeStageMatch,
     TeamAggregate,
+    TrophySummaryAggregate,
     VenueAggregate,
 )
+from backend.services.analyst_registry_service import classify_competition, classify_gender
 from backend.services.cpl_team_alias_registry import canonicalize_team_name, normalize_team_name
 from backend.services.cpl_venue_alias_registry import canonicalize_venue_name
 from backend.services.analyst_access import scoped_games_stmt
@@ -50,6 +54,11 @@ _METADATA_ONLY_STATUSES: frozenset[str] = frozenset(
     {"scanned", "metadata_extracted", "pending_full_import"}
 )
 _SEASON_YEAR_RE = re.compile(r"(?:19|20)\d{2}")
+_FINAL_STAGE_RE = re.compile(r"\bgrand\s+final\b|\bfinal\b", re.I)
+_SEMI_FINAL_STAGE_RE = re.compile(r"\bsemi[\s-]?final\b", re.I)
+_QUALIFIER_STAGE_RE = re.compile(r"\bqualifier\b", re.I)
+_ELIMINATOR_STAGE_RE = re.compile(r"\beliminator\b", re.I)
+_PLAYOFF_STAGE_RE = re.compile(r"\bplay[\s-]?off\b|\bknock[\s-]?out\b", re.I)
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +191,255 @@ def _derive_winner(
             return candidate, candidate_canonical, "medium"
 
     return None, None, "none"
+
+
+def _season_year_value(season: str | None) -> int | None:
+    if not season:
+        return None
+    match = _SEASON_YEAR_RE.search(season)
+    return int(match.group(0)) if match else None
+
+
+def _detect_stage_label(meta: dict[str, Any], match_title: str | None = None) -> str | None:
+    candidates: list[str] = []
+    for key in ("competition_stage", "tournament_round"):
+        value = meta.get(key)
+        if isinstance(value, str) and value.strip():
+            candidates.append(value.strip())
+    if match_title:
+        candidates.append(match_title)
+
+    for text in candidates:
+        if _SEMI_FINAL_STAGE_RE.search(text):
+            return "Semi Final"
+        if _QUALIFIER_STAGE_RE.search(text):
+            return "Qualifier"
+        if _ELIMINATOR_STAGE_RE.search(text):
+            return "Eliminator"
+        if _PLAYOFF_STAGE_RE.search(text):
+            return "Playoff"
+        if _FINAL_STAGE_RE.search(text):
+            return "Final"
+    return None
+
+
+def _is_final_stage(stage_label: str | None) -> bool:
+    if not stage_label:
+        return False
+    lowered = stage_label.lower()
+    return "final" in lowered and "semi" not in lowered
+
+
+def _build_season_outcomes(
+    eligible_games: list[tuple[Game, HistoricalImportBatch, dict[str, Any]]],
+    match_aggregates: list[MatchAggregate],
+) -> list[SeasonOutcomeAggregate]:
+    match_by_id: dict[str, MatchAggregate] = {match.match_id: match for match in match_aggregates}
+    grouped: dict[
+        tuple[str, str, str, str | None, int | None],
+        list[tuple[Game, dict[str, Any], MatchAggregate]],
+    ] = defaultdict(list)
+
+    for game, _batch, meta in eligible_games:
+        match = match_by_id.get(game.id)
+        if match is None:
+            continue
+        event_name = meta.get("event_name") if isinstance(meta.get("event_name"), str) else None
+        competition_code, competition_name = classify_competition(event_name)
+        gender_category = classify_gender(competition_code, meta.get("gender"))
+        season_value = match.season
+        season_year = _season_year_value(season_value)
+        grouped[(competition_code, competition_name, gender_category, season_value, season_year)].append(
+            (game, meta, match)
+        )
+
+    outcomes: list[SeasonOutcomeAggregate] = []
+    for (
+        competition_code,
+        competition_name,
+        gender_category,
+        season_value,
+        season_year,
+    ), grouped_matches in sorted(grouped.items(), key=lambda item: (item[0][1], item[0][3] or "", item[0][2])):
+        playoff_stage_matches: list[SeasonOutcomeStageMatch] = []
+        final_candidates: list[tuple[Game, MatchAggregate, str]] = []
+        winner_counts: dict[str, int] = defaultdict(int)
+        winner_raws: dict[str, set[str]] = defaultdict(set)
+
+        for game, meta, match in grouped_matches:
+            stage_label = _detect_stage_label(meta, f"{match.team_a or 'Team A'} vs {match.team_b or 'Team B'}")
+            if stage_label:
+                playoff_stage_matches.append(
+                    SeasonOutcomeStageMatch(
+                        match_id=match.match_id,
+                        match_title=f"{match.team_a or 'Team A'} vs {match.team_b or 'Team B'}",
+                        match_date=match.match_date,
+                        stage_label=stage_label,
+                        result=game.result,
+                        winner_team_raw=match.winner_team,
+                        winner_team_canonical=match.winner_team_canonical,
+                        winner_confidence=match.winner_confidence,
+                    )
+                )
+                if _is_final_stage(stage_label):
+                    final_candidates.append((game, match, stage_label))
+
+            if match.winner_team_canonical:
+                winner_counts[match.winner_team_canonical] += 1
+                if match.winner_team:
+                    winner_raws[match.winner_team_canonical].add(match.winner_team)
+
+        league_leader_canonical: str | None = None
+        league_leader_raw: str | None = None
+        if winner_counts:
+            sorted_wins = sorted(winner_counts.items(), key=lambda item: (-item[1], item[0]))
+            if len(sorted_wins) == 1 or sorted_wins[0][1] > sorted_wins[1][1]:
+                league_leader_canonical = sorted_wins[0][0]
+                league_leader_raw = sorted(winner_raws.get(league_leader_canonical, set()))[0] if winner_raws.get(league_leader_canonical) else league_leader_canonical
+
+        champion_team_raw: str | None = None
+        champion_team_canonical: str | None = None
+        runner_up_team_raw: str | None = None
+        runner_up_team_canonical: str | None = None
+        final_match_id: str | None = None
+        final_match_title: str | None = None
+        final_match_date: str | None = None
+        final_result: str | None = None
+        unresolved_reason: str | None = None
+        outcome_source = "final_not_detected"
+        confidence: str = "unknown"
+
+        if len(final_candidates) == 1:
+            final_game, final_match, _final_stage = final_candidates[0]
+            final_match_id = final_match.match_id
+            final_match_title = f"{final_match.team_a or 'Team A'} vs {final_match.team_b or 'Team B'}"
+            final_match_date = final_match.match_date
+            final_result = final_game.result
+            if final_match.winner_team_canonical:
+                champion_team_raw = final_match.winner_team
+                champion_team_canonical = final_match.winner_team_canonical
+
+                team_a_canonical = final_match.team_a_canonical or final_match.team_a
+                team_b_canonical = final_match.team_b_canonical or final_match.team_b
+                if champion_team_canonical == team_a_canonical:
+                    runner_up_team_raw = final_match.team_b
+                    runner_up_team_canonical = final_match.team_b_canonical or final_match.team_b
+                elif champion_team_canonical == team_b_canonical:
+                    runner_up_team_raw = final_match.team_a
+                    runner_up_team_canonical = final_match.team_a_canonical or final_match.team_a
+
+                outcome_source = "detected_final_result"
+                confidence = "high" if final_match.winner_confidence == "high" else "medium"
+            else:
+                unresolved_reason = (
+                    "Final-stage match detected but winner could not be parsed from result text."
+                )
+                outcome_source = "final_without_parsed_winner"
+                confidence = "low"
+        elif len(final_candidates) > 1:
+            unresolved_reason = "Multiple final-stage matches were detected; champion is unresolved."
+            outcome_source = "multiple_final_candidates"
+            confidence = "low"
+        else:
+            unresolved_reason = "No final-stage match was identified from available metadata."
+
+        outcomes.append(
+            SeasonOutcomeAggregate(
+                competition_code=competition_code,
+                competition_name=competition_name,
+                season=season_value,
+                season_year=season_year,
+                gender_category=gender_category,
+                champion_team_raw=champion_team_raw,
+                champion_team_canonical=champion_team_canonical,
+                runner_up_team_raw=runner_up_team_raw,
+                runner_up_team_canonical=runner_up_team_canonical,
+                final_match_id=final_match_id,
+                final_match_title=final_match_title,
+                final_match_date=final_match_date,
+                final_result=final_result,
+                league_table_leader_raw=league_leader_raw,
+                league_table_leader_canonical=league_leader_canonical,
+                playoff_stage_matches_detected=sorted(
+                    playoff_stage_matches,
+                    key=lambda row: (row.match_date or "", row.stage_label, row.match_id),
+                ),
+                total_matches_in_season=len(grouped_matches),
+                outcome_source=outcome_source,
+                confidence=confidence,  # type: ignore[arg-type]
+                unresolved_reason=unresolved_reason,
+            )
+        )
+
+    return outcomes
+
+
+def _build_trophy_summary(outcomes: list[SeasonOutcomeAggregate]) -> list[TrophySummaryAggregate]:
+    trophy_rows: dict[tuple[str, str, str], TrophySummaryAggregate] = {}
+
+    for outcome in outcomes:
+        teams_to_index: set[str] = set()
+        if outcome.champion_team_canonical:
+            teams_to_index.add(outcome.champion_team_canonical)
+        if outcome.runner_up_team_canonical:
+            teams_to_index.add(outcome.runner_up_team_canonical)
+
+        for canonical_team in teams_to_index:
+            key = (canonical_team, outcome.competition_code, outcome.gender_category)
+            if key not in trophy_rows:
+                trophy_rows[key] = TrophySummaryAggregate(
+                    canonical_team=canonical_team,
+                    competitions=[outcome.competition_name],
+                    competition_codes=[outcome.competition_code],
+                    gender_categories=[outcome.gender_category],
+                    confidence_notes=[
+                        "Trophy counts are based only on detected finals, not inferred standings."
+                    ],
+                )
+            row = trophy_rows[key]
+
+            raw_names = set(row.raw_team_names_seen)
+            if canonical_team == outcome.champion_team_canonical and outcome.champion_team_raw:
+                raw_names.add(outcome.champion_team_raw)
+                row.finals_appearances_detected += 1
+                row.trophies_detected += 1
+                season_label = f"{outcome.competition_name} {outcome.season or 'unknown season'}"
+                if season_label not in row.seasons_won:
+                    row.seasons_won.append(season_label)
+            if canonical_team == outcome.runner_up_team_canonical:
+                if outcome.runner_up_team_raw:
+                    raw_names.add(outcome.runner_up_team_raw)
+                row.finals_appearances_detected += 1
+                row.runner_up_finishes_detected += 1
+            row.raw_team_names_seen = sorted(raw_names)
+
+    return sorted(
+        trophy_rows.values(),
+        key=lambda row: (-row.trophies_detected, -row.finals_appearances_detected, row.canonical_team),
+    )
+
+
+def _build_deterministic_outcome_insights(outcomes: list[SeasonOutcomeAggregate]) -> list[str]:
+    insights: list[str] = []
+    for outcome in outcomes:
+        label = f"{outcome.competition_name} {outcome.season or 'unknown season'}"
+        if outcome.champion_team_canonical:
+            insights.append(f"Champion detected from final match result for {label}.")
+            if (
+                outcome.league_table_leader_canonical
+                and outcome.league_table_leader_canonical != outcome.champion_team_canonical
+            ):
+                insights.append(
+                    "Most wins and detected champion differ for "
+                    f"{label}: league leader {outcome.league_table_leader_canonical}, "
+                    f"champion {outcome.champion_team_canonical}."
+                )
+        else:
+            reason = outcome.unresolved_reason or "insufficient final-stage evidence."
+            insights.append(f"Champion unknown for {label} because {reason}")
+    if outcomes:
+        insights.append("Trophy counts are based only on detected finals, not inferred standings.")
+    return insights
 
 
 def _build_innings_aggregates(
@@ -917,6 +1175,9 @@ async def get_historical_stats_summary(
     competition_aggregates = _build_competition_aggregates(eligible_games)
     season_aggregates = _build_season_aggregates(eligible_games)
     case_studies = _build_case_studies(match_aggregates, venue_aggregates)
+    season_outcomes = _build_season_outcomes(eligible_games, match_aggregates)
+    trophy_summary = _build_trophy_summary(season_outcomes)
+    deterministic_outcome_insights = _build_deterministic_outcome_insights(season_outcomes)
 
     winner_counts: dict[str, int] = defaultdict(int)
     for match in match_aggregates:
@@ -965,6 +1226,13 @@ async def get_historical_stats_summary(
         "season_grouped_from_metadata": season_grouped_from_metadata,
         "season_grouped_from_match_date": season_grouped_from_match_date,
         "season_grouped_missing": season_grouped_missing,
+        "season_outcomes_detected": len(season_outcomes),
+        "season_outcomes_with_champion": sum(
+            1 for outcome in season_outcomes if outcome.champion_team_canonical
+        ),
+        "season_outcomes_unresolved": sum(
+            1 for outcome in season_outcomes if not outcome.champion_team_canonical
+        ),
     }
 
     return HistoricalStatsSummaryResponse(
@@ -980,6 +1248,9 @@ async def get_historical_stats_summary(
         diagnostics=diagnostics,
         top_team_by_wins=top_team_by_wins,
         case_studies=case_studies,
+        season_outcomes=season_outcomes,
+        trophy_summary=trophy_summary,
+        deterministic_outcome_insights=deterministic_outcome_insights,
         generated_at=dt.datetime.now(dt.UTC),
     )
 
