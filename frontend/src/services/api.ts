@@ -1100,6 +1100,53 @@ export interface HistoricalSeasonAggregate {
   avg_wickets: number;
 }
 
+export interface HistoricalSeasonOutcomeStageMatch {
+  match_id: string;
+  match_title: string;
+  match_date: string | null;
+  stage_label: string;
+  result: string | null;
+  winner_team_raw: string | null;
+  winner_team_canonical: string | null;
+  winner_confidence: 'high' | 'medium' | 'low' | 'none';
+}
+
+export interface HistoricalSeasonOutcomeAggregate {
+  competition_code: string;
+  competition_name: string;
+  season: string | null;
+  season_year: number | null;
+  gender_category: string;
+  champion_team_raw: string | null;
+  champion_team_canonical: string | null;
+  runner_up_team_raw: string | null;
+  runner_up_team_canonical: string | null;
+  final_match_id: string | null;
+  final_match_title: string | null;
+  final_match_date: string | null;
+  final_result: string | null;
+  league_table_leader_raw: string | null;
+  league_table_leader_canonical: string | null;
+  playoff_stage_matches_detected: HistoricalSeasonOutcomeStageMatch[];
+  total_matches_in_season: number;
+  outcome_source: string;
+  confidence: 'high' | 'medium' | 'low' | 'unknown';
+  unresolved_reason: string | null;
+}
+
+export interface HistoricalTrophySummaryAggregate {
+  canonical_team: string;
+  raw_team_names_seen: string[];
+  trophies_detected: number;
+  finals_appearances_detected: number;
+  runner_up_finishes_detected: number;
+  seasons_won: string[];
+  competitions: string[];
+  competition_codes: string[];
+  gender_categories: string[];
+  confidence_notes: string[];
+}
+
 /**
  * Full deterministic historical stats summary.
  * Mirrors backend HistoricalStatsSummaryResponse schema.
@@ -1129,6 +1176,9 @@ export interface HistoricalStatsSummaryResponse {
     source: string;
     context: string;
   }>;
+  season_outcomes?: HistoricalSeasonOutcomeAggregate[];
+  trophy_summary?: HistoricalTrophySummaryAggregate[];
+  deterministic_outcome_insights?: string[];
   generated_at: string;
   note: string;
 }

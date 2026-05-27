@@ -133,6 +133,8 @@ def _make_cpl_fixture(
     winner: str | None = None,
     venue: str | None = None,
     match_date: str | None = None,
+    competition_stage: str | None = None,
+    round_label: str | None = None,
 ) -> dict[str, Any]:
     """Return a CPL-tagged fixture variant.
 
@@ -147,6 +149,10 @@ def _make_cpl_fixture(
     if isinstance(event, dict):
         event["match_number"] = match_number
         event["name"] = "Caribbean Premier League"
+        if competition_stage:
+            event["stage"] = competition_stage
+        if round_label:
+            event["round"] = round_label
     if season is None:
         info.pop("season", None)
         fixture.pop("season", None)
@@ -234,6 +240,9 @@ def test_summary_schema_fields_present(client: TestClient) -> None:
         "venues",
         "competitions",
         "seasons",
+        "season_outcomes",
+        "trophy_summary",
+        "deterministic_outcome_insights",
         "generated_at",
         "note",
     ]
@@ -534,3 +543,114 @@ def test_summary_season_grouping_prefers_metadata_then_match_date_fallback(clien
     assert "2026" in seasons
     assert data["diagnostics"]["season_grouped_from_metadata"] >= 1
     assert data["diagnostics"]["season_grouped_from_match_date"] >= 1
+
+
+def test_season_outcome_uses_final_winner_not_most_wins(client: TestClient) -> None:
+    token = _analyst_token(client)
+    _apply_fixture(
+        client,
+        token,
+        _make_cpl_fixture(
+            match_number=81,
+            season="2024",
+            team_a="Barbados Royals",
+            team_b="Guyana Amazon Warriors",
+            winner="Barbados Royals",
+            competition_stage="League",
+        ),
+    )
+    _apply_fixture(
+        client,
+        token,
+        _make_cpl_fixture(
+            match_number=82,
+            season="2024",
+            team_a="Barbados Royals",
+            team_b="Trinbago Knight Riders",
+            winner="Barbados Royals",
+            competition_stage="League",
+        ),
+    )
+    _batch_id_final, final_game_id = _apply_fixture(
+        client,
+        token,
+        _make_cpl_fixture(
+            match_number=83,
+            season="2024",
+            team_a="Barbados Royals",
+            team_b="Trinbago Knight Riders",
+            winner="Trinbago Knight Riders",
+            competition_stage="Final",
+        ),
+    )
+
+    resp = client.get("/analytics/historical-stats/summary", headers=_auth_headers(token))
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+
+    season_outcomes = [
+        o for o in data["season_outcomes"] if o["competition_code"] == "CPL_MEN" and o["season"] == "2024"
+    ]
+    assert len(season_outcomes) == 1
+    outcome = season_outcomes[0]
+    assert outcome["champion_team_canonical"] == "Trinbago Knight Riders"
+    assert outcome["runner_up_team_canonical"] == "Barbados Royals"
+    assert outcome["final_match_id"] == final_game_id
+    assert outcome["confidence"] in {"high", "medium"}
+
+    assert data["top_team_by_wins"]["team_name"] == "Barbados Royals"
+    assert any(
+        "Most wins and detected champion differ" in insight
+        for insight in data.get("deterministic_outcome_insights", [])
+    )
+
+    trophy_rows = {
+        row["canonical_team"]: row
+        for row in data.get("trophy_summary", [])
+        if row["competition_codes"] == ["CPL_MEN"]
+    }
+    assert trophy_rows["Trinbago Knight Riders"]["trophies_detected"] >= 1
+    assert trophy_rows["Barbados Royals"]["runner_up_finishes_detected"] >= 1
+
+
+def test_season_outcome_unknown_when_final_not_detected(client: TestClient) -> None:
+    token = _analyst_token(client)
+    _apply_fixture(
+        client,
+        token,
+        _make_cpl_fixture(
+            match_number=91,
+            season="2025",
+            team_a="Jamaica Tallawahs",
+            team_b="Guyana Amazon Warriors",
+            winner="Jamaica Tallawahs",
+            competition_stage="League",
+        ),
+    )
+    _apply_fixture(
+        client,
+        token,
+        _make_cpl_fixture(
+            match_number=92,
+            season="2025",
+            team_a="Trinbago Knight Riders",
+            team_b="Barbados Royals",
+            winner="Barbados Royals",
+            competition_stage="League",
+        ),
+    )
+
+    resp = client.get("/analytics/historical-stats/summary", headers=_auth_headers(token))
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+
+    outcome = next(
+        o for o in data["season_outcomes"] if o["competition_code"] == "CPL_MEN" and o["season"] == "2025"
+    )
+    assert outcome["champion_team_canonical"] is None
+    assert outcome["confidence"] == "unknown"
+    assert "No final-stage match" in (outcome["unresolved_reason"] or "")
+    assert any(
+        "Champion unknown for Caribbean Premier League 2025 because" in insight
+        for insight in data.get("deterministic_outcome_insights", [])
+    )

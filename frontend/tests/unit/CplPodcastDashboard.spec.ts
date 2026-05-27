@@ -241,6 +241,60 @@ function cplSummary(): HistoricalStatsSummaryResponse {
         context: 'Derived from innings total runs in validated historical imports.',
       },
     ],
+    season_outcomes: [
+      {
+        competition_code: 'CPL_MEN',
+        competition_name: 'Caribbean Premier League',
+        season: '2023',
+        season_year: 2023,
+        gender_category: 'men',
+        champion_team_raw: 'Trinbago Knight Riders',
+        champion_team_canonical: 'Trinbago Knight Riders',
+        runner_up_team_raw: 'Barbados Royals',
+        runner_up_team_canonical: 'Barbados Royals',
+        final_match_id: 'cpl-match-1',
+        final_match_title: 'Trinbago Knight Riders vs Barbados Royals',
+        final_match_date: '2023-08-01',
+        final_result: 'Trinbago Knight Riders won by 30 runs',
+        league_table_leader_raw: 'Barbados Royals',
+        league_table_leader_canonical: 'Barbados Royals',
+        playoff_stage_matches_detected: [
+          {
+            match_id: 'cpl-match-1',
+            match_title: 'Trinbago Knight Riders vs Barbados Royals',
+            match_date: '2023-08-01',
+            stage_label: 'Final',
+            result: 'Trinbago Knight Riders won by 30 runs',
+            winner_team_raw: 'Trinbago Knight Riders',
+            winner_team_canonical: 'Trinbago Knight Riders',
+            winner_confidence: 'high',
+          },
+        ],
+        total_matches_in_season: 2,
+        outcome_source: 'detected_final_result',
+        confidence: 'high',
+        unresolved_reason: null,
+      },
+    ],
+    trophy_summary: [
+      {
+        canonical_team: 'Trinbago Knight Riders',
+        raw_team_names_seen: ['Trinbago Knight Riders'],
+        trophies_detected: 1,
+        finals_appearances_detected: 1,
+        runner_up_finishes_detected: 0,
+        seasons_won: ['Caribbean Premier League 2023'],
+        competitions: ['Caribbean Premier League'],
+        competition_codes: ['CPL_MEN'],
+        gender_categories: ['men'],
+        confidence_notes: ['Trophy counts are based only on detected finals, not inferred standings.'],
+      },
+    ],
+    deterministic_outcome_insights: [
+      'Champion detected from final match result for Caribbean Premier League 2023.',
+      'Most wins and detected champion differ for Caribbean Premier League 2023: league leader Barbados Royals, champion Trinbago Knight Riders.',
+      'Trophy counts are based only on detected finals, not inferred standings.',
+    ],
     generated_at: '2026-01-01T00:00:00Z',
     note: 'Deterministic on-demand aggregation from validated historical match data only.',
   };
@@ -1214,5 +1268,57 @@ describe('CplPodcastDashboard', () => {
 
     const seasonSection = wrapper.find('[aria-label="Season summary"]');
     expect(seasonSection.text()).toContain('All-time CPL');
+  });
+
+  it('renders season outcome and trophy intelligence sections', async () => {
+    mockGetHistoricalStatsSummary.mockResolvedValue(cplSummary());
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    const outcomeSection = wrapper.find('[aria-label="Season outcome intelligence"]');
+    expect(outcomeSection.exists()).toBe(true);
+    expect(outcomeSection.text()).toContain('Most wins is not automatically treated as champion.');
+    expect(outcomeSection.text()).toContain('Trinbago Knight Riders');
+    expect(outcomeSection.text()).toContain('detected_final_result');
+    expect(outcomeSection.text()).toContain('Trophy Summary');
+  });
+
+  it('shows unresolved outcome reason when champion is unknown', async () => {
+    const summary = cplSummary();
+    summary.season_outcomes = [
+      {
+        competition_code: 'CPL_MEN',
+        competition_name: 'Caribbean Premier League',
+        season: '2024',
+        season_year: 2024,
+        gender_category: 'men',
+        champion_team_raw: null,
+        champion_team_canonical: null,
+        runner_up_team_raw: null,
+        runner_up_team_canonical: null,
+        final_match_id: null,
+        final_match_title: null,
+        final_match_date: null,
+        final_result: null,
+        league_table_leader_raw: 'Barbados Royals',
+        league_table_leader_canonical: 'Barbados Royals',
+        playoff_stage_matches_detected: [],
+        total_matches_in_season: 4,
+        outcome_source: 'final_not_detected',
+        confidence: 'unknown',
+        unresolved_reason: 'No final-stage match was identified from available metadata.',
+      },
+    ];
+    summary.trophy_summary = [];
+    summary.deterministic_outcome_insights = [
+      'Champion unknown for Caribbean Premier League 2024 because No final-stage match was identified from available metadata.',
+    ];
+    mockGetHistoricalStatsSummary.mockResolvedValue(summary);
+    const wrapper = mount(CplPodcastDashboard);
+    await flushPromises();
+
+    const outcomeSection = wrapper.find('[aria-label="Season outcome intelligence"]');
+    expect(outcomeSection.text()).toContain('Unknown');
+    expect(outcomeSection.text()).toContain('No final-stage match was identified from available metadata.');
   });
 });
