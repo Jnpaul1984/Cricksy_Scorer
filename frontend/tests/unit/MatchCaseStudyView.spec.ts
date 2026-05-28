@@ -105,6 +105,8 @@ const groundedAiSummary = {
   },
 }
 
+const clipboardWriteMock = vi.fn()
+
 async function flushAsync() {
   // The view loads case-study data and AI summary in separate onMounted async calls,
   // so two microtask/tick rounds keep the test aligned with the component lifecycle.
@@ -120,6 +122,11 @@ describe('MatchCaseStudyView', () => {
     __resetAiInsightCacheForTests()
     pushMock.mockReset()
     backMock.mockReset()
+    clipboardWriteMock.mockReset()
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: clipboardWriteMock },
+      configurable: true,
+    })
   })
 
   it('renders advisory evidence when ai grounding metadata is present', async () => {
@@ -344,5 +351,48 @@ describe('MatchCaseStudyView', () => {
     expect(wrapper.text()).toContain('Innings 2 summary')
     expect(wrapper.text()).toContain('I2 dismissals')
     expect(wrapper.text()).toContain('I2 callout')
+  })
+
+  it('renders podcast prep assistant and generates reviewable cards', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(baseCaseStudy as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
+    await flushAsync()
+
+    expect(wrapper.find('#cs-podcast-prep').exists()).toBe(true)
+    expect(wrapper.text()).toContain('AI wording only. Facts come from deterministic match data and require human review before use.')
+
+    await wrapper.get('[data-testid="podcast-generate-btn"]').trigger('click')
+    await flushAsync()
+
+    const cards = wrapper.findAll('[data-testid^="podcast-card-"]')
+    expect(cards.length).toBe(9)
+    expect(wrapper.text()).toContain('Needs review / rejected (9)')
+  })
+
+  it('exports approved podcast rundown only by default', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(baseCaseStudy as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
+    await flushAsync()
+
+    await wrapper.get('[data-testid="podcast-generate-btn"]').trigger('click')
+    await flushAsync()
+
+    await wrapper.get('[data-testid="podcast-approve-opening-hook"]').trigger('click')
+    await flushAsync()
+
+    await wrapper.get('[data-testid="podcast-copy-markdown"]').trigger('click')
+    expect(clipboardWriteMock).toHaveBeenCalled()
+    const copiedDefault = clipboardWriteMock.mock.calls.at(-1)?.[0] as string
+    expect(copiedDefault).toContain('Opening hook')
+    expect(copiedDefault).not.toContain('Match context')
+
+    await wrapper.get('.cs-podcast-export-toggle input').setValue(true)
+    await wrapper.get('[data-testid="podcast-copy-markdown"]').trigger('click')
+    const copiedWithDrafts = clipboardWriteMock.mock.calls.at(-1)?.[0] as string
+    expect(copiedWithDrafts).toContain('Match context')
   })
 })

@@ -424,6 +424,247 @@
             </table>
           </div>
         </BaseCard>
+
+        <BaseCard padding="lg" class="cs-panel cs-podcast-panel" id="cs-podcast-prep">
+          <div class="cs-podcast-header">
+            <div>
+              <h2 class="cs-panel-title">Podcast Match Prep Assistant</h2>
+              <p class="cs-panel-subtitle">
+                AI wording only. Facts come from deterministic match data and require human review before use.
+              </p>
+            </div>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              data-testid="podcast-generate-btn"
+              :disabled="podcastFactBundle.length === 0"
+              @click="generatePodcastPrep"
+            >
+              Generate talking points
+            </BaseButton>
+          </div>
+
+          <p class="cs-footnote">
+            Fact bundle: {{ podcastFactBundle.length }} deterministic fact{{ podcastFactBundle.length === 1 ? '' : 's' }}.
+            <span v-if="podcastUsesTemplateFallback">Template fallback active (AI provider unavailable).</span>
+            <span v-else>Guarded draft mode active. All items still require review.</span>
+          </p>
+
+          <div v-if="podcastFactBundle.length" class="cs-podcast-fact-tags">
+            <BaseBadge
+              v-for="fact in podcastFactBundle"
+              :key="fact.id"
+              variant="neutral"
+              :uppercase="false"
+              class="cs-podcast-fact-tag"
+              :title="fact.value"
+            >
+              {{ fact.source }}
+            </BaseBadge>
+          </div>
+          <p v-else class="cs-empty-hint">No deterministic facts available for podcast prep yet.</p>
+
+          <p v-if="podcastGeneratedAt" class="cs-footnote">Draft generated {{ podcastGeneratedAt }}</p>
+          <p v-if="podcastCopyStatus" class="cs-footnote">{{ podcastCopyStatus }}</p>
+
+          <div v-if="podcastCards.length" class="cs-podcast-review-grid">
+            <section class="cs-podcast-review-column">
+              <h3 class="cs-ai-section-title">Needs review / rejected ({{ unapprovedPodcastCards.length }})</h3>
+              <article
+                v-for="card in unapprovedPodcastCards"
+                :key="`pending-${card.id}`"
+                class="cs-podcast-card"
+                :data-testid="`podcast-card-${card.id}`"
+              >
+                <div class="cs-podcast-card-header">
+                  <p class="cs-podcast-card-title">{{ card.title }}</p>
+                  <BaseBadge
+                    :variant="card.status === 'rejected' ? 'danger' : 'warning'"
+                    :uppercase="false"
+                  >
+                    {{ card.status === 'rejected' ? 'Rejected' : 'Needs review' }}
+                  </BaseBadge>
+                </div>
+
+                <textarea
+                  v-if="card.editing"
+                  v-model="card.draftText"
+                  class="cs-podcast-editor"
+                  rows="4"
+                />
+                <p v-else class="cs-podcast-card-text">{{ card.text }}</p>
+
+                <div class="cs-podcast-meta">
+                  <p class="cs-footnote">Sources:</p>
+                  <div class="cs-podcast-source-list">
+                    <BaseBadge
+                      v-for="source in card.sources"
+                      :key="`${card.id}-${source}`"
+                      variant="neutral"
+                      :uppercase="false"
+                    >
+                      {{ source }}
+                    </BaseBadge>
+                  </div>
+                  <p class="cs-footnote">
+                    Confidence:
+                    {{ card.confidence != null ? `${Math.round(card.confidence * 100)}%` : 'Unavailable' }}
+                  </p>
+                  <ul v-if="card.limitations.length" class="cs-podcast-limitations">
+                    <li v-for="(limitation, idx) in card.limitations" :key="`${card.id}-limit-${idx}`">
+                      {{ limitation }}
+                    </li>
+                  </ul>
+                </div>
+
+                <label class="cs-podcast-segment-label">
+                  Segment
+                  <select v-model="card.segment" class="cs-podcast-segment-select">
+                    <option v-for="segment in podcastSegments" :key="segment.value" :value="segment.value">
+                      {{ segment.label }}
+                    </option>
+                  </select>
+                </label>
+
+                <div class="cs-podcast-actions">
+                  <BaseButton
+                    variant="secondary"
+                    size="sm"
+                    :data-testid="`podcast-approve-${card.id}`"
+                    @click="approvePodcastCard(card.id)"
+                  >
+                    Approve
+                  </BaseButton>
+                  <BaseButton
+                    v-if="!card.editing"
+                    variant="ghost"
+                    size="sm"
+                    :data-testid="`podcast-edit-${card.id}`"
+                    @click="startEditingPodcastCard(card.id)"
+                  >
+                    Edit
+                  </BaseButton>
+                  <BaseButton
+                    v-else
+                    variant="ghost"
+                    size="sm"
+                    :data-testid="`podcast-save-${card.id}`"
+                    @click="saveEditingPodcastCard(card.id)"
+                  >
+                    Save
+                  </BaseButton>
+                  <BaseButton
+                    v-if="card.editing"
+                    variant="ghost"
+                    size="sm"
+                    @click="cancelEditingPodcastCard(card.id)"
+                  >
+                    Cancel
+                  </BaseButton>
+                  <BaseButton
+                    variant="ghost"
+                    size="sm"
+                    :data-testid="`podcast-reject-${card.id}`"
+                    @click="rejectPodcastCard(card.id)"
+                  >
+                    Reject
+                  </BaseButton>
+                  <BaseButton
+                    variant="ghost"
+                    size="sm"
+                    :data-testid="`podcast-copy-${card.id}`"
+                    @click="copyPodcastCard(card)"
+                  >
+                    Copy
+                  </BaseButton>
+                </div>
+              </article>
+            </section>
+
+            <section class="cs-podcast-review-column">
+              <h3 class="cs-ai-section-title">Approved ({{ approvedPodcastCards.length }})</h3>
+              <article
+                v-for="card in approvedPodcastCards"
+                :key="`approved-${card.id}`"
+                class="cs-podcast-card cs-podcast-card--approved"
+              >
+                <div class="cs-podcast-card-header">
+                  <p class="cs-podcast-card-title">{{ card.title }}</p>
+                  <BaseBadge variant="success" :uppercase="false">Approved</BaseBadge>
+                </div>
+                <p class="cs-podcast-card-text">{{ card.text }}</p>
+                <label class="cs-podcast-segment-label">
+                  Segment
+                  <select v-model="card.segment" class="cs-podcast-segment-select">
+                    <option v-for="segment in podcastSegments" :key="segment.value" :value="segment.value">
+                      {{ segment.label }}
+                    </option>
+                  </select>
+                </label>
+                <div class="cs-podcast-actions">
+                  <BaseButton variant="ghost" size="sm" @click="startEditingPodcastCard(card.id)">Edit</BaseButton>
+                  <BaseButton variant="ghost" size="sm" @click="rejectPodcastCard(card.id)">Reject</BaseButton>
+                  <BaseButton variant="ghost" size="sm" @click="copyPodcastCard(card)">Copy</BaseButton>
+                </div>
+              </article>
+            </section>
+          </div>
+
+          <section v-if="podcastCards.length" class="cs-podcast-export">
+            <h3 class="cs-ai-section-title">Segment builder & rundown export</h3>
+            <label class="cs-podcast-export-toggle">
+              <input v-model="includeUnreviewedPodcastCards" type="checkbox">
+              Include needs-review drafts in export/copy
+            </label>
+            <div class="cs-podcast-actions">
+              <BaseButton
+                variant="secondary"
+                size="sm"
+                data-testid="podcast-copy-markdown"
+                :disabled="!canExportPodcastRundown"
+                @click="copyPodcastRundown('markdown')"
+              >
+                Copy Markdown rundown
+              </BaseButton>
+              <BaseButton
+                variant="secondary"
+                size="sm"
+                data-testid="podcast-copy-text"
+                :disabled="!canExportPodcastRundown"
+                @click="copyPodcastRundown('text')"
+              >
+                Copy plain text rundown
+              </BaseButton>
+              <BaseButton
+                variant="ghost"
+                size="sm"
+                :disabled="!canExportPodcastRundown"
+                @click="downloadPodcastRundown('markdown')"
+              >
+                Export markdown
+              </BaseButton>
+              <BaseButton
+                variant="ghost"
+                size="sm"
+                :disabled="!canExportPodcastRundown"
+                @click="downloadPodcastRundown('text')"
+              >
+                Export text
+              </BaseButton>
+            </div>
+            <div class="cs-podcast-rundown-preview">
+              <article v-for="segment in podcastRundownSegments" :key="segment.value" class="cs-podcast-rundown-segment">
+                <h4>{{ segment.label }}</h4>
+                <ul v-if="segment.items.length">
+                  <li v-for="entry in segment.items" :key="`${segment.value}-${entry.id}`">
+                    <strong>{{ entry.title }}:</strong> {{ entry.text }}
+                  </li>
+                </ul>
+                <p v-else class="cs-empty-hint">No selected items.</p>
+              </article>
+            </div>
+          </section>
+        </BaseCard>
       </div>
 
       <!-- Right column: AI summary + dismissal patterns -->
@@ -813,6 +1054,44 @@ interface MatchAISummary {
 }
 
 type ImpactFilter = 'all' | 'positive' | 'negative' | 'neutral'
+type PodcastReviewStatus = 'needs_review' | 'approved' | 'rejected'
+type PodcastSegment =
+  | 'intro'
+  | 'match_setup'
+  | 'innings_1'
+  | 'innings_2'
+  | 'tactical_discussion'
+  | 'player_focus'
+  | 'closing_question'
+
+interface PodcastFactItem {
+  id: string
+  source: string
+  value: string
+}
+
+interface PodcastTalkingPointCard {
+  id: string
+  title: string
+  text: string
+  status: PodcastReviewStatus
+  sources: string[]
+  segment: PodcastSegment
+  confidence: number | null
+  limitations: string[]
+  editing: boolean
+  draftText: string
+}
+
+const podcastSegments: Array<{ value: PodcastSegment; label: string }> = [
+  { value: 'intro', label: 'Intro' },
+  { value: 'match_setup', label: 'Match setup' },
+  { value: 'innings_1', label: 'Innings 1' },
+  { value: 'innings_2', label: 'Innings 2' },
+  { value: 'tactical_discussion', label: 'Tactical discussion' },
+  { value: 'player_focus', label: 'Player focus' },
+  { value: 'closing_question', label: 'Closing question' },
+]
 
 const route = useRoute()
 const router = useRouter()
@@ -862,6 +1141,10 @@ const keyPlayersScopeLabel = computed(() =>
 const selectedDismissalPatterns = computed<CaseStudyDismissalPatterns | null>(() =>
   selectedInningsAnalysis.value?.dismissal_patterns ?? caseStudy.value?.dismissal_patterns ?? null
 )
+const podcastCards = ref<PodcastTalkingPointCard[]>([])
+const podcastGeneratedAt = ref<string | null>(null)
+const podcastCopyStatus = ref<string>('')
+const includeUnreviewedPodcastCards = ref(false)
 
 // FIX A7: Use real ai_summary from backend, show "unavailable" if missing
 const aiSummaryData = computed<MatchAISummary | null>(() => {
@@ -924,6 +1207,380 @@ const aiSummaryStatusLabel = computed(() => {
   if (aiSummaryCacheStatus.value === 'insufficient') return 'Insufficient data'
   return null
 })
+const podcastUsesTemplateFallback = computed(() => !aiSummary.value)
+const podcastConfidence = computed(() => {
+  const confidence = aiSummary.value?.ai_metadata?.confidence_score
+  return typeof confidence === 'number' ? confidence : null
+})
+const podcastLimitations = computed(() => {
+  if (aiLimitations.value.length) return aiLimitations.value
+  return ['AI wording is advisory only and requires analyst review before use.']
+})
+
+function buildPodcastFactBundle(detail: MatchCaseStudyResponse): PodcastFactItem[] {
+  const facts: PodcastFactItem[] = []
+  const matchData = detail.match
+  facts.push({ id: 'match-result', source: 'match.result', value: matchData.result || 'Result unavailable' })
+
+  const contextBits = [
+    matchData.teams_label,
+    matchData.date ? `Date ${matchData.date}` : null,
+    matchData.venue ? `Venue ${matchData.venue}` : null,
+    matchData.season ? `Season ${matchData.season}` : null,
+    matchData.event_name ? `Competition ${matchData.event_name}` : null,
+  ].filter(Boolean)
+  if (contextBits.length) {
+    facts.push({
+      id: 'match-context',
+      source: 'match.context',
+      value: contextBits.join(' • '),
+    })
+  }
+
+  const tournamentOutcome =
+    (detail.match_callouts ?? []).find((callout) => callout.category === 'outcome')?.explanation ??
+    (detail.innings_analysis ?? [])
+      .flatMap((innings) => innings.callouts ?? [])
+      .find((callout) => callout.category === 'outcome')?.explanation
+  if (tournamentOutcome) {
+    facts.push({
+      id: 'tournament-outcome-context',
+      source: 'tournament_outcome.champion_context',
+      value: tournamentOutcome,
+    })
+  }
+
+  ;(matchData.innings ?? []).forEach((innings, index) => {
+    facts.push({
+      id: `innings-summary-${index + 1}`,
+      source: `innings_summary.innings_${index + 1}`,
+      value: `${innings.team}: ${innings.runs}/${innings.wickets} in ${innings.overs} overs (RR ${innings.run_rate.toFixed(2)})`,
+    })
+  })
+
+  ;(detail.innings_analysis ?? []).forEach((innings, index) => {
+    ;(innings.phases ?? []).forEach((phase) => {
+      facts.push({
+        id: `phase-${index + 1}-${phase.id}`,
+        source: `phase_breakdown.${phase.id}`,
+        value: `Innings ${index + 1} ${phase.label}: ${phase.runs} runs, ${phase.wickets} wickets, ${phase.net_swing_vs_par} vs par.`,
+      })
+    })
+
+    const blocks = innings.story_blocks
+    facts.push({
+      id: `innings-opening-${index + 1}`,
+      source: 'innings_story.opening',
+      value: blocks.opening_story,
+    })
+    facts.push({
+      id: `innings-middle-${index + 1}`,
+      source: 'innings_story.middle',
+      value: blocks.middle_overs_story,
+    })
+    facts.push({
+      id: `innings-death-${index + 1}`,
+      source: 'innings_story.death',
+      value: blocks.death_overs_story,
+    })
+    facts.push({
+      id: `dismissal-pattern-${index + 1}`,
+      source: 'dismissal_patterns.wicket_cluster',
+      value:
+        innings.dismissal_patterns.wicket_cluster_callout ||
+        innings.dismissal_patterns.summary ||
+        `Innings ${index + 1} dismissal patterns unavailable.`,
+    })
+    ;(innings.callouts ?? []).forEach((callout, calloutIndex) => {
+      facts.push({
+        id: `callout-${index + 1}-${calloutIndex}`,
+        source: `analyst_callouts.${callout.category}`,
+        value: callout.explanation,
+      })
+    })
+  })
+
+  ;(detail.key_players ?? []).slice(0, 3).forEach((player, index) => {
+    facts.push({
+      id: `key-player-${index + 1}`,
+      source: 'key_players.impact',
+      value: `${player.name} (${player.team}) impact: ${player.impact_label}.`,
+    })
+  })
+
+  if (detail.momentum_summary?.title) {
+    facts.push({
+      id: 'analytics-momentum',
+      source: 'analytics_insight.momentum',
+      value: `${detail.momentum_summary.title}. ${detail.momentum_summary.subtitle}`,
+    })
+  }
+  if (detail.key_phase?.title) {
+    facts.push({
+      id: 'analytics-key-phase',
+      source: 'analytics_insight.key_phase',
+      value: `${detail.key_phase.title}: ${detail.key_phase.detail}`,
+    })
+  }
+
+  return facts
+}
+
+const podcastFactBundle = computed<PodcastFactItem[]>(() => {
+  if (!caseStudy.value) return []
+  return buildPodcastFactBundle(caseStudy.value)
+})
+
+function createPodcastCard(
+  id: string,
+  title: string,
+  text: string,
+  segment: PodcastSegment,
+  sources: string[],
+): PodcastTalkingPointCard {
+  return {
+    id,
+    title,
+    text,
+    status: 'needs_review',
+    sources,
+    segment,
+    confidence: podcastConfidence.value,
+    limitations: podcastLimitations.value,
+    editing: false,
+    draftText: text,
+  }
+}
+
+function generatePodcastPrep() {
+  if (!caseStudy.value) return
+  const detail = caseStudy.value
+  const innings1 = detail.innings_analysis?.[0]
+  const innings2 = detail.innings_analysis?.[1]
+  const leadPlayer = detail.key_players?.[0]
+  const selectedDismissals =
+    innings1?.dismissal_patterns ?? detail.dismissal_patterns ?? null
+
+  podcastCards.value = [
+    createPodcastCard(
+      'opening-hook',
+      'Opening hook',
+      `${detail.match.teams_label}: ${detail.match.result}.`,
+      'intro',
+      ['match.result'],
+    ),
+    createPodcastCard(
+      'match-context',
+      'Match context',
+      [
+        detail.match.date ? `Date: ${detail.match.date}` : null,
+        detail.match.venue ? `Venue: ${detail.match.venue}` : null,
+        detail.match.season ? `Season: ${detail.match.season}` : null,
+        detail.match.event_name ? `Competition: ${detail.match.event_name}` : null,
+      ]
+        .filter(Boolean)
+        .join(' • ') || 'Match context unavailable.',
+      'match_setup',
+      ['match.context'],
+    ),
+    createPodcastCard(
+      'first-innings-story',
+      'First innings story',
+      innings1?.story_blocks?.opening_story || innings1?.deterministic_summary || 'First innings story unavailable.',
+      'innings_1',
+      ['innings_story.opening', 'innings_summary.innings_1'],
+    ),
+    createPodcastCard(
+      'second-innings-story',
+      'Second innings story',
+      innings2?.story_blocks?.opening_story || innings2?.deterministic_summary || 'Second innings story unavailable.',
+      'innings_2',
+      ['innings_story.opening', 'innings_summary.innings_2'],
+    ),
+    createPodcastCard(
+      'turning-point',
+      'Turning point',
+      detail.key_phase?.detail || detail.momentum_summary?.subtitle || 'Turning point unavailable from deterministic data.',
+      'tactical_discussion',
+      ['analytics_insight.key_phase', 'phase_breakdown.middle'],
+    ),
+    createPodcastCard(
+      'player-spotlight',
+      'Player spotlight',
+      leadPlayer
+        ? `${leadPlayer.name} (${leadPlayer.team}) delivered ${leadPlayer.impact_label.toLowerCase()} impact.`
+        : 'Player spotlight unavailable.',
+      'player_focus',
+      ['key_players.impact'],
+    ),
+    createPodcastCard(
+      'dismissal-pattern',
+      'Dismissal pattern',
+      selectedDismissals?.wicket_cluster_callout || selectedDismissals?.summary || 'Dismissal pattern unavailable.',
+      'tactical_discussion',
+      ['dismissal_patterns.wicket_cluster'],
+    ),
+    createPodcastCard(
+      'tactical-lesson',
+      'Tactical lesson',
+      innings1?.story_blocks?.weakest_phase || detail.match_callouts?.[0]?.why_it_matters || 'Tactical lesson unavailable.',
+      'tactical_discussion',
+      ['innings_story.middle', 'analyst_callouts.momentum'],
+    ),
+    createPodcastCard(
+      'closing-question',
+      'Closing question',
+      detail.key_phase?.title
+        ? `How should teams adapt when the match swings in phases like ${detail.key_phase.title}?`
+        : 'What deterministic trend from this match should teams prepare for next?',
+      'closing_question',
+      ['analytics_insight.key_phase'],
+    ),
+  ]
+  podcastGeneratedAt.value = new Date().toLocaleString()
+  includeUnreviewedPodcastCards.value = false
+  podcastCopyStatus.value = ''
+}
+
+function updatePodcastCard(
+  cardId: string,
+  updater: (card: PodcastTalkingPointCard) => void,
+) {
+  const card = podcastCards.value.find((entry) => entry.id === cardId)
+  if (!card) return
+  updater(card)
+}
+
+function approvePodcastCard(cardId: string) {
+  updatePodcastCard(cardId, (card) => {
+    card.status = 'approved'
+    card.editing = false
+  })
+}
+
+function rejectPodcastCard(cardId: string) {
+  updatePodcastCard(cardId, (card) => {
+    card.status = 'rejected'
+    card.editing = false
+  })
+}
+
+function startEditingPodcastCard(cardId: string) {
+  updatePodcastCard(cardId, (card) => {
+    card.editing = true
+    card.draftText = card.text
+  })
+}
+
+function saveEditingPodcastCard(cardId: string) {
+  updatePodcastCard(cardId, (card) => {
+    const trimmed = card.draftText.trim()
+    if (!trimmed) return
+    card.text = trimmed
+    card.status = 'needs_review'
+    card.editing = false
+  })
+}
+
+function cancelEditingPodcastCard(cardId: string) {
+  updatePodcastCard(cardId, (card) => {
+    card.draftText = card.text
+    card.editing = false
+  })
+}
+
+async function copyText(value: string) {
+  if (!value.trim()) return
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value)
+    } else {
+      throw new Error('Clipboard API unavailable')
+    }
+    podcastCopyStatus.value = 'Copied to clipboard.'
+  } catch {
+    podcastCopyStatus.value = 'Clipboard copy failed in this browser.'
+  }
+}
+
+async function copyPodcastCard(card: PodcastTalkingPointCard) {
+  await copyText(card.text)
+}
+
+const approvedPodcastCards = computed(() =>
+  podcastCards.value.filter((card) => card.status === 'approved'),
+)
+const unapprovedPodcastCards = computed(() =>
+  podcastCards.value.filter((card) => card.status !== 'approved'),
+)
+const exportablePodcastCards = computed(() => {
+  if (includeUnreviewedPodcastCards.value) {
+    return podcastCards.value.filter((card) => card.status !== 'rejected')
+  }
+  return approvedPodcastCards.value
+})
+const canExportPodcastRundown = computed(() => exportablePodcastCards.value.length > 0)
+
+const podcastRundownSegments = computed(() =>
+  podcastSegments.map((segment) => ({
+    ...segment,
+    items: exportablePodcastCards.value.filter((card) => card.segment === segment.value),
+  })),
+)
+
+function buildPodcastRundownMarkdown() {
+  const lines = [
+    '# Podcast Match Prep Rundown',
+    '',
+    `Match: ${match.value?.teams_label ?? 'Unknown match'}`,
+    '',
+  ]
+  for (const segment of podcastRundownSegments.value) {
+    lines.push(`## ${segment.label}`)
+    if (!segment.items.length) {
+      lines.push('- (none)')
+    } else {
+      for (const card of segment.items) {
+        lines.push(`- **${card.title}**: ${card.text}`)
+      }
+    }
+    lines.push('')
+  }
+  return lines.join('\n').trim()
+}
+
+function buildPodcastRundownText() {
+  const lines = ['Podcast Match Prep Rundown', '']
+  for (const segment of podcastRundownSegments.value) {
+    lines.push(`${segment.label.toUpperCase()}:`)
+    if (!segment.items.length) {
+      lines.push('  - (none)')
+    } else {
+      for (const card of segment.items) {
+        lines.push(`  - ${card.title}: ${card.text}`)
+      }
+    }
+    lines.push('')
+  }
+  return lines.join('\n').trim()
+}
+
+async function copyPodcastRundown(format: 'markdown' | 'text') {
+  const output = format === 'markdown' ? buildPodcastRundownMarkdown() : buildPodcastRundownText()
+  await copyText(output)
+}
+
+function downloadPodcastRundown(format: 'markdown' | 'text') {
+  const output = format === 'markdown' ? buildPodcastRundownMarkdown() : buildPodcastRundownText()
+  const extension = format === 'markdown' ? 'md' : 'txt'
+  const blob = new Blob([output], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `podcast-rundown-${matchId.value}.${extension}`
+  link.click()
+  URL.revokeObjectURL(url)
+}
 
 // Per-match AI callouts derived from case study data
 const matchAiLoading = computed(() => loading.value)
@@ -1113,6 +1770,10 @@ onMounted(async () => {
 })
 
 watch(matchId, async () => {
+  podcastCards.value = []
+  podcastGeneratedAt.value = null
+  podcastCopyStatus.value = ''
+  includeUnreviewedPodcastCards.value = false
   await loadCaseStudy()
   await loadAiSummary()
 })
@@ -2305,6 +2966,157 @@ function handleCalloutSelect(callout: AiCallout) {
   flex-shrink: 0;
 }
 
+.cs-podcast-panel {
+  border: 1px solid var(--color-border);
+}
+
+.cs-podcast-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.cs-podcast-fact-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.cs-podcast-fact-tag {
+  font-size: var(--text-xs);
+}
+
+.cs-podcast-review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.cs-podcast-review-column {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.cs-podcast-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  background: var(--color-surface-hover);
+}
+
+.cs-podcast-card--approved {
+  border-color: var(--color-success-soft, #86efac);
+}
+
+.cs-podcast-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.cs-podcast-card-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.cs-podcast-card-text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.cs-podcast-meta {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.cs-podcast-source-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.cs-podcast-limitations {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.cs-podcast-editor {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: var(--space-2);
+  font: inherit;
+}
+
+.cs-podcast-segment-label {
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.cs-podcast-segment-select {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: var(--space-1) var(--space-2);
+}
+
+.cs-podcast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.cs-podcast-export {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.cs-podcast-export-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.cs-podcast-rundown-preview {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.cs-podcast-rundown-segment {
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+}
+
+.cs-podcast-rundown-segment h4 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.cs-podcast-rundown-segment ul {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-xs);
+}
+
 /* DISMISSAL PLACEHOLDER */
 .cs-dismissal-placeholder {
   display: grid;
@@ -2322,6 +3134,10 @@ function handleCalloutSelect(callout: AiCallout) {
   }
 
   .cs-ai-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cs-podcast-review-grid {
     grid-template-columns: 1fr;
   }
 }
