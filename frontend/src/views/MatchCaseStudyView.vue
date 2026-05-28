@@ -143,13 +143,27 @@
         <BaseCard v-if="momentumSummary" padding="md" class="cs-summary-card">
           <p class="cs-label">Momentum verdict</p>
           <p class="cs-value">{{ momentumSummary.title }}</p>
-          <p class="cs-footnote">{{ momentumSummary.subtitle }}</p>
+          <p class="cs-footnote">
+            {{ momentumSummary.subtitle }}
+            <span v-if="momentumSummary.level === 'match'"> • Match-level</span>
+            <span v-else> • Innings {{ selectedInningsIndex + 1 }}</span>
+          </p>
         </BaseCard>
 
         <BaseCard v-if="keyPhase" padding="md" class="cs-summary-card">
           <p class="cs-label">Key phase</p>
           <p class="cs-value">{{ keyPhase.title }}</p>
-          <p class="cs-footnote">{{ keyPhase.detail }}</p>
+          <p class="cs-footnote">
+            {{ keyPhase.detail }}
+            <span v-if="keyPhase.level === 'match'"> • Match-level</span>
+            <span v-else> • Innings {{ selectedInningsIndex + 1 }}</span>
+          </p>
+        </BaseCard>
+
+        <BaseCard v-if="selectedInningsAnalysis?.deterministic_summary" padding="md" class="cs-summary-card">
+          <p class="cs-label">Deterministic summary</p>
+          <p class="cs-value">{{ selectedInningsAnalysis.deterministic_summary }}</p>
+          <p class="cs-footnote">Innings {{ selectedInningsIndex + 1 }} story</p>
         </BaseCard>
       </section>
 
@@ -333,9 +347,24 @@
           </div>
         </BaseCard>
 
+        <BaseCard v-if="selectedInningsAnalysis?.story_blocks" padding="lg" class="cs-panel">
+          <h2 class="cs-panel-title">Innings story</h2>
+          <p class="cs-panel-subtitle">Deterministic phase narrative for innings {{ selectedInningsIndex + 1 }}.</p>
+          <ul class="cs-story-list">
+            <li>{{ selectedInningsAnalysis.story_blocks.opening_story }}</li>
+            <li>{{ selectedInningsAnalysis.story_blocks.middle_overs_story }}</li>
+            <li>{{ selectedInningsAnalysis.story_blocks.death_overs_story }}</li>
+            <li>{{ selectedInningsAnalysis.story_blocks.scoring_acceleration }}</li>
+            <li>{{ selectedInningsAnalysis.story_blocks.wickets_by_phase }}</li>
+            <li>{{ selectedInningsAnalysis.story_blocks.strongest_phase }}</li>
+            <li>{{ selectedInningsAnalysis.story_blocks.weakest_phase }}</li>
+            <li>{{ selectedInningsAnalysis.story_blocks.innings_outcome_contribution }}</li>
+          </ul>
+        </BaseCard>
+
         <BaseCard padding="lg" class="cs-panel">
           <h2 class="cs-panel-title">Key players</h2>
-          <p class="cs-panel-subtitle">Highest impact performers in this match.</p>
+          <p class="cs-panel-subtitle">Highest impact performers. {{ keyPlayersScopeLabel }}.</p>
 
           <!-- Empty state for key players -->
           <div v-if="keyPlayers.length === 0" class="cs-empty-state">
@@ -654,13 +683,66 @@
         <BaseCard padding="lg" class="cs-panel">
           <h2 class="cs-panel-title">Dismissal patterns</h2>
           <p class="cs-panel-subtitle">
-            Where and how wickets fell. This will later be powered by ball-by-ball tags.
+            Deterministic wicket analysis for the selected innings.
           </p>
-
-          <div class="cs-dismissal-placeholder">
-            <p class="cs-empty">
-              Visuals coming soon: wagon wheel + pitch map + dismissal clusters.
+          <div v-if="!selectedDismissalPatterns" class="cs-empty-state">
+            <p>No dismissal data available.</p>
+          </div>
+          <div v-else class="cs-dismissal-panel">
+            <p class="cs-footnote">{{ selectedDismissalPatterns.summary }}</p>
+            <p v-if="selectedDismissalPatterns.fallback_reason" class="cs-footnote">
+              {{ selectedDismissalPatterns.fallback_reason }}
             </p>
+            <p v-if="selectedDismissalPatterns.wicket_cluster_callout" class="cs-footnote">
+              {{ selectedDismissalPatterns.wicket_cluster_callout }}
+            </p>
+
+            <div class="cs-dismissal-grid">
+              <div>
+                <h4>Wickets by phase</h4>
+                <ul>
+                  <li
+                    v-for="row in selectedDismissalPatterns.wickets_by_phase ?? []"
+                    :key="`phase-${row.phase_id}`"
+                  >
+                    {{ row.phase_id }}: {{ row.wickets }}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h4>Wickets by over band</h4>
+                <ul>
+                  <li
+                    v-for="row in selectedDismissalPatterns.wickets_by_over_band ?? []"
+                    :key="`band-${row.band}`"
+                  >
+                    {{ row.band }}: {{ row.wickets }}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h4>Dismissal types</h4>
+                <ul>
+                  <li
+                    v-for="row in selectedDismissalPatterns.dismissal_types ?? []"
+                    :key="`type-${row.type}`"
+                  >
+                    {{ row.type }}: {{ row.wickets }}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h4>Wicket timeline</h4>
+                <ul>
+                  <li
+                    v-for="event in selectedDismissalPatterns.wicket_timeline ?? []"
+                    :key="`wkt-${event.wicket_number}-${event.over}`"
+                  >
+                    W{{ event.wicket_number }} · Ov {{ event.over }} · {{ event.dismissal_type || 'Unknown' }}
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
         </BaseCard>
 
@@ -670,8 +752,8 @@
           :loading="matchAiLoading"
           :max-items="5"
           dense
-          title="AI Callouts"
-          description="Per-match insights Cricksy AI has flagged as important."
+          title="Analyst callouts"
+          description="Deterministic innings and match-level callouts with evidence."
           @select="handleCalloutSelect"
         />
       </div>
@@ -692,7 +774,10 @@ import {
   type MatchCaseStudyResponse,
   type MatchAiSummary,
   type CaseStudyPhase as ApiCaseStudyPhase,
-  type CaseStudyKeyPlayer
+  type CaseStudyKeyPlayer,
+  type CaseStudyInningsAnalysis,
+  type CaseStudyDismissalPatterns,
+  type CaseStudyAnalystCallout,
 } from '@/services/api'
 
 // Extend CaseStudyPhase with optional fields (backend may add these later)
@@ -739,6 +824,8 @@ const matchId = computed(() => route.params.matchId as string)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const caseStudy = ref<MatchCaseStudyResponse | null>(null)
+const selectedInningsIndex = ref<number>(0)
+const selectedImpactFilter = ref<ImpactFilter>('all')
 
 // AI Summary state (dedicated endpoint)
 const aiSummary = ref<MatchAiSummary | null>(null)
@@ -750,12 +837,31 @@ const aiSummaryCacheStatus = ref<'none' | 'live' | 'cached' | 'stale' | 'fallbac
 
 // Derived view-model bindings from caseStudy
 const match = computed(() => caseStudy.value?.match ?? null)
-const momentumSummary = computed(() => caseStudy.value?.momentum_summary ?? null)
-const keyPhase = computed(() => caseStudy.value?.key_phase ?? null)
+const inningsAnalyses = computed<CaseStudyInningsAnalysis[]>(() => caseStudy.value?.innings_analysis ?? [])
+const selectedInningsAnalysis = computed<CaseStudyInningsAnalysis | null>(() => {
+  const analyses = inningsAnalyses.value
+  if (!analyses.length) return null
+  const selected = analyses.find((entry) => entry.innings_index === selectedInningsIndex.value)
+  return selected ?? analyses[0]
+})
+const momentumSummary = computed(() => selectedInningsAnalysis.value?.momentum_summary ?? caseStudy.value?.momentum_summary ?? null)
+const keyPhase = computed(() => selectedInningsAnalysis.value?.key_phase ?? caseStudy.value?.key_phase ?? null)
 const phaseBreakdown = computed<CaseStudyPhase[]>(() => {
+  const inningsPhases = selectedInningsAnalysis.value?.phases ?? []
+  if (inningsPhases.length) return inningsPhases as CaseStudyPhase[]
   return (caseStudy.value?.phases ?? []) as CaseStudyPhase[]
 })
-const keyPlayers = computed<CaseStudyKeyPlayer[]>(() => caseStudy.value?.key_players ?? [])
+const keyPlayers = computed<CaseStudyKeyPlayer[]>(() => {
+  const inningsPlayers = selectedInningsAnalysis.value?.key_players ?? []
+  if (inningsPlayers.length) return inningsPlayers
+  return caseStudy.value?.key_players ?? []
+})
+const keyPlayersScopeLabel = computed(() =>
+  selectedInningsAnalysis.value?.key_players_scope === 'match' ? 'Match-level' : 'Innings-level'
+)
+const selectedDismissalPatterns = computed<CaseStudyDismissalPatterns | null>(() =>
+  selectedInningsAnalysis.value?.dismissal_patterns ?? caseStudy.value?.dismissal_patterns ?? null
+)
 
 // FIX A7: Use real ai_summary from backend, show "unavailable" if missing
 const aiSummaryData = computed<MatchAISummary | null>(() => {
@@ -825,227 +931,29 @@ const matchAiLoading = computed(() => loading.value)
 const matchAiCallouts = computed<AiCallout[]>(() => {
   const cs = caseStudy.value
   if (!cs) return []
+  const inningsCallouts = selectedInningsAnalysis.value?.callouts ?? []
+  const matchCallouts = cs.match_callouts ?? []
+  const structured = [...inningsCallouts, ...matchCallouts]
 
-  const callouts: AiCallout[] = []
-  const phases = (cs.phases ?? []) as CaseStudyPhase[]
-  const players = cs.key_players ?? []
+  const mapStructuredCallout = (callout: CaseStudyAnalystCallout, idx: number): AiCallout => ({
+    id: `${callout.level}-${callout.phase}-${idx}`,
+    title: callout.title,
+    body: callout.explanation,
+    innings: callout.innings ? `Innings ${callout.innings}` : callout.level === 'match' ? 'Match-level' : undefined,
+    phase: callout.phase,
+    category: callout.category,
+    severity: callout.severity as CalloutSeverity,
+    sourceMetrics: callout.source_metrics,
+    confidence: callout.confidence,
+    whyItMatters: callout.why_it_matters,
+    scope: callout.level === 'match' ? 'Match-level' : undefined,
+  })
 
-  // Find noteworthy phases by type
-  const powerplayPhases = phases.filter((p) => p.id === 'powerplay')
-  const deathPhases = phases.filter((p) => p.id === 'death')
-  const middlePhases = phases.filter((p) => p.id === 'middle')
-
-  // Powerplay dominance
-  const strongPowerplay = powerplayPhases.find((p) => p.net_swing_vs_par >= 10)
-  if (strongPowerplay) {
-    const teamName = strongPowerplay.team ?? 'The batting side'
-    const inningsIdx = strongPowerplay.innings_index ?? 0
-    callouts.push({
-      id: 'powerplay-domination',
-      title: 'Powerplay domination',
-      body: `${teamName} finished the powerplay about ${Math.round(strongPowerplay.net_swing_vs_par)} runs ahead of par, setting up the innings.`,
-      category: 'Batting',
-      severity: 'positive' as CalloutSeverity,
-      scope: `Powerplay`,
-      targetDomId: `phase-${inningsIdx}-powerplay`,
-      targetGroupId: inningsIdx,
-    })
+  if (structured.length) {
+    return structured.map(mapStructuredCallout)
   }
-
-  // Powerplay struggle
-  const weakPowerplay = powerplayPhases.find((p) => p.net_swing_vs_par <= -10)
-  if (weakPowerplay) {
-    const teamName = weakPowerplay.team ?? 'The batting side'
-    const inningsIdx = weakPowerplay.innings_index ?? 0
-    callouts.push({
-      id: 'powerplay-struggle',
-      title: 'Powerplay struggle',
-      body: `${teamName} fell ${Math.abs(Math.round(weakPowerplay.net_swing_vs_par))} runs below par in the powerplay.`,
-      category: 'Batting',
-      severity: 'warning' as CalloutSeverity,
-      scope: `Powerplay`,
-      targetDomId: `phase-${inningsIdx}-powerplay`,
-      targetGroupId: inningsIdx,
-    })
-  }
-
-  // Death overs collapse
-  const badDeathPhase = deathPhases.find(
-    (p) => p.net_swing_vs_par <= -8 || p.wickets >= 3
-  )
-  if (badDeathPhase) {
-    const teamName = badDeathPhase.team ?? 'The batting side'
-    const inningsIdx = badDeathPhase.innings_index ?? 0
-    callouts.push({
-      id: 'death-overs-collapse',
-      title: 'Death overs collapse',
-      body: `${teamName} struggled at the death, with ${badDeathPhase.wickets} wickets and ${Math.abs(Math.round(badDeathPhase.net_swing_vs_par))} runs below par.`,
-      category: 'Batting',
-      severity: 'warning' as CalloutSeverity,
-      scope: `Death overs`,
-      targetDomId: `phase-${inningsIdx}-death`,
-      targetGroupId: inningsIdx,
-    })
-  }
-
-  // Death overs surge
-  const goodDeathPhase = deathPhases.find((p) => p.net_swing_vs_par >= 10)
-  if (goodDeathPhase) {
-    const teamName = goodDeathPhase.team ?? 'The batting side'
-    const inningsIdx = goodDeathPhase.innings_index ?? 0
-    callouts.push({
-      id: 'death-overs-surge',
-      title: 'Death overs surge',
-      body: `${teamName} accelerated brilliantly at the death, finishing ${Math.round(goodDeathPhase.net_swing_vs_par)} runs ahead of par.`,
-      category: 'Batting',
-      severity: 'positive' as CalloutSeverity,
-      scope: `Death overs`,
-      targetDomId: `phase-${inningsIdx}-death`,
-      targetGroupId: inningsIdx,
-    })
-  }
-
-  // Middle overs squeeze
-  const middleSqueeze = middlePhases.find((p) => p.net_swing_vs_par <= -8)
-  if (middleSqueeze) {
-    const inningsIdx = middleSqueeze.innings_index ?? 0
-    callouts.push({
-      id: 'middle-overs-choke',
-      title: 'Middle overs choke',
-      body: `Scoring slowed significantly in the middle overs, with the run rate dipping ${Math.abs(Math.round(middleSqueeze.net_swing_vs_par))} below par.`,
-      category: 'Bowling',
-      severity: 'info' as CalloutSeverity,
-      scope: `Middle overs`,
-      targetDomId: `phase-${inningsIdx}-middle`,
-      targetGroupId: inningsIdx,
-    })
-  }
-
-  // High-impact player
-  const impactPlayer = players.find((p) => p.impact === 'high')
-  if (impactPlayer) {
-    let contribution = ''
-    if (impactPlayer.batting && impactPlayer.batting.runs >= 30) {
-      contribution = `scored ${impactPlayer.batting.runs} runs`
-    }
-    if (impactPlayer.bowling && impactPlayer.bowling.wickets >= 2) {
-      contribution += contribution ? ' and ' : ''
-      contribution += `took ${impactPlayer.bowling.wickets} wickets`
-    }
-    if (contribution) {
-      callouts.push({
-        id: 'impact-player',
-        title: 'Match-defining performance',
-        body: `${impactPlayer.name} ${contribution}, producing a match-winning contribution.`,
-        category: 'Players',
-        severity: 'positive' as CalloutSeverity,
-        scope: impactPlayer.name,
-      })
-    }
-  }
-
-  // Key tactical theme from AI summary
-  const aiData = aiSummaryData.value
-  if (aiData?.tactical_themes?.length) {
-    callouts.push({
-      id: 'tactical-theme',
-      title: 'Key tactical theme',
-      body: aiData.tactical_themes[0],
-      category: 'Tactics',
-      severity: 'info' as CalloutSeverity,
-      scope: 'Full match',
-    })
-  }
-
-  // --- Callouts from AI Summary endpoint (decisive phases) ---
-  const aiSummaryVal = aiSummary.value
-  if (aiSummaryVal?.decisive_phases?.length) {
-    // Death overs collapse from AI summary
-    const deathCollapsePhase = aiSummaryVal.decisive_phases.find(
-      (p) => p.label.toLowerCase().includes('death') && p.impact_score < -20
-    )
-    if (deathCollapsePhase) {
-      callouts.push({
-        id: 'ai-death-collapse',
-        title: 'Death overs collapse',
-        body: deathCollapsePhase.narrative,
-        category: 'Batting',
-        severity: 'warning' as CalloutSeverity,
-        scope: deathCollapsePhase.label,
-        targetDomId: `mc-phase-${deathCollapsePhase.phase_id}`,
-      })
-    }
-
-    // Powerplay dominance from AI summary
-    const powerplayDominancePhase = aiSummaryVal.decisive_phases.find(
-      (p) => p.label.toLowerCase().includes('powerplay') && p.impact_score > 20
-    )
-    if (powerplayDominancePhase) {
-      callouts.push({
-        id: 'ai-powerplay-dominance',
-        title: 'Powerplay dominance',
-        body: powerplayDominancePhase.narrative,
-        category: 'Batting',
-        severity: 'positive' as CalloutSeverity,
-        scope: powerplayDominancePhase.label,
-        targetDomId: `mc-phase-${powerplayDominancePhase.phase_id}`,
-      })
-    }
-
-    // Middle overs control from AI summary
-    const middleControlPhase = aiSummaryVal.decisive_phases.find(
-      (p) => p.label.toLowerCase().includes('middle') && Math.abs(p.impact_score) > 15
-    )
-    if (middleControlPhase) {
-      const isPositive = middleControlPhase.impact_score > 0
-      callouts.push({
-        id: 'ai-middle-control',
-        title: isPositive ? 'Middle overs control' : 'Middle overs squeeze',
-        body: middleControlPhase.narrative,
-        category: isPositive ? 'Batting' : 'Bowling',
-        severity: isPositive ? 'positive' as CalloutSeverity : 'warning' as CalloutSeverity,
-        scope: middleControlPhase.label,
-        targetDomId: `mc-phase-${middleControlPhase.phase_id}`,
-      })
-    }
-  }
-
-  // --- Callouts from momentum shifts ---
-  if (aiSummaryVal?.momentum_shifts?.length) {
-    // Multiple momentum swings
-    if (aiSummaryVal.momentum_shifts.length >= 3) {
-      callouts.push({
-        id: 'ai-momentum-swings',
-        title: 'Multiple momentum swings',
-        body: `This match saw ${aiSummaryVal.momentum_shifts.length} key momentum shifts, making it a closely contested affair.`,
-        category: 'Match Flow',
-        severity: 'info' as CalloutSeverity,
-        scope: 'Full match',
-      })
-    }
-
-    // Biggest momentum shift
-    const biggestShift = aiSummaryVal.momentum_shifts.reduce((max, s) =>
-      Math.abs(s.impact_delta) > Math.abs(max.impact_delta) ? s : max
-    , aiSummaryVal.momentum_shifts[0])
-    if (biggestShift && Math.abs(biggestShift.impact_delta) >= 15) {
-      callouts.push({
-        id: 'ai-big-momentum-shift',
-        title: 'Critical turning point',
-        body: `Over ${biggestShift.over}: ${biggestShift.description}`,
-        category: 'Match Flow',
-        severity: biggestShift.impact_delta > 0 ? 'positive' as CalloutSeverity : 'warning' as CalloutSeverity,
-        scope: `Over ${biggestShift.over}`,
-      })
-    }
-  }
-
-  return callouts
+  return []
 })
-
-// Filter state for phases
-const selectedInningsIndex = ref<number>(0)
-const selectedImpactFilter = ref<ImpactFilter>('all')
 
 // Derive innings options from match.innings
 const inningsOptions = computed(() => {
@@ -1460,6 +1368,27 @@ function handleCalloutSelect(callout: AiCallout) {
 
 .cs-empty-action {
   margin-top: var(--space-3);
+}
+
+.cs-story-list,
+.cs-dismissal-grid ul {
+  margin: 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.cs-dismissal-panel {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.cs-dismissal-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .cs-panel--ai-empty .cs-empty-state {

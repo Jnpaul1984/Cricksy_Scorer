@@ -11,9 +11,14 @@ export interface AiCallout {
   id: string
   title: string
   body: string
+  innings?: string
+  phase?: string
   category?: string
   severity?: CalloutSeverity
   scope?: string
+  sourceMetrics?: string[]
+  confidence?: number | null
+  whyItMatters?: string
   /** Optional: the phase ID from backend */
   targetPhaseId?: string
   /** Optional: explicit DOM id to scroll to */
@@ -145,12 +150,27 @@ function handleViewAll() {
             <p class="ai-callout-body">
               {{ callout.body }}
             </p>
+            <p v-if="callout.whyItMatters" class="ai-callout-why">
+              Why it matters: {{ callout.whyItMatters }}
+            </p>
+            <p v-if="callout.sourceMetrics?.length" class="ai-callout-source">
+              Source: {{ callout.sourceMetrics.join(' · ') }}
+            </p>
           </div>
 
           <div class="ai-callout-meta">
             <BaseBadge v-if="callout.category" variant="neutral" :uppercase="false">
               {{ callout.category }}
             </BaseBadge>
+            <span v-if="callout.innings" class="ai-callout-scope">
+              {{ callout.innings }}
+            </span>
+            <span v-if="callout.phase" class="ai-callout-scope">
+              {{ callout.phase }}
+            </span>
+            <span v-if="typeof callout.confidence === 'number'" class="ai-callout-scope">
+              confidence {{ Math.round(callout.confidence * 100) }}%
+            </span>
             <span v-if="callout.scope" class="ai-callout-scope">
               {{ callout.scope }}
             </span>
@@ -324,6 +344,13 @@ function handleViewAll() {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
   line-height: var(--leading-relaxed);
+}
+
+.ai-callout-why,
+.ai-callout-source {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
 }
 
 .ai-callout-meta {

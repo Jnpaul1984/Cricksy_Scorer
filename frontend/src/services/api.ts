@@ -586,6 +586,9 @@ export interface CaseStudyPhase {
   net_swing_vs_par: number;
   impact: CaseStudyPhaseImpact;
   impact_label: string;
+  innings_index?: number | null;
+  team?: string | null;
+  level?: "innings" | "match";
 }
 
 export interface CaseStudyKeyPlayer {
@@ -637,6 +640,9 @@ export interface CaseStudyMomentumSummary {
   title: string;
   subtitle: string;
   winning_side?: string | null;
+  innings_index?: number | null;
+  phase_id?: string | null;
+  level?: "innings" | "match";
   swing_metric?: {
     runs_above_par?: number | null;
     win_probability_shift?: number | null;
@@ -646,6 +652,9 @@ export interface CaseStudyMomentumSummary {
 export interface CaseStudyKeyPhase {
   title: string;
   detail: string;
+  innings_index?: number | null;
+  team?: string | null;
+  level?: "innings" | "match";
   overs_range?: {
     start_over: number;
     end_over: number;
@@ -654,10 +663,69 @@ export interface CaseStudyKeyPhase {
 }
 
 export interface CaseStudyDismissalPatterns {
+  level?: "innings" | "match";
+  innings_index?: number | null;
   summary?: string | null;
+  total_wickets?: number;
+  wickets_by_phase?: { phase_id: string; wickets: number }[];
+  wickets_by_over_band?: { band: string; wickets: number }[];
+  dismissal_types?: { type: string; wickets: number }[];
+  bowler_involvement?: { name: string; wickets: number }[];
+  fielding_involvement?: { name: string; dismissals: number }[];
+  dismissed_batters?: string[];
+  wicket_timeline?: Array<{
+    wicket_number: number;
+    over: number;
+    ball?: number;
+    phase?: string | null;
+    dismissal_type?: string | null;
+    batter?: string | null;
+    bowler?: string | null;
+    fielder?: string | null;
+  }>;
+  wicket_cluster_callout?: string | null;
+  fallback_reason?: string | null;
   by_bowler_type?: { type: string; wickets: number }[];
   by_shot_type?: { shot: string; wickets: number }[];
   by_zone?: { zone: string; wickets: number }[];
+}
+
+export interface CaseStudyStoryBlocks {
+  opening_story: string;
+  middle_overs_story: string;
+  death_overs_story: string;
+  scoring_acceleration: string;
+  wickets_by_phase: string;
+  strongest_phase: string;
+  weakest_phase: string;
+  innings_outcome_contribution: string;
+}
+
+export interface CaseStudyAnalystCallout {
+  title: string;
+  level: "innings" | "match";
+  innings?: number | null;
+  phase: string;
+  category: "batting" | "bowling" | "player" | "dismissal" | "momentum" | "outcome";
+  severity: "positive" | "warning" | "info";
+  explanation: string;
+  source_metrics: string[];
+  confidence: number;
+  why_it_matters: string;
+}
+
+export interface CaseStudyInningsAnalysis {
+  innings_index: number;
+  team: string;
+  deterministic_summary: string;
+  momentum_summary: CaseStudyMomentumSummary;
+  key_phase: CaseStudyKeyPhase;
+  phases: CaseStudyPhase[];
+  key_players: CaseStudyKeyPlayer[];
+  key_players_scope: "innings" | "match";
+  dismissal_patterns: CaseStudyDismissalPatterns;
+  story_blocks: CaseStudyStoryBlocks;
+  callouts: CaseStudyAnalystCallout[];
 }
 
 export interface CaseStudyAIBlock {
@@ -674,6 +742,9 @@ export interface MatchCaseStudyResponse {
   phases: CaseStudyPhase[];
   key_players: CaseStudyKeyPlayer[];
   dismissal_patterns?: CaseStudyDismissalPatterns | null;
+  innings_analysis?: CaseStudyInningsAnalysis[];
+  match_callouts?: CaseStudyAnalystCallout[];
+  match_level_summary?: string | null;
   ai?: CaseStudyAIBlock | null;
 }
 

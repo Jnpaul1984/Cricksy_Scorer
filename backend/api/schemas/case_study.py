@@ -86,6 +86,9 @@ class CaseStudyMomentumSummary(BaseModel):
     title: str
     subtitle: str
     winning_side: str | None = None
+    innings_index: int | None = None
+    phase_id: str | None = None
+    level: Literal["innings", "match"] = "innings"
     swing_metric: CaseStudySwingMetric | None = None
 
 
@@ -99,6 +102,9 @@ class CaseStudyKeyPhase(BaseModel):
 
     title: str
     detail: str
+    innings_index: int | None = None
+    team: str | None = None
+    level: Literal["innings", "match"] = "innings"
     overs_range: dict | None = None  # {"start_over": int, "end_over": int}
     reason_codes: list[str] = []
 
@@ -121,6 +127,9 @@ class CaseStudyPhase(BaseModel):
     net_swing_vs_par: int
     impact: Literal["positive", "negative", "neutral"]
     impact_label: str
+    innings_index: int | None = None
+    team: str | None = None
+    level: Literal["innings", "match"] = "innings"
 
 
 # -----------------------------------------------------------------------------
@@ -200,10 +209,66 @@ class CaseStudyDismissalByZone(BaseModel):
 class CaseStudyDismissalPatterns(BaseModel):
     """Aggregated dismissal pattern analysis."""
 
+    level: Literal["innings", "match"] = "innings"
+    innings_index: int | None = None
     summary: str | None = None
+    total_wickets: int = 0
+    wickets_by_phase: list[dict[str, Any]] = []
+    wickets_by_over_band: list[dict[str, Any]] = []
+    dismissal_types: list[dict[str, Any]] = []
+    bowler_involvement: list[dict[str, Any]] = []
+    fielding_involvement: list[dict[str, Any]] = []
+    dismissed_batters: list[str] = []
+    wicket_timeline: list[dict[str, Any]] = []
+    wicket_cluster_callout: str | None = None
+    fallback_reason: str | None = None
     by_bowler_type: list[CaseStudyDismissalByBowlerType] = []
     by_shot_type: list[CaseStudyDismissalByShotType] = []
     by_zone: list[CaseStudyDismissalByZone] = []
+
+
+class CaseStudyStoryBlocks(BaseModel):
+    """Deterministic innings story derived from score/phase data."""
+
+    opening_story: str
+    middle_overs_story: str
+    death_overs_story: str
+    scoring_acceleration: str
+    wickets_by_phase: str
+    strongest_phase: str
+    weakest_phase: str
+    innings_outcome_contribution: str
+
+
+class CaseStudyAnalystCallout(BaseModel):
+    """Deterministic analyst callout with evidence."""
+
+    title: str
+    level: Literal["innings", "match"] = "innings"
+    innings: int | None = None
+    phase: str
+    category: Literal["batting", "bowling", "player", "dismissal", "momentum", "outcome"]
+    severity: Literal["positive", "warning", "info"]
+    explanation: str
+    source_metrics: list[str] = []
+    confidence: float = Field(ge=0.0, le=1.0, default=0.7)
+    why_it_matters: str
+
+
+class CaseStudyInningsAnalysis(BaseModel):
+    """All innings-scoped case study intelligence."""
+
+    innings_index: int
+    team: str
+    deterministic_summary: str
+    momentum_summary: CaseStudyMomentumSummary
+    key_phase: CaseStudyKeyPhase
+    phases: list[CaseStudyPhase]
+    key_players: list[CaseStudyKeyPlayer]
+    key_players_scope: Literal["innings", "match"] = "innings"
+    dismissal_patterns: CaseStudyDismissalPatterns
+    story_blocks: CaseStudyStoryBlocks
+    callouts: list[CaseStudyAnalystCallout] = []
 
 
 # -----------------------------------------------------------------------------
@@ -240,4 +305,7 @@ class MatchCaseStudyResponse(BaseModel):
     phases: list[CaseStudyPhase]
     key_players: list[CaseStudyKeyPlayer]
     dismissal_patterns: CaseStudyDismissalPatterns | None = None
+    innings_analysis: list[CaseStudyInningsAnalysis] = []
+    match_callouts: list[CaseStudyAnalystCallout] = []
+    match_level_summary: str | None = None
     ai: CaseStudyAIBlock | None = None

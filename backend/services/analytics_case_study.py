@@ -17,10 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.schemas.case_study import (
     CaseStudyAIBlock,
+    CaseStudyAnalystCallout,
     CaseStudyDismissalByBowlerType,
     CaseStudyDismissalByShotType,
     CaseStudyDismissalByZone,
     CaseStudyDismissalPatterns,
+    CaseStudyInningsAnalysis,
     CaseStudyInningsSummary,
     CaseStudyKeyPhase,
     CaseStudyKeyPlayer,
@@ -30,6 +32,7 @@ from backend.api.schemas.case_study import (
     CaseStudyPlayerBatting,
     CaseStudyPlayerBowling,
     CaseStudyPlayerFielding,
+    CaseStudyStoryBlocks,
     CaseStudySwingMetric,
     MatchCaseStudyResponse,
 )
@@ -112,11 +115,11 @@ def _aggregate_per_over(
     per_over_wickets: dict[int, int] = defaultdict(int)
 
     for d in deliveries:
-        inning = d.get("inning", 1)
+        inning = _delivery_innings_number(d)
         if inning != innings_number:
             continue
 
-        over_num = d.get("over_number", 1)
+        over_num = int(d.get("over_number") or d.get("over") or 1)
         # Total runs for this ball
         runs = d.get("runs_off_bat", 0) + d.get("extra_runs", 0)
         # Fallback to runs_scored if breakdown not available
@@ -131,6 +134,23 @@ def _aggregate_per_over(
     return dict(per_over_runs), dict(per_over_wickets)
 
 
+def _delivery_innings_number(delivery: dict[str, Any]) -> int:
+    inning = delivery.get("inning")
+    if not isinstance(inning, int):
+        inning = delivery.get("inning_no")
+    if not isinstance(inning, int):
+        inning = delivery.get("innings")
+    return int(inning) if isinstance(inning, int) and inning > 0 else 1
+
+
+def _delivery_player_name(delivery: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = delivery.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
 # -----------------------------------------------------------------------------
 # Phase Stats Computation
 # -----------------------------------------------------------------------------
@@ -142,6 +162,9 @@ def _compute_phase_stats(
     per_over_wickets: dict[int, int],
     total_runs: int,
     total_overs: float,
+    innings_index: int | None = None,
+    team: str | None = None,
+    level: Literal["innings", "match"] = "innings",
 ) -> list[CaseStudyPhase]:
     """
     Compute stats for each phase and return CaseStudyPhase objects.
@@ -183,6 +206,9 @@ def _compute_phase_stats(
                 net_swing_vs_par=net_swing,
                 impact=impact,
                 impact_label=impact_label,
+                innings_index=innings_index,
+                team=team,
+                level=level,
             )
         )
 
@@ -230,6 +256,8 @@ def _build_momentum_summary(
     key_phase: CaseStudyPhase,
     winning_team: str | None,
     total_swing: int,
+    innings_index: int | None = None,
+    level: Literal["innings", "match"] = "innings",
 ) -> CaseStudyMomentumSummary:
     """Build the momentum summary based on key phase analysis."""
     phase_name = key_phase.label.split("(")[0].strip()
@@ -251,6 +279,9 @@ def _build_momentum_summary(
         title=title,
         subtitle=subtitle,
         winning_side=winning_team,
+        innings_index=innings_index,
+        phase_id=key_phase.id,
+        level=level,
         swing_metric=CaseStudySwingMetric(
             runs_above_par=total_swing,
             win_probability_shift=None,  # Would require ML model
@@ -464,64 +495,166 @@ def _compute_player_stats(
 
 def _compute_dismissal_patterns(
     deliveries: list[dict[str, Any]],
-) -> CaseStudyDismissalPatterns | None:
+    innings_number: int,
+    phase_ranges: list[tuple[str, str, int, int]],
+) -> CaseStudyDismissalPatterns:
     """
     Aggregate dismissal patterns from deliveries.
     """
-    wicket_deliveries = [d for d in deliveries if d.get("is_wicket")]
-    if not wicket_deliveries:
-        return None
-
-    by_type: dict[str, int] = defaultdict(int)
-    by_shot: dict[str, int] = defaultdict(int)
-    by_zone: dict[str, int] = defaultdict(int)
-
-    for d in wicket_deliveries:
-        dismissal = d.get("dismissal_type", "Unknown")
-        by_type[dismissal] += 1
-
-        # Shot type (if available in shot_map or similar)
-        shot = d.get("shot_type", "Unknown")
-        if shot and shot != "Unknown":
-            by_shot[shot] += 1
-
-        # Zone (from shot_map or wagon_zone)
-        zone = d.get("wagon_zone") or d.get("shot_map", "Unknown")
-        if zone and zone != "Unknown":
-            by_zone[zone] += 1
-
-    # Build summary
-    total_wickets = len(wicket_deliveries)
-    most_common_type = max(by_type.items(), key=lambda x: x[1])[0] if by_type else None
-    summary = f"{total_wickets} wickets fell in this match."
-    if most_common_type:
-        summary = (
-            f"Most dismissals were {most_common_type.lower()} "
-            f"({by_type[most_common_type]} wickets)."
+    inning_deliveries = [d for d in deliveries if _delivery_innings_number(d) == innings_number]
+    if not inning_deliveries:
+        return CaseStudyDismissalPatterns(
+            innings_index=innings_number - 1,
+            summary="No ball-by-ball deliveries available for this innings.",
+            fallback_reason="No ball-by-ball data available.",
         )
 
+    wicket_deliveries = [d for d in inning_deliveries if d.get("is_wicket")]
+    if not wicket_deliveries:
+        return CaseStudyDismissalPatterns(
+            innings_index=innings_number - 1,
+            summary="No wicket deliveries recorded for this innings.",
+            fallback_reason="No wickets recorded in available delivery data.",
+        )
+
+    by_type: dict[str, int] = defaultdict(int)
+    by_phase: dict[str, int] = defaultdict(int)
+    by_band: dict[str, int] = defaultdict(int)
+    by_bowler: dict[str, int] = defaultdict(int)
+    by_fielder: dict[str, int] = defaultdict(int)
+    by_batter: dict[str, int] = defaultdict(int)
+    by_shot: dict[str, int] = defaultdict(int)
+    by_zone: dict[str, int] = defaultdict(int)
+    over_wickets: dict[int, int] = defaultdict(int)
+    wicket_timeline: list[dict[str, Any]] = []
+    dismissal_type_available = False
+
+    def phase_label_for_over(over_num: int) -> str:
+        for pid, label, start, end in phase_ranges:
+            if start <= over_num <= end:
+                by_phase[pid] += 1
+                return label
+        by_phase["other"] += 1
+        return "Other"
+
+    for idx, d in enumerate(
+        sorted(
+            wicket_deliveries,
+            key=lambda w: (int(w.get("over_number") or w.get("over") or 1), int(w.get("ball_number") or 0)),
+        ),
+        start=1,
+    ):
+        over_num = int(d.get("over_number") or d.get("over") or 1)
+        phase_label = phase_label_for_over(over_num)
+        over_wickets[over_num] += 1
+
+        dismissal = str(d.get("dismissal_type") or "").strip()
+        if dismissal:
+            dismissal_type_available = True
+            by_type[dismissal] += 1
+        else:
+            by_type["Unknown"] += 1
+
+        if over_num <= 6:
+            band = "1-6"
+        elif over_num <= 15:
+            band = "7-15"
+        else:
+            band = "16+"
+        by_band[band] += 1
+
+        bowler_name = _delivery_player_name(d, "bowler_name", "bowler")
+        if bowler_name:
+            by_bowler[bowler_name] += 1
+        fielder_name = _delivery_player_name(d, "fielder_name", "fielder")
+        if fielder_name:
+            by_fielder[fielder_name] += 1
+        batter_name = _delivery_player_name(d, "batter_name", "striker_name", "player_out_name")
+        if batter_name:
+            by_batter[batter_name] += 1
+
+        shot = str(d.get("shot_type") or "").strip()
+        if shot:
+            by_shot[shot] += 1
+        zone = str(d.get("wagon_zone") or d.get("shot_map") or "").strip()
+        if zone:
+            by_zone[zone] += 1
+
+        wicket_timeline.append(
+            {
+                "wicket_number": idx,
+                "over": over_num,
+                "ball": int(d.get("ball_number") or 0),
+                "phase": phase_label,
+                "dismissal_type": dismissal or None,
+                "batter": batter_name,
+                "bowler": bowler_name,
+                "fielder": fielder_name,
+            }
+        )
+
+    cluster_callout = None
+    if over_wickets:
+        overs = sorted(over_wickets)
+        best_window = (0, overs[0], overs[0])
+        for start in overs:
+            end = start + 2
+            wickets_in_window = sum(v for o, v in over_wickets.items() if start <= o <= end)
+            if wickets_in_window > best_window[0]:
+                best_window = (wickets_in_window, start, end)
+        if best_window[0] >= 2:
+            cluster_callout = (
+                f"Wicket cluster: {best_window[0]} wickets fell between overs "
+                f"{best_window[1]}-{best_window[2]}."
+            )
+
+    fallback_reason = None
+    if not dismissal_type_available:
+        fallback_reason = "Dismissal type unavailable in source data."
+
     return CaseStudyDismissalPatterns(
-        summary=summary,
-        by_bowler_type=[
-            CaseStudyDismissalByBowlerType(type=k, wickets=v)
-            for k, v in sorted(by_type.items(), key=lambda x: -x[1])
+        innings_index=innings_number - 1,
+        summary=(
+            f"{len(wicket_deliveries)} wickets fell in innings {innings_number}. "
+            f"Most came in {max(by_phase.items(), key=lambda x: x[1])[0]}."
+        ),
+        total_wickets=len(wicket_deliveries),
+        wickets_by_phase=[
+            {"phase_id": pid, "wickets": wickets}
+            for pid, wickets in sorted(by_phase.items(), key=lambda x: -x[1])
         ],
-        by_shot_type=(
-            [
-                CaseStudyDismissalByShotType(shot=k, wickets=v)
-                for k, v in sorted(by_shot.items(), key=lambda x: -x[1])
-            ]
-            if by_shot
-            else []
-        ),
-        by_zone=(
-            [
-                CaseStudyDismissalByZone(zone=k, wickets=v)
-                for k, v in sorted(by_zone.items(), key=lambda x: -x[1])
-            ]
-            if by_zone
-            else []
-        ),
+        wickets_by_over_band=[
+            {"band": band, "wickets": wickets}
+            for band, wickets in sorted(by_band.items(), key=lambda x: -x[1])
+        ],
+        dismissal_types=[
+            {"type": dtype, "wickets": wickets}
+            for dtype, wickets in sorted(by_type.items(), key=lambda x: -x[1])
+        ],
+        bowler_involvement=[
+            {"name": name, "wickets": wickets}
+            for name, wickets in sorted(by_bowler.items(), key=lambda x: -x[1])
+        ],
+        fielding_involvement=[
+            {"name": name, "dismissals": dismissals}
+            for name, dismissals in sorted(by_fielder.items(), key=lambda x: -x[1])
+        ],
+        dismissed_batters=[name for name, _ in sorted(by_batter.items(), key=lambda x: -x[1])],
+        wicket_timeline=wicket_timeline,
+        wicket_cluster_callout=cluster_callout,
+        fallback_reason=fallback_reason,
+        by_bowler_type=[
+            CaseStudyDismissalByBowlerType(type=name, wickets=wickets)
+            for name, wickets in sorted(by_bowler.items(), key=lambda x: -x[1])
+        ],
+        by_shot_type=[
+            CaseStudyDismissalByShotType(shot=shot, wickets=wickets)
+            for shot, wickets in sorted(by_shot.items(), key=lambda x: -x[1])
+        ],
+        by_zone=[
+            CaseStudyDismissalByZone(zone=zone, wickets=wickets)
+            for zone, wickets in sorted(by_zone.items(), key=lambda x: -x[1])
+        ],
     )
 
 
@@ -582,6 +715,175 @@ def _generate_ai_summary(
         ml_model_version="case-study-baseline-v1",
         tokens_used=None,
     )
+
+
+def _find_phase(phases: list[CaseStudyPhase], phase_id: str) -> CaseStudyPhase | None:
+    return next((phase for phase in phases if phase.id == phase_id), None)
+
+
+def _build_story_blocks(
+    innings_summary: CaseStudyInningsSummary,
+    phases: list[CaseStudyPhase],
+    strongest_phase: CaseStudyPhase | None,
+    weakest_phase: CaseStudyPhase | None,
+) -> CaseStudyStoryBlocks:
+    opening = _find_phase(phases, "powerplay")
+    middle = _find_phase(phases, "middle")
+    death = _find_phase(phases, "death")
+    strongest_label = strongest_phase.label if strongest_phase else "No phase data"
+    weakest_label = weakest_phase.label if weakest_phase else "No phase data"
+    return CaseStudyStoryBlocks(
+        opening_story=(
+            f"{innings_summary.team} scored {opening.runs} and lost {opening.wickets} wickets in the opening phase."
+            if opening
+            else "Opening phase story unavailable from current data."
+        ),
+        middle_overs_story=(
+            f"Middle overs returned {middle.runs} runs for {middle.wickets} wickets."
+            if middle
+            else "Middle-overs story unavailable from current data."
+        ),
+        death_overs_story=(
+            f"Death overs produced {death.runs} runs with {death.wickets} wickets."
+            if death
+            else "Death-overs story unavailable from current data."
+        ),
+        scoring_acceleration=(
+            f"Run-rate changed from {opening.run_rate:.2f} in the opening phase to {death.run_rate:.2f} in the death overs."
+            if opening and death
+            else f"Overall run rate finished at {innings_summary.run_rate:.2f}."
+        ),
+        wickets_by_phase=", ".join(f"{phase.id}: {phase.wickets}" for phase in phases)
+        if phases
+        else "Wickets by phase unavailable.",
+        strongest_phase=f"Strongest phase: {strongest_label}.",
+        weakest_phase=f"Weakest phase: {weakest_label}.",
+        innings_outcome_contribution=(
+            f"{innings_summary.team} posted {innings_summary.runs}/{innings_summary.wickets} in {innings_summary.overs} overs."
+        ),
+    )
+
+
+def _build_innings_callouts(
+    innings_number: int,
+    phases: list[CaseStudyPhase],
+    dismissal_patterns: CaseStudyDismissalPatterns,
+) -> list[CaseStudyAnalystCallout]:
+    callouts: list[CaseStudyAnalystCallout] = []
+    middle = _find_phase(phases, "middle")
+    death = _find_phase(phases, "death")
+    strongest = max(phases, key=lambda p: p.net_swing_vs_par, default=None)
+    weakest = min(phases, key=lambda p: p.net_swing_vs_par, default=None)
+
+    if middle and (middle.net_swing_vs_par <= -8 or middle.wickets >= 3):
+        callouts.append(
+            CaseStudyAnalystCallout(
+                title="Middle-over choke",
+                innings=innings_number,
+                phase="Middle overs",
+                category="momentum",
+                severity="warning",
+                explanation=(
+                    f"Innings {innings_number} scored {middle.runs} and lost {middle.wickets} wickets "
+                    f"between overs {middle.start_over}-{middle.end_over}."
+                ),
+                source_metrics=[
+                    f"runs={middle.runs}",
+                    f"wickets={middle.wickets}",
+                    f"net_vs_par={middle.net_swing_vs_par}",
+                ],
+                confidence=0.9,
+                why_it_matters="Middle-over slowdown often determines defendable totals and chase pressure.",
+            )
+        )
+    if death and death.net_swing_vs_par >= 8:
+        callouts.append(
+            CaseStudyAnalystCallout(
+                title="Death-over surge",
+                innings=innings_number,
+                phase="Death overs",
+                category="batting",
+                severity="positive",
+                explanation=(
+                    f"Innings {innings_number} finished {death.net_swing_vs_par:+d} vs par in overs "
+                    f"{death.start_over}-{death.end_over}."
+                ),
+                source_metrics=[
+                    f"runs={death.runs}",
+                    f"run_rate={death.run_rate}",
+                    f"net_vs_par={death.net_swing_vs_par}",
+                ],
+                confidence=0.9,
+                why_it_matters="Death-over acceleration changes totals quickly and shifts match pressure.",
+            )
+        )
+    if dismissal_patterns.wicket_cluster_callout:
+        callouts.append(
+            CaseStudyAnalystCallout(
+                title="Wicket cluster",
+                innings=innings_number,
+                phase="Wickets",
+                category="dismissal",
+                severity="info",
+                explanation=dismissal_patterns.wicket_cluster_callout,
+                source_metrics=[f"total_wickets={dismissal_patterns.total_wickets}"],
+                confidence=0.85,
+                why_it_matters="Clusters create momentum shocks and often decide innings direction.",
+            )
+        )
+    if strongest:
+        callouts.append(
+            CaseStudyAnalystCallout(
+                title="Strongest phase",
+                innings=innings_number,
+                phase=strongest.label,
+                category="momentum",
+                severity="info",
+                explanation=f"{strongest.label} was the strongest segment at {strongest.net_swing_vs_par:+d} vs par.",
+                source_metrics=[f"phase={strongest.id}", f"net_vs_par={strongest.net_swing_vs_par}"],
+                confidence=0.8,
+                why_it_matters="Strong phases reveal where control was established.",
+            )
+        )
+    if weakest and strongest and weakest.id != strongest.id:
+        callouts.append(
+            CaseStudyAnalystCallout(
+                title="Weakest phase",
+                innings=innings_number,
+                phase=weakest.label,
+                category="momentum",
+                severity="warning",
+                explanation=f"{weakest.label} underperformed at {weakest.net_swing_vs_par:+d} vs par.",
+                source_metrics=[f"phase={weakest.id}", f"net_vs_par={weakest.net_swing_vs_par}"],
+                confidence=0.8,
+                why_it_matters="Weak phases expose tactical windows for the opposition.",
+            )
+        )
+    return callouts
+
+
+def _build_match_callouts(match: CaseStudyMatch) -> list[CaseStudyAnalystCallout]:
+    innings = match.innings[:2]
+    if len(innings) < 2:
+        return []
+    run_diff = innings[0].runs - innings[1].runs
+    return [
+        CaseStudyAnalystCallout(
+            title="Match outcome context",
+            level="match",
+            innings=None,
+            phase="Full match",
+            category="outcome",
+            severity="info",
+            explanation=f"{match.result} (innings run differential: {run_diff:+d}).",
+            source_metrics=[
+                f"innings_1_runs={innings[0].runs}",
+                f"innings_2_runs={innings[1].runs}",
+            ],
+            confidence=0.95,
+            why_it_matters="Outcome context anchors innings-level insights to the final result.",
+        )
+    ]
 
 
 # -----------------------------------------------------------------------------
@@ -775,100 +1077,8 @@ async def _build_case_study_from_db(
         innings=innings_summaries,
     )
 
-    # 5) Get deliveries and compute per-over stats
+    # 5) Get deliveries and key players
     deliveries = game.deliveries or []
-
-    # Use first innings for phase analysis
-    per_over_runs, per_over_wickets = _aggregate_per_over(deliveries, 1)
-
-    # Get first innings totals
-    if game.first_inning_summary:
-        fis = game.first_inning_summary
-        total_runs_inn1 = fis.get("runs", 0)
-        total_overs_inn1 = _display_overs_to_decimal_overs(fis.get("overs", 0)) or sum(
-            1 for _ in per_over_runs
-        )
-    elif is_historical and hist_innings:
-        # Use stored historical innings summary for total calculation
-        first_hist = hist_innings[0] if hist_innings else {}
-        total_runs_inn1 = int(first_hist.get("runs") or 0)
-        total_overs_inn1 = _display_overs_to_decimal_overs(
-            first_hist.get("overs"),
-            first_hist.get("legal_balls"),
-        ) or max(float(len(per_over_runs)), 1.0)
-    else:
-        total_runs_inn1 = sum(per_over_runs.values())
-        total_overs_inn1 = float(len(per_over_runs)) if per_over_runs else 1.0
-
-    # 6) Compute phase breakdown (empty if no delivery data)
-    phase_ranges = _get_phase_ranges(match_format, overs_per_side)
-    if per_over_runs or deliveries:
-        phases = _compute_phase_stats(
-            phase_ranges,
-            per_over_runs,
-            per_over_wickets,
-            total_runs_inn1,
-            total_overs_inn1,
-        )
-    else:
-        phases = []
-
-    # 7) Determine key phase and momentum
-    if phases:
-        key_phase_obj, reason_code = _determine_key_phase(phases)
-        key_phase = CaseStudyKeyPhase(
-            title=f"{key_phase_obj.label} Analysis",
-            detail=(
-                f"Scored {key_phase_obj.runs} runs with {key_phase_obj.wickets} wickets lost. "
-                f"Run rate: {key_phase_obj.run_rate}, {key_phase_obj.impact_label}."
-            ),
-            overs_range={
-                "start_over": key_phase_obj.start_over,
-                "end_over": key_phase_obj.end_over,
-            },
-            reason_codes=[reason_code],
-        )
-        total_swing = sum(p.net_swing_vs_par for p in phases if p.impact == "positive")
-    else:
-        # No delivery data: provide a minimal honest key_phase
-        key_phase_obj = None
-        key_phase = CaseStudyKeyPhase(
-            title="Phase data not yet available",
-            detail=(
-                "Delivery-level data has not been imported yet for this match. "
-                "Use the Phase 5F apply-deliveries endpoint to import ball-by-ball data."
-                if is_historical
-                else "No delivery data available for this match."
-            ),
-            overs_range=None,
-            reason_codes=[],
-        )
-        total_swing = 0
-
-    # Determine winner from result
-    winning_team = None
-    if game.result:
-        if team_a_name.lower() in game.result.lower():
-            winning_team = team_a_name
-        elif team_b_name.lower() in game.result.lower():
-            winning_team = team_b_name
-
-    if key_phase_obj is not None:
-        momentum_summary = _build_momentum_summary(key_phase_obj, winning_team, total_swing)
-    else:
-        # Minimal honest momentum summary when no phase data
-        momentum_summary = CaseStudyMomentumSummary(
-            title="Momentum data not yet available",
-            subtitle=(
-                "Import delivery-level data via Phase 5F to enable momentum analysis."
-                if is_historical
-                else "No delivery data available."
-            ),
-            winning_side=winning_team,
-            swing_metric=None,
-        )
-
-    # 8) Compute key players
     key_players = _compute_player_stats(
         deliveries,
         game.batting_scorecard or {},
@@ -877,20 +1087,140 @@ async def _build_case_study_from_db(
         team_b,
     )
 
-    # 9) Compute dismissal patterns
-    dismissal_patterns = _compute_dismissal_patterns(deliveries)
+    # 6) Determine winner from result
+    winning_team = None
+    if game.result:
+        if team_a_name.lower() in game.result.lower():
+            winning_team = team_a_name
+        elif team_b_name.lower() in game.result.lower():
+            winning_team = team_b_name
 
-    # 10) Generate AI summary
+    # 7) Build innings-level intelligence
+    phase_ranges = _get_phase_ranges(match_format, overs_per_side)
+    innings_analysis: list[CaseStudyInningsAnalysis] = []
+    for innings_index, innings_summary in enumerate(innings_summaries):
+        innings_number = innings_index + 1
+        per_over_runs, per_over_wickets = _aggregate_per_over(deliveries, innings_number)
+        total_runs = innings_summary.runs
+        total_overs = max(_display_overs_to_decimal_overs(innings_summary.overs), 0.1)
+
+        if per_over_runs:
+            phases = _compute_phase_stats(
+                phase_ranges,
+                per_over_runs,
+                per_over_wickets,
+                total_runs,
+                total_overs,
+                innings_index=innings_index,
+                team=innings_summary.team,
+                level="innings",
+            )
+            key_phase_obj, reason_code = _determine_key_phase(phases)
+            key_phase = CaseStudyKeyPhase(
+                title=f"{key_phase_obj.label} Analysis",
+                detail=(
+                    f"Scored {key_phase_obj.runs} runs with {key_phase_obj.wickets} wickets lost. "
+                    f"Run rate: {key_phase_obj.run_rate}, {key_phase_obj.impact_label}."
+                ),
+                innings_index=innings_index,
+                team=innings_summary.team,
+                level="innings",
+                overs_range={
+                    "start_over": key_phase_obj.start_over,
+                    "end_over": key_phase_obj.end_over,
+                },
+                reason_codes=[reason_code],
+            )
+            total_swing = sum(p.net_swing_vs_par for p in phases if p.impact == "positive")
+            momentum_summary = _build_momentum_summary(
+                key_phase_obj,
+                winning_team,
+                total_swing,
+                innings_index=innings_index,
+                level="innings",
+            )
+        else:
+            phases = []
+            key_phase = CaseStudyKeyPhase(
+                title="Phase data not yet available",
+                detail=(
+                    "Delivery-level data has not been imported yet for this innings."
+                    if is_historical
+                    else "No delivery data available for this innings."
+                ),
+                innings_index=innings_index,
+                team=innings_summary.team,
+                level="innings",
+                overs_range=None,
+                reason_codes=[],
+            )
+            momentum_summary = CaseStudyMomentumSummary(
+                title="Momentum data not yet available",
+                subtitle="No delivery data available for this innings.",
+                winning_side=winning_team,
+                innings_index=innings_index,
+                phase_id=None,
+                level="innings",
+                swing_metric=None,
+            )
+
+        dismissal_patterns = _compute_dismissal_patterns(deliveries, innings_number, phase_ranges)
+        strongest_phase = max(phases, key=lambda p: p.net_swing_vs_par) if phases else None
+        weakest_phase = min(phases, key=lambda p: p.net_swing_vs_par) if phases else None
+        story_blocks = _build_story_blocks(innings_summary, phases, strongest_phase, weakest_phase)
+        callouts = _build_innings_callouts(innings_number, phases, dismissal_patterns)
+        innings_analysis.append(
+            CaseStudyInningsAnalysis(
+                innings_index=innings_index,
+                team=innings_summary.team,
+                deterministic_summary=(
+                    f"Innings {innings_number}: {innings_summary.team} scored "
+                    f"{innings_summary.runs}/{innings_summary.wickets} in {innings_summary.overs} overs."
+                ),
+                momentum_summary=momentum_summary,
+                key_phase=key_phase,
+                phases=phases,
+                key_players=key_players,
+                key_players_scope="match",
+                dismissal_patterns=dismissal_patterns,
+                story_blocks=story_blocks,
+                callouts=callouts,
+            )
+        )
+
+    selected_innings = innings_analysis[0] if innings_analysis else None
+    phases = selected_innings.phases if selected_innings else []
+    key_phase = selected_innings.key_phase if selected_innings else CaseStudyKeyPhase(
+        title="Phase data not yet available",
+        detail="No innings analysis available.",
+        level="match",
+    )
+    momentum_summary = (
+        selected_innings.momentum_summary
+        if selected_innings
+        else CaseStudyMomentumSummary(
+            title="Momentum data not yet available",
+            subtitle="No innings analysis available.",
+            level="match",
+        )
+    )
+    selected_dismissal_patterns = selected_innings.dismissal_patterns if selected_innings else None
+
+    # 8) Generate AI summary
     ai_block = _generate_ai_summary(case_study_match, phases, key_players)
+    match_callouts = _build_match_callouts(case_study_match)
 
-    # 11) Return complete response
+    # 9) Return complete response
     return MatchCaseStudyResponse(
         match=case_study_match,
         momentum_summary=momentum_summary,
         key_phase=key_phase,
         phases=phases,
         key_players=key_players,
-        dismissal_patterns=dismissal_patterns,
+        dismissal_patterns=selected_dismissal_patterns,
+        innings_analysis=innings_analysis,
+        match_callouts=match_callouts,
+        match_level_summary=f"{case_study_match.teams_label}: {case_study_match.result}",
         ai=ai_block,
     )
 

@@ -6,10 +6,12 @@ from .analyst_matches import (
 )
 from .case_study import (
     CaseStudyAIBlock,
+    CaseStudyAnalystCallout,
     CaseStudyDismissalByBowlerType,
     CaseStudyDismissalByShotType,
     CaseStudyDismissalByZone,
     CaseStudyDismissalPatterns,
+    CaseStudyInningsAnalysis,
     CaseStudyInningsSummary,
     CaseStudyKeyPhase,
     CaseStudyKeyPlayer,
@@ -19,6 +21,7 @@ from .case_study import (
     CaseStudyPlayerBatting,
     CaseStudyPlayerBowling,
     CaseStudyPlayerFielding,
+    CaseStudyStoryBlocks,
     CaseStudySwingMetric,
     MatchCaseStudyResponse,
 )
@@ -29,10 +32,12 @@ __all__ = [
     "AnalystMatchListResponse",
     # Case Study schemas
     "CaseStudyAIBlock",
+    "CaseStudyAnalystCallout",
     "CaseStudyDismissalByBowlerType",
     "CaseStudyDismissalByShotType",
     "CaseStudyDismissalByZone",
     "CaseStudyDismissalPatterns",
+    "CaseStudyInningsAnalysis",
     "CaseStudyInningsSummary",
     "CaseStudyKeyPhase",
     "CaseStudyKeyPlayer",
@@ -42,6 +47,7 @@ __all__ = [
     "CaseStudyPlayerBatting",
     "CaseStudyPlayerBowling",
     "CaseStudyPlayerFielding",
+    "CaseStudyStoryBlocks",
     "CaseStudySwingMetric",
     "MatchCaseStudyResponse",
 ]
