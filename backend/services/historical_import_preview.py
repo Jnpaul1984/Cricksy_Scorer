@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from backend.api.schemas.historical_import import (
@@ -18,6 +19,9 @@ from backend.api.schemas.historical_import import (
     HistoricalImportVenueContext,
 )
 from backend.domain.constants import norm_extra
+from backend.services.analyst_registry_service import classify_age_category, classify_gender
+from backend.services.cpl_team_alias_registry import canonicalize_team_name, is_known_team_alias
+from backend.services.cpl_venue_alias_registry import canonicalize_venue_name, is_known_venue_alias
 
 INNINGS_NODE_KEYS = ("team", "balls", "deliveries", "overs", "runs", "wickets")
 DELIVERY_PLAYER_KEYS = ("batsman", "batter", "striker", "non_striker", "bowler")
@@ -45,6 +49,9 @@ _INTERNATIONAL_TEAM_HINTS = {
     "netherlands",
     "scotland",
 }
+_WOMEN_KEYWORDS = re.compile(r"\bwomen\b|\bfemale\b|\bgirl\b|\bwcpl\b", re.I)
+_YOUTH_KEYWORDS = re.compile(r"\bu-?1[59]\b|\byouth\b|\bjunior\b|\bacademy\b", re.I)
+_SCHOOL_KEYWORDS = re.compile(r"\bschool\b|\bschools\b|\bcollege\b", re.I)
 
 
 def _hash_payload(payload: bytes) -> str:
@@ -280,6 +287,343 @@ def _extract_roster_snapshot(
     return snapshots
 
 
+def _collect_team_players(payload: dict[str, Any], team_names: list[str]) -> dict[str, set[str]]:
+    info_payload = payload.get("info")
+    info = info_payload if isinstance(info_payload, dict) else {}
+    info_players = info.get("players")
+    players_map = info_players if isinstance(info_players, dict) else {}
+    team_players: dict[str, set[str]] = {team_name: set() for team_name in team_names}
+
+    for team_name in team_names:
+        roster_raw = players_map.get(team_name)
+        if isinstance(roster_raw, list):
+            for player in roster_raw:
+                player_name = _as_str(player)
+                if player_name:
+                    team_players.setdefault(team_name, set()).add(player_name)
+
+    teams_payload = payload.get("teams")
+    if isinstance(teams_payload, list):
+        for team in teams_payload:
+            if not isinstance(team, dict):
+                continue
+            team_name = _as_str(team.get("name"))
+            if not team_name:
+                continue
+            players_raw = team.get("players")
+            if isinstance(players_raw, list):
+                for player in players_raw:
+                    if isinstance(player, dict):
+                        player_name = (
+                            _as_str(player.get("name"))
+                            or _as_str(player.get("player"))
+                            or _as_str(player.get("full_name"))
+                        )
+                    else:
+                        player_name = _as_str(player)
+                    if player_name:
+                        team_players.setdefault(team_name, set()).add(player_name)
+
+    return team_players
+
+
+def _name_signature(value: str) -> tuple[str, str] | None:
+    tokens = [token for token in re.split(r"[^A-Za-z]+", value) if token]
+    if len(tokens) < 2:
+        return None
+    return tokens[-1].lower(), tokens[0][0].lower()
+
+
+def _classify_match_format(
+    raw_match_type: str | None,
+    innings_count: int,
+    source_dates: list[str],
+) -> tuple[str, str]:
+    match_type = (raw_match_type or "").strip().lower()
+    if not match_type:
+        if innings_count > 2 or len(source_dates) > 1:
+            return "First-class / multi-day", "inferred"
+        return "unknown", "unknown"
+    if match_type in {"t20", "t20i", "twenty20", "20_over"}:
+        return "T20", "source"
+    if match_type in {"odi", "one-day", "one day", "list a"}:
+        return "ODI", "source"
+    if match_type in {"test", "test match"}:
+        return "Test", "source"
+    if match_type in {"first-class", "first class", "multi_day", "multi-day"}:
+        return "First-class / multi-day", "source"
+    if innings_count > 2 or len(source_dates) > 1:
+        return "First-class / multi-day", "inferred"
+    return "custom", "source"
+
+
+def _classify_age_category_hint(event_name: str | None, team_names: list[str]) -> tuple[str, str]:
+    meta = classify_age_category({"age_category": event_name}) if event_name else "unknown"
+    if meta != "unknown":
+        return meta, "source"
+    haystacks = [event_name or "", *team_names]
+    if any(_SCHOOL_KEYWORDS.search(value) for value in haystacks):
+        return "school", "inferred"
+    if any(_YOUTH_KEYWORDS.search(value) for value in haystacks):
+        return "youth", "inferred"
+    return "unknown", "unknown"
+
+
+def _classify_competition_code(
+    event_name: str | None,
+    team_names: list[str],
+    format_category: str,
+    age_category: str,
+) -> tuple[str, str]:
+    lowered = (event_name or "").strip().lower()
+    normalized_teams = {team.strip().lower() for team in team_names if team.strip()}
+    if not lowered:
+        return "UNKNOWN", "unknown"
+    if "wcpl" in lowered or (
+        "caribbean premier league" in lowered and _WOMEN_KEYWORDS.search(lowered)
+    ):
+        return "WCPL", "inferred"
+    if "caribbean premier league" in lowered or re.search(r"\bcpl\b", lowered):
+        return "CPL_MEN", "inferred"
+    if age_category == "school":
+        return "SCHOOL_CRICKET", "inferred"
+    if any(token in lowered for token in ("barbados cricket", "barbados", "bca", "barbadian")):
+        return "LOCAL_BARBADOS", "inferred"
+    if format_category == "Test":
+        return "INTERNATIONAL_TEST", "inferred"
+    if format_category == "ODI" and (
+        "icc" in lowered or "international" in lowered or "world cup" in lowered
+    ):
+        return "INTERNATIONAL_ODI", "inferred"
+    if format_category == "T20" and (
+        "icc" in lowered
+        or "international" in lowered
+        or "world cup" in lowered
+        or normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS)
+    ):
+        return "INTERNATIONAL_T20", "inferred"
+    if format_category in {"Test", "First-class / multi-day"}:
+        return "DOMESTIC_MULTI_DAY", "inferred"
+    if any(token in lowered for token in ("custom", "exhibition", "friendly", "festival")):
+        return "CUSTOM", "source"
+    return "UNKNOWN", "unknown"
+
+
+def _classify_gender_category(
+    event_name: str | None,
+    payload: dict[str, Any],
+    competition_code: str,
+    team_names: list[str],
+) -> tuple[str, str]:
+    info_payload = payload.get("info")
+    info = info_payload if isinstance(info_payload, dict) else {}
+    gender_hint = _as_str(info.get("gender")) or _as_str(payload.get("gender"))
+    gender_category = classify_gender(competition_code, gender_hint)
+    if gender_category != "unknown":
+        return gender_category, "source" if gender_hint else "inferred"
+    haystacks = [event_name or "", *team_names]
+    if any(_WOMEN_KEYWORDS.search(value) for value in haystacks):
+        return "women", "inferred"
+    return "unknown", "unknown"
+
+
+def _estimate_completeness_grade(
+    innings_preview: list[HistoricalImportInningsPreview],
+    innings_nodes: list[dict[str, Any]],
+    format_category: str,
+) -> str:
+    if not innings_preview:
+        return "unknown"
+    has_deliveries = all(inning.deliveries > 0 for inning in innings_preview)
+    has_totals = all(inning.runs is not None for inning in innings_preview)
+    has_phase_data = any(isinstance(inning.get("phases"), (dict, list)) for inning in innings_nodes)
+    is_multi_day = (
+        format_category in {"Test", "First-class / multi-day"} or len(innings_preview) > 2
+    )
+    if is_multi_day:
+        if has_deliveries and has_totals and len(innings_preview) >= 3:
+            return "multi_day_complete"
+        return "multi_day_partial"
+    if has_deliveries:
+        return "delivery_complete"
+    if has_phase_data:
+        return "phase_level"
+    if has_totals:
+        return "innings_totals"
+    if any(
+        inning.team or inning.runs is not None or inning.wickets is not None
+        for inning in innings_preview
+    ):
+        return "metadata_only"
+    return "unknown"
+
+
+def _build_team_diagnostics(
+    team_names: list[str],
+    competition_code: str,
+) -> dict[str, object]:
+    alias_groups: dict[str, dict[str, object]] = {}
+    unknown_team_names: list[str] = []
+    for team_name in team_names:
+        canonical_name, alias_key = canonicalize_team_name(team_name)
+        normalized_key = alias_key or team_name.casefold()
+        group = alias_groups.setdefault(
+            normalized_key,
+            {
+                "canonical_name": canonical_name or team_name,
+                "alias_key": normalized_key,
+                "raw_aliases": [],
+                "confidence": "high" if is_known_team_alias(team_name) else "low",
+            },
+        )
+        group["raw_aliases"].append(team_name)
+        if competition_code in {"CPL_MEN", "WCPL"} and not is_known_team_alias(team_name):
+            unknown_team_names.append(team_name)
+
+    canonical_matches = [
+        {
+            **group,
+            "raw_aliases": sorted(set(group["raw_aliases"])),
+        }
+        for group in alias_groups.values()
+    ]
+    possible_duplicate_aliases = [
+        group for group in canonical_matches if len(group["raw_aliases"]) > 1
+    ]
+    return {
+        "canonical_matches": canonical_matches,
+        "unknown_team_names": sorted(set(unknown_team_names)),
+        "possible_duplicate_team_aliases": possible_duplicate_aliases,
+    }
+
+
+def _build_player_diagnostics(
+    payload: dict[str, Any],
+    team_names: list[str],
+    player_names: list[str],
+    registry_people_map: dict[str, str],
+    gender_category: str,
+) -> dict[str, object]:
+    team_players = _collect_team_players(payload, team_names)
+    player_to_teams: dict[str, set[str]] = {}
+    for team_name, players in team_players.items():
+        for player_name in players:
+            player_to_teams.setdefault(player_name, set()).add(team_name)
+
+    missing_player_ids = [
+        player_name for player_name in player_names if player_name not in registry_people_map
+    ]
+    cross_team_conflicts = [
+        {"player_name": name, "teams": sorted(teams)}
+        for name, teams in player_to_teams.items()
+        if len(teams) > 1
+    ]
+    signature_map: dict[tuple[str, str], list[str]] = {}
+    for player_name in player_names:
+        signature = _name_signature(player_name)
+        if signature is not None:
+            signature_map.setdefault(signature, []).append(player_name)
+    initial_variants = [
+        {"signature": f"{surname}:{initial}", "variants": sorted(set(names))}
+        for (surname, initial), names in signature_map.items()
+        if len(set(names)) > 1
+    ]
+    return {
+        "mapping_status": "registry_ids_present" if registry_people_map else "source_names_only",
+        "missing_player_ids": missing_player_ids,
+        "unknown_player_records": missing_player_ids,
+        "duplicate_player_candidates": initial_variants,
+        "cross_team_name_conflicts": cross_team_conflicts,
+        "gender_category": gender_category,
+    }
+
+
+def _build_venue_diagnostics(venue_name: str | None) -> dict[str, object]:
+    canonical_name, alias_key = canonicalize_venue_name(venue_name)
+    is_known = is_known_venue_alias(venue_name)
+    unknown_venues = [venue_name] if venue_name and not is_known else []
+    return {
+        "raw_venue_names": [venue_name] if venue_name else [],
+        "canonical_venue_name": canonical_name,
+        "alias_key": alias_key,
+        "unknown_venues": unknown_venues,
+        "possible_duplicate_venues": (
+            [
+                {
+                    "canonical_name": canonical_name,
+                    "raw_alias": venue_name,
+                    "alias_key": alias_key,
+                }
+            ]
+            if venue_name and canonical_name and canonical_name != venue_name
+            else []
+        ),
+        "missing_venue_data": venue_name is None,
+    }
+
+
+def _build_multi_day_diagnostics(
+    metadata_preview: HistoricalImportMetadataPreview,
+    innings_preview: list[HistoricalImportInningsPreview],
+    innings_nodes: list[dict[str, Any]],
+    format_category: str,
+) -> dict[str, object]:
+    innings_order = [inning.team for inning in innings_preview]
+    repeated_team_sequence = any(
+        innings_order[idx] and innings_order[idx] == innings_order[idx - 1]
+        for idx in range(1, len(innings_order))
+    )
+    source_dates = metadata_preview.source_dates
+    outcome_text = (metadata_preview.result or "").lower()
+    if "draw" in outcome_text:
+        outcome = "draw"
+    elif "tie" in outcome_text:
+        outcome = "tie"
+    elif "no result" in outcome_text or "abandoned" in outcome_text:
+        outcome = "no_result"
+    else:
+        outcome = "result_declared" if metadata_preview.result else "unknown"
+
+    day_session_available = False
+    for innings in innings_nodes:
+        if _as_str(innings.get("day")) or _as_str(innings.get("session")):
+            day_session_available = True
+            break
+        for delivery in _extract_deliveries_from_overs(innings.get("overs")):
+            if _as_str(delivery.get("day")) or _as_str(delivery.get("session")):
+                day_session_available = True
+                break
+        if day_session_available:
+            break
+
+    missing_totals = [
+        inning.inning_no
+        for inning in innings_preview
+        if inning.runs is None or inning.wickets is None
+    ]
+    incomplete_scorecards = [
+        inning.inning_no for inning in innings_preview if inning.deliveries == 0
+    ]
+    is_multi_day = (
+        format_category in {"Test", "First-class / multi-day"} or len(innings_preview) > 2
+    )
+    return {
+        "is_multi_day": is_multi_day,
+        "innings_count": len(innings_preview),
+        "innings_order": innings_order,
+        "follow_on_or_unusual_order_detected": repeated_team_sequence,
+        "date_range": {
+            "start": source_dates[0] if source_dates else metadata_preview.date,
+            "end": source_dates[-1] if source_dates else metadata_preview.date,
+            "day_count": len(source_dates) if source_dates else (1 if metadata_preview.date else 0),
+        },
+        "outcome_type": outcome,
+        "day_session_metadata_available": day_session_available,
+        "missing_innings_totals": missing_totals,
+        "incomplete_scorecards": incomplete_scorecards,
+    }
+
+
 def _classify_competition_type(
     event_name: str | None,
     teams: list[str],
@@ -334,6 +678,104 @@ def _classify_schema(
     )
 
 
+def _build_validation_diagnostics(
+    *,
+    parsed: dict[str, Any],
+    metadata_preview: HistoricalImportMetadataPreview,
+    team_names: list[str],
+    innings_preview: list[HistoricalImportInningsPreview],
+    innings_nodes: list[dict[str, Any]],
+    detected_format: str,
+    source_filename: str | None = None,
+) -> dict[str, object]:
+    registry_people_map = _extract_registry_people_map(parsed)
+    competition_type, competition_type_status = _classify_competition_type(
+        metadata_preview.event_name, team_names
+    )
+    format_category, format_status = _classify_match_format(
+        metadata_preview.match_type, len(innings_preview), metadata_preview.source_dates
+    )
+    age_category, age_status = _classify_age_category_hint(metadata_preview.event_name, team_names)
+    competition_code, competition_code_status = _classify_competition_code(
+        metadata_preview.event_name, team_names, format_category, age_category
+    )
+    gender_category, gender_status = _classify_gender_category(
+        metadata_preview.event_name, parsed, competition_code, team_names
+    )
+    completeness_grade = _estimate_completeness_grade(
+        innings_preview, innings_nodes, format_category
+    )
+    analysis_readiness = (
+        "limited"
+        if completeness_grade in {"multi_day_partial", "multi_day_complete"}
+        else ("full" if completeness_grade == "delivery_complete" else "limited")
+    )
+    team_diagnostics = _build_team_diagnostics(team_names, competition_code)
+    player_names = sorted(
+        _extract_players_from_teams(parsed)
+        .union(_extract_registry_people_map(parsed).keys())
+        .union(
+            {
+                player
+                for innings in innings_nodes
+                for delivery in _extract_deliveries_from_overs(innings.get("overs"))
+                for player in (
+                    _as_str(delivery.get("batter")),
+                    _as_str(delivery.get("batsman")),
+                    _as_str(delivery.get("striker")),
+                    _as_str(delivery.get("non_striker")),
+                    _as_str(delivery.get("bowler")),
+                )
+                if player
+            }
+        )
+    )
+    player_diagnostics = _build_player_diagnostics(
+        parsed, team_names, player_names, registry_people_map, gender_category
+    )
+    venue_diagnostics = _build_venue_diagnostics(metadata_preview.venue)
+    multi_day_diagnostics = _build_multi_day_diagnostics(
+        metadata_preview, innings_preview, innings_nodes, format_category
+    )
+    return {
+        "scan_summary": {
+            "files_scanned": 1,
+            "files_recognized": 1 if detected_format != "unknown" else 0,
+            "files_skipped": 0,
+            "expected_matches": 1 if detected_format != "unknown" else 0,
+            "parse_failures": 0,
+            "source_filename": source_filename,
+        },
+        "classification": {
+            "competition_code": competition_code,
+            "competition_code_status": competition_code_status,
+            "competition_type": competition_type,
+            "competition_type_status": competition_type_status,
+            "format_category": format_category,
+            "format_status": format_status,
+            "gender_category": gender_category,
+            "gender_status": gender_status,
+            "age_category": age_category,
+            "age_status": age_status,
+            "completeness_grade": completeness_grade,
+            "analysis_readiness": analysis_readiness,
+        },
+        "multi_day": multi_day_diagnostics,
+        "team_alias_check": team_diagnostics,
+        "player_identity_risks": player_diagnostics,
+        "venue_check": venue_diagnostics,
+        "batch_traceability": {
+            "batch_id": None,
+            "source_path": source_filename,
+            "source_file_name": source_filename,
+            "import_timestamp": None,
+            "traceable_on_apply": True,
+            "records_created_updated_skipped_available_on_apply": True,
+            "validation_warnings_available": True,
+        },
+    }
+
+
 def _build_canonical_preview(
     parsed: dict[str, Any],
     metadata_preview: HistoricalImportMetadataPreview,
@@ -343,6 +785,7 @@ def _build_canonical_preview(
     source_hash: str,
     warnings: list[HistoricalImportIssue],
     errors: list[HistoricalImportIssue],
+    diagnostics: dict[str, object],
 ) -> tuple[HistoricalImportCanonicalPreview, HistoricalImportCompetitionContext]:
     info_payload = parsed.get("info")
     info = info_payload if isinstance(info_payload, dict) else {}
@@ -353,13 +796,20 @@ def _build_canonical_preview(
     event_payload = event_raw if isinstance(event_raw, dict) else {}
     event_name = metadata_preview.event_name
 
-    competition_type, competition_type_status = _classify_competition_type(event_name, team_names)
+    classification = diagnostics.get("classification", {})
+    competition_type = str(classification.get("competition_type") or "unknown")
+    competition_type_status = str(classification.get("competition_type_status") or "unknown")
     competition_context = HistoricalImportCompetitionContext(
+        competition_code=str(classification.get("competition_code") or "UNKNOWN"),
         competition_type=competition_type,  # type: ignore[arg-type]
         competition_name=event_name,
         competition_stage=_as_str(event_payload.get("stage")),
         season=metadata_preview.season,
         match_format=(metadata_preview.match_type or "unknown").lower(),
+        format_category=str(classification.get("format_category") or "unknown"),
+        gender_category=str(classification.get("gender_category") or "unknown"),
+        age_category=str(classification.get("age_category") or "unknown"),
+        analysis_readiness=str(classification.get("analysis_readiness") or "unknown"),
         tournament_name=event_name,
         tournament_round=_stringify_scalar(event_payload.get("match_number"))
         or _as_str(event_payload.get("group"))
@@ -369,14 +819,23 @@ def _build_canonical_preview(
             "competition_name": "source" if event_name else "missing",
             "season": "source" if metadata_preview.season else "missing",
             "match_format": "source" if metadata_preview.match_type else "unknown",
+            "format_category": str(classification.get("format_status") or "unknown"),  # type: ignore[dict-item]
+            "gender_category": str(classification.get("gender_status") or "unknown"),  # type: ignore[dict-item]
+            "age_category": str(classification.get("age_status") or "unknown"),  # type: ignore[dict-item]
         },
     )
 
     venue_raw = _as_str(parsed.get("venue")) or _as_str(info.get("venue"))
+    venue_check = diagnostics.get("venue_check", {})
     venue_context = HistoricalImportVenueContext(
-        venue_name=venue_raw,
+        venue_name=_as_str(venue_check.get("canonical_venue_name")) or venue_raw,
         source_venue_raw=venue_raw,
-        venue_resolution_status="resolved" if venue_raw else "unknown",
+        ground_code=_as_str(venue_check.get("alias_key")),
+        venue_resolution_status=(
+            "resolved"
+            if venue_raw and not venue_check.get("unknown_venues")
+            else ("unresolved" if venue_raw else "unknown")
+        ),
     )
     if venue_raw is None:
         warnings.append(
@@ -390,6 +849,7 @@ def _build_canonical_preview(
 
     registry_people_map = _extract_registry_people_map(parsed)
     roster_snapshot = _extract_roster_snapshot(parsed, team_names, registry_people_map)
+    player_risks = diagnostics.get("player_identity_risks", {})
     if not any(team.playing_xi for team in roster_snapshot):
         warnings.append(
             HistoricalImportIssue(
@@ -428,8 +888,8 @@ def _build_canonical_preview(
         team_context={"teams": team_names},
         squad_roster_snapshot=roster_snapshot,
         player_identity_mapping={
-            "mapping_status": "source_names_only",
-            "unresolved_entries": [],
+            "mapping_status": str(player_risks.get("mapping_status") or "source_names_only"),
+            "unresolved_entries": player_risks.get("unknown_player_records", []),
             "deterministic_blocking": False,
         },
         innings_summaries=[inning.model_dump(mode="python") for inning in innings_preview],
@@ -442,12 +902,15 @@ def _build_canonical_preview(
             "adapter_version": schema_classification.adapter_version,
             "source_hash_sha256": source_hash,
             "raw_competition_name": event_name,
+            "raw_match_type": metadata_preview.match_type,
+            "raw_dates": metadata_preview.source_dates,
             "source_venue_raw": venue_raw,
         },
         validation_report={
             "warning_count": len(warnings),
             "error_count": len(errors),
             "issues": [issue.model_dump(mode="python") for issue in [*warnings, *errors]],
+            **diagnostics,
         },
     )
     return canonical, competition_context
@@ -627,6 +1090,7 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
     try:
         decoded = raw_payload.decode("utf-8")
     except UnicodeDecodeError:
+        source_hash = _hash_payload(raw_payload)
         response = HistoricalImportDryRunResponse(
             status="invalid",
             detected_format="unknown",
@@ -646,8 +1110,17 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
                     severity="error",
                 )
             ],
+            diagnostics={
+                "scan_summary": {
+                    "files_scanned": 1,
+                    "files_recognized": 0,
+                    "files_skipped": 1,
+                    "expected_matches": 0,
+                    "parse_failures": 1,
+                }
+            },
             duplicate_detection=HistoricalImportDuplicatePreview(
-                source_hash_sha256=_hash_payload(raw_payload),
+                source_hash_sha256=source_hash,
                 probable_duplicate="unknown",
                 tracking_available=False,
                 message=DUPLICATE_TRACKING_MESSAGE,
@@ -659,6 +1132,7 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
     try:
         parsed = json.loads(decoded)
     except json.JSONDecodeError:
+        source_hash = _hash_payload(raw_payload)
         response = HistoricalImportDryRunResponse(
             status="invalid",
             detected_format="unknown",
@@ -678,8 +1152,17 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
                     severity="error",
                 )
             ],
+            diagnostics={
+                "scan_summary": {
+                    "files_scanned": 1,
+                    "files_recognized": 0,
+                    "files_skipped": 1,
+                    "expected_matches": 0,
+                    "parse_failures": 1,
+                }
+            },
             duplicate_detection=HistoricalImportDuplicatePreview(
-                source_hash_sha256=_hash_payload(raw_payload),
+                source_hash_sha256=source_hash,
                 probable_duplicate="unknown",
                 tracking_available=False,
                 message=DUPLICATE_TRACKING_MESSAGE,
@@ -689,6 +1172,7 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         return 400, response
 
     if not isinstance(parsed, dict):
+        source_hash = _hash_payload(raw_payload)
         response = HistoricalImportDryRunResponse(
             status="invalid",
             detected_format="unknown",
@@ -708,8 +1192,17 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
                     severity="error",
                 )
             ],
+            diagnostics={
+                "scan_summary": {
+                    "files_scanned": 1,
+                    "files_recognized": 0,
+                    "files_skipped": 1,
+                    "expected_matches": 0,
+                    "parse_failures": 1,
+                }
+            },
             duplicate_detection=HistoricalImportDuplicatePreview(
-                source_hash_sha256=_hash_payload(raw_payload),
+                source_hash_sha256=source_hash,
                 probable_duplicate="unknown",
                 tracking_available=False,
                 message=DUPLICATE_TRACKING_MESSAGE,
@@ -805,6 +1298,104 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
     player_names = sorted(
         players_from_teams.union(players_from_innings).union(players_from_registry)
     )
+    diagnostics = _build_validation_diagnostics(
+        parsed=parsed,
+        metadata_preview=metadata_preview,
+        team_names=team_names,
+        innings_preview=innings_preview,
+        innings_nodes=innings_nodes,
+        detected_format=detected_format,
+    )
+    classification = diagnostics.get("classification", {})
+    team_alias_check = diagnostics.get("team_alias_check", {})
+    venue_check = diagnostics.get("venue_check", {})
+    multi_day = diagnostics.get("multi_day", {})
+
+    if not metadata_preview.date:
+        warnings.append(
+            HistoricalImportIssue(
+                code="MISSING_DATE",
+                message="Match date is missing from the historical payload.",
+                severity="warning",
+                path="metadata_preview.date",
+            )
+        )
+    if classification.get("competition_code") == "UNKNOWN":
+        warnings.append(
+            HistoricalImportIssue(
+                code="UNKNOWN_COMPETITION",
+                message="Competition could not be safely classified from the source metadata.",
+                severity="warning",
+                path="diagnostics.classification.competition_code",
+            )
+        )
+    if classification.get("format_category") == "unknown":
+        warnings.append(
+            HistoricalImportIssue(
+                code="UNKNOWN_FORMAT",
+                message="Match format could not be classified conservatively.",
+                severity="warning",
+                path="diagnostics.classification.format_category",
+            )
+        )
+    if classification.get("gender_category") == "unknown":
+        warnings.append(
+            HistoricalImportIssue(
+                code="UNKNOWN_GENDER_CATEGORY",
+                message="Gender/category could not be safely inferred from source metadata.",
+                severity="warning",
+                path="diagnostics.classification.gender_category",
+            )
+        )
+    unknown_team_names = team_alias_check.get("unknown_team_names", [])
+    if isinstance(unknown_team_names, list) and unknown_team_names:
+        warnings.append(
+            HistoricalImportIssue(
+                code="UNKNOWN_TEAM_ALIASES",
+                message="One or more team names were not resolved to a known canonical alias set.",
+                severity="warning",
+                path="diagnostics.team_alias_check.unknown_team_names",
+            )
+        )
+    unknown_venues = venue_check.get("unknown_venues", [])
+    if isinstance(unknown_venues, list) and unknown_venues:
+        warnings.append(
+            HistoricalImportIssue(
+                code="UNKNOWN_VENUE_ALIAS",
+                message="Venue name was preserved but not resolved to a known canonical venue alias.",
+                severity="warning",
+                path="diagnostics.venue_check.unknown_venues",
+            )
+        )
+    missing_innings_totals = multi_day.get("missing_innings_totals", [])
+    if isinstance(missing_innings_totals, list) and missing_innings_totals:
+        warnings.append(
+            HistoricalImportIssue(
+                code="MISSING_INNINGS_TOTALS",
+                message="One or more innings totals are incomplete or missing.",
+                severity="warning",
+                path="diagnostics.multi_day.missing_innings_totals",
+            )
+        )
+    incomplete_scorecards = multi_day.get("incomplete_scorecards", [])
+    if isinstance(incomplete_scorecards, list) and incomplete_scorecards:
+        warnings.append(
+            HistoricalImportIssue(
+                code="INCOMPLETE_SCORECARD",
+                message="One or more innings scorecards are incomplete.",
+                severity="warning",
+                path="diagnostics.multi_day.incomplete_scorecards",
+            )
+        )
+    if multi_day.get("is_multi_day") and classification.get("analysis_readiness") == "limited":
+        warnings.append(
+            HistoricalImportIssue(
+                code="LIMITED_MULTI_DAY_ANALYSIS_READY",
+                message="Multi-day/Test match detected; import is safe but downstream analysis remains limited.",
+                severity="warning",
+                path="diagnostics.classification.analysis_readiness",
+            )
+        )
 
     detected_sections = HistoricalImportDetectedSections(
         teams=bool(team_names),
@@ -841,6 +1432,7 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         normalized_hash,
         warnings,
         errors,
+        diagnostics,
     )
     meta_payload = parsed.get("meta")
     meta = meta_payload if isinstance(meta_payload, dict) else {}
@@ -868,6 +1460,7 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         innings_preview=innings_preview,
         warnings=warnings,
         errors=errors,
+        diagnostics=canonical_preview.validation_report,
         duplicate_detection=HistoricalImportDuplicatePreview(
             source_hash_sha256=normalized_hash,
             probable_duplicate="unknown",

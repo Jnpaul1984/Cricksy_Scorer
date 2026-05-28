@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 
 from backend.main import app
 
-
 FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
 CRICSHEET_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_t20.json"
 CRICSHEET_635215_FIXTURE_PATH = Path(__file__).resolve().parent / "sanitized_cricsheet_635215.json"
@@ -67,6 +66,117 @@ def _cricsheet_minimal_payload(event_name: str) -> dict[str, object]:
                             ],
                         }
                     ]
+                }
+            },
+        ],
+    }
+
+
+def _cricsheet_delivery(
+    batter: str,
+    non_striker: str,
+    bowler: str,
+    *,
+    runs: int = 1,
+) -> dict[str, object]:
+    return {
+        "batter": batter,
+        "non_striker": non_striker,
+        "bowler": bowler,
+        "runs": {"batter": runs, "extras": 0, "total": runs},
+    }
+
+
+def _build_test_match_payload() -> dict[str, object]:
+    return {
+        "meta": {"data_version": "0.92"},
+        "info": {
+            "match_type": "Test",
+            "venue": "Providence Stadium",
+            "dates": ["2024-03-01", "2024-03-02", "2024-03-03"],
+            "season": "2024",
+            "event": {"name": "ICC Test Championship", "match_number": 3},
+            "teams": ["West Indies", "India"],
+            "players": {
+                "West Indies": ["K Brathwaite", "T Chanderpaul", "J Holder"],
+                "India": ["R Sharma", "Rahul Sharma", "R Ashwin", "R Dravid"],
+            },
+            "registry": {
+                "people": {
+                    "K Brathwaite": "wi-1",
+                    "T Chanderpaul": "wi-2",
+                    "R Sharma": "in-1",
+                    "R Ashwin": "in-2",
+                    "R Dravid": "in-3",
+                }
+            },
+            "outcome": {"result": "draw"},
+        },
+        "innings": [
+            {
+                "West Indies": {
+                    "runs": 250,
+                    "wickets": 10,
+                    "overs": [
+                        {
+                            "over": 0,
+                            "deliveries": [
+                                _cricsheet_delivery(
+                                    "K Brathwaite",
+                                    "T Chanderpaul",
+                                    "R Ashwin",
+                                )
+                            ],
+                        }
+                    ],
+                }
+            },
+            {
+                "India": {
+                    "runs": 300,
+                    "wickets": 10,
+                    "overs": [
+                        {
+                            "over": 0,
+                            "deliveries": [_cricsheet_delivery("R Sharma", "R Dravid", "J Holder")],
+                        }
+                    ],
+                }
+            },
+            {
+                "West Indies": {
+                    "runs": 180,
+                    "wickets": 8,
+                    "overs": [
+                        {
+                            "over": 0,
+                            "deliveries": [
+                                _cricsheet_delivery(
+                                    "T Chanderpaul",
+                                    "J Holder",
+                                    "R Ashwin",
+                                )
+                            ],
+                        }
+                    ],
+                }
+            },
+            {
+                "India": {
+                    "runs": 90,
+                    "wickets": 2,
+                    "overs": [
+                        {
+                            "over": 0,
+                            "deliveries": [
+                                _cricsheet_delivery(
+                                    "Rahul Sharma",
+                                    "R Dravid",
+                                    "J Holder",
+                                )
+                            ],
+                        }
+                    ],
                 }
             },
         ],
@@ -164,6 +274,8 @@ def test_dry_run_sanitized_cricsheet_fixture_valid_preview() -> None:
     assert data["teams_preview"] == ["Sanitized Strikers", "Sanitized Royals"]
     assert data["innings_count"] == 2
     assert data["delivery_count"] == 24
+    assert data["diagnostics"]["classification"]["competition_code"] == "UNKNOWN"
+    assert data["diagnostics"]["classification"]["format_category"] == "T20"
     assert sorted(data["canonical_preview"].keys()) == [
         "competition_context",
         "delivery_events",
@@ -219,6 +331,35 @@ def test_dry_run_unsupported_shape_returns_structured_error() -> None:
     assert data["canonical_preview"] is None
     assert data["schema_classification"]["source_schema_category"] == "unknown_unsupported_json"
     assert any(issue["code"] == "UNSUPPORTED_FORMAT" for issue in data["errors"])
+
+
+def test_dry_run_multi_day_test_payload_reports_readiness_and_identity_risks() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/historical-import/json/dry-run", json=_build_test_match_payload()
+        )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "valid"
+    assert data["innings_count"] == 4
+    assert data["diagnostics"]["classification"]["competition_code"] == "INTERNATIONAL_TEST"
+    assert data["diagnostics"]["classification"]["format_category"] == "Test"
+    assert data["diagnostics"]["classification"]["completeness_grade"] == "multi_day_complete"
+    assert data["diagnostics"]["classification"]["analysis_readiness"] == "limited"
+    assert data["diagnostics"]["multi_day"]["is_multi_day"] is True
+    assert data["diagnostics"]["multi_day"]["date_range"]["day_count"] == 3
+    assert data["diagnostics"]["multi_day"]["innings_order"] == [
+        "West Indies",
+        "India",
+        "West Indies",
+        "India",
+    ]
+    assert "Rahul Sharma" in data["diagnostics"]["player_identity_risks"]["missing_player_ids"]
+    assert data["canonical_preview"]["competition_context"]["analysis_readiness"] == "limited"
+    assert (
+        data["canonical_preview"]["competition_context"]["competition_code"] == "INTERNATIONAL_TEST"
+    )
 
 
 @pytest.mark.parametrize(
@@ -300,6 +441,27 @@ def test_dry_run_requires_two_teams_in_metadata() -> None:
     assert data["status"] == "invalid"
     assert data["canonical_preview"] is None
     assert any(issue["code"] == "MISSING_TEAMS" for issue in data["errors"])
+
+
+def test_dry_run_reports_custom_competition_and_unresolved_venue_conservatively() -> None:
+    payload = _cricsheet_minimal_payload("Island Invitational Friendly")
+    info = payload["info"]
+    assert isinstance(info, dict)
+    info["venue"] = "Village Park"
+    info["dates"] = []
+    info["teams"] = ["Custom XI", "Community XI"]
+
+    with TestClient(app) as client:
+        response = client.post("/api/historical-import/json/dry-run", json=payload)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "valid"
+    assert data["diagnostics"]["classification"]["competition_code"] == "CUSTOM"
+    assert data["diagnostics"]["classification"]["gender_category"] == "unknown"
+    assert data["diagnostics"]["venue_check"]["unknown_venues"] == ["Village Park"]
+    assert data["diagnostics"]["scan_summary"]["expected_matches"] == 1
+    assert any(issue["code"] == "MISSING_DATE" for issue in data["warnings"])
 
 
 def test_dry_run_does_not_create_games() -> None:

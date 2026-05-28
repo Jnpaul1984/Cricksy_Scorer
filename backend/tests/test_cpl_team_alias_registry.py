@@ -10,6 +10,13 @@ def test_barbados_royals_and_tridents_share_canonical_identity() -> None:
 
 
 def test_unknown_team_keeps_original_name() -> None:
-    canonical, continuity = canonicalize_team_name("Trinbago Knight Riders")
-    assert canonical == "Trinbago Knight Riders"
-    assert continuity == "trinbago knight riders"
+    canonical, continuity = canonicalize_team_name("Custom XI")
+    assert canonical == "Custom XI"
+    assert continuity == "custom xi"
+
+
+def test_red_steel_and_knight_riders_share_canonical_identity() -> None:
+    red_steel = canonicalize_team_name("Trinidad & Tobago Red Steel")
+    knight_riders = canonicalize_team_name("Trinbago Knight Riders")
+    assert red_steel[0] == knight_riders[0] == "Trinbago Knight Riders"
+    assert red_steel[1] == knight_riders[1] == "trinbago_franchise"

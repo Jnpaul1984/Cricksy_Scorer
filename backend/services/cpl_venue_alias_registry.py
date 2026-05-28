@@ -15,6 +15,16 @@ _ALIASES: dict[str, tuple[str, str]] = {
         "Kensington Oval, Bridgetown",
         "kensington_oval_bridgetown",
     ),
+    "providence stadium guyana": ("Providence Stadium", "providence_stadium"),
+    "providence stadium": ("Providence Stadium", "providence_stadium"),
+    "daren sammy national cricket stadium gros islet": (
+        "Daren Sammy National Cricket Stadium, Gros Islet",
+        "daren_sammy_national_cricket_stadium",
+    ),
+    "daren sammy national cricket stadium": (
+        "Daren Sammy National Cricket Stadium, Gros Islet",
+        "daren_sammy_national_cricket_stadium",
+    ),
 }
 
 
@@ -35,3 +45,10 @@ def canonicalize_venue_name(value: str | None) -> tuple[str | None, str | None]:
     if mapped:
         return mapped
     return value.strip(), normalized
+
+
+def is_known_venue_alias(value: str | None) -> bool:
+    normalized = normalize_venue_name(value)
+    if not normalized:
+        return False
+    return normalized in _ALIASES

@@ -4,6 +4,7 @@ import datetime as dt
 import hashlib
 import io
 import json
+import logging
 import re
 import tempfile
 import uuid
@@ -14,13 +15,26 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Any, Literal, cast
 
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import JSONResponse
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.api.schemas.historical_import import (
+    HistoricalBackfillApplyRequest,
+    HistoricalBackfillApplyResponse,
+    HistoricalBackfillAuditRequest,
+    HistoricalBackfillAuditResponse,
+    HistoricalBackfillDiagnosisResponse,
+    HistoricalBackfillSourceReattachResponse,
+    HistoricalBulkZipSourcePayloadApplyResponse,
+    HistoricalBulkZipSourcePayloadDryRunResponse,
+    HistoricalBulkZipSourcePayloadDryRunSummary,
+    HistoricalIdentityReviewResponse,
     HistoricalImportApplyDeliveriesResponse,
     HistoricalImportApplyRequest,
     HistoricalImportApplyResponse,
     HistoricalImportBatchRecord,
-    HistoricalMetadataOnlyMatchItem,
-    HistoricalMetadataOnlyMatchesResponse,
     HistoricalImportBulkZipApplyFileResult,
     HistoricalImportBulkZipApplyResponse,
     HistoricalImportBulkZipDryRunResponse,
@@ -33,11 +47,8 @@ from backend.api.schemas.historical_import import (
     HistoricalImportRollbackResponse,
     HistoricalImportTotalsValidation,
     HistoricalImportTrainingStatus,
-    HistoricalVenueAliasRecord,
-    HistoricalVenueIntelligenceRecord,
-    HistoricalVenueResolutionSnapshot,
-    HistoricalVenueUnresolvedRecord,
-    HistoricalVenueUsageRecord,
+    HistoricalMetadataOnlyMatchesResponse,
+    HistoricalMetadataOnlyMatchItem,
     HistoricalOcrDryRunRequest,
     HistoricalOcrDryRunResponse,
     HistoricalOcrExtractionMetadata,
@@ -46,25 +57,20 @@ from backend.api.schemas.historical_import import (
     HistoricalOcrReviewStatus,
     HistoricalOcrReviewUpdateRequest,
     HistoricalOcrSourceDocument,
-    HistoricalBackfillApplyRequest,
-    HistoricalBackfillApplyResponse,
-    HistoricalBackfillAuditRequest,
-    HistoricalBackfillAuditResponse,
-    HistoricalBackfillDiagnosisResponse,
+    HistoricalPlayerCandidateItem,
+    HistoricalPlayerReviewItem,
     HistoricalSourcePayloadReattachApplyFileResult,
     HistoricalSourcePayloadReattachApplyResponse,
     HistoricalSourcePayloadReattachDryRunFileResult,
     HistoricalSourcePayloadReattachDryRunResponse,
     HistoricalSourcePayloadReattachMatchCandidate,
     HistoricalSourcePayloadReattachMetadata,
-    HistoricalBackfillSourceReattachResponse,
-    HistoricalBulkZipSourcePayloadDryRunSummary,
-    HistoricalBulkZipSourcePayloadDryRunResponse,
-    HistoricalBulkZipSourcePayloadApplyResponse,
-    HistoricalIdentityReviewResponse,
-    HistoricalPlayerCandidateItem,
-    HistoricalPlayerReviewItem,
+    HistoricalVenueAliasRecord,
+    HistoricalVenueIntelligenceRecord,
+    HistoricalVenueResolutionSnapshot,
     HistoricalVenueReviewItem,
+    HistoricalVenueUnresolvedRecord,
+    HistoricalVenueUsageRecord,
     PlayerActionResponse,
     PlayerCreateRequest,
     PlayerDeferRequest,
@@ -82,19 +88,19 @@ from backend.services.historical_import_apply_service import (
     apply_historical_deliveries,
     rollback_historical_batch,
 )
+from backend.services.historical_import_backfill_service import (
+    repair_legacy_historical_metadata,
+)
 from backend.services.historical_import_delivery_service import (
     coerce_delivery_ledger,
     extract_normalized_innings,
 )
-from backend.services.historical_import_backfill_service import (
-    repair_legacy_historical_metadata,
-)
+from backend.services.historical_import_preview import build_dry_run_response
 from backend.services.historical_import_reprocess_service import (
     apply_delivery_backfill,
     audit_delivery_backfill,
     diagnose_delivery_backfill,
 )
-from backend.services.historical_import_preview import build_dry_run_response
 from backend.services.historical_import_service import (
     create_import_batch,
     find_duplicate_by_hash,
@@ -125,12 +131,6 @@ from backend.services.pdf_extraction_service import PdfExtractionResult, extract
 from backend.services.s3_service import s3_service
 from backend.sql_app import models
 from backend.sql_app.database import get_db as _base_get_db
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import JSONResponse
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-
-import logging
 
 _log = logging.getLogger(__name__)
 
@@ -1543,7 +1543,7 @@ async def _build_source_zip_reattach_preview(
                     )
                 )
                 continue
-            assert entry.member is not None  # noqa: S101 - safe: unsafe entries already skipped above
+            assert entry.member is not None
             with archive.open(entry.member, "r") as fp:
                 _evaluate_zip_candidate(entry.filename, fp.read(entry.member.file_size))
 
@@ -1847,6 +1847,107 @@ async def _build_bulk_zip_preview(
         "unsupported": sum(1 for f in files if f.status == "unsupported"),
         "error": sum(1 for f in files if f.status == "error"),
     }
+    diagnostics_summary: dict[str, Any] = {
+        "competition_codes": {},
+        "format_categories": {},
+        "gender_categories": {},
+        "completeness_grades": {},
+    }
+    aggregate_counts = {
+        "files_recognized": 0,
+        "files_skipped": sum(
+            1 for f in files if f.status in {"invalid", "duplicate", "unsupported", "error"}
+        ),
+        "expected_matches": 0,
+        "parse_failures": 0,
+        "duplicate_candidates": sum(1 for f in files if f.status == "duplicate"),
+        "missing_dates": 0,
+        "missing_teams": 0,
+        "missing_innings": 0,
+        "missing_deliveries": 0,
+        "unknown_competitions": 0,
+        "unknown_formats": 0,
+        "unknown_gender_category": 0,
+        "unknown_teams": 0,
+        "unknown_venues": 0,
+        "multi_day_matches": 0,
+        "limited_analysis_ready": 0,
+    }
+    player_cross_gender: dict[str, set[str]] = {}
+    for candidate in candidates.values():
+        dry_run = candidate.dry_run
+        diagnostics = dry_run.diagnostics
+        scan_summary = diagnostics.get("scan_summary", {}) if isinstance(diagnostics, dict) else {}
+        classification = (
+            diagnostics.get("classification", {}) if isinstance(diagnostics, dict) else {}
+        )
+        multi_day = diagnostics.get("multi_day", {}) if isinstance(diagnostics, dict) else {}
+        team_alias_check = (
+            diagnostics.get("team_alias_check", {}) if isinstance(diagnostics, dict) else {}
+        )
+        venue_check = diagnostics.get("venue_check", {}) if isinstance(diagnostics, dict) else {}
+
+        aggregate_counts["files_recognized"] += int(scan_summary.get("files_recognized", 0))
+        aggregate_counts["expected_matches"] += int(scan_summary.get("expected_matches", 0))
+        aggregate_counts["parse_failures"] += int(scan_summary.get("parse_failures", 0))
+        aggregate_counts["missing_dates"] += int(not bool(dry_run.metadata_preview.date))
+        aggregate_counts["missing_teams"] += int(
+            any(issue.code == "MISSING_TEAMS" for issue in dry_run.errors)
+        )
+        aggregate_counts["missing_innings"] += int(
+            any(issue.code == "MISSING_INNINGS" for issue in dry_run.errors)
+        )
+        aggregate_counts["missing_deliveries"] += int(
+            any(
+                issue.code in {"MISSING_DELIVERY_EVENTS", "MISSING_DELIVERIES"}
+                for issue in [*dry_run.errors, *dry_run.warnings]
+            )
+        )
+        aggregate_counts["unknown_competitions"] += int(
+            classification.get("competition_code") == "UNKNOWN"
+        )
+        aggregate_counts["unknown_formats"] += int(
+            classification.get("format_category") == "unknown"
+        )
+        aggregate_counts["unknown_gender_category"] += int(
+            classification.get("gender_category") == "unknown"
+        )
+        unknown_team_names = team_alias_check.get("unknown_team_names", [])
+        aggregate_counts["unknown_teams"] += (
+            len(unknown_team_names) if isinstance(unknown_team_names, list) else 0
+        )
+        unknown_venues = venue_check.get("unknown_venues", [])
+        aggregate_counts["unknown_venues"] += (
+            len(unknown_venues) if isinstance(unknown_venues, list) else 0
+        )
+        aggregate_counts["multi_day_matches"] += int(bool(multi_day.get("is_multi_day")))
+        aggregate_counts["limited_analysis_ready"] += int(
+            classification.get("analysis_readiness") == "limited"
+        )
+
+        for bucket_name, value in (
+            ("competition_codes", classification.get("competition_code")),
+            ("format_categories", classification.get("format_category")),
+            ("gender_categories", classification.get("gender_category")),
+            ("completeness_grades", classification.get("completeness_grade")),
+        ):
+            if not value:
+                continue
+            bucket = diagnostics_summary[bucket_name]
+            if isinstance(bucket, dict):
+                bucket[str(value)] = int(bucket.get(str(value), 0)) + 1
+
+        gender_category = classification.get("gender_category")
+        if isinstance(gender_category, str) and gender_category:
+            for player_name in dry_run.player_names_found:
+                player_cross_gender.setdefault(player_name, set()).add(gender_category)
+
+    diagnostics_summary["player_identity_cross_gender_candidates"] = sorted(
+        player_name
+        for player_name, gender_categories in player_cross_gender.items()
+        if len(gender_categories - {"unknown"}) > 1
+    )
+    summary.update(aggregate_counts)
 
     preview = HistoricalImportBulkZipDryRunResponse(
         status="preview_ready",
@@ -1874,6 +1975,7 @@ async def _build_bulk_zip_preview(
         max_total_uncompressed_bytes=PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES,
         max_total_compressed_bytes=PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES,
         summary=summary,
+        diagnostics_summary=diagnostics_summary,
         files=files,
     )
     return preview, candidates
@@ -1973,6 +2075,15 @@ async def historical_json_dry_run(
         record_id = batch.id
         no_persistence = False
 
+    diagnostics = dict(response.diagnostics)
+    batch_traceability = diagnostics.get("batch_traceability", {})
+    if isinstance(batch_traceability, dict):
+        updated_traceability = dict(batch_traceability)
+        updated_traceability["batch_id"] = record_id
+        updated_traceability["source_path"] = source_filename
+        updated_traceability["source_file_name"] = source_filename
+        diagnostics["batch_traceability"] = updated_traceability
+
     return HistoricalImportDryRunResponse(
         status=response.status,
         detected_format=response.detected_format,
@@ -1988,6 +2099,7 @@ async def historical_json_dry_run(
         innings_preview=response.innings_preview,
         warnings=response.warnings,
         errors=response.errors,
+        diagnostics=diagnostics,
         duplicate_detection=response.duplicate_detection.model_copy(
             update={
                 "probable_duplicate": probable_duplicate,
@@ -3704,7 +3816,7 @@ async def cpl_reset_reimport_apply(
     # Top-level guard: if deliveries were expected but none exist in any processed game, that is a
     # hard failure regardless of processed_matches count.
     if expected_deliveries > 0 and deliveries_imported == 0:
-        errors.append(f"delivery_rebuild_zero_rows " f"(expected={expected_deliveries}, actual=0)")
+        errors.append(f"delivery_rebuild_zero_rows (expected={expected_deliveries}, actual=0)")
 
     processed_matches_count = int(reimport_report.get("processed_matches") or 0)
     status = str(reimport_report.get("status") or "failed")
