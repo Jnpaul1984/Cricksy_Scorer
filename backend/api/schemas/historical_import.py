@@ -49,6 +49,7 @@ class HistoricalImportSchemaClassification(BaseModel):
 
 
 class HistoricalImportCompetitionContext(BaseModel):
+    competition_code: str = "UNKNOWN"
     competition_type: Literal[
         "franchise",
         "club",
@@ -62,6 +63,10 @@ class HistoricalImportCompetitionContext(BaseModel):
     competition_stage: str | None = None
     season: str | None = None
     match_format: str = "unknown"
+    format_category: str = "unknown"
+    gender_category: str = "unknown"
+    age_category: str = "unknown"
+    analysis_readiness: str = "unknown"
     tournament_name: str | None = None
     tournament_round: str | None = None
     value_status: dict[str, Literal["source", "inferred", "missing", "unknown"]] = Field(
@@ -137,6 +142,7 @@ class HistoricalImportDryRunResponse(BaseModel):
     innings_preview: list[HistoricalImportInningsPreview] = Field(default_factory=list)
     warnings: list[HistoricalImportIssue] = Field(default_factory=list)
     errors: list[HistoricalImportIssue] = Field(default_factory=list)
+    diagnostics: dict[str, object] = Field(default_factory=dict)
     duplicate_detection: HistoricalImportDuplicatePreview
     no_persistence: bool = True
     record_id: str | None = None
@@ -328,6 +334,7 @@ class HistoricalImportBulkZipDryRunResponse(BaseModel):
     max_total_uncompressed_bytes: int
     max_total_compressed_bytes: int
     summary: dict[str, int] = Field(default_factory=dict)
+    diagnostics_summary: dict[str, object] = Field(default_factory=dict)
     files: list[HistoricalImportBulkZipFilePreview] = Field(default_factory=list)
 
 

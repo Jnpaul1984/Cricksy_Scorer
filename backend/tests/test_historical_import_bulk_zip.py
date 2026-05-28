@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import io
 import json
 import zipfile
+from copy import deepcopy
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.routes.historical_import import (
-    PHASE_10I_CPL_MAX_BATCH_FILES,
     PHASE_5L_MAX_FILES,
     PHASE_5L_MAX_FULL_APPLY_FILES,
     PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES,
+    PHASE_10I_CPL_MAX_BATCH_FILES,
 )
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "simulated_t20_match.json"
@@ -38,6 +38,56 @@ def _build_cpl_fixture(match_number: int) -> dict[str, object]:
         event["match_number"] = match_number
     info["dates"] = [f"2013-08-{(match_number % 28) + 1:02d}"]
     return fixture
+
+
+def _build_custom_fixture() -> dict[str, object]:
+    return {
+        "meta": {"data_version": "0.92"},
+        "info": {
+            "match_type": "T20",
+            "venue": "Village Park",
+            "dates": [],
+            "season": "2025",
+            "event": {"name": "Island Invitational Friendly", "match_number": 7},
+            "teams": ["Custom XI", "Community XI"],
+        },
+        "innings": [
+            {
+                "Custom XI": {
+                    "overs": [
+                        {
+                            "over": 0,
+                            "deliveries": [
+                                {
+                                    "batter": "C1",
+                                    "non_striker": "C2",
+                                    "bowler": "D1",
+                                    "runs": {"batter": 1, "extras": 0, "total": 1},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            },
+            {
+                "Community XI": {
+                    "overs": [
+                        {
+                            "over": 0,
+                            "deliveries": [
+                                {
+                                    "batter": "D1",
+                                    "non_striker": "D2",
+                                    "bowler": "C1",
+                                    "runs": {"batter": 0, "extras": 0, "total": 0},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            },
+        ],
+    }
 
 
 def _build_zip(entries: dict[str, bytes]) -> bytes:
@@ -80,6 +130,33 @@ def test_bulk_zip_dry_run_accepts_multiple_valid_json_files() -> None:
     assert data["summary"]["valid"] == 2
     assert all(file_item["status"] == "valid" for file_item in data["files"])
     assert data["selected_apply_requires_confirm"] is True
+
+
+def test_bulk_zip_dry_run_aggregates_validation_diagnostics() -> None:
+    payload = _build_zip(
+        {
+            "cpl.json": json.dumps(_build_cpl_fixture(match_number=4)).encode("utf-8"),
+            "custom.json": json.dumps(_build_custom_fixture()).encode("utf-8"),
+        }
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/historical-import/json/bulk-zip/dry-run",
+            files={"file": ("matches.zip", payload, "application/zip")},
+        )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["summary"]["files_recognized"] == 2
+    assert data["summary"]["expected_matches"] == 2
+    assert data["summary"]["missing_dates"] == 1
+    assert data["summary"]["unknown_gender_category"] == 1
+    assert data["summary"]["unknown_teams"] == 0
+    assert data["summary"]["unknown_venues"] == 1
+    assert data["diagnostics_summary"]["competition_codes"]["CPL_MEN"] == 1
+    assert data["diagnostics_summary"]["competition_codes"]["CUSTOM"] == 1
+    assert data["diagnostics_summary"]["format_categories"]["T20"] == 2
 
 
 def test_bulk_zip_dry_run_accepts_large_zip_in_metadata_only_mode() -> None:
@@ -309,9 +386,9 @@ def test_bulk_zip_apply_only_applies_selected_valid_files() -> None:
     assert batches[0]["is_finalized"] is True
     assert batches[0]["applied_game_id"] == applied_game_id
     # Confirm the batch corresponds to the expected valid file, not bad.json.
-    assert (
-        batches[0]["source_filename"] == "matches.zip::ok.json"
-    ), f"Batch must be for ok.json; got {batches[0]['source_filename']!r}"
+    assert batches[0]["source_filename"] == "matches.zip::ok.json", (
+        f"Batch must be for ok.json; got {batches[0]['source_filename']!r}"
+    )
     # status=="valid" confirms the batch passed dry-run validation and was created via
     # the historical import path, not the live scoring engine.
     assert batches[0]["status"] == "valid", (
@@ -322,9 +399,9 @@ def test_bulk_zip_apply_only_applies_selected_valid_files() -> None:
     # bad.json is malformed (invalid JSON syntax), so it is skipped rather than
     # causing an apply error.  error_count must be zero because the only
     # non-applied file was handled by the skip path, not the error path.
-    assert (
-        data["error_count"] == 0
-    ), f"Expected error_count=0 (bad.json is skipped, not errored), got {data['error_count']}"
+    assert data["error_count"] == 0, (
+        f"Expected error_count=0 (bad.json is skipped, not errored), got {data['error_count']}"
+    )
 
 
 def test_bulk_zip_apply_large_zip_records_metadata_only_batches_not_training_eligible() -> None:
