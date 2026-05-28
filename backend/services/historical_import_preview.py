@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Any
+from typing import Any, TypedDict, cast
 
 from backend.api.schemas.historical_import import (
     HistoricalImportCanonicalPreview,
@@ -116,6 +116,17 @@ def _stringify_scalar(value: Any) -> str | None:
     if isinstance(value, (int, float)):
         return str(value)
     return None
+
+
+def _as_dict(value: object) -> dict[str, Any]:
+    return cast(dict[str, Any], value) if isinstance(value, dict) else {}
+
+
+class _TeamAliasGroup(TypedDict):
+    canonical_name: str
+    alias_key: str
+    raw_aliases: list[str]
+    confidence: str
 
 
 def _safe_int(value: Any) -> int:
@@ -298,21 +309,22 @@ def _collect_team_players(payload: dict[str, Any], team_names: list[str]) -> dic
         roster_raw = players_map.get(team_name)
         if isinstance(roster_raw, list):
             for player in roster_raw:
-                player_name = _as_str(player)
-                if player_name:
-                    team_players.setdefault(team_name, set()).add(player_name)
+                roster_player_name = _as_str(player)
+                if roster_player_name:
+                    team_players.setdefault(team_name, set()).add(roster_player_name)
 
     teams_payload = payload.get("teams")
     if isinstance(teams_payload, list):
         for team in teams_payload:
             if not isinstance(team, dict):
                 continue
-            team_name = _as_str(team.get("name"))
-            if not team_name:
+            source_team_name = _as_str(team.get("name"))
+            if not source_team_name:
                 continue
             players_raw = team.get("players")
             if isinstance(players_raw, list):
                 for player in players_raw:
+                    player_name: str | None
                     if isinstance(player, dict):
                         player_name = (
                             _as_str(player.get("name"))
@@ -322,7 +334,7 @@ def _collect_team_players(payload: dict[str, Any], team_names: list[str]) -> dic
                     else:
                         player_name = _as_str(player)
                     if player_name:
-                        team_players.setdefault(team_name, set()).add(player_name)
+                        team_players.setdefault(source_team_name, set()).add(player_name)
 
     return team_players
 
@@ -461,8 +473,8 @@ def _estimate_completeness_grade(
 def _build_team_diagnostics(
     team_names: list[str],
     competition_code: str,
-) -> dict[str, object]:
-    alias_groups: dict[str, dict[str, object]] = {}
+) -> dict[str, Any]:
+    alias_groups: dict[str, _TeamAliasGroup] = {}
     unknown_team_names: list[str] = []
     for team_name in team_names:
         canonical_name, alias_key = canonicalize_team_name(team_name)
@@ -480,7 +492,7 @@ def _build_team_diagnostics(
         if competition_code in {"CPL_MEN", "WCPL"} and not is_known_team_alias(team_name):
             unknown_team_names.append(team_name)
 
-    canonical_matches = [
+    canonical_matches: list[_TeamAliasGroup] = [
         {
             **group,
             "raw_aliases": sorted(set(group["raw_aliases"])),
@@ -503,7 +515,7 @@ def _build_player_diagnostics(
     player_names: list[str],
     registry_people_map: dict[str, str],
     gender_category: str,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     team_players = _collect_team_players(payload, team_names)
     player_to_teams: dict[str, set[str]] = {}
     for team_name, players in team_players.items():
@@ -538,7 +550,7 @@ def _build_player_diagnostics(
     }
 
 
-def _build_venue_diagnostics(venue_name: str | None) -> dict[str, object]:
+def _build_venue_diagnostics(venue_name: str | None) -> dict[str, Any]:
     canonical_name, alias_key = canonicalize_venue_name(venue_name)
     is_known = is_known_venue_alias(venue_name)
     unknown_venues = [venue_name] if venue_name and not is_known else []
@@ -567,7 +579,7 @@ def _build_multi_day_diagnostics(
     innings_preview: list[HistoricalImportInningsPreview],
     innings_nodes: list[dict[str, Any]],
     format_category: str,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     innings_order = [inning.team for inning in innings_preview]
     repeated_team_sequence = any(
         innings_order[idx] and innings_order[idx] == innings_order[idx - 1]
@@ -687,7 +699,7 @@ def _build_validation_diagnostics(
     innings_nodes: list[dict[str, Any]],
     detected_format: str,
     source_filename: str | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     registry_people_map = _extract_registry_people_map(parsed)
     competition_type, competition_type_status = _classify_competition_type(
         metadata_preview.event_name, team_names
@@ -785,7 +797,7 @@ def _build_canonical_preview(
     source_hash: str,
     warnings: list[HistoricalImportIssue],
     errors: list[HistoricalImportIssue],
-    diagnostics: dict[str, object],
+    diagnostics: dict[str, Any],
 ) -> tuple[HistoricalImportCanonicalPreview, HistoricalImportCompetitionContext]:
     info_payload = parsed.get("info")
     info = info_payload if isinstance(info_payload, dict) else {}
@@ -796,7 +808,7 @@ def _build_canonical_preview(
     event_payload = event_raw if isinstance(event_raw, dict) else {}
     event_name = metadata_preview.event_name
 
-    classification = diagnostics.get("classification", {})
+    classification = _as_dict(diagnostics.get("classification"))
     competition_type = str(classification.get("competition_type") or "unknown")
     competition_type_status = str(classification.get("competition_type_status") or "unknown")
     competition_context = HistoricalImportCompetitionContext(
@@ -826,7 +838,7 @@ def _build_canonical_preview(
     )
 
     venue_raw = _as_str(parsed.get("venue")) or _as_str(info.get("venue"))
-    venue_check = diagnostics.get("venue_check", {})
+    venue_check = _as_dict(diagnostics.get("venue_check"))
     venue_context = HistoricalImportVenueContext(
         venue_name=_as_str(venue_check.get("canonical_venue_name")) or venue_raw,
         source_venue_raw=venue_raw,
@@ -849,7 +861,7 @@ def _build_canonical_preview(
 
     registry_people_map = _extract_registry_people_map(parsed)
     roster_snapshot = _extract_roster_snapshot(parsed, team_names, registry_people_map)
-    player_risks = diagnostics.get("player_identity_risks", {})
+    player_risks = _as_dict(diagnostics.get("player_identity_risks"))
     if not any(team.playing_xi for team in roster_snapshot):
         warnings.append(
             HistoricalImportIssue(
@@ -1306,10 +1318,10 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         innings_nodes=innings_nodes,
         detected_format=detected_format,
     )
-    classification = diagnostics.get("classification", {})
-    team_alias_check = diagnostics.get("team_alias_check", {})
-    venue_check = diagnostics.get("venue_check", {})
-    multi_day = diagnostics.get("multi_day", {})
+    classification = _as_dict(diagnostics.get("classification"))
+    team_alias_check = _as_dict(diagnostics.get("team_alias_check"))
+    venue_check = _as_dict(diagnostics.get("venue_check"))
+    multi_day = _as_dict(diagnostics.get("multi_day"))
 
     if not metadata_preview.date:
         warnings.append(

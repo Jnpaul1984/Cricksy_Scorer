@@ -149,6 +149,10 @@ async def _get_import_db() -> AsyncGenerator[AsyncSession, None]:
         yield db
 
 
+def _as_any_dict(value: object) -> dict[str, Any]:
+    return cast(dict[str, Any], value) if isinstance(value, dict) else {}
+
+
 PHASE_5L_MAX_FILES = 2000
 PHASE_5L_MAX_FULL_APPLY_FILES = 100
 PHASE_5L_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
@@ -1543,9 +1547,29 @@ async def _build_source_zip_reattach_preview(
                     )
                 )
                 continue
-            assert entry.member is not None
-            with archive.open(entry.member, "r") as fp:
-                _evaluate_zip_candidate(entry.filename, fp.read(entry.member.file_size))
+            member = entry.member
+            if member is None:
+                file_results.append(
+                    HistoricalSourcePayloadReattachDryRunFileResult(
+                        file_name=entry.filename,
+                        status="invalid",
+                        message="ZIP entry metadata could not be read safely.",
+                        warnings=[
+                            HistoricalImportIssue(
+                                code="ZIP_MEMBER_UNAVAILABLE",
+                                message="ZIP entry metadata was unavailable during preview.",
+                                severity="warning",
+                                path=entry.filename,
+                            )
+                        ],
+                        metadata=HistoricalSourcePayloadReattachMetadata(
+                            source_filename=_source_file_label(entry.filename)
+                        ),
+                    )
+                )
+                continue
+            with archive.open(member, "r") as fp:
+                _evaluate_zip_candidate(entry.filename, fp.read(member.file_size))
 
     candidate_json_count = sum(
         1
@@ -1876,16 +1900,12 @@ async def _build_bulk_zip_preview(
     player_cross_gender: dict[str, set[str]] = {}
     for candidate in candidates.values():
         dry_run = candidate.dry_run
-        diagnostics = dry_run.diagnostics
-        scan_summary = diagnostics.get("scan_summary", {}) if isinstance(diagnostics, dict) else {}
-        classification = (
-            diagnostics.get("classification", {}) if isinstance(diagnostics, dict) else {}
-        )
-        multi_day = diagnostics.get("multi_day", {}) if isinstance(diagnostics, dict) else {}
-        team_alias_check = (
-            diagnostics.get("team_alias_check", {}) if isinstance(diagnostics, dict) else {}
-        )
-        venue_check = diagnostics.get("venue_check", {}) if isinstance(diagnostics, dict) else {}
+        diagnostics = _as_any_dict(dry_run.diagnostics)
+        scan_summary = _as_any_dict(diagnostics.get("scan_summary"))
+        classification = _as_any_dict(diagnostics.get("classification"))
+        multi_day = _as_any_dict(diagnostics.get("multi_day"))
+        team_alias_check = _as_any_dict(diagnostics.get("team_alias_check"))
+        venue_check = _as_any_dict(diagnostics.get("venue_check"))
 
         aggregate_counts["files_recognized"] += int(scan_summary.get("files_recognized", 0))
         aggregate_counts["expected_matches"] += int(scan_summary.get("expected_matches", 0))
