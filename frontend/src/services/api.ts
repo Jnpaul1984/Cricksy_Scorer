@@ -631,6 +631,10 @@ export interface CaseStudyMatch {
   away_team?: string | null;
   teams_label: string;
   venue?: string | null;
+  event_name?: string | null;
+  season?: string | null;
+  match_number?: number | null;
+  source_dates?: string[];
   result: string;
   overs_per_side?: number | null;
   innings: CaseStudyInningsSummary[];
