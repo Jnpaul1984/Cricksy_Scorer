@@ -497,7 +497,7 @@ def _compute_dismissal_patterns(
     deliveries: list[dict[str, Any]],
     innings_number: int,
     phase_ranges: list[tuple[str, str, int, int]],
-) -> CaseStudyDismissalPatterns | None:
+) -> CaseStudyDismissalPatterns:
     """
     Aggregate dismissal patterns from deliveries.
     """
@@ -1204,7 +1204,7 @@ async def _build_case_study_from_db(
             level="match",
         )
     )
-    dismissal_patterns = selected_innings.dismissal_patterns if selected_innings else None
+    selected_dismissal_patterns = selected_innings.dismissal_patterns if selected_innings else None
 
     # 8) Generate AI summary
     ai_block = _generate_ai_summary(case_study_match, phases, key_players)
@@ -1217,7 +1217,7 @@ async def _build_case_study_from_db(
         key_phase=key_phase,
         phases=phases,
         key_players=key_players,
-        dismissal_patterns=dismissal_patterns,
+        dismissal_patterns=selected_dismissal_patterns,
         innings_analysis=innings_analysis,
         match_callouts=match_callouts,
         match_level_summary=f"{case_study_match.teams_label}: {case_study_match.result}",
