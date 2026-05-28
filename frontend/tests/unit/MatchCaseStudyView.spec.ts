@@ -34,7 +34,10 @@ const globalStubs = {
   BaseBadge: { template: '<span class="base-badge-stub"><slot /></span>' },
   ImpactBar: { template: '<div class="impact-bar-stub" />' },
   MiniSparkline: { template: '<div class="mini-sparkline-stub" />' },
-  AiCalloutsPanel: { template: '<div class="ai-callouts-panel-stub" />' },
+  AiCalloutsPanel: {
+    props: ['callouts'],
+    template: '<div class="ai-callouts-panel-stub">{{ (callouts || []).map((c) => c.title).join(" | ") }}</div>',
+  },
   AiInsightReviewCard: { template: '<div data-testid="ai-insight-review-card-stub" />' },
 }
 
@@ -55,6 +58,9 @@ const baseCaseStudy = {
   phases: [],
   key_players: [],
   dismissal_patterns: null,
+  innings_analysis: [],
+  match_callouts: [],
+  match_level_summary: null,
   ai: null,
 }
 
@@ -229,5 +235,114 @@ describe('MatchCaseStudyView', () => {
     await flushAsync()
 
     expect(wrapper.text()).toContain('Insufficient match data for AI or deterministic summary.')
+  })
+
+  it('switches innings-specific story, dismissal, and callouts', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue({
+      ...baseCaseStudy,
+      innings_analysis: [
+        {
+          innings_index: 0,
+          team: 'Lions',
+          deterministic_summary: 'Innings 1 summary',
+          momentum_summary: { title: 'Innings 1 momentum', subtitle: 'I1 subtitle' },
+          key_phase: { title: 'I1 key phase', detail: 'I1 detail' },
+          phases: [],
+          key_players: [],
+          key_players_scope: 'match',
+          dismissal_patterns: {
+            summary: 'I1 dismissals',
+            wickets_by_phase: [{ phase_id: 'powerplay', wickets: 1 }],
+            wickets_by_over_band: [{ band: '1-6', wickets: 1 }],
+            dismissal_types: [{ type: 'bowled', wickets: 1 }],
+            wicket_timeline: [{ wicket_number: 1, over: 2, dismissal_type: 'bowled' }],
+          },
+          story_blocks: {
+            opening_story: 'I1 opening',
+            middle_overs_story: 'I1 middle',
+            death_overs_story: 'I1 death',
+            scoring_acceleration: 'I1 acceleration',
+            wickets_by_phase: 'I1 wickets by phase',
+            strongest_phase: 'I1 strongest',
+            weakest_phase: 'I1 weakest',
+            innings_outcome_contribution: 'I1 contribution',
+          },
+          callouts: [
+            {
+              title: 'I1 callout',
+              level: 'innings',
+              innings: 1,
+              phase: 'Middle overs',
+              category: 'momentum',
+              severity: 'warning',
+              explanation: 'I1 explanation',
+              source_metrics: ['runs=30'],
+              confidence: 0.9,
+              why_it_matters: 'I1 why',
+            },
+          ],
+        },
+        {
+          innings_index: 1,
+          team: 'Falcons',
+          deterministic_summary: 'Innings 2 summary',
+          momentum_summary: { title: 'Innings 2 momentum', subtitle: 'I2 subtitle' },
+          key_phase: { title: 'I2 key phase', detail: 'I2 detail' },
+          phases: [],
+          key_players: [],
+          key_players_scope: 'match',
+          dismissal_patterns: {
+            summary: 'I2 dismissals',
+            wickets_by_phase: [{ phase_id: 'death', wickets: 2 }],
+            wickets_by_over_band: [{ band: '16+', wickets: 2 }],
+            dismissal_types: [{ type: 'caught', wickets: 2 }],
+            wicket_timeline: [{ wicket_number: 1, over: 17, dismissal_type: 'caught' }],
+          },
+          story_blocks: {
+            opening_story: 'I2 opening',
+            middle_overs_story: 'I2 middle',
+            death_overs_story: 'I2 death',
+            scoring_acceleration: 'I2 acceleration',
+            wickets_by_phase: 'I2 wickets by phase',
+            strongest_phase: 'I2 strongest',
+            weakest_phase: 'I2 weakest',
+            innings_outcome_contribution: 'I2 contribution',
+          },
+          callouts: [
+            {
+              title: 'I2 callout',
+              level: 'innings',
+              innings: 2,
+              phase: 'Death overs',
+              category: 'batting',
+              severity: 'positive',
+              explanation: 'I2 explanation',
+              source_metrics: ['runs=50'],
+              confidence: 0.85,
+              why_it_matters: 'I2 why',
+            },
+          ],
+        },
+      ],
+    } as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
+    await flushAsync()
+
+    expect(wrapper.text()).toContain('Innings 1 summary')
+    expect(wrapper.text()).toContain('I1 dismissals')
+    expect(wrapper.text()).toContain('I1 callout')
+
+    const inningsTwoButton = wrapper
+      .findAll('button')
+      .find((btn) => btn.text().includes('Innings 2'))
+    expect(inningsTwoButton).toBeTruthy()
+    await inningsTwoButton!.trigger('click')
+    await flushAsync()
+
+    expect(wrapper.text()).toContain('Innings 2 summary')
+    expect(wrapper.text()).toContain('I2 dismissals')
+    expect(wrapper.text()).toContain('I2 callout')
   })
 })
