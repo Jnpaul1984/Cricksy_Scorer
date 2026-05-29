@@ -464,6 +464,114 @@ def test_dry_run_reports_custom_competition_and_unresolved_venue_conservatively(
     assert any(issue["code"] == "MISSING_DATE" for issue in data["warnings"])
 
 
+def test_dry_run_maps_english_domestic_t20_and_resolves_kennington_oval() -> None:
+    payload = _cricsheet_minimal_payload("Vitality Blast")
+    info = payload["info"]
+    assert isinstance(info, dict)
+    info["teams"] = ["Surrey", "Lancashire"]
+    info["venue"] = "Kennington Oval, London"
+    info["city"] = "London"
+
+    with TestClient(app) as client:
+        response = client.post("/api/historical-import/json/dry-run", json=payload)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["diagnostics"]["classification"]["competition_code"] == "DOMESTIC_T20_ENGLAND"
+    assert data["diagnostics"]["classification"]["competition_type"] == "domestic"
+    assert data["diagnostics"]["venue_check"]["venue_canonical"] == "Kennington Oval, London, England"
+    assert data["diagnostics"]["venue_check"]["venue_country"] == "England"
+    assert data["diagnostics"]["venue_check"]["venue_confidence"] in {"high", "medium"}
+    assert data["canonical_preview"]["venue_context"]["country"] == "England"
+    assert not any(issue["code"] == "UNKNOWN_COMPETITION" for issue in data["warnings"])
+    assert not any(issue["code"] == "COMPETITION_TYPE_UNKNOWN" for issue in data["warnings"])
+
+
+def test_dry_run_cpl_context_resolves_queens_park_oval_country() -> None:
+    payload = _cricsheet_minimal_payload("Caribbean Premier League")
+    info = payload["info"]
+    assert isinstance(info, dict)
+    info["teams"] = ["Trinbago Knight Riders", "Barbados Royals"]
+    info["venue"] = "Queen's Park Oval"
+    info["city"] = "Port of Spain"
+
+    with TestClient(app) as client:
+        response = client.post("/api/historical-import/json/dry-run", json=payload)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["diagnostics"]["classification"]["competition_code"] == "CPL_MEN"
+    assert (
+        data["diagnostics"]["venue_check"]["venue_canonical"]
+        == "Queen's Park Oval, Port of Spain, Trinidad and Tobago"
+    )
+    assert data["diagnostics"]["venue_check"]["venue_country"] == "Trinidad and Tobago"
+    assert data["diagnostics"]["venue_check"]["venue_resolution_source"] == "alias_registry"
+
+
+def test_dry_run_ambiguous_oval_stays_unresolved_without_context() -> None:
+    payload = _cricsheet_minimal_payload("Unknown Cup")
+    info = payload["info"]
+    assert isinstance(info, dict)
+    info["venue"] = "The Oval"
+    info["teams"] = ["Team A", "Team B"]
+    info.pop("city", None)
+
+    with TestClient(app) as client:
+        response = client.post("/api/historical-import/json/dry-run", json=payload)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["diagnostics"]["venue_check"]["unknown_venues"] == ["The Oval"]
+    assert data["diagnostics"]["venue_check"]["unresolved_reason"] == "ambiguous_without_context"
+    assert any(issue["code"] == "UNKNOWN_VENUE_ALIAS" for issue in data["warnings"])
+
+
+def test_dry_run_unknown_competition_remains_unknown() -> None:
+    payload = _cricsheet_minimal_payload("Neighborhood Showdown")
+
+    with TestClient(app) as client:
+        response = client.post("/api/historical-import/json/dry-run", json=payload)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["diagnostics"]["classification"]["competition_code"] == "UNKNOWN"
+    assert any(issue["code"] == "UNKNOWN_COMPETITION" for issue in data["warnings"])
+
+
+def test_dry_run_maps_wcpl_separately_when_metadata_indicates_women() -> None:
+    payload = _cricsheet_minimal_payload("Women's Caribbean Premier League")
+    info = payload["info"]
+    assert isinstance(info, dict)
+    info["gender"] = "female"
+
+    with TestClient(app) as client:
+        response = client.post("/api/historical-import/json/dry-run", json=payload)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["diagnostics"]["classification"]["competition_code"] == "WCPL"
+    assert data["diagnostics"]["classification"]["gender_category"] == "women"
+
+
+def test_dry_run_test_without_international_context_maps_to_domestic_multi_day() -> None:
+    payload = _cricsheet_minimal_payload("County Championship")
+    info = payload["info"]
+    assert isinstance(info, dict)
+    info["match_type"] = "Test"
+    info["teams"] = ["Surrey", "Lancashire"]
+    info["dates"] = ["2026-05-20", "2026-05-21", "2026-05-22"]
+
+    with TestClient(app) as client:
+        response = client.post("/api/historical-import/json/dry-run", json=payload)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["diagnostics"]["classification"]["format_category"] == "Test"
+    assert data["diagnostics"]["classification"]["competition_code"] == "DOMESTIC_MULTI_DAY"
+    assert data["diagnostics"]["classification"]["competition_type"] == "domestic"
+
+
 def test_dry_run_does_not_create_games() -> None:
     with TestClient(app) as client:
         before = client.get("/games/results")

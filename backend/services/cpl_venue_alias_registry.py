@@ -15,6 +15,17 @@ _ALIASES: dict[str, tuple[str, str]] = {
         "Kensington Oval, Bridgetown",
         "kensington_oval_bridgetown",
     ),
+    "kensington oval": ("Kensington Oval, Bridgetown", "kensington_oval_bridgetown"),
+    "queens park oval": ("Queen's Park Oval, Port of Spain", "queens_park_oval_port_of_spain"),
+    "queen s park oval": ("Queen's Park Oval, Port of Spain", "queens_park_oval_port_of_spain"),
+    "the oval": ("Kennington Oval, London, England", "kennington_oval_london_england"),
+    "kennington oval": ("Kennington Oval, London, England", "kennington_oval_london_england"),
+    "kennington oval london": (
+        "Kennington Oval, London, England",
+        "kennington_oval_london_england",
+    ),
+    "kia oval": ("Kennington Oval, London, England", "kennington_oval_london_england"),
+    "the kia oval": ("Kennington Oval, London, England", "kennington_oval_london_england"),
     "providence stadium guyana": ("Providence Stadium", "providence_stadium"),
     "providence stadium": ("Providence Stadium", "providence_stadium"),
     "daren sammy national cricket stadium gros islet": (

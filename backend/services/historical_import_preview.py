@@ -21,7 +21,11 @@ from backend.api.schemas.historical_import import (
 from backend.domain.constants import norm_extra
 from backend.services.analyst_registry_service import classify_age_category, classify_gender
 from backend.services.cpl_team_alias_registry import canonicalize_team_name, is_known_team_alias
-from backend.services.cpl_venue_alias_registry import canonicalize_venue_name, is_known_venue_alias
+from backend.services.cpl_venue_alias_registry import (
+    canonicalize_venue_name,
+    is_known_venue_alias,
+    normalize_venue_name,
+)
 
 INNINGS_NODE_KEYS = ("team", "balls", "deliveries", "overs", "runs", "wickets")
 DELIVERY_PLAYER_KEYS = ("batsman", "batter", "striker", "non_striker", "bowler")
@@ -52,6 +56,111 @@ _INTERNATIONAL_TEAM_HINTS = {
 _WOMEN_KEYWORDS = re.compile(r"\bwomen\b|\bfemale\b|\bgirl\b|\bwcpl\b", re.I)
 _YOUTH_KEYWORDS = re.compile(r"\bu-?1[59]\b|\byouth\b|\bjunior\b|\bacademy\b", re.I)
 _SCHOOL_KEYWORDS = re.compile(r"\bschool\b|\bschools\b|\bcollege\b", re.I)
+_INTERNATIONAL_EVENT_HINTS = ("icc", "international", "world cup", "test championship")
+_ENGLISH_DOMESTIC_T20_HINTS = ("vitality blast", "t20 blast", "blast")
+_TEAM_COUNTRY_HINTS = {
+    "surrey": "England",
+    "lancashire": "England",
+    "england": "England",
+    "west indies": "West Indies",
+    "australia": "Australia",
+    "india": "India",
+    "pakistan": "Pakistan",
+    "south africa": "South Africa",
+    "barbados royals": "Barbados",
+    "barbados tridents": "Barbados",
+    "trinbago knight riders": "Trinidad and Tobago",
+    "trinidad and tobago red steel": "Trinidad and Tobago",
+}
+_COMPETITION_COUNTRY_HINTS = {
+    "DOMESTIC_T20_ENGLAND": "England",
+}
+_VENUE_CONTEXT_CANDIDATES: dict[str, list[dict[str, object]]] = {
+    "kennington oval": [
+        {
+            "canonical_name": "Kennington Oval, London, England",
+            "alias_key": "kennington_oval_london_england",
+            "city": "London",
+            "country": "England",
+            "competition_codes": {"DOMESTIC_T20_ENGLAND"},
+            "aliases": {
+                "kennington oval",
+                "kennington oval london",
+                "the oval",
+                "kia oval",
+                "the kia oval",
+            },
+        }
+    ],
+    "the oval": [
+        {
+            "canonical_name": "Kennington Oval, London, England",
+            "alias_key": "kennington_oval_london_england",
+            "city": "London",
+            "country": "England",
+            "competition_codes": {"DOMESTIC_T20_ENGLAND"},
+            "aliases": {"the oval", "kia oval", "the kia oval"},
+        },
+        {
+            "canonical_name": "Kensington Oval, Bridgetown, Barbados",
+            "alias_key": "kensington_oval_bridgetown",
+            "city": "Bridgetown",
+            "country": "Barbados",
+            "competition_codes": {"CPL_MEN", "WCPL"},
+            "aliases": {"the oval", "kensington oval"},
+        },
+    ],
+    "kia oval": [
+        {
+            "canonical_name": "Kennington Oval, London, England",
+            "alias_key": "kennington_oval_london_england",
+            "city": "London",
+            "country": "England",
+            "competition_codes": {"DOMESTIC_T20_ENGLAND"},
+            "aliases": {"kia oval", "the kia oval", "the oval"},
+        }
+    ],
+    "the kia oval": [
+        {
+            "canonical_name": "Kennington Oval, London, England",
+            "alias_key": "kennington_oval_london_england",
+            "city": "London",
+            "country": "England",
+            "competition_codes": {"DOMESTIC_T20_ENGLAND"},
+            "aliases": {"kia oval", "the kia oval", "the oval"},
+        }
+    ],
+    "kensington oval": [
+        {
+            "canonical_name": "Kensington Oval, Bridgetown, Barbados",
+            "alias_key": "kensington_oval_bridgetown",
+            "city": "Bridgetown",
+            "country": "Barbados",
+            "competition_codes": {"CPL_MEN", "WCPL"},
+            "aliases": {"kensington oval", "kensington oval bridgetown"},
+        }
+    ],
+    "queens park oval": [
+        {
+            "canonical_name": "Queen's Park Oval, Port of Spain, Trinidad and Tobago",
+            "alias_key": "queens_park_oval_port_of_spain",
+            "city": "Port of Spain",
+            "country": "Trinidad and Tobago",
+            "competition_codes": {"CPL_MEN", "WCPL"},
+            "aliases": {"queens park oval", "queen s park oval"},
+        }
+    ],
+    "queen s park oval": [
+        {
+            "canonical_name": "Queen's Park Oval, Port of Spain, Trinidad and Tobago",
+            "alias_key": "queens_park_oval_port_of_spain",
+            "city": "Port of Spain",
+            "country": "Trinidad and Tobago",
+            "competition_codes": {"CPL_MEN", "WCPL"},
+            "aliases": {"queens park oval", "queen s park oval"},
+        }
+    ],
+}
 
 
 def _hash_payload(payload: bytes) -> str:
@@ -390,6 +499,20 @@ def _classify_competition_code(
     lowered = (event_name or "").strip().lower()
     normalized_teams = {team.strip().lower() for team in team_names if team.strip()}
     if not lowered:
+        if format_category == "T20" and normalized_teams and normalized_teams.issubset(
+            _INTERNATIONAL_TEAM_HINTS
+        ):
+            return "INTERNATIONAL_T20", "inferred"
+        if format_category == "ODI" and normalized_teams and normalized_teams.issubset(
+            _INTERNATIONAL_TEAM_HINTS
+        ):
+            return "INTERNATIONAL_ODI", "inferred"
+        if format_category == "Test" and normalized_teams and normalized_teams.issubset(
+            _INTERNATIONAL_TEAM_HINTS
+        ):
+            return "INTERNATIONAL_TEST", "inferred"
+        if format_category in {"Test", "First-class / multi-day"}:
+            return "DOMESTIC_MULTI_DAY", "inferred"
         return "UNKNOWN", "unknown"
     if "wcpl" in lowered or (
         "caribbean premier league" in lowered and _WOMEN_KEYWORDS.search(lowered)
@@ -397,21 +520,25 @@ def _classify_competition_code(
         return "WCPL", "inferred"
     if "caribbean premier league" in lowered or re.search(r"\bcpl\b", lowered):
         return "CPL_MEN", "inferred"
+    if any(token in lowered for token in _ENGLISH_DOMESTIC_T20_HINTS) and format_category == "T20":
+        return "DOMESTIC_T20_ENGLAND", "inferred"
     if age_category == "school":
         return "SCHOOL_CRICKET", "inferred"
     if any(token in lowered for token in ("barbados cricket", "barbados", "bca", "barbadian")):
         return "LOCAL_BARBADOS", "inferred"
-    if format_category == "Test":
+    if format_category == "Test" and (
+        any(token in lowered for token in _INTERNATIONAL_EVENT_HINTS)
+        or (normalized_teams and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS))
+    ):
         return "INTERNATIONAL_TEST", "inferred"
     if format_category == "ODI" and (
-        "icc" in lowered or "international" in lowered or "world cup" in lowered
+        any(token in lowered for token in _INTERNATIONAL_EVENT_HINTS)
+        or (normalized_teams and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS))
     ):
         return "INTERNATIONAL_ODI", "inferred"
     if format_category == "T20" and (
-        "icc" in lowered
-        or "international" in lowered
-        or "world cup" in lowered
-        or normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS)
+        any(token in lowered for token in _INTERNATIONAL_EVENT_HINTS)
+        or (normalized_teams and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS))
     ):
         return "INTERNATIONAL_T20", "inferred"
     if format_category in {"Test", "First-class / multi-day"}:
@@ -550,24 +677,198 @@ def _build_player_diagnostics(
     }
 
 
-def _build_venue_diagnostics(venue_name: str | None) -> dict[str, Any]:
+def _extract_cricsheet_event_metadata(parsed: dict[str, Any]) -> dict[str, Any]:
+    info_payload = parsed.get("info")
+    info = info_payload if isinstance(info_payload, dict) else {}
+    event_payload = _as_dict(info.get("event"))
+    dates_raw = info.get("dates")
+    return {
+        "event_name_raw": _as_str(event_payload.get("name")),
+        "event_match_number_raw": event_payload.get("match_number"),
+        "event_group_raw": _stringify_scalar(event_payload.get("group")),
+        "event_round_raw": _stringify_scalar(event_payload.get("round")),
+        "match_type_raw": _as_str(info.get("match_type")),
+        "gender_raw": _as_str(info.get("gender")) or _as_str(parsed.get("gender")),
+        "team_type_raw": _as_str(info.get("team_type")),
+        "dates_raw": dates_raw if isinstance(dates_raw, list) else [],
+        "venue_raw": _as_str(info.get("venue")) or _as_str(parsed.get("venue")),
+        "city_raw": _as_str(info.get("city")) or _as_str(parsed.get("city")),
+    }
+
+
+def _team_country_context(team_names: list[str]) -> set[str]:
+    countries: set[str] = set()
+    for team_name in team_names:
+        normalized = team_name.strip().lower()
+        country = _TEAM_COUNTRY_HINTS.get(normalized)
+        if country:
+            countries.add(country)
+    return countries
+
+
+def _resolve_venue_with_context(
+    *,
+    venue_name: str | None,
+    city: str | None,
+    competition_code: str,
+    team_names: list[str],
+) -> dict[str, Any]:
+    if not venue_name:
+        return {
+            "venue_canonical": None,
+            "venue_alias_key": None,
+            "venue_city": city,
+            "venue_country": None,
+            "venue_resolution_source": "missing",
+            "venue_confidence": "unknown",
+            "resolved": False,
+            "unresolved_reason": "missing_venue",
+            "candidates": [],
+        }
+
+    normalized = normalize_venue_name(venue_name)
+    candidates = _VENUE_CONTEXT_CANDIDATES.get(normalized, [])
+    if not candidates:
+        for entry in _VENUE_CONTEXT_CANDIDATES.values():
+            for candidate in entry:
+                aliases = candidate.get("aliases")
+                if isinstance(aliases, set) and normalized in aliases:
+                    candidates.append(candidate)
+
+    city_lower = (city or "").strip().lower()
+    competition_country_hint = _COMPETITION_COUNTRY_HINTS.get(competition_code)
+    team_country_hints = _team_country_context(team_names)
+
+    scored: list[tuple[int, dict[str, object]]] = []
+    for candidate in candidates:
+        score = 0
+        candidate_city = str(candidate.get("city") or "")
+        candidate_country = str(candidate.get("country") or "")
+        candidate_competitions = candidate.get("competition_codes")
+        if city_lower and candidate_city and city_lower == candidate_city.lower():
+            score += 4
+        if isinstance(candidate_competitions, set) and competition_code in candidate_competitions:
+            score += 3
+        if competition_country_hint and candidate_country == competition_country_hint:
+            score += 2
+        if candidate_country and candidate_country in team_country_hints:
+            score += 2
+        scored.append((score, candidate))
+
+    if len(scored) > 1:
+        scored.sort(key=lambda item: item[0], reverse=True)
+        top_score = scored[0][0]
+        top_candidates = [candidate for score, candidate in scored if score == top_score]
+        if top_score == 0 or len(top_candidates) > 1:
+            return {
+                "venue_canonical": None,
+                "venue_alias_key": None,
+                "venue_city": city,
+                "venue_country": None,
+                "venue_resolution_source": "context_ambiguous",
+                "venue_confidence": "low",
+                "resolved": False,
+                "unresolved_reason": "ambiguous_without_context",
+                "candidates": [
+                    str(candidate.get("canonical_name"))
+                    for _, candidate in sorted(scored, key=lambda item: item[0], reverse=True)
+                ],
+            }
+        best_candidate = top_candidates[0]
+        return {
+            "venue_canonical": _as_str(best_candidate.get("canonical_name")),
+            "venue_alias_key": _as_str(best_candidate.get("alias_key")),
+            "venue_city": _as_str(best_candidate.get("city")),
+            "venue_country": _as_str(best_candidate.get("country")),
+            "venue_resolution_source": "context_match",
+            "venue_confidence": "high" if top_score >= 4 else "medium",
+            "resolved": True,
+            "unresolved_reason": None,
+            "candidates": [
+                str(candidate.get("canonical_name"))
+                for _, candidate in sorted(scored, key=lambda item: item[0], reverse=True)
+            ],
+        }
+
+    if len(scored) == 1:
+        _, best_candidate = scored[0]
+        return {
+            "venue_canonical": _as_str(best_candidate.get("canonical_name")),
+            "venue_alias_key": _as_str(best_candidate.get("alias_key")),
+            "venue_city": _as_str(best_candidate.get("city")),
+            "venue_country": _as_str(best_candidate.get("country")),
+            "venue_resolution_source": "alias_registry",
+            "venue_confidence": "medium",
+            "resolved": True,
+            "unresolved_reason": None,
+            "candidates": [_as_str(best_candidate.get("canonical_name"))],
+        }
+
     canonical_name, alias_key = canonicalize_venue_name(venue_name)
-    is_known = is_known_venue_alias(venue_name)
-    unknown_venues = [venue_name] if venue_name and not is_known else []
+    if is_known_venue_alias(venue_name):
+        return {
+            "venue_canonical": canonical_name,
+            "venue_alias_key": alias_key,
+            "venue_city": city,
+            "venue_country": None,
+            "venue_resolution_source": "legacy_alias_registry",
+            "venue_confidence": "medium",
+            "resolved": True,
+            "unresolved_reason": None,
+            "candidates": [canonical_name],
+        }
+
+    return {
+        "venue_canonical": canonical_name,
+        "venue_alias_key": alias_key,
+        "venue_city": city,
+        "venue_country": None,
+        "venue_resolution_source": "unresolved",
+        "venue_confidence": "low",
+        "resolved": False,
+        "unresolved_reason": "unknown_alias",
+        "candidates": [],
+    }
+
+
+def _build_venue_diagnostics(
+    venue_name: str | None,
+    *,
+    city: str | None,
+    competition_code: str,
+    team_names: list[str],
+) -> dict[str, Any]:
+    resolved = _resolve_venue_with_context(
+        venue_name=venue_name,
+        city=city,
+        competition_code=competition_code,
+        team_names=team_names,
+    )
+    unknown_venues = [venue_name] if venue_name and not resolved.get("resolved") else []
     return {
         "raw_venue_names": [venue_name] if venue_name else [],
-        "canonical_venue_name": canonical_name,
-        "alias_key": alias_key,
+        "canonical_venue_name": resolved.get("venue_canonical"),
+        "alias_key": resolved.get("venue_alias_key"),
         "unknown_venues": unknown_venues,
+        "venue_raw": venue_name,
+        "venue_canonical": resolved.get("venue_canonical"),
+        "venue_city": resolved.get("venue_city"),
+        "venue_country": resolved.get("venue_country"),
+        "venue_resolution_source": resolved.get("venue_resolution_source"),
+        "venue_confidence": resolved.get("venue_confidence"),
+        "unresolved_reason": resolved.get("unresolved_reason"),
+        "alias_candidates": resolved.get("candidates"),
         "possible_duplicate_venues": (
             [
                 {
-                    "canonical_name": canonical_name,
+                    "canonical_name": resolved.get("venue_canonical"),
                     "raw_alias": venue_name,
-                    "alias_key": alias_key,
+                    "alias_key": resolved.get("venue_alias_key"),
                 }
             ]
-            if venue_name and canonical_name and canonical_name != venue_name
+            if venue_name
+            and resolved.get("venue_canonical")
+            and resolved.get("venue_canonical") != venue_name
             else []
         ),
         "missing_venue_data": venue_name is None,
@@ -639,16 +940,47 @@ def _build_multi_day_diagnostics(
 def _classify_competition_type(
     event_name: str | None,
     teams: list[str],
+    competition_code: str,
 ) -> tuple[str, str]:
+    if competition_code in {"CPL_MEN", "WCPL"}:
+        return "franchise", "inferred"
+    if competition_code in {
+        "INTERNATIONAL_T20",
+        "INTERNATIONAL_ODI",
+        "INTERNATIONAL_TEST",
+    }:
+        return "international", "inferred"
+    if competition_code in {"DOMESTIC_T20_ENGLAND", "DOMESTIC_MULTI_DAY"}:
+        return "domestic", "inferred"
     if event_name:
         lowered = event_name.lower()
-        if any(token in lowered for token in ("premier league", "ipl", "cpl", "sa20", "hundred")):
+        if any(
+            token in lowered
+            for token in (
+                "premier league",
+                "ipl",
+                "cpl",
+                "sa20",
+                "hundred",
+            )
+        ):
             return "franchise", "inferred"
         if any(token in lowered for token in ("academy",)):
             return "academy", "inferred"
         if any(token in lowered for token in ("school", "u-19 school", "schools")):
             return "school", "inferred"
-        if any(token in lowered for token in ("club", "county", "domestic", "ranji", "super50")):
+        if any(
+            token in lowered
+            for token in (
+                "club",
+                "county",
+                "domestic",
+                "ranji",
+                "super50",
+                "vitality blast",
+                "t20 blast",
+            )
+        ):
             return "domestic", "inferred"
         if any(
             token in lowered for token in ("world cup", "icc", "international", "test championship")
@@ -701,15 +1033,16 @@ def _build_validation_diagnostics(
     source_filename: str | None = None,
 ) -> dict[str, Any]:
     registry_people_map = _extract_registry_people_map(parsed)
-    competition_type, competition_type_status = _classify_competition_type(
-        metadata_preview.event_name, team_names
-    )
+    source_metadata = _extract_cricsheet_event_metadata(parsed)
     format_category, format_status = _classify_match_format(
         metadata_preview.match_type, len(innings_preview), metadata_preview.source_dates
     )
     age_category, age_status = _classify_age_category_hint(metadata_preview.event_name, team_names)
     competition_code, competition_code_status = _classify_competition_code(
         metadata_preview.event_name, team_names, format_category, age_category
+    )
+    competition_type, competition_type_status = _classify_competition_type(
+        metadata_preview.event_name, team_names, competition_code
     )
     gender_category, gender_status = _classify_gender_category(
         metadata_preview.event_name, parsed, competition_code, team_names
@@ -745,7 +1078,13 @@ def _build_validation_diagnostics(
     player_diagnostics = _build_player_diagnostics(
         parsed, team_names, player_names, registry_people_map, gender_category
     )
-    venue_diagnostics = _build_venue_diagnostics(metadata_preview.venue)
+    source_city = _as_str(source_metadata.get("city_raw"))
+    venue_diagnostics = _build_venue_diagnostics(
+        metadata_preview.venue,
+        city=source_city,
+        competition_code=competition_code,
+        team_names=team_names,
+    )
     multi_day_diagnostics = _build_multi_day_diagnostics(
         metadata_preview, innings_preview, innings_nodes, format_category
     )
@@ -761,6 +1100,11 @@ def _build_validation_diagnostics(
         "classification": {
             "competition_code": competition_code,
             "competition_code_status": competition_code_status,
+            "competition_mapping_source": (
+                "event_name_mapping"
+                if competition_code_status == "inferred" and metadata_preview.event_name
+                else competition_code_status
+            ),
             "competition_type": competition_type,
             "competition_type_status": competition_type_status,
             "format_category": format_category,
@@ -773,6 +1117,7 @@ def _build_validation_diagnostics(
             "analysis_readiness": analysis_readiness,
         },
         "multi_day": multi_day_diagnostics,
+        "source_metadata": source_metadata,
         "team_alias_check": team_diagnostics,
         "player_identity_risks": player_diagnostics,
         "venue_check": venue_diagnostics,
@@ -841,6 +1186,8 @@ def _build_canonical_preview(
     venue_check = _as_dict(diagnostics.get("venue_check"))
     venue_context = HistoricalImportVenueContext(
         venue_name=_as_str(venue_check.get("canonical_venue_name")) or venue_raw,
+        city=_as_str(venue_check.get("venue_city")),
+        country=_as_str(venue_check.get("venue_country")),
         source_venue_raw=venue_raw,
         ground_code=_as_str(venue_check.get("alias_key")),
         venue_resolution_status=(

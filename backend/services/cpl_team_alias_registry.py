@@ -5,6 +5,14 @@ import re
 _NORMALIZE_RE = re.compile(r"[^a-z0-9]+")
 
 _ALIASES: dict[str, tuple[str, str]] = {
+    "surrey": ("Surrey", "surrey_county"),
+    "lancashire": ("Lancashire", "lancashire_county"),
+    "england": ("England", "england_national"),
+    "west indies": ("West Indies", "west_indies_national"),
+    "australia": ("Australia", "australia_national"),
+    "india": ("India", "india_national"),
+    "pakistan": ("Pakistan", "pakistan_national"),
+    "south africa": ("South Africa", "south_africa_national"),
     "barbados royals": ("Barbados Royals", "barbados_franchise"),
     "barbados tridents": ("Barbados Royals", "barbados_franchise"),
     "guyana amazon warriors": ("Guyana Amazon Warriors", "guyana_franchise"),
