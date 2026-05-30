@@ -591,6 +591,8 @@ export interface CaseStudyPhase {
   level?: "innings" | "match";
 }
 
+export type CaseStudyAnalysisMode = "limited_overs" | "test_multi_day" | "unknown";
+
 export interface CaseStudyKeyPlayer {
   id: string;
   name: string;
@@ -732,6 +734,23 @@ export interface CaseStudyInningsAnalysis {
   callouts: CaseStudyAnalystCallout[];
 }
 
+export interface CaseStudyMultiDayInningsContext {
+  innings_number: number;
+  team: string;
+  runs: number;
+  wickets: number;
+  overs: number;
+  deliveries?: number | null;
+  lead_deficit_after_innings?: number | null;
+}
+
+export interface CaseStudyMultiDaySummary {
+  match_status: "won" | "lost" | "draw" | "tie" | "no_result" | "unknown";
+  innings: CaseStudyMultiDayInningsContext[];
+  fourth_innings_chase_note?: string | null;
+  notice: string;
+}
+
 export interface CaseStudyAIBlock {
   match_summary: string;
   generated_at?: string | null;
@@ -740,6 +759,7 @@ export interface CaseStudyAIBlock {
 }
 
 export interface MatchCaseStudyResponse {
+  analysis_mode: CaseStudyAnalysisMode;
   match: CaseStudyMatch;
   momentum_summary: CaseStudyMomentumSummary;
   key_phase: CaseStudyKeyPhase;
@@ -749,6 +769,7 @@ export interface MatchCaseStudyResponse {
   innings_analysis?: CaseStudyInningsAnalysis[];
   match_callouts?: CaseStudyAnalystCallout[];
   match_level_summary?: string | null;
+  multi_day_summary?: CaseStudyMultiDaySummary | null;
   ai?: CaseStudyAIBlock | null;
 }
 

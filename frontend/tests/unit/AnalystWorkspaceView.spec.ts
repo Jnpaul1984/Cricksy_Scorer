@@ -115,6 +115,7 @@ const mockMatchList = {
 }
 
 const mockMatchDetail = {
+  analysis_mode: 'limited_overs',
   match: {
     id: 'match-001',
     date: '2025-01-10',

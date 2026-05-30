@@ -28,6 +28,8 @@ from backend.api.schemas.case_study import (
     CaseStudyKeyPlayer,
     CaseStudyMatch,
     CaseStudyMomentumSummary,
+    CaseStudyMultiDayInningsContext,
+    CaseStudyMultiDaySummary,
     CaseStudyPhase,
     CaseStudyPlayerBatting,
     CaseStudyPlayerBowling,
@@ -96,6 +98,47 @@ def _get_phase_ranges(match_format: str, overs_per_side: int) -> list[tuple[str,
             ("middle", f"Middle Overs ({pp_end + 1}-{mid_end})", pp_end + 1, mid_end),
             ("death", f"Late Overs ({mid_end + 1}-{n})", mid_end + 1, n),
         ]
+
+
+def _resolve_analysis_mode(
+    raw_match_type: str,
+    overs_per_side: int,
+    innings_count: int,
+    days_limit: int | None = None,
+) -> Literal["limited_overs", "test_multi_day", "unknown"]:
+    normalized = (raw_match_type or "").strip().upper()
+    if (
+        normalized in {"TEST", "FIRST_CLASS", "FIRST-CLASS", "MULTI_DAY", "MULTI-DAY"}
+        or innings_count >= 3
+        or (isinstance(days_limit, int) and days_limit > 1)
+    ):
+        return "test_multi_day"
+    if normalized in {"T20", "ODI"} or (
+        innings_count <= 2 and overs_per_side > 0 and overs_per_side <= 50
+    ):
+        return "limited_overs"
+    return "unknown"
+
+
+def _test_multi_day_ranges(overs_value: float) -> list[tuple[str, str, int, int]]:
+    max_over = max(1, int(overs_value))
+    first_band_end = min(max_over, 20)
+    second_band_end = min(max_over, 50)
+    ranges = [("custom", f"Overs 1-{first_band_end}", 1, first_band_end)]
+    if second_band_end > first_band_end:
+        ranges.append(
+            (
+                "custom",
+                f"Overs {first_band_end + 1}-{second_band_end}",
+                first_band_end + 1,
+                second_band_end,
+            )
+        )
+    if max_over > second_band_end:
+        ranges.append(
+            ("custom", f"Overs {second_band_end + 1}-{max_over}", second_band_end + 1, max_over)
+        )
+    return ranges
 
 
 # -----------------------------------------------------------------------------
@@ -540,7 +583,10 @@ def _compute_dismissal_patterns(
     for idx, d in enumerate(
         sorted(
             wicket_deliveries,
-            key=lambda w: (int(w.get("over_number") or w.get("over") or 1), int(w.get("ball_number") or 0)),
+            key=lambda w: (
+                int(w.get("over_number") or w.get("over") or 1),
+                int(w.get("ball_number") or 0),
+            ),
         ),
         start=1,
     ):
@@ -726,7 +772,28 @@ def _build_story_blocks(
     phases: list[CaseStudyPhase],
     strongest_phase: CaseStudyPhase | None,
     weakest_phase: CaseStudyPhase | None,
+    analysis_mode: Literal["limited_overs", "test_multi_day", "unknown"] = "limited_overs",
+    innings_number: int = 1,
 ) -> CaseStudyStoryBlocks:
+    if analysis_mode == "test_multi_day":
+        return CaseStudyStoryBlocks(
+            opening_story=(
+                f"Innings {innings_number}: {innings_summary.team} scored "
+                f"{innings_summary.runs}/{innings_summary.wickets} in {innings_summary.overs} overs."
+            ),
+            middle_overs_story="Session-safe progression is used; limited-overs phase labels are intentionally disabled.",
+            death_overs_story="Late-innings output is summarized with innings-safe wording only.",
+            scoring_acceleration=f"Overall innings run rate: {innings_summary.run_rate:.2f}.",
+            wickets_by_phase=(
+                f"Total wickets in innings {innings_number}: {innings_summary.wickets}."
+            ),
+            strongest_phase="Strongest segment is unavailable for Test/multi-day phase-safe mode.",
+            weakest_phase="Weakest segment is unavailable for Test/multi-day phase-safe mode.",
+            innings_outcome_contribution=(
+                f"{innings_summary.team} contributed {innings_summary.runs} runs in innings {innings_number}."
+            ),
+        )
+
     opening = _find_phase(phases, "powerplay")
     middle = _find_phase(phases, "middle")
     death = _find_phase(phases, "death")
@@ -768,8 +835,43 @@ def _build_innings_callouts(
     innings_number: int,
     phases: list[CaseStudyPhase],
     dismissal_patterns: CaseStudyDismissalPatterns,
+    analysis_mode: Literal["limited_overs", "test_multi_day", "unknown"] = "limited_overs",
 ) -> list[CaseStudyAnalystCallout]:
     callouts: list[CaseStudyAnalystCallout] = []
+    if analysis_mode == "test_multi_day":
+        if dismissal_patterns.wicket_cluster_callout:
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="Wicket cluster",
+                    innings=innings_number,
+                    phase="Innings segment",
+                    category="dismissal",
+                    severity="info",
+                    explanation=dismissal_patterns.wicket_cluster_callout,
+                    source_metrics=[f"total_wickets={dismissal_patterns.total_wickets}"],
+                    confidence=0.85,
+                    why_it_matters="Clusters indicate deterministic pressure swings without relying on T20 phase assumptions.",
+                )
+            )
+        if dismissal_patterns.total_wickets >= 5:
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="High wicket pressure",
+                    innings=innings_number,
+                    phase="Innings",
+                    category="bowling",
+                    severity="warning",
+                    explanation=(
+                        f"Innings {innings_number} lost {dismissal_patterns.total_wickets} wickets "
+                        "in recorded delivery data."
+                    ),
+                    source_metrics=[f"total_wickets={dismissal_patterns.total_wickets}"],
+                    confidence=0.8,
+                    why_it_matters="Sustained wicket pressure often drives Test/multi-day momentum changes.",
+                )
+            )
+        return callouts
+
     middle = _find_phase(phases, "middle")
     death = _find_phase(phases, "death")
     strongest = max(phases, key=lambda p: p.net_swing_vs_par, default=None)
@@ -840,7 +942,10 @@ def _build_innings_callouts(
                 category="momentum",
                 severity="info",
                 explanation=f"{strongest.label} was the strongest segment at {strongest.net_swing_vs_par:+d} vs par.",
-                source_metrics=[f"phase={strongest.id}", f"net_vs_par={strongest.net_swing_vs_par}"],
+                source_metrics=[
+                    f"phase={strongest.id}",
+                    f"net_vs_par={strongest.net_swing_vs_par}",
+                ],
                 confidence=0.8,
                 why_it_matters="Strong phases reveal where control was established.",
             )
@@ -862,7 +967,85 @@ def _build_innings_callouts(
     return callouts
 
 
-def _build_match_callouts(match: CaseStudyMatch) -> list[CaseStudyAnalystCallout]:
+def _build_multi_day_summary(match: CaseStudyMatch) -> CaseStudyMultiDaySummary:
+    cumulative_runs: dict[str, int] = defaultdict(int)
+    innings_rows: list[CaseStudyMultiDayInningsContext] = []
+    for idx, inn in enumerate(match.innings, start=1):
+        cumulative_runs[inn.team] += inn.runs
+        opponent_total = max(
+            (runs for team, runs in cumulative_runs.items() if team != inn.team), default=0
+        )
+        deliveries = cricket_overs_to_legal_balls(inn.overs)
+        innings_rows.append(
+            CaseStudyMultiDayInningsContext(
+                innings_number=idx,
+                team=inn.team,
+                runs=inn.runs,
+                wickets=inn.wickets,
+                overs=inn.overs,
+                deliveries=deliveries,
+                lead_deficit_after_innings=cumulative_runs[inn.team] - opponent_total,
+            )
+        )
+
+    result_lower = (match.result or "").lower()
+    match_status: Literal["won", "lost", "draw", "tie", "no_result", "unknown"] = "unknown"
+    if "won" in result_lower:
+        match_status = "won"
+    elif "lost" in result_lower:
+        match_status = "lost"
+    elif "draw" in result_lower:
+        match_status = "draw"
+    elif "tie" in result_lower:
+        match_status = "tie"
+    elif "no result" in result_lower or "abandoned" in result_lower:
+        match_status = "no_result"
+
+    fourth_note = None
+    if len(innings_rows) >= 4:
+        chasing_team = innings_rows[3].team
+        opposition_total = sum(row.runs for row in innings_rows[:3] if row.team != chasing_team)
+        chasing_prior = sum(row.runs for row in innings_rows[:3] if row.team == chasing_team)
+        target = opposition_total - chasing_prior + 1
+        if target > 0:
+            remaining = target - innings_rows[3].runs
+            if remaining > 0:
+                fourth_note = (
+                    f"Fourth-innings chase context: {chasing_team} required {target}, "
+                    f"finishing {remaining} short in recorded totals."
+                )
+            else:
+                fourth_note = f"Fourth-innings chase context: {chasing_team} exceeded the implied target of {target}."
+
+    return CaseStudyMultiDaySummary(
+        match_status=match_status,
+        innings=innings_rows,
+        fourth_innings_chase_note=fourth_note,
+    )
+
+
+def _build_match_callouts(
+    match: CaseStudyMatch,
+    analysis_mode: Literal["limited_overs", "test_multi_day", "unknown"] = "limited_overs",
+) -> list[CaseStudyAnalystCallout]:
+    if analysis_mode == "test_multi_day":
+        return [
+            CaseStudyAnalystCallout(
+                title="Test/multi-day limited-analysis notice",
+                level="match",
+                innings=None,
+                phase="Full match",
+                category="outcome",
+                severity="info",
+                explanation=(
+                    "Test/multi-day analysis is currently limited and uses innings/session-safe summaries."
+                ),
+                source_metrics=[f"innings_count={len(match.innings)}"],
+                confidence=0.95,
+                why_it_matters="This prevents misleading limited-overs framing for 3/4-innings matches.",
+            )
+        ]
+
     innings = match.innings[:2]
     if len(innings) < 2:
         return []
@@ -944,7 +1127,8 @@ async def _build_case_study_from_db(
     team_b_name = team_b.get("name", "Team B")
 
     overs_per_side = game.overs_limit or 20
-    match_format = game.match_type.upper() if game.match_type else "T20"
+    raw_match_type = game.match_type.upper() if game.match_type else "T20"
+    match_format = raw_match_type
     if match_format not in ("T20", "ODI", "TEST"):
         match_format = "CUSTOM"
 
@@ -1076,6 +1260,15 @@ async def _build_case_study_from_db(
         overs_per_side=overs_per_side,
         innings=innings_summaries,
     )
+    analysis_mode = _resolve_analysis_mode(
+        raw_match_type=raw_match_type,
+        overs_per_side=overs_per_side,
+        innings_count=len(innings_summaries),
+        days_limit=game.days_limit,
+    )
+    multi_day_summary = (
+        _build_multi_day_summary(case_study_match) if analysis_mode == "test_multi_day" else None
+    )
 
     # 5) Get deliveries and key players
     deliveries = game.deliveries or []
@@ -1103,10 +1296,40 @@ async def _build_case_study_from_db(
         per_over_runs, per_over_wickets = _aggregate_per_over(deliveries, innings_number)
         total_runs = innings_summary.runs
         total_overs = max(_display_overs_to_decimal_overs(innings_summary.overs), 0.1)
+        innings_phase_ranges = (
+            _test_multi_day_ranges(innings_summary.overs)
+            if analysis_mode == "test_multi_day"
+            else phase_ranges
+        )
 
-        if per_over_runs:
+        if analysis_mode == "test_multi_day":
+            phases = []
+            key_phase = CaseStudyKeyPhase(
+                title=f"Innings {innings_number} summary",
+                detail=(
+                    f"{innings_summary.team} scored {innings_summary.runs}/{innings_summary.wickets} "
+                    f"in {innings_summary.overs} overs."
+                ),
+                innings_index=innings_index,
+                team=innings_summary.team,
+                level="innings",
+                overs_range=None,
+                reason_codes=["innings_safe_summary"],
+            )
+            momentum_summary = CaseStudyMomentumSummary(
+                title="Innings-safe momentum summary",
+                subtitle=(
+                    "Test/multi-day analysis is currently limited and uses innings/session-safe summaries."
+                ),
+                winning_side=winning_team,
+                innings_index=innings_index,
+                phase_id=None,
+                level="innings",
+                swing_metric=None,
+            )
+        elif per_over_runs:
             phases = _compute_phase_stats(
-                phase_ranges,
+                innings_phase_ranges,
                 per_over_runs,
                 per_over_wickets,
                 total_runs,
@@ -1164,11 +1387,25 @@ async def _build_case_study_from_db(
                 swing_metric=None,
             )
 
-        dismissal_patterns = _compute_dismissal_patterns(deliveries, innings_number, phase_ranges)
+        dismissal_patterns = _compute_dismissal_patterns(
+            deliveries, innings_number, innings_phase_ranges
+        )
         strongest_phase = max(phases, key=lambda p: p.net_swing_vs_par) if phases else None
         weakest_phase = min(phases, key=lambda p: p.net_swing_vs_par) if phases else None
-        story_blocks = _build_story_blocks(innings_summary, phases, strongest_phase, weakest_phase)
-        callouts = _build_innings_callouts(innings_number, phases, dismissal_patterns)
+        story_blocks = _build_story_blocks(
+            innings_summary,
+            phases,
+            strongest_phase,
+            weakest_phase,
+            analysis_mode=analysis_mode,
+            innings_number=innings_number,
+        )
+        callouts = _build_innings_callouts(
+            innings_number,
+            phases,
+            dismissal_patterns,
+            analysis_mode=analysis_mode,
+        )
         innings_analysis.append(
             CaseStudyInningsAnalysis(
                 innings_index=innings_index,
@@ -1190,10 +1427,14 @@ async def _build_case_study_from_db(
 
     selected_innings = innings_analysis[0] if innings_analysis else None
     phases = selected_innings.phases if selected_innings else []
-    key_phase = selected_innings.key_phase if selected_innings else CaseStudyKeyPhase(
-        title="Phase data not yet available",
-        detail="No innings analysis available.",
-        level="match",
+    key_phase = (
+        selected_innings.key_phase
+        if selected_innings
+        else CaseStudyKeyPhase(
+            title="Phase data not yet available",
+            detail="No innings analysis available.",
+            level="match",
+        )
     )
     momentum_summary = (
         selected_innings.momentum_summary
@@ -1208,10 +1449,11 @@ async def _build_case_study_from_db(
 
     # 8) Generate AI summary
     ai_block = _generate_ai_summary(case_study_match, phases, key_players)
-    match_callouts = _build_match_callouts(case_study_match)
+    match_callouts = _build_match_callouts(case_study_match, analysis_mode=analysis_mode)
 
     # 9) Return complete response
     return MatchCaseStudyResponse(
+        analysis_mode=analysis_mode,
         match=case_study_match,
         momentum_summary=momentum_summary,
         key_phase=key_phase,
@@ -1221,6 +1463,7 @@ async def _build_case_study_from_db(
         innings_analysis=innings_analysis,
         match_callouts=match_callouts,
         match_level_summary=f"{case_study_match.teams_label}: {case_study_match.result}",
+        multi_day_summary=multi_day_summary,
         ai=ai_block,
     )
 
