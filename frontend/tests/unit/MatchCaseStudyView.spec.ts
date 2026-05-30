@@ -573,12 +573,119 @@ describe('MatchCaseStudyView', () => {
 
     const text = wrapper.text()
     // Test-specific podcast card titles
+    expect(text).toContain('First innings')
     expect(text).toContain('First-innings lead story')
+    expect(text).toContain('Third innings')
     expect(text).toContain('Fourth-innings chase story')
     expect(text).toContain('Collapse / recovery talking point')
     // Must NOT contain limited-overs cards in test mode
     expect(text).not.toContain('Powerplay')
     expect(text).not.toContain('vs par')
+  })
+
+  it('generates Test podcast with presenter-ready copy and no grammar issues', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue({
+      ...baseCaseStudy,
+      analysis_mode: 'test_multi_day',
+      match: {
+        ...baseCaseStudy.match,
+        format: 'TEST',
+        venue: 'Adelaide Oval',
+        result: 'Australia won by 7 wickets',
+        teams_label: 'Australia vs South Africa',
+        innings: [
+          { team: 'SA', runs: 259, wickets: 10, overs: 80, run_rate: 3.24 },
+          { team: 'AUS', runs: 383, wickets: 10, overs: 121, run_rate: 3.16 },
+          { team: 'SA', runs: 250, wickets: 10, overs: 73, run_rate: 3.42 },
+          { team: 'AUS', runs: 127, wickets: 0, overs: 30, run_rate: 4.23 },
+        ],
+      },
+      key_players: [
+        {
+          id: 'starc',
+          name: 'MA Starc',
+          team: 'Australia',
+          role: 'all-rounder',
+          impact: 'high',
+          impact_label: 'scored 53 off 91 balls',
+          batting: { innings: 1, runs: 53, balls: 91, strike_rate: 58.2, boundaries: { fours: 4, sixes: 0 } },
+          bowling: { overs: 22, maidens: 3, runs: 71, wickets: 4, economy: 3.23 },
+        },
+      ],
+      phases: [],
+      innings_analysis: [],
+      multi_day_summary: {
+        match_status: 'won',
+        notice: 'Test/multi-day match.',
+        innings: [
+          { innings_number: 1, team: 'SA', runs: 259, wickets: 10, overs: 80 },
+          { innings_number: 2, team: 'AUS', runs: 383, wickets: 10, overs: 121 },
+          { innings_number: 3, team: 'SA', runs: 250, wickets: 10, overs: 73 },
+          { innings_number: 4, team: 'AUS', runs: 127, wickets: 0, overs: 30 },
+        ],
+        first_innings_lead_note: 'Australia took a 124-run first-innings lead.',
+        lead_swing_notes: ['Australia took a 124-run first-innings lead.'],
+        fourth_innings_chase: {
+          target: 127,
+          chasing_team: 'Australia',
+          runs_scored: 127,
+          wickets_lost: 0,
+          wickets_in_hand: 10,
+          chase_result: 'completed',
+          pressure_note: 'Chase completed; 10 wickets in hand.',
+        },
+        wicket_clusters: [
+          { innings_number: 2, overs_start: 13, overs_end: 15, wickets: 2, label: 'wicket cluster' },
+        ],
+        recovery_windows: [],
+        match_turning_point: null,
+      },
+    } as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
+    await flushAsync()
+
+    await wrapper.get('[data-testid="podcast-generate-btn"]').trigger('click')
+    await flushAsync()
+
+    const text = wrapper.text()
+
+    // No "wicket(s)" pluralization artifact anywhere
+    expect(text).not.toContain('wicket(s)')
+
+    // Opening hook uses venue
+    expect(text).toContain('Adelaide Oval')
+
+    // First innings story describes first batting team
+    expect(text).toContain('SA posted 259/10')
+
+    // First-innings lead card combines reply + lead note
+    expect(text).toContain('AUS replied with 383/10')
+    expect(text).toContain('Australia took a 124-run first-innings lead.')
+
+    // Third innings story sets up the target
+    expect(text).toContain('SA made 250/10')
+    expect(text).toContain('target of 127')
+
+    // Fourth-innings chase: concise, no repetition from pressure_note
+    expect(text).toContain('Australia completed the chase at 127/0')
+    expect(text).toContain('10 wickets in hand')
+    // Podcast card must NOT reproduce the pressure_note verbatim
+    const chaseCardText = wrapper.get('[data-testid="podcast-card-test-fourth-innings-chase"]').text()
+    expect(chaseCardText).not.toContain('Chase completed; 10 wickets in hand')
+
+    // Player spotlight uses batting and bowling facts — no "delivered scored" artifact
+    const playerCardText = wrapper.get('[data-testid="podcast-card-test-player-impact"]').text()
+    expect(playerCardText).not.toContain('delivered scored')
+    expect(text).toContain('MA Starc')
+    expect(text).toContain('all-round contribution')
+    expect(text).toContain('53 runs off 91 balls')
+    expect(text).toContain('4 wickets')
+
+    // Closing question is discussion-ready (not generic placeholder)
+    expect(text).not.toContain('What deterministic trend')
+    expect(text).toContain("Australia's chase")
   })
 
   it('exports approved podcast rundown only by default', async () => {
