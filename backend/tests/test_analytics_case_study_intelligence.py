@@ -701,6 +701,9 @@ def test_odi_chase_intelligence_with_delivery_data() -> None:
     assert 11 in snapshot_overs
     assert 26 in snapshot_overs
     assert 41 in snapshot_overs
+    assert result.chase_pressure_note is not None
+    assert "entering entering" not in result.chase_pressure_note
+    assert "entering the Consolidation phase" in result.chase_pressure_note
 
 
 def test_odi_chase_intelligence_no_delivery_data() -> None:
@@ -877,8 +880,9 @@ def test_odi_turning_point_one_run_match() -> None:
 
     turning_point = _derive_odi_turning_point([inn1, inn2], [], None, match)
     assert turning_point is not None
-    assert "one run" in turning_point.lower()
+    assert "one-run odi" in turning_point.lower()
     assert "Warwickshire" in turning_point
+    assert "Turning point candidate:" not in turning_point
 
 
 def test_odi_required_rate_increases_over_time() -> None:
@@ -921,3 +925,6 @@ def test_odi_required_rate_increases_over_time() -> None:
     snap_11 = next((s for s in result.required_rate_snapshots if s.over == 11), None)
     if snap_11:
         assert snap_11.required_rate > result.initial_required_rate
+        assert snap_11.label == "Consolidation"
+    assert all("entering entering" not in window for window in result.pressure_windows)
+    assert all("death overs" not in window for window in result.pressure_windows)

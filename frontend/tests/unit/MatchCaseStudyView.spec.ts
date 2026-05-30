@@ -484,6 +484,71 @@ describe('MatchCaseStudyView', () => {
           callouts: [],
         },
       ],
+      odi_intelligence: {
+        scoreboard_comparison: {
+          team_1: 'Durham',
+          team_1_runs: 338,
+          team_1_wickets: 8,
+          team_1_run_rate: 6.76,
+          team_2: 'Warwickshire',
+          team_2_runs: 337,
+          team_2_wickets: 8,
+          team_2_run_rate: 6.74,
+          run_differential: 1,
+          final_margin: 'Durham won by 1 runs',
+        },
+        chase_intelligence: {
+          target: 339,
+          chasing_team: 'Warwickshire',
+          initial_required_rate: 6.78,
+          required_rate_snapshots: [
+            { over: 11, label: 'Consolidation', runs_needed: 281, overs_remaining: 40, required_rate: 7.03 },
+            { over: 41, label: 'Death Overs', runs_needed: 89, overs_remaining: 10, required_rate: 8.9 },
+          ],
+          chase_pressure_note: 'Required rate at start: 7.03 RPO (entering the Consolidation phase, 281 runs from 40 overs). Required rate rose from 7.32 to 8.90 RPO entering the Death Overs.',
+          final_10_overs_summary: 'Warwickshire entered the final 10 overs needing 89 runs with 5 wickets in hand.',
+          chase_result: 'fell_short',
+          runs_margin: 1,
+          wickets_in_hand: 2,
+          pressure_windows: ['Required rate rose from 7.32 to 8.90 RPO entering the Death Overs.'],
+          data_quality: 'full',
+        },
+        partnerships: [
+          {
+            innings_number: 1,
+            highest_partnership: {
+              batter_1: 'DG Bedingham',
+              batter_2: 'TSS Mackintosh',
+              runs: 116,
+              balls: 96,
+              run_rate: 7.25,
+              start_over: 31,
+              end_over: 46,
+            },
+            best_run_rate_partnership: {
+              batter_1: 'DG Bedingham',
+              batter_2: 'MJ Killeen',
+              runs: 49,
+              balls: 18,
+              run_rate: 16.33,
+              start_over: 47,
+              end_over: 49,
+            },
+            rebuilding_partnership: {
+              batter_1: 'DG Bedingham',
+              batter_2: 'TSS Mackintosh',
+              runs: 116,
+              balls: 96,
+              run_rate: 7.25,
+              start_over: 31,
+              end_over: 46,
+            },
+            summary: 'Highest partnership: 116 runs (DG Bedingham & TSS Mackintosh, overs 31-46).',
+            data_quality: 'full',
+          },
+        ],
+        turning_point_candidate: 'Warwickshire stayed within one run of Durham’s 338, but the chase never quite closed. In a one-run ODI, every phase decision carried weight.',
+      },
     } as never)
     vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
 
@@ -492,10 +557,22 @@ describe('MatchCaseStudyView', () => {
     await wrapper.get('[data-testid="podcast-generate-btn"]').trigger('click')
     await flushAsync()
 
+    const pageText = wrapper.text()
     const text = wrapper.get('#cs-podcast-prep').text()
+    expect(pageText).toContain('Scoreboard comparison')
+    expect(pageText).toContain('Durham won by 1 run')
+    expect(pageText).not.toContain('Durham won by 1 runs')
     expect(text).toContain('Durham beat Warwickshire by 1 run.')
     expect(text).toContain('Warwickshire replied with 337/8 from 50 overs, falling 1 run short.')
     expect(text).toContain('Death Overs (41-50)')
+    expect(text).not.toContain('entering entering')
+    expect(text).toContain('entering the Consolidation phase')
+    expect(text).toContain('entering the Death Overs')
+    expect((text.match(/Required rate rose from 7\.32 to 8\.90 RPO entering the Death Overs\./g) ?? []).length).toBe(1)
+    expect(text).toContain("Durham's strongest stand was 116 between DG Bedingham and TSS Mackintosh from overs 31–46.")
+    expect(text).toContain('That partnership powered the late surge.')
+    expect(text).toContain('Warwickshire stayed within one run of Durham’s 338, but the chase never quite closed.')
+    expect(wrapper.findAll('.cs-odi-list').length).toBeGreaterThan(0)
     expect(text).not.toContain('Durham vs Warwickshire: Durham won by 1 run.')
     expect(text).not.toContain('durham won by 1 run')
     expect(text).not.toContain('Powerplay (1-6)')

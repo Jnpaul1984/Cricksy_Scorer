@@ -1974,9 +1974,9 @@ def _derive_odi_chase_intelligence(
 
     # Phase boundary overs for ODI
     phase_boundaries = [
-        (11, "Entering consolidation (over 11)", 10),
-        (26, "Entering acceleration (over 26)", 25),
-        (41, "Entering death overs (over 41)", 40),
+        (11, "Consolidation", 10),
+        (26, "Acceleration", 25),
+        (41, "Death Overs", 40),
     ]
 
     snapshots: list[CaseStudyODIRequiredRateSnapshot] = []
@@ -2046,7 +2046,7 @@ def _derive_odi_chase_intelligence(
             if rr_increase >= 1.5:
                 pressure_windows.append(
                     f"Required rate rose from {prev.required_rate:.2f} to "
-                    f"{curr.required_rate:.2f} RPO entering {curr.label.split('(')[0].strip().lower()}."
+                    f"{curr.required_rate:.2f} RPO entering the {curr.label}."
                 )
 
     # Chase pressure note
@@ -2095,12 +2095,18 @@ def _build_odi_chase_pressure_note(
     wickets_in_hand: int,
 ) -> str:
     """Build a plain-English ODI chase pressure note."""
+
+    def _phase_entry_phrase(phase_label: str) -> str:
+        if phase_label in {"Consolidation", "Acceleration"}:
+            return f"entering the {phase_label} phase"
+        return f"entering the {phase_label}"
+
     parts: list[str] = []
     if snapshots:
         entry = snapshots[0]
         parts.append(
             f"Required rate at start: {entry.required_rate:.2f} RPO "
-            f"(entering {entry.label.split('(')[0].strip().lower()}, "
+            f"({_phase_entry_phrase(entry.label)}, "
             f"{entry.runs_needed} runs from {entry.overs_remaining:.0f} overs)."
         )
     if pressure_windows:
@@ -2196,14 +2202,11 @@ def _derive_odi_turning_point(
         inn2 = innings_summaries[1] if len(innings_summaries) >= 2 else None
         if inn1 and inn2:
             return (
-                f"Turning point candidate: {inn2.team} stayed within one run of "
-                f"{inn1.team}'s total of {inn1.runs} but could not close the gap. "
-                "Every phase decision in a one-run ODI carries decisive weight."
+                f"{inn2.team} stayed within one run of {inn1.team}\u2019s {inn1.runs}, "
+                "but the chase never quite closed. In a one-run ODI, every phase decision "
+                "carried weight."
             )
-        return (
-            "Turning point candidate: The match was decided by a single run — "
-            "every phase decision proved pivotal."
-        )
+        return "The match was decided by a single run, and every phase decision proved pivotal."
 
     # 2. Chase wicket cluster + required-rate spike
     if chase_intel and chase_intel.pressure_windows:

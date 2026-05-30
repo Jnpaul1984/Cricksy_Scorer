@@ -316,7 +316,7 @@
           <p
             v-if="caseStudy.odi_intelligence.scoreboard_comparison.final_margin"
             class="cs-footnote"
-          >{{ caseStudy.odi_intelligence.scoreboard_comparison.final_margin }}</p>
+          >{{ normalizeResultGrammar(caseStudy.odi_intelligence.scoreboard_comparison.final_margin) }}</p>
         </BaseCard>
 
         <!-- Chase Intelligence -->
@@ -343,14 +343,20 @@
               <span class="cs-phase-number-value">{{ caseStudy.odi_intelligence.chase_intelligence.wickets_in_hand }}</span>
             </div>
           </div>
-          <p
-            v-if="caseStudy.odi_intelligence.chase_intelligence.chase_pressure_note"
-            class="cs-footnote"
-          >{{ caseStudy.odi_intelligence.chase_intelligence.chase_pressure_note }}</p>
-          <p
-            v-if="caseStudy.odi_intelligence.chase_intelligence.final_10_overs_summary"
-            class="cs-footnote"
-          >{{ caseStudy.odi_intelligence.chase_intelligence.final_10_overs_summary }}</p>
+          <ul class="cs-odi-list">
+            <li
+              v-if="caseStudy.odi_intelligence.chase_intelligence.chase_pressure_note"
+              class="cs-footnote"
+            >
+              {{ caseStudy.odi_intelligence.chase_intelligence.chase_pressure_note }}
+            </li>
+            <li
+              v-if="caseStudy.odi_intelligence.chase_intelligence.final_10_overs_summary"
+              class="cs-footnote"
+            >
+              {{ caseStudy.odi_intelligence.chase_intelligence.final_10_overs_summary }}
+            </li>
+          </ul>
         </BaseCard>
 
         <!-- Required Rate Movement -->
@@ -367,7 +373,8 @@
               class="cs-phase-number-item"
             >
               <span class="cs-phase-number-label">{{ snap.label }}</span>
-              <span class="cs-phase-number-value">{{ snap.required_rate.toFixed(2) }} RPO ({{ snap.runs_needed }} from {{ snap.overs_remaining.toFixed(0) }} ov)</span>
+            <span class="cs-phase-number-value">{{ snap.required_rate.toFixed(2) }} RPO</span>
+            <span class="cs-footnote">{{ snap.runs_needed }} from {{ snap.overs_remaining.toFixed(0) }} ov</span>
             </div>
           </div>
         </BaseCard>
@@ -380,14 +387,22 @@
           class="cs-summary-card"
         >
           <p class="cs-label">Partnership impact — innings {{ pship.innings_number }}</p>
-          <p class="cs-value" v-if="pship.highest_partnership">
-            Highest: {{ pship.highest_partnership.runs }} runs
-            ({{ pship.highest_partnership.batter_1 }} &amp; {{ pship.highest_partnership.batter_2 }}
-            <template v-if="pship.highest_partnership.start_over && pship.highest_partnership.end_over">
-              , overs {{ pship.highest_partnership.start_over }}–{{ pship.highest_partnership.end_over }}
-            </template>)
-          </p>
-          <p class="cs-footnote">{{ pship.summary }}</p>
+          <ul class="cs-odi-list">
+            <li class="cs-footnote" v-if="pship.highest_partnership">
+              Highest stand: {{ pship.highest_partnership.runs }} runs
+              ({{ pship.highest_partnership.batter_1 }} &amp; {{ pship.highest_partnership.batter_2 }}
+              <template v-if="pship.highest_partnership.start_over && pship.highest_partnership.end_over">
+                , overs {{ pship.highest_partnership.start_over }}–{{ pship.highest_partnership.end_over }}
+              </template>)
+            </li>
+            <li class="cs-footnote" v-if="pship.best_run_rate_partnership">
+              Best scoring rate: {{ pship.best_run_rate_partnership.run_rate.toFixed(2) }} RPO
+            </li>
+            <li class="cs-footnote" v-if="pship.rebuilding_partnership">
+              Rebuild stand: {{ pship.rebuilding_partnership.runs }} runs
+            </li>
+            <li class="cs-footnote">{{ pship.summary }}</li>
+          </ul>
         </BaseCard>
 
         <!-- ODI Turning Point Candidate -->
@@ -1842,7 +1857,11 @@ function formatODIChaseResultClause(
 }
 
 function formatODIPhaseLabel(label: string): string {
-  return label.replace(/\bdeath overs\b/gi, 'Death Overs')
+  return label
+    .replace(/\bopening powerplay\b/gi, 'Opening Powerplay')
+    .replace(/\bconsolidation\b/gi, 'Consolidation')
+    .replace(/\bacceleration\b/gi, 'Acceleration')
+    .replace(/\bdeath overs\b/gi, 'Death Overs')
 }
 
 function formatSafeTestInningsScore(
@@ -2184,7 +2203,6 @@ function generatePodcastPrep() {
       const parts: string[] = []
       if (chase.chase_pressure_note) parts.push(chase.chase_pressure_note)
       if (chase.final_10_overs_summary) parts.push(chase.final_10_overs_summary)
-      if (chase.pressure_windows?.length) parts.push(chase.pressure_windows[0])
       return parts.length ? parts.join(' ') : `${chase.chasing_team} chased ${chase.target} (initial required rate: ${chase.initial_required_rate.toFixed(2)} RPO).`
     })()
 
@@ -2193,11 +2211,26 @@ function generatePodcastPrep() {
       const partnerships = odiIntel?.partnerships ?? []
       const inn1p = partnerships.find((p) => p.innings_number === 1)
       const inn2p = partnerships.find((p) => p.innings_number === 2)
-      if (inn1p?.data_quality !== 'unavailable' && inn1p?.summary) {
-        return inn1p.summary
-      }
-      if (inn2p?.data_quality !== 'unavailable' && inn2p?.summary) {
-        return inn2p.summary
+      const primary = inn1p?.data_quality !== 'unavailable' ? inn1p : inn2p?.data_quality !== 'unavailable' ? inn2p : null
+      if (primary?.highest_partnership) {
+        const highest = primary.highest_partnership
+        const battingTeam = primary.innings_number === 1
+          ? (innings1Score?.team ?? innings1?.team ?? 'The batting side')
+          : (innings2Score?.team ?? innings2?.team ?? 'The batting side')
+        const oversText = highest.start_over && highest.end_over
+          ? ` from overs ${highest.start_over}–${highest.end_over}`
+          : ''
+        const coreSentence = `${battingTeam}'s strongest stand was ${highest.runs} between ${highest.batter_1} and ${highest.batter_2}${oversText}.`
+        if (highest.end_over && highest.end_over >= 40) {
+          return sanitizePresenterText(`${coreSentence} That partnership powered the late surge.`)
+        }
+        if (primary.rebuilding_partnership && primary.rebuilding_partnership.runs !== highest.runs) {
+          return sanitizePresenterText(`${coreSentence} It stabilized the innings after a pressure spell.`)
+        }
+        if (primary.best_run_rate_partnership) {
+          return sanitizePresenterText(`${coreSentence} It also created a scoring burst at ${primary.best_run_rate_partnership.run_rate.toFixed(2)} RPO.`)
+        }
+        return sanitizePresenterText(coreSentence)
       }
       return 'Partnership detail unavailable from current delivery/player data.'
     })()
@@ -2213,7 +2246,9 @@ function generatePodcastPrep() {
 
     // Turning point — prefer ODI intelligence turning point, fall back to phase analysis
     const turningPointText = (() => {
-      if (odiIntel?.turning_point_candidate) return odiIntel.turning_point_candidate
+      if (odiIntel?.turning_point_candidate) {
+        return odiIntel.turning_point_candidate.replace(/^Turning point candidate:\s*/i, '')
+      }
       const opening = findODIPhase(phases1, 'powerplay')
       const acceleration = findODIPhase(phases1, 'acceleration')
       const death = findODIPhase(phases1, 'death')
@@ -2224,7 +2259,7 @@ function generatePodcastPrep() {
         return `${innings1?.team ?? innings1Score?.team ?? 'The batting side'}'s slow opening powerplay was offset by stronger scoring in acceleration.`
       }
       if (death && death.runs > 0) {
-        return `Execution in the death overs (41–50) proved decisive in the final ODI balance.`
+        return `Execution in the Death Overs (41–50) proved decisive in the final ODI balance.`
       }
       return detail.momentum_summary?.subtitle || 'Turning point unavailable from deterministic data.'
     })()
@@ -2236,10 +2271,10 @@ function generatePodcastPrep() {
       const sb = odiIntel?.scoreboard_comparison
       const parts: string[] = []
       if (death1) {
-        parts.push(`${innings1Score?.team ?? innings1?.team ?? 'Team 1'} scored ${death1.runs}/${death1.wickets} in the death overs (41–50) at ${death1.run_rate.toFixed(2)} RPO.`)
+        parts.push(`${innings1Score?.team ?? innings1?.team ?? 'Team 1'} scored ${death1.runs}/${death1.wickets} in the Death Overs (41–50) at ${death1.run_rate.toFixed(2)} RPO.`)
       }
       if (death2) {
-        parts.push(`${innings2Score?.team ?? innings2?.team ?? 'Team 2'} replied with ${death2.runs}/${death2.wickets} in their death overs.`)
+        parts.push(`${innings2Score?.team ?? innings2?.team ?? 'Team 2'} replied with ${death2.runs}/${death2.wickets} in their Death Overs.`)
       }
       if (!parts.length && sb) {
         if (sb.team_1_death_runs != null) parts.push(`${sb.team_1}: ${sb.team_1_death_runs} death-over runs (${sb.team_1_death_wickets ?? '?'} wickets).`)
@@ -2252,7 +2287,7 @@ function generatePodcastPrep() {
       const consol = findODIPhase(phases1, 'consolidation')
       const accel = findODIPhase(phases1, 'acceleration')
       if (consol && accel) {
-        return `In 50-over cricket, the consolidation and acceleration phases can decide whether a slow start is recoverable.`
+        return `In 50-over cricket, the Consolidation and Acceleration phases can decide whether a slow start is recoverable.`
       }
       return 'In 50-over cricket, middle-overs control often decides whether totals are defendable or chaseable.'
     })()
@@ -3336,6 +3371,12 @@ function handleCalloutSelect(callout: AiCallout) {
   font-size: var(--text-xs);
 }
 
+.cs-phase-number-item {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+}
+
 .cs-phase-number-label {
   color: var(--color-text-muted);
 }
@@ -3343,6 +3384,13 @@ function handleCalloutSelect(callout: AiCallout) {
 .cs-phase-number-value {
   font-weight: var(--font-semibold);
   color: var(--color-text);
+}
+
+.cs-odi-list {
+  margin: 0;
+  padding-left: var(--space-3);
+  display: grid;
+  gap: 4px;
 }
 
 .cs-phase-moments {
