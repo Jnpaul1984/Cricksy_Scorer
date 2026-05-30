@@ -790,7 +790,7 @@
                     </div>
                     <div v-if="registryData.competition_type" class="aw-registry-row">
                       <span class="aw-registry-label">Competition type</span>
-                      <span class="aw-registry-value">{{ registryData.competition_type }}</span>
+                      <span class="aw-registry-value">{{ humanizeRegistryToken(registryData.competition_type) }}</span>
                     </div>
                     <div v-if="registryData.competition_name && registryData.competition_name !== registryData.competition" class="aw-registry-row">
                       <span class="aw-registry-label">Competition name</span>
@@ -1612,7 +1612,7 @@
                           v-for="code in registryCompetitionOptions.filter(c => !['CPL_MEN','WCPL','unknown'].includes(c))"
                           :key="code"
                           :value="code"
-                        >{{ code }}</option>
+                        >{{ registryCompetitionCodeLabel(code) }}</option>
                       </select>
                     </div>
 
@@ -2170,7 +2170,40 @@ const registrySeasonOptions = computed(() => {
 function registryCompetitionLabel(entry: AnalystRegistryEntry): string {
   if (entry.competition_code === 'CPL_MEN') return 'CPL Men'
   if (entry.competition_code === 'WCPL') return 'WCPL'
-  return entry.competition_name || 'unknown'
+  return entry.competition_name || registryCompetitionCodeLabel(entry.competition_code)
+}
+
+function registryCompetitionCodeLabel(code: string): string {
+  const compact = code.trim()
+  if (!compact) return 'unknown'
+  if (compact === 'unknown') return 'unknown'
+  const special: Record<string, string> = {
+    ONE_DAY_CUP: 'One-Day Cup',
+    T20_BLAST: 'T20 Blast',
+    THE_HUNDRED_MEN: 'The Hundred Men',
+    THE_HUNDRED_WOMEN: 'The Hundred Women',
+    IPL: 'IPL',
+    WPL: 'WPL',
+    BBL: 'BBL',
+    WBBL: 'WBBL',
+    PSL: 'PSL',
+    SA20: 'SA20',
+    ILT20: 'ILT20',
+    ICC_T20_WORLD_CUP: 'ICC T20 World Cup',
+    ICC_CRICKET_WORLD_CUP: 'ICC Cricket World Cup',
+    ICC_CHAMPIONS_TROPHY: 'ICC Champions Trophy',
+  }
+  if (special[compact]) return special[compact]
+  return compact
+    .toLowerCase()
+    .split('_')
+    .map(token => token ? token[0].toUpperCase() + token.slice(1) : token)
+    .join(' ')
+}
+
+function humanizeRegistryToken(value: string | null | undefined): string {
+  if (!value) return 'unknown'
+  return value.replace(/_/g, ' ')
 }
 
 function registrySourceLabel(sourceType: string): string {

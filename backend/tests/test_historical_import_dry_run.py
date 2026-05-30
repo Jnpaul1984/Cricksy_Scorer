@@ -226,7 +226,7 @@ def test_dry_run_real_structure_metadata_and_innings_team_mapping(
     assert data["detected_format"] == "cricsheet_json"
     assert data["schema_classification"]["source_schema"] == "cricsheet_json"
     assert data["schema_classification"]["adapter_id"] == "historical_json_competition_adapter"
-    assert data["schema_classification"]["adapter_version"] == "10b.1"
+    assert data["schema_classification"]["adapter_version"] == "10s.0"
     assert data["schema_classification"]["source_schema_category"] == "franchise_tournament_json"
     assert data["teams_preview"] == expected_teams
     assert [inning["team"] for inning in data["innings_preview"]] == expected_teams
@@ -343,7 +343,7 @@ def test_dry_run_multi_day_test_payload_reports_readiness_and_identity_risks() -
     data = response.json()
     assert data["status"] == "valid"
     assert data["innings_count"] == 4
-    assert data["diagnostics"]["classification"]["competition_code"] == "INTERNATIONAL_TEST"
+    assert data["diagnostics"]["classification"]["competition_code"] == "INTERNATIONAL_TEST_SERIES"
     assert data["diagnostics"]["classification"]["format_category"] == "Test"
     assert data["diagnostics"]["classification"]["completeness_grade"] == "multi_day_complete"
     assert data["diagnostics"]["classification"]["analysis_readiness"] == "limited"
@@ -358,18 +358,19 @@ def test_dry_run_multi_day_test_payload_reports_readiness_and_identity_risks() -
     assert "Rahul Sharma" in data["diagnostics"]["player_identity_risks"]["missing_player_ids"]
     assert data["canonical_preview"]["competition_context"]["analysis_readiness"] == "limited"
     assert (
-        data["canonical_preview"]["competition_context"]["competition_code"] == "INTERNATIONAL_TEST"
+        data["canonical_preview"]["competition_context"]["competition_code"]
+        == "INTERNATIONAL_TEST_SERIES"
     )
 
 
 @pytest.mark.parametrize(
     ("event_name", "expected_category", "expected_competition_type"),
     [
-        ("Caribbean Premier League", "franchise_tournament_json", "franchise"),
-        ("ICC World Cup", "international_match_json", "international"),
-        ("County Club League", "domestic_club_match_json", "domestic"),
-        ("School Championship", "school_academy_match_json", "school"),
-        ("Academy Development League", "school_academy_match_json", "academy"),
+        ("Caribbean Premier League", "franchise_tournament_json", "franchise_league"),
+        ("ICC World Cup", "international_match_json", "international_tournament"),
+        ("County Club League", "domestic_club_match_json", "domestic_league"),
+        ("School Championship", "school_academy_match_json", "school_or_custom"),
+        ("Academy Development League", "school_academy_match_json", "school_or_custom"),
     ],
 )
 def test_dry_run_schema_classification_expands_by_competition_type(
@@ -477,8 +478,8 @@ def test_dry_run_maps_english_domestic_t20_and_resolves_kennington_oval() -> Non
 
     assert response.status_code == 200, response.text
     data = response.json()
-    assert data["diagnostics"]["classification"]["competition_code"] == "DOMESTIC_T20_ENGLAND"
-    assert data["diagnostics"]["classification"]["competition_type"] == "domestic"
+    assert data["diagnostics"]["classification"]["competition_code"] == "T20_BLAST"
+    assert data["diagnostics"]["classification"]["competition_type"] == "domestic_league"
     assert (
         data["diagnostics"]["venue_check"]["venue_canonical"] == "Kennington Oval, London, England"
     )
@@ -539,6 +540,8 @@ def test_dry_run_unknown_competition_remains_unknown() -> None:
     data = response.json()
     assert data["diagnostics"]["classification"]["competition_code"] == "UNKNOWN"
     assert any(issue["code"] == "UNKNOWN_COMPETITION" for issue in data["warnings"])
+    warning = next(issue for issue in data["warnings"] if issue["code"] == "UNKNOWN_COMPETITION")
+    assert "safe unknown classification" in warning["message"]
 
 
 def test_dry_run_maps_wcpl_separately_when_metadata_indicates_women() -> None:
@@ -570,8 +573,60 @@ def test_dry_run_test_without_international_context_maps_to_domestic_multi_day()
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["diagnostics"]["classification"]["format_category"] == "Test"
-    assert data["diagnostics"]["classification"]["competition_code"] == "DOMESTIC_MULTI_DAY"
-    assert data["diagnostics"]["classification"]["competition_type"] == "domestic"
+    assert data["diagnostics"]["classification"]["competition_code"] == "COUNTY_CHAMPIONSHIP"
+    assert data["diagnostics"]["classification"]["competition_type"] == "domestic_league"
+
+
+def test_dry_run_classifies_one_day_cup_odm_and_edgbaston_context() -> None:
+    payload = _cricsheet_minimal_payload("One-Day Cup")
+    info = payload["info"]
+    assert isinstance(info, dict)
+    info["match_type"] = "ODM"
+    info["teams"] = ["Durham", "Warwickshire"]
+    info["venue"] = "Edgbaston, Birmingham"
+    info["city"] = "Birmingham"
+    info["dates"] = ["2023-08-20"]
+
+    with TestClient(app) as client:
+        response = client.post("/api/historical-import/json/dry-run", json=payload)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["diagnostics"]["classification"]["competition_code"] == "ONE_DAY_CUP"
+    assert data["diagnostics"]["classification"]["competition_type"] == "domestic_cup"
+    assert data["diagnostics"]["classification"]["format_category"] == "ODI"
+    assert data["diagnostics"]["classification"]["competition_region"] == "England"
+    assert data["diagnostics"]["venue_check"]["venue_canonical"] == "Edgbaston, Birmingham, England"
+    assert data["diagnostics"]["venue_check"]["venue_country"] == "England"
+    assert not any(
+        issue["code"] in {"UNKNOWN_COMPETITION", "UNKNOWN_VENUE_ALIAS", "COMPETITION_TYPE_UNKNOWN"}
+        for issue in data["warnings"]
+    )
+
+
+def test_dry_run_classifies_international_test_series_and_adelaide_context() -> None:
+    payload = _cricsheet_minimal_payload("South Africa in Australia Test Series")
+    info = payload["info"]
+    assert isinstance(info, dict)
+    info["match_type"] = "Test"
+    info["teams"] = ["Australia", "South Africa"]
+    info["venue"] = "Adelaide Oval"
+    info["city"] = "Adelaide"
+    info["dates"] = ["2016-11-24", "2016-11-25", "2016-11-26"]
+
+    with TestClient(app) as client:
+        response = client.post("/api/historical-import/json/dry-run", json=payload)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["diagnostics"]["classification"]["competition_code"] == "INTERNATIONAL_TEST_SERIES"
+    assert data["diagnostics"]["classification"]["competition_type"] == "international_series"
+    assert data["diagnostics"]["classification"]["format_category"] == "Test"
+    assert (
+        data["diagnostics"]["venue_check"]["venue_canonical"]
+        == "Adelaide Oval, Adelaide, Australia"
+    )
+    assert data["diagnostics"]["venue_check"]["venue_country"] == "Australia"
 
 
 def test_dry_run_does_not_create_games() -> None:

@@ -19,7 +19,13 @@ from backend.api.schemas.historical_import import (
     HistoricalImportVenueContext,
 )
 from backend.domain.constants import norm_extra
-from backend.services.analyst_registry_service import classify_age_category, classify_gender
+from backend.services.analyst_registry_service import (
+    classify_age_category,
+    classify_competition,
+    classify_competition_type,
+    classify_gender,
+    competition_region_for_code,
+)
 from backend.services.cpl_team_alias_registry import canonicalize_team_name, is_known_team_alias
 from backend.services.cpl_venue_alias_registry import (
     canonicalize_venue_name,
@@ -36,7 +42,7 @@ DUPLICATE_TRACKING_MESSAGE_NO_DB = (
 # Keep old name for backwards compat with any external references
 DUPLICATE_TRACKING_MESSAGE = DUPLICATE_TRACKING_MESSAGE_NO_DB
 ADAPTER_ID = "historical_json_competition_adapter"
-ADAPTER_VERSION = "10b.1"
+ADAPTER_VERSION = "10s.0"
 _INTERNATIONAL_TEAM_HINTS = {
     "india",
     "australia",
@@ -74,6 +80,30 @@ _TEAM_COUNTRY_HINTS = {
 }
 _COMPETITION_COUNTRY_HINTS = {
     "DOMESTIC_T20_ENGLAND": "England",
+    "ONE_DAY_CUP": "England",
+    "COUNTY_CHAMPIONSHIP": "England",
+    "T20_BLAST": "England",
+    "THE_HUNDRED_MEN": "England",
+    "THE_HUNDRED_WOMEN": "England",
+    "IPL": "India",
+    "WPL": "India",
+    "BBL": "Australia",
+    "WBBL": "Australia",
+    "PSL": "Pakistan",
+    "SA20": "South Africa",
+    "ILT20": "United Arab Emirates",
+    "MAJOR_LEAGUE_CRICKET": "United States",
+    "SUPER_SMASH": "New Zealand",
+    "SHEFFIELD_SHIELD": "Australia",
+    "MARSH_ONE_DAY_CUP": "Australia",
+    "RANJI_TROPHY": "India",
+    "VIJAY_HAZARE_TROPHY": "India",
+    "INTERNATIONAL_TEST_SERIES": None,
+    "INTERNATIONAL_ODI_SERIES": None,
+    "INTERNATIONAL_T20I_SERIES": None,
+    "ICC_CRICKET_WORLD_CUP": None,
+    "ICC_T20_WORLD_CUP": None,
+    "ICC_CHAMPIONS_TROPHY": None,
 }
 _VENUE_CONTEXT_CANDIDATES: dict[str, list[dict[str, object]]] = {
     "kennington oval": [
@@ -158,6 +188,56 @@ _VENUE_CONTEXT_CANDIDATES: dict[str, list[dict[str, object]]] = {
             "country": "Trinidad and Tobago",
             "competition_codes": {"CPL_MEN", "WCPL"},
             "aliases": {"queens park oval", "queen s park oval"},
+        }
+    ],
+    "edgbaston": [
+        {
+            "canonical_name": "Edgbaston, Birmingham, England",
+            "alias_key": "edgbaston_birmingham_england",
+            "city": "Birmingham",
+            "country": "England",
+            "competition_codes": {
+                "ONE_DAY_CUP",
+                "COUNTY_CHAMPIONSHIP",
+                "T20_BLAST",
+                "THE_HUNDRED_MEN",
+                "THE_HUNDRED_WOMEN",
+            },
+            "aliases": {"edgbaston", "edgbaston birmingham", "edgbaston, birmingham"},
+        }
+    ],
+    "edgbaston birmingham": [
+        {
+            "canonical_name": "Edgbaston, Birmingham, England",
+            "alias_key": "edgbaston_birmingham_england",
+            "city": "Birmingham",
+            "country": "England",
+            "competition_codes": {
+                "ONE_DAY_CUP",
+                "COUNTY_CHAMPIONSHIP",
+                "T20_BLAST",
+                "THE_HUNDRED_MEN",
+                "THE_HUNDRED_WOMEN",
+            },
+            "aliases": {"edgbaston", "edgbaston birmingham", "edgbaston, birmingham"},
+        }
+    ],
+    "adelaide oval": [
+        {
+            "canonical_name": "Adelaide Oval, Adelaide, Australia",
+            "alias_key": "adelaide_oval_adelaide_australia",
+            "city": "Adelaide",
+            "country": "Australia",
+            "competition_codes": {
+                "INTERNATIONAL_TEST_SERIES",
+                "INTERNATIONAL_ODI_SERIES",
+                "INTERNATIONAL_T20I_SERIES",
+                "BBL",
+                "WBBL",
+                "SHEFFIELD_SHIELD",
+                "MARSH_ONE_DAY_CUP",
+            },
+            "aliases": {"adelaide oval"},
         }
     ],
 }
@@ -467,7 +547,7 @@ def _classify_match_format(
         return "unknown", "unknown"
     if match_type in {"t20", "t20i", "twenty20", "20_over"}:
         return "T20", "source"
-    if match_type in {"odi", "one-day", "one day", "list a"}:
+    if match_type in {"odi", "odm", "one-day", "one day", "list a", "list_a"}:
         return "ODI", "source"
     if match_type in {"test", "test match"}:
         return "Test", "source"
@@ -496,62 +576,17 @@ def _classify_competition_code(
     format_category: str,
     age_category: str,
 ) -> tuple[str, str]:
-    lowered = (event_name or "").strip().lower()
-    normalized_teams = {team.strip().lower() for team in team_names if team.strip()}
-    if not lowered:
-        if (
-            format_category == "T20"
-            and normalized_teams
-            and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS)
-        ):
-            return "INTERNATIONAL_T20", "inferred"
-        if (
-            format_category == "ODI"
-            and normalized_teams
-            and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS)
-        ):
-            return "INTERNATIONAL_ODI", "inferred"
-        if (
-            format_category == "Test"
-            and normalized_teams
-            and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS)
-        ):
-            return "INTERNATIONAL_TEST", "inferred"
-        if format_category in {"Test", "First-class / multi-day"}:
-            return "DOMESTIC_MULTI_DAY", "inferred"
+    competition_code, competition_name = classify_competition(
+        event_name,
+        match_format=format_category,
+        team_names=team_names,
+        age_category=age_category,
+    )
+    if competition_code == "unknown":
         return "UNKNOWN", "unknown"
-    if "wcpl" in lowered or (
-        "caribbean premier league" in lowered and _WOMEN_KEYWORDS.search(lowered)
-    ):
-        return "WCPL", "inferred"
-    if "caribbean premier league" in lowered or re.search(r"\bcpl\b", lowered):
-        return "CPL_MEN", "inferred"
-    if any(token in lowered for token in _ENGLISH_DOMESTIC_T20_HINTS) and format_category == "T20":
-        return "DOMESTIC_T20_ENGLAND", "inferred"
-    if age_category == "school":
-        return "SCHOOL_CRICKET", "inferred"
-    if any(token in lowered for token in ("barbados cricket", "barbados", "bca", "barbadian")):
-        return "LOCAL_BARBADOS", "inferred"
-    if format_category == "Test" and (
-        any(token in lowered for token in _INTERNATIONAL_EVENT_HINTS)
-        or (normalized_teams and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS))
-    ):
-        return "INTERNATIONAL_TEST", "inferred"
-    if format_category == "ODI" and (
-        any(token in lowered for token in _INTERNATIONAL_EVENT_HINTS)
-        or (normalized_teams and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS))
-    ):
-        return "INTERNATIONAL_ODI", "inferred"
-    if format_category == "T20" and (
-        any(token in lowered for token in _INTERNATIONAL_EVENT_HINTS)
-        or (normalized_teams and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS))
-    ):
-        return "INTERNATIONAL_T20", "inferred"
-    if format_category in {"Test", "First-class / multi-day"}:
-        return "DOMESTIC_MULTI_DAY", "inferred"
-    if any(token in lowered for token in ("custom", "exhibition", "friendly", "festival")):
-        return "CUSTOM", "source"
-    return "UNKNOWN", "unknown"
+    if competition_name == "Unknown":
+        return competition_code, "inferred"
+    return competition_code, "source" if event_name else "inferred"
 
 
 def _classify_gender_category(
@@ -948,56 +983,14 @@ def _classify_competition_type(
     teams: list[str],
     competition_code: str,
 ) -> tuple[str, str]:
-    if competition_code in {"CPL_MEN", "WCPL"}:
-        return "franchise", "inferred"
-    if competition_code in {
-        "INTERNATIONAL_T20",
-        "INTERNATIONAL_ODI",
-        "INTERNATIONAL_TEST",
-    }:
-        return "international", "inferred"
-    if competition_code in {"DOMESTIC_T20_ENGLAND", "DOMESTIC_MULTI_DAY"}:
-        return "domestic", "inferred"
-    if event_name:
-        lowered = event_name.lower()
-        if any(
-            token in lowered
-            for token in (
-                "premier league",
-                "ipl",
-                "cpl",
-                "sa20",
-                "hundred",
-            )
-        ):
-            return "franchise", "inferred"
-        if any(token in lowered for token in ("academy",)):
-            return "academy", "inferred"
-        if any(token in lowered for token in ("school", "u-19 school", "schools")):
-            return "school", "inferred"
-        if any(
-            token in lowered
-            for token in (
-                "club",
-                "county",
-                "domestic",
-                "ranji",
-                "super50",
-                "vitality blast",
-                "t20 blast",
-            )
-        ):
-            return "domestic", "inferred"
-        if any(
-            token in lowered for token in ("world cup", "icc", "international", "test championship")
-        ):
-            return "international", "inferred"
-
-    normalized_teams = {team.strip().lower() for team in teams if team.strip()}
-    if normalized_teams and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS):
-        return "international", "inferred"
-
-    return "unknown", "unknown"
+    competition_type = classify_competition_type(
+        competition_code,
+        event_name=event_name,
+        team_names=teams,
+    )
+    return (
+        (competition_type, "inferred") if competition_type != "unknown" else ("unknown", "unknown")
+    )
 
 
 def _classify_schema(
@@ -1006,13 +999,13 @@ def _classify_schema(
     if detected_format == "cricksy_fixture":
         category = "cricksy_internal_json"
     elif detected_format == "cricsheet_json":
-        if competition_type == "franchise":
+        if competition_type == "franchise_league":
             category = "franchise_tournament_json"
-        elif competition_type == "international":
+        elif competition_type in {"international_series", "international_tournament"}:
             category = "international_match_json"
-        elif competition_type in {"domestic", "club"}:
+        elif competition_type in {"domestic_league", "domestic_cup", "regional_league"}:
             category = "domestic_club_match_json"
-        elif competition_type in {"school", "academy"}:
+        elif competition_type == "school_or_custom":
             category = "school_academy_match_json"
         else:
             category = "cricsheet_style_json"
@@ -1106,10 +1099,26 @@ def _build_validation_diagnostics(
         "classification": {
             "competition_code": competition_code,
             "competition_code_status": competition_code_status,
+            "competition_name": metadata_preview.event_name,
+            "competition_region": competition_region_for_code(competition_code),
             "competition_mapping_source": (
                 "event_name_mapping"
                 if competition_code_status == "inferred" and metadata_preview.event_name
                 else competition_code_status
+            ),
+            "competition_confidence": (
+                "high"
+                if competition_code_status == "source"
+                else ("medium" if competition_code != "UNKNOWN" else "low")
+            ),
+            "competition_unknown_reason": (
+                None
+                if competition_code != "UNKNOWN"
+                else (
+                    "missing_event_name"
+                    if not metadata_preview.event_name
+                    else "unmapped_event_name"
+                )
             ),
             "competition_type": competition_type,
             "competition_type_status": competition_type_status,
@@ -1228,7 +1237,10 @@ def _build_canonical_preview(
         warnings.append(
             HistoricalImportIssue(
                 code="COMPETITION_TYPE_UNKNOWN",
-                message="Competition type could not be deterministically resolved from source.",
+                message=(
+                    "Competition type could not be deterministically resolved from the "
+                    "available source metadata; safe fallback classification remains unknown."
+                ),
                 severity="warning",
                 path="competition_context.competition_type",
             )
@@ -1686,10 +1698,16 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
             )
         )
     if classification.get("competition_code") == "UNKNOWN":
+        raw_competition = metadata_preview.event_name or "source event metadata"
+        reason = classification.get("competition_unknown_reason") or "unmapped_event_name"
         warnings.append(
             HistoricalImportIssue(
                 code="UNKNOWN_COMPETITION",
-                message="Competition could not be safely classified from the source metadata.",
+                message=(
+                    f"Competition '{raw_competition}' could not be matched to the registry "
+                    f"(reason: {reason}; confidence: low). Import can still proceed with a "
+                    "safe unknown classification."
+                ),
                 severity="warning",
                 path="diagnostics.classification.competition_code",
             )
@@ -1724,10 +1742,16 @@ def build_dry_run_response(raw_payload: bytes) -> tuple[int, HistoricalImportDry
         )
     unknown_venues = venue_check.get("unknown_venues", [])
     if isinstance(unknown_venues, list) and unknown_venues:
+        raw_venue = ", ".join(str(item) for item in unknown_venues if isinstance(item, str))
+        unresolved_reason = venue_check.get("unresolved_reason") or "unknown_alias"
         warnings.append(
             HistoricalImportIssue(
                 code="UNKNOWN_VENUE_ALIAS",
-                message="Venue name was preserved but not resolved to a known canonical venue alias.",
+                message=(
+                    f"Venue '{raw_venue}' was preserved but not canonically resolved "
+                    f"(reason: {unresolved_reason}; confidence: "
+                    f"{venue_check.get('venue_confidence') or 'low'}). Import is still safe."
+                ),
                 severity="warning",
                 path="diagnostics.venue_check.unknown_venues",
             )

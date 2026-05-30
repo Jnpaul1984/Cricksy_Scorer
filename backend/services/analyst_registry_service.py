@@ -34,22 +34,336 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # Competition classification
 # ---------------------------------------------------------------------------
 
-_WCPL_PATTERNS = [
-    re.compile(r"\bwcpl\b", re.I),
-    re.compile(r"women'?s\s+caribbean\s+premier\s+league", re.I),
-    re.compile(r"women'?s\s+cpl", re.I),
-    re.compile(r"\bwomen\b.*\bcaribbean\b.*\bleague\b", re.I),
-]
-
-_CPL_MEN_PATTERNS = [
-    re.compile(r"caribbean\s+premier\s+league", re.I),
-    re.compile(r"\bcpl\b", re.I),
-]
+_COMPETITION_REGISTRY: tuple[dict[str, Any], ...] = (
+    {
+        "code": "WCPL",
+        "label": "Women's Caribbean Premier League",
+        "competition_type": "franchise_league",
+        "region": "Caribbean",
+        "default_gender": "women",
+        "patterns": (
+            re.compile(r"\bwcpl\b", re.I),
+            re.compile(r"women'?s\s+caribbean\s+premier\s+league", re.I),
+            re.compile(r"women'?s\s+cpl", re.I),
+            re.compile(r"\bwomen\b.*\bcaribbean\b.*\bleague\b", re.I),
+        ),
+    },
+    {
+        "code": "CPL_MEN",
+        "label": "Caribbean Premier League",
+        "competition_type": "franchise_league",
+        "region": "Caribbean",
+        "default_gender": "men",
+        "patterns": (
+            re.compile(r"caribbean\s+premier\s+league", re.I),
+            re.compile(r"\bcpl\b", re.I),
+        ),
+    },
+    {
+        "code": "ONE_DAY_CUP",
+        "label": "One-Day Cup",
+        "competition_type": "domestic_cup",
+        "region": "England",
+        "patterns": (
+            re.compile(r"\bone[- ]day cup\b", re.I),
+            re.compile(r"\broyal london one[- ]day cup\b", re.I),
+        ),
+    },
+    {
+        "code": "COUNTY_CHAMPIONSHIP",
+        "label": "County Championship",
+        "competition_type": "domestic_league",
+        "region": "England",
+        "patterns": (re.compile(r"\bcounty championship\b", re.I),),
+    },
+    {
+        "code": "T20_BLAST",
+        "label": "T20 Blast",
+        "competition_type": "domestic_league",
+        "region": "England",
+        "patterns": (
+            re.compile(r"\bvitality blast\b", re.I),
+            re.compile(r"\bt20 blast\b", re.I),
+            re.compile(r"\bblast\b", re.I),
+        ),
+    },
+    {
+        "code": "THE_HUNDRED_WOMEN",
+        "label": "The Hundred Women",
+        "competition_type": "franchise_league",
+        "region": "England",
+        "default_gender": "women",
+        "patterns": (
+            re.compile(r"\bthe hundred\b.*\bwomen\b", re.I),
+            re.compile(r"\bhundred women\b", re.I),
+        ),
+    },
+    {
+        "code": "THE_HUNDRED_MEN",
+        "label": "The Hundred Men",
+        "competition_type": "franchise_league",
+        "region": "England",
+        "default_gender": "men",
+        "patterns": (
+            re.compile(r"\bthe hundred\b.*\bmen\b", re.I),
+            re.compile(r"\bhundred men\b", re.I),
+            re.compile(r"\bthe hundred\b", re.I),
+        ),
+    },
+    {
+        "code": "WPL",
+        "label": "Women's Premier League",
+        "competition_type": "franchise_league",
+        "region": "India",
+        "default_gender": "women",
+        "patterns": (
+            re.compile(r"\bwpl\b", re.I),
+            re.compile(r"women'?s\s+premier\s+league", re.I),
+        ),
+    },
+    {
+        "code": "IPL",
+        "label": "Indian Premier League",
+        "competition_type": "franchise_league",
+        "region": "India",
+        "default_gender": "men",
+        "patterns": (
+            re.compile(r"\bindian premier league\b", re.I),
+            re.compile(r"\bipl\b", re.I),
+        ),
+    },
+    {
+        "code": "WBBL",
+        "label": "Women's Big Bash League",
+        "competition_type": "franchise_league",
+        "region": "Australia",
+        "default_gender": "women",
+        "patterns": (
+            re.compile(r"\bwbbbl\b", re.I),
+            re.compile(r"\bwbbl\b", re.I),
+            re.compile(r"women'?s\s+big bash league", re.I),
+        ),
+    },
+    {
+        "code": "BBL",
+        "label": "Big Bash League",
+        "competition_type": "franchise_league",
+        "region": "Australia",
+        "default_gender": "men",
+        "patterns": (
+            re.compile(r"\bbbl\b", re.I),
+            re.compile(r"\bbig bash league\b", re.I),
+        ),
+    },
+    {
+        "code": "PSL",
+        "label": "Pakistan Super League",
+        "competition_type": "franchise_league",
+        "region": "Pakistan",
+        "patterns": (
+            re.compile(r"\bpsl\b", re.I),
+            re.compile(r"\bpakistan super league\b", re.I),
+        ),
+    },
+    {
+        "code": "SA20",
+        "label": "SA20",
+        "competition_type": "franchise_league",
+        "region": "South Africa",
+        "patterns": (re.compile(r"\bsa20\b", re.I),),
+    },
+    {
+        "code": "ILT20",
+        "label": "ILT20",
+        "competition_type": "franchise_league",
+        "region": "United Arab Emirates",
+        "patterns": (
+            re.compile(r"\bilt20\b", re.I),
+            re.compile(r"\binternational league t20\b", re.I),
+        ),
+    },
+    {
+        "code": "MAJOR_LEAGUE_CRICKET",
+        "label": "Major League Cricket",
+        "competition_type": "franchise_league",
+        "region": "United States",
+        "patterns": (
+            re.compile(r"\bmajor league cricket\b", re.I),
+            re.compile(r"\bmlc\b", re.I),
+        ),
+    },
+    {
+        "code": "SUPER_SMASH",
+        "label": "Super Smash",
+        "competition_type": "domestic_league",
+        "region": "New Zealand",
+        "patterns": (re.compile(r"\bsuper smash\b", re.I),),
+    },
+    {
+        "code": "SHEFFIELD_SHIELD",
+        "label": "Sheffield Shield",
+        "competition_type": "domestic_league",
+        "region": "Australia",
+        "patterns": (re.compile(r"\bsheffield shield\b", re.I),),
+    },
+    {
+        "code": "MARSH_ONE_DAY_CUP",
+        "label": "Marsh One-Day Cup",
+        "competition_type": "domestic_cup",
+        "region": "Australia",
+        "patterns": (
+            re.compile(r"\bmarsh one[- ]day cup\b", re.I),
+            re.compile(r"\bone[- ]day cup\b", re.I),
+        ),
+    },
+    {
+        "code": "RANJI_TROPHY",
+        "label": "Ranji Trophy",
+        "competition_type": "domestic_cup",
+        "region": "India",
+        "patterns": (re.compile(r"\branji trophy\b", re.I),),
+    },
+    {
+        "code": "VIJAY_HAZARE_TROPHY",
+        "label": "Vijay Hazare Trophy",
+        "competition_type": "domestic_cup",
+        "region": "India",
+        "patterns": (re.compile(r"\bvijay hazare trophy\b", re.I),),
+    },
+    {
+        "code": "ICC_T20_WORLD_CUP",
+        "label": "ICC T20 World Cup",
+        "competition_type": "international_tournament",
+        "patterns": (
+            re.compile(r"\bicc\b.*\bt20\b.*\bworld cup\b", re.I),
+            re.compile(r"\bt20\b.*\bworld cup\b", re.I),
+        ),
+    },
+    {
+        "code": "ICC_CHAMPIONS_TROPHY",
+        "label": "ICC Champions Trophy",
+        "competition_type": "international_tournament",
+        "patterns": (re.compile(r"\bicc\b.*\bchampions trophy\b", re.I),),
+    },
+    {
+        "code": "ICC_CRICKET_WORLD_CUP",
+        "label": "ICC Cricket World Cup",
+        "competition_type": "international_tournament",
+        "patterns": (
+            re.compile(r"\bicc\b.*\bcricket world cup\b", re.I),
+            re.compile(r"\bicc\b.*\bworld cup\b", re.I),
+            re.compile(r"\bcricket world cup\b", re.I),
+        ),
+    },
+)
 
 _WOMEN_KEYWORDS = re.compile(r"\bwomen\b|\bfemale\b|\bgirl\b|\bwcpl\b", re.I)
+_SCHOOL_KEYWORDS = re.compile(r"\bschool\b|\bschools\b|\bcollege\b", re.I)
+_CUSTOM_KEYWORDS = re.compile(r"\bcustom\b|\bexhibition\b|\bfriendly\b|\bfestival\b", re.I)
+_INTERNATIONAL_EVENT_HINTS = ("icc", "international", "world cup", "test championship")
+_COMPETITION_TYPE_BY_CODE = {
+    "CPL_MEN": "franchise_league",
+    "WCPL": "franchise_league",
+    "ONE_DAY_CUP": "domestic_cup",
+    "COUNTY_CHAMPIONSHIP": "domestic_league",
+    "T20_BLAST": "domestic_league",
+    "THE_HUNDRED_MEN": "franchise_league",
+    "THE_HUNDRED_WOMEN": "franchise_league",
+    "IPL": "franchise_league",
+    "WPL": "franchise_league",
+    "BBL": "franchise_league",
+    "WBBL": "franchise_league",
+    "PSL": "franchise_league",
+    "SA20": "franchise_league",
+    "ILT20": "franchise_league",
+    "MAJOR_LEAGUE_CRICKET": "franchise_league",
+    "SUPER_SMASH": "domestic_league",
+    "SHEFFIELD_SHIELD": "domestic_league",
+    "MARSH_ONE_DAY_CUP": "domestic_cup",
+    "RANJI_TROPHY": "domestic_cup",
+    "VIJAY_HAZARE_TROPHY": "domestic_cup",
+    "INTERNATIONAL_TEST_SERIES": "international_series",
+    "INTERNATIONAL_ODI_SERIES": "international_series",
+    "INTERNATIONAL_T20I_SERIES": "international_series",
+    "ICC_CRICKET_WORLD_CUP": "international_tournament",
+    "ICC_T20_WORLD_CUP": "international_tournament",
+    "ICC_CHAMPIONS_TROPHY": "international_tournament",
+    "DOMESTIC_MULTI_DAY": "domestic_league",
+    "DOMESTIC_T20_ENGLAND": "domestic_league",
+    "LOCAL_BARBADOS": "regional_league",
+    "SCHOOL_CRICKET": "school_or_custom",
+    "CUSTOM": "school_or_custom",
+    "UNKNOWN": "unknown",
+    "unknown": "unknown",
+}
+_COMPETITION_REGION_BY_CODE = {
+    entry["code"]: entry.get("region") for entry in _COMPETITION_REGISTRY if entry.get("region")
+} | {
+    "DOMESTIC_T20_ENGLAND": "England",
+    "DOMESTIC_MULTI_DAY": "England",
+    "LOCAL_BARBADOS": "Barbados",
+}
+_MEN_COMPETITION_CODES = {
+    "CPL_MEN",
+    "THE_HUNDRED_MEN",
+    "IPL",
+    "BBL",
+    "PSL",
+    "SA20",
+    "ILT20",
+    "MAJOR_LEAGUE_CRICKET",
+    "SUPER_SMASH",
+    "T20_BLAST",
+    "COUNTY_CHAMPIONSHIP",
+    "ONE_DAY_CUP",
+    "SHEFFIELD_SHIELD",
+    "MARSH_ONE_DAY_CUP",
+    "RANJI_TROPHY",
+    "VIJAY_HAZARE_TROPHY",
+    "INTERNATIONAL_TEST_SERIES",
+    "INTERNATIONAL_ODI_SERIES",
+    "INTERNATIONAL_T20I_SERIES",
+    "ICC_CRICKET_WORLD_CUP",
+    "ICC_T20_WORLD_CUP",
+    "ICC_CHAMPIONS_TROPHY",
+}
+_WOMEN_COMPETITION_CODES = {
+    "WCPL",
+    "THE_HUNDRED_WOMEN",
+    "WPL",
+    "WBBL",
+}
 
 
-def classify_competition(event_name: str | None) -> tuple[str, str]:
+def _normalize_match_format(match_format: str | None) -> str:
+    value = (match_format or "").strip().lower()
+    if value in {"t20", "t20i", "twenty20", "20_over"}:
+        return "T20"
+    if value in {"odi", "odm", "one-day", "one day", "list a", "list_a"}:
+        return "ODI"
+    if value in {"test", "test match"}:
+        return "Test"
+    if value in {"first-class", "first class", "multi_day", "multi-day"}:
+        return "First-class / multi-day"
+    return "unknown"
+
+
+def _international_team_names(team_names: list[str] | None) -> set[str]:
+    normalized = {
+        team.strip().lower()
+        for team in (team_names or [])
+        if isinstance(team, str) and team.strip()
+    }
+    return normalized
+
+
+def classify_competition(
+    event_name: str | None,
+    *,
+    match_format: str | None = None,
+    team_names: list[str] | None = None,
+    age_category: str | None = None,
+) -> tuple[str, str]:
     """Return (competition_code, competition_name) for the given event name.
 
     Rules (conservative):
@@ -59,21 +373,129 @@ def classify_competition(event_name: str | None) -> tuple[str, str]:
 
     Returns (competition_code, canonical_name).
     """
-    if not event_name or not event_name.strip():
+    name = (event_name or "").strip()
+    normalized_format = _normalize_match_format(match_format)
+    normalized_teams = _international_team_names(team_names)
+    is_international = bool(normalized_teams) and normalized_teams.issubset(
+        {
+            "india",
+            "australia",
+            "england",
+            "new zealand",
+            "south africa",
+            "pakistan",
+            "sri lanka",
+            "bangladesh",
+            "afghanistan",
+            "west indies",
+            "ireland",
+            "zimbabwe",
+            "netherlands",
+            "scotland",
+        }
+    )
+
+    if not name:
+        if normalized_format == "Test" and is_international:
+            return ("INTERNATIONAL_TEST_SERIES", "International Test Series")
+        if normalized_format == "ODI" and is_international:
+            return ("INTERNATIONAL_ODI_SERIES", "International ODI Series")
+        if normalized_format == "T20" and is_international:
+            return ("INTERNATIONAL_T20I_SERIES", "International T20I Series")
+        if normalized_format in {"Test", "First-class / multi-day"}:
+            return ("DOMESTIC_MULTI_DAY", "Domestic multi-day match")
         return ("unknown", "Unknown")
 
-    name = event_name.strip()
+    for entry in _COMPETITION_REGISTRY:
+        patterns = entry.get("patterns") or ()
+        if any(pattern.search(name) for pattern in patterns):
+            if entry["code"] == "CPL_MEN" and _WOMEN_KEYWORDS.search(name):
+                continue
+            if entry["code"] == "THE_HUNDRED_MEN" and _WOMEN_KEYWORDS.search(name):
+                continue
+            if entry["code"] == "BBL" and _WOMEN_KEYWORDS.search(name):
+                continue
+            return (str(entry["code"]), name)
 
-    # Check WCPL first (more specific)
-    if any(p.search(name) for p in _WCPL_PATTERNS):
-        return ("WCPL", name)
-
-    # Check CPL_MEN — but only if no women markers present
-    if any(p.search(name) for p in _CPL_MEN_PATTERNS):
-        if not _WOMEN_KEYWORDS.search(name):
-            return ("CPL_MEN", name)
-
+    lowered = name.lower()
+    if age_category == "school":
+        return ("SCHOOL_CRICKET", name)
+    if _CUSTOM_KEYWORDS.search(name):
+        return ("CUSTOM", name)
+    if any(token in lowered for token in ("barbados cricket", "barbados", "bca", "barbadian")):
+        return ("LOCAL_BARBADOS", name)
+    if normalized_format == "Test" and (
+        "series" in lowered
+        or any(token in lowered for token in _INTERNATIONAL_EVENT_HINTS)
+        or is_international
+    ):
+        return ("INTERNATIONAL_TEST_SERIES", name)
+    if normalized_format == "ODI" and (
+        "series" in lowered
+        or any(token in lowered for token in _INTERNATIONAL_EVENT_HINTS)
+        or is_international
+    ):
+        return ("INTERNATIONAL_ODI_SERIES", name)
+    if normalized_format == "T20" and (
+        "series" in lowered
+        or any(token in lowered for token in _INTERNATIONAL_EVENT_HINTS)
+        or is_international
+    ):
+        return ("INTERNATIONAL_T20I_SERIES", name)
+    if normalized_format in {"Test", "First-class / multi-day"}:
+        return ("DOMESTIC_MULTI_DAY", name)
+    if normalized_format == "T20" and "county" in lowered:
+        return ("DOMESTIC_T20_ENGLAND", name)
     return ("unknown", name)
+
+
+def classify_competition_type(
+    competition_code: str,
+    *,
+    event_name: str | None = None,
+    team_names: list[str] | None = None,
+) -> str:
+    competition_type = _COMPETITION_TYPE_BY_CODE.get(competition_code)
+    if competition_type and competition_type != "unknown":
+        return competition_type
+    lowered = (event_name or "").strip().lower()
+    if any(token in lowered for token in ("world cup", "champions trophy")):
+        return "international_tournament"
+    if any(token in lowered for token in ("series",)):
+        return "international_series"
+    if any(token in lowered for token in ("academy", "school", "schools")):
+        return "school_or_custom"
+    if any(token in lowered for token in ("premier league", "hundred", "bbl", "ipl", "wpl")):
+        return "franchise_league"
+    if any(token in lowered for token in ("cup", "trophy")):
+        return "domestic_cup"
+    if any(token in lowered for token in ("championship", "blast", "league")):
+        return "domestic_league"
+    normalized_teams = _international_team_names(team_names)
+    if normalized_teams and normalized_teams.issubset(
+        {
+            "india",
+            "australia",
+            "england",
+            "new zealand",
+            "south africa",
+            "pakistan",
+            "sri lanka",
+            "bangladesh",
+            "afghanistan",
+            "west indies",
+            "ireland",
+            "zimbabwe",
+            "netherlands",
+            "scotland",
+        }
+    ):
+        return "international_series"
+    return "unknown"
+
+
+def competition_region_for_code(competition_code: str) -> str | None:
+    return _COMPETITION_REGION_BY_CODE.get(competition_code)
 
 
 def classify_gender(
@@ -88,9 +510,9 @@ def classify_gender(
     - gender_metadata hint when competition_code is 'unknown'
     - Default: unknown (never force unknown into men)
     """
-    if competition_code == "WCPL":
+    if competition_code in _WOMEN_COMPETITION_CODES:
         return "women"
-    if competition_code == "CPL_MEN":
+    if competition_code in _MEN_COMPETITION_CODES:
         return "men"
 
     # Use explicit gender metadata as fallback
@@ -320,15 +742,34 @@ async def build_analyst_registry(
         event_name: str | None = hist_meta.get("event_name") if hist_meta else None
         season: str | None = hist_meta.get("season") if hist_meta else None
         venue_raw: str | None = hist_meta.get("venue") if hist_meta else None
-        venue_canonical, _ = canonicalize_venue_name(venue_raw)
+        venue_context_raw = hist_meta.get("venue_context") if hist_meta else None
+        venue_context = venue_context_raw if isinstance(venue_context_raw, dict) else {}
+        venue_canonical = (
+            venue_context.get("venue_name")
+            if isinstance(venue_context.get("venue_name"), str)
+            else canonicalize_venue_name(venue_raw)[0]
+        )
 
         # Classification
-        competition_code, competition_name = classify_competition(event_name)
+        age_category = classify_age_category(hist_meta)
+        stored_competition_code = hist_meta.get("competition_code") if hist_meta else None
+        if isinstance(stored_competition_code, str) and stored_competition_code.strip():
+            competition_code = stored_competition_code.strip()
+            if competition_code.upper() == "UNKNOWN":
+                competition_code = "unknown"
+            competition_name = event_name or stored_competition_code.strip()
+        else:
+            competition_code, competition_name = classify_competition(
+                event_name,
+                match_format=game.match_type,
+                team_names=[team_a_name, team_b_name],
+                age_category=age_category,
+            )
         gender_category = classify_gender(
             competition_code,
-            hist_meta.get("gender") if hist_meta else None,
+            (hist_meta.get("gender") if hist_meta else None)
+            or (hist_meta.get("gender_category") if hist_meta else None),
         )
-        age_category = classify_age_category(hist_meta)
         source_type = classify_source_type(hist_meta, batch)
         data_completeness = classify_data_completeness(game, hist_meta)
 
