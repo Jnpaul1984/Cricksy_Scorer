@@ -507,7 +507,9 @@ def test_summary_canonicalizes_known_venue_aliases(client: TestClient) -> None:
     assert "Brian Lara Stadium, Tarouba, Trinidad" in match_raw_venues
 
 
-def test_summary_season_grouping_prefers_metadata_then_match_date_fallback(client: TestClient) -> None:
+def test_summary_season_grouping_prefers_metadata_then_match_date_fallback(
+    client: TestClient,
+) -> None:
     token = _analyst_token(client)
     _batch_id_meta, game_id_meta = _apply_fixture(
         client,
@@ -589,7 +591,9 @@ def test_season_outcome_uses_final_winner_not_most_wins(client: TestClient) -> N
     data = resp.json()
 
     season_outcomes = [
-        o for o in data["season_outcomes"] if o["competition_code"] == "CPL_MEN" and o["season"] == "2024"
+        o
+        for o in data["season_outcomes"]
+        if o["competition_code"] == "CPL_MEN" and o["season"] == "2024"
     ]
     assert len(season_outcomes) == 1
     outcome = season_outcomes[0]
@@ -645,7 +649,9 @@ def test_season_outcome_unknown_when_final_not_detected(client: TestClient) -> N
     data = resp.json()
 
     outcome = next(
-        o for o in data["season_outcomes"] if o["competition_code"] == "CPL_MEN" and o["season"] == "2025"
+        o
+        for o in data["season_outcomes"]
+        if o["competition_code"] == "CPL_MEN" and o["season"] == "2025"
     )
     assert outcome["champion_team_canonical"] is None
     assert outcome["confidence"] == "unknown"

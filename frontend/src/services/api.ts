@@ -591,7 +591,7 @@ export interface CaseStudyPhase {
   level?: "innings" | "match";
 }
 
-export type CaseStudyAnalysisMode = "limited_overs" | "test_multi_day" | "unknown";
+export type CaseStudyAnalysisMode = "limited_overs" | "odi_limited_overs" | "t20_limited_overs" | "test_multi_day" | "unknown";
 
 export interface CaseStudyKeyPlayer {
   id: string;

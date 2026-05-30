@@ -117,7 +117,7 @@ class CaseStudyKeyPhase(BaseModel):
 class CaseStudyPhase(BaseModel):
     """Breakdown of a single phase (powerplay, middle, death, or custom)."""
 
-    id: Literal["powerplay", "middle", "death", "custom"]
+    id: Literal["powerplay", "middle", "death", "custom", "consolidation", "acceleration"]
     label: str
     start_over: int
     end_over: int
@@ -365,7 +365,9 @@ class MatchCaseStudyResponse(BaseModel):
     Provides all data needed to render the MatchCaseStudyView.vue UI.
     """
 
-    analysis_mode: Literal["limited_overs", "test_multi_day", "unknown"] = "unknown"
+    analysis_mode: Literal[
+        "limited_overs", "odi_limited_overs", "t20_limited_overs", "test_multi_day", "unknown"
+    ] = "unknown"
     match: CaseStudyMatch
     momentum_summary: CaseStudyMomentumSummary
     key_phase: CaseStudyKeyPhase

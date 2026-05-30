@@ -101,7 +101,8 @@ def test_resolve_analysis_mode_preserves_limited_overs() -> None:
         innings_count=2,
         days_limit=None,
     )
-    assert mode == "limited_overs"
+    # T20 now resolves to t20_limited_overs (more specific than the old limited_overs)
+    assert mode == "t20_limited_overs"
 
 
 def test_multi_day_summary_represents_four_innings() -> None:
@@ -267,18 +268,18 @@ def test_recovery_window_detection_after_cluster() -> None:
     deliveries = []
     for ov in range(32, 38):
         for ball in range(1, 7):
-            deliveries.append({
-                "inning": 1,
-                "over_number": ov,
-                "ball_number": ball,
-                "is_wicket": False,
-                "runs_off_bat": 1,
-                "extras": 0,
-            })
+            deliveries.append(
+                {
+                    "inning": 1,
+                    "over_number": ov,
+                    "ball_number": ball,
+                    "is_wicket": False,
+                    "runs_off_bat": 1,
+                    "extras": 0,
+                }
+            )
     # This gives 6 runs per over, 36 total over 6 overs — should be recovery
-    recovery_windows = _detect_recovery_windows_from_deliveries(
-        deliveries, 1, cluster_overs=[30]
-    )
+    recovery_windows = _detect_recovery_windows_from_deliveries(deliveries, 1, cluster_overs=[30])
     assert recovery_windows, "Expected a recovery window after overs of scoring without wickets"
     rw = recovery_windows[0]
     assert rw.wickets_fell == 0
@@ -290,11 +291,12 @@ def test_multi_day_band_labels_use_passage_names() -> None:
     """_test_multi_day_ranges returns 'passage' labels, not generic 'Overs N-M'."""
     ranges = _test_multi_day_ranges(90.0)
     labels = [r[1] for r in ranges]
-    assert any("passage" in lbl.lower() for lbl in labels), (
-        f"Expected passage-based labels, got: {labels}"
-    )
+    assert any(
+        "passage" in lbl.lower() for lbl in labels
+    ), f"Expected passage-based labels, got: {labels}"
     # Ensure no label is purely "Overs N-M" generic pattern
     import re
+
     generic_pattern = re.compile(r"^Overs \d+-\d+$")
     for lbl in labels:
         assert not generic_pattern.match(lbl), f"Generic label still present: {lbl}"
@@ -304,7 +306,9 @@ def test_rich_match_callouts_for_test_mode_with_lead() -> None:
     """_build_match_callouts for test_multi_day includes first-innings lead callout."""
     match = _make_test_match()
     summary = _build_multi_day_summary(match)
-    callouts = _build_match_callouts(match, analysis_mode="test_multi_day", multi_day_summary=summary)
+    callouts = _build_match_callouts(
+        match, analysis_mode="test_multi_day", multi_day_summary=summary
+    )
     assert callouts, "Expected match callouts for test_multi_day mode"
     titles = [c.title for c in callouts]
     assert "First-innings lead established" in titles
@@ -327,7 +331,9 @@ def test_rich_match_callouts_include_fourth_innings_chase() -> None:
         ],
     )
     summary = _build_multi_day_summary(match)
-    callouts = _build_match_callouts(match, analysis_mode="test_multi_day", multi_day_summary=summary)
+    callouts = _build_match_callouts(
+        match, analysis_mode="test_multi_day", multi_day_summary=summary
+    )
     titles = [c.title for c in callouts]
     assert "Fourth-innings chase completed" in titles
 
@@ -384,3 +390,237 @@ def test_story_blocks_test_mode_no_limited_overs_language() -> None:
         assert "powerplay" not in val.lower(), f"Powerplay found in {attr}: {val}"
         assert "death over" not in val.lower(), f"Death over found in {attr}: {val}"
         assert "vs par" not in val.lower(), f"vs par found in {attr}: {val}"
+
+
+# ---------------------------------------------------------------------------
+# Phase 10R.4: ODI Format-Aware Phase Logic Tests
+# ---------------------------------------------------------------------------
+
+
+def test_odi_phase_ranges_are_four_phase() -> None:
+    """ODI phase ranges return 4-phase model: powerplay/consolidation/acceleration/death."""
+    phase_ranges = _get_phase_ranges("ODI", 50)
+    ids = [pid for pid, *_ in phase_ranges]
+    assert ids == ["powerplay", "consolidation", "acceleration", "death"]
+
+
+def test_odi_phase_ranges_correct_boundaries() -> None:
+    """ODI phase boundaries match the required 1-10 / 11-25 / 26-40 / 41-50 model."""
+    phase_ranges = _get_phase_ranges("ODI", 50)
+    by_id = {pid: (start, end) for pid, _label, start, end in phase_ranges}
+
+    assert by_id["powerplay"] == (1, 10), f"Powerplay range wrong: {by_id['powerplay']}"
+    assert by_id["consolidation"] == (
+        11,
+        25,
+    ), f"Consolidation range wrong: {by_id['consolidation']}"
+    assert by_id["acceleration"] == (26, 40), f"Acceleration range wrong: {by_id['acceleration']}"
+    assert by_id["death"] == (41, 50), f"Death range wrong: {by_id['death']}"
+
+
+def test_odi_phase_labels_include_odi_language() -> None:
+    """ODI phase labels use ODI-specific names, not T20 terminology."""
+    phase_ranges = _get_phase_ranges("ODI", 50)
+    labels = [label for _, label, *_ in phase_ranges]
+    assert any("powerplay" in label.lower() for label in labels)
+    assert any("consolidation" in label.lower() for label in labels)
+    assert any("acceleration" in label.lower() for label in labels)
+    assert any("death" in label.lower() for label in labels)
+    # Must NOT use T20-style 1-6 or 7-15 labels
+    for label in labels:
+        assert "1-6" not in label, f"T20-style phase label found in ODI ranges: {label}"
+        assert "7-15" not in label, f"T20-style phase label found in ODI ranges: {label}"
+
+
+def test_t20_phase_ranges_unchanged() -> None:
+    """T20 phase ranges remain 1-6 / 7-15 / 16-20 (no regression)."""
+    phase_ranges = _get_phase_ranges("T20", 20)
+    by_id = {pid: (start, end) for pid, _label, start, end in phase_ranges}
+
+    assert by_id["powerplay"] == (1, 6), f"T20 powerplay range regressed: {by_id['powerplay']}"
+    assert by_id["middle"] == (7, 15), f"T20 middle range regressed: {by_id['middle']}"
+    assert by_id["death"] == (16, 20), f"T20 death range regressed: {by_id['death']}"
+
+
+def test_resolve_analysis_mode_odi() -> None:
+    """ODI match resolves to odi_limited_overs analysis mode."""
+    mode = _resolve_analysis_mode(
+        raw_match_type="ODI",
+        overs_per_side=50,
+        innings_count=2,
+        days_limit=None,
+    )
+    assert mode == "odi_limited_overs"
+
+
+def test_resolve_analysis_mode_odi_by_overs() -> None:
+    """Match with 50 overs per side (no explicit type) resolves to odi_limited_overs."""
+    mode = _resolve_analysis_mode(
+        raw_match_type="",
+        overs_per_side=50,
+        innings_count=2,
+        days_limit=None,
+    )
+    assert mode == "odi_limited_overs"
+
+
+def test_resolve_analysis_mode_t20() -> None:
+    """T20 match resolves to t20_limited_overs analysis mode."""
+    mode = _resolve_analysis_mode(
+        raw_match_type="T20",
+        overs_per_side=20,
+        innings_count=2,
+        days_limit=None,
+    )
+    assert mode == "t20_limited_overs"
+
+
+def test_resolve_analysis_mode_t20_by_overs() -> None:
+    """Match with 20 overs per side (no explicit type) resolves to t20_limited_overs."""
+    mode = _resolve_analysis_mode(
+        raw_match_type="",
+        overs_per_side=20,
+        innings_count=2,
+        days_limit=None,
+    )
+    assert mode == "t20_limited_overs"
+
+
+def test_resolve_analysis_mode_test_unchanged() -> None:
+    """Test/multi-day mode is unchanged (no regression)."""
+    mode = _resolve_analysis_mode(
+        raw_match_type="TEST",
+        overs_per_side=90,
+        innings_count=4,
+        days_limit=5,
+    )
+    assert mode == "test_multi_day"
+
+
+def test_odi_story_blocks_use_odi_language() -> None:
+    """_build_story_blocks for odi_limited_overs uses ODI-specific phase language."""
+    phase_ranges = _get_phase_ranges("ODI", 50)
+    innings_summary = CaseStudyInningsSummary(
+        team="India", runs=285, wickets=7, overs=50.0, run_rate=5.70
+    )
+    phases = _compute_phase_stats(
+        phase_ranges=phase_ranges,
+        per_over_runs={i: 5 for i in range(1, 51)},
+        per_over_wickets={3: 1, 15: 1, 30: 2, 45: 2, 48: 1},
+        total_runs=285,
+        total_overs=50.0,
+        innings_index=0,
+        team="India",
+    )
+    strongest = max(phases, key=lambda p: p.runs) if phases else None
+    weakest = min(phases, key=lambda p: p.runs) if phases else None
+
+    blocks = _build_story_blocks(
+        innings_summary,
+        phases,
+        strongest,
+        weakest,
+        analysis_mode="odi_limited_overs",
+        innings_number=1,
+    )
+
+    # Must reference ODI phases
+    assert "powerplay" in blocks.opening_story.lower() or "1\u201310" in blocks.opening_story
+    assert "overs" in blocks.middle_overs_story.lower()
+    # Must not use T20-style 1-6 framing
+    assert "1-6" not in blocks.opening_story
+    assert "7-15" not in blocks.middle_overs_story
+    assert "16-20" not in blocks.death_overs_story
+    # Acceleration and death labels
+    assert "41" in blocks.death_overs_story or "death" in blocks.death_overs_story.lower()
+
+
+def test_odi_story_blocks_no_test_language() -> None:
+    """_build_story_blocks for odi_limited_overs must not produce Test/multi-day language."""
+    innings_summary = CaseStudyInningsSummary(
+        team="Australia", runs=310, wickets=8, overs=50.0, run_rate=6.20
+    )
+    blocks = _build_story_blocks(
+        innings_summary,
+        phases=[],
+        strongest_phase=None,
+        weakest_phase=None,
+        analysis_mode="odi_limited_overs",
+        innings_number=1,
+    )
+    for attr in ("opening_story", "middle_overs_story", "death_overs_story"):
+        val = getattr(blocks, attr, "") or ""
+        assert (
+            "innings 1" not in val.lower()
+            or "innings" not in val.lower()
+            or "passage" not in val.lower()
+        ), f"Test language found in ODI story block {attr}: {val}"
+        assert "vs par" not in val.lower(), f"vs par found in ODI {attr}: {val}"
+
+
+def test_odi_innings_callouts_use_odi_phases() -> None:
+    """_build_innings_callouts for odi_limited_overs references ODI phase labels."""
+    phase_ranges = _get_phase_ranges("ODI", 50)
+    phases = _compute_phase_stats(
+        phase_ranges=phase_ranges,
+        per_over_runs={i: 5 for i in range(1, 51)},
+        per_over_wickets={3: 2, 4: 2, 15: 2, 16: 1, 28: 1, 45: 1},
+        total_runs=285,
+        total_overs=50.0,
+        innings_index=0,
+        team="Pakistan",
+    )
+    dismissal_patterns = _compute_dismissal_patterns(
+        [
+            {
+                "inning": 1,
+                "over_number": 3,
+                "ball_number": 2,
+                "is_wicket": True,
+                "batter_name": "Batter 1",
+            },
+            {
+                "inning": 1,
+                "over_number": 4,
+                "ball_number": 1,
+                "is_wicket": True,
+                "batter_name": "Batter 2",
+            },
+        ],
+        1,
+        phase_ranges,
+    )
+    callouts = _build_innings_callouts(
+        1, phases, dismissal_patterns, analysis_mode="odi_limited_overs"
+    )
+
+    assert callouts, "Expected callouts for odi_limited_overs innings"
+    all_phases = [c.phase for c in callouts]
+    all_categories = [c.category for c in callouts]
+    # Should have phase references
+    assert any(c.phase for c in callouts)
+    # Categories should be valid
+    valid_cats = {"batting", "bowling", "player", "dismissal", "momentum", "outcome"}
+    assert all(cat in valid_cats for cat in all_categories)
+
+
+def test_t20_phase_ranges_unaffected_by_odi_changes() -> None:
+    """T20 phase computation produces 3 phases, not 4 ODI phases."""
+    phase_ranges = _get_phase_ranges("T20", 20)
+    assert len(phase_ranges) == 3, f"Expected 3 T20 phases, got {len(phase_ranges)}"
+
+
+def test_odi_phase_ranges_produce_four_phases() -> None:
+    """ODI phase computation produces 4 phases."""
+    phase_ranges = _get_phase_ranges("ODI", 50)
+    assert len(phase_ranges) == 4, f"Expected 4 ODI phases, got {len(phase_ranges)}"
+
+
+def test_odi_phase_ranges_with_45_overs() -> None:
+    """ODI-style match with 45 overs also gets 4 ODI phases."""
+    phase_ranges = _get_phase_ranges("ODI", 45)
+    ids = [pid for pid, *_ in phase_ranges]
+    assert "powerplay" in ids
+    assert "consolidation" in ids
+    assert "acceleration" in ids
+    assert "death" in ids

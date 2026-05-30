@@ -78,6 +78,17 @@ def _get_phase_ranges(match_format: str, overs_per_side: int) -> list[tuple[str,
     Return phase definitions based on match format.
 
     Returns list of (id, label, start_over, end_over).
+
+    ODI uses the preferred 4-phase model:
+      - Opening powerplay: overs 1-10
+      - Consolidation:     overs 11-25
+      - Acceleration:      overs 26-40
+      - Death overs:       overs 41-50
+
+    T20 uses 3-phase model:
+      - Powerplay:    overs 1-6
+      - Middle overs: overs 7-15
+      - Death overs:  overs 16-20
     """
     if match_format.upper() == "T20" or overs_per_side == 20:
         return [
@@ -85,11 +96,13 @@ def _get_phase_ranges(match_format: str, overs_per_side: int) -> list[tuple[str,
             ("middle", "Middle Overs (7-15)", 7, 15),
             ("death", "Death Overs (16-20)", 16, 20),
         ]
-    elif match_format.upper() == "ODI" or overs_per_side >= 40:
+    elif match_format.upper() in {"ODI", "ONE-DAY", "ONE_DAY", "LIST_A"} or overs_per_side >= 40:
+        death_start = min(41, overs_per_side)
         return [
-            ("powerplay", "Powerplay (1-10)", 1, 10),
-            ("middle", "Middle Overs (11-40)", 11, 40),
-            ("death", "Death Overs (41-50)", 41, min(overs_per_side, 50)),
+            ("powerplay", "Opening Powerplay (1-10)", 1, 10),
+            ("consolidation", "Consolidation (11-25)", 11, 25),
+            ("acceleration", "Acceleration (26-40)", 26, 40),
+            ("death", "Death Overs (41-50)", death_start, min(overs_per_side, 50)),
         ]
     else:
         # Generic 3-part split for custom formats
@@ -108,7 +121,9 @@ def _resolve_analysis_mode(
     overs_per_side: int,
     innings_count: int,
     days_limit: int | None = None,
-) -> Literal["limited_overs", "test_multi_day", "unknown"]:
+) -> Literal[
+    "limited_overs", "odi_limited_overs", "t20_limited_overs", "test_multi_day", "unknown"
+]:
     normalized = (raw_match_type or "").strip().upper()
     if (
         normalized in {"TEST", "FIRST_CLASS", "FIRST-CLASS", "MULTI_DAY", "MULTI-DAY"}
@@ -116,9 +131,18 @@ def _resolve_analysis_mode(
         or (isinstance(days_limit, int) and days_limit > 1)
     ):
         return "test_multi_day"
-    if normalized in {"T20", "ODI"} or (
-        innings_count <= 2 and overs_per_side > 0 and overs_per_side <= 50
+    # ODI: explicit type or 40-50 overs per side
+    if normalized in {"ODI", "ONE-DAY", "ONE_DAY", "LIST_A"} or (
+        innings_count <= 2 and overs_per_side >= 40 and overs_per_side <= 60
     ):
+        return "odi_limited_overs"
+    # T20: explicit type or ≤20 overs per side
+    if normalized in {"T20", "T20I", "TWENTY20", "20_OVER"} or (
+        innings_count <= 2 and overs_per_side > 0 and overs_per_side <= 20
+    ):
+        return "t20_limited_overs"
+    # Generic limited-overs fallback (e.g. 21-39 over formats, CPL-tagged with no overs info)
+    if innings_count <= 2 and overs_per_side > 0 and overs_per_side <= 50:
         return "limited_overs"
     return "unknown"
 
@@ -909,7 +933,9 @@ def _build_story_blocks(
     phases: list[CaseStudyPhase],
     strongest_phase: CaseStudyPhase | None,
     weakest_phase: CaseStudyPhase | None,
-    analysis_mode: Literal["limited_overs", "test_multi_day", "unknown"] = "limited_overs",
+    analysis_mode: Literal[
+        "limited_overs", "odi_limited_overs", "t20_limited_overs", "test_multi_day", "unknown"
+    ] = "limited_overs",
     innings_number: int = 1,
     multi_day_summary: CaseStudyMultiDaySummary | None = None,
     dismissal_patterns: CaseStudyDismissalPatterns | None = None,
@@ -1036,6 +1062,91 @@ def _build_story_blocks(
             innings_outcome_contribution=innings_outcome_contribution,
         )
 
+    # ODI-specific story blocks (4-phase: powerplay / consolidation / acceleration / death)
+    if analysis_mode == "odi_limited_overs":
+        opening = _find_phase(phases, "powerplay")
+        consol = _find_phase(phases, "consolidation")
+        accel = _find_phase(phases, "acceleration")
+        death = _find_phase(phases, "death")
+        strongest_label = strongest_phase.label if strongest_phase else "No phase data"
+        weakest_label = weakest_phase.label if weakest_phase else "No phase data"
+
+        # Opening powerplay story
+        if opening:
+            opening_story = (
+                f"The opening powerplay gave {innings_summary.team} "
+                f"{opening.runs} runs for {opening.wickets} wicket(s) "
+                f"at {opening.run_rate:.2f} RPO (overs 1\u201310)."
+            )
+        else:
+            opening_story = "Opening powerplay story unavailable from current data."
+
+        # Middle-over story: consolidation + acceleration combined
+        mid_parts = []
+        if consol:
+            mid_parts.append(
+                f"Overs 11\u201325 (consolidation): {consol.runs} runs, {consol.wickets} wicket(s) at {consol.run_rate:.2f} RPO."
+            )
+        if accel:
+            mid_parts.append(
+                f"Overs 26\u201340 (acceleration): {accel.runs} runs, {accel.wickets} wicket(s) at {accel.run_rate:.2f} RPO."
+            )
+        middle_overs_story = (
+            " ".join(mid_parts)
+            if mid_parts
+            else "Middle-overs story unavailable from current data."
+        )
+
+        # Death overs story (41-50)
+        if death:
+            death_overs_story = f"Death overs (41\u201350) yielded {death.runs} runs with {death.wickets} wicket(s) at {death.run_rate:.2f} RPO."
+        else:
+            death_overs_story = "Death-overs story unavailable from current data."
+
+        # Scoring acceleration: powerplay run rate vs death run rate
+        if opening and death:
+            scoring_acceleration = (
+                f"Run rate rose from {opening.run_rate:.2f} in the opening powerplay "
+                f"to {death.run_rate:.2f} in the death overs."
+            )
+        elif accel and death:
+            scoring_acceleration = (
+                f"The acceleration phase changed the scoring rate before the death overs "
+                f"({accel.run_rate:.2f} → {death.run_rate:.2f} RPO)."
+            )
+        else:
+            scoring_acceleration = f"Overall innings run rate: {innings_summary.run_rate:.2f} RPO."
+
+        # Wickets by ODI phase
+        wickets_by_phase = (
+            "; ".join(f"{phase.label}: {phase.wickets} wkt(s)" for phase in phases)
+            if phases
+            else "Wickets by phase unavailable."
+        )
+
+        # Chase pressure note for second innings
+        chase_note = ""
+        if innings_number == 2:
+            if consol and consol.wickets >= 3:
+                chase_note = " The chase was shaped by wickets in the consolidation phase (overs 11\u201325)."
+            elif accel and accel.wickets >= 3:
+                chase_note = " Wickets in the acceleration phase increased chase pressure."
+
+        return CaseStudyStoryBlocks(
+            opening_story=opening_story,
+            middle_overs_story=middle_overs_story + chase_note,
+            death_overs_story=death_overs_story,
+            scoring_acceleration=scoring_acceleration,
+            wickets_by_phase=wickets_by_phase,
+            strongest_phase=f"Strongest ODI phase: {strongest_label}.",
+            weakest_phase=f"Weakest ODI phase: {weakest_label}.",
+            innings_outcome_contribution=(
+                f"{innings_summary.team} posted {innings_summary.runs}/{innings_summary.wickets} "
+                f"in {innings_summary.overs} overs (ODI)."
+            ),
+        )
+
+    # Generic limited-overs story blocks (T20 and other formats)
     opening = _find_phase(phases, "powerplay")
     middle = _find_phase(phases, "middle")
     death = _find_phase(phases, "death")
@@ -1077,7 +1188,9 @@ def _build_innings_callouts(
     innings_number: int,
     phases: list[CaseStudyPhase],
     dismissal_patterns: CaseStudyDismissalPatterns,
-    analysis_mode: Literal["limited_overs", "test_multi_day", "unknown"] = "limited_overs",
+    analysis_mode: Literal[
+        "limited_overs", "odi_limited_overs", "t20_limited_overs", "test_multi_day", "unknown"
+    ] = "limited_overs",
     innings_summary: CaseStudyInningsSummary | None = None,
 ) -> list[CaseStudyAnalystCallout]:
     callouts: list[CaseStudyAnalystCallout] = []
@@ -1187,6 +1300,135 @@ def _build_innings_callouts(
                     why_it_matters="Long innings demonstrate batting endurance and session control in Test cricket.",
                 )
             )
+
+        return callouts
+
+    # ODI-specific callouts (4-phase model)
+    if analysis_mode == "odi_limited_overs":
+        opening = _find_phase(phases, "powerplay")
+        consol = _find_phase(phases, "consolidation")
+        accel = _find_phase(phases, "acceleration")
+        death = _find_phase(phases, "death")
+
+        if opening and opening.wickets >= 3:
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="Early wickets in powerplay",
+                    innings=innings_number,
+                    phase="Opening Powerplay (1-10)",
+                    category="dismissal",
+                    severity="warning",
+                    explanation=(
+                        f"Innings {innings_number} lost {opening.wickets} wicket(s) in the opening powerplay "
+                        f"(overs 1\u201310), limiting scoring platform."
+                    ),
+                    source_metrics=[f"wickets={opening.wickets}", f"runs={opening.runs}"],
+                    confidence=0.85,
+                    why_it_matters="Wickets in the ODI powerplay reduce batting depth for the acceleration and death phases.",
+                )
+            )
+
+        if consol and (consol.net_swing_vs_par <= -8 or consol.wickets >= 4):
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="Middle-over consolidation slowdown",
+                    innings=innings_number,
+                    phase="Consolidation (11-25)",
+                    category="momentum",
+                    severity="warning",
+                    explanation=(
+                        f"Overs 11\u201325 (consolidation): {consol.runs} runs, {consol.wickets} wicket(s) "
+                        f"at {consol.run_rate:.2f} RPO."
+                    ),
+                    source_metrics=[
+                        f"runs={consol.runs}",
+                        f"wickets={consol.wickets}",
+                        f"net_vs_par={consol.net_swing_vs_par}",
+                    ],
+                    confidence=0.85,
+                    why_it_matters="Slowdowns in overs 11\u201325 shift pressure onto the acceleration and death phases.",
+                )
+            )
+
+        if accel and accel.net_swing_vs_par >= 8:
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="Acceleration phase surge",
+                    innings=innings_number,
+                    phase="Acceleration (26-40)",
+                    category="batting",
+                    severity="positive",
+                    explanation=(
+                        f"The acceleration phase changed the scoring rate before the death overs: "
+                        f"{accel.runs} runs at {accel.run_rate:.2f} RPO (overs 26\u201340)."
+                    ),
+                    source_metrics=[
+                        f"runs={accel.runs}",
+                        f"run_rate={accel.run_rate}",
+                        f"net_vs_par={accel.net_swing_vs_par}",
+                    ],
+                    confidence=0.85,
+                    why_it_matters="An acceleration surge in overs 26\u201340 builds the platform for death-over finishing.",
+                )
+            )
+
+        if death and death.net_swing_vs_par >= 8:
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="Death-over finish",
+                    innings=innings_number,
+                    phase="Death Overs (41-50)",
+                    category="batting",
+                    severity="positive",
+                    explanation=(
+                        f"Death overs (41\u201350): {death.runs} runs, {death.wickets} wicket(s) "
+                        f"at {death.run_rate:.2f} RPO — {death.net_swing_vs_par:+d} vs par."
+                    ),
+                    source_metrics=[
+                        f"runs={death.runs}",
+                        f"run_rate={death.run_rate}",
+                        f"net_vs_par={death.net_swing_vs_par}",
+                    ],
+                    confidence=0.85,
+                    why_it_matters="Death-over execution determines final totals and defendability in ODIs.",
+                )
+            )
+
+        if dismissal_patterns.wicket_cluster_callout:
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="Wicket cluster (ODI phase)",
+                    innings=innings_number,
+                    phase="ODI phase",
+                    category="dismissal",
+                    severity="info",
+                    explanation=dismissal_patterns.wicket_cluster_callout,
+                    source_metrics=[f"total_wickets={dismissal_patterns.total_wickets}"],
+                    confidence=0.85,
+                    why_it_matters="Wicket clusters shift momentum and can reshape ODI innings trajectory.",
+                )
+            )
+
+        if not callouts and phases:
+            # Provide at minimum a phase summary callout
+            strongest = max(phases, key=lambda p: p.runs)
+            if strongest:
+                callouts.append(
+                    CaseStudyAnalystCallout(
+                        title="Strongest ODI phase",
+                        innings=innings_number,
+                        phase=strongest.label,
+                        category="batting",
+                        severity="info",
+                        explanation=(
+                            f"Innings {innings_number} scored {strongest.runs} runs "
+                            f"in the {strongest.label} at {strongest.run_rate:.2f} RPO."
+                        ),
+                        source_metrics=[f"phase={strongest.id}", f"runs={strongest.runs}"],
+                        confidence=0.8,
+                        why_it_matters="The strongest ODI phase reveals where batting control was established.",
+                    )
+                )
 
         return callouts
 
@@ -1479,7 +1721,9 @@ def _build_multi_day_summary(
 
 def _build_match_callouts(
     match: CaseStudyMatch,
-    analysis_mode: Literal["limited_overs", "test_multi_day", "unknown"] = "limited_overs",
+    analysis_mode: Literal[
+        "limited_overs", "odi_limited_overs", "t20_limited_overs", "test_multi_day", "unknown"
+    ] = "limited_overs",
     multi_day_summary: CaseStudyMultiDaySummary | None = None,
 ) -> list[CaseStudyAnalystCallout]:
     if analysis_mode == "test_multi_day":
