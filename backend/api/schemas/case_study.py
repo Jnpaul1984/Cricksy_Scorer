@@ -325,7 +325,8 @@ class CaseStudyMultiDaySummary(BaseModel):
     # Legacy note field kept for backward compatibility
     fourth_innings_chase_note: str | None = None
     notice: str = (
-        "Test/multi-day match. Analysis uses innings-safe bands; limited-overs phase labels are disabled."
+        "Test/multi-day match. Analysis uses innings-safe bands; "
+        "limited-overs phase labels are disabled."
     )
     # Rich derived intelligence
     first_innings_lead_note: str | None = None
