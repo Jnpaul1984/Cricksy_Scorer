@@ -665,7 +665,7 @@ def _build_knockout_context(
             and outcome.season == group_key.season
             and outcome.gender_category == group_key.gender_category
         ):
-            semi_finals = [
+            outcome_semi_finals = [
                 TournamentMatchHighlight(
                     match_id=m.match_id,
                     match_title=m.match_title,
@@ -677,7 +677,7 @@ def _build_knockout_context(
                 for m in outcome.playoff_stage_matches_detected
                 if m.stage_label in ("Semi Final", "Eliminator")
             ]
-            qualifiers = [
+            outcome_qualifiers = [
                 TournamentMatchHighlight(
                     match_id=m.match_id,
                     match_title=m.match_title,
@@ -698,8 +698,8 @@ def _build_knockout_context(
                 final_match_title=outcome.final_match_title,
                 final_match_date=outcome.final_match_date,
                 final_result=outcome.final_result,
-                semi_final_matches=semi_finals,
-                qualifier_matches=qualifiers,
+                semi_final_matches=outcome_semi_finals,
+                qualifier_matches=outcome_qualifiers,
                 outcome_source=outcome.outcome_source,
                 confidence=outcome.confidence,
             )
