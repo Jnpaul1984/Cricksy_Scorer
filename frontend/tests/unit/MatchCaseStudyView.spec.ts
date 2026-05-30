@@ -372,6 +372,106 @@ describe('MatchCaseStudyView', () => {
     expect(wrapper.text()).toContain('Needs review / rejected (9)')
   })
 
+  it('generates ODI podcast copy with ODI-safe phases and grammar', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue({
+      ...baseCaseStudy,
+      analysis_mode: 'odi_limited_overs',
+      match: {
+        ...baseCaseStudy.match,
+        format: 'ODI',
+        teams_label: 'Durham vs Warwickshire',
+        result: 'Durham won by 1 runs',
+        innings: [
+          { team: 'Durham', runs: 338, wickets: 8, overs: 50, run_rate: 6.76 },
+          { team: 'Warwickshire', runs: 337, wickets: 8, overs: 50, run_rate: 6.74 },
+        ],
+      },
+      key_players: [
+        {
+          id: 'bedingham',
+          name: 'DG Bedingham',
+          team: 'Durham',
+          role: 'batter',
+          impact: 'high',
+          impact_label: 'scored 152 off 108 balls',
+          batting: { innings: 1, runs: 152, balls: 108, strike_rate: 140.74, boundaries: { fours: 16, sixes: 3 } },
+        },
+      ],
+      innings_analysis: [
+        {
+          innings_index: 0,
+          team: 'Durham',
+          deterministic_summary: 'Innings 1 summary',
+          momentum_summary: { title: 'ODI momentum', subtitle: 'ODI subtitle' },
+          key_phase: { title: 'Acceleration (26-40)', detail: 'ODI key phase detail' },
+          phases: [
+            { id: 'powerplay', label: 'Opening Powerplay (1-10)', start_over: 1, end_over: 10, runs: 48, wickets: 1, run_rate: 4.8, net_swing_vs_par: -6, impact: 'negative', impact_label: 'Below par' },
+            { id: 'consolidation', label: 'Consolidation (11-25)', start_over: 11, end_over: 25, runs: 85, wickets: 2, run_rate: 5.67, net_swing_vs_par: -3, impact: 'negative', impact_label: 'Slightly below par' },
+            { id: 'acceleration', label: 'Acceleration (26-40)', start_over: 26, end_over: 40, runs: 128, wickets: 2, run_rate: 8.53, net_swing_vs_par: 12, impact: 'positive', impact_label: 'Above par' },
+            { id: 'death', label: 'Death Overs (41-50)', start_over: 41, end_over: 50, runs: 77, wickets: 3, run_rate: 7.7, net_swing_vs_par: 4, impact: 'positive', impact_label: 'Above par' },
+          ],
+          key_players: [],
+          key_players_scope: 'match',
+          dismissal_patterns: { summary: 'Durham dismissals', wicket_cluster_callout: 'A key wicket cluster came between overs 24 and 26, when 2 wickets fell.' },
+          story_blocks: {
+            opening_story: 'ODI opening',
+            middle_overs_story: 'ODI middle',
+            death_overs_story: 'ODI death',
+            scoring_acceleration: 'ODI acceleration',
+            wickets_by_phase: 'ODI wickets',
+            strongest_phase: 'ODI strongest',
+            weakest_phase: 'ODI weakest',
+            innings_outcome_contribution: 'ODI contribution',
+          },
+          callouts: [],
+        },
+        {
+          innings_index: 1,
+          team: 'Warwickshire',
+          deterministic_summary: 'Innings 2 summary',
+          momentum_summary: { title: 'ODI chase momentum', subtitle: 'ODI chase subtitle' },
+          key_phase: { title: 'Consolidation (11-25)', detail: 'ODI chase key phase detail' },
+          phases: [
+            { id: 'powerplay', label: 'Opening Powerplay (1-10)', start_over: 1, end_over: 10, runs: 58, wickets: 1, run_rate: 5.8, net_swing_vs_par: 1, impact: 'neutral', impact_label: 'On par' },
+            { id: 'consolidation', label: 'Consolidation (11-25)', start_over: 11, end_over: 25, runs: 86, wickets: 2, run_rate: 5.73, net_swing_vs_par: -1, impact: 'neutral', impact_label: 'On par' },
+            { id: 'acceleration', label: 'Acceleration (26-40)', start_over: 26, end_over: 40, runs: 118, wickets: 2, run_rate: 7.87, net_swing_vs_par: 8, impact: 'positive', impact_label: 'Above par' },
+            { id: 'death', label: 'Death Overs (41-50)', start_over: 41, end_over: 50, runs: 75, wickets: 3, run_rate: 7.5, net_swing_vs_par: 3, impact: 'positive', impact_label: 'Above par' },
+          ],
+          key_players: [],
+          key_players_scope: 'match',
+          dismissal_patterns: { summary: 'Warwickshire dismissals', wicket_cluster_callout: 'A key wicket cluster came between overs 24 and 26, when 2 wickets fell.' },
+          story_blocks: {
+            opening_story: 'ODI opening 2',
+            middle_overs_story: 'ODI middle 2',
+            death_overs_story: 'ODI death 2',
+            scoring_acceleration: 'ODI acceleration 2',
+            wickets_by_phase: 'ODI wickets 2',
+            strongest_phase: 'ODI strongest 2',
+            weakest_phase: 'ODI weakest 2',
+            innings_outcome_contribution: 'ODI contribution 2',
+          },
+          callouts: [],
+        },
+      ],
+    } as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
+    await flushAsync()
+    await wrapper.get('[data-testid="podcast-generate-btn"]').trigger('click')
+    await flushAsync()
+
+    const text = wrapper.get('#cs-podcast-prep').text()
+    expect(text).toContain('Durham won by 1 run')
+    expect(text).not.toContain('Powerplay (1-6)')
+    expect(text).not.toContain('Middle Overs (7-15)')
+    expect(text).not.toContain('Death Overs (16-20)')
+    expect(text).not.toContain('wicket(s)')
+    expect(text).toContain("DG Bedingham anchored Durham's innings with 152 off 108 balls.")
+    expect(text).toContain('A key wicket cluster came between overs 24 and 26, when 2 wickets fell.')
+    expect(text).toContain('In a one-run ODI, which mattered more')
+  })
+
   it('renders test/multi-day innings-safe notice and four innings selectors', async () => {
     vi.mocked(api.getMatchCaseStudy).mockResolvedValue({
       ...baseCaseStudy,

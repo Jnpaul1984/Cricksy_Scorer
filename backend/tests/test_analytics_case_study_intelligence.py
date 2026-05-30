@@ -486,6 +486,17 @@ def test_resolve_analysis_mode_t20_by_overs() -> None:
     assert mode == "t20_limited_overs"
 
 
+def test_resolve_analysis_mode_odm_alias() -> None:
+    """ODM alias should resolve to ODI limited-overs mode."""
+    mode = _resolve_analysis_mode(
+        raw_match_type="ODM",
+        overs_per_side=50,
+        innings_count=2,
+        days_limit=None,
+    )
+    assert mode == "odi_limited_overs"
+
+
 def test_resolve_analysis_mode_test_unchanged() -> None:
     """Test/multi-day mode is unchanged (no regression)."""
     mode = _resolve_analysis_mode(
@@ -533,6 +544,11 @@ def test_odi_story_blocks_use_odi_language() -> None:
     assert "16-20" not in blocks.death_overs_story
     # Acceleration and death labels
     assert "41" in blocks.death_overs_story or "death" in blocks.death_overs_story.lower()
+    # No wicket(s) placeholder artifacts
+    assert "wicket(s)" not in blocks.opening_story
+    assert "wicket(s)" not in blocks.middle_overs_story
+    assert "wicket(s)" not in blocks.death_overs_story
+    assert "wicket(s)" not in blocks.wickets_by_phase
 
 
 def test_odi_story_blocks_no_test_language() -> None:
@@ -624,3 +640,19 @@ def test_odi_phase_ranges_with_45_overs() -> None:
     assert "consolidation" in ids
     assert "acceleration" in ids
     assert "death" in ids
+
+
+def test_wicket_cluster_callout_is_presenter_ready() -> None:
+    """Cluster callout should use smoother presenter-friendly language."""
+    phase_ranges = _get_phase_ranges("ODI", 50)
+    patterns = _compute_dismissal_patterns(
+        [
+            {"inning": 1, "over_number": 24, "ball_number": 2, "is_wicket": True},
+            {"inning": 1, "over_number": 25, "ball_number": 1, "is_wicket": True},
+        ],
+        1,
+        phase_ranges,
+    )
+    assert patterns.wicket_cluster_callout is not None
+    assert "A key wicket cluster came between overs 24 and 26" in patterns.wicket_cluster_callout
+    assert "2 wickets fell" in patterns.wicket_cluster_callout
