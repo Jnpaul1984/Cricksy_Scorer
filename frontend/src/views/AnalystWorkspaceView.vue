@@ -1776,6 +1776,11 @@
             </div>
 
 
+            <!-- Tournament Intelligence Tab (Phase 10S.1) -->
+            <div v-else-if="activeTab === 'tournament'" class="aw-table-wrapper">
+              <TournamentIntelligencePanel />
+            </div>
+
             <!-- Default fallback -->
             <div v-else class="aw-table-wrapper">
               <div class="aw-empty-large">
@@ -1810,6 +1815,7 @@ import HistoricalSourcePayloadReattachPanel from '@/components/HistoricalSourceP
 import HistoricalBackfillReprocessPanel from '@/components/HistoricalBackfillReprocessPanel.vue'
 import BulkZipSourcePayloadRecoveryPanel from '@/components/BulkZipSourcePayloadRecoveryPanel.vue'
 import HistoricalIdentityMappingReviewPanel from '@/components/HistoricalIdentityMappingReviewPanel.vue'
+import TournamentIntelligencePanel from '@/components/TournamentIntelligencePanel.vue'
 import { readAiInsightCache, writeAiInsightCache } from '@/services/aiInsightCache'
 import { useAuthStore } from '@/stores/authStore'
 import { normalizeResultDisplayText } from '@/utils/resultDisplay'
@@ -1836,7 +1842,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 // Types
-type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics' | 'import' | 'data-library' | 'cpl-dashboard' | 'registry'
+type AnalystTab = 'matches' | 'players' | 'deliveries' | 'case-studies' | 'analytics' | 'import' | 'data-library' | 'cpl-dashboard' | 'registry' | 'tournament'
 type RegistrySortOption = 'newest' | 'oldest' | 'competition' | 'season' | 'completeness'
 
 // State
@@ -1878,6 +1884,7 @@ const tabs: { value: AnalystTab; label: string }[] = [
   { value: 'analytics', label: 'Analytics' },
   { value: 'cpl-dashboard', label: 'CPL Dashboard' },
   { value: 'registry', label: 'Match Registry' },
+  { value: 'tournament', label: 'Tournament Intelligence' },
   { value: 'import', label: 'Import Data' }
 ]
 
