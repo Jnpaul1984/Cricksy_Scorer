@@ -1611,6 +1611,53 @@ function pluralizeWickets(n: number): string {
   return n === 1 ? '1 wicket' : `${n} wickets`
 }
 
+function extractOppositionTeam(teamsLabel: string | null | undefined, knownTeam: string): string | null {
+  if (!teamsLabel || !knownTeam) return null
+  const parts = teamsLabel.split(/\s+vs\s+/i).map((team) => team.trim()).filter(Boolean)
+  if (parts.length !== 2) return null
+  const knownLower = knownTeam.trim().toLowerCase()
+  if (parts[0].toLowerCase() === knownLower) return parts[1]
+  if (parts[1].toLowerCase() === knownLower) return parts[0]
+  return null
+}
+
+function extractResultMargin(result: string | null | undefined): string | null {
+  if (!result) return null
+  const match = result.match(/\bwon by\s+(.+)$/i)
+  return match?.[1] ? `by ${match[1].trim()}` : null
+}
+
+function formatSafeTestInningsScore(
+  runs: number | null | undefined,
+  wickets: number | null | undefined,
+  options: {
+    completed: boolean
+    allowCompletedWicketNotation?: boolean
+  },
+): string {
+  const safeRuns = typeof runs === 'number' ? runs : 0
+  const safeWickets = typeof wickets === 'number' ? wickets : null
+  const allowCompletedWicketNotation = options.allowCompletedWicketNotation ?? false
+
+  if (safeWickets === 10) return `${safeRuns} all out`
+  if (safeWickets === null || safeWickets < 0) {
+    return options.completed ? `${safeRuns}, based on recorded innings data` : `${safeRuns}`
+  }
+  if (safeWickets === 0) {
+    if (options.completed && !allowCompletedWicketNotation) {
+      return `${safeRuns}, based on recorded innings data`
+    }
+    return `${safeRuns}/0`
+  }
+  if (safeWickets >= 1 && safeWickets <= 9) {
+    if (!options.completed || allowCompletedWicketNotation) {
+      return `${safeRuns}/${safeWickets}`
+    }
+    return `${safeRuns}, based on recorded innings data`
+  }
+  return `${safeRuns}`
+}
+
 /**
  * Generates a presenter-ready player spotlight sentence from batting and/or
  * bowling facts. Combines both when available; mentions only the supported side
@@ -1661,6 +1708,11 @@ function generatePodcastPrep() {
     const openingHookText = (() => {
       const result = detail.match.result
       if (chase?.chase_result === 'completed' && detail.match.venue) {
+        const opposition = extractOppositionTeam(detail.match.teams_label, chase.chasing_team)
+        const margin = extractResultMargin(result)
+        if (opposition && margin) {
+          return `${chase.chasing_team} completed a controlled fourth-innings chase to beat ${opposition} ${margin} at ${detail.match.venue}.`
+        }
         return `${result} at ${detail.match.venue}.`
       }
       if (detail.match.venue) {
@@ -1672,17 +1724,21 @@ function generatePodcastPrep() {
     // Build first innings story from multi_day_summary.innings[0]
     const firstInningsCtx = mdInnings[0]
     const firstInningsText = firstInningsCtx
-      ? `${firstInningsCtx.team} posted ${firstInningsCtx.runs}/${firstInningsCtx.wickets} in the first innings.`
+      ? `${firstInningsCtx.team} posted ${formatSafeTestInningsScore(firstInningsCtx.runs, firstInningsCtx.wickets, { completed: mdInnings.length > 1 })} in the first innings.`
       : innings1?.deterministic_summary || 'First innings story unavailable.'
 
     // Build reply + lead card: innings[1] data combined with lead note
     const replyCtx = mdInnings[1]
     const firstInningsLeadText = (() => {
       if (replyCtx && leadNote) {
-        return `${replyCtx.team} replied with ${replyCtx.runs}/${replyCtx.wickets}. ${leadNote}`
+        const score = formatSafeTestInningsScore(replyCtx.runs, replyCtx.wickets, { completed: mdInnings.length > 2 })
+        return `${replyCtx.team} replied with ${score}. ${leadNote}`
       }
       if (leadNote) return leadNote
-      if (replyCtx) return `${replyCtx.team} replied with ${replyCtx.runs}/${replyCtx.wickets}.`
+      if (replyCtx) {
+        const score = formatSafeTestInningsScore(replyCtx.runs, replyCtx.wickets, { completed: mdInnings.length > 2 })
+        return `${replyCtx.team} replied with ${score}.`
+      }
       return innings1?.story_blocks?.opening_story || innings1?.deterministic_summary || 'First-innings lead story unavailable.'
     })()
 
@@ -1690,13 +1746,15 @@ function generatePodcastPrep() {
     const thirdInningsCtx = mdInnings[2]
     const thirdInningsText = (() => {
       if (thirdInningsCtx && chase) {
+        const score = formatSafeTestInningsScore(thirdInningsCtx.runs, thirdInningsCtx.wickets, { completed: true })
         return (
-          `${thirdInningsCtx.team} made ${thirdInningsCtx.runs}/${thirdInningsCtx.wickets} ` +
+          `${thirdInningsCtx.team} made ${score} ` +
           `in their second innings, setting ${chase.chasing_team} a target of ${chase.target}.`
         )
       }
       if (thirdInningsCtx) {
-        return `${thirdInningsCtx.team} made ${thirdInningsCtx.runs}/${thirdInningsCtx.wickets} in their second innings.`
+        const score = formatSafeTestInningsScore(thirdInningsCtx.runs, thirdInningsCtx.wickets, { completed: mdInnings.length > 3 })
+        return `${thirdInningsCtx.team} made ${score} in their second innings.`
       }
       return innings2?.deterministic_summary || 'Third innings story unavailable.'
     })()
@@ -1749,10 +1807,14 @@ function generatePodcastPrep() {
 
     // Build turning point note with context
     const turningPointText = (() => {
-      if (turningPoint) return turningPoint
-      if (chase?.chase_result === 'completed' && leadNote) {
-        return `The first-innings lead was the foundation of the match result. It meant the opposition had to repair the deficit before applying any pressure.`
+      if (leadNote && chase?.chase_result === 'completed') {
+        const leadMatch = leadNote.match(/^(.+?) took an? (.+?) first-innings lead\.?$/i)
+        if (leadMatch) {
+          return `${leadMatch[1]}’s ${leadMatch[2]} first-innings lead gave them control before the fourth-innings chase confirmed the result.`
+        }
+        return `${leadNote.replace(/\.$/, '')} gave them control before the fourth-innings chase confirmed the result.`
       }
+      if (turningPoint) return turningPoint
       return detail.key_phase?.detail || 'Match turning point unavailable.'
     })()
 

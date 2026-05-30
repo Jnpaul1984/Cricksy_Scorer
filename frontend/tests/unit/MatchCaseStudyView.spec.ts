@@ -596,7 +596,7 @@ describe('MatchCaseStudyView', () => {
         innings: [
           { team: 'SA', runs: 259, wickets: 10, overs: 80, run_rate: 3.24 },
           { team: 'AUS', runs: 383, wickets: 10, overs: 121, run_rate: 3.16 },
-          { team: 'SA', runs: 250, wickets: 10, overs: 73, run_rate: 3.42 },
+          { team: 'SA', runs: 250, wickets: 0, overs: 73, run_rate: 3.42 },
           { team: 'AUS', runs: 127, wickets: 0, overs: 30, run_rate: 4.23 },
         ],
       },
@@ -620,7 +620,7 @@ describe('MatchCaseStudyView', () => {
         innings: [
           { innings_number: 1, team: 'SA', runs: 259, wickets: 10, overs: 80 },
           { innings_number: 2, team: 'AUS', runs: 383, wickets: 10, overs: 121 },
-          { innings_number: 3, team: 'SA', runs: 250, wickets: 10, overs: 73 },
+          { innings_number: 3, team: 'SA', runs: 250, wickets: 0, overs: 73 },
           { innings_number: 4, team: 'AUS', runs: 127, wickets: 0, overs: 30 },
         ],
         first_innings_lead_note: 'Australia took a 124-run first-innings lead.',
@@ -654,18 +654,19 @@ describe('MatchCaseStudyView', () => {
     // No "wicket(s)" pluralization artifact anywhere
     expect(text).not.toContain('wicket(s)')
 
-    // Opening hook uses venue
-    expect(text).toContain('Adelaide Oval')
+    // Opening hook uses chase context + venue
+    expect(text).toContain('Australia completed a controlled fourth-innings chase to beat South Africa by 7 wickets at Adelaide Oval.')
 
     // First innings story describes first batting team
-    expect(text).toContain('SA posted 259/10')
+    expect(text).toContain('SA posted 259 all out')
 
     // First-innings lead card combines reply + lead note
-    expect(text).toContain('AUS replied with 383/10')
+    expect(text).toContain('AUS replied with 383 all out')
     expect(text).toContain('Australia took a 124-run first-innings lead.')
 
     // Third innings story sets up the target
-    expect(text).toContain('SA made 250/10')
+    expect(text).toContain('SA made 250, based on recorded innings data')
+    expect(text).not.toContain('SA made 250/0')
     expect(text).toContain('target of 127')
 
     // Fourth-innings chase: concise, no repetition from pressure_note
@@ -686,6 +687,9 @@ describe('MatchCaseStudyView', () => {
     // Closing question is discussion-ready (not generic placeholder)
     expect(text).not.toContain('What deterministic trend')
     expect(text).toContain("Australia's chase")
+
+    // Turning point combines lead + chase context when both are available
+    expect(text).toContain('Australia’s 124-run first-innings lead gave them control before the fourth-innings chase confirmed the result.')
   })
 
   it('exports approved podcast rundown only by default', async () => {
