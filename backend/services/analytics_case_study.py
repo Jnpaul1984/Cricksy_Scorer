@@ -928,14 +928,12 @@ def _build_story_blocks(
             consol = next((p for p in phases if "consolidation" in p.label.lower()), None)
             if consol:
                 middle_overs_story = (
-                    f"Consolidation passage (overs {consol.start_over}–{consol.end_over}): "
+                    f"Consolidation passage (overs {consol.start_over}-{consol.end_over}): "
                     f"{consol.runs} runs, {consol.wickets} wickets at {consol.run_rate:.2f} RPO."
                 )
             else:
                 mid = phases[1] if len(phases) > 1 else phases[0]
-                middle_overs_story = (
-                    f"{mid.label}: {mid.runs} runs, {mid.wickets} wickets at {mid.run_rate:.2f} RPO."
-                )
+                middle_overs_story = f"{mid.label}: {mid.runs} runs, {mid.wickets} wickets at {mid.run_rate:.2f} RPO."
         elif multi_day_summary and len(multi_day_summary.innings) >= innings_number:
             row = multi_day_summary.innings[innings_number - 1]
             ld = row.lead_deficit_after_innings
@@ -972,9 +970,7 @@ def _build_story_blocks(
                 f"chasing {chase.target} ({chase.chase_result.replace('_', ' ')})."
             )
         else:
-            death_overs_story = (
-                f"Innings {innings_number} concluded: {innings_summary.runs}/{innings_summary.wickets}."
-            )
+            death_overs_story = f"Innings {innings_number} concluded: {innings_summary.runs}/{innings_summary.wickets}."
 
         # Scoring acceleration: opening band run rate to late band
         if phases and len(phases) >= 2:
@@ -989,9 +985,7 @@ def _build_story_blocks(
 
         # Wickets by band: from phases or simple total
         if phases:
-            wickets_by_phase = "; ".join(
-                f"{p.label}: {p.wickets} wkt(s)" for p in phases
-            )
+            wickets_by_phase = "; ".join(f"{p.label}: {p.wickets} wkt(s)" for p in phases)
         else:
             wickets_by_phase = (
                 f"Total wickets in innings {innings_number}: {innings_summary.wickets}."
@@ -1198,8 +1192,8 @@ def _build_innings_callouts(
 
     middle = _find_phase(phases, "middle")
     death = _find_phase(phases, "death")
-    strongest = max(phases, key=lambda p: p.net_swing_vs_par, default=None)
-    weakest = min(phases, key=lambda p: p.net_swing_vs_par, default=None)
+    strongest = max(phases, key=lambda p: p.net_swing_vs_par) if phases else None
+    weakest = min(phases, key=lambda p: p.net_swing_vs_par) if phases else None
 
     if middle and (middle.net_swing_vs_par <= -8 or middle.wickets >= 3):
         callouts.append(
@@ -1406,9 +1400,7 @@ def _build_multi_day_summary(
                 fourth_note = (
                     f"{chasing_team} chased {target} with {wickets_in_hand} wicket(s) in hand."
                 )
-                pressure_note = (
-                    f"Chase completed; {wickets_in_hand} wicket(s) in hand."
-                )
+                pressure_note = f"Chase completed; {wickets_in_hand} wicket(s) in hand."
             elif wickets_in_chase >= 10:
                 chase_result = "fell_short"
                 runs_margin = target - runs_in_chase
@@ -1457,7 +1449,7 @@ def _build_multi_day_summary(
         biggest = max(all_clusters, key=lambda c: c.wickets)
         match_turning_point = (
             f"A {biggest.label} of {biggest.wickets} wickets in overs "
-            f"{biggest.overs_start}–{biggest.overs_end} (innings {biggest.innings_number}) "
+            f"{biggest.overs_start}-{biggest.overs_end} (innings {biggest.innings_number}) "
             "may have been a key turning point."
         )
     elif fourth_innings_chase and fourth_innings_chase.chase_result != "unknown":
@@ -1566,12 +1558,12 @@ def _build_match_callouts(
                     title="Wicket cluster changed innings direction",
                     level="match",
                     innings=biggest.innings_number,
-                    phase=f"Overs {biggest.overs_start}–{biggest.overs_end}",
+                    phase=f"Overs {biggest.overs_start}-{biggest.overs_end}",
                     category="dismissal",
                     severity="info",
                     explanation=(
                         f"{biggest.label.capitalize()}: {biggest.wickets} wickets fell between "
-                        f"overs {biggest.overs_start}–{biggest.overs_end} in innings {biggest.innings_number}."
+                        f"overs {biggest.overs_start}-{biggest.overs_end} in innings {biggest.innings_number}."
                     ),
                     source_metrics=[
                         f"wickets={biggest.wickets}",
@@ -1591,12 +1583,12 @@ def _build_match_callouts(
                     title="Recovery period after cluster",
                     level="match",
                     innings=best_rec.innings_number,
-                    phase=f"Overs {best_rec.overs_start}–{best_rec.overs_end}",
+                    phase=f"Overs {best_rec.overs_start}-{best_rec.overs_end}",
                     category="batting",
                     severity="positive",
                     explanation=(
                         f"Recovery period: {best_rec.runs_scored} runs scored in overs "
-                        f"{best_rec.overs_start}–{best_rec.overs_end} of innings {best_rec.innings_number} "
+                        f"{best_rec.overs_start}-{best_rec.overs_end} of innings {best_rec.innings_number} "
                         f"({best_rec.wickets_fell} wicket(s) lost)."
                     ),
                     source_metrics=[
