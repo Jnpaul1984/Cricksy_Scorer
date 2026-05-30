@@ -1154,6 +1154,217 @@ export async function getAnalystRegistry(): Promise<AnalystMatchRegistryListResp
   return request<AnalystMatchRegistryListResponse>('/analytics/matches/registry');
 }
 
+/* --------- Tournament Intelligence (Phase 10S.1) --------- */
+
+export interface TournamentGroupKey {
+  competition_code: string;
+  competition_name: string | null;
+  season: string | null;
+  season_year: number | null;
+  gender_category: string;
+  format_family: string;
+  source_type: string;
+}
+
+export interface TournamentGroupSummary {
+  group_key: TournamentGroupKey;
+  match_count: number;
+  teams_count: number;
+  has_result_data: boolean;
+  has_delivery_data: boolean;
+  champion_detected: boolean;
+  champion_team: string | null;
+  confidence: 'high' | 'medium' | 'low' | 'unknown';
+}
+
+export interface TournamentGroupsResponse {
+  groups: TournamentGroupSummary[];
+  total_groups: number;
+  total_matches: number;
+}
+
+export interface DerivedStandingsRow {
+  team_name: string;
+  canonical_team_name: string | null;
+  played: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  no_results: number;
+  points: number;
+  net_run_rate: number | null;
+  nrr_available: boolean;
+  confidence: 'high' | 'medium' | 'low';
+  note: string;
+}
+
+export interface TournamentMatchHighlight {
+  match_id: string;
+  match_title: string;
+  match_date: string | null;
+  stage_label: string | null;
+  result: string | null;
+  highlight_type: string;
+  detail: string | null;
+}
+
+export interface TournamentPlayerLeader {
+  player_name: string;
+  value: number;
+  matches_contributed: number;
+  stat_type: string;
+  source: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface TournamentDataCompleteness {
+  total_matches: number;
+  matches_with_result: number;
+  matches_missing_result: number;
+  delivery_complete_matches: number;
+  phase_level_matches: number;
+  innings_totals_matches: number;
+  metadata_only_matches: number;
+  confidence_level: string;
+  note: string;
+}
+
+export interface TournamentKnockoutContext {
+  champion_team: string | null;
+  champion_team_canonical: string | null;
+  runner_up_team: string | null;
+  runner_up_team_canonical: string | null;
+  final_match_id: string | null;
+  final_match_title: string | null;
+  final_match_date: string | null;
+  final_result: string | null;
+  semi_final_matches: TournamentMatchHighlight[];
+  qualifier_matches: TournamentMatchHighlight[];
+  outcome_source: string;
+  confidence: string;
+}
+
+export interface TournamentPodcastFacts {
+  competition_label: string | null;
+  season_label: string | null;
+  champion: string | null;
+  finalist: string | null;
+  strongest_team_by_wins: string | null;
+  top_scoring_venue: string | null;
+  highest_scoring_match_title: string | null;
+  highest_match_total_runs: number | null;
+  key_journey_note: string | null;
+  confidence: string;
+  source_label: string;
+}
+
+export interface TournamentSummaryResponse {
+  group_key: TournamentGroupKey;
+  match_count: number;
+  teams: string[];
+  venues: string[];
+  total_runs: number;
+  total_wickets: number;
+  highest_team_total: number | null;
+  highest_team_total_by: string | null;
+  lowest_completed_total: number | null;
+  lowest_completed_total_by: string | null;
+  closest_match: TournamentMatchHighlight | null;
+  biggest_win_by_runs: TournamentMatchHighlight | null;
+  biggest_win_by_wickets: TournamentMatchHighlight | null;
+  top_run_scorer: TournamentPlayerLeader | null;
+  top_wicket_taker: TournamentPlayerLeader | null;
+  derived_standings: DerivedStandingsRow[];
+  standings_label: string;
+  knockout_context: TournamentKnockoutContext | null;
+  data_completeness: TournamentDataCompleteness;
+  podcast_facts: TournamentPodcastFacts | null;
+}
+
+export interface TeamJourneyMatch {
+  match_id: string;
+  match_title: string;
+  match_date: string | null;
+  opponent: string;
+  venue: string | null;
+  result: string | null;
+  outcome: string;
+  team_runs: number | null;
+  opponent_runs: number | null;
+  stage_label: string | null;
+  highlight: string | null;
+}
+
+export interface TeamJourneySummary {
+  wins: number;
+  losses: number;
+  ties: number;
+  no_results: number;
+  total_runs_for: number;
+  total_runs_against: number;
+  best_win: TeamJourneyMatch | null;
+  worst_defeat: TeamJourneyMatch | null;
+  closest_match: TeamJourneyMatch | null;
+  top_scorer_name: string | null;
+  top_scorer_runs: number | null;
+  note: string;
+}
+
+export interface TeamJourneyResponse {
+  team_name: string;
+  canonical_team_name: string | null;
+  group_key: TournamentGroupKey;
+  matches: TeamJourneyMatch[];
+  summary: TeamJourneySummary;
+  note: string;
+}
+
+/**
+ * GET /analytics/tournament-intelligence/groups
+ * Phase 10S.1: Returns all discoverable tournament/season groups.
+ */
+export async function getTournamentGroups(): Promise<TournamentGroupsResponse> {
+  return request<TournamentGroupsResponse>('/analytics/tournament-intelligence/groups');
+}
+
+/**
+ * GET /analytics/tournament-intelligence/summary
+ * Phase 10S.1: Returns full tournament intelligence for one group.
+ */
+export async function getTournamentSummary(
+  competitionCode: string,
+  season?: string | null,
+  genderCategory?: string,
+): Promise<TournamentSummaryResponse> {
+  const params = new URLSearchParams({ competition_code: competitionCode });
+  if (season) params.set('season', season);
+  if (genderCategory) params.set('gender_category', genderCategory);
+  return request<TournamentSummaryResponse>(
+    `/analytics/tournament-intelligence/summary?${params.toString()}`,
+  );
+}
+
+/**
+ * GET /analytics/tournament-intelligence/team-journey
+ * Phase 10S.1: Returns a team's journey within a competition/season.
+ */
+export async function getTeamJourney(
+  competitionCode: string,
+  teamName: string,
+  season?: string | null,
+  genderCategory?: string,
+): Promise<TeamJourneyResponse> {
+  const params = new URLSearchParams({
+    competition_code: competitionCode,
+    team_name: teamName,
+  });
+  if (season) params.set('season', season);
+  if (genderCategory) params.set('gender_category', genderCategory);
+  return request<TeamJourneyResponse>(
+    `/analytics/tournament-intelligence/team-journey?${params.toString()}`,
+  );
+}
+
 export interface AnalystExportFilters {
   dateFrom?: string;
   dateTo?: string;
