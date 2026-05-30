@@ -283,15 +283,57 @@ class CaseStudyMultiDayInningsContext(BaseModel):
     lead_deficit_after_innings: int | None = None
 
 
+class CaseStudyFourthInningsChase(BaseModel):
+    """Structured fourth-innings chase intelligence for Test/multi-day matches."""
+
+    target: int
+    chasing_team: str
+    runs_scored: int
+    wickets_lost: int
+    wickets_in_hand: int
+    chase_result: Literal["completed", "fell_short", "unknown"]
+    runs_margin: int | None = None
+    pressure_note: str | None = None
+
+
+class CaseStudyWicketCluster(BaseModel):
+    """A detected wicket cluster (collapse window) within a Test/multi-day innings."""
+
+    innings_number: int
+    overs_start: int
+    overs_end: int
+    wickets: int
+    label: str  # e.g. "wicket cluster", "possible collapse window"
+
+
+class CaseStudyRecoveryWindow(BaseModel):
+    """A detected recovery period following a wicket cluster."""
+
+    innings_number: int
+    overs_start: int
+    overs_end: int
+    runs_scored: int
+    wickets_fell: int
+    label: str  # e.g. "recovery period"
+
+
 class CaseStudyMultiDaySummary(BaseModel):
-    """Format-safe summary payload for Test/multi-day matches."""
+    """Enriched summary payload for Test/multi-day matches."""
 
     match_status: Literal["won", "lost", "draw", "tie", "no_result", "unknown"]
     innings: list[CaseStudyMultiDayInningsContext] = []
+    # Legacy note field kept for backward compatibility
     fourth_innings_chase_note: str | None = None
     notice: str = (
-        "Test/multi-day analysis is currently limited and uses innings/session-safe summaries."
+        "Test/multi-day match. Analysis uses innings-safe bands; limited-overs phase labels are disabled."
     )
+    # Rich derived intelligence
+    first_innings_lead_note: str | None = None
+    lead_swing_notes: list[str] = []
+    fourth_innings_chase: CaseStudyFourthInningsChase | None = None
+    wicket_clusters: list[CaseStudyWicketCluster] = []
+    recovery_windows: list[CaseStudyRecoveryWindow] = []
+    match_turning_point: str | None = None
 
 
 # -----------------------------------------------------------------------------

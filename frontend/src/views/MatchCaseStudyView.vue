@@ -174,11 +174,118 @@
           <p class="cs-footnote">
             {{
               caseStudy?.multi_day_summary?.notice
-                || 'Test/multi-day analysis is currently limited and uses innings/session-safe summaries.'
+                || 'Test/multi-day match. Analysis uses innings-safe bands; limited-overs phase labels are disabled.'
             }}
           </p>
         </BaseCard>
+
+        <!-- First-innings lead note -->
+        <BaseCard
+          v-if="caseStudy?.multi_day_summary?.first_innings_lead_note"
+          padding="md"
+          class="cs-summary-card"
+        >
+          <p class="cs-label">First-innings lead</p>
+          <p class="cs-value">{{ caseStudy.multi_day_summary.first_innings_lead_note }}</p>
+        </BaseCard>
+
+        <!-- Lead/deficit swing notes -->
+        <BaseCard
+          v-if="caseStudy?.multi_day_summary?.lead_swing_notes?.length"
+          padding="md"
+          class="cs-summary-card"
+        >
+          <p class="cs-label">Lead / deficit swing</p>
+          <ul class="cs-lead-swing-list">
+            <li
+              v-for="(note, idx) in caseStudy.multi_day_summary.lead_swing_notes"
+              :key="`lead-note-${idx}`"
+              class="cs-footnote"
+            >{{ note }}</li>
+          </ul>
+        </BaseCard>
+
+        <!-- Fourth-innings chase structured -->
+        <BaseCard
+          v-if="caseStudy?.multi_day_summary?.fourth_innings_chase"
+          padding="md"
+          class="cs-summary-card"
+        >
+          <p class="cs-label">Fourth-innings chase</p>
+          <p class="cs-value">
+            {{ caseStudy.multi_day_summary.fourth_innings_chase.chasing_team }}
+            chasing {{ caseStudy.multi_day_summary.fourth_innings_chase.target }}
+          </p>
+          <div class="cs-phase-numbers">
+            <div class="cs-phase-number">
+              <span class="cs-phase-number-label">Runs scored</span>
+              <span class="cs-phase-number-value">{{ caseStudy.multi_day_summary.fourth_innings_chase.runs_scored }}</span>
+            </div>
+            <div class="cs-phase-number">
+              <span class="cs-phase-number-label">Wickets in hand</span>
+              <span class="cs-phase-number-value">{{ caseStudy.multi_day_summary.fourth_innings_chase.wickets_in_hand }}</span>
+            </div>
+            <div class="cs-phase-number">
+              <span class="cs-phase-number-label">Result</span>
+              <span class="cs-phase-number-value">{{ caseStudy.multi_day_summary.fourth_innings_chase.chase_result.replace('_', ' ') }}</span>
+            </div>
+          </div>
+          <p
+            v-if="caseStudy.multi_day_summary.fourth_innings_chase.pressure_note"
+            class="cs-footnote"
+          >{{ caseStudy.multi_day_summary.fourth_innings_chase.pressure_note }}</p>
+        </BaseCard>
+
+        <!-- Wicket clusters -->
+        <BaseCard
+          v-if="caseStudy?.multi_day_summary?.wicket_clusters?.length"
+          padding="md"
+          class="cs-summary-card"
+        >
+          <p class="cs-label">Wicket clusters</p>
+          <ul class="cs-lead-swing-list">
+            <li
+              v-for="(cluster, idx) in caseStudy.multi_day_summary.wicket_clusters"
+              :key="`cluster-${idx}`"
+              class="cs-footnote"
+            >
+              {{ cluster.label.charAt(0).toUpperCase() + cluster.label.slice(1) }}:
+              {{ cluster.wickets }} wickets, overs {{ cluster.overs_start }}–{{ cluster.overs_end }}
+              (innings {{ cluster.innings_number }})
+            </li>
+          </ul>
+        </BaseCard>
+
+        <!-- Recovery windows -->
+        <BaseCard
+          v-if="caseStudy?.multi_day_summary?.recovery_windows?.length"
+          padding="md"
+          class="cs-summary-card"
+        >
+          <p class="cs-label">Recovery periods</p>
+          <ul class="cs-lead-swing-list">
+            <li
+              v-for="(rw, idx) in caseStudy.multi_day_summary.recovery_windows"
+              :key="`recovery-${idx}`"
+              class="cs-footnote"
+            >
+              Recovery (innings {{ rw.innings_number }}, overs {{ rw.overs_start }}–{{ rw.overs_end }}):
+              {{ rw.runs_scored }} runs, {{ rw.wickets_fell }} wicket(s) lost
+            </li>
+          </ul>
+        </BaseCard>
+
+        <!-- Match turning point -->
+        <BaseCard
+          v-if="caseStudy?.multi_day_summary?.match_turning_point"
+          padding="md"
+          class="cs-summary-card"
+        >
+          <p class="cs-label">Match turning point candidate</p>
+          <p class="cs-footnote">{{ caseStudy.multi_day_summary.match_turning_point }}</p>
+        </BaseCard>
       </section>
+
 
       <!-- No match found state -->
       <section v-else class="cs-not-found">
@@ -1313,6 +1420,61 @@ function buildPodcastFactBundle(detail: MatchCaseStudyResponse): PodcastFactItem
     })
   }
 
+  const isTestMode = detail.analysis_mode === 'test_multi_day'
+  const multiDaySummary = detail.multi_day_summary
+
+  // Test/multi-day specific facts
+  if (isTestMode && multiDaySummary) {
+    if (multiDaySummary.first_innings_lead_note) {
+      facts.push({
+        id: 'test-first-innings-lead',
+        source: 'multi_day_summary.first_innings_lead',
+        value: multiDaySummary.first_innings_lead_note,
+      })
+    }
+    ;(multiDaySummary.lead_swing_notes ?? []).slice(1).forEach((note, idx) => {
+      facts.push({
+        id: `test-lead-swing-${idx + 2}`,
+        source: 'multi_day_summary.lead_swing',
+        value: note,
+      })
+    })
+    if (multiDaySummary.fourth_innings_chase) {
+      const chase = multiDaySummary.fourth_innings_chase
+      facts.push({
+        id: 'test-fourth-innings-chase',
+        source: 'multi_day_summary.fourth_innings_chase',
+        value: `Fourth-innings chase: ${chase.chasing_team} scored ${chase.runs_scored}/${chase.wickets_lost} `
+          + `chasing ${chase.target} (${chase.chase_result.replace('_', ' ')}, `
+          + `${chase.wickets_in_hand} wicket(s) in hand).`,
+      })
+    }
+    ;(multiDaySummary.wicket_clusters ?? []).forEach((cluster, idx) => {
+      facts.push({
+        id: `test-wicket-cluster-${idx + 1}`,
+        source: 'multi_day_summary.wicket_clusters',
+        value: `${cluster.label.charAt(0).toUpperCase() + cluster.label.slice(1)}: `
+          + `${cluster.wickets} wickets in overs ${cluster.overs_start}–${cluster.overs_end} `
+          + `(innings ${cluster.innings_number}).`,
+      })
+    })
+    ;(multiDaySummary.recovery_windows ?? []).forEach((rw, idx) => {
+      facts.push({
+        id: `test-recovery-window-${idx + 1}`,
+        source: 'multi_day_summary.recovery_windows',
+        value: `Recovery period (innings ${rw.innings_number}, overs ${rw.overs_start}–${rw.overs_end}): `
+          + `${rw.runs_scored} runs, ${rw.wickets_fell} wicket(s) lost.`,
+      })
+    })
+    if (multiDaySummary.match_turning_point) {
+      facts.push({
+        id: 'test-turning-point',
+        source: 'multi_day_summary.match_turning_point',
+        value: multiDaySummary.match_turning_point,
+      })
+    }
+  }
+
   const tournamentOutcome =
     (detail.match_callouts ?? []).find((callout) => callout.category === 'outcome')?.explanation ??
     (detail.innings_analysis ?? [])
@@ -1335,13 +1497,25 @@ function buildPodcastFactBundle(detail: MatchCaseStudyResponse): PodcastFactItem
   })
 
   ;(detail.innings_analysis ?? []).forEach((innings, index) => {
-    ;(innings.phases ?? []).forEach((phase) => {
-      facts.push({
-        id: `phase-${index + 1}-${phase.id}`,
-        source: `phase_breakdown.${phase.id}`,
-        value: `Innings ${index + 1} ${phase.label}: ${phase.runs} runs, ${phase.wickets} wickets, ${phase.net_swing_vs_par} vs par.`,
+    if (!isTestMode) {
+      // For limited-overs: include phase breakdown and vs-par
+      ;(innings.phases ?? []).forEach((phase) => {
+        facts.push({
+          id: `phase-${index + 1}-${phase.id}`,
+          source: `phase_breakdown.${phase.id}`,
+          value: `Innings ${index + 1} ${phase.label}: ${phase.runs} runs, ${phase.wickets} wickets, ${phase.net_swing_vs_par} vs par.`,
+        })
       })
-    })
+    } else {
+      // For Test/multi-day: include band-based phase breakdown without vs-par
+      ;(innings.phases ?? []).forEach((phase) => {
+        facts.push({
+          id: `test-band-${index + 1}-${phase.id}`,
+          source: `innings_band.innings_${index + 1}`,
+          value: `Innings ${index + 1} ${phase.label}: ${phase.runs} runs, ${phase.wickets} wickets at ${phase.run_rate} RPO.`,
+        })
+      })
+    }
 
     const blocks = innings.story_blocks
     facts.push({
@@ -1436,83 +1610,192 @@ function generatePodcastPrep() {
   const leadPlayer = detail.key_players?.[0]
   const selectedDismissals =
     innings1?.dismissal_patterns ?? detail.dismissal_patterns ?? null
+  const isTestMode = detail.analysis_mode === 'test_multi_day'
+  const multiDaySummary = detail.multi_day_summary
 
-  podcastCards.value = [
-    createPodcastCard(
-      'opening-hook',
-      'Opening hook',
-      `${detail.match.teams_label}: ${detail.match.result}.`,
-      'intro',
-      ['match.result'],
-    ),
-    createPodcastCard(
-      'match-context',
-      'Match context',
-      [
-        detail.match.date ? `Date: ${detail.match.date}` : null,
-        detail.match.venue ? `Venue: ${detail.match.venue}` : null,
-        detail.match.season ? `Season: ${detail.match.season}` : null,
-        detail.match.event_name ? `Competition: ${detail.match.event_name}` : null,
-      ]
-        .filter(Boolean)
-        .join(' • ') || 'Match context unavailable.',
-      'match_setup',
-      ['match.context'],
-    ),
-    createPodcastCard(
-      'first-innings-story',
-      'First innings story',
-      innings1?.story_blocks?.opening_story || innings1?.deterministic_summary || 'First innings story unavailable.',
-      'innings_1',
-      ['innings_story.opening', 'innings_summary.innings_1'],
-    ),
-    createPodcastCard(
-      'second-innings-story',
-      'Second innings story',
-      innings2?.story_blocks?.opening_story || innings2?.deterministic_summary || 'Second innings story unavailable.',
-      'innings_2',
-      ['innings_story.opening', 'innings_summary.innings_2'],
-    ),
-    createPodcastCard(
-      'turning-point',
-      'Turning point',
-      detail.key_phase?.detail || detail.momentum_summary?.subtitle || 'Turning point unavailable from deterministic data.',
-      'tactical_discussion',
-      ['analytics_insight.key_phase', 'phase_breakdown.middle'],
-    ),
-    createPodcastCard(
-      'player-spotlight',
-      'Player spotlight',
-      leadPlayer
-        ? `${leadPlayer.name} (${leadPlayer.team}) delivered ${leadPlayer.impact_label.toLowerCase()} impact.`
-        : 'Player spotlight unavailable.',
-      'player_focus',
-      ['key_players.impact'],
-    ),
-    createPodcastCard(
-      'dismissal-pattern',
-      'Dismissal pattern',
-      selectedDismissals?.wicket_cluster_callout || selectedDismissals?.summary || 'Dismissal pattern unavailable.',
-      'tactical_discussion',
-      ['dismissal_patterns.wicket_cluster'],
-    ),
-    createPodcastCard(
-      'tactical-lesson',
-      'Tactical lesson',
-      innings1?.story_blocks?.weakest_phase || detail.match_callouts?.[0]?.why_it_matters || 'Tactical lesson unavailable.',
-      'tactical_discussion',
-      ['innings_story.middle', 'analyst_callouts.momentum'],
-    ),
-    createPodcastCard(
-      'closing-question',
-      'Closing question',
-      detail.key_phase?.title
-        ? `How should teams adapt when the match swings in phases like ${detail.key_phase.title}?`
-        : 'What deterministic trend from this match should teams prepare for next?',
-      'closing_question',
-      ['analytics_insight.key_phase'],
-    ),
-  ]
+  if (isTestMode) {
+    // Test/multi-day specific podcast cards
+    const chase = multiDaySummary?.fourth_innings_chase
+    const clusters = multiDaySummary?.wicket_clusters ?? []
+    const recoveries = multiDaySummary?.recovery_windows ?? []
+    const leadNote = multiDaySummary?.first_innings_lead_note
+    const turningPoint = multiDaySummary?.match_turning_point
+
+    podcastCards.value = [
+      createPodcastCard(
+        'opening-hook',
+        'Opening hook',
+        `${detail.match.teams_label}: ${detail.match.result}.`,
+        'intro',
+        ['match.result'],
+      ),
+      createPodcastCard(
+        'match-context',
+        'Match context',
+        [
+          detail.match.date ? `Date: ${detail.match.date}` : null,
+          detail.match.venue ? `Venue: ${detail.match.venue}` : null,
+          detail.match.season ? `Season: ${detail.match.season}` : null,
+          detail.match.event_name ? `Competition: ${detail.match.event_name}` : null,
+        ]
+          .filter(Boolean)
+          .join(' • ') || 'Match context unavailable.',
+        'match_setup',
+        ['match.context'],
+      ),
+      createPodcastCard(
+        'test-first-innings-lead',
+        'First-innings lead story',
+        leadNote
+          ? leadNote
+          : innings1?.story_blocks?.opening_story || innings1?.deterministic_summary || 'First innings story unavailable.',
+        'innings_1',
+        ['multi_day_summary.first_innings_lead', 'innings_story.opening'],
+      ),
+      createPodcastCard(
+        'test-innings-2-story',
+        'Second innings story',
+        innings2?.story_blocks?.opening_story || innings2?.deterministic_summary || 'Second innings story unavailable.',
+        'innings_2',
+        ['innings_story.opening', 'innings_summary.innings_2'],
+      ),
+      createPodcastCard(
+        'test-fourth-innings-chase',
+        'Fourth-innings chase story',
+        chase
+          ? `${chase.chasing_team} ${chase.chase_result === 'completed' ? 'successfully chased' : 'chased'} `
+            + `${chase.target} — scoring ${chase.runs_scored}/${chase.wickets_lost} `
+            + `(${chase.wickets_in_hand} wicket(s) in hand). ${chase.pressure_note ?? ''}`.trim()
+          : 'No fourth-innings chase context available.',
+        'tactical_discussion',
+        ['multi_day_summary.fourth_innings_chase'],
+      ),
+      createPodcastCard(
+        'test-collapse-recovery',
+        'Collapse / recovery talking point',
+        clusters.length
+          ? `${clusters[0].label.charAt(0).toUpperCase() + clusters[0].label.slice(1)}: `
+            + `${clusters[0].wickets} wickets in overs ${clusters[0].overs_start}–${clusters[0].overs_end} `
+            + `(innings ${clusters[0].innings_number}).`
+            + (recoveries.length
+              ? ` Followed by a recovery period: ${recoveries[0].runs_scored} runs in overs ${recoveries[0].overs_start}–${recoveries[0].overs_end}.`
+              : '')
+          : selectedDismissals?.wicket_cluster_callout || 'No collapse/recovery patterns detected in recorded data.',
+        'tactical_discussion',
+        ['multi_day_summary.wicket_clusters', 'multi_day_summary.recovery_windows'],
+      ),
+      createPodcastCard(
+        'test-player-impact',
+        'Top innings impact player',
+        leadPlayer
+          ? `${leadPlayer.name} (${leadPlayer.team}) delivered ${leadPlayer.impact_label.toLowerCase()} impact across the match.`
+          : 'Player impact unavailable.',
+        'player_focus',
+        ['key_players.impact'],
+      ),
+      createPodcastCard(
+        'test-bowling-impact',
+        'Bowling impact note',
+        (detail.innings_analysis ?? []).flatMap((inn) => inn.callouts ?? []).find((c) => c.category === 'bowling')?.explanation
+          || 'Bowling impact note unavailable from deterministic data.',
+        'tactical_discussion',
+        ['analyst_callouts.bowling'],
+      ),
+      createPodcastCard(
+        'test-turning-point',
+        'Match turning point candidate',
+        turningPoint || detail.key_phase?.detail || 'Match turning point unavailable.',
+        'tactical_discussion',
+        ['multi_day_summary.match_turning_point', 'analytics_insight.key_phase'],
+      ),
+      createPodcastCard(
+        'closing-question',
+        'Closing question',
+        leadNote
+          ? `How did the first-innings lead shape the rest of this Test match?`
+          : 'What deterministic trend from this match should teams prepare for next?',
+        'closing_question',
+        ['multi_day_summary.first_innings_lead', 'analytics_insight.key_phase'],
+      ),
+    ]
+  } else {
+    podcastCards.value = [
+      createPodcastCard(
+        'opening-hook',
+        'Opening hook',
+        `${detail.match.teams_label}: ${detail.match.result}.`,
+        'intro',
+        ['match.result'],
+      ),
+      createPodcastCard(
+        'match-context',
+        'Match context',
+        [
+          detail.match.date ? `Date: ${detail.match.date}` : null,
+          detail.match.venue ? `Venue: ${detail.match.venue}` : null,
+          detail.match.season ? `Season: ${detail.match.season}` : null,
+          detail.match.event_name ? `Competition: ${detail.match.event_name}` : null,
+        ]
+          .filter(Boolean)
+          .join(' • ') || 'Match context unavailable.',
+        'match_setup',
+        ['match.context'],
+      ),
+      createPodcastCard(
+        'first-innings-story',
+        'First innings story',
+        innings1?.story_blocks?.opening_story || innings1?.deterministic_summary || 'First innings story unavailable.',
+        'innings_1',
+        ['innings_story.opening', 'innings_summary.innings_1'],
+      ),
+      createPodcastCard(
+        'second-innings-story',
+        'Second innings story',
+        innings2?.story_blocks?.opening_story || innings2?.deterministic_summary || 'Second innings story unavailable.',
+        'innings_2',
+        ['innings_story.opening', 'innings_summary.innings_2'],
+      ),
+      createPodcastCard(
+        'turning-point',
+        'Turning point',
+        detail.key_phase?.detail || detail.momentum_summary?.subtitle || 'Turning point unavailable from deterministic data.',
+        'tactical_discussion',
+        ['analytics_insight.key_phase', 'phase_breakdown.middle'],
+      ),
+      createPodcastCard(
+        'player-spotlight',
+        'Player spotlight',
+        leadPlayer
+          ? `${leadPlayer.name} (${leadPlayer.team}) delivered ${leadPlayer.impact_label.toLowerCase()} impact.`
+          : 'Player spotlight unavailable.',
+        'player_focus',
+        ['key_players.impact'],
+      ),
+      createPodcastCard(
+        'dismissal-pattern',
+        'Dismissal pattern',
+        selectedDismissals?.wicket_cluster_callout || selectedDismissals?.summary || 'Dismissal pattern unavailable.',
+        'tactical_discussion',
+        ['dismissal_patterns.wicket_cluster'],
+      ),
+      createPodcastCard(
+        'tactical-lesson',
+        'Tactical lesson',
+        innings1?.story_blocks?.weakest_phase || detail.match_callouts?.[0]?.why_it_matters || 'Tactical lesson unavailable.',
+        'tactical_discussion',
+        ['innings_story.middle', 'analyst_callouts.momentum'],
+      ),
+      createPodcastCard(
+        'closing-question',
+        'Closing question',
+        detail.key_phase?.title
+          ? `How should teams adapt when the match swings in phases like ${detail.key_phase.title}?`
+          : 'What deterministic trend from this match should teams prepare for next?',
+        'closing_question',
+        ['analytics_insight.key_phase'],
+      ),
+    ]
+  }
   podcastGeneratedAt.value = new Date().toLocaleString()
   includeUnreviewedPodcastCards.value = false
   podcastCopyStatus.value = ''

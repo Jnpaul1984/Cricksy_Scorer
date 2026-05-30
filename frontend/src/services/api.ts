@@ -744,10 +744,44 @@ export interface CaseStudyMultiDayInningsContext {
   lead_deficit_after_innings?: number | null;
 }
 
+export interface CaseStudyFourthInningsChase {
+  target: number;
+  chasing_team: string;
+  runs_scored: number;
+  wickets_lost: number;
+  wickets_in_hand: number;
+  chase_result: "completed" | "fell_short" | "unknown";
+  runs_margin?: number | null;
+  pressure_note?: string | null;
+}
+
+export interface CaseStudyWicketCluster {
+  innings_number: number;
+  overs_start: number;
+  overs_end: number;
+  wickets: number;
+  label: string;
+}
+
+export interface CaseStudyRecoveryWindow {
+  innings_number: number;
+  overs_start: number;
+  overs_end: number;
+  runs_scored: number;
+  wickets_fell: number;
+  label: string;
+}
+
 export interface CaseStudyMultiDaySummary {
   match_status: "won" | "lost" | "draw" | "tie" | "no_result" | "unknown";
   innings: CaseStudyMultiDayInningsContext[];
   fourth_innings_chase_note?: string | null;
+  first_innings_lead_note?: string | null;
+  lead_swing_notes?: string[];
+  fourth_innings_chase?: CaseStudyFourthInningsChase | null;
+  wicket_clusters?: CaseStudyWicketCluster[];
+  recovery_windows?: CaseStudyRecoveryWindow[];
+  match_turning_point?: string | null;
   notice: string;
 }
 
