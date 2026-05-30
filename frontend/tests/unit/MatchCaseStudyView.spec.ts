@@ -117,6 +117,14 @@ async function flushAsync() {
   await nextTick()
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
+}
+
 describe('MatchCaseStudyView', () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -407,8 +415,8 @@ describe('MatchCaseStudyView', () => {
           phases: [
             { id: 'powerplay', label: 'Opening Powerplay (1-10)', start_over: 1, end_over: 10, runs: 48, wickets: 1, run_rate: 4.8, net_swing_vs_par: -6, impact: 'negative', impact_label: 'Below par' },
             { id: 'consolidation', label: 'Consolidation (11-25)', start_over: 11, end_over: 25, runs: 85, wickets: 2, run_rate: 5.67, net_swing_vs_par: -3, impact: 'negative', impact_label: 'Slightly below par' },
-            { id: 'acceleration', label: 'Acceleration (26-40)', start_over: 26, end_over: 40, runs: 128, wickets: 2, run_rate: 8.53, net_swing_vs_par: 12, impact: 'positive', impact_label: 'Above par' },
-            { id: 'death', label: 'Death Overs (41-50)', start_over: 41, end_over: 50, runs: 77, wickets: 3, run_rate: 7.7, net_swing_vs_par: 4, impact: 'positive', impact_label: 'Above par' },
+            { id: 'acceleration', label: 'Acceleration (26-40)', start_over: 26, end_over: 40, runs: 108, wickets: 2, run_rate: 7.2, net_swing_vs_par: 12, impact: 'positive', impact_label: 'Above par' },
+            { id: 'death', label: 'Death Overs (41-50)', start_over: 41, end_over: 50, runs: 127, wickets: 3, run_rate: 12.7, net_swing_vs_par: 4, impact: 'positive', impact_label: 'Above par' },
           ],
           key_players: [],
           key_players_scope: 'match',
@@ -462,7 +470,11 @@ describe('MatchCaseStudyView', () => {
     await flushAsync()
 
     const text = wrapper.get('#cs-podcast-prep').text()
-    expect(text).toContain('Durham won by 1 run')
+    expect(text).toContain('Durham beat Warwickshire by 1 run.')
+    expect(text).toContain('Warwickshire replied with 337/8 from 50 overs, falling 1 run short.')
+    expect(text).toContain('Death Overs (41-50)')
+    expect(text).not.toContain('Durham vs Warwickshire: Durham won by 1 run.')
+    expect(text).not.toContain('durham won by 1 run')
     expect(text).not.toContain('Powerplay (1-6)')
     expect(text).not.toContain('Middle Overs (7-15)')
     expect(text).not.toContain('Death Overs (16-20)')
@@ -470,6 +482,58 @@ describe('MatchCaseStudyView', () => {
     expect(text).toContain("DG Bedingham anchored Durham's innings with 152 off 108 balls.")
     expect(text).toContain('A key wicket cluster came between overs 24 and 26, when 2 wickets fell.')
     expect(text).toContain('In a one-run ODI, which mattered more')
+  })
+
+  it('does not show match-not-found when imported case-study payload exists', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(baseCaseStudy as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
+    await flushAsync()
+
+    expect(wrapper.text()).toContain('Match case study')
+    expect(wrapper.text()).not.toContain('Match not found')
+    expect(wrapper.text()).not.toContain('No match data available for ID:')
+  })
+
+  it('shows match-not-found when payload is truly empty', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue({
+      analysis_mode: 'unknown',
+      match: null,
+      momentum_summary: null,
+      key_phase: null,
+      phases: [],
+      key_players: [],
+      dismissal_patterns: null,
+      innings_analysis: [],
+      match_callouts: [],
+      match_level_summary: null,
+      ai: null,
+    } as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
+    await flushAsync()
+
+    expect(wrapper.text()).toContain('Match not found')
+    expect(wrapper.text()).toContain('No match data available for ID: match-001')
+  })
+
+  it('does not keep not-found visible after loading completes with payload', async () => {
+    const deferred = createDeferred<typeof baseCaseStudy>()
+    vi.mocked(api.getMatchCaseStudy).mockImplementation(() => deferred.promise as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
+    await nextTick()
+
+    expect(wrapper.text()).not.toContain('Match not found')
+
+    deferred.resolve(baseCaseStudy)
+    await flushAsync()
+
+    expect(wrapper.text()).toContain('Match case study')
+    expect(wrapper.text()).not.toContain('Match not found')
   })
 
   it('renders test/multi-day innings-safe notice and four innings selectors', async () => {

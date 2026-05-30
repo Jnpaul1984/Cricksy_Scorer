@@ -288,7 +288,7 @@
 
 
       <!-- No match found state -->
-      <section v-else class="cs-not-found">
+      <section v-if="showNotFoundState" class="cs-not-found">
         <BaseCard padding="lg" class="cs-not-found-card">
           <h2>Match not found</h2>
           <p>No match data available for ID: {{ matchId }}</p>
@@ -1279,6 +1279,21 @@ const aiSummaryCacheStatus = ref<'none' | 'live' | 'cached' | 'stale' | 'fallbac
 
 // Derived view-model bindings from caseStudy
 const match = computed(() => caseStudy.value?.match ?? null)
+const hasCaseStudyPayload = computed(() => {
+  if (!caseStudy.value) return false
+  if (caseStudy.value.match) return true
+  return Boolean(
+    (caseStudy.value.innings_analysis?.length ?? 0) > 0
+    || (caseStudy.value.phases?.length ?? 0) > 0
+    || (caseStudy.value.key_players?.length ?? 0) > 0
+    || (caseStudy.value.match_callouts?.length ?? 0) > 0
+    || caseStudy.value.match_level_summary
+    || caseStudy.value.momentum_summary
+    || caseStudy.value.key_phase
+    || caseStudy.value.dismissal_patterns
+  )
+})
+const showNotFoundState = computed(() => !loading.value && !error.value && !hasCaseStudyPayload.value)
 const analysisMode = computed(() => caseStudy.value?.analysis_mode ?? 'unknown')
 const isTestMultiDay = computed(() => analysisMode.value === 'test_multi_day')
 const isODIMode = computed(() => analysisMode.value === 'odi_limited_overs')
@@ -1654,6 +1669,70 @@ function extractResultMargin(result: string | null | undefined): string | null {
   return match?.[1] ? `by ${match[1].trim()}` : null
 }
 
+function sanitizePresenterText(text: string): string {
+  return normalizeResultGrammar(text).replace(/\bwicket\(s\)\b/gi, 'wickets')
+}
+
+function resolveTeamDisplayName(teamsLabel: string | null | undefined, teamName: string): string {
+  if (!teamsLabel || !teamName) return teamName
+  const parts = teamsLabel.split(/\s+vs\s+/i).map((team) => team.trim()).filter(Boolean)
+  const match = parts.find((part) => part.toLowerCase() === teamName.trim().toLowerCase())
+  return match ?? teamName
+}
+
+function parseWonByResult(result: string | null | undefined): { winner: string; margin: string } | null {
+  if (!result) return null
+  const match = normalizeResultGrammar(result).match(/^(.+?)\s+won by\s+(.+)$/i)
+  if (!match?.[1] || !match?.[2]) return null
+  return {
+    winner: match[1].trim(),
+    margin: match[2].trim(),
+  }
+}
+
+function formatODIOpeningHook(teamsLabel: string, result: string | null | undefined): string {
+  const parsed = parseWonByResult(result)
+  if (!parsed) {
+    return `${teamsLabel}: ${normalizeResultGrammar(result) || result || 'Result unavailable'}.`
+  }
+  const winner = resolveTeamDisplayName(teamsLabel, parsed.winner)
+  const opposition = extractOppositionTeam(teamsLabel, winner)
+  if (!opposition) return `${winner} won by ${parsed.margin}.`
+  return `${winner} beat ${opposition} by ${parsed.margin}.`
+}
+
+function formatODIChaseResultClause(
+  teamsLabel: string,
+  chasingTeam: string,
+  result: string | null | undefined,
+): string {
+  const parsed = parseWonByResult(result)
+  if (!parsed) {
+    const normalized = normalizeResultGrammar(result)
+    return normalized ? `, ${normalized}` : ''
+  }
+  const winner = resolveTeamDisplayName(teamsLabel, parsed.winner)
+  const chasingDisplayName = resolveTeamDisplayName(teamsLabel, chasingTeam)
+  if (winner.toLowerCase() === chasingDisplayName.toLowerCase()) {
+    const wicketsMatch = parsed.margin.match(/(\d+)\s*wickets?/i)
+    if (wicketsMatch?.[1]) {
+      const wickets = Number.parseInt(wicketsMatch[1], 10)
+      return `, completed the chase with ${pluralizeWickets(wickets)} in hand`
+    }
+    return ', completed the chase'
+  }
+  const runsMatch = parsed.margin.match(/(\d+)\s*runs?/i)
+  if (runsMatch?.[1]) {
+    const runs = Number.parseInt(runsMatch[1], 10)
+    return `, falling ${pluralizeRuns(runs)} short`
+  }
+  return `, ${winner} won by ${parsed.margin}`
+}
+
+function formatODIPhaseLabel(label: string): string {
+  return label.replace(/\bdeath overs\b/gi, 'Death Overs')
+}
+
 function formatSafeTestInningsScore(
   runs: number | null | undefined,
   wickets: number | null | undefined,
@@ -1956,7 +2035,6 @@ function generatePodcastPrep() {
     const innings1Score = detail.match.innings?.[0]
     const innings2Score = detail.match.innings?.[1]
     const normalizedResult = normalizeResultGrammar(detail.match.result)
-    const openingResult = normalizedResult || detail.match.result || 'Result unavailable'
 
     // Helper: find a phase by id from innings analysis phases
     const findODIPhase = (phases: typeof phases1, id: string) =>
@@ -1969,9 +2047,9 @@ function generatePodcastPrep() {
         ? [...phases1].sort((a, b) => b.runs - a.runs)[0]
         : null
       const strongestPhaseText = strongest
-        ? `, with the strongest scoring in ${strongest.label.toLowerCase()}`
+        ? `, with the strongest scoring in ${formatODIPhaseLabel(strongest.label)}`
         : ''
-      return `${innings1Score.team} built their innings around ${innings1Score.runs}/${innings1Score.wickets} from ${innings1Score.overs} overs${strongestPhaseText}.`
+      return sanitizePresenterText(`${innings1Score.team} built their innings around ${innings1Score.runs}/${innings1Score.wickets} from ${innings1Score.overs} overs${strongestPhaseText}.`)
     })()
 
     // Chase equation / second innings story
@@ -1982,8 +2060,8 @@ function generatePodcastPrep() {
         middleCluster && middleCluster.wickets >= 2
           ? ` A key middle-over pressure point came in consolidation, where ${pluralizeWickets(middleCluster.wickets)} fell.`
           : ''
-      const resultClause = normalizedResult ? `, ${normalizedResult.toLowerCase()}` : ''
-      return `${innings2Score.team} replied with ${innings2Score.runs}/${innings2Score.wickets} from ${innings2Score.overs} overs${resultClause}.${clusterText}`
+      const resultClause = formatODIChaseResultClause(detail.match.teams_label, innings2Score.team, normalizedResult)
+      return sanitizePresenterText(`${innings2Score.team} replied with ${innings2Score.runs}/${innings2Score.wickets} from ${innings2Score.overs} overs${resultClause}.${clusterText}`)
     })()
 
     // Player spotlight
@@ -2033,7 +2111,7 @@ function generatePodcastPrep() {
       createPodcastCard(
         'opening-hook',
         'Opening hook',
-        `${detail.match.teams_label}: ${openingResult}.`,
+        sanitizePresenterText(formatODIOpeningHook(detail.match.teams_label, normalizedResult)),
         'intro',
         ['match.result'],
       ),
