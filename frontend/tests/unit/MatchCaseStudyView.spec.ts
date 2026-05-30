@@ -238,6 +238,29 @@ describe('MatchCaseStudyView', () => {
     expect(wrapper.text()).toContain('Lions vs Falcons: Lions won by 18 runs')
   })
 
+  it('normalizes match result card and deterministic fallback display text', async () => {
+    const rawResult = 'Durham won by 1 runs'
+    const caseStudyPayload = {
+      ...baseCaseStudy,
+      match: {
+        ...baseCaseStudy.match,
+        teams_label: 'Durham vs Warwickshire',
+        format: 'ODI',
+        result: rawResult,
+      },
+    }
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(caseStudyPayload as never)
+    vi.mocked(api.getMatchAiSummary).mockRejectedValue(new Error('AI unavailable'))
+
+    const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
+    await flushAsync()
+
+    const text = wrapper.text()
+    expect(text).toContain('Durham won by 1 run')
+    expect(text).toContain('Durham vs Warwickshire: Durham won by 1 run')
+    expect(caseStudyPayload.match.result).toBe(rawResult)
+  })
+
   it('shows insufficient-data state when AI fails and deterministic data is missing', async () => {
     vi.mocked(api.getMatchCaseStudy).mockResolvedValue({
       ...baseCaseStudy,

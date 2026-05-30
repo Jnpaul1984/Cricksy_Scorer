@@ -50,8 +50,8 @@ const globalStubs = {
     `,
   },
   AnalyticsTablesWidget: {
-    props: ['matchId', 'matchSource', 'dataCompleteness', 'matchTitle'],
-    template: '<div class="analytics-tables-stub">{{ matchId }}|{{ matchSource }}|{{ dataCompleteness }}|{{ matchTitle }}</div>',
+    props: ['matchId', 'matchSource', 'dataCompleteness', 'matchTitle', 'result'],
+    template: '<div class="analytics-tables-stub">{{ matchId }}|{{ matchSource }}|{{ dataCompleteness }}|{{ matchTitle }}|{{ result }}</div>',
   },
   ExportUI: { template: '<div class="export-ui-stub" />' },
   HistoricalImportPanel: {
@@ -401,6 +401,46 @@ describe('AnalystWorkspaceView', () => {
     expect(wrapper.text()).toContain('Lions vs Falcons')
     expect(wrapper.text()).toContain('Lions won by 18 runs')
     expect(wrapper.text()).toContain('Tigers vs Eagles')
+  })
+
+  it('normalizes singular result grammar in match list, detail, and deterministic fallback', async () => {
+    const singularList = {
+      ...mockMatchList,
+      items: [
+        {
+          ...mockMatchList.items[0],
+          teams: 'Durham vs Warwickshire',
+          result: 'Durham won by 1 runs',
+        },
+      ],
+      total: 1,
+    }
+    const singularDetail = {
+      ...mockMatchDetail,
+      match: {
+        ...mockMatchDetail.match,
+        teams_label: 'Durham vs Warwickshire',
+        result: 'Durham won by 1 runs',
+      },
+    }
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(singularList as never)
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue(singularDetail as never)
+    vi.mocked(api.getMatchAiSummary).mockRejectedValue(new Error('AI fetch failed'))
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Durham won by 1 run')
+
+    await wrapper.findAll('.aw-matches-row')[0].trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('Durham won by 1 run')
+    expect(text).toContain('Durham vs Warwickshire: Durham won by 1 run')
+    expect(singularDetail.match.result).toBe('Durham won by 1 runs')
   })
 
   it('shows imported historical metadata in match list rows', async () => {
@@ -2189,7 +2229,31 @@ describe('AnalystWorkspaceView', () => {
   })
 
   it('Match Registry row actions navigate analysts into analytics and match story flows', async () => {
-    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+    const singularList = {
+      ...mockMatchList,
+      items: [
+        {
+          ...mockMatchList.items[0],
+          teams: 'Durham vs Warwickshire',
+          result: 'Durham won by 1 runs',
+        },
+        ...mockMatchList.items.slice(1),
+      ],
+    }
+    const singularRegistry = {
+      ...mockAnalystRegistry,
+      entries: mockAnalystRegistry.entries.map((entry, index) => (
+        index === 0
+          ? {
+              ...entry,
+              match_title: 'Durham vs Warwickshire',
+              result: 'Durham won by 1 runs',
+            }
+          : entry
+      )),
+    }
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(singularList as never)
+    vi.mocked(api.getAnalystRegistry).mockResolvedValue(singularRegistry as never)
 
     const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
     await nextTick()
@@ -2201,13 +2265,14 @@ describe('AnalystWorkspaceView', () => {
 
     const analyticsButtons = wrapper.findAll('.aw-registry-action--analytics')
     expect(analyticsButtons.length).toBeGreaterThan(0)
+    expect(wrapper.text()).toContain('Durham won by 1 run')
     await analyticsButtons[0].trigger('click')
     await nextTick()
 
     expect(wrapper.find('.analytics-tables-stub').exists()).toBe(true)
     const analyticsSelect = wrapper.find('#analytics-match-select')
     expect((analyticsSelect.element as HTMLSelectElement).value).toBe('match-001')
-    expect(wrapper.find('.analytics-tables-stub').text()).toContain('match-001|historical|phase_level|Lions vs Falcons')
+    expect(wrapper.find('.analytics-tables-stub').text()).toContain('match-001|historical|phase_level|Durham vs Warwickshire|Durham won by 1 run')
 
     const registryTabAgain = wrapper.findAll('button.base-button-stub').find((b) => b.text().includes('Match Registry'))
     await registryTabAgain!.trigger('click')
