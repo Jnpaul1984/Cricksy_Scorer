@@ -287,6 +287,122 @@
       </section>
 
 
+      <!-- ODI Deep Intelligence Section (Phase 10R.4D) -->
+      <section v-if="isODIMode && caseStudy?.odi_intelligence" class="cs-summary">
+
+        <!-- Scoreboard Comparison -->
+        <BaseCard
+          v-if="caseStudy.odi_intelligence.scoreboard_comparison"
+          padding="md"
+          class="cs-summary-card"
+        >
+          <p class="cs-label">Scoreboard comparison</p>
+          <div class="cs-phase-numbers">
+            <div class="cs-phase-number-item">
+              <span class="cs-phase-number-label">{{ caseStudy.odi_intelligence.scoreboard_comparison.team_1 }}</span>
+              <span class="cs-phase-number-value">
+                {{ caseStudy.odi_intelligence.scoreboard_comparison.team_1_runs }}/{{ caseStudy.odi_intelligence.scoreboard_comparison.team_1_wickets }}
+                ({{ caseStudy.odi_intelligence.scoreboard_comparison.team_1_run_rate.toFixed(2) }} RPO)
+              </span>
+            </div>
+            <div class="cs-phase-number-item">
+              <span class="cs-phase-number-label">{{ caseStudy.odi_intelligence.scoreboard_comparison.team_2 }}</span>
+              <span class="cs-phase-number-value">
+                {{ caseStudy.odi_intelligence.scoreboard_comparison.team_2_runs }}/{{ caseStudy.odi_intelligence.scoreboard_comparison.team_2_wickets }}
+                ({{ caseStudy.odi_intelligence.scoreboard_comparison.team_2_run_rate.toFixed(2) }} RPO)
+              </span>
+            </div>
+          </div>
+          <p
+            v-if="caseStudy.odi_intelligence.scoreboard_comparison.final_margin"
+            class="cs-footnote"
+          >{{ caseStudy.odi_intelligence.scoreboard_comparison.final_margin }}</p>
+        </BaseCard>
+
+        <!-- Chase Intelligence -->
+        <BaseCard
+          v-if="caseStudy.odi_intelligence.chase_intelligence"
+          padding="md"
+          class="cs-summary-card"
+        >
+          <p class="cs-label">Chase pressure</p>
+          <div class="cs-phase-numbers">
+            <div class="cs-phase-number-item">
+              <span class="cs-phase-number-label">Target</span>
+              <span class="cs-phase-number-value">{{ caseStudy.odi_intelligence.chase_intelligence.target }}</span>
+            </div>
+            <div class="cs-phase-number-item">
+              <span class="cs-phase-number-label">Initial RR required</span>
+              <span class="cs-phase-number-value">{{ caseStudy.odi_intelligence.chase_intelligence.initial_required_rate.toFixed(2) }}</span>
+            </div>
+            <div
+              v-if="caseStudy.odi_intelligence.chase_intelligence.wickets_in_hand != null"
+              class="cs-phase-number-item"
+            >
+              <span class="cs-phase-number-label">Wickets in hand</span>
+              <span class="cs-phase-number-value">{{ caseStudy.odi_intelligence.chase_intelligence.wickets_in_hand }}</span>
+            </div>
+          </div>
+          <p
+            v-if="caseStudy.odi_intelligence.chase_intelligence.chase_pressure_note"
+            class="cs-footnote"
+          >{{ caseStudy.odi_intelligence.chase_intelligence.chase_pressure_note }}</p>
+          <p
+            v-if="caseStudy.odi_intelligence.chase_intelligence.final_10_overs_summary"
+            class="cs-footnote"
+          >{{ caseStudy.odi_intelligence.chase_intelligence.final_10_overs_summary }}</p>
+        </BaseCard>
+
+        <!-- Required Rate Movement -->
+        <BaseCard
+          v-if="caseStudy.odi_intelligence.chase_intelligence?.required_rate_snapshots?.length"
+          padding="md"
+          class="cs-summary-card"
+        >
+          <p class="cs-label">Required rate movement</p>
+          <div class="cs-phase-numbers">
+            <div
+              v-for="snap in caseStudy.odi_intelligence.chase_intelligence.required_rate_snapshots"
+              :key="snap.over"
+              class="cs-phase-number-item"
+            >
+              <span class="cs-phase-number-label">{{ snap.label }}</span>
+              <span class="cs-phase-number-value">{{ snap.required_rate.toFixed(2) }} RPO ({{ snap.runs_needed }} from {{ snap.overs_remaining.toFixed(0) }} ov)</span>
+            </div>
+          </div>
+        </BaseCard>
+
+        <!-- Partnership Intelligence -->
+        <BaseCard
+          v-for="pship in caseStudy.odi_intelligence.partnerships"
+          :key="`partnership-${pship.innings_number}`"
+          padding="md"
+          class="cs-summary-card"
+        >
+          <p class="cs-label">Partnership impact — innings {{ pship.innings_number }}</p>
+          <p class="cs-value" v-if="pship.highest_partnership">
+            Highest: {{ pship.highest_partnership.runs }} runs
+            ({{ pship.highest_partnership.batter_1 }} &amp; {{ pship.highest_partnership.batter_2 }}
+            <template v-if="pship.highest_partnership.start_over && pship.highest_partnership.end_over">
+              , overs {{ pship.highest_partnership.start_over }}–{{ pship.highest_partnership.end_over }}
+            </template>)
+          </p>
+          <p class="cs-footnote">{{ pship.summary }}</p>
+        </BaseCard>
+
+        <!-- ODI Turning Point Candidate -->
+        <BaseCard
+          v-if="caseStudy.odi_intelligence.turning_point_candidate"
+          padding="md"
+          class="cs-summary-card"
+        >
+          <p class="cs-label">ODI turning point candidate</p>
+          <p class="cs-footnote">{{ caseStudy.odi_intelligence.turning_point_candidate }}</p>
+        </BaseCard>
+
+      </section>
+
+
       <!-- No match found state -->
       <section v-if="showNotFoundState" class="cs-not-found">
         <BaseCard padding="lg" class="cs-not-found-card">
@@ -2031,6 +2147,7 @@ function generatePodcastPrep() {
     const innings1Score = detail.match.innings?.[0]
     const innings2Score = detail.match.innings?.[1]
     const normalizedResult = normalizeResultGrammar(detail.match.result)
+    const odiIntel = detail.odi_intelligence
 
     // Helper: find a phase by id from innings analysis phases
     const findODIPhase = (phases: typeof phases1, id: string) =>
@@ -2060,6 +2177,31 @@ function generatePodcastPrep() {
       return sanitizePresenterText(`${innings2Score.team} replied with ${innings2Score.runs}/${innings2Score.wickets} from ${innings2Score.overs} overs${resultClause}.${clusterText}`)
     })()
 
+    // Chase pressure / required rate card
+    const chasePressureText = (() => {
+      const chase = odiIntel?.chase_intelligence
+      if (!chase) return 'Chase pressure data unavailable.'
+      const parts: string[] = []
+      if (chase.chase_pressure_note) parts.push(chase.chase_pressure_note)
+      if (chase.final_10_overs_summary) parts.push(chase.final_10_overs_summary)
+      if (chase.pressure_windows?.length) parts.push(chase.pressure_windows[0])
+      return parts.length ? parts.join(' ') : `${chase.chasing_team} chased ${chase.target} (initial required rate: ${chase.initial_required_rate.toFixed(2)} RPO).`
+    })()
+
+    // Partnership anchor
+    const partnershipText = (() => {
+      const partnerships = odiIntel?.partnerships ?? []
+      const inn1p = partnerships.find((p) => p.innings_number === 1)
+      const inn2p = partnerships.find((p) => p.innings_number === 2)
+      if (inn1p?.data_quality !== 'unavailable' && inn1p?.summary) {
+        return inn1p.summary
+      }
+      if (inn2p?.data_quality !== 'unavailable' && inn2p?.summary) {
+        return inn2p.summary
+      }
+      return 'Partnership detail unavailable from current delivery/player data.'
+    })()
+
     // Player spotlight
     const playerSpotlightText = leadPlayer
       ? buildPlayerSpotlightText(leadPlayer)
@@ -2069,8 +2211,9 @@ function generatePodcastPrep() {
       || selectedDismissals?.summary
       || 'No wicket-cluster pattern was detected from deterministic delivery data.'
 
-    // Turning point (ODI-safe tactical framing)
+    // Turning point — prefer ODI intelligence turning point, fall back to phase analysis
     const turningPointText = (() => {
+      if (odiIntel?.turning_point_candidate) return odiIntel.turning_point_candidate
       const opening = findODIPhase(phases1, 'powerplay')
       const acceleration = findODIPhase(phases1, 'acceleration')
       const death = findODIPhase(phases1, 'death')
@@ -2084,6 +2227,25 @@ function generatePodcastPrep() {
         return `Execution in the death overs (41–50) proved decisive in the final ODI balance.`
       }
       return detail.momentum_summary?.subtitle || 'Turning point unavailable from deterministic data.'
+    })()
+
+    // Death overs execution card
+    const deathOversText = (() => {
+      const death1 = findODIPhase(phases1, 'death')
+      const death2 = findODIPhase(phases2, 'death')
+      const sb = odiIntel?.scoreboard_comparison
+      const parts: string[] = []
+      if (death1) {
+        parts.push(`${innings1Score?.team ?? innings1?.team ?? 'Team 1'} scored ${death1.runs}/${death1.wickets} in the death overs (41–50) at ${death1.run_rate.toFixed(2)} RPO.`)
+      }
+      if (death2) {
+        parts.push(`${innings2Score?.team ?? innings2?.team ?? 'Team 2'} replied with ${death2.runs}/${death2.wickets} in their death overs.`)
+      }
+      if (!parts.length && sb) {
+        if (sb.team_1_death_runs != null) parts.push(`${sb.team_1}: ${sb.team_1_death_runs} death-over runs (${sb.team_1_death_wickets ?? '?'} wickets).`)
+        if (sb.team_2_death_runs != null) parts.push(`${sb.team_2}: ${sb.team_2_death_runs} death-over runs (${sb.team_2_death_wickets ?? '?'} wickets).`)
+      }
+      return parts.join(' ') || 'Death-over data unavailable.'
     })()
 
     const tacticalLessonText = (() => {
@@ -2140,6 +2302,20 @@ function generatePodcastPrep() {
         ['innings_summary.innings_2', 'phase_breakdown'],
       ),
       createPodcastCard(
+        'odi-chase-pressure',
+        'Chase pressure & required rate',
+        chasePressureText,
+        'tactical_discussion',
+        ['odi_intelligence.chase_intelligence'],
+      ),
+      createPodcastCard(
+        'odi-partnership-anchor',
+        'Partnership anchor',
+        partnershipText,
+        'tactical_discussion',
+        ['odi_intelligence.partnerships'],
+      ),
+      createPodcastCard(
         'player-spotlight',
         'Player spotlight',
         playerSpotlightText,
@@ -2158,7 +2334,14 @@ function generatePodcastPrep() {
         'Turning point',
         turningPointText,
         'tactical_discussion',
-        ['phase_breakdown', 'match.result'],
+        ['odi_intelligence.turning_point_candidate', 'phase_breakdown', 'match.result'],
+      ),
+      createPodcastCard(
+        'odi-death-overs',
+        'Death-over execution',
+        deathOversText,
+        'tactical_discussion',
+        ['phase_breakdown.death', 'odi_intelligence.scoreboard_comparison'],
       ),
       createPodcastCard(
         'tactical-lesson',

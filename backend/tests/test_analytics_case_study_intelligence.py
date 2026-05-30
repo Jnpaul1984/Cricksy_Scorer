@@ -1,3 +1,4 @@
+import pytest
 from backend.services.analytics_case_study import (
     _build_multi_day_summary,
     _build_innings_callouts,
@@ -656,3 +657,267 @@ def test_wicket_cluster_callout_is_presenter_ready() -> None:
     assert patterns.wicket_cluster_callout is not None
     assert "A key wicket cluster came between overs 24 and 26" in patterns.wicket_cluster_callout
     assert "2 wickets fell" in patterns.wicket_cluster_callout
+
+
+# ---------------------------------------------------------------------------
+# Phase 10R.4D: ODI Deep Match Intelligence Tests
+# ---------------------------------------------------------------------------
+
+
+def test_odi_chase_intelligence_with_delivery_data() -> None:
+    """Chase intelligence with delivery data produces full required-rate snapshots."""
+    from backend.services.analytics_case_study import _derive_odi_chase_intelligence
+    from backend.api.schemas.case_study import CaseStudyInningsSummary
+
+    inn1 = CaseStudyInningsSummary(team="Durham", runs=338, wickets=8, overs=50.0, run_rate=6.76)
+    inn2 = CaseStudyInningsSummary(
+        team="Warwickshire", runs=337, wickets=8, overs=50.0, run_rate=6.74
+    )
+
+    # Minimal delivery data: 50 overs for innings 2 with 6 runs per over
+    deliveries = []
+    for over in range(1, 51):
+        for ball in range(1, 7):
+            deliveries.append(
+                {
+                    "inning": 2,
+                    "over_number": over,
+                    "ball_number": ball,
+                    "runs_off_bat": 1,
+                    "extra_runs": 0,
+                    "is_wicket": False,
+                }
+            )
+
+    result = _derive_odi_chase_intelligence([inn1, inn2], deliveries, 50)
+    assert result is not None
+    assert result.target == 339
+    assert result.chasing_team == "Warwickshire"
+    assert result.initial_required_rate == pytest.approx(6.78, abs=0.01)
+    assert result.data_quality == "full"
+    # Should have snapshots at over boundaries
+    assert len(result.required_rate_snapshots) > 0
+    snapshot_overs = [s.over for s in result.required_rate_snapshots]
+    assert 11 in snapshot_overs
+    assert 26 in snapshot_overs
+    assert 41 in snapshot_overs
+
+
+def test_odi_chase_intelligence_no_delivery_data() -> None:
+    """Chase intelligence with no delivery data falls back gracefully."""
+    from backend.services.analytics_case_study import _derive_odi_chase_intelligence
+    from backend.api.schemas.case_study import CaseStudyInningsSummary
+
+    inn1 = CaseStudyInningsSummary(team="Durham", runs=300, wickets=7, overs=50.0, run_rate=6.0)
+    inn2 = CaseStudyInningsSummary(
+        team="Warwickshire", runs=295, wickets=10, overs=50.0, run_rate=5.9
+    )
+
+    result = _derive_odi_chase_intelligence([inn1, inn2], [], 50)
+    assert result is not None
+    assert result.target == 301
+    assert result.data_quality == "partial"
+    assert len(result.required_rate_snapshots) == 0
+    assert result.chase_result == "fell_short"
+
+
+def test_odi_chase_intelligence_single_innings_returns_none() -> None:
+    """Chase intelligence returns None when only one innings is available."""
+    from backend.services.analytics_case_study import _derive_odi_chase_intelligence
+    from backend.api.schemas.case_study import CaseStudyInningsSummary
+
+    inn1 = CaseStudyInningsSummary(team="Durham", runs=300, wickets=7, overs=50.0, run_rate=6.0)
+    result = _derive_odi_chase_intelligence([inn1], [], 50)
+    assert result is None
+
+
+def test_odi_partnership_intelligence_with_deliveries() -> None:
+    """Partnership intelligence correctly tracks pairs from delivery data."""
+    from backend.services.analytics_case_study import _derive_odi_partnership_intelligence
+
+    deliveries = [
+        # Partnership 1: Alice & Bob, 30 runs, 30 balls, ends with wicket
+        *[
+            {
+                "inning": 1,
+                "over_number": o,
+                "ball_number": b,
+                "batter_name": "Alice",
+                "non_striker": "Bob",
+                "runs_off_bat": 1,
+                "extra_runs": 0,
+                "is_wicket": False,
+            }
+            for o in range(1, 6)
+            for b in range(1, 7)
+        ],
+        {
+            "inning": 1,
+            "over_number": 6,
+            "ball_number": 1,
+            "batter_name": "Alice",
+            "non_striker": "Bob",
+            "runs_off_bat": 0,
+            "extra_runs": 0,
+            "is_wicket": True,
+        },
+        # Partnership 2: Charlie & Bob, 20 runs, 20 balls — no wicket
+        *[
+            {
+                "inning": 1,
+                "over_number": o,
+                "ball_number": b,
+                "batter_name": "Charlie",
+                "non_striker": "Bob",
+                "runs_off_bat": 1,
+                "extra_runs": 0,
+                "is_wicket": False,
+            }
+            for o in range(7, 11)
+            for b in range(1, 6)
+        ],
+    ]
+
+    result = _derive_odi_partnership_intelligence(deliveries, 1)
+    assert result.innings_number == 1
+    assert result.data_quality in ("full", "partial")
+    assert result.highest_partnership is not None
+    assert result.highest_partnership.runs == 30
+    assert "Alice" in (result.highest_partnership.batter_1, result.highest_partnership.batter_2)
+    assert "Bob" in (result.highest_partnership.batter_1, result.highest_partnership.batter_2)
+    assert "Highest partnership" in result.summary
+
+
+def test_odi_partnership_intelligence_fallback_no_deliveries() -> None:
+    """Partnership intelligence falls back when no delivery data is available."""
+    from backend.services.analytics_case_study import _derive_odi_partnership_intelligence
+
+    result = _derive_odi_partnership_intelligence([], 1)
+    assert result.data_quality == "unavailable"
+    assert result.highest_partnership is None
+    assert "unavailable" in result.summary.lower()
+
+
+def test_odi_partnership_intelligence_fallback_no_player_names() -> None:
+    """Partnership intelligence falls back when delivery data lacks player names."""
+    from backend.services.analytics_case_study import _derive_odi_partnership_intelligence
+
+    deliveries = [
+        {
+            "inning": 1,
+            "over_number": o,
+            "ball_number": b,
+            "runs_off_bat": 1,
+            "extra_runs": 0,
+            "is_wicket": False,
+        }
+        for o in range(1, 6)
+        for b in range(1, 7)
+    ]
+    result = _derive_odi_partnership_intelligence(deliveries, 1)
+    assert result.data_quality == "unavailable"
+    assert result.highest_partnership is None
+
+
+def test_odi_scoreboard_comparison_basic() -> None:
+    """Scoreboard comparison builds correctly from innings summaries."""
+    from backend.services.analytics_case_study import _derive_odi_scoreboard_comparison
+    from backend.api.schemas.case_study import CaseStudyInningsSummary
+
+    inn1 = CaseStudyInningsSummary(team="Durham", runs=338, wickets=8, overs=50.0, run_rate=6.76)
+    inn2 = CaseStudyInningsSummary(
+        team="Warwickshire", runs=337, wickets=8, overs=50.0, run_rate=6.74
+    )
+
+    result = _derive_odi_scoreboard_comparison([inn1, inn2], [], "Durham won by 1 run")
+    assert result is not None
+    assert result.team_1 == "Durham"
+    assert result.team_1_runs == 338
+    assert result.team_2 == "Warwickshire"
+    assert result.team_2_runs == 337
+    assert result.run_differential == 1
+    assert result.final_margin == "Durham won by 1 run"
+
+
+def test_odi_scoreboard_comparison_single_innings_returns_none() -> None:
+    """Scoreboard comparison returns None when only one innings available."""
+    from backend.services.analytics_case_study import _derive_odi_scoreboard_comparison
+    from backend.api.schemas.case_study import CaseStudyInningsSummary
+
+    inn1 = CaseStudyInningsSummary(team="Durham", runs=338, wickets=8, overs=50.0, run_rate=6.76)
+    result = _derive_odi_scoreboard_comparison([inn1], [], "")
+    assert result is None
+
+
+def test_odi_turning_point_one_run_match() -> None:
+    """One-run match produces a special narrow-margin turning point candidate."""
+    from backend.services.analytics_case_study import _derive_odi_turning_point
+    from backend.api.schemas.case_study import (
+        CaseStudyInningsSummary,
+        CaseStudyMatch,
+    )
+    from datetime import date
+
+    inn1 = CaseStudyInningsSummary(team="Durham", runs=338, wickets=8, overs=50.0, run_rate=6.76)
+    inn2 = CaseStudyInningsSummary(
+        team="Warwickshire", runs=337, wickets=8, overs=50.0, run_rate=6.74
+    )
+    match = CaseStudyMatch(
+        id="test-id",
+        team_a="Durham",
+        team_b="Warwickshire",
+        teams_label="Durham vs Warwickshire",
+        date=date(2023, 8, 20),
+        venue="Edgbaston",
+        competition="One-Day Cup",
+        result="Durham won by 1 run",
+        format="ODI",
+        innings=[inn1, inn2],
+    )
+
+    turning_point = _derive_odi_turning_point([inn1, inn2], [], None, match)
+    assert turning_point is not None
+    assert "one run" in turning_point.lower()
+    assert "Warwickshire" in turning_point
+
+
+def test_odi_required_rate_increases_over_time() -> None:
+    """Required rate increases when the chasing team scores slowly."""
+    from backend.services.analytics_case_study import _derive_odi_chase_intelligence
+    from backend.api.schemas.case_study import CaseStudyInningsSummary
+
+    inn1 = CaseStudyInningsSummary(team="TeamA", runs=300, wickets=8, overs=50.0, run_rate=6.0)
+    inn2 = CaseStudyInningsSummary(team="TeamB", runs=289, wickets=10, overs=50.0, run_rate=5.78)
+
+    # TeamB scores only 3 runs per over for first 25 overs
+    deliveries = []
+    for over in range(1, 26):
+        for ball in range(1, 7):
+            deliveries.append(
+                {
+                    "inning": 2,
+                    "over_number": over,
+                    "ball_number": ball,
+                    "runs_off_bat": 0,
+                    "extra_runs": 0,
+                    "is_wicket": False,
+                }
+            )
+        # Add 3 run delivery
+        deliveries.append(
+            {
+                "inning": 2,
+                "over_number": over,
+                "ball_number": 7,
+                "runs_off_bat": 3,
+                "extra_runs": 0,
+                "is_wicket": False,
+            }
+        )
+
+    result = _derive_odi_chase_intelligence([inn1, inn2], deliveries, 50)
+    assert result is not None
+    # Required rate at over 11 should be > initial required rate
+    snap_11 = next((s for s in result.required_rate_snapshots if s.over == 11), None)
+    if snap_11:
+        assert snap_11.required_rate > result.initial_required_rate

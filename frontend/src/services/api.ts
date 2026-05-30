@@ -785,6 +785,75 @@ export interface CaseStudyMultiDaySummary {
   notice: string;
 }
 
+export interface CaseStudyODIRequiredRateSnapshot {
+  over: number;
+  label: string;
+  runs_needed: number;
+  overs_remaining: number;
+  required_rate: number;
+}
+
+export interface CaseStudyODIChaseIntelligence {
+  target: number;
+  chasing_team: string;
+  initial_required_rate: number;
+  required_rate_snapshots: CaseStudyODIRequiredRateSnapshot[];
+  final_10_overs_summary?: string | null;
+  chase_pressure_note?: string | null;
+  chase_result: "completed" | "fell_short" | "in_progress" | "unknown";
+  runs_margin?: number | null;
+  wickets_in_hand?: number | null;
+  pressure_windows: string[];
+  data_quality: "full" | "partial" | "unavailable";
+}
+
+export interface CaseStudyODIPartnershipRecord {
+  batter_1: string;
+  batter_2: string;
+  runs: number;
+  balls: number;
+  run_rate: number;
+  start_over?: number | null;
+  end_over?: number | null;
+}
+
+export interface CaseStudyODIPartnershipIntelligence {
+  innings_number: number;
+  highest_partnership?: CaseStudyODIPartnershipRecord | null;
+  best_run_rate_partnership?: CaseStudyODIPartnershipRecord | null;
+  rebuilding_partnership?: CaseStudyODIPartnershipRecord | null;
+  summary: string;
+  data_quality: "full" | "partial" | "unavailable";
+}
+
+export interface CaseStudyODIScoreboardComparison {
+  team_1: string;
+  team_1_runs: number;
+  team_1_wickets: number;
+  team_1_run_rate: number;
+  team_1_strongest_phase?: string | null;
+  team_1_weakest_phase?: string | null;
+  team_1_death_runs?: number | null;
+  team_1_death_wickets?: number | null;
+  team_2: string;
+  team_2_runs: number;
+  team_2_wickets: number;
+  team_2_run_rate: number;
+  team_2_strongest_phase?: string | null;
+  team_2_weakest_phase?: string | null;
+  team_2_death_runs?: number | null;
+  team_2_death_wickets?: number | null;
+  run_differential: number;
+  final_margin?: string | null;
+}
+
+export interface CaseStudyODIIntelligence {
+  chase_intelligence?: CaseStudyODIChaseIntelligence | null;
+  partnerships: CaseStudyODIPartnershipIntelligence[];
+  scoreboard_comparison?: CaseStudyODIScoreboardComparison | null;
+  turning_point_candidate?: string | null;
+}
+
 export interface CaseStudyAIBlock {
   match_summary: string;
   generated_at?: string | null;
@@ -804,6 +873,7 @@ export interface MatchCaseStudyResponse {
   match_callouts?: CaseStudyAnalystCallout[];
   match_level_summary?: string | null;
   multi_day_summary?: CaseStudyMultiDaySummary | null;
+  odi_intelligence?: CaseStudyODIIntelligence | null;
   ai?: CaseStudyAIBlock | null;
 }
 

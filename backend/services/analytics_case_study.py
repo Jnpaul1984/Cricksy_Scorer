@@ -32,6 +32,12 @@ from backend.api.schemas.case_study import (
     CaseStudyMomentumSummary,
     CaseStudyMultiDayInningsContext,
     CaseStudyMultiDaySummary,
+    CaseStudyODIChaseIntelligence,
+    CaseStudyODIIntelligence,
+    CaseStudyODIPartnershipIntelligence,
+    CaseStudyODIPartnershipRecord,
+    CaseStudyODIRequiredRateSnapshot,
+    CaseStudyODIScoreboardComparison,
     CaseStudyPhase,
     CaseStudyPlayerBatting,
     CaseStudyPlayerBowling,
@@ -1735,6 +1741,550 @@ def _build_multi_day_summary(
     )
 
 
+# -----------------------------------------------------------------------------
+# ODI Deep Intelligence Helpers (Phase 10R.4D)
+# -----------------------------------------------------------------------------
+
+
+def _derive_odi_partnership_intelligence(
+    deliveries: list[dict[str, Any]],
+    innings_number: int,
+) -> CaseStudyODIPartnershipIntelligence:
+    """
+    Derive partnership intelligence for a single ODI/ODM innings from delivery data.
+
+    Tracks striker+non-striker pairs across deliveries. A partnership ends when
+    a wicket falls. Only named player pairs are counted. Provides highest,
+    best-run-rate, and rebuilding partnerships. Falls back gracefully when data
+    is insufficient.
+    """
+    inning_deliveries = [d for d in deliveries if _delivery_innings_number(d) == innings_number]
+    if not inning_deliveries:
+        return CaseStudyODIPartnershipIntelligence(
+            innings_number=innings_number,
+            summary="Partnership detail unavailable from current delivery/player data.",
+            data_quality="unavailable",
+        )
+
+    # Sort by over then ball
+    sorted_deliveries = sorted(
+        inning_deliveries,
+        key=lambda d: (
+            int(d.get("over_number") or d.get("over") or 1),
+            int(d.get("ball_number") or 0),
+        ),
+    )
+
+    # Track partnerships
+    partnerships: list[dict[str, Any]] = []
+    current_runs = 0
+    current_balls = 0
+    current_start_over: int | None = None
+    current_end_over: int | None = None
+    current_pair: frozenset[str] | None = None
+    wicket_cluster_overs: list[int] = []
+
+    for d in sorted_deliveries:
+        striker = _delivery_player_name(d, "batter_name", "batter", "batsman", "striker_name")
+        non_striker = _delivery_player_name(d, "non_striker", "non_striker_name")
+        over_num = int(d.get("over_number") or d.get("over") or 1)
+
+        if not striker or not non_striker:
+            # Can't track partnerships without both batters named; count ball anyway
+            runs = int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0)
+            if runs == 0 and d.get("runs_scored"):
+                runs = int(d.get("runs_scored") or 0)
+            current_runs += runs
+            current_balls += 1
+            if current_start_over is None:
+                current_start_over = over_num
+            current_end_over = over_num
+            if d.get("is_wicket"):
+                # End current partial partnership without recording (names unavailable)
+                current_runs = 0
+                current_balls = 0
+                current_start_over = None
+                current_end_over = None
+                current_pair = None
+                wicket_cluster_overs.append(over_num)
+            continue
+
+        pair = frozenset([striker, non_striker])
+        if current_pair is None:
+            current_pair = pair
+            current_start_over = over_num
+
+        if pair != current_pair:
+            # Pair changed without a wicket event (rotation) — keep running totals
+            current_pair = pair
+
+        runs = int(d.get("runs_off_bat") or 0) + int(d.get("extra_runs") or 0)
+        if runs == 0 and d.get("runs_scored"):
+            runs = int(d.get("runs_scored") or 0)
+        current_runs += runs
+        current_balls += 1
+        current_end_over = over_num
+
+        if d.get("is_wicket"):
+            # Record the completed partnership
+            batter_list = sorted(current_pair)
+            partnership_rr = (
+                round(current_runs / current_balls * 6, 2) if current_balls > 0 else 0.0
+            )
+            partnerships.append(
+                {
+                    "batter_1": batter_list[0],
+                    "batter_2": batter_list[1],
+                    "runs": current_runs,
+                    "balls": current_balls,
+                    "run_rate": partnership_rr,
+                    "start_over": current_start_over,
+                    "end_over": current_end_over,
+                    "wicket_over": over_num,
+                }
+            )
+            wicket_cluster_overs.append(over_num)
+            current_runs = 0
+            current_balls = 0
+            current_start_over = None
+            current_end_over = None
+            current_pair = None
+
+    # Record last unfinished partnership (innings ended without wicket)
+    if current_pair and current_balls > 0:
+        batter_list = sorted(current_pair)
+        partnership_rr = round(current_runs / current_balls * 6, 2) if current_balls > 0 else 0.0
+        partnerships.append(
+            {
+                "batter_1": batter_list[0],
+                "batter_2": batter_list[1],
+                "runs": current_runs,
+                "balls": current_balls,
+                "run_rate": partnership_rr,
+                "start_over": current_start_over,
+                "end_over": current_end_over,
+                "wicket_over": None,
+            }
+        )
+
+    if not partnerships:
+        return CaseStudyODIPartnershipIntelligence(
+            innings_number=innings_number,
+            summary="Partnership detail unavailable from current delivery/player data.",
+            data_quality="unavailable",
+        )
+
+    def _to_record(p: dict[str, Any]) -> CaseStudyODIPartnershipRecord:
+        return CaseStudyODIPartnershipRecord(
+            batter_1=p["batter_1"],
+            batter_2=p["batter_2"],
+            runs=p["runs"],
+            balls=p["balls"],
+            run_rate=p["run_rate"],
+            start_over=p.get("start_over"),
+            end_over=p.get("end_over"),
+        )
+
+    # Highest by runs
+    highest_p = max(partnerships, key=lambda p: p["runs"])
+    highest = _to_record(highest_p)
+
+    # Best run-rate (min 18 balls to be meaningful)
+    rr_candidates = [p for p in partnerships if p["balls"] >= 18]
+    best_rr = None
+    if rr_candidates:
+        best_rr_p = max(rr_candidates, key=lambda p: p["run_rate"])
+        best_rr = _to_record(best_rr_p)
+
+    # Rebuilding: first sizeable partnership (>= 20 runs) that starts after a wicket cluster
+    rebuilding = None
+    if wicket_cluster_overs:
+        cluster_end = max(wicket_cluster_overs[:3])  # consider first cluster region
+        rebuilding_candidates = [
+            p for p in partnerships if (p.get("start_over") or 0) > cluster_end and p["runs"] >= 20
+        ]
+        if rebuilding_candidates:
+            rebuild_p = max(rebuilding_candidates, key=lambda p: p["runs"])
+            rebuilding = _to_record(rebuild_p)
+
+    # Build summary text
+    summary_parts = [
+        f"Highest partnership: {highest.runs} runs ({highest.batter_1} & {highest.batter_2}"
+        + (
+            f", overs {highest.start_over}-{highest.end_over}"
+            if highest.start_over and highest.end_over
+            else ""
+        )
+        + ")."
+    ]
+    if best_rr and (best_rr.batter_1 != highest.batter_1 or best_rr.batter_2 != highest.batter_2):
+        summary_parts.append(
+            f"Best-rate partnership: {best_rr.runs} runs at {best_rr.run_rate:.2f} RPO "
+            f"({best_rr.batter_1} & {best_rr.batter_2})."
+        )
+    if rebuilding:
+        summary_parts.append(
+            f"Rebuilding stand after pressure: {rebuilding.runs} runs "
+            f"({rebuilding.batter_1} & {rebuilding.batter_2})."
+        )
+
+    data_quality: Literal["full", "partial", "unavailable"] = (
+        "full" if len(partnerships) >= 3 else "partial"
+    )
+
+    return CaseStudyODIPartnershipIntelligence(
+        innings_number=innings_number,
+        highest_partnership=highest,
+        best_run_rate_partnership=best_rr,
+        rebuilding_partnership=rebuilding,
+        summary=" ".join(summary_parts),
+        data_quality=data_quality,
+    )
+
+
+def _derive_odi_chase_intelligence(
+    innings_summaries: list[CaseStudyInningsSummary],
+    deliveries: list[dict[str, Any]],
+    overs_per_side: int,
+    innings_analysis: list[CaseStudyInningsAnalysis] | None = None,
+) -> CaseStudyODIChaseIntelligence | None:
+    """
+    Derive chase pressure and required-rate intelligence for an ODI second innings.
+
+    Calculates:
+    - Target and initial required rate
+    - Required rate at each ODI phase boundary (over 11, 26, 41)
+    - Final 10-over chase context (runs needed, wickets in hand entering over 41)
+    - Chase result and pressure windows
+    - Data quality rating
+    """
+    if len(innings_summaries) < 2:
+        return None
+
+    inn1 = innings_summaries[0]
+    inn2 = innings_summaries[1]
+    target = inn1.runs + 1
+    chasing_team = inn2.team
+
+    # Initial required rate
+    initial_rr = round(target / overs_per_side, 2)
+
+    # Build per-over cumulative runs for innings 2 from deliveries
+    per_over_runs_2, per_over_wickets_2 = _aggregate_per_over(deliveries, 2)
+
+    # Phase boundary overs for ODI
+    phase_boundaries = [
+        (11, "Entering consolidation (over 11)", 10),
+        (26, "Entering acceleration (over 26)", 25),
+        (41, "Entering death overs (over 41)", 40),
+    ]
+
+    snapshots: list[CaseStudyODIRequiredRateSnapshot] = []
+    data_quality: Literal["full", "partial", "unavailable"]
+
+    if per_over_runs_2:
+        data_quality = "full"
+        for boundary_over, label, overs_completed in phase_boundaries:
+            runs_at_boundary = sum(v for o, v in per_over_runs_2.items() if o <= overs_completed)
+            runs_needed = target - runs_at_boundary
+            overs_remaining = float(overs_per_side - overs_completed)
+            if overs_remaining > 0 and runs_needed > 0:
+                rr = round(runs_needed / overs_remaining, 2)
+                snapshots.append(
+                    CaseStudyODIRequiredRateSnapshot(
+                        over=boundary_over,
+                        label=label,
+                        runs_needed=runs_needed,
+                        overs_remaining=overs_remaining,
+                        required_rate=rr,
+                    )
+                )
+    elif len(innings_summaries) >= 2:
+        # No delivery-level data — only innings summary available
+        data_quality = "partial"
+    else:
+        data_quality = "unavailable"
+
+    # Final 10-over context (entering death overs = over 41)
+    final_10_summary: str | None = None
+    if per_over_runs_2:
+        runs_after_40 = sum(v for o, v in per_over_runs_2.items() if o <= 40)
+        wickets_after_40 = sum(v for o, v in per_over_wickets_2.items() if o <= 40)
+        runs_needed_at_40 = target - runs_after_40
+        wickets_in_hand_at_40 = max(0, 10 - wickets_after_40)
+        if runs_needed_at_40 > 0:
+            final_10_summary = (
+                f"{chasing_team} entered the final 10 overs needing "
+                f"{_pluralize(runs_needed_at_40, 'run')} with "
+                f"{_pluralize(wickets_in_hand_at_40, 'wicket')} in hand."
+            )
+        else:
+            final_10_summary = f"{chasing_team} had already passed the target by over 40."
+
+    # Chase result from innings summary
+    runs_scored = inn2.runs
+    wickets_lost = inn2.wickets
+    wickets_in_hand = max(0, 10 - wickets_lost)
+
+    if runs_scored >= target:
+        chase_result: Literal["completed", "fell_short", "in_progress", "unknown"] = "completed"
+        runs_margin = runs_scored - target
+    elif wickets_lost >= 10:
+        chase_result = "fell_short"
+        runs_margin = target - runs_scored
+    else:
+        chase_result = "in_progress"
+        runs_margin = None
+
+    # Pressure windows: identify over ranges where required rate spiked
+    pressure_windows: list[str] = []
+    if len(snapshots) >= 2:
+        for i in range(1, len(snapshots)):
+            prev = snapshots[i - 1]
+            curr = snapshots[i]
+            rr_increase = curr.required_rate - prev.required_rate
+            if rr_increase >= 1.5:
+                pressure_windows.append(
+                    f"Required rate rose from {prev.required_rate:.2f} to "
+                    f"{curr.required_rate:.2f} RPO entering {curr.label.split('(')[0].strip().lower()}."
+                )
+
+    # Chase pressure note
+    if per_over_runs_2:
+        chase_pressure_note = _build_odi_chase_pressure_note(
+            snapshots, pressure_windows, chasing_team, chase_result, runs_margin, wickets_in_hand
+        )
+    elif chase_result == "completed":
+        chase_pressure_note = (
+            f"{chasing_team} successfully chased {target} with "
+            f"{_pluralize(wickets_in_hand, 'wicket')} in hand."
+        )
+    elif chase_result == "fell_short":
+        assert runs_margin is not None
+        chase_pressure_note = (
+            f"{chasing_team} fell {_pluralize(runs_margin, 'run')} short of {target}."
+        )
+    else:
+        chase_pressure_note = (
+            f"Required-rate detail unavailable — innings-level data only. "
+            f"Target: {target} from {overs_per_side} overs "
+            f"(initial required rate: {initial_rr:.2f} RPO)."
+        )
+
+    return CaseStudyODIChaseIntelligence(
+        target=target,
+        chasing_team=chasing_team,
+        initial_required_rate=initial_rr,
+        required_rate_snapshots=snapshots,
+        final_10_overs_summary=final_10_summary,
+        chase_pressure_note=chase_pressure_note,
+        chase_result=chase_result,
+        runs_margin=runs_margin,
+        wickets_in_hand=wickets_in_hand,
+        pressure_windows=pressure_windows,
+        data_quality=data_quality,
+    )
+
+
+def _build_odi_chase_pressure_note(
+    snapshots: list[CaseStudyODIRequiredRateSnapshot],
+    pressure_windows: list[str],
+    chasing_team: str,
+    chase_result: Literal["completed", "fell_short", "in_progress", "unknown"],
+    runs_margin: int | None,
+    wickets_in_hand: int,
+) -> str:
+    """Build a plain-English ODI chase pressure note."""
+    parts: list[str] = []
+    if snapshots:
+        entry = snapshots[0]
+        parts.append(
+            f"Required rate at start: {entry.required_rate:.2f} RPO "
+            f"(entering {entry.label.split('(')[0].strip().lower()}, "
+            f"{entry.runs_needed} runs from {entry.overs_remaining:.0f} overs)."
+        )
+    if pressure_windows:
+        parts.append(pressure_windows[0])
+    if chase_result == "completed":
+        parts.append(
+            f"{chasing_team} completed the chase with "
+            f"{_pluralize(wickets_in_hand, 'wicket')} in hand."
+        )
+    elif chase_result == "fell_short" and runs_margin is not None:
+        parts.append(f"{chasing_team} fell {_pluralize(runs_margin, 'run')} short.")
+    return " ".join(parts) if parts else "Chase pressure data unavailable."
+
+
+def _derive_odi_scoreboard_comparison(
+    innings_summaries: list[CaseStudyInningsSummary],
+    innings_analysis: list[CaseStudyInningsAnalysis],
+    result: str,
+) -> CaseStudyODIScoreboardComparison | None:
+    """Build compact ODI scoreboard comparison block."""
+    if len(innings_summaries) < 2:
+        return None
+
+    inn1 = innings_summaries[0]
+    inn2 = innings_summaries[1]
+    run_diff = inn1.runs - inn2.runs
+
+    def _phase_info(
+        analysis: CaseStudyInningsAnalysis | None,
+    ) -> tuple[str | None, str | None, int | None, int | None]:
+        if not analysis or not analysis.phases:
+            return None, None, None, None
+        phases = analysis.phases
+        strongest = max(phases, key=lambda p: p.runs, default=None)
+        weakest = min(phases, key=lambda p: p.runs, default=None)
+        death = next((p for p in phases if p.id == "death"), None)
+        return (
+            strongest.label if strongest else None,
+            weakest.label if weakest else None,
+            death.runs if death else None,
+            death.wickets if death else None,
+        )
+
+    ia1 = innings_analysis[0] if innings_analysis else None
+    ia2 = innings_analysis[1] if len(innings_analysis) >= 2 else None
+
+    s1, w1, dr1, dw1 = _phase_info(ia1)
+    s2, w2, dr2, dw2 = _phase_info(ia2)
+
+    return CaseStudyODIScoreboardComparison(
+        team_1=inn1.team,
+        team_1_runs=inn1.runs,
+        team_1_wickets=inn1.wickets,
+        team_1_run_rate=inn1.run_rate,
+        team_1_strongest_phase=s1,
+        team_1_weakest_phase=w1,
+        team_1_death_runs=dr1,
+        team_1_death_wickets=dw1,
+        team_2=inn2.team,
+        team_2_runs=inn2.runs,
+        team_2_wickets=inn2.wickets,
+        team_2_run_rate=inn2.run_rate,
+        team_2_strongest_phase=s2,
+        team_2_weakest_phase=w2,
+        team_2_death_runs=dr2,
+        team_2_death_wickets=dw2,
+        run_differential=run_diff,
+        final_margin=result if result else None,
+    )
+
+
+def _derive_odi_turning_point(
+    innings_summaries: list[CaseStudyInningsSummary],
+    innings_analysis: list[CaseStudyInningsAnalysis],
+    chase_intel: CaseStudyODIChaseIntelligence | None,
+    match: CaseStudyMatch,
+) -> str | None:
+    """
+    Derive a meaningful ODI turning point candidate.
+
+    Prioritises:
+    1. One-run / close-margin finish (narrow pressure)
+    2. Wicket cluster in chase innings that spiked required rate
+    3. Required-rate spike window
+    4. Death-over swing
+    5. Phase-level strongest contrast
+    """
+    result_lower = (match.result or "").lower()
+
+    # 1. One-run / extremely narrow margin
+    if "won by 1 run" in result_lower:
+        inn1 = innings_summaries[0] if innings_summaries else None
+        inn2 = innings_summaries[1] if len(innings_summaries) >= 2 else None
+        if inn1 and inn2:
+            return (
+                f"Turning point candidate: {inn2.team} stayed within one run of "
+                f"{inn1.team}'s total of {inn1.runs} but could not close the gap. "
+                "Every phase decision in a one-run ODI carries decisive weight."
+            )
+        return (
+            "Turning point candidate: The match was decided by a single run — "
+            "every phase decision proved pivotal."
+        )
+
+    # 2. Chase wicket cluster + required-rate spike
+    if chase_intel and chase_intel.pressure_windows:
+        pw = chase_intel.pressure_windows[0]
+        return f"Turning point candidate: {pw}"
+
+    # 3. Wicket cluster in second innings analysis
+    if len(innings_analysis) >= 2:
+        inn2_analysis = innings_analysis[1]
+        cluster_callout = inn2_analysis.dismissal_patterns.wicket_cluster_callout
+        if cluster_callout:
+            return f"Turning point candidate: {cluster_callout}"
+
+    # 4. Significant wicket cluster in first innings
+    if innings_analysis:
+        inn1_analysis = innings_analysis[0]
+        cluster_callout = inn1_analysis.dismissal_patterns.wicket_cluster_callout
+        if cluster_callout:
+            return f"Turning point candidate: {cluster_callout}"
+
+    # 5. Death-over phase contrast between the two innings
+    if len(innings_analysis) >= 2:
+        death1 = next((p for p in innings_analysis[0].phases if p.id == "death"), None)
+        death2 = next((p for p in innings_analysis[1].phases if p.id == "death"), None)
+        if death1 and death2:
+            diff = death1.runs - death2.runs
+            if abs(diff) >= 15:
+                leader = innings_analysis[0].team if diff > 0 else innings_analysis[1].team
+                trailer = innings_analysis[1].team if diff > 0 else innings_analysis[0].team
+                return (
+                    f"Turning point candidate: Death-over execution (overs 41-50) - "
+                    f"{leader} scored {abs(diff)} more runs than {trailer} at the death, "
+                    "a margin that proved significant to the final result."
+                )
+
+    # 6. Strongest phase contrast
+    if len(innings_analysis) >= 2 and innings_analysis[0].phases:
+        strongest = max(innings_analysis[0].phases, key=lambda p: p.runs)
+        return (
+            f"Turning point candidate: {innings_analysis[0].team}'s strongest phase was "
+            f"{strongest.label} ({strongest.runs} runs at {strongest.run_rate:.2f} RPO), "
+            "which set the competitive context for the chase."
+        )
+
+    return None
+
+
+def _build_odi_intelligence(
+    match: CaseStudyMatch,
+    innings_summaries: list[CaseStudyInningsSummary],
+    innings_analysis: list[CaseStudyInningsAnalysis],
+    deliveries: list[dict[str, Any]],
+    overs_per_side: int,
+) -> CaseStudyODIIntelligence:
+    """Build the complete ODI deep intelligence block (Phase 10R.4D)."""
+    chase_intel = _derive_odi_chase_intelligence(
+        innings_summaries, deliveries, overs_per_side, innings_analysis
+    )
+
+    # Partnerships for each innings that has delivery data
+    partnerships: list[CaseStudyODIPartnershipIntelligence] = []
+    unique_innings = sorted({_delivery_innings_number(d) for d in deliveries}) if deliveries else []
+    for inn_num in unique_innings:
+        if inn_num in (1, 2):  # Only first two innings for ODI
+            partnerships.append(_derive_odi_partnership_intelligence(deliveries, inn_num))
+
+    scoreboard = _derive_odi_scoreboard_comparison(
+        innings_summaries, innings_analysis, match.result
+    )
+    turning_point = _derive_odi_turning_point(
+        innings_summaries, innings_analysis, chase_intel, match
+    )
+
+    return CaseStudyODIIntelligence(
+        chase_intelligence=chase_intel,
+        partnerships=partnerships,
+        scoreboard_comparison=scoreboard,
+        turning_point_candidate=turning_point,
+    )
+
+
 def _build_match_callouts(
     match: CaseStudyMatch,
     analysis_mode: Literal[
@@ -2367,6 +2917,19 @@ async def _build_case_study_from_db(
         case_study_match, analysis_mode=analysis_mode, multi_day_summary=multi_day_summary
     )
 
+    # 8b) ODI deep intelligence (Phase 10R.4D)
+    odi_intelligence = (
+        _build_odi_intelligence(
+            case_study_match,
+            innings_summaries,
+            innings_analysis,
+            deliveries,
+            overs_per_side,
+        )
+        if analysis_mode == "odi_limited_overs"
+        else None
+    )
+
     # 9) Return complete response
     return MatchCaseStudyResponse(
         analysis_mode=analysis_mode,
@@ -2380,6 +2943,7 @@ async def _build_case_study_from_db(
         match_callouts=match_callouts,
         match_level_summary=f"{case_study_match.teams_label}: {case_study_match.result}",
         multi_day_summary=multi_day_summary,
+        odi_intelligence=odi_intelligence,
         ai=ai_block,
     )
 
