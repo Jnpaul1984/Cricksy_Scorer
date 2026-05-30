@@ -151,7 +151,7 @@
         </BaseCard>
 
         <BaseCard v-if="keyPhase" padding="md" class="cs-summary-card">
-          <p class="cs-label">Key phase</p>
+          <p class="cs-label">{{ isTestMultiDay ? 'Innings focus' : 'Key phase' }}</p>
           <p class="cs-value">{{ keyPhase.title }}</p>
           <p class="cs-footnote">
             {{ keyPhase.detail }}
@@ -164,6 +164,19 @@
           <p class="cs-label">Deterministic summary</p>
           <p class="cs-value">{{ selectedInningsAnalysis.deterministic_summary }}</p>
           <p class="cs-footnote">Innings {{ selectedInningsIndex + 1 }} story</p>
+        </BaseCard>
+      </section>
+
+      <section v-if="isTestMultiDay" class="cs-summary">
+        <BaseCard padding="md" class="cs-summary-card">
+          <p class="cs-label">Analysis mode</p>
+          <p class="cs-value">Test / multi-day</p>
+          <p class="cs-footnote">
+            {{
+              caseStudy?.multi_day_summary?.notice
+                || 'Test/multi-day analysis is currently limited and uses innings/session-safe summaries.'
+            }}
+          </p>
         </BaseCard>
       </section>
 
@@ -185,9 +198,13 @@
         <BaseCard padding="lg" class="cs-panel">
           <div class="cs-phases-header">
             <div>
-              <h2 class="cs-panel-title">Phase breakdown</h2>
+              <h2 class="cs-panel-title">{{ isTestMultiDay ? 'Innings breakdown' : 'Phase breakdown' }}</h2>
               <p class="cs-panel-subtitle">
-                Runs, wickets, and momentum by over segment.
+                {{
+                  isTestMultiDay
+                    ? 'Runs, wickets, overs, and lead/deficit context by innings.'
+                    : 'Runs, wickets, and momentum by over segment.'
+                }}
               </p>
             </div>
 
@@ -206,7 +223,7 @@
               </div>
 
               <!-- Impact filter pills -->
-              <div class="cs-phases-impact-filters">
+              <div v-if="!isTestMultiDay" class="cs-phases-impact-filters">
                 <BaseButton
                   size="sm"
                   :variant="selectedImpactFilter === 'all' ? 'secondary' : 'ghost'"
@@ -240,15 +257,44 @@
           </div>
 
           <!-- Empty state for phases (no data at all) -->
-          <div v-if="phaseBreakdown.length === 0" class="cs-empty-state">
+          <div v-if="!isTestMultiDay && phaseBreakdown.length === 0" class="cs-empty-state">
             <p>No phase analytics available for this match yet.</p>
             <p class="cs-empty-hint">Try re-running analytics once the scorecard and ball-by-ball data are complete.</p>
           </div>
 
           <!-- Empty state for filtered results -->
-          <div v-else-if="filteredPhases.length === 0" class="cs-empty-state">
+          <div v-else-if="!isTestMultiDay && filteredPhases.length === 0" class="cs-empty-state">
             <p>No phase data for this selection.</p>
             <p class="cs-empty-hint">Try a different innings or impact filter.</p>
+          </div>
+
+          <div v-else-if="isTestMultiDay" class="cs-phase-grid">
+            <BaseCard
+              v-for="innings in testMultiDayInningsCards"
+              :key="`test-innings-${innings.inningsNumber}`"
+              class="cs-phase-card"
+              padding="md"
+            >
+              <header class="cs-phase-header">
+                <div>
+                  <h3 class="cs-phase-title">Innings {{ innings.inningsNumber }} · {{ innings.team }}</h3>
+                  <p class="cs-phase-meta">{{ innings.runs }}/{{ innings.wickets }} in {{ innings.overs }} overs</p>
+                </div>
+                <BaseBadge variant="neutral" :uppercase="false">
+                  RR {{ innings.runRate }}
+                </BaseBadge>
+              </header>
+              <div class="cs-phase-numbers">
+                <div class="cs-phase-number">
+                  <span class="cs-phase-number-label">Deliveries</span>
+                  <span class="cs-phase-number-value">{{ innings.deliveries }}</span>
+                </div>
+                <div class="cs-phase-number">
+                  <span class="cs-phase-number-label">Lead/deficit</span>
+                  <span class="cs-phase-number-value">{{ innings.leadDeficit }}</span>
+                </div>
+              </div>
+            </BaseCard>
           </div>
 
           <!-- Phase cards -->
@@ -349,7 +395,13 @@
 
         <BaseCard v-if="selectedInningsAnalysis?.story_blocks" padding="lg" class="cs-panel">
           <h2 class="cs-panel-title">Innings story</h2>
-          <p class="cs-panel-subtitle">Deterministic phase narrative for innings {{ selectedInningsIndex + 1 }}.</p>
+          <p class="cs-panel-subtitle">
+            {{
+              isTestMultiDay
+                ? `Innings/session-safe narrative for innings ${selectedInningsIndex + 1}.`
+                : `Deterministic phase narrative for innings ${selectedInningsIndex + 1}.`
+            }}
+          </p>
           <ul class="cs-story-list">
             <li>{{ selectedInningsAnalysis.story_blocks.opening_story }}</li>
             <li>{{ selectedInningsAnalysis.story_blocks.middle_overs_story }}</li>
@@ -1116,6 +1168,8 @@ const aiSummaryCacheStatus = ref<'none' | 'live' | 'cached' | 'stale' | 'fallbac
 
 // Derived view-model bindings from caseStudy
 const match = computed(() => caseStudy.value?.match ?? null)
+const analysisMode = computed(() => caseStudy.value?.analysis_mode ?? 'unknown')
+const isTestMultiDay = computed(() => analysisMode.value === 'test_multi_day')
 const inningsAnalyses = computed<CaseStudyInningsAnalysis[]>(() => caseStudy.value?.innings_analysis ?? [])
 const selectedInningsAnalysis = computed<CaseStudyInningsAnalysis | null>(() => {
   const analyses = inningsAnalyses.value
@@ -1140,6 +1194,28 @@ const keyPlayersScopeLabel = computed(() =>
 )
 const selectedDismissalPatterns = computed<CaseStudyDismissalPatterns | null>(() =>
   selectedInningsAnalysis.value?.dismissal_patterns ?? caseStudy.value?.dismissal_patterns ?? null
+)
+const testMultiDayInningsCards = computed(() =>
+  (caseStudy.value?.match?.innings ?? []).map((inn, index) => {
+    const summaryRow = caseStudy.value?.multi_day_summary?.innings?.find(
+      (entry) => entry.innings_number === index + 1
+    )
+    const deliveries =
+      summaryRow?.deliveries ?? Math.max(0, Math.round(Math.trunc(inn.overs) * 6 + (inn.overs % 1) * 10))
+    return {
+      inningsNumber: index + 1,
+      team: inn.team,
+      runs: inn.runs,
+      wickets: inn.wickets,
+      overs: inn.overs,
+      runRate: inn.run_rate.toFixed(2),
+      deliveries,
+      leadDeficit:
+        typeof summaryRow?.lead_deficit_after_innings === 'number'
+          ? `${summaryRow.lead_deficit_after_innings >= 0 ? '+' : ''}${summaryRow.lead_deficit_after_innings}`
+          : 'N/A',
+    }
+  })
 )
 const podcastCards = ref<PodcastTalkingPointCard[]>([])
 const podcastGeneratedAt = ref<string | null>(null)

@@ -28,6 +28,7 @@ function buildCaseStudy({
   }>
 }) {
   return {
+    analysis_mode: 'limited_overs',
     match: {
       id: 'match-001',
       date: '2025-01-10',
@@ -165,7 +166,7 @@ describe('AnalyticsTablesWidget', () => {
     expect(wrapper.text()).not.toContain('NaN')
 
     const inningsTwoOption = wrapper.find('select[aria-label="Select innings"] option[value="2"]')
-    expect((inningsTwoOption.element as HTMLOptionElement).disabled).toBe(true)
+    expect(inningsTwoOption.exists()).toBe(false)
   })
 
   it('falls back to innings totals when only innings-level data exists', async () => {
@@ -223,5 +224,43 @@ describe('AnalyticsTablesWidget', () => {
     expect(wrapper.text()).toContain('This registry entry only has metadata.')
     expect(wrapper.text()).toContain('Unavailable')
     expect(wrapper.text()).not.toContain('NaN')
+  })
+
+  it('supports innings selector up to innings 4 for test/multi-day matches', async () => {
+    mockGetAnalystDeliveries.mockResolvedValue({
+      items: [],
+      total: 0,
+      data_completeness: 'innings_totals',
+    })
+    mockGetMatchCaseStudy.mockResolvedValue({
+      ...buildCaseStudy({
+        innings: [
+          { team: 'AUS', runs: 320, wickets: 10, overs: 96, run_rate: 3.33 },
+          { team: 'SA', runs: 280, wickets: 10, overs: 88, run_rate: 3.18 },
+          { team: 'AUS', runs: 210, wickets: 10, overs: 70, run_rate: 3.0 },
+          { team: 'SA', runs: 251, wickets: 7, overs: 82, run_rate: 3.06 },
+        ],
+        phases: [],
+      }),
+      analysis_mode: 'test_multi_day',
+    })
+
+    const wrapper = mount(AnalyticsTablesWidget, {
+      props: {
+        profile: null,
+        matchId: 'match-001',
+        matchSource: 'historical',
+        matchTitle: 'AUS vs SA',
+        dataCompleteness: 'innings_totals',
+      },
+    })
+
+    await flushPromises()
+
+    const inningsSelect = wrapper.find('select[aria-label="Select innings"]')
+    expect(inningsSelect.html()).toContain('value="4"')
+    await inningsSelect.setValue('4')
+    await nextTick()
+    expect(wrapper.text()).toContain('251')
   })
 })

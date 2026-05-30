@@ -1,9 +1,13 @@
 from backend.services.analytics_case_study import (
+    _build_multi_day_summary,
     _build_innings_callouts,
     _compute_dismissal_patterns,
     _compute_phase_stats,
     _get_phase_ranges,
+    _resolve_analysis_mode,
 )
+from backend.api.schemas.case_study import CaseStudyInningsSummary, CaseStudyMatch
+from datetime import date
 
 
 def test_compute_dismissal_patterns_produces_timeline_and_fallback_flags() -> None:
@@ -73,3 +77,51 @@ def test_build_innings_callouts_contains_required_structure() -> None:
     assert isinstance(first.source_metrics, list)
     assert 0.0 <= first.confidence <= 1.0
     assert first.why_it_matters
+
+
+def test_resolve_analysis_mode_uses_test_multi_day_for_four_innings() -> None:
+    mode = _resolve_analysis_mode(
+        raw_match_type="TEST",
+        overs_per_side=90,
+        innings_count=4,
+        days_limit=5,
+    )
+    assert mode == "test_multi_day"
+
+
+def test_resolve_analysis_mode_preserves_limited_overs() -> None:
+    mode = _resolve_analysis_mode(
+        raw_match_type="T20",
+        overs_per_side=20,
+        innings_count=2,
+        days_limit=None,
+    )
+    assert mode == "limited_overs"
+
+
+def test_multi_day_summary_represents_four_innings() -> None:
+    match = CaseStudyMatch(
+        id="test-match",
+        date=date(2025, 1, 1),
+        format="TEST",
+        teams_label="AUS vs SA",
+        result="South Africa won by 3 wickets",
+        innings=[
+            CaseStudyInningsSummary(team="AUS", runs=320, wickets=10, overs=96.0, run_rate=3.33),
+            CaseStudyInningsSummary(team="SA", runs=280, wickets=10, overs=88.0, run_rate=3.18),
+            CaseStudyInningsSummary(team="AUS", runs=210, wickets=10, overs=70.0, run_rate=3.0),
+            CaseStudyInningsSummary(team="SA", runs=251, wickets=7, overs=82.0, run_rate=3.06),
+        ],
+    )
+    summary = _build_multi_day_summary(match)
+    assert len(summary.innings) == 4
+    assert summary.match_status == "won"
+    assert summary.fourth_innings_chase_note is not None
+
+
+def test_limited_overs_phase_labels_remain_for_t20() -> None:
+    phase_ranges = _get_phase_ranges("T20", 20)
+    labels = [label for _, label, *_ in phase_ranges]
+    assert labels[0].startswith("Powerplay")
+    assert "Middle Overs" in labels[1]
+    assert "Death Overs" in labels[2]

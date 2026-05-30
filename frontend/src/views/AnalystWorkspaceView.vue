@@ -427,7 +427,9 @@
                     v-if="matchDetail.key_phase"
                     class="aw-detail-keyphase"
                   >
-                    <h4 class="aw-detail-section-title">Key phase</h4>
+                    <h4 class="aw-detail-section-title">
+                      {{ matchDetail.analysis_mode === 'test_multi_day' ? 'Innings focus' : 'Key phase' }}
+                    </h4>
                     <p class="aw-detail-keyphase-title">
                       {{ matchDetail.key_phase.title }}
                     </p>
@@ -438,9 +440,23 @@
 
                   <!-- Phase breakdown -->
                   <section class="aw-detail-phases">
-                    <h4 class="aw-detail-section-title">Phase breakdown</h4>
+                    <h4 class="aw-detail-section-title">
+                      {{ matchDetail.analysis_mode === 'test_multi_day' ? 'Innings breakdown' : 'Phase breakdown' }}
+                    </h4>
+                    <p v-if="matchDetail.analysis_mode === 'test_multi_day'" class="aw-detail-empty-hint">
+                      {{
+                        matchDetail.multi_day_summary?.notice
+                          || 'Test/multi-day analysis is currently limited and uses innings/session-safe summaries.'
+                      }}
+                    </p>
                     <div
-                      v-if="!matchDetail.phases || matchDetail.phases.length === 0"
+                      v-if="matchDetail.analysis_mode === 'test_multi_day'"
+                      class="aw-detail-empty-hint"
+                    >
+                      Phase labels are hidden for Test/multi-day matches to avoid misleading limited-overs framing.
+                    </div>
+                    <div
+                      v-else-if="!matchDetail.phases || matchDetail.phases.length === 0"
                       class="aw-detail-empty-hint"
                     >
                       No phase data available yet.

@@ -271,6 +271,29 @@ class CaseStudyInningsAnalysis(BaseModel):
     callouts: list[CaseStudyAnalystCallout] = []
 
 
+class CaseStudyMultiDayInningsContext(BaseModel):
+    """Innings-scoped multi-day summary row."""
+
+    innings_number: int
+    team: str
+    runs: int
+    wickets: int
+    overs: float
+    deliveries: int | None = None
+    lead_deficit_after_innings: int | None = None
+
+
+class CaseStudyMultiDaySummary(BaseModel):
+    """Format-safe summary payload for Test/multi-day matches."""
+
+    match_status: Literal["won", "lost", "draw", "tie", "no_result", "unknown"]
+    innings: list[CaseStudyMultiDayInningsContext] = []
+    fourth_innings_chase_note: str | None = None
+    notice: str = (
+        "Test/multi-day analysis is currently limited and uses innings/session-safe summaries."
+    )
+
+
 # -----------------------------------------------------------------------------
 # AI Block
 # -----------------------------------------------------------------------------
@@ -299,6 +322,7 @@ class MatchCaseStudyResponse(BaseModel):
     Provides all data needed to render the MatchCaseStudyView.vue UI.
     """
 
+    analysis_mode: Literal["limited_overs", "test_multi_day", "unknown"] = "unknown"
     match: CaseStudyMatch
     momentum_summary: CaseStudyMomentumSummary
     key_phase: CaseStudyKeyPhase
@@ -308,4 +332,5 @@ class MatchCaseStudyResponse(BaseModel):
     innings_analysis: list[CaseStudyInningsAnalysis] = []
     match_callouts: list[CaseStudyAnalystCallout] = []
     match_level_summary: str | None = None
+    multi_day_summary: CaseStudyMultiDaySummary | None = None
     ai: CaseStudyAIBlock | None = None

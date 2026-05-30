@@ -27,7 +27,7 @@
         <select v-model="inningsFilter" class="analytics-select" aria-label="Select innings">
           <option value="all">All innings</option>
           <option
-            v-for="innings in [1, 2]"
+            v-for="innings in inningsFilterOptions"
             :key="`innings-option-${innings}`"
             :value="String(innings)"
             :disabled="!availableInningsSet.has(innings)"
@@ -315,7 +315,7 @@ import type { PlayerProfile } from '@/types/player'
 
 type AnalyticsChart = 'manhattan' | 'worm' | 'scatter'
 type AnalyticsCompleteness = 'delivery_complete' | 'phase_level' | 'innings_totals' | 'metadata_only'
-type InningsFilter = 'all' | '1' | '2'
+type InningsFilter = 'all' | `${number}`
 type ColorTheme = 'default' | 'high_contrast' | 'podcast_bright'
 type ManhattanViewMode = 'over' | 'delivery'
 type ScatterViewMode = 'over_vs_runs' | 'run_rate_vs_wickets' | 'delivery_index_vs_runs'
@@ -430,6 +430,7 @@ const error = ref<string | null>(null)
 const deliveries = ref<AnalystDeliveryRow[]>([])
 const deliveryCompleteness = ref<AnalyticsCompleteness>('metadata_only')
 const caseStudy = ref<MatchCaseStudyResponse | null>(null)
+const isTestMultiDay = computed(() => caseStudy.value?.analysis_mode === 'test_multi_day')
 
 const displayMatchTitle = computed(() => props.matchTitle || props.registryEntry?.match_title || 'Selected match')
 const displayMatchDate = computed(() => props.matchDate || props.registryEntry?.match_date || 'Date unavailable')
@@ -486,6 +487,8 @@ const themePalette = computed(() => {
 
 function inningsColor(innings: number): string {
   if (innings === 2) return themePalette.value.innings2
+  if (innings === 3) return themePalette.value.phase
+  if (innings === 4) return themePalette.value.neutral
   return themePalette.value.innings1
 }
 
@@ -515,17 +518,23 @@ const inningsTotals = computed<InningsBucket[]>(() =>
 const availableInningsSet = computed(() => {
   const inningsSet = new Set<number>()
   deliveries.value.forEach((row) => {
-    if (row.innings === 1 || row.innings === 2) inningsSet.add(row.innings)
+    if (typeof row.innings === 'number' && row.innings > 0) inningsSet.add(row.innings)
   })
   inningsTotals.value.forEach((innings) => {
-    if (innings.innings === 1 || innings.innings === 2) inningsSet.add(innings.innings)
+    if (innings.innings > 0) inningsSet.add(innings.innings)
   })
   return inningsSet
 })
 
+const inningsFilterOptions = computed(() =>
+  [...availableInningsSet.value].sort((a, b) => a - b)
+)
+
 const selectedInnings = computed<number | null>(() => {
-  if (inningsFilter.value === '1') return 1
-  if (inningsFilter.value === '2') return 2
+  if (inningsFilter.value !== 'all') {
+    const parsed = Number.parseInt(inningsFilter.value, 10)
+    if (Number.isFinite(parsed) && parsed > 0) return parsed
+  }
   return null
 })
 
@@ -534,8 +543,9 @@ const filteredInningsTotals = computed<InningsBucket[]>(() => {
   return inningsTotals.value.filter(innings => innings.innings === selectedInnings.value)
 })
 
-const phaseBuckets = computed<PhaseBucket[]>(() =>
-  (caseStudy.value?.phases || [])
+const phaseBuckets = computed<PhaseBucket[]>(() => {
+  if (isTestMultiDay.value) return []
+  return (caseStudy.value?.phases || [])
     .filter(phase => (phase.runs ?? 0) > 0 || (phase.wickets ?? 0) > 0)
     .map(phase => ({
       key: phase.id,
@@ -545,8 +555,8 @@ const phaseBuckets = computed<PhaseBucket[]>(() =>
       overs: phase.run_rate && phase.run_rate > 0
         ? Number((phase.runs / phase.run_rate).toFixed(2))
         : phaseOvers(phase.start_over, phase.end_over),
-    })),
-)
+    }))
+})
 
 const filteredDeliveries = computed<AnalystDeliveryRow[]>(() => {
   if (!selectedInnings.value) return deliveries.value

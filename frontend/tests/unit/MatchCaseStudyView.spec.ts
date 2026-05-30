@@ -42,6 +42,7 @@ const globalStubs = {
 }
 
 const baseCaseStudy = {
+  analysis_mode: 'limited_overs',
   match: {
     id: 'match-001',
     date: '2025-01-10',
@@ -369,6 +370,70 @@ describe('MatchCaseStudyView', () => {
     const cards = wrapper.findAll('[data-testid^="podcast-card-"]')
     expect(cards.length).toBe(9)
     expect(wrapper.text()).toContain('Needs review / rejected (9)')
+  })
+
+  it('renders test/multi-day innings-safe notice and four innings selectors', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue({
+      ...baseCaseStudy,
+      analysis_mode: 'test_multi_day',
+      match: {
+        ...baseCaseStudy.match,
+        format: 'TEST',
+        innings: [
+          { team: 'AUS', runs: 320, wickets: 10, overs: 96, run_rate: 3.33 },
+          { team: 'SA', runs: 280, wickets: 10, overs: 88, run_rate: 3.18 },
+          { team: 'AUS', runs: 210, wickets: 10, overs: 70, run_rate: 3.0 },
+          { team: 'SA', runs: 251, wickets: 7, overs: 82, run_rate: 3.06 },
+        ],
+      },
+      phases: [
+        { id: 'powerplay', label: 'Powerplay', start_over: 1, end_over: 6, runs: 24, wickets: 1, run_rate: 4, net_swing_vs_par: 0, impact: 'neutral', impact_label: 'On par' },
+      ],
+      innings_analysis: [
+        {
+          innings_index: 0,
+          team: 'AUS',
+          deterministic_summary: 'Innings 1 summary',
+          momentum_summary: { title: 'Innings-safe momentum summary', subtitle: 'Test-safe summary' },
+          key_phase: { title: 'Innings 1 summary', detail: 'Innings-safe detail' },
+          phases: [],
+          key_players: [],
+          key_players_scope: 'match',
+          dismissal_patterns: { summary: 'I1 dismissals' },
+          story_blocks: {
+            opening_story: 'I1 opening',
+            middle_overs_story: 'I1 middle',
+            death_overs_story: 'I1 late innings',
+            scoring_acceleration: 'I1 acceleration',
+            wickets_by_phase: 'I1 wickets',
+            strongest_phase: 'I1 strongest',
+            weakest_phase: 'I1 weakest',
+            innings_outcome_contribution: 'I1 contribution',
+          },
+          callouts: [],
+        },
+      ],
+      multi_day_summary: {
+        match_status: 'won',
+        notice: 'Test/multi-day analysis is currently limited and uses innings/session-safe summaries.',
+        innings: [
+          { innings_number: 1, team: 'AUS', runs: 320, wickets: 10, overs: 96, deliveries: 576, lead_deficit_after_innings: 320 },
+          { innings_number: 2, team: 'SA', runs: 280, wickets: 10, overs: 88, deliveries: 528, lead_deficit_after_innings: -40 },
+          { innings_number: 3, team: 'AUS', runs: 210, wickets: 10, overs: 70, deliveries: 420, lead_deficit_after_innings: 170 },
+          { innings_number: 4, team: 'SA', runs: 251, wickets: 7, overs: 82, deliveries: 492, lead_deficit_after_innings: 81 },
+        ],
+        fourth_innings_chase_note: 'Fourth-innings chase context',
+      },
+    } as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
+    await flushAsync()
+
+    expect(wrapper.text()).toContain('Test/multi-day analysis is currently limited and uses innings/session-safe summaries.')
+    expect(wrapper.text()).toContain('Innings 4 · SA')
+    expect(wrapper.text()).not.toContain('Net vs par')
+    expect(wrapper.text()).not.toContain('Powerplay (1-6)')
   })
 
   it('exports approved podcast rundown only by default', async () => {
