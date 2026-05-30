@@ -418,7 +418,7 @@ def classify_competition(
             return (str(entry["code"]), name)
 
     lowered = name.lower()
-    if age_category == "school" or _SCHOOL_KEYWORDS.search(name):
+    if age_category == "school":
         return ("SCHOOL_CRICKET", name)
     if _CUSTOM_KEYWORDS.search(name):
         return ("CUSTOM", name)
@@ -456,13 +456,15 @@ def classify_competition_type(
     team_names: list[str] | None = None,
 ) -> str:
     competition_type = _COMPETITION_TYPE_BY_CODE.get(competition_code)
-    if competition_type:
+    if competition_type and competition_type != "unknown":
         return competition_type
     lowered = (event_name or "").strip().lower()
     if any(token in lowered for token in ("world cup", "champions trophy")):
         return "international_tournament"
     if any(token in lowered for token in ("series",)):
         return "international_series"
+    if any(token in lowered for token in ("academy", "school", "schools")):
+        return "school_or_custom"
     if any(token in lowered for token in ("premier league", "hundred", "bbl", "ipl", "wpl")):
         return "franchise_league"
     if any(token in lowered for token in ("cup", "trophy")):
@@ -753,6 +755,8 @@ async def build_analyst_registry(
         stored_competition_code = hist_meta.get("competition_code") if hist_meta else None
         if isinstance(stored_competition_code, str) and stored_competition_code.strip():
             competition_code = stored_competition_code.strip()
+            if competition_code.upper() == "UNKNOWN":
+                competition_code = "unknown"
             competition_name = event_name or stored_competition_code.strip()
         else:
             competition_code, competition_name = classify_competition(

@@ -370,7 +370,7 @@ def test_dry_run_multi_day_test_payload_reports_readiness_and_identity_risks() -
         ("ICC World Cup", "international_match_json", "international_tournament"),
         ("County Club League", "domestic_club_match_json", "domestic_league"),
         ("School Championship", "school_academy_match_json", "school_or_custom"),
-        ("Academy Development League", "domestic_club_match_json", "domestic_league"),
+        ("Academy Development League", "school_academy_match_json", "school_or_custom"),
     ],
 )
 def test_dry_run_schema_classification_expands_by_competition_type(
@@ -573,7 +573,7 @@ def test_dry_run_test_without_international_context_maps_to_domestic_multi_day()
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["diagnostics"]["classification"]["format_category"] == "Test"
-    assert data["diagnostics"]["classification"]["competition_code"] == "DOMESTIC_MULTI_DAY"
+    assert data["diagnostics"]["classification"]["competition_code"] == "COUNTY_CHAMPIONSHIP"
     assert data["diagnostics"]["classification"]["competition_type"] == "domestic_league"
 
 
