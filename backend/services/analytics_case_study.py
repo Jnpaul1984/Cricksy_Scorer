@@ -8,6 +8,7 @@ including match metadata, phase breakdowns, key players, and AI summaries.
 from __future__ import annotations
 
 import contextlib
+import math
 from collections import defaultdict
 from datetime import date, datetime
 from typing import Any, Literal
@@ -73,6 +74,13 @@ def _resolved_result(game: Game) -> str:
     return "In progress"
 
 
+def _pluralize(count: int, singular: str, plural: str | None = None) -> str:
+    if count == 1:
+        return f"{count} {singular}"
+    resolved_plural = plural or f"{singular}s"
+    return f"{count} {resolved_plural}"
+
+
 def _get_phase_ranges(match_format: str, overs_per_side: int) -> list[tuple[str, str, int, int]]:
     """
     Return phase definitions based on match format.
@@ -96,7 +104,7 @@ def _get_phase_ranges(match_format: str, overs_per_side: int) -> list[tuple[str,
             ("middle", "Middle Overs (7-15)", 7, 15),
             ("death", "Death Overs (16-20)", 16, 20),
         ]
-    elif match_format.upper() in {"ODI", "ONE-DAY", "ONE_DAY", "LIST_A"} or overs_per_side >= 40:
+    elif match_format.upper() in {"ODI", "ODM", "ONE-DAY", "ONE_DAY", "LIST_A"} or overs_per_side >= 40:
         death_start = min(41, overs_per_side)
         return [
             ("powerplay", "Opening Powerplay (1-10)", 1, 10),
@@ -132,7 +140,7 @@ def _resolve_analysis_mode(
     ):
         return "test_multi_day"
     # ODI: explicit type or 40-50 overs per side
-    if normalized in {"ODI", "ONE-DAY", "ONE_DAY", "LIST_A"} or (
+    if normalized in {"ODI", "ODM", "ONE-DAY", "ONE_DAY", "LIST_A"} or (
         innings_count <= 2 and overs_per_side >= 40 and overs_per_side <= 60
     ):
         return "odi_limited_overs"
@@ -811,8 +819,8 @@ def _compute_dismissal_patterns(
                 best_window = (wickets_in_window, start, end)
         if best_window[0] >= 2:
             cluster_callout = (
-                f"Wicket cluster: {best_window[0]} wickets fell between overs "
-                f"{best_window[1]}-{best_window[2]}."
+                f"A key wicket cluster came between overs {best_window[1]} and "
+                f"{best_window[2]}, when {_pluralize(best_window[0], 'wicket')} fell."
             )
 
     fallback_reason = None
@@ -1075,7 +1083,7 @@ def _build_story_blocks(
         if opening:
             opening_story = (
                 f"The opening powerplay gave {innings_summary.team} "
-                f"{opening.runs} runs for {opening.wickets} wicket(s) "
+                f"{opening.runs} runs for {_pluralize(opening.wickets, 'wicket')} "
                 f"at {opening.run_rate:.2f} RPO (overs 1\u201310)."
             )
         else:
@@ -1085,11 +1093,13 @@ def _build_story_blocks(
         mid_parts = []
         if consol:
             mid_parts.append(
-                f"Overs 11\u201325 (consolidation): {consol.runs} runs, {consol.wickets} wicket(s) at {consol.run_rate:.2f} RPO."
+                f"Overs 11\u201325 (consolidation): {consol.runs} runs, "
+                f"{_pluralize(consol.wickets, 'wicket')} at {consol.run_rate:.2f} RPO."
             )
         if accel:
             mid_parts.append(
-                f"Overs 26\u201340 (acceleration): {accel.runs} runs, {accel.wickets} wicket(s) at {accel.run_rate:.2f} RPO."
+                f"Overs 26\u201340 (acceleration): {accel.runs} runs, "
+                f"{_pluralize(accel.wickets, 'wicket')} at {accel.run_rate:.2f} RPO."
             )
         middle_overs_story = (
             " ".join(mid_parts)
@@ -1099,7 +1109,10 @@ def _build_story_blocks(
 
         # Death overs story (41-50)
         if death:
-            death_overs_story = f"Death overs (41\u201350) yielded {death.runs} runs with {death.wickets} wicket(s) at {death.run_rate:.2f} RPO."
+            death_overs_story = (
+                f"Death overs (41\u201350) yielded {death.runs} runs with "
+                f"{_pluralize(death.wickets, 'wicket')} at {death.run_rate:.2f} RPO."
+            )
         else:
             death_overs_story = "Death-overs story unavailable from current data."
 
@@ -1119,7 +1132,7 @@ def _build_story_blocks(
 
         # Wickets by ODI phase
         wickets_by_phase = (
-            "; ".join(f"{phase.label}: {phase.wickets} wkt(s)" for phase in phases)
+            "; ".join(f"{phase.label}: {_pluralize(phase.wickets, 'wicket')}" for phase in phases)
             if phases
             else "Wickets by phase unavailable."
         )
@@ -1319,7 +1332,7 @@ def _build_innings_callouts(
                     category="dismissal",
                     severity="warning",
                     explanation=(
-                        f"Innings {innings_number} lost {opening.wickets} wicket(s) in the opening powerplay "
+                        f"Innings {innings_number} lost {_pluralize(opening.wickets, 'wicket')} in the opening powerplay "
                         f"(overs 1\u201310), limiting scoring platform."
                     ),
                     source_metrics=[f"wickets={opening.wickets}", f"runs={opening.runs}"],
@@ -1337,7 +1350,7 @@ def _build_innings_callouts(
                     category="momentum",
                     severity="warning",
                     explanation=(
-                        f"Overs 11\u201325 (consolidation): {consol.runs} runs, {consol.wickets} wicket(s) "
+                        f"Overs 11\u201325 (consolidation): {consol.runs} runs, {_pluralize(consol.wickets, 'wicket')} "
                         f"at {consol.run_rate:.2f} RPO."
                     ),
                     source_metrics=[
@@ -1381,7 +1394,7 @@ def _build_innings_callouts(
                     category="batting",
                     severity="positive",
                     explanation=(
-                        f"Death overs (41\u201350): {death.runs} runs, {death.wickets} wicket(s) "
+                        f"Death overs (41\u201350): {death.runs} runs, {_pluralize(death.wickets, 'wicket')} "
                         f"at {death.run_rate:.2f} RPO — {death.net_swing_vs_par:+d} vs par."
                     ),
                     source_metrics=[
@@ -1973,11 +1986,7 @@ async def _build_case_study_from_db(
     team_a_name = team_a.get("name", "Team A")
     team_b_name = team_b.get("name", "Team B")
 
-    overs_per_side = game.overs_limit or 20
     raw_match_type = game.match_type.upper() if game.match_type else "T20"
-    match_format = raw_match_type
-    if match_format not in ("T20", "ODI", "TEST"):
-        match_format = "CUSTOM"
 
     # Detect whether this is a historical import (Phase 5D+)
     game_phases_blob = game.phases if isinstance(game.phases, dict) else {}
@@ -2079,6 +2088,44 @@ async def _build_case_study_from_db(
             else:
                 innings_summaries.append(second_summary)
 
+    # Deliveries may be available for historical imports and live matches.
+    deliveries = game.deliveries or []
+
+    # Infer overs-per-side for formats where imported matches may not persist overs_limit.
+    overs_per_side_candidates: list[int] = []
+    if isinstance(game.overs_limit, int) and game.overs_limit > 0:
+        overs_per_side_candidates.append(game.overs_limit)
+    for innings_summary in innings_summaries:
+        if innings_summary.overs > 0:
+            overs_per_side_candidates.append(max(1, int(math.ceil(innings_summary.overs))))
+    if deliveries:
+        by_innings_max_over: dict[int, int] = {}
+        for delivery in deliveries:
+            over_number = int(delivery.get("over_number") or 0)
+            innings_number = int(delivery.get("inning") or 0)
+            if over_number <= 0 or innings_number <= 0:
+                continue
+            by_innings_max_over[innings_number] = max(
+                by_innings_max_over.get(innings_number, 0), over_number
+            )
+        overs_per_side_candidates.extend(
+            max_over for max_over in by_innings_max_over.values() if max_over > 0
+        )
+    overs_per_side = max(overs_per_side_candidates) if overs_per_side_candidates else 20
+
+    if raw_match_type in {"T20", "T20I", "TWENTY20", "20_OVER"}:
+        match_format = "T20"
+    elif raw_match_type in {"ODI", "ODM", "ONE-DAY", "ONE_DAY", "LIST_A"}:
+        match_format = "ODI"
+    elif raw_match_type in {"TEST", "FIRST_CLASS", "FIRST-CLASS", "MULTI_DAY", "MULTI-DAY"}:
+        match_format = "TEST"
+    elif overs_per_side >= 40:
+        match_format = "ODI"
+    elif overs_per_side <= 20:
+        match_format = "T20"
+    else:
+        match_format = "CUSTOM"
+
     # 4) Build CaseStudyMatch
     match_date = date.today()  # Game model doesn't have created_at exposed as date
     if hasattr(game, "created_at") and game.created_at:
@@ -2119,8 +2166,7 @@ async def _build_case_study_from_db(
         else None
     )
 
-    # 5) Get deliveries and key players
-    deliveries = game.deliveries or []
+    # 5) Get key players
     key_players = _compute_player_stats(
         deliveries,
         game.batting_scorecard or {},

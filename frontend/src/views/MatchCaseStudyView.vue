@@ -270,7 +270,7 @@
               class="cs-footnote"
             >
               Recovery (innings {{ rw.innings_number }}, overs {{ rw.overs_start }}–{{ rw.overs_end }}):
-              {{ rw.runs_scored }} runs, {{ rw.wickets_fell }} wicket(s) lost
+              {{ rw.runs_scored }} runs, {{ pluralizeWickets(rw.wickets_fell) }} lost
             </li>
           </ul>
         </BaseCard>
@@ -1408,7 +1408,11 @@ const podcastLimitations = computed(() => {
 function buildPodcastFactBundle(detail: MatchCaseStudyResponse): PodcastFactItem[] {
   const facts: PodcastFactItem[] = []
   const matchData = detail.match
-  facts.push({ id: 'match-result', source: 'match.result', value: matchData.result || 'Result unavailable' })
+  facts.push({
+    id: 'match-result',
+    source: 'match.result',
+    value: normalizeResultGrammar(matchData.result) || 'Result unavailable',
+  })
 
   const contextBits = [
     matchData.teams_label,
@@ -1452,7 +1456,7 @@ function buildPodcastFactBundle(detail: MatchCaseStudyResponse): PodcastFactItem
         source: 'multi_day_summary.fourth_innings_chase',
         value: `Fourth-innings chase: ${chase.chasing_team} scored ${chase.runs_scored}/${chase.wickets_lost} `
           + `chasing ${chase.target} (${chase.chase_result.replace('_', ' ')}, `
-          + `${chase.wickets_in_hand} wicket(s) in hand).`,
+          + `${pluralizeWickets(chase.wickets_in_hand)} in hand).`,
       })
     }
     ;(multiDaySummary.wicket_clusters ?? []).forEach((cluster, idx) => {
@@ -1469,7 +1473,7 @@ function buildPodcastFactBundle(detail: MatchCaseStudyResponse): PodcastFactItem
         id: `test-recovery-window-${idx + 1}`,
         source: 'multi_day_summary.recovery_windows',
         value: `Recovery period (innings ${rw.innings_number}, overs ${rw.overs_start}–${rw.overs_end}): `
-          + `${rw.runs_scored} runs, ${rw.wickets_fell} wicket(s) lost.`,
+          + `${rw.runs_scored} runs, ${pluralizeWickets(rw.wickets_fell)} lost.`,
       })
     })
     if (multiDaySummary.match_turning_point) {
@@ -1622,6 +1626,18 @@ function pluralizeWickets(n: number): string {
   return n === 1 ? '1 wicket' : `${n} wickets`
 }
 
+/** Returns "1 run" or "N runs" with correct pluralization. */
+function pluralizeRuns(n: number): string {
+  return n === 1 ? '1 run' : `${n} runs`
+}
+
+function normalizeResultGrammar(result: string | null | undefined): string {
+  if (!result) return ''
+  return result
+    .replace(/\b1 runs\b/gi, '1 run')
+    .replace(/\b1 wickets\b/gi, '1 wicket')
+}
+
 function extractOppositionTeam(teamsLabel: string | null | undefined, knownTeam: string): string | null {
   if (!teamsLabel || !knownTeam) return null
   const parts = teamsLabel.split(/\s+vs\s+/i).map((team) => team.trim()).filter(Boolean)
@@ -1687,7 +1703,7 @@ function buildPlayerSpotlightText(player: CaseStudyKeyPlayer): string {
     )
   }
   if (hasBatting) {
-    return `${name} (${team}) provided batting control with ${player.batting!.runs} runs off ${player.batting!.balls} balls.`
+    return `${name} anchored ${team}'s innings with ${player.batting!.runs} off ${player.batting!.balls} balls.`
   }
   if (hasBowling) {
     return `${name} (${team}) added bowling impact with ${pluralizeWickets(player.bowling!.wickets)}.`
@@ -1718,7 +1734,7 @@ function generatePodcastPrep() {
 
     // Build opening hook: venue-aware narrative sentence
     const openingHookText = (() => {
-      const result = detail.match.result
+      const result = normalizeResultGrammar(detail.match.result)
       if (chase?.chase_result === 'completed' && detail.match.venue) {
         const opposition = extractOppositionTeam(detail.match.teams_label, chase.chasing_team)
         const margin = extractResultMargin(result)
@@ -1937,58 +1953,37 @@ function generatePodcastPrep() {
     // ODI-specific podcast cards
     const phases1 = innings1?.phases ?? []
     const phases2 = innings2?.phases ?? []
+    const innings1Score = detail.match.innings?.[0]
+    const innings2Score = detail.match.innings?.[1]
+    const normalizedResult = normalizeResultGrammar(detail.match.result)
+    const openingResult = normalizedResult || detail.match.result || 'Result unavailable'
 
     // Helper: find a phase by id from innings analysis phases
     const findODIPhase = (phases: typeof phases1, id: string) =>
       phases.find((p) => p.id === id) ?? null
 
-    // Opening powerplay story
-    const pp1 = findODIPhase(phases1, 'powerplay')
-    const openingPowerplayText = pp1
-      ? `The opening powerplay gave ${innings1?.deterministic_summary
-          ? (innings1.story_blocks?.opening_story ?? `${detail.match.teams_label?.split(' vs ')[0] ?? 'the batting side'} early control.`)
-          : `${detail.match.teams_label?.split(' vs ')[0] ?? 'the batting side'} early control.`}`
-      : (innings1?.story_blocks?.opening_story ?? 'Opening powerplay story unavailable from current data.')
-
-    // Middle-overs (consolidation + acceleration) story from innings 1
-    const middleOversText =
-      innings1?.story_blocks?.middle_overs_story ?? 'Middle-overs story unavailable from current data.'
-
-    // Acceleration / death overs story from innings 1
-    const accel1 = findODIPhase(phases1, 'acceleration')
-    const death1 = findODIPhase(phases1, 'death')
-    const accelerationDeathText = (() => {
-      const parts: string[] = []
-      if (accel1) {
-        parts.push(
-          `The acceleration phase (overs 26–40) changed the scoring rate before the death overs` +
-          ` (${accel1.run_rate} RPO).`,
-        )
-      }
-      if (death1) {
-        parts.push(
-          `Death overs (41–50): ${death1.runs} runs, ${death1.wickets} wicket(s) at ${death1.run_rate} RPO.`,
-        )
-      }
-      return parts.length ? parts.join(' ') : (innings1?.story_blocks?.death_overs_story ?? 'Death-overs story unavailable.')
+    // First innings ODI summary with strongest phase context
+    const firstInningsText = (() => {
+      if (!innings1Score) return innings1?.deterministic_summary ?? 'First innings story unavailable.'
+      const strongest = phases1.length
+        ? [...phases1].sort((a, b) => b.runs - a.runs)[0]
+        : null
+      const strongestPhaseText = strongest
+        ? `, with the strongest scoring in ${strongest.label.toLowerCase()}`
+        : ''
+      return `${innings1Score.team} built their innings around ${innings1Score.runs}/${innings1Score.wickets} from ${innings1Score.overs} overs${strongestPhaseText}.`
     })()
 
     // Chase equation / second innings story
-    const chaseText = (() => {
-      if (!innings2) return 'Second innings data unavailable.'
-      const pp2 = findODIPhase(phases2, 'powerplay')
-      const consol2 = findODIPhase(phases2, 'consolidation')
-      const wicketNote =
-        consol2 && consol2.wickets >= 3
-          ? ` The chase was shaped by wickets in the middle overs (overs 11–25).`
+    const secondInningsText = (() => {
+      if (!innings2Score) return innings2?.deterministic_summary ?? 'Second innings data unavailable.'
+      const middleCluster = findODIPhase(phases2, 'consolidation')
+      const clusterText =
+        middleCluster && middleCluster.wickets >= 2
+          ? ` A key middle-over pressure point came in consolidation, where ${pluralizeWickets(middleCluster.wickets)} fell.`
           : ''
-      if (pp2) {
-        return (
-          `${innings2.deterministic_summary || `${innings2.team} chased.`}` +
-          wicketNote
-        )
-      }
-      return innings2.story_blocks?.opening_story ?? innings2.deterministic_summary ?? 'Chase story unavailable.'
+      const resultClause = normalizedResult ? `, ${normalizedResult.toLowerCase()}` : ''
+      return `${innings2Score.team} replied with ${innings2Score.runs}/${innings2Score.wickets} from ${innings2Score.overs} overs${resultClause}.${clusterText}`
     })()
 
     // Player spotlight
@@ -1996,23 +1991,49 @@ function generatePodcastPrep() {
       ? buildPlayerSpotlightText(leadPlayer)
       : 'Player impact unavailable.'
 
-    // Turning point
-    const turningPointText =
-      detail.key_phase?.detail ||
-      detail.momentum_summary?.subtitle ||
-      'Turning point unavailable from deterministic data.'
+    const dismissalPatternText = selectedDismissals?.wicket_cluster_callout
+      || selectedDismissals?.summary
+      || 'No wicket-cluster pattern was detected from deterministic delivery data.'
+
+    // Turning point (ODI-safe tactical framing)
+    const turningPointText = (() => {
+      const opening = findODIPhase(phases1, 'powerplay')
+      const acceleration = findODIPhase(phases1, 'acceleration')
+      const death = findODIPhase(phases1, 'death')
+      if (normalizedResult.toLowerCase().includes('won by 1 run') && innings1Score && innings2Score) {
+        return `${innings2Score.team} fell ${pluralizeRuns(1)} short despite matching ${innings1Score.team} deep into the chase.`
+      }
+      if (opening && acceleration && acceleration.run_rate > opening.run_rate) {
+        return `${innings1?.team ?? innings1Score?.team ?? 'The batting side'}'s slow opening powerplay was offset by stronger scoring in acceleration.`
+      }
+      if (death && death.runs > 0) {
+        return `Execution in the death overs (41–50) proved decisive in the final ODI balance.`
+      }
+      return detail.momentum_summary?.subtitle || 'Turning point unavailable from deterministic data.'
+    })()
+
+    const tacticalLessonText = (() => {
+      const consol = findODIPhase(phases1, 'consolidation')
+      const accel = findODIPhase(phases1, 'acceleration')
+      if (consol && accel) {
+        return `In 50-over cricket, the consolidation and acceleration phases can decide whether a slow start is recoverable.`
+      }
+      return 'In 50-over cricket, middle-overs control often decides whether totals are defendable or chaseable.'
+    })()
 
     // Closing question
-    const closingQuestionText =
-      detail.key_phase?.title
-        ? `How should teams approach the acceleration phase when the match situation resembles ${detail.key_phase.title}?`
-        : 'What tactical lesson from this ODI should teams carry into their next 50-over match?'
+    const closingQuestionText = (() => {
+      if (normalizedResult.toLowerCase().includes('won by 1 run')) {
+        return 'In a one-run ODI, which mattered more: the early scoring rate, the middle-over wicket cluster, or execution at the death?'
+      }
+      return `Was this match decided by the first-innings total, chase management, or the wicket cluster in the middle overs?`
+    })()
 
     podcastCards.value = [
       createPodcastCard(
         'opening-hook',
         'Opening hook',
-        `${detail.match.teams_label}: ${detail.match.result}.`,
+        `${detail.match.teams_label}: ${openingResult}.`,
         'intro',
         ['match.result'],
       ),
@@ -2031,32 +2052,18 @@ function generatePodcastPrep() {
         ['match.context'],
       ),
       createPodcastCard(
-        'odi-opening-powerplay',
-        'Opening powerplay story',
-        openingPowerplayText,
+        'odi-first-innings-story',
+        'First innings story',
+        firstInningsText,
         'innings_1',
-        ['innings_story.opening', 'phase_breakdown.powerplay'],
+        ['innings_summary.innings_1', 'phase_breakdown'],
       ),
       createPodcastCard(
-        'odi-middle-overs',
-        'Middle-overs control or pressure',
-        middleOversText,
-        'innings_1',
-        ['innings_story.middle', 'phase_breakdown.consolidation'],
-      ),
-      createPodcastCard(
-        'odi-acceleration-death',
-        'Acceleration and death overs finish',
-        accelerationDeathText,
-        'innings_1',
-        ['phase_breakdown.acceleration', 'phase_breakdown.death'],
-      ),
-      createPodcastCard(
-        'odi-chase',
-        'Chase equation / second innings',
-        chaseText,
+        'odi-second-innings-story',
+        'Second innings story',
+        secondInningsText,
         'innings_2',
-        ['innings_story.opening', 'innings_summary.innings_2'],
+        ['innings_summary.innings_2', 'phase_breakdown'],
       ),
       createPodcastCard(
         'player-spotlight',
@@ -2066,18 +2073,32 @@ function generatePodcastPrep() {
         ['key_players.impact'],
       ),
       createPodcastCard(
+        'dismissal-pattern',
+        'Dismissal pattern',
+        dismissalPatternText,
+        'tactical_discussion',
+        ['dismissal_patterns.wicket_cluster'],
+      ),
+      createPodcastCard(
         'turning-point',
         'Turning point',
         turningPointText,
         'tactical_discussion',
-        ['analytics_insight.key_phase'],
+        ['phase_breakdown', 'match.result'],
+      ),
+      createPodcastCard(
+        'tactical-lesson',
+        'Tactical lesson',
+        tacticalLessonText,
+        'tactical_discussion',
+        ['phase_breakdown.consolidation', 'phase_breakdown.acceleration'],
       ),
       createPodcastCard(
         'closing-question',
         'Closing question',
         closingQuestionText,
         'closing_question',
-        ['analytics_insight.key_phase'],
+        ['match.result', 'dismissal_patterns.wicket_cluster'],
       ),
     ]
   } else {
@@ -2085,7 +2106,7 @@ function generatePodcastPrep() {
       createPodcastCard(
         'opening-hook',
         'Opening hook',
-        `${detail.match.teams_label}: ${detail.match.result}.`,
+        `${detail.match.teams_label}: ${normalizeResultGrammar(detail.match.result) || detail.match.result || 'Result unavailable'}.`,
         'intro',
         ['match.result'],
       ),
