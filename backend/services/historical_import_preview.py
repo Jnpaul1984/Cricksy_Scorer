@@ -988,7 +988,9 @@ def _classify_competition_type(
         event_name=event_name,
         team_names=teams,
     )
-    return (competition_type, "inferred") if competition_type != "unknown" else ("unknown", "unknown")
+    return (
+        (competition_type, "inferred") if competition_type != "unknown" else ("unknown", "unknown")
+    )
 
 
 def _classify_schema(
@@ -1112,7 +1114,11 @@ def _build_validation_diagnostics(
             "competition_unknown_reason": (
                 None
                 if competition_code != "UNKNOWN"
-                else ("missing_event_name" if not metadata_preview.event_name else "unmapped_event_name")
+                else (
+                    "missing_event_name"
+                    if not metadata_preview.event_name
+                    else "unmapped_event_name"
+                )
             ),
             "competition_type": competition_type,
             "competition_type_status": competition_type_status,
