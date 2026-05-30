@@ -84,6 +84,24 @@ class TestCompetitionClassification:
         code, _ = classify_competition("Super50 Cup")
         assert code == "unknown"
 
+    def test_one_day_cup_classification(self) -> None:
+        code, name = classify_competition("One-Day Cup", match_format="ODM")
+        assert code == "ONE_DAY_CUP"
+        assert name == "One-Day Cup"
+
+    def test_international_test_series_classification(self) -> None:
+        code, name = classify_competition(
+            "South Africa in Australia Test Series",
+            match_format="Test",
+            team_names=["Australia", "South Africa"],
+        )
+        assert code == "INTERNATIONAL_TEST_SERIES"
+        assert name == "South Africa in Australia Test Series"
+
+    def test_t20_blast_classification(self) -> None:
+        code, _ = classify_competition("Vitality Blast", match_format="T20")
+        assert code == "T20_BLAST"
+
     def test_empty_name_is_unknown(self) -> None:
         code, _ = classify_competition("")
         assert code == "unknown"

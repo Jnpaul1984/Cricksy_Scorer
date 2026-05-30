@@ -1000,7 +1000,7 @@ async def test_match_registry_for_applied_historical_import(client: TestClient) 
     assert data["source_format"] is not None
     assert data["source_schema"] == "cricksy_fixture"
     assert data["adapter_id"] == "historical_json_competition_adapter"
-    assert data["adapter_version"] == "10b.1"
+    assert data["adapter_version"] == "10s.0"
     assert data["competition_type"] == "unknown"
     assert data["competition_name"] is None
     assert data["match_format"] == "t20"

@@ -51,12 +51,13 @@ class HistoricalImportSchemaClassification(BaseModel):
 class HistoricalImportCompetitionContext(BaseModel):
     competition_code: str = "UNKNOWN"
     competition_type: Literal[
-        "franchise",
-        "club",
-        "international",
-        "domestic",
-        "school",
-        "academy",
+        "international_series",
+        "international_tournament",
+        "domestic_league",
+        "domestic_cup",
+        "franchise_league",
+        "regional_league",
+        "school_or_custom",
         "unknown",
     ] = "unknown"
     competition_name: str | None = None
