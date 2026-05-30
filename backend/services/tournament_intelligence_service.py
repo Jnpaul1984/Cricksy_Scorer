@@ -245,7 +245,7 @@ def _build_derived_standings(
         }
     )
 
-    for game, _batch, meta, match in group_games:
+    for game, _batch, _meta, match in group_games:
         team_a = match.team_a or "Team A"
         team_b = match.team_b or "Team B"
         team_a_canonical = match.team_a_canonical or team_a
@@ -346,11 +346,7 @@ def _build_derived_standings(
             nrr = round(run_rate_for - run_rate_against, 3)
             nrr_available = True
 
-        confidence: str
-        if acc["wins"] + acc["losses"] > 0:
-            confidence = "medium"
-        else:
-            confidence = "low"
+        confidence = "medium" if acc["wins"] + acc["losses"] > 0 else "low"
 
         rows.append(
             DerivedStandingsRow(
@@ -473,9 +469,7 @@ def _build_tournament_summary(
             match_margins_runs.append((margin_val, match.winner_team or "", match_title, match_id))
         if wkts_margin_m:
             margin_val = int(wkts_margin_m.group(1))
-            match_margins_wkts.append(
-                (margin_val, match.winner_team or "", match_title, match_id)
-            )
+            match_margins_wkts.append((margin_val, match.winner_team or "", match_title, match_id))
 
     # --- Build highlights ---
     biggest_win_runs: TournamentMatchHighlight | None = None
@@ -548,12 +542,8 @@ def _build_tournament_summary(
     top_run_scorer: TournamentPlayerLeader | None = None
     top_wicket_taker: TournamentPlayerLeader | None = None
 
-    batting_acc: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"runs": 0, "matches": 0}
-    )
-    bowling_acc: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"wickets": 0, "matches": 0}
-    )
+    batting_acc: dict[str, dict[str, Any]] = defaultdict(lambda: {"runs": 0, "matches": 0})
+    bowling_acc: dict[str, dict[str, Any]] = defaultdict(lambda: {"wickets": 0, "matches": 0})
     for game, _batch, meta, _match in group_games:
         if meta.get("deliveries_imported") or (
             isinstance(game.deliveries, list) and len(game.deliveries) > 0
@@ -595,9 +585,10 @@ def _build_tournament_summary(
     confidence_level: str
     if dc_delivery > len(group_games) // 2:
         confidence_level = "high"
-    elif dc_delivery + dc_phase > len(group_games) // 2:
-        confidence_level = "medium"
-    elif matches_with_result > len(group_games) // 2:
+    elif (
+        dc_delivery + dc_phase > len(group_games) // 2
+        or matches_with_result > len(group_games) // 2
+    ):
         confidence_level = "medium"
     else:
         confidence_level = "low"
@@ -881,9 +872,7 @@ def _build_team_journey(
 
         opponent = tb if team_is_a else ta
         venue = match.venue or (str(meta.get("venue") or "")).strip() or None
-        stage_label = _detect_stage_label(
-            meta, f"{ta} vs {tb}"
-        )
+        stage_label = _detect_stage_label(meta, f"{ta} vs {tb}")
 
         # Determine outcome
         outcome_str = _derive_outcome(game.result, team_name)
@@ -922,7 +911,9 @@ def _build_team_journey(
         if game.result:
             m = re.search(r"won by (\d+ (?:runs?|wickets?))", game.result, re.I)
             if m:
-                margin_note = f"Won by {m.group(1)}" if outcome_str == "win" else f"Lost ({m.group(0)})"
+                margin_note = (
+                    f"Won by {m.group(1)}" if outcome_str == "win" else f"Lost ({m.group(0)})"
+                )
 
         journey_matches.append(
             TeamJourneyMatch(
@@ -965,6 +956,7 @@ def _build_team_journey(
             if jm.team_runs is not None and jm.opponent_runs is not None:
                 return abs(jm.team_runs - jm.opponent_runs)
             return 9999
+
         closest_m = min(all_decided, key=_run_diff)
 
     # Top scorer
@@ -1091,9 +1083,7 @@ async def get_tournament_groups(
     # Index outcomes by (competition_code, season, gender)
     outcome_index: dict[tuple[str, str | None, str], SeasonOutcomeAggregate] = {}
     for outcome in season_outcomes:
-        outcome_index[
-            (outcome.competition_code, outcome.season, outcome.gender_category)
-        ] = outcome
+        outcome_index[(outcome.competition_code, outcome.season, outcome.gender_category)] = outcome
 
     summaries: list[TournamentGroupSummary] = []
     for (
@@ -1121,18 +1111,22 @@ async def get_tournament_groups(
             source_type="historical_import",
         )
 
-        outcome = outcome_index.get((competition_code, season_value, gender_category))
-        champion_detected = bool(outcome and outcome.champion_team_canonical)
+        group_outcome = outcome_index.get((competition_code, season_value, gender_category))
+        champion_detected = bool(group_outcome and group_outcome.champion_team_canonical)
         champion_team = (
-            outcome.champion_team_canonical if outcome and outcome.champion_team_canonical else None
+            group_outcome.champion_team_canonical
+            if group_outcome and group_outcome.champion_team_canonical
+            else None
         )
-        confidence = outcome.confidence if outcome else "unknown"
+        confidence = group_outcome.confidence if group_outcome else "unknown"
         has_result = any(
-            bool(g.result or match_agg.winner_team)
-            for g, _b, _m, match_agg in group_games
+            bool(g.result or match_agg.winner_team) for g, _b, _m, match_agg in group_games
         )
         has_delivery = any(
-            bool(meta.get("deliveries_imported") or (isinstance(g.deliveries, list) and len(g.deliveries) > 0))
+            bool(
+                meta.get("deliveries_imported")
+                or (isinstance(g.deliveries, list) and len(g.deliveries) > 0)
+            )
             for g, _b, meta, _ in group_games
         )
         teams_set: set[str] = set()

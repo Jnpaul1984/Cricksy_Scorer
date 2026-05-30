@@ -85,7 +85,9 @@ async def list_tournament_groups(
 async def get_tournament_summary_endpoint(
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
     db: AsyncSession = Depends(_get_ti_db),
-    competition_code: str = Query(..., description="Competition code, e.g. CPL_MEN, WCPL, ONE_DAY_CUP"),
+    competition_code: str = Query(
+        ..., description="Competition code, e.g. CPL_MEN, WCPL, ONE_DAY_CUP"
+    ),
     season: str | None = Query(None, description="Season label, e.g. 2023 or '2023/24'"),
     gender_category: str = Query("unknown", description="Gender: men | women | mixed | unknown"),
 ) -> TournamentSummaryResponse:
@@ -107,7 +109,9 @@ async def get_tournament_summary_endpoint(
     Returns 404 if no matches are found for the specified group.
     No official cricket standings or championship data are mutated.
     """
-    result = await get_tournament_summary(db, current_user, competition_code, season, gender_category)
+    result = await get_tournament_summary(
+        db, current_user, competition_code, season, gender_category
+    )
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -10,7 +10,7 @@ confidence level. No official standings or statistics are fabricated.
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -76,7 +76,8 @@ class TournamentMatchHighlight(BaseModel):
     match_date: str | None = None
     stage_label: str | None = None
     result: str | None = None
-    highlight_type: str  # biggest_win_runs | biggest_win_wickets | closest_match | final | semi_final
+    # biggest_win_runs | biggest_win_wickets | closest_match | final | semi_final
+    highlight_type: str
     detail: str | None = None
 
 
@@ -177,12 +178,12 @@ class TournamentSummaryResponse(BaseModel):
 
     # Derived standings (labeled as non-official)
     derived_standings: list[DerivedStandingsRow] = Field(default_factory=list)
-    standings_label: str = "Derived standings — estimated from imported match results only. Not official."
+    standings_label: str = (
+        "Derived standings — estimated from imported match results only. Not official."
+    )
 
     # Knockout / finals context
-    knockout_context: TournamentKnockoutContext = Field(
-        default_factory=TournamentKnockoutContext
-    )
+    knockout_context: TournamentKnockoutContext = Field(default_factory=TournamentKnockoutContext)
 
     # Data completeness
     data_completeness: TournamentDataCompleteness = Field(

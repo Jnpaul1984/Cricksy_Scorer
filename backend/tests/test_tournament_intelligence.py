@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -627,8 +627,12 @@ class TestBuildKnockoutContext:
 class TestGroupEligibleGames:
     def test_same_competition_grouped_together(self) -> None:
         entries = [
-            _make_eligible_entry(game_id="g1", event_name="Caribbean Premier League", season="2023"),
-            _make_eligible_entry(game_id="g2", event_name="Caribbean Premier League", season="2023"),
+            _make_eligible_entry(
+                game_id="g1", event_name="Caribbean Premier League", season="2023"
+            ),
+            _make_eligible_entry(
+                game_id="g2", event_name="Caribbean Premier League", season="2023"
+            ),
         ]
         groups = _group_eligible_games(entries)
         # Both should be in the same group
@@ -639,15 +643,21 @@ class TestGroupEligibleGames:
 
     def test_different_seasons_different_groups(self) -> None:
         entries = [
-            _make_eligible_entry(game_id="g1", event_name="Caribbean Premier League", season="2022"),
-            _make_eligible_entry(game_id="g2", event_name="Caribbean Premier League", season="2023"),
+            _make_eligible_entry(
+                game_id="g1", event_name="Caribbean Premier League", season="2022"
+            ),
+            _make_eligible_entry(
+                game_id="g2", event_name="Caribbean Premier League", season="2023"
+            ),
         ]
         groups = _group_eligible_games(entries)
         assert len(groups) == 2
 
     def test_different_competitions_different_groups(self) -> None:
         entries = [
-            _make_eligible_entry(game_id="g1", event_name="Caribbean Premier League", season="2023"),
+            _make_eligible_entry(
+                game_id="g1", event_name="Caribbean Premier League", season="2023"
+            ),
             _make_eligible_entry(game_id="g2", event_name="One Day Cup", season="2023"),
         ]
         groups = _group_eligible_games(entries)
@@ -657,7 +667,9 @@ class TestGroupEligibleGames:
 
     def test_unknown_competition_in_own_group(self) -> None:
         entries = [
-            _make_eligible_entry(game_id="g1", event_name="Some Unknown League 2023", season="2023"),
+            _make_eligible_entry(
+                game_id="g1", event_name="Some Unknown League 2023", season="2023"
+            ),
         ]
         groups = _group_eligible_games(entries)
         key = next(iter(groups))
