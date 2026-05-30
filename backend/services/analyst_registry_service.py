@@ -295,9 +295,7 @@ async def build_analyst_registry(
         for batch in batch_result.scalars().all():
             batches_by_id[str(batch.id)] = batch
 
-    entries_with_sort: list[
-        tuple[tuple[int, date, datetime, str], AnalystRegistryEntry]
-    ] = []
+    entries_with_sort: list[tuple[tuple[int, date, datetime, str], AnalystRegistryEntry]] = []
 
     for game in games:
         hist_meta = _hist_meta_from_game(game)
@@ -392,7 +390,9 @@ async def build_analyst_registry(
             )
         )
 
-    entries = [entry for _, entry in sorted(entries_with_sort, key=lambda item: item[0], reverse=True)]
+    entries = [
+        entry for _, entry in sorted(entries_with_sort, key=lambda item: item[0], reverse=True)
+    ]
 
     # Build diagnostics
     diagnostics: dict[str, int] = {

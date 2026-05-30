@@ -479,7 +479,9 @@ def test_dry_run_maps_english_domestic_t20_and_resolves_kennington_oval() -> Non
     data = response.json()
     assert data["diagnostics"]["classification"]["competition_code"] == "DOMESTIC_T20_ENGLAND"
     assert data["diagnostics"]["classification"]["competition_type"] == "domestic"
-    assert data["diagnostics"]["venue_check"]["venue_canonical"] == "Kennington Oval, London, England"
+    assert (
+        data["diagnostics"]["venue_check"]["venue_canonical"] == "Kennington Oval, London, England"
+    )
     assert data["diagnostics"]["venue_check"]["venue_country"] == "England"
     assert data["diagnostics"]["venue_check"]["venue_confidence"] in {"high", "medium"}
     assert data["canonical_preview"]["venue_context"]["country"] == "England"

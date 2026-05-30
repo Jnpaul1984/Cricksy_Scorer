@@ -365,7 +365,9 @@ class MatchCaseStudyResponse(BaseModel):
     Provides all data needed to render the MatchCaseStudyView.vue UI.
     """
 
-    analysis_mode: Literal["limited_overs", "odi_limited_overs", "t20_limited_overs", "test_multi_day", "unknown"] = "unknown"
+    analysis_mode: Literal[
+        "limited_overs", "odi_limited_overs", "t20_limited_overs", "test_multi_day", "unknown"
+    ] = "unknown"
     match: CaseStudyMatch
     momentum_summary: CaseStudyMomentumSummary
     key_phase: CaseStudyKeyPhase

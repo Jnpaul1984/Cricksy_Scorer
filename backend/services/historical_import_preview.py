@@ -499,16 +499,22 @@ def _classify_competition_code(
     lowered = (event_name or "").strip().lower()
     normalized_teams = {team.strip().lower() for team in team_names if team.strip()}
     if not lowered:
-        if format_category == "T20" and normalized_teams and normalized_teams.issubset(
-            _INTERNATIONAL_TEAM_HINTS
+        if (
+            format_category == "T20"
+            and normalized_teams
+            and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS)
         ):
             return "INTERNATIONAL_T20", "inferred"
-        if format_category == "ODI" and normalized_teams and normalized_teams.issubset(
-            _INTERNATIONAL_TEAM_HINTS
+        if (
+            format_category == "ODI"
+            and normalized_teams
+            and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS)
         ):
             return "INTERNATIONAL_ODI", "inferred"
-        if format_category == "Test" and normalized_teams and normalized_teams.issubset(
-            _INTERNATIONAL_TEAM_HINTS
+        if (
+            format_category == "Test"
+            and normalized_teams
+            and normalized_teams.issubset(_INTERNATIONAL_TEAM_HINTS)
         ):
             return "INTERNATIONAL_TEST", "inferred"
         if format_category in {"Test", "First-class / multi-day"}:

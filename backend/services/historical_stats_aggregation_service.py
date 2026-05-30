@@ -249,9 +249,9 @@ def _build_season_outcomes(
         gender_category = classify_gender(competition_code, meta.get("gender"))
         season_value = match.season
         season_year = _season_year_value(season_value)
-        grouped[(competition_code, competition_name, gender_category, season_value, season_year)].append(
-            (game, meta, match)
-        )
+        grouped[
+            (competition_code, competition_name, gender_category, season_value, season_year)
+        ].append((game, meta, match))
 
     outcomes: list[SeasonOutcomeAggregate] = []
     for (
@@ -260,14 +260,18 @@ def _build_season_outcomes(
         gender_category,
         season_value,
         season_year,
-    ), grouped_matches in sorted(grouped.items(), key=lambda item: (item[0][1], item[0][3] or "", item[0][2])):
+    ), grouped_matches in sorted(
+        grouped.items(), key=lambda item: (item[0][1], item[0][3] or "", item[0][2])
+    ):
         playoff_stage_matches: list[SeasonOutcomeStageMatch] = []
         final_candidates: list[tuple[Game, MatchAggregate, str]] = []
         winner_counts: dict[str, int] = defaultdict(int)
         winner_raws: dict[str, set[str]] = defaultdict(set)
 
         for game, meta, match in grouped_matches:
-            stage_label = _detect_stage_label(meta, f"{match.team_a or 'Team A'} vs {match.team_b or 'Team B'}")
+            stage_label = _detect_stage_label(
+                meta, f"{match.team_a or 'Team A'} vs {match.team_b or 'Team B'}"
+            )
             if stage_label:
                 playoff_stage_matches.append(
                     SeasonOutcomeStageMatch(
@@ -295,7 +299,11 @@ def _build_season_outcomes(
             sorted_wins = sorted(winner_counts.items(), key=lambda item: (-item[1], item[0]))
             if len(sorted_wins) == 1 or sorted_wins[0][1] > sorted_wins[1][1]:
                 league_leader_canonical = sorted_wins[0][0]
-                league_leader_raw = sorted(winner_raws.get(league_leader_canonical, set()))[0] if winner_raws.get(league_leader_canonical) else league_leader_canonical
+                league_leader_raw = (
+                    sorted(winner_raws.get(league_leader_canonical, set()))[0]
+                    if winner_raws.get(league_leader_canonical)
+                    else league_leader_canonical
+                )
 
         champion_team_raw: str | None = None
         champion_team_canonical: str | None = None
@@ -312,7 +320,9 @@ def _build_season_outcomes(
         if len(final_candidates) == 1:
             final_game, final_match, _final_stage = final_candidates[0]
             final_match_id = final_match.match_id
-            final_match_title = f"{final_match.team_a or 'Team A'} vs {final_match.team_b or 'Team B'}"
+            final_match_title = (
+                f"{final_match.team_a or 'Team A'} vs {final_match.team_b or 'Team B'}"
+            )
             final_match_date = final_match.match_date
             final_result = final_game.result
             if final_match.winner_team_canonical:
@@ -337,7 +347,9 @@ def _build_season_outcomes(
                 outcome_source = "final_without_parsed_winner"
                 confidence = "low"
         elif len(final_candidates) > 1:
-            unresolved_reason = "Multiple final-stage matches were detected; champion is unresolved."
+            unresolved_reason = (
+                "Multiple final-stage matches were detected; champion is unresolved."
+            )
             outcome_source = "multiple_final_candidates"
             confidence = "low"
         else:
@@ -415,7 +427,11 @@ def _build_trophy_summary(outcomes: list[SeasonOutcomeAggregate]) -> list[Trophy
 
     return sorted(
         trophy_rows.values(),
-        key=lambda row: (-row.trophies_detected, -row.finals_appearances_detected, row.canonical_team),
+        key=lambda row: (
+            -row.trophies_detected,
+            -row.finals_appearances_detected,
+            row.canonical_team,
+        ),
     )
 
 
@@ -1026,6 +1042,7 @@ def _build_case_studies(
         and int(m.phase_breakdown["powerplay"].get("legal_balls") or 0) > 0
     ]
     if powerplay_candidates:
+
         def _pp_run_rate(match: MatchAggregate) -> float:
             phase = match.phase_breakdown["powerplay"]
             legal_balls = int(phase.get("legal_balls") or 0)
@@ -1193,7 +1210,9 @@ async def get_historical_stats_summary(
             "confidence": "medium",
         }
 
-    matches_with_parsed_winner = sum(1 for match in match_aggregates if match.winner_team is not None)
+    matches_with_parsed_winner = sum(
+        1 for match in match_aggregates if match.winner_team is not None
+    )
     scorecard_derived_wicket_matches = sum(
         1 for match in match_aggregates if match.wicket_derivation_source == "scorecard"
     )
@@ -1213,12 +1232,16 @@ async def get_historical_stats_summary(
     season_grouped_from_match_date = sum(
         1 for match in match_aggregates if match.season_source == "match_date"
     )
-    season_grouped_missing = sum(1 for match in match_aggregates if match.season_source == "missing")
+    season_grouped_missing = sum(
+        1 for match in match_aggregates if match.season_source == "missing"
+    )
     diagnostics = {
         "matches_imported": len(match_aggregates),
         "matches_with_parsed_winner": matches_with_parsed_winner,
         "matches_missing_winner_or_result": len(match_aggregates) - matches_with_parsed_winner,
-        "delivery_complete_matches": sum(1 for match in match_aggregates if match.has_delivery_data),
+        "delivery_complete_matches": sum(
+            1 for match in match_aggregates if match.has_delivery_data
+        ),
         "delivery_derived_wicket_matches": delivery_derived_wicket_matches,
         "scorecard_derived_wicket_matches": scorecard_derived_wicket_matches,
         "canonical_teams_represented": len(canonical_teams),

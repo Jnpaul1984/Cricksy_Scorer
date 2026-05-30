@@ -590,7 +590,9 @@ class TestAnalystRegistryEndpoint:
         ordered_ids = [entry["match_id"] for entry in entries[:3]]
         assert ordered_ids == [newest_game_id, middle_game_id, oldest_game_id]
 
-    def test_registry_places_missing_match_dates_after_dated_entries(self, client: TestClient) -> None:
+    def test_registry_places_missing_match_dates_after_dated_entries(
+        self, client: TestClient
+    ) -> None:
         token = _analyst_token(client)
         _, dated_game_id = _apply_fixture(
             client,
@@ -619,7 +621,9 @@ class TestAnalystRegistryEndpoint:
         assert entries[-1]["match_id"] == undated_game_id
         assert entries[-1]["match_date"] is None
 
-    def test_registry_uses_created_at_fallback_for_undated_entries(self, client: TestClient) -> None:
+    def test_registry_uses_created_at_fallback_for_undated_entries(
+        self, client: TestClient
+    ) -> None:
         token = _analyst_token(client)
         older_batch_id, older_game_id = _apply_fixture(
             client,
@@ -651,4 +655,7 @@ class TestAnalystRegistryEndpoint:
         resp = client.get("/analytics/matches/registry", headers=_auth_headers(token))
         assert resp.status_code == 200, resp.text
         undated_entries = [entry for entry in resp.json()["entries"] if entry["match_date"] is None]
-        assert [entry["match_id"] for entry in undated_entries[:2]] == [newer_game_id, older_game_id]
+        assert [entry["match_id"] for entry in undated_entries[:2]] == [
+            newer_game_id,
+            older_game_id,
+        ]

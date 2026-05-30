@@ -268,18 +268,18 @@ def test_recovery_window_detection_after_cluster() -> None:
     deliveries = []
     for ov in range(32, 38):
         for ball in range(1, 7):
-            deliveries.append({
-                "inning": 1,
-                "over_number": ov,
-                "ball_number": ball,
-                "is_wicket": False,
-                "runs_off_bat": 1,
-                "extras": 0,
-            })
+            deliveries.append(
+                {
+                    "inning": 1,
+                    "over_number": ov,
+                    "ball_number": ball,
+                    "is_wicket": False,
+                    "runs_off_bat": 1,
+                    "extras": 0,
+                }
+            )
     # This gives 6 runs per over, 36 total over 6 overs — should be recovery
-    recovery_windows = _detect_recovery_windows_from_deliveries(
-        deliveries, 1, cluster_overs=[30]
-    )
+    recovery_windows = _detect_recovery_windows_from_deliveries(deliveries, 1, cluster_overs=[30])
     assert recovery_windows, "Expected a recovery window after overs of scoring without wickets"
     rw = recovery_windows[0]
     assert rw.wickets_fell == 0
@@ -291,11 +291,12 @@ def test_multi_day_band_labels_use_passage_names() -> None:
     """_test_multi_day_ranges returns 'passage' labels, not generic 'Overs N-M'."""
     ranges = _test_multi_day_ranges(90.0)
     labels = [r[1] for r in ranges]
-    assert any("passage" in lbl.lower() for lbl in labels), (
-        f"Expected passage-based labels, got: {labels}"
-    )
+    assert any(
+        "passage" in lbl.lower() for lbl in labels
+    ), f"Expected passage-based labels, got: {labels}"
     # Ensure no label is purely "Overs N-M" generic pattern
     import re
+
     generic_pattern = re.compile(r"^Overs \d+-\d+$")
     for lbl in labels:
         assert not generic_pattern.match(lbl), f"Generic label still present: {lbl}"
@@ -305,7 +306,9 @@ def test_rich_match_callouts_for_test_mode_with_lead() -> None:
     """_build_match_callouts for test_multi_day includes first-innings lead callout."""
     match = _make_test_match()
     summary = _build_multi_day_summary(match)
-    callouts = _build_match_callouts(match, analysis_mode="test_multi_day", multi_day_summary=summary)
+    callouts = _build_match_callouts(
+        match, analysis_mode="test_multi_day", multi_day_summary=summary
+    )
     assert callouts, "Expected match callouts for test_multi_day mode"
     titles = [c.title for c in callouts]
     assert "First-innings lead established" in titles
@@ -328,7 +331,9 @@ def test_rich_match_callouts_include_fourth_innings_chase() -> None:
         ],
     )
     summary = _build_multi_day_summary(match)
-    callouts = _build_match_callouts(match, analysis_mode="test_multi_day", multi_day_summary=summary)
+    callouts = _build_match_callouts(
+        match, analysis_mode="test_multi_day", multi_day_summary=summary
+    )
     titles = [c.title for c in callouts]
     assert "Fourth-innings chase completed" in titles
 
@@ -405,7 +410,10 @@ def test_odi_phase_ranges_correct_boundaries() -> None:
     by_id = {pid: (start, end) for pid, _label, start, end in phase_ranges}
 
     assert by_id["powerplay"] == (1, 10), f"Powerplay range wrong: {by_id['powerplay']}"
-    assert by_id["consolidation"] == (11, 25), f"Consolidation range wrong: {by_id['consolidation']}"
+    assert by_id["consolidation"] == (
+        11,
+        25,
+    ), f"Consolidation range wrong: {by_id['consolidation']}"
     assert by_id["acceleration"] == (26, 40), f"Acceleration range wrong: {by_id['acceleration']}"
     assert by_id["death"] == (41, 50), f"Death range wrong: {by_id['death']}"
 
@@ -542,8 +550,11 @@ def test_odi_story_blocks_no_test_language() -> None:
     )
     for attr in ("opening_story", "middle_overs_story", "death_overs_story"):
         val = getattr(blocks, attr, "") or ""
-        assert "innings 1" not in val.lower() or "innings" not in val.lower() or "passage" not in val.lower(), \
-            f"Test language found in ODI story block {attr}: {val}"
+        assert (
+            "innings 1" not in val.lower()
+            or "innings" not in val.lower()
+            or "passage" not in val.lower()
+        ), f"Test language found in ODI story block {attr}: {val}"
         assert "vs par" not in val.lower(), f"vs par found in ODI {attr}: {val}"
 
 
@@ -561,13 +572,27 @@ def test_odi_innings_callouts_use_odi_phases() -> None:
     )
     dismissal_patterns = _compute_dismissal_patterns(
         [
-            {"inning": 1, "over_number": 3, "ball_number": 2, "is_wicket": True, "batter_name": "Batter 1"},
-            {"inning": 1, "over_number": 4, "ball_number": 1, "is_wicket": True, "batter_name": "Batter 2"},
+            {
+                "inning": 1,
+                "over_number": 3,
+                "ball_number": 2,
+                "is_wicket": True,
+                "batter_name": "Batter 1",
+            },
+            {
+                "inning": 1,
+                "over_number": 4,
+                "ball_number": 1,
+                "is_wicket": True,
+                "batter_name": "Batter 2",
+            },
         ],
         1,
         phase_ranges,
     )
-    callouts = _build_innings_callouts(1, phases, dismissal_patterns, analysis_mode="odi_limited_overs")
+    callouts = _build_innings_callouts(
+        1, phases, dismissal_patterns, analysis_mode="odi_limited_overs"
+    )
 
     assert callouts, "Expected callouts for odi_limited_overs innings"
     all_phases = [c.phase for c in callouts]
