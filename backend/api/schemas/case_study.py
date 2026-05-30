@@ -338,6 +338,92 @@ class CaseStudyMultiDaySummary(BaseModel):
 
 
 # -----------------------------------------------------------------------------
+# ODI Deep Intelligence (Phase 10R.4D)
+# -----------------------------------------------------------------------------
+
+
+class CaseStudyODIRequiredRateSnapshot(BaseModel):
+    """Required run-rate snapshot at an ODI phase boundary."""
+
+    over: int
+    label: str  # e.g. "Entering consolidation (over 11)"
+    runs_needed: int
+    overs_remaining: float
+    required_rate: float  # runs per over needed
+
+
+class CaseStudyODIChaseIntelligence(BaseModel):
+    """Chase pressure intelligence for second-innings ODI/ODM matches."""
+
+    target: int
+    chasing_team: str
+    initial_required_rate: float
+    required_rate_snapshots: list[CaseStudyODIRequiredRateSnapshot] = []
+    final_10_overs_summary: str | None = None
+    chase_pressure_note: str | None = None
+    chase_result: Literal["completed", "fell_short", "in_progress", "unknown"] = "unknown"
+    runs_margin: int | None = None
+    wickets_in_hand: int | None = None
+    pressure_windows: list[str] = []
+    data_quality: Literal["full", "partial", "unavailable"] = "unavailable"
+
+
+class CaseStudyODIPartnershipRecord(BaseModel):
+    """A single derived partnership record for ODI/ODM analysis."""
+
+    batter_1: str
+    batter_2: str
+    runs: int
+    balls: int
+    run_rate: float
+    start_over: int | None = None
+    end_over: int | None = None
+
+
+class CaseStudyODIPartnershipIntelligence(BaseModel):
+    """Partnership intelligence for a single ODI/ODM innings."""
+
+    innings_number: int
+    highest_partnership: CaseStudyODIPartnershipRecord | None = None
+    best_run_rate_partnership: CaseStudyODIPartnershipRecord | None = None
+    rebuilding_partnership: CaseStudyODIPartnershipRecord | None = None
+    summary: str
+    data_quality: Literal["full", "partial", "unavailable"] = "unavailable"
+
+
+class CaseStudyODIScoreboardComparison(BaseModel):
+    """Compact ODI/ODM scoreboard comparison block."""
+
+    team_1: str
+    team_1_runs: int
+    team_1_wickets: int
+    team_1_run_rate: float
+    team_1_strongest_phase: str | None = None
+    team_1_weakest_phase: str | None = None
+    team_1_death_runs: int | None = None
+    team_1_death_wickets: int | None = None
+    team_2: str
+    team_2_runs: int
+    team_2_wickets: int
+    team_2_run_rate: float
+    team_2_strongest_phase: str | None = None
+    team_2_weakest_phase: str | None = None
+    team_2_death_runs: int | None = None
+    team_2_death_wickets: int | None = None
+    run_differential: int
+    final_margin: str | None = None
+
+
+class CaseStudyODIIntelligence(BaseModel):
+    """Combined ODI-specific deep match intelligence (Phase 10R.4D)."""
+
+    chase_intelligence: CaseStudyODIChaseIntelligence | None = None
+    partnerships: list[CaseStudyODIPartnershipIntelligence] = []
+    scoreboard_comparison: CaseStudyODIScoreboardComparison | None = None
+    turning_point_candidate: str | None = None
+
+
+# -----------------------------------------------------------------------------
 # AI Block
 # -----------------------------------------------------------------------------
 
@@ -378,4 +464,5 @@ class MatchCaseStudyResponse(BaseModel):
     match_callouts: list[CaseStudyAnalystCallout] = []
     match_level_summary: str | None = None
     multi_day_summary: CaseStudyMultiDaySummary | None = None
+    odi_intelligence: CaseStudyODIIntelligence | None = None
     ai: CaseStudyAIBlock | None = None
