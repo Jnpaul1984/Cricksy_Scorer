@@ -22,6 +22,7 @@ from backend.api.schemas.case_study import (
     CaseStudyDismissalByShotType,
     CaseStudyDismissalByZone,
     CaseStudyDismissalPatterns,
+    CaseStudyFourthInningsChase,
     CaseStudyInningsAnalysis,
     CaseStudyInningsSummary,
     CaseStudyKeyPhase,
@@ -34,8 +35,10 @@ from backend.api.schemas.case_study import (
     CaseStudyPlayerBatting,
     CaseStudyPlayerBowling,
     CaseStudyPlayerFielding,
+    CaseStudyRecoveryWindow,
     CaseStudyStoryBlocks,
     CaseStudySwingMetric,
+    CaseStudyWicketCluster,
     MatchCaseStudyResponse,
 )
 from backend.services.historical_import_delivery_service import (
@@ -124,19 +127,24 @@ def _test_multi_day_ranges(overs_value: float) -> list[tuple[str, str, int, int]
     max_over = max(1, int(overs_value))
     first_band_end = min(max_over, 20)
     second_band_end = min(max_over, 50)
-    ranges = [("custom", f"Overs 1-{first_band_end}", 1, first_band_end)]
+    ranges = [("custom", f"Opening passage (1\u2013{first_band_end})", 1, first_band_end)]
     if second_band_end > first_band_end:
         ranges.append(
             (
                 "custom",
-                f"Overs {first_band_end + 1}-{second_band_end}",
+                f"Consolidation passage ({first_band_end + 1}\u2013{second_band_end})",
                 first_band_end + 1,
                 second_band_end,
             )
         )
     if max_over > second_band_end:
         ranges.append(
-            ("custom", f"Overs {second_band_end + 1}-{max_over}", second_band_end + 1, max_over)
+            (
+                "custom",
+                f"Extended innings passage ({second_band_end + 1}\u2013{max_over})",
+                second_band_end + 1,
+                max_over,
+            )
         )
     return ranges
 
@@ -192,6 +200,135 @@ def _delivery_player_name(delivery: dict[str, Any], *keys: str) -> str | None:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return None
+
+
+# -----------------------------------------------------------------------------
+# Wicket Cluster and Recovery Detection (Test/multi-day)
+# -----------------------------------------------------------------------------
+
+
+def _detect_wicket_clusters_from_deliveries(
+    deliveries: list[dict[str, Any]],
+    innings_number: int,
+    over_window: int = 3,
+    min_wickets: int = 3,
+) -> list[CaseStudyWicketCluster]:
+    """
+    Detect wicket clusters (collapse windows) within a Test/multi-day innings.
+
+    A cluster is defined as min_wickets or more wickets falling within over_window overs.
+    Uses a sliding window approach to find the densest cluster first.
+    """
+    inning_deliveries = [d for d in deliveries if _delivery_innings_number(d) == innings_number]
+    if not inning_deliveries:
+        return []
+
+    over_wickets: dict[int, int] = defaultdict(int)
+    for d in inning_deliveries:
+        if d.get("is_wicket"):
+            over_num = int(d.get("over_number") or d.get("over") or 1)
+            over_wickets[over_num] += 1
+
+    if not over_wickets:
+        return []
+
+    clusters: list[CaseStudyWicketCluster] = []
+    covered_overs: set[int] = set()
+    # Iterate over overs that have wickets, sliding forward
+    for start_over in sorted(over_wickets.keys()):
+        if start_over in covered_overs:
+            continue
+        end_over = start_over + over_window - 1
+        wickets_in_window = sum(v for o, v in over_wickets.items() if start_over <= o <= end_over)
+        if wickets_in_window >= min_wickets:
+            label = "possible collapse window" if wickets_in_window >= 4 else "wicket cluster"
+            clusters.append(
+                CaseStudyWicketCluster(
+                    innings_number=innings_number,
+                    overs_start=start_over,
+                    overs_end=end_over,
+                    wickets=wickets_in_window,
+                    label=label,
+                )
+            )
+            # Mark these overs as covered to avoid overlapping clusters
+            for o in range(start_over, end_over + 1):
+                covered_overs.add(o)
+
+    return clusters
+
+
+def _detect_recovery_windows_from_deliveries(
+    deliveries: list[dict[str, Any]],
+    innings_number: int,
+    cluster_overs: list[int],
+    min_recovery_overs: int = 5,
+    min_runs: int = 20,
+) -> list[CaseStudyRecoveryWindow]:
+    """
+    Detect recovery windows after wicket clusters.
+
+    A recovery window is a period of min_recovery_overs or more consecutive overs
+    (after a cluster end) where runs score at a reasonable rate and wickets are limited.
+    """
+    if not cluster_overs:
+        return []
+
+    inning_deliveries = [d for d in deliveries if _delivery_innings_number(d) == innings_number]
+    if not inning_deliveries:
+        return []
+
+    per_over_runs: dict[int, int] = defaultdict(int)
+    per_over_wickets: dict[int, int] = defaultdict(int)
+    for d in inning_deliveries:
+        over_num = int(d.get("over_number") or d.get("over") or 1)
+        runs = d.get("runs_off_bat", 0) + d.get("extra_runs", 0)
+        if runs == 0 and d.get("runs_scored"):
+            runs = d.get("runs_scored", 0)
+        per_over_runs[over_num] += runs
+        if d.get("is_wicket"):
+            per_over_wickets[over_num] += 1
+
+    if not per_over_runs:
+        return []
+
+    max_over = max(per_over_runs.keys())
+    recovery_windows: list[CaseStudyRecoveryWindow] = []
+
+    for cluster_end in cluster_overs:
+        recovery_start = cluster_end + 1
+        if recovery_start > max_over:
+            continue
+
+        # Find the end of the recovery window: stop if another dense wicket over is hit
+        recovery_end = recovery_start
+        runs_in_window = 0
+        wickets_in_window = 0
+
+        for over in range(recovery_start, max_over + 1):
+            w = per_over_wickets.get(over, 0)
+            r = per_over_runs.get(over, 0)
+            # Stop recovery window if more than 1 wicket in a single over (pressure resumed)
+            if w >= 2:
+                break
+            runs_in_window += r
+            wickets_in_window += w
+            recovery_end = over
+
+        window_len = recovery_end - recovery_start + 1
+        if window_len >= min_recovery_overs and runs_in_window >= min_runs:
+            recovery_windows.append(
+                CaseStudyRecoveryWindow(
+                    innings_number=innings_number,
+                    overs_start=recovery_start,
+                    overs_end=recovery_end,
+                    runs_scored=runs_in_window,
+                    wickets_fell=wickets_in_window,
+                    label="recovery period",
+                )
+            )
+
+    return recovery_windows
 
 
 # -----------------------------------------------------------------------------
@@ -774,24 +911,129 @@ def _build_story_blocks(
     weakest_phase: CaseStudyPhase | None,
     analysis_mode: Literal["limited_overs", "test_multi_day", "unknown"] = "limited_overs",
     innings_number: int = 1,
+    multi_day_summary: CaseStudyMultiDaySummary | None = None,
+    dismissal_patterns: CaseStudyDismissalPatterns | None = None,
 ) -> CaseStudyStoryBlocks:
     if analysis_mode == "test_multi_day":
-        return CaseStudyStoryBlocks(
-            opening_story=(
-                f"Innings {innings_number}: {innings_summary.team} scored "
-                f"{innings_summary.runs}/{innings_summary.wickets} in {innings_summary.overs} overs."
-            ),
-            middle_overs_story="Session-safe progression is used; limited-overs phase labels are intentionally disabled.",
-            death_overs_story="Late-innings output is summarized with innings-safe wording only.",
-            scoring_acceleration=f"Overall innings run rate: {innings_summary.run_rate:.2f}.",
-            wickets_by_phase=(
+        # Opening story: innings summary
+        opening_story = (
+            f"Innings {innings_number}: {innings_summary.team} scored "
+            f"{innings_summary.runs}/{innings_summary.wickets} in {innings_summary.overs} overs "
+            f"at {innings_summary.run_rate:.2f} RPO."
+        )
+
+        # Middle overs story: band-based progression or lead context
+        if phases and len(phases) >= 2:
+            # Use consolidation band if available
+            consol = next((p for p in phases if "consolidation" in p.label.lower()), None)
+            if consol:
+                middle_overs_story = (
+                    f"Consolidation passage (overs {consol.start_over}-{consol.end_over}): "
+                    f"{consol.runs} runs, {consol.wickets} wickets at {consol.run_rate:.2f} RPO."
+                )
+            else:
+                mid = phases[1] if len(phases) > 1 else phases[0]
+                middle_overs_story = f"{mid.label}: {mid.runs} runs, {mid.wickets} wickets at {mid.run_rate:.2f} RPO."
+        elif multi_day_summary and len(multi_day_summary.innings) >= innings_number:
+            row = multi_day_summary.innings[innings_number - 1]
+            ld = row.lead_deficit_after_innings
+            if isinstance(ld, int):
+                ld_str = f"{ld:+d}" if ld != 0 else "level"
+                middle_overs_story = (
+                    f"After innings {innings_number}, {innings_summary.team} "
+                    f"stands at {ld_str} runs relative to the opposition."
+                )
+            else:
+                middle_overs_story = f"Innings-safe progression noted for innings {innings_number}."
+        else:
+            middle_overs_story = (
+                f"Innings {innings_number} progression: {innings_summary.runs} runs "
+                f"across {innings_summary.overs} overs."
+            )
+
+        # Death overs story: late innings analysis or fourth-innings chase note
+        if phases:
+            # Use extended innings band if available
+            ext = next((p for p in phases if "extended" in p.label.lower()), None)
+            late = ext or (phases[-1] if phases else None)
+            if late:
+                death_overs_story = (
+                    f"Late innings ({late.label}): {late.runs} runs, "
+                    f"{late.wickets} wickets at {late.run_rate:.2f} RPO."
+                )
+            else:
+                death_overs_story = f"Innings {innings_number} concluding total: {innings_summary.runs}/{innings_summary.wickets}."
+        elif multi_day_summary and multi_day_summary.fourth_innings_chase and innings_number == 4:
+            chase = multi_day_summary.fourth_innings_chase
+            death_overs_story = (
+                f"Fourth-innings chase: {chase.chasing_team} scored {chase.runs_scored}/{chase.wickets_lost} "
+                f"chasing {chase.target} ({chase.chase_result.replace('_', ' ')})."
+            )
+        else:
+            death_overs_story = f"Innings {innings_number} concluded: {innings_summary.runs}/{innings_summary.wickets}."
+
+        # Scoring acceleration: opening band run rate to late band
+        if phases and len(phases) >= 2:
+            first_band = phases[0]
+            last_band = phases[-1]
+            scoring_acceleration = (
+                f"Run rate changed from {first_band.run_rate:.2f} RPO in the "
+                f"{first_band.label} to {last_band.run_rate:.2f} RPO in the {last_band.label}."
+            )
+        else:
+            scoring_acceleration = f"Overall innings run rate: {innings_summary.run_rate:.2f} RPO."
+
+        # Wickets by band: from phases or simple total
+        if phases:
+            wickets_by_phase = "; ".join(f"{p.label}: {p.wickets} wkt(s)" for p in phases)
+        else:
+            wickets_by_phase = (
                 f"Total wickets in innings {innings_number}: {innings_summary.wickets}."
-            ),
-            strongest_phase="Strongest segment is unavailable for Test/multi-day phase-safe mode.",
-            weakest_phase="Weakest segment is unavailable for Test/multi-day phase-safe mode.",
-            innings_outcome_contribution=(
-                f"{innings_summary.team} contributed {innings_summary.runs} runs in innings {innings_number}."
-            ),
+            )
+
+        # Strongest segment: band with most runs
+        if phases:
+            strongest_band = max(phases, key=lambda p: p.runs)
+            strongest_phase_str = (
+                f"Strongest band: {strongest_band.label} "
+                f"({strongest_band.runs} runs at {strongest_band.run_rate:.2f} RPO)."
+            )
+        else:
+            # Fall back to top-scoring player contribution if no phase data
+            strongest_phase_str = (
+                f"{innings_summary.team} scored {innings_summary.runs}/{innings_summary.wickets}."
+            )
+
+        # Weakest segment: band with fewest runs
+        if phases and len(phases) >= 2:
+            weakest_band = min(phases, key=lambda p: p.runs)
+            weakest_phase_str = (
+                f"Lowest-scoring band: {weakest_band.label} "
+                f"({weakest_band.runs} runs at {weakest_band.run_rate:.2f} RPO)."
+            )
+        elif dismissal_patterns and dismissal_patterns.wicket_cluster_callout:
+            weakest_phase_str = f"Pressure window: {dismissal_patterns.wicket_cluster_callout}"
+        else:
+            weakest_phase_str = (
+                f"Bowling pressure: {innings_summary.wickets} wickets in innings {innings_number}."
+            )
+
+        # Innings outcome contribution: match result context
+        innings_outcome_contribution = (
+            f"{innings_summary.team} contributed {innings_summary.runs} runs "
+            f"in innings {innings_number} ({innings_summary.overs} overs, "
+            f"{innings_summary.wickets} wickets)."
+        )
+
+        return CaseStudyStoryBlocks(
+            opening_story=opening_story,
+            middle_overs_story=middle_overs_story,
+            death_overs_story=death_overs_story,
+            scoring_acceleration=scoring_acceleration,
+            wickets_by_phase=wickets_by_phase,
+            strongest_phase=strongest_phase_str,
+            weakest_phase=weakest_phase_str,
+            innings_outcome_contribution=innings_outcome_contribution,
         )
 
     opening = _find_phase(phases, "powerplay")
@@ -836,9 +1078,11 @@ def _build_innings_callouts(
     phases: list[CaseStudyPhase],
     dismissal_patterns: CaseStudyDismissalPatterns,
     analysis_mode: Literal["limited_overs", "test_multi_day", "unknown"] = "limited_overs",
+    innings_summary: CaseStudyInningsSummary | None = None,
 ) -> list[CaseStudyAnalystCallout]:
     callouts: list[CaseStudyAnalystCallout] = []
     if analysis_mode == "test_multi_day":
+        # Wicket cluster callout
         if dismissal_patterns.wicket_cluster_callout:
             callouts.append(
                 CaseStudyAnalystCallout(
@@ -850,9 +1094,11 @@ def _build_innings_callouts(
                     explanation=dismissal_patterns.wicket_cluster_callout,
                     source_metrics=[f"total_wickets={dismissal_patterns.total_wickets}"],
                     confidence=0.85,
-                    why_it_matters="Clusters indicate deterministic pressure swings without relying on T20 phase assumptions.",
+                    why_it_matters="Clusters indicate deterministic pressure swings without relying on limited-overs phase assumptions.",
                 )
             )
+
+        # High wicket pressure callout
         if dismissal_patterns.total_wickets >= 5:
             callouts.append(
                 CaseStudyAnalystCallout(
@@ -870,12 +1116,84 @@ def _build_innings_callouts(
                     why_it_matters="Sustained wicket pressure often drives Test/multi-day momentum changes.",
                 )
             )
+
+        # Band-based analysis from computed phases (if available)
+        if phases:
+            strongest = max(phases, key=lambda p: p.runs, default=None)
+            weakest = min(phases, key=lambda p: p.runs, default=None)
+            if strongest:
+                callouts.append(
+                    CaseStudyAnalystCallout(
+                        title="Top scoring band",
+                        innings=innings_number,
+                        phase=strongest.label,
+                        category="batting",
+                        severity="info",
+                        explanation=(
+                            f"Innings {innings_number} scored the most runs ({strongest.runs}) "
+                            f"in the {strongest.label} at {strongest.run_rate:.2f} RPO."
+                        ),
+                        source_metrics=[
+                            f"band={strongest.label}",
+                            f"runs={strongest.runs}",
+                            f"run_rate={strongest.run_rate}",
+                        ],
+                        confidence=0.8,
+                        why_it_matters="The highest-scoring band reveals when batting control was most established.",
+                    )
+                )
+            if weakest and strongest and weakest.label != strongest.label:
+                callouts.append(
+                    CaseStudyAnalystCallout(
+                        title="Low-scoring pressure window",
+                        innings=innings_number,
+                        phase=weakest.label,
+                        category="bowling",
+                        severity="warning",
+                        explanation=(
+                            f"Innings {innings_number} scored only {weakest.runs} runs "
+                            f"in the {weakest.label} at {weakest.run_rate:.2f} RPO."
+                        ),
+                        source_metrics=[
+                            f"band={weakest.label}",
+                            f"runs={weakest.runs}",
+                            f"run_rate={weakest.run_rate}",
+                        ],
+                        confidence=0.75,
+                        why_it_matters="Low-scoring windows indicate bowling dominance or batting consolidation phases.",
+                    )
+                )
+
+        # Long innings control callout
+        if innings_summary and innings_summary.overs >= 80.0:
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="Long innings control",
+                    innings=innings_number,
+                    phase="Full innings",
+                    category="batting",
+                    severity="info",
+                    explanation=(
+                        f"{innings_summary.team} batted for {innings_summary.overs} overs "
+                        f"scoring {innings_summary.runs}/{innings_summary.wickets} "
+                        f"at {innings_summary.run_rate:.2f} RPO."
+                    ),
+                    source_metrics=[
+                        f"runs={innings_summary.runs}",
+                        f"overs={innings_summary.overs}",
+                        f"wickets={innings_summary.wickets}",
+                    ],
+                    confidence=0.9,
+                    why_it_matters="Long innings demonstrate batting endurance and session control in Test cricket.",
+                )
+            )
+
         return callouts
 
     middle = _find_phase(phases, "middle")
     death = _find_phase(phases, "death")
-    strongest = max(phases, key=lambda p: p.net_swing_vs_par, default=None)
-    weakest = min(phases, key=lambda p: p.net_swing_vs_par, default=None)
+    strongest = max(phases, key=lambda p: p.net_swing_vs_par) if phases else None
+    weakest = min(phases, key=lambda p: p.net_swing_vs_par) if phases else None
 
     if middle and (middle.net_swing_vs_par <= -8 or middle.wickets >= 3):
         callouts.append(
@@ -967,7 +1285,10 @@ def _build_innings_callouts(
     return callouts
 
 
-def _build_multi_day_summary(match: CaseStudyMatch) -> CaseStudyMultiDaySummary:
+def _build_multi_day_summary(
+    match: CaseStudyMatch,
+    deliveries: list[dict[str, Any]] | None = None,
+) -> CaseStudyMultiDaySummary:
     cumulative_runs: dict[str, int] = defaultdict(int)
     innings_rows: list[CaseStudyMultiDayInningsContext] = []
     for idx, inn in enumerate(match.innings, start=1):
@@ -975,7 +1296,7 @@ def _build_multi_day_summary(match: CaseStudyMatch) -> CaseStudyMultiDaySummary:
         opponent_total = max(
             (runs for team, runs in cumulative_runs.items() if team != inn.team), default=0
         )
-        deliveries = cricket_overs_to_legal_balls(inn.overs)
+        ball_count = cricket_overs_to_legal_balls(inn.overs)
         innings_rows.append(
             CaseStudyMultiDayInningsContext(
                 innings_number=idx,
@@ -983,7 +1304,7 @@ def _build_multi_day_summary(match: CaseStudyMatch) -> CaseStudyMultiDaySummary:
                 runs=inn.runs,
                 wickets=inn.wickets,
                 overs=inn.overs,
-                deliveries=deliveries,
+                deliveries=ball_count,
                 lead_deficit_after_innings=cumulative_runs[inn.team] - opponent_total,
             )
         )
@@ -1001,50 +1322,332 @@ def _build_multi_day_summary(match: CaseStudyMatch) -> CaseStudyMultiDaySummary:
     elif "no result" in result_lower or "abandoned" in result_lower:
         match_status = "no_result"
 
-    fourth_note = None
+    # --- First-innings lead ---
+    # The first-innings lead is derived after BOTH teams have batted once.
+    # innings_rows[1].lead_deficit_after_innings gives team2's cumulative vs team1 total.
+    # A negative value means team2 trails (team1 leads).
+    first_innings_lead_note: str | None = None
+    if len(innings_rows) >= 2:
+        # After both teams bat: innings_rows[1] gives team2's position vs team1
+        lead_after_both = innings_rows[1].lead_deficit_after_innings
+        if isinstance(lead_after_both, int):
+            if lead_after_both < 0:
+                # Team1 (innings_rows[0].team) leads
+                abs_lead = abs(lead_after_both)
+                leading_team = innings_rows[0].team
+                first_innings_lead_note = (
+                    f"{leading_team} took a {abs_lead}-run first-innings lead."
+                )
+            elif lead_after_both > 0:
+                # Team2 (innings_rows[1].team) leads
+                leading_team = innings_rows[1].team
+                first_innings_lead_note = (
+                    f"{leading_team} took a {lead_after_both}-run first-innings lead."
+                )
+            else:
+                first_innings_lead_note = "The teams were level after the first innings."
+
+    # --- Lead swing notes per completed innings ---
+    lead_swing_notes: list[str] = []
+    if first_innings_lead_note:
+        lead_swing_notes.append(first_innings_lead_note)
+
+    if len(innings_rows) >= 3:
+        # After both first innings, summarise the swing: already done via first_innings_lead_note
+        # After innings 3 (team1's second innings), note the match position
+        lead_after_3 = innings_rows[2].lead_deficit_after_innings
+        if isinstance(lead_after_3, int):
+            team_1 = innings_rows[0].team
+            team_2 = innings_rows[1].team
+            if lead_after_3 > 0:
+                lead_swing_notes.append(
+                    f"After innings 3, {team_1} extended their lead to {lead_after_3} runs."
+                )
+            elif lead_after_3 < 0:
+                lead_swing_notes.append(
+                    f"After innings 3, {team_2} now needed to defend a {abs(lead_after_3)}-run lead."
+                )
+
+    if len(innings_rows) >= 4:
+        # After innings 3, compute set target
+        chasing_team = innings_rows[3].team
+        opposition_total = sum(row.runs for row in innings_rows[:3] if row.team != chasing_team)
+        chasing_prior = sum(row.runs for row in innings_rows[:3] if row.team == chasing_team)
+        target = opposition_total - chasing_prior + 1
+        setting_team = innings_rows[2].team
+        if target > 0:
+            lead_swing_notes.append(
+                f"{setting_team} set {chasing_team} a fourth-innings target of {target}."
+            )
+
+    # --- Legacy fourth-innings note ---
+    fourth_note: str | None = None
+    fourth_innings_chase: CaseStudyFourthInningsChase | None = None
     if len(innings_rows) >= 4:
         chasing_team = innings_rows[3].team
         opposition_total = sum(row.runs for row in innings_rows[:3] if row.team != chasing_team)
         chasing_prior = sum(row.runs for row in innings_rows[:3] if row.team == chasing_team)
         target = opposition_total - chasing_prior + 1
         if target > 0:
-            remaining = target - innings_rows[3].runs
-            if remaining > 0:
+            runs_in_chase = innings_rows[3].runs
+            wickets_in_chase = innings_rows[3].wickets
+            wickets_in_hand = max(0, 10 - wickets_in_chase)
+            chase_completed = runs_in_chase >= target
+
+            if chase_completed:
+                chase_result: Literal["completed", "fell_short", "unknown"] = "completed"
+                runs_margin = None
                 fourth_note = (
-                    f"Fourth-innings chase context: {chasing_team} required {target}, "
-                    f"finishing {remaining} short in recorded totals."
+                    f"{chasing_team} chased {target} with {wickets_in_hand} wicket(s) in hand."
                 )
+                pressure_note = f"Chase completed; {wickets_in_hand} wicket(s) in hand."
+            elif wickets_in_chase >= 10:
+                chase_result = "fell_short"
+                runs_margin = target - runs_in_chase
+                fourth_note = (
+                    f"{chasing_team} fell {runs_margin} run(s) short of the {target}-run target."
+                )
+                pressure_note = f"All out {runs_margin} short."
             else:
-                fourth_note = f"Fourth-innings chase context: {chasing_team} exceeded the implied target of {target}."
+                chase_result = "unknown"
+                runs_margin = None
+                fourth_note = (
+                    f"Fourth-innings chase: {chasing_team} scored {runs_in_chase}/{wickets_in_chase} "
+                    f"chasing {target}."
+                )
+                pressure_note = None
+
+            fourth_innings_chase = CaseStudyFourthInningsChase(
+                target=target,
+                chasing_team=chasing_team,
+                runs_scored=runs_in_chase,
+                wickets_lost=wickets_in_chase,
+                wickets_in_hand=wickets_in_hand,
+                chase_result=chase_result,
+                runs_margin=runs_margin,
+                pressure_note=pressure_note,
+            )
+
+    # --- Wicket clusters and recovery windows from deliveries ---
+    all_clusters: list[CaseStudyWicketCluster] = []
+    all_recoveries: list[CaseStudyRecoveryWindow] = []
+    if deliveries:
+        unique_innings = sorted({_delivery_innings_number(d) for d in deliveries})
+        for inn_num in unique_innings:
+            clusters = _detect_wicket_clusters_from_deliveries(deliveries, inn_num)
+            all_clusters.extend(clusters)
+            if clusters:
+                cluster_end_overs = [c.overs_end for c in clusters]
+                recoveries = _detect_recovery_windows_from_deliveries(
+                    deliveries, inn_num, cluster_end_overs
+                )
+                all_recoveries.extend(recoveries)
+
+    # --- Match turning point ---
+    match_turning_point: str | None = None
+    if all_clusters:
+        biggest = max(all_clusters, key=lambda c: c.wickets)
+        match_turning_point = (
+            f"A {biggest.label} of {biggest.wickets} wickets in overs "
+            f"{biggest.overs_start}-{biggest.overs_end} (innings {biggest.innings_number}) "
+            "may have been a key turning point."
+        )
+    elif fourth_innings_chase and fourth_innings_chase.chase_result != "unknown":
+        if fourth_innings_chase.chase_result == "completed":
+            match_turning_point = (
+                f"{fourth_innings_chase.chasing_team} successfully chased "
+                f"{fourth_innings_chase.target} in the fourth innings."
+            )
+        else:
+            match_turning_point = (
+                f"The fourth-innings bowling effort restricted "
+                f"{fourth_innings_chase.chasing_team} short of the {fourth_innings_chase.target}-run target."
+            )
 
     return CaseStudyMultiDaySummary(
         match_status=match_status,
         innings=innings_rows,
         fourth_innings_chase_note=fourth_note,
+        first_innings_lead_note=first_innings_lead_note,
+        lead_swing_notes=lead_swing_notes,
+        fourth_innings_chase=fourth_innings_chase,
+        wicket_clusters=all_clusters,
+        recovery_windows=all_recoveries,
+        match_turning_point=match_turning_point,
     )
 
 
 def _build_match_callouts(
     match: CaseStudyMatch,
     analysis_mode: Literal["limited_overs", "test_multi_day", "unknown"] = "limited_overs",
+    multi_day_summary: CaseStudyMultiDaySummary | None = None,
 ) -> list[CaseStudyAnalystCallout]:
     if analysis_mode == "test_multi_day":
-        return [
-            CaseStudyAnalystCallout(
-                title="Test/multi-day limited-analysis notice",
-                level="match",
-                innings=None,
-                phase="Full match",
-                category="outcome",
-                severity="info",
-                explanation=(
-                    "Test/multi-day analysis is currently limited and uses innings/session-safe summaries."
-                ),
-                source_metrics=[f"innings_count={len(match.innings)}"],
-                confidence=0.95,
-                why_it_matters="This prevents misleading limited-overs framing for 3/4-innings matches.",
+        callouts: list[CaseStudyAnalystCallout] = []
+
+        # First-innings lead callout
+        if multi_day_summary and multi_day_summary.first_innings_lead_note:
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="First-innings lead established",
+                    level="match",
+                    innings=None,
+                    phase="Full match",
+                    category="outcome",
+                    severity="info",
+                    explanation=multi_day_summary.first_innings_lead_note,
+                    source_metrics=[f"innings_count={len(match.innings)}"],
+                    confidence=0.95,
+                    why_it_matters="First-innings lead is a key deterministic indicator in Test/multi-day matches.",
+                )
             )
-        ]
+
+        # Fourth-innings chase callout
+        if multi_day_summary and multi_day_summary.fourth_innings_chase:
+            chase = multi_day_summary.fourth_innings_chase
+            if chase.chase_result == "completed":
+                callouts.append(
+                    CaseStudyAnalystCallout(
+                        title="Fourth-innings chase completed",
+                        level="match",
+                        innings=4,
+                        phase="Fourth innings",
+                        category="outcome",
+                        severity="positive",
+                        explanation=(
+                            f"{chase.chasing_team} successfully chased {chase.target} "
+                            f"with {chase.wickets_in_hand} wicket(s) in hand."
+                        ),
+                        source_metrics=[
+                            f"target={chase.target}",
+                            f"runs_scored={chase.runs_scored}",
+                            f"wickets_in_hand={chase.wickets_in_hand}",
+                        ],
+                        confidence=0.95,
+                        why_it_matters="Fourth-innings chase completion is the decisive outcome of a Test match.",
+                    )
+                )
+            elif chase.chase_result == "fell_short":
+                callouts.append(
+                    CaseStudyAnalystCallout(
+                        title="Fourth-innings chase fell short",
+                        level="match",
+                        innings=4,
+                        phase="Fourth innings",
+                        category="outcome",
+                        severity="warning",
+                        explanation=(
+                            f"{chase.chasing_team} fell {chase.runs_margin} run(s) short "
+                            f"of the {chase.target}-run target."
+                        ),
+                        source_metrics=[
+                            f"target={chase.target}",
+                            f"runs_scored={chase.runs_scored}",
+                            f"runs_margin={chase.runs_margin}",
+                        ],
+                        confidence=0.95,
+                        why_it_matters="Bowling side successfully defended the target in the fourth innings.",
+                    )
+                )
+
+        # Wicket cluster callout
+        if multi_day_summary and multi_day_summary.wicket_clusters:
+            biggest = max(multi_day_summary.wicket_clusters, key=lambda c: c.wickets)
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="Wicket cluster changed innings direction",
+                    level="match",
+                    innings=biggest.innings_number,
+                    phase=f"Overs {biggest.overs_start}-{biggest.overs_end}",
+                    category="dismissal",
+                    severity="info",
+                    explanation=(
+                        f"{biggest.label.capitalize()}: {biggest.wickets} wickets fell between "
+                        f"overs {biggest.overs_start}-{biggest.overs_end} in innings {biggest.innings_number}."
+                    ),
+                    source_metrics=[
+                        f"wickets={biggest.wickets}",
+                        f"innings={biggest.innings_number}",
+                        f"overs={biggest.overs_start}-{biggest.overs_end}",
+                    ],
+                    confidence=0.85,
+                    why_it_matters="Wicket clusters in Test matches often determine session control and match momentum.",
+                )
+            )
+
+        # Recovery window callout
+        if multi_day_summary and multi_day_summary.recovery_windows:
+            best_rec = max(multi_day_summary.recovery_windows, key=lambda r: r.runs_scored)
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="Recovery period after cluster",
+                    level="match",
+                    innings=best_rec.innings_number,
+                    phase=f"Overs {best_rec.overs_start}-{best_rec.overs_end}",
+                    category="batting",
+                    severity="positive",
+                    explanation=(
+                        f"Recovery period: {best_rec.runs_scored} runs scored in overs "
+                        f"{best_rec.overs_start}-{best_rec.overs_end} of innings {best_rec.innings_number} "
+                        f"({best_rec.wickets_fell} wicket(s) lost)."
+                    ),
+                    source_metrics=[
+                        f"runs={best_rec.runs_scored}",
+                        f"innings={best_rec.innings_number}",
+                        f"overs={best_rec.overs_start}-{best_rec.overs_end}",
+                    ],
+                    confidence=0.75,
+                    why_it_matters="Recovery periods show batting resilience after pressure and help stabilise totals.",
+                )
+            )
+
+        # Long innings control callout
+        long_innings = [inn for inn in match.innings if inn.overs >= 80.0]
+        if long_innings:
+            longest = max(long_innings, key=lambda i: i.overs)
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="Long innings control",
+                    level="match",
+                    innings=None,
+                    phase="Full innings",
+                    category="batting",
+                    severity="info",
+                    explanation=(
+                        f"{longest.team} batted for {longest.overs} overs, "
+                        f"scoring {longest.runs}/{longest.wickets}."
+                    ),
+                    source_metrics=[
+                        f"runs={longest.runs}",
+                        f"overs={longest.overs}",
+                        f"team={longest.team}",
+                    ],
+                    confidence=0.9,
+                    why_it_matters="Long innings demonstrate batting endurance and session control in Test cricket.",
+                )
+            )
+
+        # Fallback notice if no other callouts produced
+        if not callouts:
+            callouts.append(
+                CaseStudyAnalystCallout(
+                    title="Test/multi-day match",
+                    level="match",
+                    innings=None,
+                    phase="Full match",
+                    category="outcome",
+                    severity="info",
+                    explanation=(
+                        f"Test/multi-day match with {len(match.innings)} innings. "
+                        "Limited-overs phase labels are disabled."
+                    ),
+                    source_metrics=[f"innings_count={len(match.innings)}"],
+                    confidence=0.95,
+                    why_it_matters="This prevents misleading limited-overs framing for 3/4-innings matches.",
+                )
+            )
+
+        return callouts
 
     innings = match.innings[:2]
     if len(innings) < 2:
@@ -1267,7 +1870,9 @@ async def _build_case_study_from_db(
         days_limit=game.days_limit,
     )
     multi_day_summary = (
-        _build_multi_day_summary(case_study_match) if analysis_mode == "test_multi_day" else None
+        _build_multi_day_summary(case_study_match, deliveries=game.deliveries or [])
+        if analysis_mode == "test_multi_day"
+        else None
     )
 
     # 5) Get deliveries and key players
@@ -1303,7 +1908,20 @@ async def _build_case_study_from_db(
         )
 
         if analysis_mode == "test_multi_day":
-            phases = []
+            if per_over_runs:
+                # Build phases from innings-safe passage bands
+                phases = _compute_phase_stats(
+                    innings_phase_ranges,
+                    per_over_runs,
+                    per_over_wickets,
+                    total_runs,
+                    total_overs,
+                    innings_index=innings_index,
+                    team=innings_summary.team,
+                    level="innings",
+                )
+            else:
+                phases = []
             key_phase = CaseStudyKeyPhase(
                 title=f"Innings {innings_number} summary",
                 detail=(
@@ -1319,7 +1937,7 @@ async def _build_case_study_from_db(
             momentum_summary = CaseStudyMomentumSummary(
                 title="Innings-safe momentum summary",
                 subtitle=(
-                    "Test/multi-day analysis is currently limited and uses innings/session-safe summaries."
+                    "Test/multi-day analysis uses innings-safe bands; limited-overs phase labels are disabled."
                 ),
                 winning_side=winning_team,
                 innings_index=innings_index,
@@ -1399,12 +2017,15 @@ async def _build_case_study_from_db(
             weakest_phase,
             analysis_mode=analysis_mode,
             innings_number=innings_number,
+            multi_day_summary=multi_day_summary,
+            dismissal_patterns=dismissal_patterns,
         )
         callouts = _build_innings_callouts(
             innings_number,
             phases,
             dismissal_patterns,
             analysis_mode=analysis_mode,
+            innings_summary=innings_summary,
         )
         innings_analysis.append(
             CaseStudyInningsAnalysis(
@@ -1449,7 +2070,9 @@ async def _build_case_study_from_db(
 
     # 8) Generate AI summary
     ai_block = _generate_ai_summary(case_study_match, phases, key_players)
-    match_callouts = _build_match_callouts(case_study_match, analysis_mode=analysis_mode)
+    match_callouts = _build_match_callouts(
+        case_study_match, analysis_mode=analysis_mode, multi_day_summary=multi_day_summary
+    )
 
     # 9) Return complete response
     return MatchCaseStudyResponse(

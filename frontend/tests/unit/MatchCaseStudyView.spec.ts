@@ -415,7 +415,7 @@ describe('MatchCaseStudyView', () => {
       ],
       multi_day_summary: {
         match_status: 'won',
-        notice: 'Test/multi-day analysis is currently limited and uses innings/session-safe summaries.',
+        notice: 'Test/multi-day match. Analysis uses innings-safe bands; limited-overs phase labels are disabled.',
         innings: [
           { innings_number: 1, team: 'AUS', runs: 320, wickets: 10, overs: 96, deliveries: 576, lead_deficit_after_innings: 320 },
           { innings_number: 2, team: 'SA', runs: 280, wickets: 10, overs: 88, deliveries: 528, lead_deficit_after_innings: -40 },
@@ -423,6 +423,24 @@ describe('MatchCaseStudyView', () => {
           { innings_number: 4, team: 'SA', runs: 251, wickets: 7, overs: 82, deliveries: 492, lead_deficit_after_innings: 81 },
         ],
         fourth_innings_chase_note: 'Fourth-innings chase context',
+        first_innings_lead_note: 'AUS took a 40-run first-innings lead.',
+        lead_swing_notes: ['AUS took a 40-run first-innings lead.', 'AUS set SA a fourth-innings target of 251.'],
+        fourth_innings_chase: {
+          target: 251,
+          chasing_team: 'SA',
+          runs_scored: 251,
+          wickets_lost: 7,
+          wickets_in_hand: 3,
+          chase_result: 'completed',
+          pressure_note: 'Chase completed; 3 wickets in hand.',
+        },
+        wicket_clusters: [
+          { innings_number: 2, overs_start: 45, overs_end: 47, wickets: 3, label: 'wicket cluster' },
+        ],
+        recovery_windows: [
+          { innings_number: 2, overs_start: 48, overs_end: 55, runs_scored: 42, wickets_fell: 0, label: 'recovery period' },
+        ],
+        match_turning_point: 'A wicket cluster of 3 wickets in overs 45–47 (innings 2) may have been a key turning point.',
       },
     } as never)
     vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
@@ -430,10 +448,137 @@ describe('MatchCaseStudyView', () => {
     const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
     await flushAsync()
 
-    expect(wrapper.text()).toContain('Test/multi-day analysis is currently limited and uses innings/session-safe summaries.')
+    // Notice text updated for Phase 10R.3
+    expect(wrapper.text()).toContain('Test/multi-day match. Analysis uses innings-safe bands; limited-overs phase labels are disabled.')
+    // Four innings selectors still visible
     expect(wrapper.text()).toContain('Innings 4 · SA')
+    // No limited-overs labels
     expect(wrapper.text()).not.toContain('Net vs par')
     expect(wrapper.text()).not.toContain('Powerplay (1-6)')
+    // New rich intelligence visible
+    expect(wrapper.text()).toContain('AUS took a 40-run first-innings lead.')
+    expect(wrapper.text()).toContain('AUS set SA a fourth-innings target of 251.')
+    expect(wrapper.text()).toContain('SA')
+    expect(wrapper.text()).toContain('chasing 251')
+  })
+
+  it('shows wicket cluster and recovery period cards for test/multi-day', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue({
+      ...baseCaseStudy,
+      analysis_mode: 'test_multi_day',
+      match: {
+        ...baseCaseStudy.match,
+        format: 'TEST',
+        innings: [
+          { team: 'AUS', runs: 320, wickets: 10, overs: 96, run_rate: 3.33 },
+          { team: 'SA', runs: 280, wickets: 10, overs: 88, run_rate: 3.18 },
+        ],
+      },
+      phases: [],
+      innings_analysis: [],
+      multi_day_summary: {
+        match_status: 'unknown',
+        notice: 'Test/multi-day match. Analysis uses innings-safe bands; limited-overs phase labels are disabled.',
+        innings: [
+          { innings_number: 1, team: 'AUS', runs: 320, wickets: 10, overs: 96, deliveries: 576, lead_deficit_after_innings: 320 },
+          { innings_number: 2, team: 'SA', runs: 280, wickets: 10, overs: 88, deliveries: 528, lead_deficit_after_innings: -40 },
+        ],
+        wicket_clusters: [
+          { innings_number: 1, overs_start: 30, overs_end: 32, wickets: 4, label: 'possible collapse window' },
+        ],
+        recovery_windows: [
+          { innings_number: 1, overs_start: 33, overs_end: 40, runs_scored: 55, wickets_fell: 1, label: 'recovery period' },
+        ],
+        match_turning_point: 'A possible collapse window of 4 wickets in overs 30–32 (innings 1) may have been a key turning point.',
+      },
+    } as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
+    await flushAsync()
+
+    expect(wrapper.text()).toContain('Wicket clusters')
+    expect(wrapper.text()).toContain('possible collapse window')
+    expect(wrapper.text()).toContain('Recovery periods')
+    expect(wrapper.text()).toContain('Recovery (innings 1')
+    expect(wrapper.text()).toContain('Match turning point candidate')
+  })
+
+  it('generates Test-specific podcast cards for test_multi_day mode', async () => {
+    vi.mocked(api.getMatchCaseStudy).mockResolvedValue({
+      ...baseCaseStudy,
+      analysis_mode: 'test_multi_day',
+      match: {
+        ...baseCaseStudy.match,
+        format: 'TEST',
+        innings: [
+          { team: 'AUS', runs: 320, wickets: 10, overs: 96, run_rate: 3.33 },
+          { team: 'SA', runs: 280, wickets: 10, overs: 88, run_rate: 3.18 },
+          { team: 'AUS', runs: 200, wickets: 10, overs: 65, run_rate: 3.07 },
+          { team: 'SA', runs: 155, wickets: 5, overs: 45, run_rate: 3.44 },
+        ],
+      },
+      phases: [],
+      innings_analysis: [
+        {
+          innings_index: 0,
+          team: 'AUS',
+          deterministic_summary: 'Innings 1 summary',
+          momentum_summary: { title: 'Innings-safe', subtitle: 'Test-safe' },
+          key_phase: { title: 'Innings 1', detail: 'Test detail' },
+          phases: [],
+          key_players: [],
+          key_players_scope: 'match',
+          dismissal_patterns: { summary: 'I1 dismissals' },
+          story_blocks: {
+            opening_story: 'I1 opening',
+            middle_overs_story: 'I1 middle',
+            death_overs_story: 'I1 death',
+            scoring_acceleration: 'I1 acc',
+            wickets_by_phase: 'I1 wkts',
+            strongest_phase: 'I1 strongest',
+            weakest_phase: 'I1 weakest',
+            innings_outcome_contribution: 'I1 contribution',
+          },
+          callouts: [],
+        },
+      ],
+      multi_day_summary: {
+        match_status: 'won',
+        notice: 'Test/multi-day match.',
+        innings: [],
+        first_innings_lead_note: 'AUS took a 40-run first-innings lead.',
+        lead_swing_notes: ['AUS took a 40-run first-innings lead.'],
+        fourth_innings_chase: {
+          target: 151,
+          chasing_team: 'SA',
+          runs_scored: 155,
+          wickets_lost: 5,
+          wickets_in_hand: 5,
+          chase_result: 'completed',
+          pressure_note: 'Chase completed with 5 wickets in hand.',
+        },
+        wicket_clusters: [],
+        recovery_windows: [],
+        match_turning_point: null,
+      },
+    } as never)
+    vi.mocked(api.getMatchAiSummary).mockResolvedValue(groundedAiSummary as never)
+
+    const wrapper = mount(MatchCaseStudyView, { global: { stubs: globalStubs } })
+    await flushAsync()
+
+    await wrapper.get('[data-testid="podcast-generate-btn"]').trigger('click')
+    await flushAsync()
+
+    const text = wrapper.text()
+    // Test-specific podcast card titles
+    expect(text).toContain('First-innings lead story')
+    expect(text).toContain('Fourth-innings chase story')
+    expect(text).toContain('Collapse / recovery talking point')
+    // Must NOT contain limited-overs cards in test mode
+    expect(text).not.toContain('Powerplay')
+    expect(text).not.toContain('vs par')
   })
 
   it('exports approved podcast rundown only by default', async () => {
