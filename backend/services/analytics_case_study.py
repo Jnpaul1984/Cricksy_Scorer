@@ -104,7 +104,10 @@ def _get_phase_ranges(match_format: str, overs_per_side: int) -> list[tuple[str,
             ("middle", "Middle Overs (7-15)", 7, 15),
             ("death", "Death Overs (16-20)", 16, 20),
         ]
-    elif match_format.upper() in {"ODI", "ODM", "ONE-DAY", "ONE_DAY", "LIST_A"} or overs_per_side >= 40:
+    elif (
+        match_format.upper() in {"ODI", "ODM", "ONE-DAY", "ONE_DAY", "LIST_A"}
+        or overs_per_side >= 40
+    ):
         death_start = min(41, overs_per_side)
         return [
             ("powerplay", "Opening Powerplay (1-10)", 1, 10),

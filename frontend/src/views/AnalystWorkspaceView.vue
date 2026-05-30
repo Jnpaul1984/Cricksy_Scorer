@@ -217,7 +217,7 @@
                     <div class="aw-match-meta">
                       <span>{{ match.format }}</span>
                       <span>• {{ match.date }}</span>
-                      <span>• {{ match.result }}</span>
+                      <span>• {{ normalizeResultDisplayText(match.result) || match.result }}</span>
                       <span v-if="match.venue">• {{ match.venue }}</span>
                       <BaseBadge v-if="match.isHistorical" variant="neutral" :uppercase="false">
                         Imported
@@ -358,7 +358,7 @@
                   <section class="aw-detail-summary">
                     <div class="aw-detail-row">
                       <span class="aw-detail-label">Result</span>
-                      <span class="aw-detail-value">{{ matchDetail.match.result || '—' }}</span>
+                      <span class="aw-detail-value">{{ normalizeResultDisplayText(matchDetail.match.result) || matchDetail.match.result || '—' }}</span>
                     </div>
                     <div class="aw-detail-row">
                       <span class="aw-detail-label">Format</span>
@@ -1508,7 +1508,7 @@
                   :match-source="analyticsMatchSource"
                   :match-title="analyticsSelectedMatch?.teams ?? analyticsSelectedRegistryEntry?.match_title ?? null"
                   :match-date="analyticsSelectedMatch?.date ?? analyticsSelectedRegistryEntry?.match_date ?? null"
-                  :result="analyticsSelectedMatch?.result ?? analyticsSelectedRegistryEntry?.result ?? null"
+                  :result="normalizeResultDisplayText(analyticsSelectedMatch?.result ?? analyticsSelectedRegistryEntry?.result ?? null)"
                   :data-completeness="analyticsSelectedRegistryEntry?.data_completeness ?? null"
                   :registry-entry="analyticsSelectedRegistryEntry ?? null"
                 />
@@ -1707,7 +1707,7 @@
                         <td class="aw-registry-cell-main aw-registry-col-match">
                           <span class="aw-registry-match-title">{{ entry.match_title }}</span>
                           <span class="aw-registry-match-date">{{ entry.match_date || 'Date unavailable' }}</span>
-                          <span v-if="entry.result" class="aw-registry-match-result">{{ entry.result }}</span>
+                          <span v-if="entry.result" class="aw-registry-match-result">{{ normalizeResultDisplayText(entry.result) }}</span>
                         </td>
                         <td>
                           <span class="aw-registry-badge" :class="`aw-registry-badge--${entry.competition_code.toLowerCase()}`">
@@ -1812,6 +1812,7 @@ import BulkZipSourcePayloadRecoveryPanel from '@/components/BulkZipSourcePayload
 import HistoricalIdentityMappingReviewPanel from '@/components/HistoricalIdentityMappingReviewPanel.vue'
 import { readAiInsightCache, writeAiInsightCache } from '@/services/aiInsightCache'
 import { useAuthStore } from '@/stores/authStore'
+import { normalizeResultDisplayText } from '@/utils/resultDisplay'
 import {
   getAnalystDeliveries,
   getAnalystMatches,
@@ -2617,7 +2618,7 @@ function buildDeterministicMatchFallback(detail: MatchCaseStudyResponse | null):
     bullets.push(detail.key_phase.title)
   }
   return {
-    summary: `${match.teams_label}: ${match.result || 'Result unavailable'}`,
+    summary: `${match.teams_label}: ${normalizeResultDisplayText(match.result) || match.result || 'Result unavailable'}`,
     bullets: bullets.slice(0, 4),
   }
 }
@@ -2807,7 +2808,7 @@ function buildPodcastPrepPackage(detail: MatchCaseStudyResponse): PodcastPrepPac
     : 'Episode title not available'
 
   // Match context — result string from real data
-  const matchContext = match.result || null
+  const matchContext = normalizeResultDisplayText(match.result) || match.result || null
 
   // Scoreboard facts — from innings array
   const scoreboardFacts: string[] = []

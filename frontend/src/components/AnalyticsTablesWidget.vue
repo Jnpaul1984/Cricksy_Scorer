@@ -312,6 +312,7 @@ import {
   type MatchCaseStudyResponse,
 } from '@/services/api'
 import type { PlayerProfile } from '@/types/player'
+import { normalizeResultDisplayText } from '@/utils/resultDisplay'
 
 type AnalyticsChart = 'manhattan' | 'worm' | 'scatter'
 type AnalyticsCompleteness = 'delivery_complete' | 'phase_level' | 'innings_totals' | 'metadata_only'
@@ -434,7 +435,7 @@ const isTestMultiDay = computed(() => caseStudy.value?.analysis_mode === 'test_m
 
 const displayMatchTitle = computed(() => props.matchTitle || props.registryEntry?.match_title || 'Selected match')
 const displayMatchDate = computed(() => props.matchDate || props.registryEntry?.match_date || 'Date unavailable')
-const result = computed(() => props.result || props.registryEntry?.result || null)
+const result = computed(() => normalizeResultDisplayText(props.result || props.registryEntry?.result || null) || null)
 const sourceLabel = computed(() => (props.matchSource === 'live' ? 'Live / scored' : 'Historical import'))
 
 function normalizeCompleteness(value: string | null | undefined): AnalyticsCompleteness {

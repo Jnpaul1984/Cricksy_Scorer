@@ -136,7 +136,7 @@
       <section v-if="match" class="cs-summary">
         <BaseCard padding="md" class="cs-summary-card">
           <p class="cs-label">Result</p>
-          <p class="cs-value">{{ match.result }}</p>
+          <p class="cs-value">{{ normalizeResultGrammar(match.result) || match.result }}</p>
           <p class="cs-footnote">{{ match.date }} • {{ match.format }}</p>
         </BaseCard>
 
@@ -1168,6 +1168,7 @@ import { BaseCard, BaseButton, BaseBadge, ImpactBar, MiniSparkline, AiCalloutsPa
 import type { AiCallout, CalloutSeverity } from '@/components'
 import { readAiInsightCache, writeAiInsightCache } from '@/services/aiInsightCache'
 import { useAuthStore } from '@/stores/authStore'
+import { normalizeResultDisplayText } from '@/utils/resultDisplay'
 import {
   getMatchCaseStudy,
   getMatchAiSummary,
@@ -1646,12 +1647,7 @@ function pluralizeRuns(n: number): string {
   return n === 1 ? '1 run' : `${n} runs`
 }
 
-function normalizeResultGrammar(result: string | null | undefined): string {
-  if (!result) return ''
-  return result
-    .replace(/\b1 runs\b/gi, '1 run')
-    .replace(/\b1 wickets\b/gi, '1 wicket')
-}
+const normalizeResultGrammar = normalizeResultDisplayText
 
 function extractOppositionTeam(teamsLabel: string | null | undefined, knownTeam: string): string | null {
   if (!teamsLabel || !knownTeam) return null
@@ -2516,7 +2512,7 @@ function buildDeterministicMatchFallback() {
     bullets.push(caseStudy.value.key_phase.title)
   }
   return {
-    summary: `${matchData.teams_label}: ${matchData.result || 'Result unavailable'}`,
+    summary: `${matchData.teams_label}: ${normalizeResultGrammar(matchData.result) || matchData.result || 'Result unavailable'}`,
     bullets: [...inningsSummary, ...bullets].slice(0, 4),
   }
 }
