@@ -29,6 +29,8 @@ vi.mock('@/services/api', () => ({
   getMatchRegistry: vi.fn(),
   getAnalystRegistry: vi.fn(),
   getAnalystExportData: vi.fn(),
+  getTournamentGroups: vi.fn(),
+  getHistoricalArchiveExplorer: vi.fn(),
   historicalImportRollback: vi.fn(),
 }))
 
@@ -68,6 +70,7 @@ const globalStubs = {
   HistoricalSourcePayloadReattachPanel: { template: '<div class="source-reattach-panel-stub" />' },
   HistoricalBackfillReprocessPanel: { template: '<div class="backfill-reprocess-panel-stub" />' },
   HistoricalIdentityMappingReviewPanel: { template: '<div class="identity-mapping-review-panel-stub" />' },
+  HistoricalArchiveExplorerPanel: { template: '<div class="historical-archive-explorer-panel-stub" />' },
 }
 
 const mockMatchList = {
@@ -586,6 +589,17 @@ describe('AnalystWorkspaceView', () => {
 
     expect(api.getAnalystMatches).toHaveBeenCalledTimes(2)
     expect(wrapper.find('.zip-import-done-btn').exists()).toBe(false)
+  })
+
+  it('renders the historical archive tab for archive-level analyst comparisons', async () => {
+    vi.mocked(api.getAnalystMatches).mockResolvedValue(mockMatchList)
+
+    const wrapper = mount(AnalystWorkspaceView, { global: { stubs: globalStubs } })
+    await nextTick()
+    await nextTick()
+
+    const archiveTab = wrapper.findAll('button.base-button-stub').find((b) => b.text().includes('Historical Archive'))
+    expect(archiveTab).toBeDefined()
   })
 
   it('shows empty state when no completed matches exist', async () => {

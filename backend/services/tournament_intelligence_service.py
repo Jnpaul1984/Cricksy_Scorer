@@ -23,7 +23,15 @@ from backend.api.schemas.historical_stats import (
     SeasonOutcomeAggregate,
 )
 from backend.api.schemas.tournament_intelligence import (
+    ArchiveComparisonRow,
+    ArchiveDynastyIndicator,
+    ArchiveEraComparisonCard,
+    ArchiveResearchSection,
+    ArchiveResearchSummary,
+    ArchiveVenueTrend,
     DerivedStandingsRow,
+    HistoricalArchiveExplorerResponse,
+    ChampionHistoryEntry,
     TeamJourneyMatch,
     TeamJourneyResponse,
     TeamJourneySummary,
@@ -1790,6 +1798,862 @@ def build_tournament_podcast_rundown(
     )
 
 
+def _normalize_result_text(result_text: str | None) -> str | None:
+    if not result_text:
+        return None
+    normalized = re.sub(
+        r"\b(\d+)\s+run\(s\)",
+        lambda match: _pluralize(int(match.group(1)), "run"),
+        result_text,
+        flags=re.I,
+    )
+    normalized = re.sub(
+        r"\b(\d+)\s+wicket\(s\)",
+        lambda match: _pluralize(int(match.group(1)), "wicket"),
+        normalized,
+        flags=re.I,
+    )
+    normalized = re.sub(r"\b1\s+runs\b", "1 run", normalized, flags=re.I)
+    normalized = re.sub(r"\b1\s+wickets\b", "1 wicket", normalized, flags=re.I)
+    return normalized
+
+
+def _parse_margin(result_text: str | None) -> tuple[str, int] | None:
+    if not result_text:
+        return None
+    runs_match = re.search(r"won by (\d+) runs?", result_text, re.I)
+    if runs_match:
+        return ("runs", int(runs_match.group(1)))
+    wickets_match = re.search(r"won by (\d+) wickets?", result_text, re.I)
+    if wickets_match:
+        return ("wickets", int(wickets_match.group(1)))
+    return None
+
+
+def _format_archive_group_label(group_key: TournamentGroupKey) -> str:
+    competition = group_key.competition_name or group_key.competition_code
+    if group_key.season:
+        return f"{competition} {group_key.season}"
+    return competition
+
+
+def _is_incomplete_summary(summary: TournamentSummaryResponse) -> bool:
+    dc = summary.data_completeness
+    return dc.matches_with_result < dc.total_matches
+
+
+def _summary_confidence(summary: TournamentSummaryResponse) -> str:
+    return summary.data_completeness.confidence_level or "unknown"
+
+
+def _build_archive_comparison_row(summary: TournamentSummaryResponse) -> ArchiveComparisonRow:
+    dc = summary.data_completeness
+    total_wickets = summary.total_wickets if summary.total_wickets > 0 else None
+    average_runs_per_match = (
+        round(summary.total_runs / summary.match_count, 2) if summary.match_count > 0 else None
+    )
+    average_runs_per_wicket = (
+        round(summary.total_runs / summary.total_wickets, 2)
+        if summary.total_wickets and summary.total_wickets > 0
+        else None
+    )
+    completeness_label = (
+        f"{dc.matches_with_result}/{dc.total_matches} matches with results. "
+        f"{dc.delivery_complete_matches} delivery-complete."
+    )
+    return ArchiveComparisonRow(
+        group_key=summary.group_key,
+        imported_matches=summary.match_count,
+        teams_count=len(summary.teams),
+        venues_count=len(summary.venues),
+        champion_detected=(
+            summary.knockout_context.champion_team_canonical
+            or summary.knockout_context.champion_team
+        ),
+        runner_up_detected=(
+            summary.knockout_context.runner_up_team_canonical
+            or summary.knockout_context.runner_up_team
+        ),
+        final_result=_normalize_result_text(summary.knockout_context.final_result),
+        total_runs=summary.total_runs,
+        total_wickets=total_wickets,
+        average_runs_per_match=average_runs_per_match,
+        average_runs_per_wicket=average_runs_per_wicket,
+        data_completeness_label=completeness_label,
+        confidence=_summary_confidence(summary),  # type: ignore[arg-type]
+        incomplete_season=_is_incomplete_summary(summary),
+        wicket_source_label=summary.wicket_source_label,
+    )
+
+
+def _fallback_archive_card(card_key: str, title: str, subtitle: str) -> ArchiveEraComparisonCard:
+    return ArchiveEraComparisonCard(
+        card_key=card_key,
+        title=title,
+        value="Unavailable",
+        subtitle=subtitle,
+        confidence="unknown",
+        fallback=True,
+    )
+
+
+def _build_archive_era_cards(
+    summaries: list[TournamentSummaryResponse],
+    comparison_rows: list[ArchiveComparisonRow],
+    venue_trends: list[ArchiveVenueTrend],
+    minimum_matches: int,
+) -> list[ArchiveEraComparisonCard]:
+    enough_data_threshold = max(2, minimum_matches)
+
+    def _row_label(row: ArchiveComparisonRow) -> str:
+        return _format_archive_group_label(row.group_key)
+
+    cards: list[ArchiveEraComparisonCard] = []
+
+    if comparison_rows:
+        highest_scoring = max(
+            comparison_rows,
+            key=lambda row: (
+                row.average_runs_per_match or 0.0,
+                row.total_runs,
+                row.imported_matches,
+            ),
+        )
+        cards.append(
+            ArchiveEraComparisonCard(
+                card_key="highest_scoring_season",
+                title="Highest-scoring season",
+                value=_row_label(highest_scoring),
+                subtitle=(
+                    f"{highest_scoring.average_runs_per_match:.2f} runs per match "
+                    f"across {highest_scoring.imported_matches} matches"
+                )
+                if highest_scoring.average_runs_per_match is not None
+                else None,
+                confidence=highest_scoring.confidence,
+            )
+        )
+    else:
+        cards.append(
+            _fallback_archive_card(
+                "highest_scoring_season",
+                "Highest-scoring season",
+                "Import more completed archive seasons to compare scoring.",
+            )
+        )
+
+    lowest_candidates = [
+        row
+        for row in comparison_rows
+        if row.imported_matches >= enough_data_threshold and row.average_runs_per_match is not None
+    ]
+    if lowest_candidates:
+        lowest_scoring = min(
+            lowest_candidates,
+            key=lambda row: (row.average_runs_per_match or float("inf"), row.imported_matches),
+        )
+        cards.append(
+            ArchiveEraComparisonCard(
+                card_key="lowest_scoring_season",
+                title="Lowest-scoring season",
+                value=_row_label(lowest_scoring),
+                subtitle=(
+                    f"{lowest_scoring.average_runs_per_match:.2f} runs per match "
+                    f"with the minimum {enough_data_threshold}-match safeguard"
+                )
+                if lowest_scoring.average_runs_per_match is not None
+                else None,
+                confidence=lowest_scoring.confidence,
+            )
+        )
+    else:
+        cards.append(
+            _fallback_archive_card(
+                "lowest_scoring_season",
+                "Lowest-scoring season",
+                "Unavailable until at least one season clears the minimum-match safeguard.",
+            )
+        )
+
+    wicket_candidates = [
+        row for row in comparison_rows if row.total_wickets is not None and row.imported_matches > 0
+    ]
+    if wicket_candidates:
+        wicket_heavy = max(
+            wicket_candidates,
+            key=lambda row: (
+                (row.total_wickets or 0) / row.imported_matches,
+                row.total_wickets or 0,
+            ),
+        )
+        wickets_per_match = (wicket_heavy.total_wickets or 0) / wicket_heavy.imported_matches
+        cards.append(
+            ArchiveEraComparisonCard(
+                card_key="most_wicket_heavy_season",
+                title="Most wicket-heavy season",
+                value=_row_label(wicket_heavy),
+                subtitle=f"{wickets_per_match:.2f} wickets per match from delivery-derived or innings wicket totals",
+                confidence=wicket_heavy.confidence,
+            )
+        )
+    else:
+        cards.append(
+            _fallback_archive_card(
+                "most_wicket_heavy_season",
+                "Most wicket-heavy season",
+                "Wicket-heavy comparisons need reliable wicket data.",
+            )
+        )
+
+    runs_per_wicket_candidates = [
+        row for row in comparison_rows if row.average_runs_per_wicket is not None
+    ]
+    if runs_per_wicket_candidates:
+        best_runs_per_wicket = max(
+            runs_per_wicket_candidates,
+            key=lambda row: row.average_runs_per_wicket or 0.0,
+        )
+        cards.append(
+            ArchiveEraComparisonCard(
+                card_key="best_average_runs_per_wicket",
+                title="Best average runs per wicket",
+                value=_row_label(best_runs_per_wicket),
+                subtitle=f"{best_runs_per_wicket.average_runs_per_wicket:.2f} runs per wicket",
+                confidence=best_runs_per_wicket.confidence,
+            )
+        )
+    else:
+        cards.append(
+            _fallback_archive_card(
+                "best_average_runs_per_wicket",
+                "Best average runs per wicket",
+                "Runs-per-wicket comparisons need reliable wicket totals.",
+            )
+        )
+
+    dominant_candidates: list[tuple[TournamentSummaryResponse, DerivedStandingsRow, str]] = []
+    for summary in summaries:
+        champion_name = (
+            summary.knockout_context.champion_team_canonical
+            or summary.knockout_context.champion_team
+        )
+        if not champion_name:
+            continue
+        champion_row = next(
+            (
+                row
+                for row in summary.derived_standings
+                if (row.canonical_team_name or row.team_name) == champion_name
+            ),
+            None,
+        )
+        if champion_row:
+            dominant_candidates.append((summary, champion_row, champion_name))
+    if dominant_candidates:
+        dominant_summary, dominant_row, dominant_team = max(
+            dominant_candidates,
+            key=lambda item: (item[1].points, item[1].wins, -(item[1].losses)),
+        )
+        cards.append(
+            ArchiveEraComparisonCard(
+                card_key="most_dominant_champion",
+                title="Most dominant champion",
+                value=f"{dominant_team} ({dominant_summary.group_key.season or 'Unknown season'})",
+                subtitle=(
+                    f"{dominant_row.points} derived points, {dominant_row.wins} wins "
+                    f"from estimated standings"
+                ),
+                confidence=dominant_row.confidence,
+            )
+        )
+    else:
+        cards.append(
+            _fallback_archive_card(
+                "most_dominant_champion",
+                "Most dominant champion",
+                "Dominance cards need a detected champion and derived standings row.",
+            )
+        )
+
+    final_candidates: list[tuple[TournamentSummaryResponse, str, int]] = []
+    for summary in summaries:
+        margin = _parse_margin(summary.knockout_context.final_result)
+        if margin is None:
+            continue
+        final_candidates.append((summary, margin[0], margin[1]))
+    if final_candidates:
+        closest_final = min(
+            final_candidates, key=lambda item: (item[2], item[0].group_key.season or "")
+        )
+        cards.append(
+            ArchiveEraComparisonCard(
+                card_key="closest_final",
+                title="Closest final",
+                value=_format_archive_group_label(closest_final[0].group_key),
+                subtitle=_normalize_result_text(closest_final[0].knockout_context.final_result),
+                confidence=_summary_confidence(closest_final[0]),  # type: ignore[arg-type]
+            )
+        )
+
+        biggest_final = max(
+            final_candidates, key=lambda item: (item[2], item[0].group_key.season or "")
+        )
+        cards.append(
+            ArchiveEraComparisonCard(
+                card_key="biggest_final_win",
+                title="Biggest final win",
+                value=_format_archive_group_label(biggest_final[0].group_key),
+                subtitle=_normalize_result_text(biggest_final[0].knockout_context.final_result),
+                confidence=_summary_confidence(biggest_final[0]),  # type: ignore[arg-type]
+            )
+        )
+    else:
+        cards.append(
+            _fallback_archive_card(
+                "closest_final",
+                "Closest final",
+                "Final comparisons need detected final result text.",
+            )
+        )
+        cards.append(
+            _fallback_archive_card(
+                "biggest_final_win",
+                "Biggest final win",
+                "Final comparisons need detected final result text.",
+            )
+        )
+
+    venue_candidates = [
+        venue
+        for venue in venue_trends
+        if venue.average_runs_per_match is not None and venue.matches >= 2
+    ]
+    if venue_candidates:
+        top_venue = max(
+            venue_candidates,
+            key=lambda venue: (venue.average_runs_per_match or 0.0, venue.matches),
+        )
+        cards.append(
+            ArchiveEraComparisonCard(
+                card_key="highest_scoring_venue",
+                title="Highest-scoring venue",
+                value=top_venue.venue,
+                subtitle=f"{top_venue.average_runs_per_match:.2f} runs per match across {top_venue.matches} matches",
+                confidence=top_venue.confidence,
+            )
+        )
+    else:
+        cards.append(
+            _fallback_archive_card(
+                "highest_scoring_venue",
+                "Highest-scoring venue",
+                "Venue scoring cards need at least a two-match sample.",
+            )
+        )
+
+    return cards
+
+
+def _build_champion_history(
+    summaries: list[TournamentSummaryResponse],
+) -> list[ChampionHistoryEntry]:
+    history: list[ChampionHistoryEntry] = []
+    for summary in sorted(
+        summaries,
+        key=lambda item: (item.group_key.season_year or -1, item.group_key.season or ""),
+    ):
+        history.append(
+            ChampionHistoryEntry(
+                season=summary.group_key.season,
+                season_year=summary.group_key.season_year,
+                champion_detected=(
+                    summary.knockout_context.champion_team_canonical
+                    or summary.knockout_context.champion_team
+                ),
+                runner_up_detected=(
+                    summary.knockout_context.runner_up_team_canonical
+                    or summary.knockout_context.runner_up_team
+                ),
+                final_result=_normalize_result_text(summary.knockout_context.final_result),
+                confidence=_summary_confidence(summary),  # type: ignore[arg-type]
+                source=summary.knockout_context.outcome_source,
+            )
+        )
+    return history
+
+
+def _build_dynasty_indicators(
+    competition_summaries: list[TournamentSummaryResponse],
+) -> list[ArchiveDynastyIndicator]:
+    if not competition_summaries:
+        return [
+            ArchiveDynastyIndicator(
+                metric_key="no_competition_selected",
+                title="Repeat-success indicators",
+                value="Select a competition",
+                subtitle="Dynasty indicators need multiple seasons from one competition.",
+                confidence="unknown",
+                fallback=True,
+            )
+        ]
+
+    title_counts: Counter[str] = Counter()
+    finals_counts: Counter[str] = Counter()
+    top_two_counts: Counter[str] = Counter()
+    win_record: dict[str, dict[str, int]] = defaultdict(lambda: {"wins": 0, "played": 0})
+
+    for summary in competition_summaries:
+        champion = (
+            summary.knockout_context.champion_team_canonical
+            or summary.knockout_context.champion_team
+        )
+        runner_up = (
+            summary.knockout_context.runner_up_team_canonical
+            or summary.knockout_context.runner_up_team
+        )
+        if champion:
+            title_counts[champion] += 1
+            finals_counts[champion] += 1
+        if runner_up:
+            finals_counts[runner_up] += 1
+        for row in summary.derived_standings[:2]:
+            top_two_counts[row.canonical_team_name or row.team_name] += 1
+        for row in summary.derived_standings:
+            team_name = row.canonical_team_name or row.team_name
+            win_record[team_name]["wins"] += row.wins
+            win_record[team_name]["played"] += row.played
+
+    def _best_counter(counter: Counter[str]) -> tuple[str, int] | None:
+        if not counter:
+            return None
+        return max(counter.items(), key=lambda item: (item[1], item[0]))
+
+    indicators: list[ArchiveDynastyIndicator] = []
+
+    best_titles = _best_counter(title_counts)
+    if best_titles:
+        indicators.append(
+            ArchiveDynastyIndicator(
+                metric_key="most_detected_titles",
+                title="Most detected titles",
+                team_name=best_titles[0],
+                value=str(best_titles[1]),
+                subtitle="Detected titles from derived final results only.",
+                confidence="medium",
+            )
+        )
+    else:
+        indicators.append(
+            ArchiveDynastyIndicator(
+                metric_key="most_detected_titles",
+                title="Most detected titles",
+                value="Unavailable",
+                subtitle="No detected champions found in the selected competition.",
+                confidence="unknown",
+                fallback=True,
+            )
+        )
+
+    best_finals = _best_counter(finals_counts)
+    if best_finals:
+        indicators.append(
+            ArchiveDynastyIndicator(
+                metric_key="most_derived_finals",
+                title="Most derived finals reached",
+                team_name=best_finals[0],
+                value=str(best_finals[1]),
+                subtitle="Final appearances derived from detected final participants.",
+                confidence="medium",
+            )
+        )
+    else:
+        indicators.append(
+            ArchiveDynastyIndicator(
+                metric_key="most_derived_finals",
+                title="Most derived finals reached",
+                value="Unavailable",
+                subtitle="Derived final participants were not available.",
+                confidence="unknown",
+                fallback=True,
+            )
+        )
+
+    best_top_two = _best_counter(top_two_counts)
+    if best_top_two:
+        indicators.append(
+            ArchiveDynastyIndicator(
+                metric_key="most_top_two_finishes",
+                title="Most seasons in estimated top 2",
+                team_name=best_top_two[0],
+                value=str(best_top_two[1]),
+                subtitle="Estimated from derived standings only.",
+                confidence="medium",
+            )
+        )
+    else:
+        indicators.append(
+            ArchiveDynastyIndicator(
+                metric_key="most_top_two_finishes",
+                title="Most seasons in estimated top 2",
+                value="Unavailable",
+                subtitle="Estimated standings were not available.",
+                confidence="unknown",
+                fallback=True,
+            )
+        )
+
+    if win_record:
+        best_win_team, best_win_stats = max(
+            win_record.items(),
+            key=lambda item: (
+                (item[1]["wins"] / item[1]["played"]) if item[1]["played"] else 0.0,
+                item[1]["wins"],
+                item[0],
+            ),
+        )
+        rate = (
+            round((best_win_stats["wins"] / best_win_stats["played"]) * 100, 1)
+            if best_win_stats["played"]
+            else 0.0
+        )
+        indicators.append(
+            ArchiveDynastyIndicator(
+                metric_key="best_win_record",
+                title="Best win record across seasons",
+                team_name=best_win_team,
+                value=f"{rate}%",
+                subtitle=(
+                    f"{best_win_stats['wins']} wins from {best_win_stats['played']} "
+                    "estimated standings matches"
+                ),
+                confidence="medium",
+            )
+        )
+    else:
+        indicators.append(
+            ArchiveDynastyIndicator(
+                metric_key="best_win_record",
+                title="Best win record across seasons",
+                value="Unavailable",
+                subtitle="Win-record estimates need derived standings rows.",
+                confidence="unknown",
+                fallback=True,
+            )
+        )
+
+    return indicators
+
+
+def _build_venue_trends(
+    filtered_group_games: list[list[EligibleGame]],
+) -> list[ArchiveVenueTrend]:
+    venue_acc: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"matches": 0, "total_runs": 0, "total_wickets": 0, "wicket_matches": 0}
+    )
+
+    for group_games in filtered_group_games:
+        wicket_intelligence = _derive_delivery_wicket_intelligence(group_games)
+        for game, _batch, meta, match in group_games:
+            venue = str(match.venue or meta.get("venue") or "").strip()
+            if not venue:
+                continue
+            venue_acc[venue]["matches"] += 1
+            venue_acc[venue]["total_runs"] += sum(
+                int(inn.get("runs") or 0) for inn in _innings_summary(game)
+            )
+            wickets_for_match = wicket_intelligence.wickets_by_match.get(game.id)
+            if wickets_for_match is not None and wickets_for_match > 0:
+                venue_acc[venue]["total_wickets"] += wickets_for_match
+                venue_acc[venue]["wicket_matches"] += 1
+
+    trends: list[ArchiveVenueTrend] = []
+    for venue, acc in sorted(
+        venue_acc.items(),
+        key=lambda item: (-item[1]["matches"], -(item[1]["total_runs"]), item[0]),
+    ):
+        matches = acc["matches"]
+        wicket_matches = acc["wicket_matches"]
+        average_runs = (
+            round(acc["total_runs"] / matches, 2) if matches >= 2 and matches > 0 else None
+        )
+        wickets_per_match = (
+            round(acc["total_wickets"] / wicket_matches, 2) if wicket_matches >= 2 else None
+        )
+        if matches < 2:
+            sample_note = "Single-match sample — average runs per match withheld."
+            confidence = "low"
+        elif wicket_matches < 2:
+            sample_note = (
+                "Runs trend meets the sample safeguard; wicket trend still needs two matches."
+            )
+            confidence = "medium"
+        else:
+            sample_note = "Meets archive sample-size safeguards."
+            confidence = "high"
+        trends.append(
+            ArchiveVenueTrend(
+                venue=venue,
+                matches=matches,
+                total_runs=acc["total_runs"],
+                average_runs_per_match=average_runs,
+                total_wickets=acc["total_wickets"] if wicket_matches > 0 else None,
+                wickets_per_match=wickets_per_match,
+                sample_note=sample_note,
+                confidence=confidence,  # type: ignore[arg-type]
+            )
+        )
+    return trends
+
+
+def _build_archive_research_summary(
+    comparison_rows: list[ArchiveComparisonRow],
+    champion_history: list[ChampionHistoryEntry],
+    era_cards: list[ArchiveEraComparisonCard],
+    dynasty_indicators: list[ArchiveDynastyIndicator],
+    venue_trends: list[ArchiveVenueTrend],
+) -> ArchiveResearchSummary:
+    if not comparison_rows:
+        empty_sections = [
+            ArchiveResearchSection(
+                section_key="archive_overview",
+                title="Archive overview",
+                body="No archive groups matched the current filters.",
+            ),
+            ArchiveResearchSection(
+                section_key="data_trust_note",
+                title="Data trust note",
+                body=(
+                    "Archive views are derived from imported match data and are not official. "
+                    "Incomplete seasons may affect comparisons. Wicket trends use delivery-derived "
+                    "dismissal records only where available."
+                ),
+            ),
+        ]
+        return ArchiveResearchSummary(sections=empty_sections, markdown=None, plain_text=None)
+
+    competitions = {
+        row.group_key.competition_name or row.group_key.competition_code for row in comparison_rows
+    }
+    total_matches = sum(row.imported_matches for row in comparison_rows)
+    incomplete_count = sum(1 for row in comparison_rows if row.incomplete_season)
+
+    highest_scoring = next(
+        (card for card in era_cards if card.card_key == "highest_scoring_season"), None
+    )
+    wicket_card = next(
+        (card for card in era_cards if card.card_key == "most_wicket_heavy_season"), None
+    )
+    venue_card = next(
+        (card for card in era_cards if card.card_key == "highest_scoring_venue"), None
+    )
+    title_indicator = next(
+        (
+            indicator
+            for indicator in dynasty_indicators
+            if indicator.metric_key == "most_detected_titles"
+        ),
+        None,
+    )
+    timeline_text = (
+        "; ".join(
+            f"{entry.season or 'Unknown season'}: {entry.champion_detected or 'Champion unavailable'}"
+            for entry in champion_history
+        )
+        if champion_history
+        else "Select a competition filter to generate a champion timeline."
+    )
+    debate_lines = [
+        f"Does {highest_scoring.value if highest_scoring else 'the archive leader'} represent a genuine scoring-era shift?",
+        "How much should incomplete seasons change archive comparisons?",
+        "Which venue trend is signal, and which is just sample noise?",
+    ]
+    trust_note = (
+        "All archive views are derived from imported match data and are not official. "
+        "Incomplete seasons may affect comparisons. Wicket trends use delivery-derived dismissal "
+        "records only where available. Player leaderboards require player-level data and are not invented."
+    )
+    sections = [
+        ArchiveResearchSection(
+            section_key="archive_overview",
+            title="Archive overview",
+            body=(
+                f"The archive currently spans {len(comparison_rows)} competition-season groups across "
+                f"{len(competitions)} competitions and {total_matches} imported matches. "
+                f"{incomplete_count} filtered season{' is' if incomplete_count == 1 else 's are'} incomplete."
+            ),
+        ),
+        ArchiveResearchSection(
+            section_key="champion_timeline",
+            title="Champion timeline",
+            body=timeline_text,
+        ),
+        ArchiveResearchSection(
+            section_key="scoring_trend_story",
+            title="Scoring trend story",
+            body=(
+                f"Highest-scoring season: {highest_scoring.value}. {highest_scoring.subtitle}"
+                if highest_scoring and not highest_scoring.fallback and highest_scoring.subtitle
+                else "Scoring-era comparisons are limited by the current archive sample."
+            ),
+        ),
+        ArchiveResearchSection(
+            section_key="wicket_trend_story",
+            title="Wicket trend story",
+            body=(
+                f"Most wicket-heavy season: {wicket_card.value}. {wicket_card.subtitle}"
+                if wicket_card and not wicket_card.fallback and wicket_card.subtitle
+                else "Reliable wicket-era comparisons are not available for the current filters."
+            ),
+        ),
+        ArchiveResearchSection(
+            section_key="venue_trend_story",
+            title="Venue trend story",
+            body=(
+                f"Highest-scoring archive venue: {venue_card.value}. {venue_card.subtitle}"
+                if venue_card and not venue_card.fallback and venue_card.subtitle
+                else (
+                    f"Most-used venue: {venue_trends[0].venue} ({venue_trends[0].matches} matches). "
+                    f"{venue_trends[0].sample_note}"
+                    if venue_trends
+                    else "Venue trend coverage is currently thin."
+                )
+            ),
+        ),
+        ArchiveResearchSection(
+            section_key="dynasty_story",
+            title="Dynasty / repeat contender story",
+            body=(
+                f"Detected titles leader: {title_indicator.team_name} ({title_indicator.value}). "
+                f"{title_indicator.subtitle}"
+                if title_indicator and not title_indicator.fallback and title_indicator.team_name
+                else "Select a competition with multiple seasons to compare repeat contenders."
+            ),
+        ),
+        ArchiveResearchSection(
+            section_key="debate_questions",
+            title="Best comparison debate questions",
+            body="\n".join(f"- {line}" for line in debate_lines),
+        ),
+        ArchiveResearchSection(
+            section_key="data_trust_note",
+            title="Data trust note",
+            body=trust_note,
+        ),
+    ]
+
+    markdown_lines: list[str] = []
+    text_lines: list[str] = []
+    for section in sections:
+        markdown_lines.append(f"## {section.title}")
+        if section.body:
+            markdown_lines.append(section.body)
+        markdown_lines.append("")
+        text_lines.append(section.title)
+        if section.body:
+            text_lines.append(section.body)
+        text_lines.append("")
+
+    return ArchiveResearchSummary(
+        sections=sections,
+        markdown="\n".join(markdown_lines).strip() or None,
+        plain_text="\n".join(text_lines).strip() or None,
+    )
+
+
+def _build_historical_archive_explorer(
+    eligible_with_agg: list[EligibleGame],
+    season_outcomes: list[SeasonOutcomeAggregate],
+    competition_code: str | None = None,
+    season_start: int | None = None,
+    season_end: int | None = None,
+    format_family: str | None = None,
+    gender_category: str | None = None,
+    minimum_matches: int = 1,
+    include_incomplete: bool = True,
+) -> HistoricalArchiveExplorerResponse:
+    groups_map = _group_eligible_games(eligible_with_agg)
+    filtered_summaries: list[TournamentSummaryResponse] = []
+    filtered_group_games: list[list[EligibleGame]] = []
+
+    for (
+        competition,
+        competition_name,
+        gender,
+        season_value,
+        format_value,
+    ), group_games in sorted(
+        groups_map.items(),
+        key=lambda item: (
+            item[0][1] or item[0][0],
+            item[0][3] or "",
+            item[0][2],
+            item[0][4],
+        ),
+    ):
+        group_key = TournamentGroupKey(
+            competition_code=competition,
+            competition_name=competition_name,
+            season=season_value,
+            season_year=_season_year_value(season_value),
+            gender_category=gender,
+            format_family=format_value,
+            source_type="historical_import",
+        )
+        summary = _build_tournament_summary(group_key, group_games, season_outcomes)
+        if competition_code and competition != competition_code:
+            continue
+        if format_family and format_value.lower() != format_family.lower():
+            continue
+        if gender_category and gender.lower() != gender_category.lower():
+            continue
+        if season_start is not None and (
+            summary.group_key.season_year is None or summary.group_key.season_year < season_start
+        ):
+            continue
+        if season_end is not None and (
+            summary.group_key.season_year is None or summary.group_key.season_year > season_end
+        ):
+            continue
+        if summary.match_count < minimum_matches:
+            continue
+        if not include_incomplete and _is_incomplete_summary(summary):
+            continue
+        filtered_summaries.append(summary)
+        filtered_group_games.append(group_games)
+
+    comparison_rows = [_build_archive_comparison_row(summary) for summary in filtered_summaries]
+    venue_trends = _build_venue_trends(filtered_group_games)
+    era_cards = _build_archive_era_cards(
+        filtered_summaries,
+        comparison_rows,
+        venue_trends,
+        minimum_matches=minimum_matches,
+    )
+
+    selected_competition_summaries = filtered_summaries if competition_code else []
+    champion_history = _build_champion_history(selected_competition_summaries)
+    dynasty_indicators = _build_dynasty_indicators(selected_competition_summaries)
+    research_summary = _build_archive_research_summary(
+        comparison_rows=comparison_rows,
+        champion_history=champion_history,
+        era_cards=era_cards,
+        dynasty_indicators=dynasty_indicators,
+        venue_trends=venue_trends,
+    )
+
+    return HistoricalArchiveExplorerResponse(
+        comparison_rows=comparison_rows,
+        era_comparison_cards=era_cards,
+        champion_history=champion_history,
+        dynasty_indicators=dynasty_indicators,
+        venue_trends=venue_trends,
+        research_summary=research_summary,
+        total_matches=sum(row.imported_matches for row in comparison_rows),
+        total_groups=len(comparison_rows),
+        selected_competition_code=competition_code,
+    )
+
+
 async def _fetch_eligible_games(
     db: AsyncSession,
     current_user: Any,
@@ -1834,6 +2698,36 @@ async def _fetch_eligible_games(
     return eligible
 
 
+async def _load_tournament_dataset(
+    db: AsyncSession,
+    current_user: Any,
+) -> tuple[
+    list[EligibleGame],
+    dict[tuple[str, str, str, str | None, str], list[EligibleGame]],
+    list[SeasonOutcomeAggregate],
+]:
+    from backend.services.historical_stats_aggregation_service import (
+        _build_match_aggregate,
+        _build_season_outcomes,
+    )
+
+    raw_games = await _fetch_eligible_games(db, current_user)
+    if not raw_games:
+        return [], {}, []
+
+    eligible_with_agg: list[EligibleGame] = [
+        (game, batch, meta, _build_match_aggregate(game, batch, meta))
+        for game, batch, meta in raw_games
+    ]
+    groups_map = _group_eligible_games(eligible_with_agg)
+    match_aggregates = [entry[3] for entry in eligible_with_agg]
+    season_outcomes = _build_season_outcomes(
+        [(g, b, m) for g, b, m, _ in eligible_with_agg],
+        match_aggregates,
+    )
+    return eligible_with_agg, groups_map, season_outcomes
+
+
 async def get_tournament_groups(
     db: AsyncSession,
     current_user: Any,
@@ -1842,26 +2736,12 @@ async def get_tournament_groups(
 
     Phase 10S.1: read-only, deterministic. Requires analyst_pro or org_pro role.
     """
-    from backend.services.historical_stats_aggregation_service import _build_match_aggregate
-
-    raw_games = await _fetch_eligible_games(db, current_user)
-    if not raw_games:
+    eligible_with_agg, groups_map, season_outcomes = await _load_tournament_dataset(
+        db, current_user
+    )
+    if not eligible_with_agg:
         return TournamentGroupsResponse(groups=[], total=0)
 
-    eligible_with_agg: list[EligibleGame] = [
-        (game, batch, meta, _build_match_aggregate(game, batch, meta))
-        for game, batch, meta in raw_games
-    ]
-
-    groups_map = _group_eligible_games(eligible_with_agg)
-
-    # Build season outcomes to detect champions
-    from backend.services.historical_stats_aggregation_service import _build_season_outcomes
-
-    match_aggregates = [entry[3] for entry in eligible_with_agg]
-    season_outcomes = _build_season_outcomes(
-        [(g, b, m) for g, b, m, _ in eligible_with_agg], match_aggregates
-    )
     # Index outcomes by (competition_code, season, gender)
     outcome_index: dict[tuple[str, str | None, str], SeasonOutcomeAggregate] = {}
     for outcome in season_outcomes:
@@ -1945,21 +2825,11 @@ async def get_tournament_summary(
 
     Phase 10S.1: read-only, deterministic. Returns None if no matching games found.
     """
-    from backend.services.historical_stats_aggregation_service import (
-        _build_match_aggregate,
-        _build_season_outcomes,
+    eligible_with_agg, groups_map, season_outcomes = await _load_tournament_dataset(
+        db, current_user
     )
-
-    raw_games = await _fetch_eligible_games(db, current_user)
-    if not raw_games:
+    if not eligible_with_agg:
         return None
-
-    eligible_with_agg: list[EligibleGame] = [
-        (game, batch, meta, _build_match_aggregate(game, batch, meta))
-        for game, batch, meta in raw_games
-    ]
-
-    groups_map = _group_eligible_games(eligible_with_agg)
 
     # Find matching group
     target_games: list[EligibleGame] = []
@@ -1996,12 +2866,6 @@ async def get_tournament_summary(
         source_type="historical_import",
     )
 
-    # Build season outcomes for knockout context
-    match_aggregates = [entry[3] for entry in eligible_with_agg]
-    season_outcomes = _build_season_outcomes(
-        [(g, b, m) for g, b, m, _ in eligible_with_agg], match_aggregates
-    )
-
     return _build_tournament_summary(group_key, target_games, season_outcomes)
 
 
@@ -2017,18 +2881,11 @@ async def get_team_journey(
 
     Phase 10S.1: read-only, deterministic. Returns None if no matching games found.
     """
-    from backend.services.historical_stats_aggregation_service import _build_match_aggregate
-
-    raw_games = await _fetch_eligible_games(db, current_user)
-    if not raw_games:
+    eligible_with_agg, groups_map, _season_outcomes = await _load_tournament_dataset(
+        db, current_user
+    )
+    if not eligible_with_agg:
         return None
-
-    eligible_with_agg: list[EligibleGame] = [
-        (game, batch, meta, _build_match_aggregate(game, batch, meta))
-        for game, batch, meta in raw_games
-    ]
-
-    groups_map = _group_eligible_games(eligible_with_agg)
 
     target_games: list[EligibleGame] = []
     target_competition_name: str | None = None
@@ -2086,3 +2943,32 @@ async def get_tournament_podcast_rundown(
     if summary is None:
         return None
     return build_tournament_podcast_rundown(summary)
+
+
+async def get_historical_archive_explorer(
+    db: AsyncSession,
+    current_user: Any,
+    competition_code: str | None = None,
+    season_start: int | None = None,
+    season_end: int | None = None,
+    format_family: str | None = None,
+    gender_category: str | None = None,
+    minimum_matches: int = 1,
+    include_incomplete: bool = True,
+) -> HistoricalArchiveExplorerResponse:
+    eligible_with_agg, _groups_map, season_outcomes = await _load_tournament_dataset(
+        db, current_user
+    )
+    if not eligible_with_agg:
+        return HistoricalArchiveExplorerResponse()
+    return _build_historical_archive_explorer(
+        eligible_with_agg=eligible_with_agg,
+        season_outcomes=season_outcomes,
+        competition_code=competition_code,
+        season_start=season_start,
+        season_end=season_end,
+        format_family=format_family,
+        gender_category=gender_category,
+        minimum_matches=minimum_matches,
+        include_incomplete=include_incomplete,
+    )
