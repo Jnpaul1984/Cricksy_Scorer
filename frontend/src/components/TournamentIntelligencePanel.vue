@@ -570,7 +570,7 @@
             :data-testid="`rundown-section-${section.section_key}`"
           >
             <h6 class="tip-rundown-card-title">{{ section.title }}</h6>
-            <p v-if="section.body" class="tip-rundown-section-body">{{ section.body }}</p>
+            <p v-if="section.body" class="tip-rundown-section-body">{{ formatRundownSectionBody(section) }}</p>
             <span :class="`tip-confidence-badge tip-confidence-badge--${section.confidence}`">
               {{ section.confidence }}
             </span>
@@ -805,7 +805,8 @@ function buildPodcastMarkdown(rundown: TournamentPodcastRundown): string {
   for (const section of rundown.sections) {
     if (section.section_key === 'opening_hook') continue
     lines.push(`## ${section.title}`, '')
-    if (section.body) lines.push(section.body)
+    const sectionBody = formatRundownSectionBody(section)
+    if (sectionBody) lines.push(sectionBody)
     lines.push('')
   }
   lines.push('---', `*${rundown.note}*`)
@@ -846,7 +847,8 @@ function buildPodcastPlainText(rundown: TournamentPodcastRundown): string {
   for (const section of rundown.sections) {
     if (section.section_key === 'opening_hook') continue
     lines.push(section.title.toUpperCase(), '-'.repeat(30))
-    if (section.body) lines.push(section.body)
+    const sectionBody = formatRundownSectionBody(section)
+    if (sectionBody) lines.push(sectionBody)
     lines.push('')
   }
   lines.push('='.repeat(50), rundown.note)
@@ -878,8 +880,38 @@ function formatTournamentResult(result: string | null | undefined): string {
   return normalizeResultDisplayText(result) || result || ''
 }
 
+function stripLeadingLabel(text: string, label: string): string {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return text.replace(new RegExp(`^\\s*(?:${escapedLabel}\\s*)+`, 'i'), '').trimStart()
+}
+
+function normalizeClosestFinishText(text: string): string {
+  const normalized = normalizeResultDisplayText(text) || text
+  return `Closest finish: ${stripLeadingLabel(normalized, 'Closest finish:')}`
+}
+
+function formatRundownSectionBody(section: { section_key: string; body?: string | null }): string {
+  const body = section.body || ''
+  if (!body) return ''
+  if (section.section_key !== 'key_matches') return body
+
+  return body
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trimStart()
+      if (/^closest finish:/i.test(trimmed)) return normalizeClosestFinishText(trimmed)
+      return normalizeResultDisplayText(line) || line
+    })
+    .join('\n')
+}
+
 function formatHighlightResult(highlight: TournamentMatchHighlight | null | undefined): string {
-  return formatTournamentResult(highlight?.detail) || formatTournamentResult(highlight?.result)
+  if (!highlight) return ''
+  const raw = formatTournamentResult(highlight.detail) || formatTournamentResult(highlight.result)
+  if (highlight.highlight_type === 'closest_match' && raw) {
+    return stripLeadingLabel(raw, 'Closest finish:')
+  }
+  return raw
 }
 </script>
 
