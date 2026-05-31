@@ -32,6 +32,7 @@ from backend.api.schemas.tournament_intelligence import (
 )
 from backend.services.tournament_intelligence_service import (
     _build_derived_standings,
+    _build_historical_archive_explorer,
     _build_knockout_context,
     _build_team_journey,
     _build_tournament_summary,
@@ -189,6 +190,7 @@ def _make_eligible_entry(
     innings_summary: list | None = None,
     deliveries: list | None = None,
     deliveries_imported: bool = False,
+    venue: str = "Providence Stadium",
 ) -> tuple:
     """Build a (game, batch, meta, match_aggregate) tuple."""
     game = _make_game(
@@ -210,6 +212,7 @@ def _make_eligible_entry(
         event_name=event_name,
         season=season,
         gender=gender,
+        venue=venue,
         competition_stage=competition_stage,
         deliveries_imported=deliveries_imported,
     )
@@ -222,8 +225,19 @@ def _make_eligible_entry(
         winner_team=winner,
         winner_team_canonical=winner,
         season=season,
+        venue=venue,
     )
     return (game, batch, meta, match_agg)
+
+
+def _build_archive_response(entries: list, **filters):
+    from backend.services.historical_stats_aggregation_service import _build_season_outcomes
+
+    season_outcomes = _build_season_outcomes(
+        [(game, batch, meta) for game, batch, meta, _ in entries],
+        [match_agg for *_rest, match_agg in entries],
+    )
+    return _build_historical_archive_explorer(entries, season_outcomes, **filters)
 
 
 # ---------------------------------------------------------------------------
@@ -863,6 +877,213 @@ class TestGroupEligibleGames:
 
 
 # ---------------------------------------------------------------------------
+# Phase 10S.3 — Historical Archive Explorer tests
+# ---------------------------------------------------------------------------
+
+
+class TestHistoricalArchiveExplorer:
+    def test_groups_multiple_seasons_into_archive_comparison_rows(self) -> None:
+        entries = [
+            _make_eligible_entry(
+                game_id="cpl-2021-final",
+                team_a="Saint Lucia Kings",
+                team_b="St Kitts and Nevis Patriots",
+                result="St Kitts and Nevis Patriots won by 3 wickets",
+                season="2021",
+                winner="St Kitts and Nevis Patriots",
+                competition_stage="Final",
+                venue="Warner Park",
+                innings_summary=[
+                    {"inning_no": 1, "team": "Saint Lucia Kings", "runs": 159, "wickets": 7, "overs": 20.0},
+                    {"inning_no": 2, "team": "St Kitts and Nevis Patriots", "runs": 160, "wickets": 7, "overs": 19.0},
+                ],
+            ),
+            _make_eligible_entry(
+                game_id="cpl-2022-final",
+                team_a="Barbados Royals",
+                team_b="Jamaica Tallawahs",
+                result="Jamaica Tallawahs won by 8 wickets",
+                season="2022",
+                winner="Jamaica Tallawahs",
+                competition_stage="Final",
+                venue="Warner Park",
+                innings_summary=[
+                    {"inning_no": 1, "team": "Barbados Royals", "runs": 161, "wickets": 7, "overs": 20.0},
+                    {"inning_no": 2, "team": "Jamaica Tallawahs", "runs": 162, "wickets": 2, "overs": 18.1},
+                ],
+            ),
+            _make_eligible_entry(
+                game_id="odi-2023-final",
+                team_a="Leicestershire",
+                team_b="Hampshire",
+                result="Leicestershire won by 5 runs",
+                event_name="One Day Cup",
+                season="2023",
+                winner="Leicestershire",
+                competition_stage="Final",
+                venue="Sabina Park",
+                innings_summary=[
+                    {"inning_no": 1, "team": "Leicestershire", "runs": 301, "wickets": 8, "overs": 50.0},
+                    {"inning_no": 2, "team": "Hampshire", "runs": 296, "wickets": 10, "overs": 49.4},
+                ],
+            ),
+        ]
+
+        response = _build_archive_response(entries)
+
+        assert len(response.comparison_rows) == 3
+        assert [row.group_key.season for row in response.comparison_rows] == ["2021", "2022", "2023"]
+        assert response.total_groups == 3
+        assert response.total_matches == 3
+
+    def test_builds_selected_competition_champion_history(self) -> None:
+        entries = [
+            _make_eligible_entry(
+                game_id="cpl-2021-final",
+                team_a="Saint Lucia Kings",
+                team_b="St Kitts and Nevis Patriots",
+                result="St Kitts and Nevis Patriots won by 3 wickets",
+                season="2021",
+                winner="St Kitts and Nevis Patriots",
+                competition_stage="Final",
+                venue="Warner Park",
+            ),
+            _make_eligible_entry(
+                game_id="cpl-2022-final",
+                team_a="Barbados Royals",
+                team_b="Jamaica Tallawahs",
+                result="Jamaica Tallawahs won by 8 wickets",
+                season="2022",
+                winner="Jamaica Tallawahs",
+                competition_stage="Final",
+                venue="Warner Park",
+            ),
+        ]
+
+        response = _build_archive_response(entries, competition_code="CPL_MEN")
+
+        assert [entry.season for entry in response.champion_history] == ["2021", "2022"]
+        assert response.champion_history[0].champion_detected == "St Kitts and Nevis Patriots"
+        assert response.champion_history[0].runner_up_detected == "Saint Lucia Kings"
+        assert response.champion_history[1].champion_detected == "Jamaica Tallawahs"
+        assert "not an official record" in response.champion_history_note.lower()
+
+    def test_computes_era_cards_and_venue_sample_safeguards(self) -> None:
+        deliveries = [
+            {
+                "inning_no": 1,
+                "batting_team": "Saint Lucia Kings",
+                "bowler": "Bowler A",
+                "wickets": [{"kind": "bowled", "player_out": "Batter 1"}],
+            },
+            {
+                "inning_no": 2,
+                "batting_team": "St Kitts and Nevis Patriots",
+                "bowler": "Bowler B",
+                "wickets": [{"kind": "caught", "player_out": "Batter 2"}],
+            },
+        ]
+        entries = [
+            _make_eligible_entry(
+                game_id="cpl-2021-final",
+                team_a="Saint Lucia Kings",
+                team_b="St Kitts and Nevis Patriots",
+                result="St Kitts and Nevis Patriots won by 3 wickets",
+                season="2021",
+                winner="St Kitts and Nevis Patriots",
+                competition_stage="Final",
+                venue="Warner Park",
+                deliveries=deliveries,
+                deliveries_imported=True,
+                innings_summary=[
+                    {"inning_no": 1, "team": "Saint Lucia Kings", "runs": 185, "wickets": 7, "overs": 20.0},
+                    {"inning_no": 2, "team": "St Kitts and Nevis Patriots", "runs": 186, "wickets": 7, "overs": 19.2},
+                ],
+            ),
+            _make_eligible_entry(
+                game_id="cpl-2022-final",
+                team_a="Barbados Royals",
+                team_b="Jamaica Tallawahs",
+                result="Jamaica Tallawahs won by 8 wickets",
+                season="2022",
+                winner="Jamaica Tallawahs",
+                competition_stage="Final",
+                venue="Warner Park",
+                innings_summary=[
+                    {"inning_no": 1, "team": "Barbados Royals", "runs": 138, "wickets": 8, "overs": 20.0},
+                    {"inning_no": 2, "team": "Jamaica Tallawahs", "runs": 139, "wickets": 2, "overs": 15.4},
+                ],
+            ),
+            _make_eligible_entry(
+                game_id="odi-2023-final",
+                team_a="Leicestershire",
+                team_b="Hampshire",
+                result="Leicestershire won by 5 runs",
+                event_name="One Day Cup",
+                season="2023",
+                winner="Leicestershire",
+                competition_stage="Final",
+                venue="Sabina Park",
+                innings_summary=[
+                    {"inning_no": 1, "team": "Leicestershire", "runs": 301, "wickets": 8, "overs": 50.0},
+                    {"inning_no": 2, "team": "Hampshire", "runs": 296, "wickets": 10, "overs": 49.4},
+                ],
+            ),
+        ]
+
+        response = _build_archive_response(entries)
+
+        highest_scoring = next(
+            card for card in response.era_comparison_cards if card.card_key == "highest_scoring_season"
+        )
+        assert highest_scoring.value == "One Day Cup 2023"
+
+        highest_scoring_venue = next(
+            card for card in response.era_comparison_cards if card.card_key == "highest_scoring_venue"
+        )
+        assert highest_scoring_venue.value == "Warner Park"
+
+        single_sample_venue = next(venue for venue in response.venue_trends if venue.matches == 1)
+        assert single_sample_venue.average_runs_per_match is None
+        assert "withheld" in single_sample_venue.sample_note.lower()
+
+    def test_preserves_wicket_fallbacks_and_trust_note_in_copy_output(self) -> None:
+        entries = [
+            _make_eligible_entry(
+                game_id="cpl-2021-final",
+                team_a="Saint Lucia Kings",
+                team_b="St Kitts and Nevis Patriots",
+                result="St Kitts and Nevis Patriots won by 3 wicket(s)",
+                season="2021",
+                winner="St Kitts and Nevis Patriots",
+                competition_stage="Final",
+                venue="Warner Park",
+            ),
+        ]
+
+        response = _build_archive_response(entries, competition_code="CPL_MEN")
+
+        assert response.comparison_rows[0].final_result == "St Kitts and Nevis Patriots won by 3 wickets"
+        assert response.venue_trends[0].wickets_per_match is None
+        assert response.research_summary.markdown is not None
+        assert "derived from imported match data" in response.research_summary.markdown.lower()
+        assert "not official" in response.research_summary.markdown.lower()
+        assert "delivery-derived dismissal records only where available" in response.research_summary.markdown.lower()
+
+    def test_returns_empty_archive_fallback_when_filters_exclude_all_rows(self) -> None:
+        entries = [
+            _make_eligible_entry(game_id="cpl-2021-final", season="2021", competition_stage="Final")
+        ]
+
+        response = _build_archive_response(entries, season_start=2024)
+
+        assert response.comparison_rows == []
+        assert response.total_groups == 0
+        assert response.research_summary.markdown is None
+        assert response.research_summary.sections[0].body == "No archive groups matched the current filters."
+
+
+# ---------------------------------------------------------------------------
 # API endpoint tests (in-memory mode)
 # ---------------------------------------------------------------------------
 
@@ -878,6 +1099,10 @@ def client():
 class TestTournamentIntelligenceEndpoints:
     def test_groups_endpoint_requires_auth(self, client) -> None:
         response = client.get("/analytics/tournament-intelligence/groups")
+        assert response.status_code in (401, 403)
+
+    def test_archive_explorer_endpoint_requires_auth(self, client) -> None:
+        response = client.get("/analytics/tournament-intelligence/archive-explorer")
         assert response.status_code in (401, 403)
 
     def test_summary_endpoint_requires_auth(self, client) -> None:

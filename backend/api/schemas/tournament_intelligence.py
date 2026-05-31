@@ -238,6 +238,140 @@ class TournamentGroupsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Phase 10S.3 — Historical Archive Explorer schemas
+# ---------------------------------------------------------------------------
+
+
+class ArchiveComparisonRow(BaseModel):
+    """Archive-level comparison row for one competition/season group."""
+
+    group_key: TournamentGroupKey
+    imported_matches: int = 0
+    teams_count: int = 0
+    venues_count: int = 0
+    champion_detected: str | None = None
+    runner_up_detected: str | None = None
+    final_result: str | None = None
+    total_runs: int = 0
+    total_wickets: int | None = None
+    average_runs_per_match: float | None = None
+    average_runs_per_wicket: float | None = None
+    data_completeness_label: str = ""
+    confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    incomplete_season: bool = False
+    wicket_source_label: str | None = None
+    note: str = (
+        "Derived from imported match data. Standings, champions, and finals context are not official."
+    )
+
+
+class ArchiveEraComparisonCard(BaseModel):
+    """One archive-level comparison card with safe fallback text."""
+
+    card_key: str
+    title: str
+    value: str
+    subtitle: str | None = None
+    confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    fallback: bool = False
+    note: str = "Derived from imported match data. Not official."
+
+
+class ChampionHistoryEntry(BaseModel):
+    """Compact champion-history row for one season of a selected competition."""
+
+    season: str | None = None
+    season_year: int | None = None
+    champion_detected: str | None = None
+    runner_up_detected: str | None = None
+    final_result: str | None = None
+    confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    source: str = "derived_final_context"
+    note: str = (
+        "Champion history is derived from imported match data and detected final results. "
+        "It is not an official record."
+    )
+
+
+class ArchiveDynastyIndicator(BaseModel):
+    """Repeat-success indicator for a competition across seasons."""
+
+    metric_key: str
+    title: str
+    team_name: str | None = None
+    value: str
+    subtitle: str | None = None
+    confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    fallback: bool = False
+    note: str = "Detected titles, derived finals, and estimated standings only. Not official."
+
+
+class ArchiveVenueTrend(BaseModel):
+    """Archive-level venue trend row with sample-size safeguards."""
+
+    venue: str
+    matches: int = 0
+    total_runs: int = 0
+    average_runs_per_match: float | None = None
+    total_wickets: int | None = None
+    wickets_per_match: float | None = None
+    sample_note: str = ""
+    confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    note: str = (
+        "Venue trends are derived from imported match data. Wicket trends use delivery-derived "
+        "dismissal records only where available."
+    )
+
+
+class ArchiveResearchSection(BaseModel):
+    """Deterministic archive summary section."""
+
+    section_key: str
+    title: str
+    body: str | None = None
+
+
+class ArchiveResearchSummary(BaseModel):
+    """Archive-level markdown/plain-text research summary."""
+
+    sections: list[ArchiveResearchSection] = Field(default_factory=list)
+    markdown: str | None = None
+    plain_text: str | None = None
+    note: str = (
+        "Derived from imported match data only. Incomplete seasons may affect comparisons. "
+        "Not official."
+    )
+
+
+class HistoricalArchiveExplorerResponse(BaseModel):
+    """Full archive explorer payload for Analyst Workspace."""
+
+    comparison_rows: list[ArchiveComparisonRow] = Field(default_factory=list)
+    era_comparison_cards: list[ArchiveEraComparisonCard] = Field(default_factory=list)
+    champion_history: list[ChampionHistoryEntry] = Field(default_factory=list)
+    champion_history_note: str = (
+        "Champion history is derived from imported match data and detected final results. "
+        "It is not an official record."
+    )
+    dynasty_indicators: list[ArchiveDynastyIndicator] = Field(default_factory=list)
+    venue_trends: list[ArchiveVenueTrend] = Field(default_factory=list)
+    research_summary: ArchiveResearchSummary = Field(default_factory=ArchiveResearchSummary)
+    total_matches: int = 0
+    total_groups: int = 0
+    selected_competition_code: str | None = None
+    trust_note: str = (
+        "All archive views are derived from imported match data and are not official. "
+        "Incomplete seasons may affect comparisons. Wicket trends use delivery-derived "
+        "dismissal records only where available. Player leaderboards require player-level "
+        "data and are not invented."
+    )
+    note: str = (
+        "Historical Archive Explorer is deterministic and read-only. "
+        "No official standings or trophy records are asserted."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Team journey schemas
 # ---------------------------------------------------------------------------
 

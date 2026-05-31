@@ -1393,6 +1393,107 @@ export interface TournamentPodcastRundown {
   note: string;
 }
 
+export interface ArchiveComparisonRow {
+  group_key: TournamentGroupKey;
+  imported_matches: number;
+  teams_count: number;
+  venues_count: number;
+  champion_detected: string | null;
+  runner_up_detected: string | null;
+  final_result: string | null;
+  total_runs: number;
+  total_wickets: number | null;
+  average_runs_per_match: number | null;
+  average_runs_per_wicket: number | null;
+  data_completeness_label: string;
+  confidence: 'high' | 'medium' | 'low' | 'unknown';
+  incomplete_season: boolean;
+  wicket_source_label: string | null;
+  note: string;
+}
+
+export interface ArchiveEraComparisonCard {
+  card_key: string;
+  title: string;
+  value: string;
+  subtitle: string | null;
+  confidence: 'high' | 'medium' | 'low' | 'unknown';
+  fallback: boolean;
+  note: string;
+}
+
+export interface ChampionHistoryEntry {
+  season: string | null;
+  season_year: number | null;
+  champion_detected: string | null;
+  runner_up_detected: string | null;
+  final_result: string | null;
+  confidence: 'high' | 'medium' | 'low' | 'unknown';
+  source: string;
+  note: string;
+}
+
+export interface ArchiveDynastyIndicator {
+  metric_key: string;
+  title: string;
+  team_name: string | null;
+  value: string;
+  subtitle: string | null;
+  confidence: 'high' | 'medium' | 'low' | 'unknown';
+  fallback: boolean;
+  note: string;
+}
+
+export interface ArchiveVenueTrend {
+  venue: string;
+  matches: number;
+  total_runs: number;
+  average_runs_per_match: number | null;
+  total_wickets: number | null;
+  wickets_per_match: number | null;
+  sample_note: string;
+  confidence: 'high' | 'medium' | 'low' | 'unknown';
+  note: string;
+}
+
+export interface ArchiveResearchSection {
+  section_key: string;
+  title: string;
+  body: string | null;
+}
+
+export interface ArchiveResearchSummary {
+  sections: ArchiveResearchSection[];
+  markdown: string | null;
+  plain_text: string | null;
+  note: string;
+}
+
+export interface HistoricalArchiveExplorerResponse {
+  comparison_rows: ArchiveComparisonRow[];
+  era_comparison_cards: ArchiveEraComparisonCard[];
+  champion_history: ChampionHistoryEntry[];
+  champion_history_note: string;
+  dynasty_indicators: ArchiveDynastyIndicator[];
+  venue_trends: ArchiveVenueTrend[];
+  research_summary: ArchiveResearchSummary;
+  total_matches: number;
+  total_groups: number;
+  selected_competition_code: string | null;
+  trust_note: string;
+  note: string;
+}
+
+export interface HistoricalArchiveExplorerFilters {
+  competitionCode?: string;
+  seasonStart?: number;
+  seasonEnd?: number;
+  formatFamily?: string;
+  genderCategory?: string;
+  minimumMatches?: number;
+  includeIncomplete?: boolean;
+}
+
 /**
  * GET /analytics/tournament-intelligence/groups
  * Phase 10S.1: Returns all discoverable tournament/season groups.
@@ -1453,6 +1554,25 @@ export async function getTournamentPodcastRundown(
   if (genderCategory) params.set('gender_category', genderCategory);
   return request<TournamentPodcastRundown>(
     `/analytics/tournament-intelligence/podcast-rundown?${params.toString()}`,
+  );
+}
+
+export async function getHistoricalArchiveExplorer(
+  filters: HistoricalArchiveExplorerFilters = {},
+): Promise<HistoricalArchiveExplorerResponse> {
+  const params = new URLSearchParams();
+  if (filters.competitionCode) params.set('competition_code', filters.competitionCode);
+  if (filters.seasonStart != null) params.set('season_start', String(filters.seasonStart));
+  if (filters.seasonEnd != null) params.set('season_end', String(filters.seasonEnd));
+  if (filters.formatFamily) params.set('format_family', filters.formatFamily);
+  if (filters.genderCategory) params.set('gender_category', filters.genderCategory);
+  if (filters.minimumMatches != null) params.set('minimum_matches', String(filters.minimumMatches));
+  if (filters.includeIncomplete != null) {
+    params.set('include_incomplete', String(filters.includeIncomplete));
+  }
+  const query = params.toString();
+  return request<HistoricalArchiveExplorerResponse>(
+    `/analytics/tournament-intelligence/archive-explorer${query ? `?${query}` : ''}`,
   );
 }
 

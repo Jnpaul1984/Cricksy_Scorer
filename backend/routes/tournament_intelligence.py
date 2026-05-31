@@ -32,6 +32,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from backend import security
 from backend.api.schemas.tournament_intelligence import (
+    HistoricalArchiveExplorerResponse,
     TeamJourneyResponse,
     TournamentGroupsResponse,
     TournamentPodcastRundown,
@@ -39,6 +40,7 @@ from backend.api.schemas.tournament_intelligence import (
 )
 from backend.services.tournament_intelligence_service import (
     get_team_journey,
+    get_historical_archive_explorer,
     get_tournament_groups,
     get_tournament_podcast_rundown,
     get_tournament_summary,
@@ -209,3 +211,41 @@ async def get_tournament_podcast_rundown_endpoint(
             ),
         )
     return result
+
+
+@router.get("/archive-explorer", response_model=HistoricalArchiveExplorerResponse)
+async def get_historical_archive_explorer_endpoint(
+        current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+        db: AsyncSession = Depends(_get_ti_db),
+        competition_code: str | None = Query(None, description="Optional competition code filter"),
+        season_start: int | None = Query(None, description="Optional inclusive season-year start"),
+        season_end: int | None = Query(None, description="Optional inclusive season-year end"),
+        format_family: str | None = Query(None, description="Optional format filter: T20 | ODI | TEST"),
+        gender_category: str | None = Query(
+            None, description="Optional gender filter: men | women | mixed | unknown"
+        ),
+        minimum_matches: int = Query(1, ge=1, description="Minimum matches required per season row"),
+        include_incomplete: bool = Query(
+            True, description="Whether to keep seasons with incomplete result coverage"
+        ),
+) -> HistoricalArchiveExplorerResponse:
+        """Return archive-level historical comparisons across imported tournament seasons.
+
+        Phase 10S.3: deterministic, read-only archive explorer for analyst research,
+        champion history, era comparisons, venue trends, and podcast-ready copy.
+
+        All values are derived from imported match data and explicitly marked as
+        non-official. Wicket trends use delivery-derived dismissal records only
+        where available.
+        """
+        return await get_historical_archive_explorer(
+            db=db,
+            current_user=current_user,
+            competition_code=competition_code,
+            season_start=season_start,
+            season_end=season_end,
+            format_family=format_family,
+            gender_category=gender_category,
+            minimum_matches=minimum_matches,
+            include_incomplete=include_incomplete,
+        )
