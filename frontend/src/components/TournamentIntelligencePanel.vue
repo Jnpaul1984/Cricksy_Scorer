@@ -216,7 +216,7 @@
             Runner-up: {{ summary.knockout_context.runner_up_team_canonical || summary.knockout_context.runner_up_team }}
           </div>
           <div v-if="summary.knockout_context.final_result" class="tip-champion-result">
-            {{ summary.knockout_context.final_result }}
+            {{ formatTournamentResult(summary.knockout_context.final_result) }}
           </div>
           <div class="tip-champion-source">
             Source: {{ summary.knockout_context.outcome_source }} —
@@ -231,17 +231,17 @@
       <div class="tip-highlights-row">
         <div v-if="summary.biggest_win_by_runs" class="tip-highlight-card">
           <span class="tip-highlight-label">Biggest win (runs)</span>
-          <span class="tip-highlight-val">{{ summary.biggest_win_by_runs.detail || summary.biggest_win_by_runs.result }}</span>
+          <span class="tip-highlight-val">{{ formatHighlightResult(summary.biggest_win_by_runs) }}</span>
           <span class="tip-highlight-match">{{ summary.biggest_win_by_runs.match_title }}</span>
         </div>
         <div v-if="summary.biggest_win_by_wickets" class="tip-highlight-card">
           <span class="tip-highlight-label">Biggest win (wickets)</span>
-          <span class="tip-highlight-val">{{ summary.biggest_win_by_wickets.detail || summary.biggest_win_by_wickets.result }}</span>
+          <span class="tip-highlight-val">{{ formatHighlightResult(summary.biggest_win_by_wickets) }}</span>
           <span class="tip-highlight-match">{{ summary.biggest_win_by_wickets.match_title }}</span>
         </div>
         <div v-if="summary.closest_match" class="tip-highlight-card">
           <span class="tip-highlight-label">Closest match</span>
-          <span class="tip-highlight-val">{{ summary.closest_match.detail || summary.closest_match.result }}</span>
+          <span class="tip-highlight-val">{{ formatHighlightResult(summary.closest_match) }}</span>
           <span class="tip-highlight-match">{{ summary.closest_match.match_title }}</span>
         </div>
       </div>
@@ -337,6 +337,9 @@
           <li v-if="summary.podcast_facts.finalist">
             🥈 <strong>Finalist:</strong> {{ summary.podcast_facts.finalist }}
           </li>
+          <li v-if="summary.knockout_context?.final_result">
+            🎯 <strong>Final result:</strong> {{ formatTournamentResult(summary.knockout_context.final_result) }}
+          </li>
           <li v-if="summary.podcast_facts.strongest_team_by_wins">
             📊 <strong>Strongest team (wins):</strong> {{ summary.podcast_facts.strongest_team_by_wins }}
           </li>
@@ -351,7 +354,7 @@
             </span>
           </li>
           <li v-if="summary.podcast_facts.key_journey_note">
-            📝 {{ summary.podcast_facts.key_journey_note }}
+            📝 {{ formatTournamentResult(summary.podcast_facts.key_journey_note) }}
           </li>
         </ul>
       </div>
@@ -421,7 +424,7 @@
               >
                 <td>{{ m.match_date || '—' }}</td>
                 <td>{{ m.opponent }}</td>
-                <td class="tip-journey-result">{{ m.result || '—' }}</td>
+                <td class="tip-journey-result">{{ formatTournamentResult(m.result) || '—' }}</td>
                 <td>
                   <span class="tip-outcome-badge" :class="`tip-outcome-badge--${m.outcome}`">
                     {{ m.outcome }}
@@ -445,11 +448,13 @@ import {
   getTournamentGroups,
   getTournamentSummary,
   getTeamJourney,
+  type TournamentMatchHighlight,
   type TournamentGroupsResponse,
   type TournamentGroupSummary,
   type TournamentSummaryResponse,
   type TeamJourneyResponse,
 } from '@/services/api'
+import { normalizeResultDisplayText } from '@/utils/resultDisplay'
 
 // --- State ---
 
@@ -585,6 +590,14 @@ async function loadTeamJourney(teamName: string) {
 function groupCardKey(g: TournamentGroupSummary): string {
   const k = g.group_key
   return `${k.competition_code}__${k.season ?? 'all'}__${k.gender_category}__${k.format_family}`
+}
+
+function formatTournamentResult(result: string | null | undefined): string {
+  return normalizeResultDisplayText(result) || result || ''
+}
+
+function formatHighlightResult(highlight: TournamentMatchHighlight | null | undefined): string {
+  return formatTournamentResult(highlight?.detail) || formatTournamentResult(highlight?.result)
 }
 </script>
 

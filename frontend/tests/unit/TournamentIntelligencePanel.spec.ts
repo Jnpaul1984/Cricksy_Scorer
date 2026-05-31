@@ -5,6 +5,7 @@ import {
   getTeamJourney,
   getTournamentGroups,
   getTournamentSummary,
+  type TeamJourneyResponse,
   type TournamentGroupsResponse,
   type TournamentSummaryResponse,
 } from '@/services/api'
@@ -151,6 +152,42 @@ const summaryFixture: TournamentSummaryResponse = {
   },
 }
 
+const journeyFixture: TeamJourneyResponse = {
+  team_name: 'Trinbago Knight Riders',
+  canonical_team_name: 'Trinbago Knight Riders',
+  group_key: groupsFixture.groups[0].group_key,
+  matches: [
+    {
+      match_id: 'm-journey',
+      match_title: 'Trinbago Knight Riders vs Saint Lucia Kings',
+      match_date: '2021-09-15',
+      opponent: 'Saint Lucia Kings',
+      venue: 'Warner Park',
+      result: 'Saint Lucia Kings won by 1 wicket(s)',
+      outcome: 'loss',
+      team_runs: 150,
+      opponent_runs: 151,
+      stage_label: 'Final',
+      highlight: 'Lost (won by 1 wicket)',
+    },
+  ],
+  summary: {
+    wins: 7,
+    losses: 3,
+    ties: 0,
+    no_results: 0,
+    total_runs_for: 1650,
+    total_runs_against: 1590,
+    best_win: null,
+    worst_defeat: null,
+    closest_match: null,
+    top_scorer_name: 'Player A',
+    top_scorer_runs: 450,
+    note: 'Derived from imported match results only.',
+  },
+  note: 'Derived from imported match results only.',
+}
+
 describe('TournamentIntelligencePanel', () => {
   beforeEach(() => {
     groupsMock.mockReset()
@@ -158,6 +195,7 @@ describe('TournamentIntelligencePanel', () => {
     journeyMock.mockReset()
     groupsMock.mockResolvedValue(groupsFixture)
     summaryMock.mockResolvedValue(summaryFixture)
+    journeyMock.mockResolvedValue(journeyFixture)
   })
 
   it('renders summary, champion, standings, and podcast dark-theme sections', async () => {
@@ -190,5 +228,79 @@ describe('TournamentIntelligencePanel', () => {
     const podcast = wrapper.get('[aria-label="Podcast talking points"]')
     expect(podcast.classes()).toContain('tip-podcast-section')
     expect(podcast.text()).toContain('validated imports')
+  })
+
+  it('normalizes tournament result grammar at display boundaries without mutating payloads', async () => {
+    const grammarSummaryFixture: TournamentSummaryResponse = {
+      ...summaryFixture,
+      closest_match: {
+        ...summaryFixture.closest_match!,
+        result: 'Won by 1 wicket(s)',
+        detail: 'Narrow finish: Saint Lucia Kings won by 1 wicket(s)',
+      },
+      biggest_win_by_runs: {
+        ...summaryFixture.biggest_win_by_runs!,
+        result: 'Won by 1 runs',
+        detail: 'Trinbago Knight Riders won by 1 runs',
+      },
+      biggest_win_by_wickets: {
+        match_id: 'm-wkts',
+        match_title: 'Eliminator',
+        match_date: '2021-09-12',
+        stage_label: 'Eliminator',
+        result: 'Won by 2 wicket(s)',
+        highlight_type: 'biggest_win_by_wickets',
+        detail: 'Saint Lucia Kings won by 2 wicket(s)',
+      },
+      knockout_context: {
+        ...summaryFixture.knockout_context!,
+        final_result: 'Won by 1 wicket(s)',
+      },
+      podcast_facts: {
+        ...summaryFixture.podcast_facts!,
+        key_journey_note: 'Saint Lucia Kings won by 1 wicket(s) in the final.',
+      },
+    }
+
+    const grammarJourneyFixture: TeamJourneyResponse = {
+      ...journeyFixture,
+      matches: [
+        {
+          ...journeyFixture.matches[0],
+          result: 'Saint Lucia Kings won by 1 wicket(s)',
+        },
+      ],
+    }
+
+    summaryMock.mockResolvedValueOnce(grammarSummaryFixture)
+    journeyMock.mockResolvedValueOnce(grammarJourneyFixture)
+
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+
+    const highlightTexts = wrapper.findAll('.tip-highlight-val').map((node) => node.text())
+    expect(highlightTexts).toContain('Trinbago Knight Riders won by 1 run')
+    expect(highlightTexts).toContain('Saint Lucia Kings won by 2 wickets')
+    expect(highlightTexts).toContain('Narrow finish: Saint Lucia Kings won by 1 wicket')
+
+    const champion = wrapper.get('[aria-label="Champion context"]')
+    expect(champion.text()).toContain('Won by 1 wicket')
+
+    const podcast = wrapper.get('[aria-label="Podcast talking points"]')
+    expect(podcast.text()).toContain('Final result: Won by 1 wicket')
+    expect(podcast.text()).toContain('Saint Lucia Kings won by 1 wicket in the final.')
+
+    await wrapper.get('button.tip-journey-link').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('.tip-journey-result').text()).toBe('Saint Lucia Kings won by 1 wicket')
+
+    expect(grammarSummaryFixture.biggest_win_by_runs?.detail).toBe('Trinbago Knight Riders won by 1 runs')
+    expect(grammarSummaryFixture.biggest_win_by_wickets?.detail).toBe('Saint Lucia Kings won by 2 wicket(s)')
+    expect(grammarSummaryFixture.knockout_context?.final_result).toBe('Won by 1 wicket(s)')
+    expect(grammarJourneyFixture.matches[0]?.result).toBe('Saint Lucia Kings won by 1 wicket(s)')
   })
 })
