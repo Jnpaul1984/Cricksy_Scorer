@@ -52,6 +52,7 @@ from backend.api.schemas.tournament_intelligence import (
     TournamentWicketIntelligence,
 )
 from backend.services.analyst_registry_service import classify_competition, classify_gender
+from backend.services.cpl_venue_alias_registry import resolve_venue_identity
 from backend.services.cpl_team_alias_registry import canonicalize_team_name
 from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 from sqlalchemy import select
@@ -2348,29 +2349,61 @@ def _build_venue_trends(
     filtered_group_games: list[list[EligibleGame]],
 ) -> list[ArchiveVenueTrend]:
     venue_acc: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"matches": 0, "total_runs": 0, "total_wickets": 0, "wicket_matches": 0}
+        lambda: {
+            "matches": 0,
+            "total_runs": 0,
+            "total_wickets": 0,
+            "wicket_matches": 0,
+            "raw_variants": set(),
+            "venue": None,
+            "source_method": "raw_fallback",
+            "confidence": "low",
+        }
     )
 
     for group_games in filtered_group_games:
         wicket_intelligence = _derive_delivery_wicket_intelligence(group_games)
         for game, _batch, meta, match in group_games:
-            venue = str(match.venue or meta.get("venue") or "").strip()
-            if not venue:
+            raw_venue = str(match.venue or meta.get("venue") or "").strip()
+            if not raw_venue:
                 continue
-            venue_acc[venue]["matches"] += 1
-            venue_acc[venue]["total_runs"] += sum(
-                int(inn.get("runs") or 0) for inn in _innings_summary(game)
+            competition_name = str(meta.get("event_name") or "").strip() or None
+            competition_code, _competition_name = classify_competition(competition_name or "")
+            resolved = resolve_venue_identity(
+                raw_venue,
+                competition_name=competition_name,
+                competition_code=competition_code,
             )
+            if resolved is None:
+                continue
+
+            acc = venue_acc[resolved.canonical_venue_key]
+            acc["matches"] += 1
+            acc["venue"] = resolved.canonical_display_name
+            acc["source_method"] = resolved.source_method
+            if resolved.confidence == "high" or (
+                resolved.confidence == "medium" and acc["confidence"] != "high"
+            ):
+                acc["confidence"] = resolved.confidence
+            acc["raw_variants"].add(resolved.raw_venue_name)
+            acc["total_runs"] += sum(int(inn.get("runs") or 0) for inn in _innings_summary(game))
             wickets_for_match = wicket_intelligence.wickets_by_match.get(game.id)
             if wickets_for_match is not None and wickets_for_match > 0:
-                venue_acc[venue]["total_wickets"] += wickets_for_match
-                venue_acc[venue]["wicket_matches"] += 1
+                acc["total_wickets"] += wickets_for_match
+                acc["wicket_matches"] += 1
 
     trends: list[ArchiveVenueTrend] = []
-    for venue, acc in sorted(
+    for _venue_key, acc in sorted(
         venue_acc.items(),
-        key=lambda item: (-item[1]["matches"], -(item[1]["total_runs"]), item[0]),
+        key=lambda item: (
+            -item[1]["matches"],
+            -item[1]["total_runs"],
+            str(item[1]["venue"] or item[0]),
+        ),
     ):
+        venue = str(acc.get("venue") or "").strip()
+        if not venue:
+            continue
         matches = acc["matches"]
         wicket_matches = acc["wicket_matches"]
         average_runs = (
@@ -2399,6 +2432,10 @@ def _build_venue_trends(
                 total_wickets=acc["total_wickets"] if wicket_matches > 0 else None,
                 wickets_per_match=wickets_per_match,
                 sample_note=sample_note,
+                alias_count=len(acc["raw_variants"]),
+                raw_variants=sorted(acc["raw_variants"]),
+                source_method=str(acc["source_method"]),
+                source_confidence=str(acc["confidence"]),
                 confidence=confidence,  # type: ignore[arg-type]
             )
         )
@@ -2425,7 +2462,8 @@ def _build_archive_research_summary(
                 body=(
                     "Archive views are derived from imported match data and are not official. "
                     "Incomplete seasons may affect comparisons. Wicket trends use delivery-derived "
-                    "dismissal records only where available."
+                    "dismissal records only where available. Venue trends use canonical venue aliases "
+                    "where available; raw venue names are preserved in imported records."
                 ),
             ),
         ]
@@ -2470,7 +2508,9 @@ def _build_archive_research_summary(
     trust_note = (
         "All archive views are derived from imported match data and are not official. "
         "Incomplete seasons may affect comparisons. Wicket trends use delivery-derived dismissal "
-        "records only where available. Player leaderboards require player-level data and are not invented."
+        "records only where available. Venue trends use canonical venue aliases where available; "
+        "raw venue names are preserved in imported records. Player leaderboards require player-level "
+        "data and are not invented."
     )
     sections = [
         ArchiveResearchSection(
