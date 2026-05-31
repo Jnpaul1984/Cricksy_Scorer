@@ -21,6 +21,15 @@ describe('normalizeResultDisplayText', () => {
     expect(normalizeResultDisplayText('Team C won by 10 wickets')).toBe('Team C won by 10 wickets')
   })
 
+  it('normalizes tournament summary copy around wicket placeholders', () => {
+    expect(normalizeResultDisplayText('Narrow finish: Falcons won by 1 wicket(s)')).toBe(
+      'Narrow finish: Falcons won by 1 wicket',
+    )
+    expect(normalizeResultDisplayText('Champions sealed it by winning by 2 wicket(s)')).toBe(
+      'Champions sealed it by winning by 2 wickets',
+    )
+  })
+
   it('does not mutate source objects', () => {
     const payload = { result: 'Durham won by 1 runs' }
     const display = normalizeResultDisplayText(payload.result)
