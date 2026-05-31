@@ -190,7 +190,13 @@
         </div>
         <div class="tip-stat-card">
           <span class="tip-stat-label">Total wickets</span>
-          <span class="tip-stat-val">{{ summary.total_wickets > 0 ? summary.total_wickets : 'Unavailable' }}</span>
+          <span
+            class="tip-stat-val"
+            :class="{ 'tip-stat-val--unavailable': summary.total_wickets <= 0 }"
+            :title="summary.total_wickets <= 0 ? wicketsUnavailableHelperText : undefined"
+          >
+            {{ summary.total_wickets > 0 ? summary.total_wickets : 'Unavailable' }}
+          </span>
         </div>
         <div v-if="summary.highest_team_total" class="tip-stat-card">
           <span class="tip-stat-label">Highest total</span>
@@ -627,6 +633,8 @@ const podcastRundownCopied = ref<'md' | 'text' | null>(null)
 const selectedCompetitionCode = ref('')
 const selectedSeason = ref('')
 const selectedGender = ref('')
+const wicketsUnavailableHelperText =
+  'Wicket totals require reliable dismissal/wicket data from imported records.'
 
 // --- Computed ---
 
@@ -1176,6 +1184,11 @@ function formatHighlightResult(highlight: TournamentMatchHighlight | null | unde
   font-weight: 700;
   color: #f8fafc;
 }
+.tip-stat-val--unavailable {
+  font-size: 1rem;
+  white-space: nowrap;
+  word-break: keep-all;
+}
 .tip-stat-sub {
   font-size: 0.7rem;
   color: #93c5fd;
@@ -1206,16 +1219,17 @@ function formatHighlightResult(highlight: TournamentMatchHighlight | null | unde
   margin-bottom: 1rem;
 }
 .tip-highlight-card {
-  background: var(--color-surface-alt, #f0f4f8);
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
 }
-.tip-highlight-label { font-size: 0.72rem; color: var(--color-text-muted, #6b7280); font-weight: 600; }
-.tip-highlight-val { font-size: 0.85rem; font-weight: 600; }
-.tip-highlight-match { font-size: 0.72rem; color: var(--color-text-muted, #6b7280); }
+.tip-highlight-label { font-size: 0.72rem; color: #cbd5e1; font-weight: 600; }
+.tip-highlight-val { font-size: 0.85rem; font-weight: 600; color: #f8fafc; }
+.tip-highlight-match { font-size: 0.72rem; color: #94a3b8; }
 
 .tip-leaders-row {
   display: flex;
