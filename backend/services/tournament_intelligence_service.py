@@ -15,7 +15,7 @@ Every output is labeled with its derivation source and confidence level.
 from __future__ import annotations
 
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Any
 
 from backend.api.schemas.historical_stats import (
@@ -41,6 +41,7 @@ from backend.api.schemas.tournament_intelligence import (
     TournamentRoadToFinal,
     TournamentSeasonReview,
     TournamentSummaryResponse,
+    TournamentWicketIntelligence,
 )
 from backend.services.analyst_registry_service import classify_competition, classify_gender
 from backend.services.cpl_team_alias_registry import canonicalize_team_name
@@ -62,6 +63,21 @@ _SEASON_YEAR_RE = re.compile(r"(?:19|20)\d{2}")
 # Metadata-only batch statuses (mirrors historical_stats_aggregation_service)
 _METADATA_ONLY_STATUSES: frozenset[str] = frozenset(
     {"scanned", "metadata_extracted", "pending_full_import"}
+)
+
+_NON_TEAM_WICKET_DISMISSALS: frozenset[str] = frozenset({"retired hurt", "retired not out"})
+_NON_BOWLER_WICKET_DISMISSALS: frozenset[str] = frozenset(
+    {
+        "run out",
+        "retired hurt",
+        "retired out",
+        "obstructing the field",
+        "timed out",
+        "handled the ball",
+    }
+)
+_BOWLER_CREDIT_DISMISSALS: frozenset[str] = frozenset(
+    {"bowled", "caught", "caught and bowled", "lbw", "stumped", "hit wicket"}
 )
 
 
@@ -107,6 +123,137 @@ def _pluralize(count: int, singular: str, plural: str | None = None) -> str:
     if plural is None:
         plural = singular + "s"
     return f"{count} {singular}" if count == 1 else f"{count} {plural}"
+
+
+def _normalize_dismissal_type(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = re.sub(r"\s+", " ", str(value).strip().lower().replace("_", " ").replace("-", " "))
+    return text or None
+
+
+def _extract_delivery_wicket_events(delivery: dict[str, Any]) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    wickets_payload = delivery.get("wickets")
+    if isinstance(wickets_payload, list):
+        for entry in wickets_payload:
+            if isinstance(entry, dict):
+                events.append(entry)
+    elif isinstance(wickets_payload, dict):
+        events.append(wickets_payload)
+
+    wicket_payload = delivery.get("wicket")
+    if not events and isinstance(wicket_payload, dict):
+        events.append(wicket_payload)
+
+    if events:
+        return events
+
+    if delivery.get("is_wicket"):
+        return [
+            {
+                "player_out": delivery.get("player_out"),
+                "kind": delivery.get("dismissal_type") or delivery.get("wicket_type"),
+            }
+        ]
+    return []
+
+
+def _derive_delivery_wicket_intelligence(
+    group_games: list[EligibleGame],
+) -> TournamentWicketIntelligence:
+    total_matches = len(group_games)
+    wickets_by_match: dict[str, int] = {}
+    wickets_by_innings: Counter[str] = Counter()
+    wickets_by_team: Counter[str] = Counter()
+    wickets_by_venue: Counter[str] = Counter()
+    dismissal_type_counts: Counter[str] = Counter()
+    total_team_wickets = 0
+    total_bowler_creditable_wickets = 0
+    matches_with_reliable = 0
+    bowler_credit_dismissals_seen = 0
+    missing_bowler_for_creditable = 0
+
+    for game, _batch, meta, match in group_games:
+        deliveries = game.deliveries if isinstance(game.deliveries, list) else []
+        match_wickets = 0
+
+        for raw_delivery in deliveries:
+            if not isinstance(raw_delivery, dict):
+                continue
+            for wicket_event in _extract_delivery_wicket_events(raw_delivery):
+                dismissal = _normalize_dismissal_type(
+                    wicket_event.get("kind")
+                    or wicket_event.get("dismissal_type")
+                    or raw_delivery.get("dismissal_type")
+                    or raw_delivery.get("wicket_type")
+                )
+                if dismissal in _NON_TEAM_WICKET_DISMISSALS:
+                    continue
+
+                match_wickets += 1
+                total_team_wickets += 1
+                dismissal_type_counts[dismissal or "unknown"] += 1
+
+                inning_no = raw_delivery.get("inning_no") or raw_delivery.get("inning")
+                inning_key = f"{game.id}:inning_{int(inning_no) if inning_no else 0}"
+                wickets_by_innings[inning_key] += 1
+
+                batting_team = str(raw_delivery.get("batting_team") or "").strip()
+                if batting_team:
+                    wickets_by_team[batting_team] += 1
+
+                venue = (
+                    str(match.venue or "").strip() or str(meta.get("venue") or "").strip() or None
+                )
+                if venue:
+                    wickets_by_venue[venue] += 1
+
+                if dismissal in _BOWLER_CREDIT_DISMISSALS:
+                    bowler_credit_dismissals_seen += 1
+                    bowler_name = str(raw_delivery.get("bowler") or "").strip()
+                    if bowler_name:
+                        total_bowler_creditable_wickets += 1
+                    else:
+                        missing_bowler_for_creditable += 1
+                elif dismissal is None and raw_delivery.get("bowler"):
+                    # Unknown dismissal type is never assumed to be bowler-creditable.
+                    continue
+
+        wickets_by_match[game.id] = match_wickets
+        if match_wickets > 0:
+            matches_with_reliable += 1
+
+    matches_without_reliable = total_matches - matches_with_reliable
+    availability: str
+    if matches_with_reliable <= 0:
+        availability = "unavailable"
+    elif matches_with_reliable == total_matches:
+        availability = "complete"
+    else:
+        availability = "partial"
+
+    bowler_attribution_complete = (
+        bowler_credit_dismissals_seen > 0 and missing_bowler_for_creditable == 0
+    )
+    source_label = (
+        "derived from delivery dismissal records" if matches_with_reliable > 0 else "unavailable"
+    )
+
+    return TournamentWicketIntelligence(
+        total_team_wickets=total_team_wickets,
+        total_bowler_creditable_wickets=total_bowler_creditable_wickets,
+        wickets_by_match=wickets_by_match,
+        wickets_by_innings=dict(wickets_by_innings),
+        wickets_by_batting_team=dict(wickets_by_team),
+        wickets_by_venue=dict(wickets_by_venue),
+        dismissal_type_counts=dict(dismissal_type_counts),
+        matches_with_reliable_wicket_data=matches_with_reliable,
+        matches_without_reliable_wicket_data=matches_without_reliable,
+        availability=availability,  # type: ignore[arg-type]
+        source_label=source_label,
+        bowler_attribution_complete=bowler_attribution_complete,
+    )
 
 
 def _detect_stage_label(meta: dict[str, Any], match_title: str | None = None) -> str | None:
@@ -486,6 +633,33 @@ def _build_tournament_summary(
             margin_val = int(wkts_margin_m.group(1))
             match_margins_wkts.append((margin_val, match.winner_team or "", match_title, match_id))
 
+    delivery_wicket_intelligence = _derive_delivery_wicket_intelligence(group_games)
+    wicket_source_label: str | None = None
+    wicket_availability_label: str | None = None
+    bowler_wicket_leaderboard_available = True
+
+    if delivery_wicket_intelligence.matches_with_reliable_wicket_data > 0:
+        total_wickets = delivery_wicket_intelligence.total_team_wickets
+        wicket_source_label = "Derived from delivery dismissal records"
+        if delivery_wicket_intelligence.availability == "complete":
+            wicket_availability_label = (
+                f"Complete: {delivery_wicket_intelligence.matches_with_reliable_wicket_data}/"
+                f"{len(group_games)} matches with wicket events"
+            )
+        else:
+            wicket_availability_label = (
+                f"Partial: {delivery_wicket_intelligence.matches_with_reliable_wicket_data}/"
+                f"{len(group_games)} matches with wicket events"
+            )
+        bowler_wicket_leaderboard_available = (
+            delivery_wicket_intelligence.bowler_attribution_complete
+        )
+    elif total_wickets > 0:
+        wicket_source_label = "Derived from innings summary records"
+        wicket_availability_label = "Complete: wickets available from innings summaries"
+    else:
+        bowler_wicket_leaderboard_available = False
+
     # --- Build highlights ---
     biggest_win_runs: TournamentMatchHighlight | None = None
     biggest_win_wkts: TournamentMatchHighlight | None = None
@@ -584,7 +758,7 @@ def _build_tournament_summary(
                 stat_type="runs",
                 confidence="medium",
             )
-    if bowling_acc:
+    if bowling_acc and bowler_wicket_leaderboard_available:
         top_bowl = max(bowling_acc.items(), key=lambda x: (-x[1]["wickets"], x[0]))
         if top_bowl[1]["wickets"] > 0:
             top_wicket_taker = TournamentPlayerLeader(
@@ -641,6 +815,10 @@ def _build_tournament_summary(
         venues=sorted(venues_set),
         total_runs=total_runs,
         total_wickets=total_wickets,
+        wicket_source_label=wicket_source_label,
+        wicket_availability_label=wicket_availability_label,
+        bowler_wicket_leaderboard_available=bowler_wicket_leaderboard_available,
+        wicket_intelligence=delivery_wicket_intelligence,
         highest_team_total=highest_total,
         highest_team_total_by=highest_total_by,
         lowest_completed_total=lowest_total,
@@ -1448,11 +1626,16 @@ def _build_rundown_sections(
             if summary.total_wickets > 0
             else "wicket data unavailable from imported records"
         )
+        wicket_context = ""
+        if summary.total_wickets > 0 and summary.wicket_source_label:
+            wicket_context += f" Source: {summary.wicket_source_label}."
+        if summary.total_wickets > 0 and summary.wicket_availability_label:
+            wicket_context += f" {summary.wicket_availability_label}."
         venue_body = (
             f"Tournament scoring: {summary.total_runs} total runs, "
             f"{wickets_str} across {_pluralize(summary.match_count, 'match', 'matches')}. "
             f"Average match total: ~{avg_per_match} runs."
-            f"{top_venue_str}{highest_total_str}"
+            f"{top_venue_str}{highest_total_str}{wicket_context}"
         )
     else:
         venue_body = "Venue and scoring pattern data is unavailable for this tournament."
@@ -1476,6 +1659,10 @@ def _build_rundown_sections(
         f"This tournament produced {summary.total_runs} total runs "
         f"and {wickets_label}. "
     )
+    if summary.total_wickets > 0 and summary.wicket_source_label:
+        tactical_body += f"Wicket source: {summary.wicket_source_label}. "
+    if summary.total_wickets > 0 and summary.wicket_availability_label:
+        tactical_body += f"{summary.wicket_availability_label}. "
     if summary.total_wickets > 0 and summary.total_runs > 0:
         run_rate_per_wkt = round(summary.total_runs / summary.total_wickets, 1)
         tactical_body += f"Average runs per wicket (derived): {run_rate_per_wkt}. "
@@ -1529,6 +1716,8 @@ def _build_rundown_sections(
         f"Data trust: {dc.confidence_level} confidence. "
         f"{dc.matches_with_result}/{dc.total_matches} matches have result data. "
         f"{dc.delivery_complete_matches} matches have ball-by-ball delivery data. "
+        f"Wicket summary: {summary.wicket_source_label or 'unavailable'}. "
+        f"{summary.wicket_availability_label or 'No reliable wicket-event coverage detected.'} "
         "All standings and outcomes are derived from imported match data — not official. "
         "Source: validated historical imports only."
     )

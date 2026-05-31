@@ -1258,6 +1258,21 @@ export interface TournamentPodcastFacts {
   source_label: string;
 }
 
+export interface TournamentWicketIntelligence {
+  total_team_wickets: number;
+  total_bowler_creditable_wickets: number;
+  wickets_by_match: Record<string, number>;
+  wickets_by_innings: Record<string, number>;
+  wickets_by_batting_team: Record<string, number>;
+  wickets_by_venue: Record<string, number>;
+  dismissal_type_counts: Record<string, number>;
+  matches_with_reliable_wicket_data: number;
+  matches_without_reliable_wicket_data: number;
+  availability: 'unavailable' | 'partial' | 'complete';
+  source_label: string;
+  bowler_attribution_complete: boolean;
+}
+
 export interface TournamentSummaryResponse {
   group_key: TournamentGroupKey;
   match_count: number;
@@ -1265,6 +1280,10 @@ export interface TournamentSummaryResponse {
   venues: string[];
   total_runs: number;
   total_wickets: number;
+  wicket_source_label: string | null;
+  wicket_availability_label: string | null;
+  bowler_wicket_leaderboard_available: boolean;
+  wicket_intelligence: TournamentWicketIntelligence | null;
   highest_team_total: number | null;
   highest_team_total_by: string | null;
   lowest_completed_total: number | null;

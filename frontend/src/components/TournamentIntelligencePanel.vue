@@ -197,6 +197,12 @@
           >
             {{ summary.total_wickets > 0 ? summary.total_wickets : 'Unavailable' }}
           </span>
+          <span v-if="summary.total_wickets > 0 && summary.wicket_source_label" class="tip-stat-sub">
+            {{ summary.wicket_source_label }}
+          </span>
+          <span v-if="summary.total_wickets > 0 && summary.wicket_availability_label" class="tip-stat-sub">
+            {{ summary.wicket_availability_label }}
+          </span>
         </div>
         <div v-if="summary.highest_team_total" class="tip-stat-card">
           <span class="tip-stat-label">Highest total</span>

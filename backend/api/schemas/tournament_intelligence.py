@@ -145,6 +145,23 @@ class TournamentPodcastFacts(BaseModel):
     source_label: str = "derived from imported match data"
 
 
+class TournamentWicketIntelligence(BaseModel):
+    """Delivery-derived wicket intelligence for tournament-level summaries."""
+
+    total_team_wickets: int = 0
+    total_bowler_creditable_wickets: int = 0
+    wickets_by_match: dict[str, int] = Field(default_factory=dict)
+    wickets_by_innings: dict[str, int] = Field(default_factory=dict)
+    wickets_by_batting_team: dict[str, int] = Field(default_factory=dict)
+    wickets_by_venue: dict[str, int] = Field(default_factory=dict)
+    dismissal_type_counts: dict[str, int] = Field(default_factory=dict)
+    matches_with_reliable_wicket_data: int = 0
+    matches_without_reliable_wicket_data: int = 0
+    availability: Literal["unavailable", "partial", "complete"] = "unavailable"
+    source_label: str = "unavailable"
+    bowler_attribution_complete: bool = False
+
+
 class TournamentSummaryResponse(BaseModel):
     """Full tournament/season intelligence summary.
 
@@ -162,6 +179,10 @@ class TournamentSummaryResponse(BaseModel):
     # Run/wicket aggregates
     total_runs: int = 0
     total_wickets: int = 0
+    wicket_source_label: str | None = None
+    wicket_availability_label: str | None = None
+    bowler_wicket_leaderboard_available: bool = False
+    wicket_intelligence: TournamentWicketIntelligence | None = None
     highest_team_total: int | None = None
     highest_team_total_by: str | None = None
     lowest_completed_total: int | None = None
