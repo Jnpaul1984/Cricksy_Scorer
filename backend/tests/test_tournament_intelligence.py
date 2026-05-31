@@ -894,8 +894,20 @@ class TestHistoricalArchiveExplorer:
                 competition_stage="Final",
                 venue="Warner Park",
                 innings_summary=[
-                    {"inning_no": 1, "team": "Saint Lucia Kings", "runs": 159, "wickets": 7, "overs": 20.0},
-                    {"inning_no": 2, "team": "St Kitts and Nevis Patriots", "runs": 160, "wickets": 7, "overs": 19.0},
+                    {
+                        "inning_no": 1,
+                        "team": "Saint Lucia Kings",
+                        "runs": 159,
+                        "wickets": 7,
+                        "overs": 20.0,
+                    },
+                    {
+                        "inning_no": 2,
+                        "team": "St Kitts and Nevis Patriots",
+                        "runs": 160,
+                        "wickets": 7,
+                        "overs": 19.0,
+                    },
                 ],
             ),
             _make_eligible_entry(
@@ -908,8 +920,20 @@ class TestHistoricalArchiveExplorer:
                 competition_stage="Final",
                 venue="Warner Park",
                 innings_summary=[
-                    {"inning_no": 1, "team": "Barbados Royals", "runs": 161, "wickets": 7, "overs": 20.0},
-                    {"inning_no": 2, "team": "Jamaica Tallawahs", "runs": 162, "wickets": 2, "overs": 18.1},
+                    {
+                        "inning_no": 1,
+                        "team": "Barbados Royals",
+                        "runs": 161,
+                        "wickets": 7,
+                        "overs": 20.0,
+                    },
+                    {
+                        "inning_no": 2,
+                        "team": "Jamaica Tallawahs",
+                        "runs": 162,
+                        "wickets": 2,
+                        "overs": 18.1,
+                    },
                 ],
             ),
             _make_eligible_entry(
@@ -923,8 +947,20 @@ class TestHistoricalArchiveExplorer:
                 competition_stage="Final",
                 venue="Sabina Park",
                 innings_summary=[
-                    {"inning_no": 1, "team": "Leicestershire", "runs": 301, "wickets": 8, "overs": 50.0},
-                    {"inning_no": 2, "team": "Hampshire", "runs": 296, "wickets": 10, "overs": 49.4},
+                    {
+                        "inning_no": 1,
+                        "team": "Leicestershire",
+                        "runs": 301,
+                        "wickets": 8,
+                        "overs": 50.0,
+                    },
+                    {
+                        "inning_no": 2,
+                        "team": "Hampshire",
+                        "runs": 296,
+                        "wickets": 10,
+                        "overs": 49.4,
+                    },
                 ],
             ),
         ]
@@ -932,7 +968,11 @@ class TestHistoricalArchiveExplorer:
         response = _build_archive_response(entries)
 
         assert len(response.comparison_rows) == 3
-        assert [row.group_key.season for row in response.comparison_rows] == ["2021", "2022", "2023"]
+        assert [row.group_key.season for row in response.comparison_rows] == [
+            "2021",
+            "2022",
+            "2023",
+        ]
         assert response.total_groups == 3
         assert response.total_matches == 3
 
@@ -996,8 +1036,20 @@ class TestHistoricalArchiveExplorer:
                 deliveries=deliveries,
                 deliveries_imported=True,
                 innings_summary=[
-                    {"inning_no": 1, "team": "Saint Lucia Kings", "runs": 185, "wickets": 7, "overs": 20.0},
-                    {"inning_no": 2, "team": "St Kitts and Nevis Patriots", "runs": 186, "wickets": 7, "overs": 19.2},
+                    {
+                        "inning_no": 1,
+                        "team": "Saint Lucia Kings",
+                        "runs": 185,
+                        "wickets": 7,
+                        "overs": 20.0,
+                    },
+                    {
+                        "inning_no": 2,
+                        "team": "St Kitts and Nevis Patriots",
+                        "runs": 186,
+                        "wickets": 7,
+                        "overs": 19.2,
+                    },
                 ],
             ),
             _make_eligible_entry(
@@ -1010,8 +1062,20 @@ class TestHistoricalArchiveExplorer:
                 competition_stage="Final",
                 venue="Warner Park",
                 innings_summary=[
-                    {"inning_no": 1, "team": "Barbados Royals", "runs": 138, "wickets": 8, "overs": 20.0},
-                    {"inning_no": 2, "team": "Jamaica Tallawahs", "runs": 139, "wickets": 2, "overs": 15.4},
+                    {
+                        "inning_no": 1,
+                        "team": "Barbados Royals",
+                        "runs": 138,
+                        "wickets": 8,
+                        "overs": 20.0,
+                    },
+                    {
+                        "inning_no": 2,
+                        "team": "Jamaica Tallawahs",
+                        "runs": 139,
+                        "wickets": 2,
+                        "overs": 15.4,
+                    },
                 ],
             ),
             _make_eligible_entry(
@@ -1025,8 +1089,20 @@ class TestHistoricalArchiveExplorer:
                 competition_stage="Final",
                 venue="Sabina Park",
                 innings_summary=[
-                    {"inning_no": 1, "team": "Leicestershire", "runs": 301, "wickets": 8, "overs": 50.0},
-                    {"inning_no": 2, "team": "Hampshire", "runs": 296, "wickets": 10, "overs": 49.4},
+                    {
+                        "inning_no": 1,
+                        "team": "Leicestershire",
+                        "runs": 301,
+                        "wickets": 8,
+                        "overs": 50.0,
+                    },
+                    {
+                        "inning_no": 2,
+                        "team": "Hampshire",
+                        "runs": 296,
+                        "wickets": 10,
+                        "overs": 49.4,
+                    },
                 ],
             ),
         ]
@@ -1034,12 +1110,16 @@ class TestHistoricalArchiveExplorer:
         response = _build_archive_response(entries)
 
         highest_scoring = next(
-            card for card in response.era_comparison_cards if card.card_key == "highest_scoring_season"
+            card
+            for card in response.era_comparison_cards
+            if card.card_key == "highest_scoring_season"
         )
         assert highest_scoring.value == "One Day Cup 2023"
 
         highest_scoring_venue = next(
-            card for card in response.era_comparison_cards if card.card_key == "highest_scoring_venue"
+            card
+            for card in response.era_comparison_cards
+            if card.card_key == "highest_scoring_venue"
         )
         assert highest_scoring_venue.value == "Warner Park"
 
@@ -1063,12 +1143,18 @@ class TestHistoricalArchiveExplorer:
 
         response = _build_archive_response(entries, competition_code="CPL_MEN")
 
-        assert response.comparison_rows[0].final_result == "St Kitts and Nevis Patriots won by 3 wickets"
+        assert (
+            response.comparison_rows[0].final_result
+            == "St Kitts and Nevis Patriots won by 3 wickets"
+        )
         assert response.venue_trends[0].wickets_per_match is None
         assert response.research_summary.markdown is not None
         assert "derived from imported match data" in response.research_summary.markdown.lower()
         assert "not official" in response.research_summary.markdown.lower()
-        assert "delivery-derived dismissal records only where available" in response.research_summary.markdown.lower()
+        assert (
+            "delivery-derived dismissal records only where available"
+            in response.research_summary.markdown.lower()
+        )
 
     def test_returns_empty_archive_fallback_when_filters_exclude_all_rows(self) -> None:
         entries = [
@@ -1080,7 +1166,10 @@ class TestHistoricalArchiveExplorer:
         assert response.comparison_rows == []
         assert response.total_groups == 0
         assert response.research_summary.markdown is None
-        assert response.research_summary.sections[0].body == "No archive groups matched the current filters."
+        assert (
+            response.research_summary.sections[0].body
+            == "No archive groups matched the current filters."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1449,9 +1538,9 @@ class TestBuildPodcastRundown:
         )
         assert trust_section is not None
         body = trust_section.body or ""
-        assert "wicket events All" not in body, (
-            "Missing period: 'wicket events All' found — expected period before 'All standings'."
-        )
+        assert (
+            "wicket events All" not in body
+        ), "Missing period: 'wicket events All' found — expected period before 'All standings'."
         assert "wicket events. All" in body or ". All standings" in body
 
     def test_trust_note_fallback_punctuation_before_all_standings(self) -> None:
@@ -1464,9 +1553,9 @@ class TestBuildPodcastRundown:
         )
         assert trust_section is not None
         body = trust_section.body or ""
-        assert "detected All" not in body, (
-            "Missing period after fallback wicket coverage text before 'All standings'."
-        )
+        assert (
+            "detected All" not in body
+        ), "Missing period after fallback wicket coverage text before 'All standings'."
 
     def test_rundown_debate_questions_section_present(self) -> None:
         summary = _make_full_summary()

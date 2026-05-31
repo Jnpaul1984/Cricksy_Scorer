@@ -261,7 +261,8 @@ class ArchiveComparisonRow(BaseModel):
     incomplete_season: bool = False
     wicket_source_label: str | None = None
     note: str = (
-        "Derived from imported match data. Standings, champions, and finals context are not official."
+        "Derived from imported match data. "
+        "Standings, champions, and finals context are not official."
     )
 
 

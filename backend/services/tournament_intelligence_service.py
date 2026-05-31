@@ -1802,13 +1802,13 @@ def _normalize_result_text(result_text: str | None) -> str | None:
     if not result_text:
         return None
     normalized = re.sub(
-        r"\b(\d+)\s+run\(s\)\b",
+        r"\b(\d+)\s+run\(s\)",
         lambda match: _pluralize(int(match.group(1)), "run"),
         result_text,
         flags=re.I,
     )
     normalized = re.sub(
-        r"\b(\d+)\s+wicket\(s\)\b",
+        r"\b(\d+)\s+wicket\(s\)",
         lambda match: _pluralize(int(match.group(1)), "wicket"),
         normalized,
         flags=re.I,
@@ -1976,14 +1976,15 @@ def _build_archive_era_cards(
         )
 
     wicket_candidates = [
-        row
-        for row in comparison_rows
-        if row.total_wickets is not None and row.imported_matches > 0
+        row for row in comparison_rows if row.total_wickets is not None and row.imported_matches > 0
     ]
     if wicket_candidates:
         wicket_heavy = max(
             wicket_candidates,
-            key=lambda row: ((row.total_wickets or 0) / row.imported_matches, row.total_wickets or 0),
+            key=lambda row: (
+                (row.total_wickets or 0) / row.imported_matches,
+                row.total_wickets or 0,
+            ),
         )
         wickets_per_match = (wicket_heavy.total_wickets or 0) / wicket_heavy.imported_matches
         cards.append(
@@ -2033,7 +2034,8 @@ def _build_archive_era_cards(
     dominant_candidates: list[tuple[TournamentSummaryResponse, DerivedStandingsRow, str]] = []
     for summary in summaries:
         champion_name = (
-            summary.knockout_context.champion_team_canonical or summary.knockout_context.champion_team
+            summary.knockout_context.champion_team_canonical
+            or summary.knockout_context.champion_team
         )
         if not champion_name:
             continue
@@ -2080,7 +2082,9 @@ def _build_archive_era_cards(
             continue
         final_candidates.append((summary, margin[0], margin[1]))
     if final_candidates:
-        closest_final = min(final_candidates, key=lambda item: (item[2], item[0].group_key.season or ""))
+        closest_final = min(
+            final_candidates, key=lambda item: (item[2], item[0].group_key.season or "")
+        )
         cards.append(
             ArchiveEraComparisonCard(
                 card_key="closest_final",
@@ -2091,7 +2095,9 @@ def _build_archive_era_cards(
             )
         )
 
-        biggest_final = max(final_candidates, key=lambda item: (item[2], item[0].group_key.season or ""))
+        biggest_final = max(
+            final_candidates, key=lambda item: (item[2], item[0].group_key.season or "")
+        )
         cards.append(
             ArchiveEraComparisonCard(
                 card_key="biggest_final_win",
@@ -2118,7 +2124,9 @@ def _build_archive_era_cards(
         )
 
     venue_candidates = [
-        venue for venue in venue_trends if venue.average_runs_per_match is not None and venue.matches >= 2
+        venue
+        for venue in venue_trends
+        if venue.average_runs_per_match is not None and venue.matches >= 2
     ]
     if venue_candidates:
         top_venue = max(
@@ -2146,7 +2154,9 @@ def _build_archive_era_cards(
     return cards
 
 
-def _build_champion_history(summaries: list[TournamentSummaryResponse]) -> list[ChampionHistoryEntry]:
+def _build_champion_history(
+    summaries: list[TournamentSummaryResponse],
+) -> list[ChampionHistoryEntry]:
     history: list[ChampionHistoryEntry] = []
     for summary in sorted(
         summaries,
@@ -2193,8 +2203,14 @@ def _build_dynasty_indicators(
     win_record: dict[str, dict[str, int]] = defaultdict(lambda: {"wins": 0, "played": 0})
 
     for summary in competition_summaries:
-        champion = summary.knockout_context.champion_team_canonical or summary.knockout_context.champion_team
-        runner_up = summary.knockout_context.runner_up_team_canonical or summary.knockout_context.runner_up_team
+        champion = (
+            summary.knockout_context.champion_team_canonical
+            or summary.knockout_context.champion_team
+        )
+        runner_up = (
+            summary.knockout_context.runner_up_team_canonical
+            or summary.knockout_context.runner_up_team
+        )
         if champion:
             title_counts[champion] += 1
             finals_counts[champion] += 1
@@ -2357,7 +2373,9 @@ def _build_venue_trends(
     ):
         matches = acc["matches"]
         wicket_matches = acc["wicket_matches"]
-        average_runs = round(acc["total_runs"] / matches, 2) if matches >= 2 and matches > 0 else None
+        average_runs = (
+            round(acc["total_runs"] / matches, 2) if matches >= 2 and matches > 0 else None
+        )
         wickets_per_match = (
             round(acc["total_wickets"] / wicket_matches, 2) if wicket_matches >= 2 else None
         )
@@ -2365,7 +2383,9 @@ def _build_venue_trends(
             sample_note = "Single-match sample — average runs per match withheld."
             confidence = "low"
         elif wicket_matches < 2:
-            sample_note = "Runs trend meets the sample safeguard; wicket trend still needs two matches."
+            sample_note = (
+                "Runs trend meets the sample safeguard; wicket trend still needs two matches."
+            )
             confidence = "medium"
         else:
             sample_note = "Meets archive sample-size safeguards."
@@ -2417,11 +2437,21 @@ def _build_archive_research_summary(
     total_matches = sum(row.imported_matches for row in comparison_rows)
     incomplete_count = sum(1 for row in comparison_rows if row.incomplete_season)
 
-    highest_scoring = next((card for card in era_cards if card.card_key == "highest_scoring_season"), None)
-    wicket_card = next((card for card in era_cards if card.card_key == "most_wicket_heavy_season"), None)
-    venue_card = next((card for card in era_cards if card.card_key == "highest_scoring_venue"), None)
+    highest_scoring = next(
+        (card for card in era_cards if card.card_key == "highest_scoring_season"), None
+    )
+    wicket_card = next(
+        (card for card in era_cards if card.card_key == "most_wicket_heavy_season"), None
+    )
+    venue_card = next(
+        (card for card in era_cards if card.card_key == "highest_scoring_venue"), None
+    )
     title_indicator = next(
-        (indicator for indicator in dynasty_indicators if indicator.metric_key == "most_detected_titles"),
+        (
+            indicator
+            for indicator in dynasty_indicators
+            if indicator.metric_key == "most_detected_titles"
+        ),
         None,
     )
     timeline_text = (
@@ -2600,9 +2630,7 @@ def _build_historical_archive_explorer(
         minimum_matches=minimum_matches,
     )
 
-    selected_competition_summaries = (
-        filtered_summaries if competition_code else []
-    )
+    selected_competition_summaries = filtered_summaries if competition_code else []
     champion_history = _build_champion_history(selected_competition_summaries)
     dynasty_indicators = _build_dynasty_indicators(selected_competition_summaries)
     research_summary = _build_archive_research_summary(
