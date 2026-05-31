@@ -1214,6 +1214,35 @@ class TestBuildPodcastRundown:
         assert "not official" in (trust_section.body or "").lower()
         assert "derived" in (trust_section.body or "").lower()
 
+    def test_trust_note_punctuation_before_all_standings(self) -> None:
+        """Wicket availability label must be followed by a period before 'All standings'."""
+        summary = _make_full_summary()
+        summary.wicket_availability_label = "Complete: 32/32 matches with wicket events"
+        rundown = build_tournament_podcast_rundown(summary)
+        trust_section = next(
+            (s for s in rundown.sections if s.section_key == "data_trust_note"), None
+        )
+        assert trust_section is not None
+        body = trust_section.body or ""
+        assert "wicket events All" not in body, (
+            "Missing period: 'wicket events All' found — expected period before 'All standings'."
+        )
+        assert "wicket events. All" in body or ". All standings" in body
+
+    def test_trust_note_fallback_punctuation_before_all_standings(self) -> None:
+        """Fallback 'No reliable wicket-event coverage detected' must end with period."""
+        summary = _make_full_summary()
+        summary.wicket_availability_label = None
+        rundown = build_tournament_podcast_rundown(summary)
+        trust_section = next(
+            (s for s in rundown.sections if s.section_key == "data_trust_note"), None
+        )
+        assert trust_section is not None
+        body = trust_section.body or ""
+        assert "detected All" not in body, (
+            "Missing period after fallback wicket coverage text before 'All standings'."
+        )
+
     def test_rundown_debate_questions_section_present(self) -> None:
         summary = _make_full_summary()
         rundown = build_tournament_podcast_rundown(summary)

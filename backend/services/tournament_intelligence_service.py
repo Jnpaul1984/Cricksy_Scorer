@@ -1717,7 +1717,7 @@ def _build_rundown_sections(
         f"{dc.matches_with_result}/{dc.total_matches} matches have result data. "
         f"{dc.delivery_complete_matches} matches have ball-by-ball delivery data. "
         f"Wicket summary: {summary.wicket_source_label or 'unavailable'}. "
-        f"{summary.wicket_availability_label or 'No reliable wicket-event coverage detected.'} "
+        f"{summary.wicket_availability_label or 'No reliable wicket-event coverage detected'}. "
         "All standings and outcomes are derived from imported match data — not official. "
         "Source: validated historical imports only."
     )
