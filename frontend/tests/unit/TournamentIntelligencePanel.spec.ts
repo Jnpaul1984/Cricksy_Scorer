@@ -357,6 +357,56 @@ describe('TournamentIntelligencePanel', () => {
     expect(grammarJourneyFixture.matches[0]?.result).toBe('Saint Lucia Kings won by 1 wicket(s)')
   })
 
+  it('shows single-label unavailable wickets with helper tooltip', async () => {
+    summaryMock.mockResolvedValueOnce({
+      ...summaryFixture,
+      total_wickets: 0,
+    })
+
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+
+    const totalWicketsCard = wrapper
+      .findAll('.tip-stat-card')
+      .find((card) => card.find('.tip-stat-label').text() === 'Total wickets')
+    expect(totalWicketsCard).toBeDefined()
+
+    const wicketsValue = totalWicketsCard!.get('.tip-stat-val')
+    expect(wicketsValue.text()).toBe('Unavailable')
+    expect(wicketsValue.classes()).toContain('tip-stat-val--unavailable')
+    expect(wicketsValue.attributes('title')).toBe(
+      'Wicket totals require reliable dismissal/wicket data from imported records.',
+    )
+  })
+
+  it('renders all key match summary cards', async () => {
+    summaryMock.mockResolvedValueOnce({
+      ...summaryFixture,
+      biggest_win_by_wickets: {
+        match_id: 'm-wkts-dark',
+        match_title: 'Eliminator',
+        match_date: '2021-09-12',
+        stage_label: 'Eliminator',
+        result: 'Won by 2 wickets',
+        highlight_type: 'biggest_win_by_wickets',
+        detail: 'Saint Lucia Kings won by 2 wickets',
+      },
+    })
+
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+
+    const highlightCards = wrapper.findAll('.tip-highlight-card')
+    expect(highlightCards).toHaveLength(3)
+    expect(highlightCards[0]?.text()).toContain('Biggest win (runs)')
+    expect(highlightCards[1]?.text()).toContain('Biggest win (wickets)')
+    expect(highlightCards[2]?.text()).toContain('Closest match')
+  })
+
   // ── Phase 10S.2: Podcast Rundown tests ──────────────────────────────────
 
   it('renders Generate Rundown button when a competition is selected', async () => {
