@@ -1142,9 +1142,7 @@ class TestNoPlaceholderArtifacts:
 
     def _check_no_placeholders(self, text: str, label: str) -> None:
         for ph in self.PLACEHOLDERS:
-            assert ph not in text, (
-                f"Placeholder artifact '{ph}' found in {label}: {text!r}"
-            )
+            assert ph not in text, f"Placeholder artifact '{ph}' found in {label}: {text!r}"
 
     def test_season_review_no_placeholders(self) -> None:
         from backend.services.tournament_intelligence_service import _build_season_review

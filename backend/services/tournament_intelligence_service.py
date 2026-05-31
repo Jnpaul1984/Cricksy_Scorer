@@ -1245,20 +1245,16 @@ def _build_rundown_sections(
         if summary.teams
         else "team data unavailable"
     )
-    venues_listed = (
-        "; ".join(sorted(summary.venues)[:3])
-        if summary.venues
-        else None
-    )
+    venues_listed = "; ".join(sorted(summary.venues)[:3]) if summary.venues else None
     setup_lines = [
         f"The {season} {comp} featured {_pluralize(summary.match_count, 'imported match', 'imported matches')}.",
-        f"Teams ({n_teams}): {', '.join(sorted(summary.teams)[:6])}." if summary.teams else "Team data unavailable.",
+        f"Teams ({n_teams}): {', '.join(sorted(summary.teams)[:6])}."
+        if summary.teams
+        else "Team data unavailable.",
     ]
     if venues_listed:
         if n_venues > 3:
-            setup_lines.append(
-                f"Venues ({n_venues} total, top 3 listed): {venues_listed}."
-            )
+            setup_lines.append(f"Venues ({n_venues} total, top 3 listed): {venues_listed}.")
         else:
             setup_lines.append(f"{_pluralize(n_venues, 'Venue')}: {venues_listed}.")
     else:
