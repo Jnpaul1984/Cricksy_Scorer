@@ -1099,3 +1099,233 @@ class TestPodcastRundownEndpoint:
         response = client.get("/analytics/tournament-intelligence/podcast-rundown")
         # Auth check fires before param validation in FastAPI
         assert response.status_code in (401, 403, 422)
+
+
+# ---------------------------------------------------------------------------
+# Phase 10S.2 — Copy quality and trust fix tests
+# ---------------------------------------------------------------------------
+
+
+class TestPluralize:
+    """Tests for the _pluralize helper function."""
+
+    def test_imports(self) -> None:
+        from backend.services.tournament_intelligence_service import _pluralize
+
+        assert _pluralize is not None
+
+    def test_singular(self) -> None:
+        from backend.services.tournament_intelligence_service import _pluralize
+
+        assert _pluralize(1, "match", "matches") == "1 match"
+        assert _pluralize(1, "win") == "1 win"
+        assert _pluralize(1, "wicket") == "1 wicket"
+
+    def test_plural(self) -> None:
+        from backend.services.tournament_intelligence_service import _pluralize
+
+        assert _pluralize(9, "win") == "9 wins"
+        assert _pluralize(13, "match", "matches") == "13 matches"
+        assert _pluralize(3, "wicket") == "3 wickets"
+
+    def test_zero(self) -> None:
+        from backend.services.tournament_intelligence_service import _pluralize
+
+        assert _pluralize(0, "win") == "0 wins"
+        assert _pluralize(0, "match", "matches") == "0 matches"
+
+
+class TestNoPlaceholderArtifacts:
+    """No win(s), match(es), wicket(s), run(s) in any rundown section."""
+
+    PLACEHOLDERS = ["win(s)", "match(es)", "wicket(s)", "run(s)", "team(s)", "venue(s)"]
+
+    def _check_no_placeholders(self, text: str, label: str) -> None:
+        for ph in self.PLACEHOLDERS:
+            assert ph not in text, (
+                f"Placeholder artifact '{ph}' found in {label}: {text!r}"
+            )
+
+    def test_season_review_no_placeholders(self) -> None:
+        from backend.services.tournament_intelligence_service import _build_season_review
+
+        summary = _make_full_summary()
+        review = _build_season_review(
+            group_key=summary.group_key,
+            knockout_ctx=summary.knockout_context,
+            derived_standings=summary.derived_standings,
+            match_count=summary.match_count,
+            data_completeness=summary.data_completeness,
+        )
+        self._check_no_placeholders(review.narrative, "season_review.narrative")
+
+    def test_season_review_no_champion_no_placeholders(self) -> None:
+        from backend.services.tournament_intelligence_service import _build_season_review
+
+        summary = _make_full_summary(champion=None, finalist=None, final_result=None)
+        review = _build_season_review(
+            group_key=summary.group_key,
+            knockout_ctx=summary.knockout_context,
+            derived_standings=[],
+            match_count=5,
+            data_completeness=summary.data_completeness,
+        )
+        self._check_no_placeholders(review.narrative, "season_review.narrative (no champion)")
+
+    def test_rundown_sections_no_placeholders(self) -> None:
+        summary = _make_full_summary()
+        rundown = build_tournament_podcast_rundown(summary)
+        for section in rundown.sections:
+            body = section.body or ""
+            self._check_no_placeholders(body, f"section '{section.section_key}'")
+
+    def test_rundown_thin_data_no_placeholders(self) -> None:
+        summary = _make_full_summary(champion=None, finalist=None, final_result=None)
+        summary.derived_standings = []
+        summary.top_run_scorer = None
+        summary.top_wicket_taker = None
+        rundown = build_tournament_podcast_rundown(summary)
+        for section in rundown.sections:
+            body = section.body or ""
+            self._check_no_placeholders(body, f"section '{section.section_key}' (thin data)")
+
+
+class TestSaferKnockoutWording:
+    """Knockout-stage wording must not overstate stage labels."""
+
+    def test_road_to_final_semi_finals_safe_wording(self) -> None:
+        from backend.api.schemas.tournament_intelligence import TournamentMatchHighlight
+
+        ctx = TournamentKnockoutContext(
+            champion_team="Team A",
+            champion_team_canonical="Team A",
+            runner_up_team="Team B",
+            runner_up_team_canonical="Team B",
+            final_result="Team A won by 5 wickets",
+            confidence="high",  # type: ignore[arg-type]
+            semi_final_matches=[
+                TournamentMatchHighlight(
+                    match_id="sf1",
+                    match_title="Semi Final 1",
+                    stage_label="Semi Final",
+                    highlight_type="semi_final",
+                )
+            ],
+        )
+        road = _build_road_to_final(knockout_ctx=ctx)
+        assert road is not None
+        narrative = road.narrative or ""
+        # Must NOT use the old overconfident phrasing
+        assert "Semi-finals detected:" not in narrative
+        # Must use safe phrasing
+        assert "Possible knockout-stage matches detected" in narrative
+
+    def test_road_to_final_qualifier_safe_wording(self) -> None:
+        from backend.api.schemas.tournament_intelligence import TournamentMatchHighlight
+
+        ctx = TournamentKnockoutContext(
+            champion_team="Team A",
+            champion_team_canonical="Team A",
+            runner_up_team="Team B",
+            runner_up_team_canonical="Team B",
+            final_result="Team A won by 5 wickets",
+            confidence="high",  # type: ignore[arg-type]
+            qualifier_matches=[
+                TournamentMatchHighlight(
+                    match_id="q1",
+                    match_title="Qualifier 1",
+                    stage_label="Qualifier",
+                    highlight_type="qualifier",
+                )
+            ],
+        )
+        road = _build_road_to_final(knockout_ctx=ctx)
+        assert road is not None
+        narrative = road.narrative or ""
+        # Must NOT use old phrasing
+        assert "Qualifier/eliminator matches detected:" not in narrative
+        # Must use safe phrasing
+        assert "Possible knockout-stage matches detected" in narrative
+
+    def test_road_to_final_no_knockouts_no_knockout_text(self) -> None:
+        """When no semi/qualifier matches exist, no knockout text is added."""
+        summary = _make_full_summary()
+        road = _build_road_to_final(knockout_ctx=summary.knockout_context)
+        assert road is not None
+        assert "Possible knockout-stage matches" not in (road.narrative or "")
+
+
+class TestZeroWicketFallback:
+    """Zero wickets must not be presented as a real statistic."""
+
+    def test_venue_patterns_zero_wickets_fallback(self) -> None:
+        summary = _make_full_summary()
+        summary.total_wickets = 0
+        rundown = build_tournament_podcast_rundown(summary)
+        venue_section = next(
+            (s for s in rundown.sections if s.section_key == "venue_patterns"), None
+        )
+        assert venue_section is not None
+        body = venue_section.body or ""
+        # Must not show "0 wickets" as a real stat
+        assert "0 wickets" not in body
+        # Must explain data is unavailable
+        assert "unavailable" in body.lower()
+
+    def test_tactical_themes_zero_wickets_fallback(self) -> None:
+        summary = _make_full_summary()
+        summary.total_wickets = 0
+        rundown = build_tournament_podcast_rundown(summary)
+        tactical_section = next(
+            (s for s in rundown.sections if s.section_key == "tactical_themes"), None
+        )
+        assert tactical_section is not None
+        body = tactical_section.body or ""
+        # Must not claim "0 total wickets"
+        assert "0 total wickets" not in body
+        # Must say wicket data is unavailable
+        assert "unavailable" in body.lower()
+
+    def test_venue_patterns_nonzero_wickets_shows_count(self) -> None:
+        summary = _make_full_summary()
+        summary.total_wickets = 330
+        rundown = build_tournament_podcast_rundown(summary)
+        venue_section = next(
+            (s for s in rundown.sections if s.section_key == "venue_patterns"), None
+        )
+        assert venue_section is not None
+        assert "330 wickets" in (venue_section.body or "")
+
+
+class TestPlayerStorylineFallback:
+    """Player storyline fallback must explain missing data requirements clearly."""
+
+    def test_player_storyline_fallback_explains_requirements(self) -> None:
+        summary = _make_full_summary()
+        summary.top_run_scorer = None
+        summary.top_wicket_taker = None
+        rundown = build_tournament_podcast_rundown(summary)
+        player_section = next(
+            (s for s in rundown.sections if s.section_key == "player_storylines"), None
+        )
+        assert player_section is not None
+        body = (player_section.body or "").lower()
+        # Must mention player leaderboards are unavailable
+        assert "player leaderboard" in body
+        # Must explain the reason (scorecard/delivery data)
+        assert "scorecard" in body or "delivery" in body
+        # Must be marked unknown confidence
+        assert player_section.confidence == "unknown"
+
+    def test_player_storyline_fallback_no_vague_wording(self) -> None:
+        """Old vague wording 'Scorecard or delivery data was not found' is replaced."""
+        summary = _make_full_summary()
+        summary.top_run_scorer = None
+        summary.top_wicket_taker = None
+        rundown = build_tournament_podcast_rundown(summary)
+        player_section = next(
+            (s for s in rundown.sections if s.section_key == "player_storylines"), None
+        )
+        body = player_section.body or ""
+        # Must NOT use the old vague phrasing
+        assert "Player stats are unavailable" not in body

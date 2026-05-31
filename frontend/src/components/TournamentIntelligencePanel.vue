@@ -190,7 +190,7 @@
         </div>
         <div class="tip-stat-card">
           <span class="tip-stat-label">Total wickets</span>
-          <span class="tip-stat-val">{{ summary.total_wickets }}</span>
+          <span class="tip-stat-val">{{ summary.total_wickets > 0 ? summary.total_wickets : 'Unavailable' }}</span>
         </div>
         <div v-if="summary.highest_team_total" class="tip-stat-card">
           <span class="tip-stat-label">Highest total</span>
@@ -791,7 +791,7 @@ function buildPodcastMarkdown(rundown: TournamentPodcastRundown): string {
     lines.push('## Champion Journey', '')
     if (cj.champion_team) lines.push(`**Champion (detected):** ${cj.champion_team}`)
     if (cj.final_opponent) lines.push(`**Final opponent:** ${cj.final_opponent}`)
-    if (cj.final_result) lines.push(`**Final result:** ${cj.final_result}`)
+    if (cj.final_result) lines.push(`**Final result:** ${normalizeResultDisplayText(cj.final_result) || cj.final_result}`)
     if (cj.derived_group_standing) lines.push(`**Derived standing:** ${cj.derived_group_standing}`)
     if (cj.key_note) lines.push(`**Note:** ${cj.key_note}`)
     lines.push(`*${cj.source_label}*`, '')
@@ -832,7 +832,7 @@ function buildPodcastPlainText(rundown: TournamentPodcastRundown): string {
     lines.push('CHAMPION JOURNEY', '-'.repeat(30))
     if (cj.champion_team) lines.push(`Champion (detected): ${cj.champion_team}`)
     if (cj.final_opponent) lines.push(`Final opponent: ${cj.final_opponent}`)
-    if (cj.final_result) lines.push(`Final result: ${cj.final_result}`)
+    if (cj.final_result) lines.push(`Final result: ${normalizeResultDisplayText(cj.final_result) || cj.final_result}`)
     if (cj.derived_group_standing) lines.push(`Derived standing: ${cj.derived_group_standing}`)
     if (cj.key_note) lines.push(`Note: ${cj.key_note}`)
     lines.push(cj.source_label, '')

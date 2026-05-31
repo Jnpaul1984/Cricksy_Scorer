@@ -102,6 +102,13 @@ def _innings_summary(game: Game) -> list[dict[str, Any]]:
     return []
 
 
+def _pluralize(count: int, singular: str, plural: str | None = None) -> str:
+    """Return '<count> <singular>' or '<count> <plural>' based on count."""
+    if plural is None:
+        plural = singular + "s"
+    return f"{count} {singular}" if count == 1 else f"{count} {plural}"
+
+
 def _detect_stage_label(meta: dict[str, Any], match_title: str | None = None) -> str | None:
     candidates: list[str] = []
     for key in ("competition_stage", "tournament_round"):
@@ -1049,7 +1056,7 @@ def _build_season_review(
         )
     else:
         narrative = (
-            f"The {season} {comp} season featured {match_count} imported match(es). "
+            f"The {season} {comp} season featured {_pluralize(match_count, 'imported match', 'imported matches')}. "
             f"No champion data was detected from the available match results. "
         )
 
@@ -1058,7 +1065,7 @@ def _build_season_review(
         leader_name = leader.canonical_team_name or leader.team_name
         narrative += (
             f"In the derived standings (estimated, not official), "
-            f"{leader_name} led with {leader.wins} win(s) from {leader.played} match(es). "
+            f"{leader_name} led with {_pluralize(leader.wins, 'win')} from {_pluralize(leader.played, 'match', 'matches')}. "
         )
 
     narrative += (
@@ -1166,9 +1173,15 @@ def _build_road_to_final(
         narrative = "Finalist data could not be determined from the imported match data."
 
     if semi_titles:
-        narrative += f" Semi-finals detected: {', '.join(semi_titles)}."
+        narrative += (
+            f" Possible knockout-stage matches detected (semi-final or eliminator stage label): "
+            f"{', '.join(semi_titles)}."
+        )
     if qualifier_titles:
-        narrative += f" Qualifier/eliminator matches detected: {', '.join(qualifier_titles)}."
+        narrative += (
+            f" Possible knockout-stage matches detected (qualifier or playoff stage label): "
+            f"{', '.join(qualifier_titles)}."
+        )
 
     return TournamentRoadToFinal(
         finalist_a=champion,
@@ -1212,7 +1225,7 @@ def _build_rundown_sections(
     else:
         hook_body = (
             f"Welcome to the {comp} {season} season review. "
-            f"This season featured {summary.match_count} imported match(es). "
+            f"This season featured {_pluralize(summary.match_count, 'imported match', 'imported matches')}. "
             "All facts are derived from imported match data — not official records."
         )
     sections.append(
@@ -1225,20 +1238,32 @@ def _build_rundown_sections(
     )
 
     # 2. Tournament setup
+    n_teams = len(summary.teams)
+    n_venues = len(summary.venues)
     teams_str = (
-        f"{len(summary.teams)} team(s): {', '.join(sorted(summary.teams)[:6])}"
+        f"{_pluralize(n_teams, 'team')}: {', '.join(sorted(summary.teams)[:6])}"
         if summary.teams
         else "team data unavailable"
     )
-    venues_str = (
-        f"{len(summary.venues)} venue(s): {', '.join(sorted(summary.venues)[:3])}"
+    venues_listed = (
+        "; ".join(sorted(summary.venues)[:3])
         if summary.venues
-        else "venue data unavailable"
+        else None
     )
-    setup_body = (
-        f"The {season} {comp} featured {summary.match_count} imported match(es). "
-        f"Teams: {teams_str}. Venues: {venues_str}."
-    )
+    setup_lines = [
+        f"The {season} {comp} featured {_pluralize(summary.match_count, 'imported match', 'imported matches')}.",
+        f"Teams ({n_teams}): {', '.join(sorted(summary.teams)[:6])}." if summary.teams else "Team data unavailable.",
+    ]
+    if venues_listed:
+        if n_venues > 3:
+            setup_lines.append(
+                f"Venues ({n_venues} total, top 3 listed): {venues_listed}."
+            )
+        else:
+            setup_lines.append(f"{_pluralize(n_venues, 'Venue')}: {venues_listed}.")
+    else:
+        setup_lines.append("Venue data unavailable.")
+    setup_body = " ".join(setup_lines)
     sections.append(
         TournamentPodcastSection(
             section_key="tournament_setup",
@@ -1334,7 +1359,7 @@ def _build_rundown_sections(
         spotlight_row = summary.derived_standings[0]
         spotlight_body = (
             f"Team spotlight: {spotlight_team} led the derived standings "
-            f"with {spotlight_row.wins} win(s) from {spotlight_row.played} match(es). "
+            f"with {_pluralize(spotlight_row.wins, 'win')} from {_pluralize(spotlight_row.played, 'match', 'matches')}. "
             "Use the Team Journey tab to view their full campaign match-by-match."
         )
     else:
@@ -1365,7 +1390,7 @@ def _build_rundown_sections(
             f"Closest finish: {summary.closest_match.detail} "
             f"({summary.closest_match.match_title})."
         )
-    key_body = " ".join(key_lines) if key_lines else "No key match highlights available."
+    key_body = "\n".join(key_lines) if key_lines else "No key match highlights available."
     sections.append(
         TournamentPodcastSection(
             section_key="key_matches",
@@ -1380,14 +1405,14 @@ def _build_rundown_sections(
     if summary.top_run_scorer and summary.top_run_scorer.value > 0:
         player_lines.append(
             f"Top run scorer (derived): {summary.top_run_scorer.player_name} "
-            f"— {summary.top_run_scorer.value} runs from "
-            f"{summary.top_run_scorer.matches_contributed} match(es)."
+            f"— {int(summary.top_run_scorer.value)} runs from "
+            f"{_pluralize(summary.top_run_scorer.matches_contributed, 'match', 'matches')}."
         )
     if summary.top_wicket_taker and summary.top_wicket_taker.value > 0:
         player_lines.append(
             f"Top wicket taker (derived): {summary.top_wicket_taker.player_name} "
-            f"— {summary.top_wicket_taker.value} wickets from "
-            f"{summary.top_wicket_taker.matches_contributed} match(es)."
+            f"— {int(summary.top_wicket_taker.value)} wickets from "
+            f"{_pluralize(summary.top_wicket_taker.matches_contributed, 'match', 'matches')}."
         )
     if player_lines:
         player_body = " ".join(player_lines)
@@ -1398,8 +1423,9 @@ def _build_rundown_sections(
         player_confidence = "medium"
     else:
         player_body = (
-            "Player stats are unavailable for this tournament. "
-            "Scorecard or delivery data was not found in the imported matches."
+            "Player leaderboards are unavailable because player-level scorecard or "
+            "delivery-player data was not found in the imported tournament records. "
+            "Confidence: unknown."
         )
         player_confidence = "unknown"
     sections.append(
@@ -1426,9 +1452,14 @@ def _build_rundown_sections(
             if summary.highest_team_total and summary.highest_team_total_by
             else ""
         )
+        wickets_str = (
+            f"{summary.total_wickets} wickets"
+            if summary.total_wickets > 0
+            else "wicket data unavailable from imported records"
+        )
         venue_body = (
             f"Tournament scoring: {summary.total_runs} total runs, "
-            f"{summary.total_wickets} wickets across {summary.match_count} match(es). "
+            f"{wickets_str} across {_pluralize(summary.match_count, 'match', 'matches')}. "
             f"Average match total: ~{avg_per_match} runs."
             f"{top_venue_str}{highest_total_str}"
         )
@@ -1445,10 +1476,14 @@ def _build_rundown_sections(
 
     # 10. Tactical themes (high-level observation from derived data)
     format_family = group_key.format_family or "unknown"
+    if summary.total_wickets > 0:
+        wickets_label = f"{summary.total_wickets} total wickets"
+    else:
+        wickets_label = "wicket totals unavailable for this tournament import"
     tactical_body = (
         f"Format: {format_family}. "
         f"This tournament produced {summary.total_runs} total runs "
-        f"and {summary.total_wickets} total wickets. "
+        f"and {wickets_label}. "
     )
     if summary.total_wickets > 0 and summary.total_runs > 0:
         run_rate_per_wkt = round(summary.total_runs / summary.total_wickets, 1)
