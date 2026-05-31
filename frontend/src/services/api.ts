@@ -1319,6 +1319,61 @@ export interface TeamJourneyResponse {
   note: string;
 }
 
+// ---------------------------------------------------------------------------
+// Phase 10S.2 — Tournament Podcast Rundown types
+// ---------------------------------------------------------------------------
+
+export interface TournamentPodcastSection {
+  section_key: string;
+  title: string;
+  body: string | null;
+  confidence: string;
+  note: string;
+}
+
+export interface TournamentChampionJourney {
+  champion_team: string | null;
+  final_opponent: string | null;
+  final_result: string | null;
+  derived_group_standing: string | null;
+  best_win_title: string | null;
+  closest_match_title: string | null;
+  key_note: string | null;
+  confidence: string;
+  source_label: string;
+}
+
+export interface TournamentRoadToFinal {
+  finalist_a: string | null;
+  finalist_b: string | null;
+  final_result: string | null;
+  semi_final_titles: string[];
+  qualifier_titles: string[];
+  narrative: string | null;
+  confidence: string;
+  source_label: string;
+}
+
+export interface TournamentSeasonReview {
+  competition_label: string;
+  season_label: string | null;
+  narrative: string;
+  confidence: string;
+  source_label: string;
+}
+
+export interface TournamentPodcastRundown {
+  group_key: TournamentGroupKey;
+  season_review: TournamentSeasonReview;
+  champion_journey: TournamentChampionJourney | null;
+  road_to_final: TournamentRoadToFinal | null;
+  sections: TournamentPodcastSection[];
+  overall_confidence: string;
+  source_label: string;
+  generated_at: string;
+  note: string;
+}
+
 /**
  * GET /analytics/tournament-intelligence/groups
  * Phase 10S.1: Returns all discoverable tournament/season groups.
@@ -1362,6 +1417,23 @@ export async function getTeamJourney(
   if (genderCategory) params.set('gender_category', genderCategory);
   return request<TeamJourneyResponse>(
     `/analytics/tournament-intelligence/team-journey?${params.toString()}`,
+  );
+}
+
+/**
+ * GET /analytics/tournament-intelligence/podcast-rundown
+ * Phase 10S.2: Returns a deterministic tournament podcast rundown for one group.
+ */
+export async function getTournamentPodcastRundown(
+  competitionCode: string,
+  season?: string | null,
+  genderCategory?: string,
+): Promise<TournamentPodcastRundown> {
+  const params = new URLSearchParams({ competition_code: competitionCode });
+  if (season) params.set('season', season);
+  if (genderCategory) params.set('gender_category', genderCategory);
+  return request<TournamentPodcastRundown>(
+    `/analytics/tournament-intelligence/podcast-rundown?${params.toString()}`,
   );
 }
 

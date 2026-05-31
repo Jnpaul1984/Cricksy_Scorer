@@ -271,3 +271,102 @@ class TeamJourneyResponse(BaseModel):
         "Team journey derived from imported match data. "
         "Outcomes are inferred from result text where available."
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 10S.2 — Tournament Podcast Rundown schemas
+# ---------------------------------------------------------------------------
+
+
+class TournamentPodcastSection(BaseModel):
+    """One named section of a tournament podcast rundown.
+
+    Phase 10S.2: each section is derived from deterministic tournament facts.
+    The body may be None if insufficient data exists (thin-data fallback).
+    All values carry a confidence label and a source note.
+    """
+
+    section_key: str  # e.g. opening_hook, champion_story, debate_questions
+    title: str
+    body: str | None = None
+    confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    note: str = "Derived from imported match data — not official."
+
+
+class TournamentChampionJourney(BaseModel):
+    """Deterministic champion journey block for a tournament.
+
+    Phase 10S.2: derived from knockout context and derived standings.
+    Absent when champion data is unavailable.
+    """
+
+    champion_team: str | None = None
+    final_opponent: str | None = None
+    final_result: str | None = None
+    derived_group_standing: str | None = None  # e.g. "1st in derived standings"
+    best_win_title: str | None = None
+    closest_match_title: str | None = None
+    key_note: str | None = None
+    confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    source_label: str = "derived from imported match data — not official"
+
+
+class TournamentRoadToFinal(BaseModel):
+    """Compact road-to-final narrative block.
+
+    Phase 10S.2: derived from knockout context only. No invented rounds.
+    """
+
+    finalist_a: str | None = None
+    finalist_b: str | None = None
+    final_result: str | None = None
+    semi_final_titles: list[str] = Field(default_factory=list)
+    qualifier_titles: list[str] = Field(default_factory=list)
+    narrative: str | None = None
+    confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    source_label: str = "derived from imported match data — not official"
+
+
+class TournamentSeasonReview(BaseModel):
+    """Presenter-ready season review narrative.
+
+    Phase 10S.2: uses safe confidence labels. Uses 'derived standings' not
+    'official standings'. Includes data trust note.
+    """
+
+    competition_label: str
+    season_label: str | None = None
+    narrative: str
+    confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    source_label: str = "derived from imported match data — not official"
+
+
+class TournamentPodcastRundown(BaseModel):
+    """Full tournament podcast rundown for a competition/season.
+
+    Phase 10S.2: deterministic, presenter-ready tournament narrative sections.
+    All values are derived from imported match data and labeled with their
+    derivation source. No official standings or championship claims are fabricated.
+
+    Sections list is ordered for podcast presentation flow:
+    opening_hook → tournament_setup → champion_story → final_context →
+    standings_story → team_spotlight → key_matches → player_storylines →
+    venue_patterns → tactical_themes → debate_questions → data_trust_note
+    """
+
+    group_key: TournamentGroupKey
+    season_review: TournamentSeasonReview
+    champion_journey: TournamentChampionJourney | None = None
+    road_to_final: TournamentRoadToFinal | None = None
+    sections: list[TournamentPodcastSection] = Field(default_factory=list)
+    overall_confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
+    source_label: str = (
+        "Source: derived from imported match data. "
+        "Derived standings are estimated and not official."
+    )
+    generated_at: dt.datetime = Field(default_factory=lambda: dt.datetime.now(dt.UTC))
+    note: str = (
+        "Phase 10S.2 — Deterministic tournament podcast rundown. "
+        "All sections are derived from imported match data. "
+        "Standings, outcomes, and player stats are estimated — not official."
+    )

@@ -4,9 +4,11 @@ import TournamentIntelligencePanel from '@/components/TournamentIntelligencePane
 import {
   getTeamJourney,
   getTournamentGroups,
+  getTournamentPodcastRundown,
   getTournamentSummary,
   type TeamJourneyResponse,
   type TournamentGroupsResponse,
+  type TournamentPodcastRundown,
   type TournamentSummaryResponse,
 } from '@/services/api'
 
@@ -17,12 +19,14 @@ vi.mock('@/services/api', async () => {
     getTournamentGroups: vi.fn(),
     getTournamentSummary: vi.fn(),
     getTeamJourney: vi.fn(),
+    getTournamentPodcastRundown: vi.fn(),
   }
 })
 
 const groupsMock = vi.mocked(getTournamentGroups)
 const summaryMock = vi.mocked(getTournamentSummary)
 const journeyMock = vi.mocked(getTeamJourney)
+const rundownMock = vi.mocked(getTournamentPodcastRundown)
 
 const groupsFixture: TournamentGroupsResponse = {
   groups: [
@@ -188,11 +192,59 @@ const journeyFixture: TeamJourneyResponse = {
   note: 'Derived from imported match results only.',
 }
 
+const rundownFixture: TournamentPodcastRundown = {
+  group_key: groupsFixture.groups[0].group_key,
+  season_review: {
+    narrative:
+      'The 2021 Caribbean Premier League season ended with St Kitts & Nevis Patriots lifting the title. Derived standings are estimated and not official.',
+    confidence: 'medium',
+    source_label: 'derived from imported match data',
+  },
+  champion_journey: {
+    champion_team: 'St Kitts and Nevis Patriots',
+    final_opponent: 'Saint Lucia Kings',
+    final_result: 'Won by 3 wickets',
+    derived_group_standing: 'Estimated position derived from match results — not official.',
+    key_note: 'Champion detected from knockout context.',
+    confidence: 'high',
+    source_label: 'derived from imported match data — not official',
+  },
+  road_to_final: {
+    finalist_a: 'St Kitts and Nevis Patriots',
+    finalist_b: 'Saint Lucia Kings',
+    final_result: 'Won by 3 wickets',
+    narrative: 'St Kitts and Nevis Patriots met Saint Lucia Kings in the final.',
+    source_label: 'derived from imported match data — not official',
+    confidence: 'high',
+  },
+  sections: [
+    {
+      section_key: 'opening_hook',
+      title: 'Opening Hook',
+      body: 'The 2021 Caribbean Premier League concluded with a dramatic final.',
+      confidence: 'medium',
+      source_label: 'derived',
+    },
+    {
+      section_key: 'data_trust_note',
+      title: 'Data Trust Note',
+      body: 'All facts derived from imported match data. Standings are estimated and not official.',
+      confidence: 'high',
+      source_label: 'derived from imported match data — not official',
+    },
+  ],
+  overall_confidence: 'medium',
+  source_label: 'derived from imported match data. Standings are estimated and not official.',
+  note: 'Source: derived from imported match data. Standings are estimated and not official.',
+}
+
+
 describe('TournamentIntelligencePanel', () => {
   beforeEach(() => {
     groupsMock.mockReset()
     summaryMock.mockReset()
     journeyMock.mockReset()
+    rundownMock.mockReset()
     groupsMock.mockResolvedValue(groupsFixture)
     summaryMock.mockResolvedValue(summaryFixture)
     journeyMock.mockResolvedValue(journeyFixture)
@@ -302,5 +354,152 @@ describe('TournamentIntelligencePanel', () => {
     expect(grammarSummaryFixture.biggest_win_by_wickets?.detail).toBe('Saint Lucia Kings won by 2 wicket(s)')
     expect(grammarSummaryFixture.knockout_context?.final_result).toBe('Won by 1 wicket(s)')
     expect(grammarJourneyFixture.matches[0]?.result).toBe('Saint Lucia Kings won by 1 wicket(s)')
+  })
+
+  // ── Phase 10S.2: Podcast Rundown tests ──────────────────────────────────
+
+  it('renders Generate Rundown button when a competition is selected', async () => {
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+
+    const btn = wrapper.get('[data-testid="generate-rundown-btn"]')
+    expect(btn.attributes('disabled')).toBeUndefined()
+    expect(btn.text()).toContain('Generate Rundown')
+  })
+
+  it('calls getTournamentPodcastRundown and renders rundown sections after clicking generate', async () => {
+    rundownMock.mockResolvedValueOnce(rundownFixture)
+
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-testid="generate-rundown-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(rundownMock).toHaveBeenCalledWith('CPL_MEN', '2021', 'men')
+
+    const trustNote = wrapper.get('[data-testid="rundown-trust-note"]')
+    expect(trustNote.text()).toContain('derived from imported match data')
+    expect(trustNote.text()).toContain('not official')
+
+    const seasonReview = wrapper.get('[data-testid="season-review-narrative"]')
+    expect(seasonReview.text()).toContain('2021 Caribbean Premier League')
+    expect(seasonReview.text()).toContain('not official')
+  })
+
+  it('renders champion journey card with champion team and confidence badge', async () => {
+    rundownMock.mockResolvedValueOnce(rundownFixture)
+
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="generate-rundown-btn"]').trigger('click')
+    await flushPromises()
+
+    const card = wrapper.get('[data-testid="champion-journey-card"]')
+    expect(card.text()).toContain('St Kitts and Nevis Patriots')
+    expect(card.text()).toContain('Saint Lucia Kings')
+    expect(card.text()).toContain('not official')
+    expect(card.text()).toContain('high')
+  })
+
+  it('renders road-to-final card with both finalists', async () => {
+    rundownMock.mockResolvedValueOnce(rundownFixture)
+
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="generate-rundown-btn"]').trigger('click')
+    await flushPromises()
+
+    const card = wrapper.get('[data-testid="road-to-final-card"]')
+    expect(card.text()).toContain('St Kitts and Nevis Patriots')
+    expect(card.text()).toContain('Saint Lucia Kings')
+  })
+
+  it('renders data trust note footer', async () => {
+    rundownMock.mockResolvedValueOnce(rundownFixture)
+
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="generate-rundown-btn"]').trigger('click')
+    await flushPromises()
+
+    const note = wrapper.get('[data-testid="rundown-note"]')
+    expect(note.text()).toContain('not official')
+  })
+
+  it('shows champion journey fallback card when champion_journey is null', async () => {
+    const thinRundown: TournamentPodcastRundown = {
+      ...rundownFixture,
+      champion_journey: null,
+    }
+    rundownMock.mockResolvedValueOnce(thinRundown)
+
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="generate-rundown-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="champion-journey-card"]').exists()).toBe(false)
+    const fallback = wrapper.get('[data-testid="champion-journey-fallback"]')
+    expect(fallback.text()).toContain('unavailable')
+  })
+
+  it('renders copy Markdown and copy plain text buttons after rundown is loaded', async () => {
+    rundownMock.mockResolvedValueOnce(rundownFixture)
+
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="generate-rundown-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="copy-md-btn"]').text()).toContain('Copy Markdown')
+    expect(wrapper.get('[data-testid="copy-text-btn"]').text()).toContain('Copy Plain Text')
+  })
+
+  it('shows error state when getTournamentPodcastRundown rejects', async () => {
+    rundownMock.mockRejectedValueOnce(new Error('Network error'))
+
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="generate-rundown-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="rundown-trust-note"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Network error')
+  })
+
+  it('clears rundown when × Clear is clicked', async () => {
+    rundownMock.mockResolvedValueOnce(rundownFixture)
+
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="generate-rundown-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="rundown-trust-note"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="clear-rundown-btn"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="rundown-trust-note"]').exists()).toBe(false)
   })
 })

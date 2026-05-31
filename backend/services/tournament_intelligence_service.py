@@ -1,8 +1,11 @@
-"""Phase 10S.1 — Tournament Intelligence Service.
+"""Phase 10S.1 / 10S.2 — Tournament Intelligence Service.
 
 Provides deterministic tournament-level intelligence derived from historical
 match data classified by Phase 10S. Builds on the existing historical stats
 aggregation and analyst registry classification foundations.
+
+Phase 10S.2 adds: tournament podcast rundown generation, season review narrative,
+champion journey block, road-to-final block, and structured podcast sections.
 
 All logic is deterministic Python — no AI/LLM services are used.
 No official standings, stats, or champion claims are fabricated.
@@ -24,6 +27,7 @@ from backend.api.schemas.tournament_intelligence import (
     TeamJourneyMatch,
     TeamJourneyResponse,
     TeamJourneySummary,
+    TournamentChampionJourney,
     TournamentDataCompleteness,
     TournamentGroupKey,
     TournamentGroupSummary,
@@ -32,6 +36,10 @@ from backend.api.schemas.tournament_intelligence import (
     TournamentMatchHighlight,
     TournamentPlayerLeader,
     TournamentPodcastFacts,
+    TournamentPodcastRundown,
+    TournamentPodcastSection,
+    TournamentRoadToFinal,
+    TournamentSeasonReview,
     TournamentSummaryResponse,
 )
 from backend.services.analyst_registry_service import classify_competition, classify_gender
@@ -1004,8 +1012,567 @@ def _build_team_journey(
 
 
 # ---------------------------------------------------------------------------
-# Public API (async DB-backed)
+# Phase 10S.2 — Tournament Podcast Rundown builder
 # ---------------------------------------------------------------------------
+
+
+def _build_season_review(
+    group_key: TournamentGroupKey,
+    knockout_ctx: TournamentKnockoutContext,
+    derived_standings: list[DerivedStandingsRow],
+    match_count: int,
+    data_completeness: TournamentDataCompleteness,
+) -> TournamentSeasonReview:
+    """Build a presenter-ready season review narrative from deterministic facts."""
+
+    comp = group_key.competition_name or group_key.competition_code
+    season = group_key.season or "unknown season"
+    champion = knockout_ctx.champion_team_canonical or knockout_ctx.champion_team
+    finalist = knockout_ctx.runner_up_team_canonical or knockout_ctx.runner_up_team
+    confidence = data_completeness.confidence_level
+
+    if champion and finalist and knockout_ctx.final_result:
+        narrative = (
+            f"The {season} {comp} season ended with {champion} lifting the title "
+            f"after the final against {finalist}. "
+            f"Final result (derived): {knockout_ctx.final_result}. "
+        )
+    elif champion and finalist:
+        narrative = (
+            f"The {season} {comp} season concluded with {champion} detected as champions "
+            f"and {finalist} as runners-up based on imported match data. "
+        )
+    elif champion:
+        narrative = (
+            f"The {season} {comp} season concluded with {champion} detected as champions "
+            f"from the final match. "
+        )
+    else:
+        narrative = (
+            f"The {season} {comp} season featured {match_count} imported match(es). "
+            f"No champion data was detected from the available match results. "
+        )
+
+    if derived_standings:
+        leader = derived_standings[0]
+        leader_name = leader.canonical_team_name or leader.team_name
+        narrative += (
+            f"In the derived standings (estimated, not official), "
+            f"{leader_name} led with {leader.wins} win(s) from {leader.played} match(es). "
+        )
+
+    narrative += (
+        "These derived standings are estimated from imported match results "
+        "and are not official standings."
+    )
+
+    return TournamentSeasonReview(
+        competition_label=comp,
+        season_label=season,
+        narrative=narrative,
+        confidence=confidence,  # type: ignore[arg-type]
+        source_label="derived from imported match data — not official",
+    )
+
+
+def _build_champion_journey(
+    knockout_ctx: TournamentKnockoutContext,
+    derived_standings: list[DerivedStandingsRow],
+    summary: TournamentSummaryResponse,
+) -> TournamentChampionJourney | None:
+    """Build the champion journey block when champion data exists."""
+
+    champion = knockout_ctx.champion_team_canonical or knockout_ctx.champion_team
+    if not champion:
+        return None
+
+    finalist = knockout_ctx.runner_up_team_canonical or knockout_ctx.runner_up_team
+    final_result = knockout_ctx.final_result
+
+    # Derived group standing for champion
+    derived_standing: str | None = None
+    if derived_standings:
+        for i, row in enumerate(derived_standings):
+            row_name = row.canonical_team_name or row.team_name
+            if row_name and champion.lower() in row_name.lower():
+                ordinal = ["1st", "2nd", "3rd"][i] if i < 3 else f"{i + 1}th"
+                derived_standing = (
+                    f"{ordinal} in derived standings "
+                    f"({row.wins}W / {row.losses}L — estimated, not official)"
+                )
+                break
+
+    # Best win and closest match from summary
+    best_win_title: str | None = None
+    if summary.biggest_win_by_runs and summary.biggest_win_by_runs.detail:
+        best_win_title = summary.biggest_win_by_runs.match_title
+    elif summary.biggest_win_by_wickets and summary.biggest_win_by_wickets.detail:
+        best_win_title = summary.biggest_win_by_wickets.match_title
+
+    closest_title: str | None = None
+    if summary.closest_match:
+        closest_title = summary.closest_match.match_title
+
+    # Key note
+    if champion and finalist and final_result:
+        key_note = f"{champion} defeated {finalist} to claim the title. Result: {final_result}."
+    elif champion and finalist:
+        key_note = (
+            f"{champion} were detected as champions; {finalist} were the detected runners-up."
+        )
+    else:
+        key_note = f"{champion} were detected as champions from the final match."
+
+    return TournamentChampionJourney(
+        champion_team=champion,
+        final_opponent=finalist,
+        final_result=final_result,
+        derived_group_standing=derived_standing,
+        best_win_title=best_win_title,
+        closest_match_title=closest_title,
+        key_note=key_note,
+        confidence=knockout_ctx.confidence,
+        source_label="derived from imported match data — not official",
+    )
+
+
+def _build_road_to_final(
+    knockout_ctx: TournamentKnockoutContext,
+) -> TournamentRoadToFinal | None:
+    """Build the road-to-final block when finalist context exists."""
+
+    champion = knockout_ctx.champion_team_canonical or knockout_ctx.champion_team
+    finalist = knockout_ctx.runner_up_team_canonical or knockout_ctx.runner_up_team
+
+    if not champion and not finalist:
+        return None
+
+    semi_titles = [m.match_title for m in knockout_ctx.semi_final_matches if m.match_title]
+    qualifier_titles = [m.match_title for m in knockout_ctx.qualifier_matches if m.match_title]
+
+    if champion and finalist and knockout_ctx.final_result:
+        narrative = (
+            f"{champion} met {finalist} in the final. "
+            f"Detected result: {knockout_ctx.final_result}."
+        )
+    elif champion and finalist:
+        narrative = (
+            f"{champion} and {finalist} were detected as finalists. "
+            "No final result text was found in the imported data."
+        )
+    elif champion:
+        narrative = f"{champion} were detected as champions from the final match."
+    else:
+        narrative = "Finalist data could not be determined from the imported match data."
+
+    if semi_titles:
+        narrative += f" Semi-finals detected: {', '.join(semi_titles)}."
+    if qualifier_titles:
+        narrative += f" Qualifier/eliminator matches detected: {', '.join(qualifier_titles)}."
+
+    return TournamentRoadToFinal(
+        finalist_a=champion,
+        finalist_b=finalist,
+        final_result=knockout_ctx.final_result,
+        semi_final_titles=semi_titles,
+        qualifier_titles=qualifier_titles,
+        narrative=narrative,
+        confidence=knockout_ctx.confidence,
+        source_label="derived from imported match data — not official",
+    )
+
+
+def _build_rundown_sections(
+    group_key: TournamentGroupKey,
+    summary: TournamentSummaryResponse,
+    champion_journey: TournamentChampionJourney | None,
+    road_to_final: TournamentRoadToFinal | None,
+    season_review: TournamentSeasonReview,
+) -> list[TournamentPodcastSection]:
+    """Build ordered podcast rundown sections from tournament summary."""
+
+    comp = group_key.competition_name or group_key.competition_code
+    season = group_key.season or "unknown season"
+    confidence = summary.data_completeness.confidence_level
+    champion = (
+        summary.knockout_context.champion_team_canonical or summary.knockout_context.champion_team
+    )
+    finalist = (
+        summary.knockout_context.runner_up_team_canonical or summary.knockout_context.runner_up_team
+    )
+    sections: list[TournamentPodcastSection] = []
+
+    # 1. Opening hook
+    if champion:
+        hook_body = (
+            f"Welcome to the {comp} {season} season review. "
+            f"This season ended with {champion} lifting the title. "
+            "All facts are derived from imported match data — not official records."
+        )
+    else:
+        hook_body = (
+            f"Welcome to the {comp} {season} season review. "
+            f"This season featured {summary.match_count} imported match(es). "
+            "All facts are derived from imported match data — not official records."
+        )
+    sections.append(
+        TournamentPodcastSection(
+            section_key="opening_hook",
+            title="Opening Hook",
+            body=hook_body,
+            confidence=confidence,  # type: ignore[arg-type]
+        )
+    )
+
+    # 2. Tournament setup
+    teams_str = (
+        f"{len(summary.teams)} team(s): {', '.join(sorted(summary.teams)[:6])}"
+        if summary.teams
+        else "team data unavailable"
+    )
+    venues_str = (
+        f"{len(summary.venues)} venue(s): {', '.join(sorted(summary.venues)[:3])}"
+        if summary.venues
+        else "venue data unavailable"
+    )
+    setup_body = (
+        f"The {season} {comp} featured {summary.match_count} imported match(es). "
+        f"Teams: {teams_str}. Venues: {venues_str}."
+    )
+    sections.append(
+        TournamentPodcastSection(
+            section_key="tournament_setup",
+            title="Tournament Setup",
+            body=setup_body,
+            confidence=confidence,  # type: ignore[arg-type]
+        )
+    )
+
+    # 3. Champion story
+    if champion_journey and champion_journey.champion_team:
+        champ_body = f"Champion (detected): {champion_journey.champion_team}."
+        if champion_journey.final_opponent:
+            champ_body += f" They defeated {champion_journey.final_opponent} in the final."
+        if champion_journey.final_result:
+            champ_body += f" Final result: {champion_journey.final_result}."
+        if champion_journey.derived_group_standing:
+            champ_body += f" {champion_journey.derived_group_standing}."
+        champ_body += (
+            " Note: champion detection is derived from stage labels and result text — "
+            "not from official records."
+        )
+        champ_confidence = champion_journey.confidence
+    else:
+        champ_body = (
+            "No champion data was detected from the available imported match data. "
+            "This may mean the tournament final was not included in the import, "
+            "or stage labels were not present."
+        )
+        champ_confidence = "unknown"
+    sections.append(
+        TournamentPodcastSection(
+            section_key="champion_story",
+            title="Champion Story",
+            body=champ_body,
+            confidence=champ_confidence,  # type: ignore[arg-type]
+        )
+    )
+
+    # 4. Final match context
+    if road_to_final and road_to_final.narrative:
+        final_body = road_to_final.narrative
+        final_confidence = road_to_final.confidence
+    else:
+        final_body = (
+            "Final match context could not be determined from the imported data. "
+            "No final stage label was detected."
+        )
+        final_confidence = "unknown"
+    sections.append(
+        TournamentPodcastSection(
+            section_key="final_context",
+            title="Final Match Context",
+            body=final_body,
+            confidence=final_confidence,  # type: ignore[arg-type]
+        )
+    )
+
+    # 5. Standings / group-stage story
+    standings_body: str
+    if summary.derived_standings:
+        top3 = summary.derived_standings[:3]
+        rows_str = "; ".join(
+            f"{row.canonical_team_name or row.team_name} "
+            f"({row.wins}W/{row.losses}L, {row.points}pts)"
+            for row in top3
+        )
+        standings_body = (
+            f"Derived standings (top 3, estimated — not official): {rows_str}. "
+            "Points: 2 per win, 1 per tie/no-result, 0 per loss. "
+            "These are estimated from imported match results, not official standings."
+        )
+    else:
+        standings_body = (
+            "Derived standings are unavailable for this tournament. "
+            "Insufficient result data was found in the imported matches."
+        )
+    sections.append(
+        TournamentPodcastSection(
+            section_key="standings_story",
+            title="Standings / Group-Stage Story",
+            body=standings_body,
+            confidence=confidence,  # type: ignore[arg-type]
+        )
+    )
+
+    # 6. Team journey spotlight (top team by wins if available)
+    if summary.derived_standings:
+        spotlight_team = (
+            summary.derived_standings[0].canonical_team_name
+            or summary.derived_standings[0].team_name
+        )
+        spotlight_row = summary.derived_standings[0]
+        spotlight_body = (
+            f"Team spotlight: {spotlight_team} led the derived standings "
+            f"with {spotlight_row.wins} win(s) from {spotlight_row.played} match(es). "
+            "Use the Team Journey tab to view their full campaign match-by-match."
+        )
+    else:
+        spotlight_body = "No team journey spotlight available — insufficient standings data."
+    sections.append(
+        TournamentPodcastSection(
+            section_key="team_spotlight",
+            title="Team Journey Spotlight",
+            body=spotlight_body,
+            confidence=confidence,  # type: ignore[arg-type]
+        )
+    )
+
+    # 7. Key matches
+    key_lines: list[str] = []
+    if summary.biggest_win_by_runs and summary.biggest_win_by_runs.detail:
+        key_lines.append(
+            f"Biggest win (runs): {summary.biggest_win_by_runs.detail} "
+            f"({summary.biggest_win_by_runs.match_title})."
+        )
+    if summary.biggest_win_by_wickets and summary.biggest_win_by_wickets.detail:
+        key_lines.append(
+            f"Biggest win (wickets): {summary.biggest_win_by_wickets.detail} "
+            f"({summary.biggest_win_by_wickets.match_title})."
+        )
+    if summary.closest_match and summary.closest_match.detail:
+        key_lines.append(
+            f"Closest finish: {summary.closest_match.detail} "
+            f"({summary.closest_match.match_title})."
+        )
+    key_body = " ".join(key_lines) if key_lines else "No key match highlights available."
+    sections.append(
+        TournamentPodcastSection(
+            section_key="key_matches",
+            title="Key Matches",
+            body=key_body,
+            confidence=confidence,  # type: ignore[arg-type]
+        )
+    )
+
+    # 8. Player storylines
+    player_lines: list[str] = []
+    if summary.top_run_scorer and summary.top_run_scorer.value > 0:
+        player_lines.append(
+            f"Top run scorer (derived): {summary.top_run_scorer.player_name} "
+            f"— {summary.top_run_scorer.value} runs from "
+            f"{summary.top_run_scorer.matches_contributed} match(es)."
+        )
+    if summary.top_wicket_taker and summary.top_wicket_taker.value > 0:
+        player_lines.append(
+            f"Top wicket taker (derived): {summary.top_wicket_taker.player_name} "
+            f"— {summary.top_wicket_taker.value} wickets from "
+            f"{summary.top_wicket_taker.matches_contributed} match(es)."
+        )
+    if player_lines:
+        player_body = " ".join(player_lines)
+        player_body += (
+            " Note: player stats are derived from scorecard/delivery data "
+            "only where available — not official."
+        )
+        player_confidence = "medium"
+    else:
+        player_body = (
+            "Player stats are unavailable for this tournament. "
+            "Scorecard or delivery data was not found in the imported matches."
+        )
+        player_confidence = "unknown"
+    sections.append(
+        TournamentPodcastSection(
+            section_key="player_storylines",
+            title="Top Player Storylines",
+            body=player_body,
+            confidence=player_confidence,  # type: ignore[arg-type]
+        )
+    )
+
+    # 9. Venue / scoring patterns
+    if summary.venues and summary.total_runs > 0:
+        avg_per_match = summary.total_runs // summary.match_count if summary.match_count else 0
+        podcast_facts = summary.podcast_facts
+        top_venue_str = (
+            f" Top scoring venue: {podcast_facts.top_scoring_venue}."
+            if podcast_facts and podcast_facts.top_scoring_venue
+            else ""
+        )
+        highest_total_str = (
+            f" Highest team total: {summary.highest_team_total} "
+            f"({summary.highest_team_total_by})."
+            if summary.highest_team_total and summary.highest_team_total_by
+            else ""
+        )
+        venue_body = (
+            f"Tournament scoring: {summary.total_runs} total runs, "
+            f"{summary.total_wickets} wickets across {summary.match_count} match(es). "
+            f"Average match total: ~{avg_per_match} runs."
+            f"{top_venue_str}{highest_total_str}"
+        )
+    else:
+        venue_body = "Venue and scoring pattern data is unavailable for this tournament."
+    sections.append(
+        TournamentPodcastSection(
+            section_key="venue_patterns",
+            title="Venue & Scoring Patterns",
+            body=venue_body,
+            confidence=confidence,  # type: ignore[arg-type]
+        )
+    )
+
+    # 10. Tactical themes (high-level observation from derived data)
+    format_family = group_key.format_family or "unknown"
+    tactical_body = (
+        f"Format: {format_family}. "
+        f"This tournament produced {summary.total_runs} total runs "
+        f"and {summary.total_wickets} total wickets. "
+    )
+    if summary.total_wickets > 0 and summary.total_runs > 0:
+        run_rate_per_wkt = round(summary.total_runs / summary.total_wickets, 1)
+        tactical_body += f"Average runs per wicket (derived): {run_rate_per_wkt}. "
+    tactical_body += (
+        "Tactical analysis is derived from match result and scoring data only. "
+        "Deeper tactical insights require ball-by-ball delivery data."
+    )
+    sections.append(
+        TournamentPodcastSection(
+            section_key="tactical_themes",
+            title="Tactical Themes",
+            body=tactical_body,
+            confidence=confidence,  # type: ignore[arg-type]
+        )
+    )
+
+    # 11. Debate questions
+    debate_lines: list[str] = []
+    if champion and finalist:
+        debate_lines.append(
+            f"Did {champion} truly deserve the title, "
+            f"or did {finalist} underperform in the final?"
+        )
+    if summary.derived_standings:
+        top_team = (
+            summary.derived_standings[0].canonical_team_name
+            or summary.derived_standings[0].team_name
+        )
+        debate_lines.append(
+            f"Were {top_team}'s derived standings a fair reflection of their season?"
+        )
+    if summary.top_run_scorer:
+        debate_lines.append(
+            f"Was {summary.top_run_scorer.player_name} the standout performer of the season?"
+        )
+    debate_lines.append("How reliable are these derived standings without official data?")
+
+    debate_body = "\n".join(f"- {line}" for line in debate_lines)
+    sections.append(
+        TournamentPodcastSection(
+            section_key="debate_questions",
+            title="Debate Questions",
+            body=debate_body,
+            confidence=confidence,  # type: ignore[arg-type]
+        )
+    )
+
+    # 12. Data trust note
+    dc = summary.data_completeness
+    trust_body = (
+        f"Data trust: {dc.confidence_level} confidence. "
+        f"{dc.matches_with_result}/{dc.total_matches} matches have result data. "
+        f"{dc.delivery_complete_matches} matches have ball-by-ball delivery data. "
+        "All standings and outcomes are derived from imported match data — not official. "
+        "Source: validated historical imports only."
+    )
+    sections.append(
+        TournamentPodcastSection(
+            section_key="data_trust_note",
+            title="Data Trust Note",
+            body=trust_body,
+            confidence=confidence,  # type: ignore[arg-type]
+            note="Required trust/provenance note for all podcast outputs.",
+        )
+    )
+
+    return sections
+
+
+def build_tournament_podcast_rundown(
+    summary: TournamentSummaryResponse,
+) -> TournamentPodcastRundown:
+    """Build a full tournament podcast rundown from a TournamentSummaryResponse.
+
+    Phase 10S.2: deterministic, presenter-ready tournament narrative sections.
+    Derives all content from the existing summary. No LLM/AI calls are made.
+    """
+
+    group_key = summary.group_key
+    knockout_ctx = summary.knockout_context
+
+    # Season review
+    season_review = _build_season_review(
+        group_key=group_key,
+        knockout_ctx=knockout_ctx,
+        derived_standings=summary.derived_standings,
+        match_count=summary.match_count,
+        data_completeness=summary.data_completeness,
+    )
+
+    # Champion journey
+    champion_journey = _build_champion_journey(
+        knockout_ctx=knockout_ctx,
+        derived_standings=summary.derived_standings,
+        summary=summary,
+    )
+
+    # Road to final
+    road_to_final = _build_road_to_final(knockout_ctx=knockout_ctx)
+
+    # Ordered sections
+    sections = _build_rundown_sections(
+        group_key=group_key,
+        summary=summary,
+        champion_journey=champion_journey,
+        road_to_final=road_to_final,
+        season_review=season_review,
+    )
+
+    overall_confidence = summary.data_completeness.confidence_level
+
+    return TournamentPodcastRundown(
+        group_key=group_key,
+        season_review=season_review,
+        champion_journey=champion_journey,
+        road_to_final=road_to_final,
+        sections=sections,
+        overall_confidence=overall_confidence,  # type: ignore[arg-type]
+        source_label=(
+            "Source: derived from imported match data. "
+            "Derived standings are estimated and not official."
+        ),
+    )
 
 
 async def _fetch_eligible_games(
@@ -1283,3 +1850,24 @@ async def get_team_journey(
     )
 
     return _build_team_journey(team_name, group_key, target_games)
+
+
+async def get_tournament_podcast_rundown(
+    db: AsyncSession,
+    current_user: Any,
+    competition_code: str,
+    season: str | None,
+    gender_category: str,
+) -> TournamentPodcastRundown | None:
+    """Return a full tournament podcast rundown for one competition/season group.
+
+    Phase 10S.2: read-only, deterministic. Builds the rundown from the same
+    underlying summary data as get_tournament_summary(). Returns None if no
+    matching games are found.
+    """
+    summary = await get_tournament_summary(
+        db, current_user, competition_code, season, gender_category
+    )
+    if summary is None:
+        return None
+    return build_tournament_podcast_rundown(summary)
