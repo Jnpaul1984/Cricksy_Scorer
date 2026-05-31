@@ -18,7 +18,7 @@ Run:
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, ClassVar
 from unittest.mock import MagicMock
 
 import pytest
@@ -1138,7 +1138,14 @@ class TestPluralize:
 class TestNoPlaceholderArtifacts:
     """No win(s), match(es), wicket(s), run(s) in any rundown section."""
 
-    PLACEHOLDERS = ["win(s)", "match(es)", "wicket(s)", "run(s)", "team(s)", "venue(s)"]
+    PLACEHOLDERS: ClassVar[list[str]] = [
+        "win(s)",
+        "match(es)",
+        "wicket(s)",
+        "run(s)",
+        "team(s)",
+        "venue(s)",
+    ]
 
     def _check_no_placeholders(self, text: str, label: str) -> None:
         for ph in self.PLACEHOLDERS:

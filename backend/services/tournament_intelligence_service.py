@@ -1240,11 +1240,6 @@ def _build_rundown_sections(
     # 2. Tournament setup
     n_teams = len(summary.teams)
     n_venues = len(summary.venues)
-    teams_str = (
-        f"{_pluralize(n_teams, 'team')}: {', '.join(sorted(summary.teams)[:6])}"
-        if summary.teams
-        else "team data unavailable"
-    )
     venues_listed = "; ".join(sorted(summary.venues)[:3]) if summary.venues else None
     setup_lines = [
         f"The {season} {comp} featured {_pluralize(summary.match_count, 'imported match', 'imported matches')}.",
