@@ -288,7 +288,7 @@ describe('TournamentIntelligencePanel', () => {
       closest_match: {
         ...summaryFixture.closest_match!,
         result: 'Won by 1 wicket(s)',
-        detail: 'Narrow finish: Saint Lucia Kings won by 1 wicket(s)',
+        detail: 'Closest finish: Saint Lucia Kings won by 1 runs',
       },
       biggest_win_by_runs: {
         ...summaryFixture.biggest_win_by_runs!,
@@ -336,7 +336,8 @@ describe('TournamentIntelligencePanel', () => {
     const highlightTexts = wrapper.findAll('.tip-highlight-val').map((node) => node.text())
     expect(highlightTexts).toContain('Trinbago Knight Riders won by 1 run')
     expect(highlightTexts).toContain('Saint Lucia Kings won by 2 wickets')
-    expect(highlightTexts).toContain('Narrow finish: Saint Lucia Kings won by 1 wicket')
+    expect(highlightTexts).toContain('Saint Lucia Kings won by 1 run')
+    expect(highlightTexts).not.toContain('Closest finish: Saint Lucia Kings won by 1 run')
 
     const champion = wrapper.get('[aria-label="Champion context"]')
     expect(champion.text()).toContain('Won by 1 wicket')
@@ -470,6 +471,62 @@ describe('TournamentIntelligencePanel', () => {
 
     expect(wrapper.get('[data-testid="copy-md-btn"]').text()).toContain('Copy Markdown')
     expect(wrapper.get('[data-testid="copy-text-btn"]').text()).toContain('Copy Plain Text')
+  })
+
+  it('normalizes key matches wording in rundown card and copied markdown/plain text', async () => {
+    const clipboardWriteMock = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: clipboardWriteMock },
+    })
+
+    const rundownWithKeyMatches: TournamentPodcastRundown = {
+      ...rundownFixture,
+      sections: [
+        ...rundownFixture.sections,
+        {
+          section_key: 'key_matches',
+          title: 'Key Matches',
+          body: [
+            'Biggest win (wickets): Guyana Amazon Warriors won by 2 wicket(s) (St Lucia Kings vs Guyana Amazon Warriors).',
+            'Closest finish: Closest finish: St Kitts and Nevis Patriots won by 1 runs (St Kitts and Nevis Patriots vs Barbados Royals).',
+          ].join('\n'),
+          confidence: 'medium',
+          source_label: 'derived',
+        },
+      ],
+    }
+    rundownMock.mockResolvedValueOnce(rundownWithKeyMatches)
+
+    const wrapper = mount(TournamentIntelligencePanel)
+    await flushPromises()
+    await wrapper.get('.tip-group-card').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="generate-rundown-btn"]').trigger('click')
+    await flushPromises()
+
+    const keyMatchesSection = wrapper.get('[data-testid="rundown-section-key_matches"]')
+    expect(keyMatchesSection.text()).toContain('Biggest win (wickets): Guyana Amazon Warriors won by 2 wickets')
+    expect(keyMatchesSection.text()).toContain('Closest finish: St Kitts and Nevis Patriots won by 1 run')
+    expect(keyMatchesSection.text()).not.toContain('Closest finish: Closest finish:')
+    expect(keyMatchesSection.text()).not.toContain('wicket(s)')
+    expect(keyMatchesSection.text()).not.toContain('1 runs')
+
+    await wrapper.get('[data-testid="copy-md-btn"]').trigger('click')
+    const markdownText = clipboardWriteMock.mock.calls.at(-1)?.[0] as string
+    expect(markdownText).toContain('Biggest win (wickets): Guyana Amazon Warriors won by 2 wickets')
+    expect(markdownText).toContain('Closest finish: St Kitts and Nevis Patriots won by 1 run')
+    expect(markdownText).not.toContain('Closest finish: Closest finish:')
+    expect(markdownText).not.toContain('wicket(s)')
+    expect(markdownText).not.toContain('1 runs')
+
+    await wrapper.get('[data-testid="copy-text-btn"]').trigger('click')
+    const plainText = clipboardWriteMock.mock.calls.at(-1)?.[0] as string
+    expect(plainText).toContain('Biggest win (wickets): Guyana Amazon Warriors won by 2 wickets')
+    expect(plainText).toContain('Closest finish: St Kitts and Nevis Patriots won by 1 run')
+    expect(plainText).not.toContain('Closest finish: Closest finish:')
+    expect(plainText).not.toContain('wicket(s)')
+    expect(plainText).not.toContain('1 runs')
   })
 
   it('shows error state when getTournamentPodcastRundown rejects', async () => {
