@@ -35,6 +35,7 @@ from backend.services.tournament_intelligence_service import (
     _build_knockout_context,
     _build_team_journey,
     _build_tournament_summary,
+    _derive_delivery_wicket_intelligence,
     _derive_format_family,
     _derive_outcome,
     _detect_stage_label,
@@ -186,6 +187,8 @@ def _make_eligible_entry(
     winner: str | None = "Team Alpha",
     competition_stage: str | None = None,
     innings_summary: list | None = None,
+    deliveries: list | None = None,
+    deliveries_imported: bool = False,
 ) -> tuple:
     """Build a (game, batch, meta, match_aggregate) tuple."""
     game = _make_game(
@@ -193,6 +196,7 @@ def _make_eligible_entry(
         team_a=team_a,
         team_b=team_b,
         result=result,
+        deliveries=deliveries,
         innings_summary=innings_summary
         or [
             {"inning_no": 1, "team": team_a, "runs": 160, "wickets": 7, "overs": 20.0},
@@ -207,6 +211,7 @@ def _make_eligible_entry(
         season=season,
         gender=gender,
         competition_stage=competition_stage,
+        deliveries_imported=deliveries_imported,
     )
     match_agg = _make_match_aggregate(
         match_id=game_id,
@@ -473,6 +478,187 @@ class TestBuildTournamentSummary:
         # If result text is parseable, should detect biggest win
         if result.biggest_win_by_runs:
             assert result.biggest_win_by_runs.highlight_type == "biggest_win_runs"
+
+
+class TestDeliveryDerivedWicketIntelligence:
+    def test_cricsheet_wickets_array_and_multi_wicket_delivery(self) -> None:
+        entries = [
+            _make_eligible_entry(
+                game_id="g1",
+                deliveries_imported=True,
+                deliveries=[
+                    {
+                        "inning": 1,
+                        "batting_team": "Team Alpha",
+                        "bowler": "Bowler A",
+                        "wickets": [
+                            {"player_out": "Batter 1", "kind": "caught"},
+                            {"player_out": "Batter 2", "kind": "run out"},
+                        ],
+                    }
+                ],
+            )
+        ]
+        intelligence = _derive_delivery_wicket_intelligence(entries)
+        assert intelligence.total_team_wickets == 2
+        assert intelligence.total_bowler_creditable_wickets == 1
+        assert intelligence.dismissal_type_counts.get("caught") == 1
+        assert intelligence.dismissal_type_counts.get("run out") == 1
+        assert intelligence.wickets_by_match["g1"] == 2
+
+    def test_run_out_counts_team_wicket_not_bowler_credit(self) -> None:
+        entries = [
+            _make_eligible_entry(
+                game_id="g1",
+                deliveries_imported=True,
+                deliveries=[
+                    {
+                        "inning": 1,
+                        "batting_team": "Team Alpha",
+                        "bowler": "Bowler A",
+                        "is_wicket": True,
+                        "dismissal_type": "run out",
+                    }
+                ],
+            )
+        ]
+        intelligence = _derive_delivery_wicket_intelligence(entries)
+        assert intelligence.total_team_wickets == 1
+        assert intelligence.total_bowler_creditable_wickets == 0
+        assert intelligence.bowler_attribution_complete is False
+
+    def test_creditable_dismissals_count_for_team_and_bowler(self) -> None:
+        entries = [
+            _make_eligible_entry(
+                game_id="g1",
+                deliveries_imported=True,
+                deliveries=[
+                    {
+                        "inning": 1,
+                        "batting_team": "Team Alpha",
+                        "bowler": "Bowler A",
+                        "is_wicket": True,
+                        "dismissal_type": "bowled",
+                    },
+                    {
+                        "inning": 1,
+                        "batting_team": "Team Alpha",
+                        "bowler": "Bowler A",
+                        "is_wicket": True,
+                        "dismissal_type": "caught",
+                    },
+                    {
+                        "inning": 1,
+                        "batting_team": "Team Alpha",
+                        "bowler": "Bowler A",
+                        "is_wicket": True,
+                        "dismissal_type": "lbw",
+                    },
+                ],
+            )
+        ]
+        intelligence = _derive_delivery_wicket_intelligence(entries)
+        assert intelligence.total_team_wickets == 3
+        assert intelligence.total_bowler_creditable_wickets == 3
+        assert intelligence.bowler_attribution_complete is True
+
+    def test_retired_hurt_excluded_retired_out_included(self) -> None:
+        entries = [
+            _make_eligible_entry(
+                game_id="g1",
+                deliveries_imported=True,
+                deliveries=[
+                    {
+                        "inning": 1,
+                        "batting_team": "Team Alpha",
+                        "wickets": [{"player_out": "Batter 1", "kind": "retired hurt"}],
+                    },
+                    {
+                        "inning": 1,
+                        "batting_team": "Team Alpha",
+                        "wickets": [{"player_out": "Batter 2", "kind": "retired out"}],
+                    },
+                ],
+            )
+        ]
+        intelligence = _derive_delivery_wicket_intelligence(entries)
+        assert intelligence.total_team_wickets == 1
+        assert intelligence.dismissal_type_counts.get("retired hurt") is None
+        assert intelligence.dismissal_type_counts.get("retired out") == 1
+
+    def test_tournament_summary_uses_delivery_derived_wickets_and_partial_label(self) -> None:
+        gk = _make_group_key()
+        entries = [
+            _make_eligible_entry(
+                game_id="g1",
+                deliveries_imported=True,
+                deliveries=[
+                    {
+                        "inning": 1,
+                        "batting_team": "Team Alpha",
+                        "bowler": "Bowler A",
+                        "is_wicket": True,
+                        "dismissal_type": "caught",
+                    }
+                ],
+            ),
+            _make_eligible_entry(
+                game_id="g2",
+                deliveries_imported=True,
+                deliveries=[],
+                innings_summary=[
+                    {"inning_no": 1, "team": "Team Alpha", "runs": 140, "wickets": 6, "overs": 20},
+                    {"inning_no": 2, "team": "Team Beta", "runs": 141, "wickets": 3, "overs": 18.4},
+                ],
+            ),
+        ]
+        summary = _build_tournament_summary(gk, entries, [])
+        assert summary.total_wickets == 1
+        assert summary.wicket_source_label == "Derived from delivery dismissal records"
+        assert summary.wicket_availability_label == "Partial: 1/2 matches with wicket events"
+        assert summary.wicket_intelligence is not None
+        assert summary.wicket_intelligence.matches_with_reliable_wicket_data == 1
+        assert summary.wicket_intelligence.matches_without_reliable_wicket_data == 1
+
+    def test_bowler_leaderboard_unavailable_when_bowler_attribution_incomplete(self) -> None:
+        gk = _make_group_key()
+        entries = [
+            _make_eligible_entry(
+                game_id="g1",
+                deliveries_imported=True,
+                deliveries=[
+                    {
+                        "inning": 1,
+                        "batting_team": "Team Alpha",
+                        "is_wicket": True,
+                        "dismissal_type": "bowled",
+                    }
+                ],
+            )
+        ]
+        summary = _build_tournament_summary(gk, entries, [])
+        assert summary.bowler_wicket_leaderboard_available is False
+        assert summary.top_wicket_taker is None
+
+    def test_tournament_summary_unavailable_fallback_when_no_delivery_wickets(self) -> None:
+        gk = _make_group_key()
+        entries = [
+            _make_eligible_entry(
+                game_id="g1",
+                innings_summary=[
+                    {"inning_no": 1, "team": "Team Alpha", "runs": 120, "wickets": 0, "overs": 20},
+                    {"inning_no": 2, "team": "Team Beta", "runs": 121, "wickets": 0, "overs": 19.1},
+                ],
+                deliveries=[],
+                deliveries_imported=True,
+            )
+        ]
+        summary = _build_tournament_summary(gk, entries, [])
+        assert summary.total_wickets == 0
+        assert summary.wicket_source_label is None
+        assert summary.wicket_availability_label is None
+        assert summary.wicket_intelligence is not None
+        assert summary.wicket_intelligence.availability == "unavailable"
 
 
 # ---------------------------------------------------------------------------
