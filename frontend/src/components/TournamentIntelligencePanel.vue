@@ -438,6 +438,152 @@
         </div>
       </div>
 
+      <!-- ── Tournament Podcast Rundown ────────────────────────────── -->
+      <div class="tip-podcast-rundown-section" role="region" aria-label="Tournament Podcast Rundown">
+        <div class="tip-podcast-rundown-header">
+          <h5 class="tip-podcast-rundown-title">🎙 Tournament Podcast Rundown</h5>
+          <div class="tip-podcast-rundown-actions">
+            <button
+              class="tip-btn tip-btn--primary"
+              :disabled="!selectedCompetitionCode || podcastRundownLoading"
+              @click="generatePodcastRundown"
+              data-testid="generate-rundown-btn"
+            >
+              {{ podcastRundownLoading ? 'Generating…' : 'Generate Rundown' }}
+            </button>
+            <template v-if="podcastRundown">
+              <button
+                class="tip-btn tip-btn--copy"
+                @click="copyPodcastMarkdown"
+                data-testid="copy-md-btn"
+              >
+                {{ podcastRundownCopied === 'md' ? '✓ Copied' : 'Copy Markdown' }}
+              </button>
+              <button
+                class="tip-btn tip-btn--copy"
+                @click="copyPodcastPlainText"
+                data-testid="copy-text-btn"
+              >
+                {{ podcastRundownCopied === 'text' ? '✓ Copied' : 'Copy Plain Text' }}
+              </button>
+              <button
+                class="tip-btn tip-btn--close"
+                @click="clearPodcastRundown"
+                data-testid="clear-rundown-btn"
+              >
+                × Clear
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <div v-if="podcastRundownLoading" class="tip-state tip-state--loading" role="status">
+          <p>Generating podcast rundown…</p>
+        </div>
+        <div v-else-if="podcastRundownError" class="tip-state tip-state--error" role="alert">
+          <p>⚠️ {{ podcastRundownError }}</p>
+        </div>
+        <div v-else-if="podcastRundown" class="tip-rundown-body">
+
+          <!-- Trust / confidence bar -->
+          <div class="tip-provenance-bar" data-testid="rundown-trust-note">
+            {{ podcastRundown.source_label }}
+            <span :class="`tip-confidence-badge tip-confidence-badge--${podcastRundown.overall_confidence}`">
+              {{ podcastRundown.overall_confidence }} confidence
+            </span>
+          </div>
+
+          <!-- Opening hook (season review narrative) -->
+          <div class="tip-rundown-hook" data-testid="season-review-narrative">
+            <p>{{ podcastRundown.season_review.narrative }}</p>
+            <span :class="`tip-confidence-badge tip-confidence-badge--${podcastRundown.season_review.confidence}`">
+              {{ podcastRundown.season_review.confidence }}
+            </span>
+          </div>
+
+          <!-- Champion journey card -->
+          <div
+            v-if="podcastRundown.champion_journey"
+            class="tip-rundown-card tip-rundown-card--champion"
+            data-testid="champion-journey-card"
+          >
+            <h6 class="tip-rundown-card-title">🏆 Champion Journey</h6>
+            <dl class="tip-rundown-dl">
+              <template v-if="podcastRundown.champion_journey.champion_team">
+                <dt>Champion (detected)</dt>
+                <dd>{{ podcastRundown.champion_journey.champion_team }}</dd>
+              </template>
+              <template v-if="podcastRundown.champion_journey.final_opponent">
+                <dt>Final opponent</dt>
+                <dd>{{ podcastRundown.champion_journey.final_opponent }}</dd>
+              </template>
+              <template v-if="podcastRundown.champion_journey.final_result">
+                <dt>Final result</dt>
+                <dd>{{ formatTournamentResult(podcastRundown.champion_journey.final_result) }}</dd>
+              </template>
+              <template v-if="podcastRundown.champion_journey.derived_group_standing">
+                <dt>Derived standing</dt>
+                <dd>{{ podcastRundown.champion_journey.derived_group_standing }}</dd>
+              </template>
+              <template v-if="podcastRundown.champion_journey.key_note">
+                <dt>Note</dt>
+                <dd>{{ podcastRundown.champion_journey.key_note }}</dd>
+              </template>
+            </dl>
+            <p class="tip-rundown-source">
+              {{ podcastRundown.champion_journey.source_label }}
+              <span :class="`tip-confidence-badge tip-confidence-badge--${podcastRundown.champion_journey.confidence}`">
+                {{ podcastRundown.champion_journey.confidence }}
+              </span>
+            </p>
+          </div>
+          <div v-else class="tip-rundown-card tip-rundown-card--fallback" data-testid="champion-journey-fallback">
+            <p>Champion journey unavailable — insufficient data detected.</p>
+          </div>
+
+          <!-- Road to the final card -->
+          <div
+            v-if="podcastRundown.road_to_final"
+            class="tip-rundown-card"
+            data-testid="road-to-final-card"
+          >
+            <h6 class="tip-rundown-card-title">🛣 Road to the Final</h6>
+            <p v-if="podcastRundown.road_to_final.narrative">{{ podcastRundown.road_to_final.narrative }}</p>
+            <dl class="tip-rundown-dl">
+              <template v-if="podcastRundown.road_to_final.finalist_a">
+                <dt>Finalist A</dt>
+                <dd>{{ podcastRundown.road_to_final.finalist_a }}</dd>
+              </template>
+              <template v-if="podcastRundown.road_to_final.finalist_b">
+                <dt>Finalist B</dt>
+                <dd>{{ podcastRundown.road_to_final.finalist_b }}</dd>
+              </template>
+            </dl>
+            <p class="tip-rundown-source">{{ podcastRundown.road_to_final.source_label }}</p>
+          </div>
+
+          <!-- Additional rundown sections -->
+          <div
+            v-for="section in podcastRundown.sections"
+            :key="section.section_key"
+            class="tip-rundown-card"
+            :data-testid="`rundown-section-${section.section_key}`"
+          >
+            <h6 class="tip-rundown-card-title">{{ section.title }}</h6>
+            <p v-if="section.body" class="tip-rundown-section-body">{{ section.body }}</p>
+            <span :class="`tip-confidence-badge tip-confidence-badge--${section.confidence}`">
+              {{ section.confidence }}
+            </span>
+          </div>
+
+          <!-- Data trust note footer -->
+          <p class="tip-rundown-note" data-testid="rundown-note">{{ podcastRundown.note }}</p>
+        </div>
+        <div v-else-if="!selectedCompetitionCode" class="tip-rundown-empty">
+          <p>Select a competition above, then click <strong>Generate Rundown</strong> to create a presenter-ready podcast rundown.</p>
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
@@ -448,11 +594,13 @@ import {
   getTournamentGroups,
   getTournamentSummary,
   getTeamJourney,
+  getTournamentPodcastRundown,
   type TournamentMatchHighlight,
   type TournamentGroupsResponse,
   type TournamentGroupSummary,
   type TournamentSummaryResponse,
   type TeamJourneyResponse,
+  type TournamentPodcastRundown,
 } from '@/services/api'
 import { normalizeResultDisplayText } from '@/utils/resultDisplay'
 
@@ -470,6 +618,11 @@ const journey = ref<TeamJourneyResponse | null>(null)
 const journeyLoading = ref(false)
 const journeyError = ref<string | null>(null)
 const journeyTeamName = ref<string | null>(null)
+
+const podcastRundown = ref<TournamentPodcastRundown | null>(null)
+const podcastRundownLoading = ref(false)
+const podcastRundownError = ref<string | null>(null)
+const podcastRundownCopied = ref<'md' | 'text' | null>(null)
 
 const selectedCompetitionCode = ref('')
 const selectedSeason = ref('')
@@ -522,12 +675,16 @@ async function loadGroups() {
 function onGroupChange() {
   summary.value = null
   summaryError.value = null
+  podcastRundown.value = null
+  podcastRundownError.value = null
   clearJourney()
 }
 
 function clearSummary() {
   summary.value = null
   summaryError.value = null
+  podcastRundown.value = null
+  podcastRundownError.value = null
   clearJourney()
 }
 
@@ -542,6 +699,8 @@ async function loadSummary() {
   summaryLoading.value = true
   summaryError.value = null
   summary.value = null
+  podcastRundown.value = null
+  podcastRundownError.value = null
   clearJourney()
   try {
     summary.value = await getTournamentSummary(
@@ -585,6 +744,129 @@ async function loadTeamJourney(teamName: string) {
   } finally {
     journeyLoading.value = false
   }
+}
+
+async function generatePodcastRundown() {
+  if (!selectedCompetitionCode.value) return
+  podcastRundownLoading.value = true
+  podcastRundownError.value = null
+  podcastRundown.value = null
+  try {
+    podcastRundown.value = await getTournamentPodcastRundown(
+      selectedCompetitionCode.value,
+      selectedSeason.value || null,
+      selectedGender.value || undefined,
+    )
+  } catch (err: unknown) {
+    podcastRundownError.value =
+      err instanceof Error ? err.message : 'Failed to generate podcast rundown'
+  } finally {
+    podcastRundownLoading.value = false
+  }
+}
+
+function clearPodcastRundown() {
+  podcastRundown.value = null
+  podcastRundownError.value = null
+  podcastRundownCopied.value = null
+}
+
+function buildPodcastMarkdown(rundown: TournamentPodcastRundown): string {
+  const comp = rundown.group_key.competition_name || rundown.group_key.competition_code
+  const season = rundown.group_key.season || ''
+  const lines: string[] = [
+    `# ${comp} ${season} — Tournament Podcast Rundown`,
+    '',
+    `> ${rundown.source_label}`,
+    '',
+    `**Overall confidence:** ${rundown.overall_confidence}`,
+    '',
+    '## Season Review',
+    '',
+    rundown.season_review.narrative,
+    '',
+  ]
+  if (rundown.champion_journey) {
+    const cj = rundown.champion_journey
+    lines.push('## Champion Journey', '')
+    if (cj.champion_team) lines.push(`**Champion (detected):** ${cj.champion_team}`)
+    if (cj.final_opponent) lines.push(`**Final opponent:** ${cj.final_opponent}`)
+    if (cj.final_result) lines.push(`**Final result:** ${cj.final_result}`)
+    if (cj.derived_group_standing) lines.push(`**Derived standing:** ${cj.derived_group_standing}`)
+    if (cj.key_note) lines.push(`**Note:** ${cj.key_note}`)
+    lines.push(`*${cj.source_label}*`, '')
+  }
+  if (rundown.road_to_final) {
+    const rf = rundown.road_to_final
+    lines.push('## Road to the Final', '')
+    if (rf.narrative) lines.push(rf.narrative)
+    lines.push(`*${rf.source_label}*`, '')
+  }
+  for (const section of rundown.sections) {
+    if (section.section_key === 'opening_hook') continue
+    lines.push(`## ${section.title}`, '')
+    if (section.body) lines.push(section.body)
+    lines.push('')
+  }
+  lines.push('---', `*${rundown.note}*`)
+  return lines.join('\n')
+}
+
+function buildPodcastPlainText(rundown: TournamentPodcastRundown): string {
+  const comp = rundown.group_key.competition_name || rundown.group_key.competition_code
+  const season = rundown.group_key.season || ''
+  const lines: string[] = [
+    `${comp} ${season} — TOURNAMENT PODCAST RUNDOWN`,
+    '='.repeat(50),
+    '',
+    rundown.source_label,
+    `Confidence: ${rundown.overall_confidence}`,
+    '',
+    'SEASON REVIEW',
+    '-'.repeat(30),
+    rundown.season_review.narrative,
+    '',
+  ]
+  if (rundown.champion_journey) {
+    const cj = rundown.champion_journey
+    lines.push('CHAMPION JOURNEY', '-'.repeat(30))
+    if (cj.champion_team) lines.push(`Champion (detected): ${cj.champion_team}`)
+    if (cj.final_opponent) lines.push(`Final opponent: ${cj.final_opponent}`)
+    if (cj.final_result) lines.push(`Final result: ${cj.final_result}`)
+    if (cj.derived_group_standing) lines.push(`Derived standing: ${cj.derived_group_standing}`)
+    if (cj.key_note) lines.push(`Note: ${cj.key_note}`)
+    lines.push(cj.source_label, '')
+  }
+  if (rundown.road_to_final) {
+    const rf = rundown.road_to_final
+    lines.push('ROAD TO THE FINAL', '-'.repeat(30))
+    if (rf.narrative) lines.push(rf.narrative)
+    lines.push(rf.source_label, '')
+  }
+  for (const section of rundown.sections) {
+    if (section.section_key === 'opening_hook') continue
+    lines.push(section.title.toUpperCase(), '-'.repeat(30))
+    if (section.body) lines.push(section.body)
+    lines.push('')
+  }
+  lines.push('='.repeat(50), rundown.note)
+  return lines.join('\n')
+}
+
+async function copyPodcastMarkdown() {
+  if (!podcastRundown.value) return
+  const text = buildPodcastMarkdown(podcastRundown.value)
+  await navigator.clipboard.writeText(text)
+  podcastRundownCopied.value = 'md'
+  setTimeout(() => { podcastRundownCopied.value = null }, 2500)
+}
+
+async function copyPodcastPlainText() {
+  if (!podcastRundown.value) return
+  const text = buildPodcastPlainText(podcastRundown.value)
+  await navigator.clipboard.writeText(text)
+  podcastRundownCopied.value = 'text'
+  setTimeout(() => { podcastRundownCopied.value = null }, 2500)
 }
 
 function groupCardKey(g: TournamentGroupSummary): string {
@@ -1086,4 +1368,143 @@ function formatHighlightResult(highlight: TournamentMatchHighlight | null | unde
 .tip-outcome-badge--unknown { background: #f1f5f9; color: #9ca3af; }
 
 .tip-journey-note { font-size: 0.72rem; color: var(--color-text-muted, #6b7280); }
+
+/* ── Podcast Rundown ──────────────────────────────── */
+.tip-podcast-rundown-section {
+  margin-top: 2rem;
+  padding: 1rem 1.25rem;
+  background: rgba(15, 23, 42, 0.55);
+  border-radius: 8px;
+  border: 1px solid rgba(59, 130, 246, 0.18);
+}
+
+.tip-podcast-rundown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.tip-podcast-rundown-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.tip-podcast-rundown-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.tip-btn {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.3rem 0.75rem;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.tip-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.tip-btn--primary {
+  background: rgba(59, 130, 246, 0.85);
+  color: #f8fafc;
+}
+.tip-btn--primary:not(:disabled):hover {
+  background: rgba(59, 130, 246, 1);
+}
+.tip-btn--copy {
+  background: rgba(51, 65, 85, 0.8);
+  color: #e2e8f0;
+}
+.tip-btn--copy:hover {
+  background: rgba(71, 85, 105, 0.9);
+}
+.tip-btn--close {
+  background: transparent;
+  color: var(--color-text-muted, #6b7280);
+  border: 1px solid rgba(100, 116, 139, 0.4);
+}
+.tip-btn--close:hover { color: #e2e8f0; }
+
+.tip-rundown-body { margin-top: 0.5rem; }
+
+.tip-rundown-hook {
+  background: rgba(51, 65, 85, 0.45);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  font-style: italic;
+  font-size: 0.875rem;
+  color: var(--color-text, #e2e8f0);
+}
+
+.tip-rundown-card {
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(100, 116, 139, 0.18);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.65rem;
+}
+.tip-rundown-card--champion {
+  border-left: 3px solid #f59e0b;
+}
+.tip-rundown-card--fallback {
+  opacity: 0.65;
+  font-style: italic;
+  font-size: 0.8rem;
+}
+
+.tip-rundown-card-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+
+.tip-rundown-dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.2rem 0.75rem;
+  font-size: 0.8rem;
+  margin: 0 0 0.5rem;
+}
+.tip-rundown-dl dt {
+  color: var(--color-text-muted, #9ca3af);
+  font-weight: 600;
+}
+.tip-rundown-dl dd { margin: 0; color: var(--color-text, #e2e8f0); }
+
+.tip-rundown-section-body {
+  font-size: 0.83rem;
+  color: var(--color-text, #cbd5e1);
+  white-space: pre-line;
+  margin: 0.25rem 0;
+}
+
+.tip-rundown-source {
+  font-size: 0.71rem;
+  color: var(--color-text-muted, #6b7280);
+  margin: 0.4rem 0 0;
+}
+
+.tip-rundown-note {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #6b7280);
+  margin-top: 0.5rem;
+  border-top: 1px solid rgba(100, 116, 139, 0.15);
+  padding-top: 0.4rem;
+}
+
+.tip-rundown-empty {
+  font-size: 0.83rem;
+  color: var(--color-text-muted, #6b7280);
+  font-style: italic;
+}
 </style>

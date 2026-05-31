@@ -718,3 +718,384 @@ class TestTournamentIntelligenceEndpoints:
         """Missing required params triggers auth or validation failure."""
         response = client.get("/analytics/tournament-intelligence/team-journey")
         assert response.status_code in (401, 403, 422)
+
+
+# ---------------------------------------------------------------------------
+# Phase 10S.2 — Podcast rundown tests
+# ---------------------------------------------------------------------------
+
+
+from backend.api.schemas.tournament_intelligence import (
+    TournamentDataCompleteness,
+    TournamentKnockoutContext,
+    TournamentPodcastRundown,
+    TournamentSeasonReview,
+    TournamentSummaryResponse,
+)
+from backend.services.tournament_intelligence_service import (
+    build_tournament_podcast_rundown,
+    _build_champion_journey,
+    _build_road_to_final,
+    _build_season_review,
+)
+
+
+def _make_full_summary(
+    champion: str | None = "St Kitts Patriots",
+    finalist: str | None = "Saint Lucia Kings",
+    final_result: str | None = "St Kitts Patriots won by 3 wickets",
+    confidence: str = "high",
+    standings_wins: int = 8,
+) -> TournamentSummaryResponse:
+    """Build a full TournamentSummaryResponse for podcast rundown tests."""
+    group_key = _make_group_key(
+        competition_code="CPL_MEN",
+        competition_name="Caribbean Premier League",
+        season="2021",
+        gender_category="men",
+        format_family="T20",
+    )
+    knockout_ctx = TournamentKnockoutContext(
+        champion_team=champion,
+        champion_team_canonical=champion,
+        runner_up_team=finalist,
+        runner_up_team_canonical=finalist,
+        final_match_id="final-m",
+        final_match_title="CPL 2021 Final",
+        final_match_date="2021-09-15",
+        final_result=final_result,
+        confidence=confidence,  # type: ignore[arg-type]
+    )
+    from backend.api.schemas.tournament_intelligence import (
+        DerivedStandingsRow,
+        TournamentMatchHighlight,
+        TournamentPlayerLeader,
+        TournamentPodcastFacts,
+    )
+
+    standings = [
+        DerivedStandingsRow(
+            team_name="St Kitts Patriots",
+            canonical_team_name="St Kitts Patriots",
+            played=10,
+            wins=standings_wins,
+            losses=2,
+            points=standings_wins * 2,
+            confidence="medium",  # type: ignore[arg-type]
+        ),
+        DerivedStandingsRow(
+            team_name="Saint Lucia Kings",
+            canonical_team_name="Saint Lucia Kings",
+            played=10,
+            wins=6,
+            losses=4,
+            points=12,
+            confidence="medium",  # type: ignore[arg-type]
+        ),
+    ]
+    completeness = TournamentDataCompleteness(
+        total_matches=34,
+        matches_with_result=33,
+        matches_missing_result=1,
+        delivery_complete_matches=30,
+        phase_level_matches=2,
+        innings_totals_matches=2,
+        metadata_only_matches=0,
+        confidence_level=confidence,  # type: ignore[arg-type]
+    )
+    podcast_facts = TournamentPodcastFacts(
+        competition_label="CPL",
+        season_label="2021",
+        champion=champion,
+        finalist=finalist,
+        top_scoring_venue="Warner Park",
+        highest_scoring_match_title="CPL 2021 Final",
+        highest_match_total_runs=395,
+        confidence=confidence,  # type: ignore[arg-type]
+    )
+    top_run_scorer = TournamentPlayerLeader(
+        player_name="D Bravo",
+        value=450,
+        matches_contributed=10,
+        stat_type="runs",
+        confidence="medium",  # type: ignore[arg-type]
+    )
+    biggest_win = TournamentMatchHighlight(
+        match_id="m-big",
+        match_title="CPL Match 10",
+        result="Won by 60 runs",
+        highlight_type="biggest_win_runs",
+        detail="St Kitts Patriots won by 60 runs",
+    )
+    closest_match = TournamentMatchHighlight(
+        match_id="m-close",
+        match_title="CPL 2021 Final",
+        result="Won by 3 wickets",
+        highlight_type="closest_match",
+        detail="St Kitts Patriots won by 3 wickets",
+    )
+    return TournamentSummaryResponse(
+        group_key=group_key,
+        match_count=34,
+        teams=["St Kitts Patriots", "Saint Lucia Kings", "TKR"],
+        venues=["Warner Park", "Queen's Park Oval"],
+        total_runs=9000,
+        total_wickets=330,
+        highest_team_total=220,
+        highest_team_total_by="TKR",
+        closest_match=closest_match,
+        biggest_win_by_runs=biggest_win,
+        top_run_scorer=top_run_scorer,
+        derived_standings=standings,
+        knockout_context=knockout_ctx,
+        data_completeness=completeness,
+        podcast_facts=podcast_facts,
+    )
+
+
+class TestBuildSeasonReview:
+    def test_with_champion_and_result(self) -> None:
+        summary = _make_full_summary()
+        review = _build_season_review(
+            group_key=summary.group_key,
+            knockout_ctx=summary.knockout_context,
+            derived_standings=summary.derived_standings,
+            match_count=summary.match_count,
+            data_completeness=summary.data_completeness,
+        )
+        assert isinstance(review, TournamentSeasonReview)
+        assert "St Kitts Patriots" in review.narrative
+        assert "Saint Lucia Kings" in review.narrative
+        assert "derived standings" in review.narrative.lower()
+        assert "not official" in review.narrative.lower()
+        assert review.confidence == "high"
+
+    def test_with_no_champion(self) -> None:
+        summary = _make_full_summary(champion=None, finalist=None, final_result=None)
+        review = _build_season_review(
+            group_key=summary.group_key,
+            knockout_ctx=summary.knockout_context,
+            derived_standings=[],
+            match_count=5,
+            data_completeness=TournamentDataCompleteness(
+                total_matches=5,
+                matches_with_result=3,
+                matches_missing_result=2,
+                delivery_complete_matches=0,
+                phase_level_matches=0,
+                innings_totals_matches=3,
+                metadata_only_matches=0,
+                confidence_level="low",
+            ),
+        )
+        assert "No champion data" in review.narrative
+        assert "not official" in review.narrative.lower()
+
+    def test_source_label_always_present(self) -> None:
+        summary = _make_full_summary()
+        review = _build_season_review(
+            group_key=summary.group_key,
+            knockout_ctx=summary.knockout_context,
+            derived_standings=summary.derived_standings,
+            match_count=summary.match_count,
+            data_completeness=summary.data_completeness,
+        )
+        assert "not official" in review.source_label.lower()
+
+
+class TestBuildChampionJourney:
+    def test_champion_journey_with_full_data(self) -> None:
+        summary = _make_full_summary()
+        journey = _build_champion_journey(
+            knockout_ctx=summary.knockout_context,
+            derived_standings=summary.derived_standings,
+            summary=summary,
+        )
+        assert journey is not None
+        assert journey.champion_team == "St Kitts Patriots"
+        assert journey.final_opponent == "Saint Lucia Kings"
+        assert journey.final_result == "St Kitts Patriots won by 3 wickets"
+        assert journey.derived_group_standing is not None
+        assert "1st" in journey.derived_group_standing
+        assert "not official" in journey.source_label.lower()
+
+    def test_champion_journey_no_champion_returns_none(self) -> None:
+        summary = _make_full_summary(champion=None, finalist=None, final_result=None)
+        journey = _build_champion_journey(
+            knockout_ctx=summary.knockout_context,
+            derived_standings=[],
+            summary=summary,
+        )
+        assert journey is None
+
+    def test_champion_journey_confidence_passed_through(self) -> None:
+        summary = _make_full_summary(confidence="medium")
+        journey = _build_champion_journey(
+            knockout_ctx=summary.knockout_context,
+            derived_standings=summary.derived_standings,
+            summary=summary,
+        )
+        assert journey is not None
+        assert journey.confidence == "medium"
+
+
+class TestBuildRoadToFinal:
+    def test_road_to_final_with_champion_and_finalist(self) -> None:
+        summary = _make_full_summary()
+        road = _build_road_to_final(knockout_ctx=summary.knockout_context)
+        assert road is not None
+        assert road.finalist_a == "St Kitts Patriots"
+        assert road.finalist_b == "Saint Lucia Kings"
+        assert road.final_result is not None
+        assert "St Kitts Patriots" in (road.narrative or "")
+        assert "not official" in road.source_label.lower()
+
+    def test_road_to_final_no_finalists_returns_none(self) -> None:
+        ctx = TournamentKnockoutContext(
+            champion_team=None,
+            runner_up_team=None,
+            confidence="unknown",
+        )
+        road = _build_road_to_final(knockout_ctx=ctx)
+        assert road is None
+
+    def test_road_to_final_no_semi_finals_by_default(self) -> None:
+        summary = _make_full_summary()
+        road = _build_road_to_final(knockout_ctx=summary.knockout_context)
+        assert road is not None
+        # No invented semis
+        assert road.semi_final_titles == []
+
+
+class TestBuildPodcastRundown:
+    def test_rundown_has_all_required_sections(self) -> None:
+        summary = _make_full_summary()
+        rundown = build_tournament_podcast_rundown(summary)
+        assert isinstance(rundown, TournamentPodcastRundown)
+        section_keys = {s.section_key for s in rundown.sections}
+        required_keys = {
+            "opening_hook",
+            "tournament_setup",
+            "champion_story",
+            "final_context",
+            "standings_story",
+            "team_spotlight",
+            "key_matches",
+            "player_storylines",
+            "venue_patterns",
+            "tactical_themes",
+            "debate_questions",
+            "data_trust_note",
+        }
+        assert required_keys.issubset(section_keys)
+
+    def test_rundown_season_review_present(self) -> None:
+        summary = _make_full_summary()
+        rundown = build_tournament_podcast_rundown(summary)
+        assert rundown.season_review is not None
+        assert "St Kitts Patriots" in rundown.season_review.narrative
+
+    def test_rundown_champion_journey_present_when_champion_exists(self) -> None:
+        summary = _make_full_summary()
+        rundown = build_tournament_podcast_rundown(summary)
+        assert rundown.champion_journey is not None
+        assert rundown.champion_journey.champion_team == "St Kitts Patriots"
+
+    def test_rundown_champion_journey_absent_when_no_champion(self) -> None:
+        summary = _make_full_summary(champion=None, finalist=None, final_result=None)
+        rundown = build_tournament_podcast_rundown(summary)
+        assert rundown.champion_journey is None
+
+    def test_rundown_road_to_final_present_when_finalists_exist(self) -> None:
+        summary = _make_full_summary()
+        rundown = build_tournament_podcast_rundown(summary)
+        assert rundown.road_to_final is not None
+        assert rundown.road_to_final.finalist_a == "St Kitts Patriots"
+
+    def test_rundown_source_label_present_and_honest(self) -> None:
+        summary = _make_full_summary()
+        rundown = build_tournament_podcast_rundown(summary)
+        assert "not official" in rundown.source_label.lower()
+        assert "derived" in rundown.source_label.lower()
+
+    def test_rundown_data_trust_note_section_body_has_source(self) -> None:
+        summary = _make_full_summary()
+        rundown = build_tournament_podcast_rundown(summary)
+        trust_section = next(
+            (s for s in rundown.sections if s.section_key == "data_trust_note"), None
+        )
+        assert trust_section is not None
+        assert "not official" in (trust_section.body or "").lower()
+        assert "derived" in (trust_section.body or "").lower()
+
+    def test_rundown_debate_questions_section_present(self) -> None:
+        summary = _make_full_summary()
+        rundown = build_tournament_podcast_rundown(summary)
+        debate_section = next(
+            (s for s in rundown.sections if s.section_key == "debate_questions"), None
+        )
+        assert debate_section is not None
+        assert debate_section.body is not None
+        # Should have at least one debate question line
+        assert "?" in debate_section.body
+
+    def test_rundown_thin_data_fallback_safe(self) -> None:
+        """No champion, no standings — rundown is safe and honest."""
+        summary = _make_full_summary(champion=None, finalist=None, final_result=None)
+        # Strip derived standings
+        summary.derived_standings = []
+        summary.top_run_scorer = None
+        summary.top_wicket_taker = None
+        summary.biggest_win_by_runs = None
+        summary.biggest_win_by_wickets = None
+        summary.closest_match = None
+
+        rundown = build_tournament_podcast_rundown(summary)
+        assert rundown is not None
+        # Champion story must acknowledge no data — not fabricate
+        champ_section = next(s for s in rundown.sections if s.section_key == "champion_story")
+        assert champ_section.body is not None
+        assert "no champion" in champ_section.body.lower()
+        # Player storylines must say unavailable
+        player_section = next(s for s in rundown.sections if s.section_key == "player_storylines")
+        assert "unavailable" in (player_section.body or "").lower()
+
+    def test_no_official_claims_in_any_section(self) -> None:
+        """No section should claim 'official standings' without the 'not official' qualifier."""
+        summary = _make_full_summary()
+        rundown = build_tournament_podcast_rundown(summary)
+        for section in rundown.sections:
+            body_lower = (section.body or "").lower()
+            # If 'official' appears, it must be qualified as 'not official'
+            if "official standings" in body_lower:
+                assert "not official" in body_lower, (
+                    f"Section '{section.section_key}' claims official standings "
+                    "without 'not official' qualifier."
+                )
+
+    def test_overall_confidence_matches_data_completeness(self) -> None:
+        summary = _make_full_summary(confidence="medium")
+        rundown = build_tournament_podcast_rundown(summary)
+        assert rundown.overall_confidence == "medium"
+
+
+class TestPodcastRundownEndpoint:
+    def test_podcast_rundown_endpoint_requires_auth(self) -> None:
+        from fastapi.testclient import TestClient
+        from backend.main import fastapi_app
+
+        client = TestClient(fastapi_app)
+        response = client.get(
+            "/analytics/tournament-intelligence/podcast-rundown",
+            params={"competition_code": "CPL_MEN"},
+        )
+        assert response.status_code in (401, 403)
+
+    def test_podcast_rundown_missing_param_triggers_validation(self) -> None:
+        from fastapi.testclient import TestClient
+        from backend.main import fastapi_app
+
+        client = TestClient(fastapi_app)
+        response = client.get("/analytics/tournament-intelligence/podcast-rundown")
+        # Auth check fires before param validation in FastAPI
+        assert response.status_code in (401, 403, 422)

@@ -1,4 +1,4 @@
-"""Phase 10S.1 — Tournament Intelligence: read-only REST endpoints.
+"""Phase 10S.1 / 10S.2 — Tournament Intelligence: read-only REST endpoints.
 
 Exposes:
   GET /analytics/tournament-intelligence/groups
@@ -9,6 +9,9 @@ Exposes:
 
   GET /analytics/tournament-intelligence/team-journey
       Returns a team's journey within a competition/season.
+
+  GET /analytics/tournament-intelligence/podcast-rundown
+      Returns a deterministic tournament podcast rundown (Phase 10S.2).
 
 All endpoints:
   - Require analyst_pro or org_pro role.
@@ -31,11 +34,13 @@ from backend import security
 from backend.api.schemas.tournament_intelligence import (
     TeamJourneyResponse,
     TournamentGroupsResponse,
+    TournamentPodcastRundown,
     TournamentSummaryResponse,
 )
 from backend.services.tournament_intelligence_service import (
     get_team_journey,
     get_tournament_groups,
+    get_tournament_podcast_rundown,
     get_tournament_summary,
 )
 from backend.sql_app.database import get_db as _base_get_db
@@ -155,6 +160,52 @@ async def get_team_journey_endpoint(
             detail=(
                 f"No eligible matches found for team='{team_name}' in "
                 f"competition_code='{competition_code}', season='{season}'."
+            ),
+        )
+    return result
+
+
+@router.get("/podcast-rundown", response_model=TournamentPodcastRundown)
+async def get_tournament_podcast_rundown_endpoint(
+    current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    db: AsyncSession = Depends(_get_ti_db),
+    competition_code: str = Query(
+        ..., description="Competition code, e.g. CPL_MEN, WCPL, ONE_DAY_CUP"
+    ),
+    season: str | None = Query(None, description="Season label, e.g. 2023 or '2023/24'"),
+    gender_category: str = Query("unknown", description="Gender: men | women | mixed | unknown"),
+) -> TournamentPodcastRundown:
+    """Return a deterministic tournament podcast rundown for a specific group.
+
+    Phase 10S.2: presenter-ready tournament narrative sections derived from the
+    same deterministic tournament summary data as the /summary endpoint.
+
+    Returned data includes:
+    - Season review narrative
+    - Champion journey block (when champion data exists)
+    - Road-to-final block (when finalist context exists)
+    - Ordered podcast rundown sections:
+        opening_hook, tournament_setup, champion_story, final_context,
+        standings_story, team_spotlight, key_matches, player_storylines,
+        venue_patterns, tactical_themes, debate_questions, data_trust_note
+    - Overall confidence label
+    - Source/trust note
+
+    All values are derived from imported match data and labeled with their
+    derivation source. No official standings or championship claims are fabricated.
+
+    Returns 404 if no matches are found for the specified group.
+    """
+    result = await get_tournament_podcast_rundown(
+        db, current_user, competition_code, season, gender_category
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"No eligible matches found for competition_code='{competition_code}', "
+                f"season='{season}', gender_category='{gender_category}'. "
+                "Import historical matches or adjust the filter parameters."
             ),
         )
     return result
