@@ -591,7 +591,7 @@ function groupCardKey(g: TournamentGroupSummary): string {
 <style scoped>
 .tip {
   font-size: 0.875rem;
-  color: var(--color-text, #1a2332);
+  color: var(--color-text, #e2e8f0);
 }
 
 .tip-header {
@@ -609,13 +609,13 @@ function groupCardKey(g: TournamentGroupSummary): string {
 }
 
 .tip-provenance-bar {
-  background: var(--color-surface-alt, #f0f4f8);
-  border-left: 3px solid var(--color-brand, #1d6aff);
+  background: rgba(15, 23, 42, 0.72);
+  border-left: 3px solid rgba(59, 130, 246, 0.9);
   border-radius: 4px;
   padding: 0.5rem 0.75rem;
   margin-bottom: 1rem;
   font-size: 0.78rem;
-  color: var(--color-text-muted, #6b7280);
+  color: #cbd5e1;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -753,9 +753,9 @@ function groupCardKey(g: TournamentGroupSummary): string {
   border-radius: 10px;
   font-weight: 600;
 }
-.tip-tag--format { background: #e8f0fe; color: #1a56db; }
-.tip-tag--gender { background: #fef3c7; color: #92400e; }
-.tip-tag--source { background: #ecfdf5; color: #065f46; }
+.tip-tag--format { background: rgba(56, 189, 248, 0.18); color: #bae6fd; }
+.tip-tag--gender { background: rgba(250, 204, 21, 0.2); color: #fde68a; }
+.tip-tag--source { background: rgba(74, 222, 128, 0.16); color: #bbf7d0; }
 
 /* Summary layout */
 .tip-back-btn {
@@ -793,26 +793,36 @@ function groupCardKey(g: TournamentGroupSummary): string {
 }
 
 .tip-completeness-bar {
-  background: #fffbeb;
-  border-left: 3px solid #f59e0b;
-  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-left: 3px solid rgba(251, 191, 36, 0.8);
+  border-radius: 8px;
   padding: 0.5rem 0.75rem;
   font-size: 0.78rem;
   margin-bottom: 1rem;
+  color: #f8fafc;
 }
-.tip-warn-inline { color: #e67e22; font-weight: 600; }
+.tip-completeness-bar strong {
+  color: #fef3c7;
+}
+.tip-warn-inline { color: #fbbf24; font-weight: 600; }
 
 .tip-confidence-badge {
   display: inline-block;
   padding: 0.1rem 0.4rem;
+  border: 1px solid transparent;
   border-radius: 10px;
   font-size: 0.7rem;
   font-weight: 700;
 }
-.tip-confidence-badge--high { background: #d1fae5; color: #065f46; }
-.tip-confidence-badge--medium { background: #fef3c7; color: #92400e; }
-.tip-confidence-badge--low { background: #fee2e2; color: #991b1b; }
-.tip-confidence-badge--unknown { background: #f1f5f9; color: #6b7280; }
+.tip-confidence-badge--high { background: rgba(22, 163, 74, 0.2); border-color: rgba(74, 222, 128, 0.45); color: #bbf7d0; }
+.tip-confidence-badge--medium { background: rgba(251, 191, 36, 0.2); border-color: rgba(251, 191, 36, 0.45); color: #fde68a; }
+.tip-confidence-badge--low { background: rgba(220, 38, 38, 0.2); border-color: rgba(248, 113, 113, 0.45); color: #fecaca; }
+.tip-confidence-badge--unknown { background: rgba(148, 163, 184, 0.2); border-color: rgba(148, 163, 184, 0.45); color: #cbd5e1; }
 
 .tip-stat-grid {
   display: grid;
@@ -821,7 +831,8 @@ function groupCardKey(g: TournamentGroupSummary): string {
   margin-bottom: 1rem;
 }
 .tip-stat-card {
-  background: var(--color-surface-alt, #f0f4f8);
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   display: flex;
@@ -830,21 +841,22 @@ function groupCardKey(g: TournamentGroupSummary): string {
 }
 .tip-stat-label {
   font-size: 0.72rem;
-  color: var(--color-text-muted, #6b7280);
+  color: #cbd5e1;
   font-weight: 600;
 }
 .tip-stat-val {
   font-size: 1.15rem;
   font-weight: 700;
+  color: #f8fafc;
 }
 .tip-stat-sub {
   font-size: 0.7rem;
-  color: var(--color-text-muted, #6b7280);
+  color: #93c5fd;
 }
 
 .tip-champion-card {
-  background: linear-gradient(135deg, #fef9c3, #fef3c7);
-  border: 1px solid #f59e0b;
+  background: linear-gradient(135deg, rgba(120, 53, 15, 0.4), rgba(30, 41, 59, 0.92));
+  border: 1px solid rgba(245, 158, 11, 0.65);
   border-radius: 8px;
   padding: 0.75rem 1rem;
   display: flex;
@@ -854,11 +866,11 @@ function groupCardKey(g: TournamentGroupSummary): string {
 }
 .tip-champion-icon { font-size: 1.5rem; }
 .tip-champion-body { display: flex; flex-direction: column; gap: 0.2rem; }
-.tip-champion-name { font-size: 1rem; font-weight: 700; }
-.tip-champion-sub { font-size: 0.75rem; color: #92400e; font-weight: 600; }
-.tip-champion-runnerup { font-size: 0.8rem; color: #374151; }
-.tip-champion-result { font-size: 0.78rem; color: var(--color-text-muted, #6b7280); }
-.tip-champion-source { font-size: 0.72rem; color: #6b7280; }
+.tip-champion-name { font-size: 1rem; font-weight: 700; color: #fef3c7; }
+.tip-champion-sub { font-size: 0.75rem; color: #fde68a; font-weight: 600; }
+.tip-champion-runnerup { font-size: 0.8rem; color: #f8fafc; }
+.tip-champion-result { font-size: 0.78rem; color: #e2e8f0; }
+.tip-champion-source { font-size: 0.72rem; color: #cbd5e1; }
 
 .tip-highlights-row {
   display: grid;
@@ -911,14 +923,19 @@ function groupCardKey(g: TournamentGroupSummary): string {
 .tip-standings-title { font-size: 0.88rem; font-weight: 700; margin: 0; }
 .tip-derived-label {
   font-size: 0.72rem;
-  background: #fff7e6;
-  color: #92400e;
-  border: 1px solid #f59e0b;
+  background: rgba(251, 191, 36, 0.2);
+  color: #fde68a;
+  border: 1px solid rgba(251, 191, 36, 0.45);
   border-radius: 10px;
   padding: 0.1rem 0.5rem;
 }
 
-.tip-standings-table-wrapper { overflow-x: auto; }
+.tip-standings-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(15, 23, 42, 0.72);
+  border-radius: 8px;
+}
 .tip-standings-table {
   width: 100%;
   border-collapse: collapse;
@@ -928,11 +945,13 @@ function groupCardKey(g: TournamentGroupSummary): string {
 .tip-standings-table td {
   padding: 0.35rem 0.5rem;
   text-align: left;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+  color: #e2e8f0;
 }
+.tip-standings-table th { background: rgba(15, 23, 42, 0.85); color: #f8fafc; }
 .tip-th-team { min-width: 160px; }
 .tip-th-num, .tip-td-num { text-align: center; font-variant-numeric: tabular-nums; }
-.tip-standings-row:hover { background: var(--color-surface-alt, #f9fafb); }
+.tip-standings-row:hover { background: rgba(30, 41, 59, 0.72); }
 .tip-standings-row--first .tip-td-team { font-weight: 700; }
 .tip-td-team {
   display: flex;
@@ -942,32 +961,33 @@ function groupCardKey(g: TournamentGroupSummary): string {
 }
 
 .tip-journey-link {
-  background: none;
-  border: 1px solid var(--color-brand, #1d6aff);
-  color: var(--color-brand, #1d6aff);
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.7);
+  color: #bfdbfe;
   font-size: 0.68rem;
   padding: 0.05rem 0.4rem;
   border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
 }
-.tip-journey-link:hover { background: #e8f0fe; }
-.tip-na { color: var(--color-text-muted, #9ca3af); font-size: 0.75rem; }
+.tip-journey-link:hover { background: rgba(37, 99, 235, 0.28); }
+.tip-na { color: #94a3b8; font-size: 0.75rem; }
 .tip-standings-note {
   font-size: 0.72rem;
-  color: var(--color-text-muted, #6b7280);
+  color: #cbd5e1;
   margin: 0.25rem 0 0;
 }
 
 /* Podcast */
 .tip-podcast-section {
-  background: var(--color-surface-alt, #f0f4f8);
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 8px;
   padding: 0.75rem 1rem;
   margin-bottom: 1.25rem;
 }
-.tip-podcast-title { font-size: 0.88rem; font-weight: 700; margin: 0 0 0.35rem; }
-.tip-podcast-label-bar { font-size: 0.72rem; color: #6b7280; margin-bottom: 0.5rem; }
+.tip-podcast-title { font-size: 0.88rem; font-weight: 700; margin: 0 0 0.35rem; color: #f8fafc; }
+.tip-podcast-label-bar { font-size: 0.72rem; color: #cbd5e1; margin-bottom: 0.5rem; }
 .tip-podcast-facts {
   list-style: none;
   padding: 0;
@@ -976,7 +996,10 @@ function groupCardKey(g: TournamentGroupSummary): string {
   flex-direction: column;
   gap: 0.25rem;
   font-size: 0.82rem;
+  color: #e2e8f0;
 }
+.tip-podcast-facts li { border-bottom: 1px solid rgba(148, 163, 184, 0.2); padding-bottom: 0.2rem; }
+.tip-podcast-facts li:last-child { border-bottom: none; padding-bottom: 0; }
 
 /* Team journey */
 .tip-journey-section {
