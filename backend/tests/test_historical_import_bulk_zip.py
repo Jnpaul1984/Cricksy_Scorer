@@ -13,6 +13,7 @@ from backend.routes.historical_import import (
     PHASE_5L_MAX_FILES,
     PHASE_5L_MAX_FULL_APPLY_FILES,
     PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES,
+    PHASE_10S3C_MAX_APPLY_FILES,
     PHASE_10I_CPL_MAX_BATCH_FILES,
 )
 
@@ -157,6 +158,10 @@ def test_bulk_zip_dry_run_aggregates_validation_diagnostics() -> None:
     assert data["diagnostics_summary"]["competition_codes"]["CPL_MEN"] == 1
     assert data["diagnostics_summary"]["competition_codes"]["CUSTOM"] == 1
     assert data["diagnostics_summary"]["format_categories"]["T20"] == 2
+    assert "Village Park" in data["diagnostics_summary"]["unresolved_venues"]
+    assert "Island Invitational Friendly" in data["diagnostics_summary"]["unknown_competitions"]
+    assert data["summary"]["expected_delivery_complete_count"] >= 1
+    assert data["safety_gate"]["status"] in {"warning", "blocking"}
 
 
 def test_bulk_zip_dry_run_accepts_large_zip_in_metadata_only_mode() -> None:
@@ -402,6 +407,9 @@ def test_bulk_zip_apply_only_applies_selected_valid_files() -> None:
     assert (
         data["error_count"] == 0
     ), f"Expected error_count=0 (bad.json is skipped, not errored), got {data['error_count']}"
+    assert data["post_import_audit"]["records_created"] == 1
+    assert data["post_import_audit"]["records_skipped_duplicates"] == 0
+    assert data["post_import_audit"]["records_rejected"] >= 1
 
 
 def test_bulk_zip_apply_large_zip_records_metadata_only_batches_not_training_eligible() -> None:
@@ -453,6 +461,66 @@ def test_bulk_zip_apply_rejects_cpl_batch_size_outside_controlled_ladder() -> No
 
     assert response.status_code == 422, response.text
     assert "staged ladder" in response.json()["detail"].lower()
+
+
+def test_bulk_zip_dry_run_does_not_mutate_batch_records() -> None:
+    fixture = _load_fixture()
+    payload = _build_zip({"ok.json": json.dumps(fixture).encode("utf-8")})
+
+    with TestClient(app) as client:
+        before = client.get("/api/historical-import/json/batches")
+        response = client.post(
+            "/api/historical-import/json/bulk-zip/dry-run",
+            files={"file": ("matches.zip", payload, "application/zip")},
+        )
+        after = client.get("/api/historical-import/json/batches")
+
+    assert response.status_code == 200, response.text
+    assert before.status_code == 200
+    assert after.status_code == 200
+    assert before.json() == after.json()
+
+
+def test_bulk_zip_apply_blocks_when_dry_run_safety_gate_is_blocking() -> None:
+    entries = {f"blocked_{idx}.json": b"{broken" for idx in range(10)}
+    entries["ok.json"] = json.dumps(_load_fixture()).encode("utf-8")
+    payload = _build_zip(entries)
+
+    with TestClient(app) as client:
+        dry = client.post(
+            "/api/historical-import/json/bulk-zip/dry-run",
+            files={"file": ("blocked.zip", payload, "application/zip")},
+        )
+        apply_response = client.post(
+            "/api/historical-import/json/bulk-zip/apply",
+            files={"file": ("blocked.zip", payload, "application/zip")},
+            data={"confirm": "true", "selected_files": json.dumps(["ok.json"])},
+        )
+
+    assert dry.status_code == 200, dry.text
+    assert dry.json()["safety_gate"]["status"] == "blocking"
+    assert apply_response.status_code == 422, apply_response.text
+    assert "safety gate blocked" in apply_response.json()["detail"].lower()
+
+
+def test_bulk_zip_apply_enforces_selected_apply_limit_without_override() -> None:
+    fixture = _load_fixture()
+    entries = {
+        f"match_{idx:03d}.json": json.dumps({**fixture, "matchType": f"T20-{idx}"}).encode("utf-8")
+        for idx in range(PHASE_10S3C_MAX_APPLY_FILES + 1)
+    }
+    payload = _build_zip(entries)
+    selected = list(entries.keys())
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/historical-import/json/bulk-zip/apply",
+            files={"file": ("large-selected.zip", payload, "application/zip")},
+            data={"confirm": "true", "selected_files": json.dumps(selected)},
+        )
+
+    assert response.status_code == 422, response.text
+    assert "configured bulk apply safety limit" in response.json()["detail"].lower()
 
 
 def test_bulk_zip_apply_rejects_cpl_duplicate_collision_stop_condition() -> None:

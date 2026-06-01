@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import logging
+import os
 import re
 import tempfile
 import uuid
@@ -159,6 +160,25 @@ PHASE_5L_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
 PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
 PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES = 100 * 1024 * 1024
 PHASE_5L_SOURCE_FILENAME_PREFIX_SEPARATOR = "::"
+
+
+def _read_positive_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    with suppress(ValueError, TypeError):
+        parsed = int(raw)
+        if parsed > 0:
+            return parsed
+    return default
+
+
+PHASE_10S3C_MAX_DRY_RUN_FILES = _read_positive_int_env(
+    "HISTORICAL_BULK_MAX_DRY_RUN_FILES", PHASE_5L_MAX_FILES
+)
+PHASE_10S3C_MAX_APPLY_FILES = _read_positive_int_env(
+    "HISTORICAL_BULK_MAX_APPLY_FILES", PHASE_5L_MAX_FULL_APPLY_FILES
+)
 PHASE_10I_CPL_MAX_BATCH_FILES = 25
 PHASE_7_MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 PHASE_7_ALLOWED_DOCUMENT_CONTENT_TYPES = frozenset(
@@ -337,16 +357,188 @@ def _validate_controlled_cpl_batch_selection(
         )
 
 
+def _append_bulk_safety_issue(
+    issues: list[dict[str, object]],
+    *,
+    severity: Literal["info", "warning", "blocking"],
+    code: str,
+    message: str,
+    value: int | float | None = None,
+    threshold: int | float | None = None,
+) -> None:
+    issue: dict[str, object] = {
+        "severity": severity,
+        "code": code,
+        "message": message,
+    }
+    if value is not None:
+        issue["value"] = value
+    if threshold is not None:
+        issue["threshold"] = threshold
+    issues.append(issue)
+
+
+def _build_bulk_zip_safety_gate(
+    *,
+    summary: dict[str, int],
+    diagnostics_summary: dict[str, Any],
+) -> dict[str, object]:
+    issues: list[dict[str, object]] = []
+    files_scanned = max(int(summary.get("files_scanned", 0)), 0)
+    parse_failures = max(int(summary.get("parse_failures", 0)), 0)
+    duplicates = max(int(summary.get("duplicate", 0)), 0)
+    unsupported = max(int(summary.get("unsupported", 0)), 0)
+    unknown_formats = max(int(summary.get("unknown_formats", 0)), 0)
+    unknown_competitions = max(int(summary.get("unknown_competitions", 0)), 0)
+    unresolved_venues = len(
+        diagnostics_summary.get("unresolved_venues", [])
+        if isinstance(diagnostics_summary.get("unresolved_venues"), list)
+        else []
+    )
+    missing_identity = max(int(summary.get("missing_dates", 0)), 0) + max(
+        int(summary.get("missing_teams", 0)), 0
+    )
+
+    parse_failure_rate = (parse_failures / files_scanned) if files_scanned else 0.0
+    duplicate_rate = (duplicates / files_scanned) if files_scanned else 0.0
+    unknown_format_rate = (unknown_formats / files_scanned) if files_scanned else 0.0
+    unknown_competition_rate = (unknown_competitions / files_scanned) if files_scanned else 0.0
+    unresolved_venue_rate = (unresolved_venues / files_scanned) if files_scanned else 0.0
+
+    if parse_failures > 0:
+        severity: Literal["warning", "blocking"] = (
+            "blocking" if parse_failure_rate >= 0.6 and parse_failures >= 10 else "warning"
+        )
+        _append_bulk_safety_issue(
+            issues,
+            severity=severity,
+            code="PARSE_FAILURE_RATE",
+            message=(
+                "High parse failure rate detected."
+                if severity == "blocking"
+                else "Some files failed parsing in dry-run."
+            ),
+            value=round(parse_failure_rate, 4),
+            threshold=0.6,
+        )
+    if duplicates > 0:
+        severity = "blocking" if duplicate_rate >= 0.3 else "warning"
+        _append_bulk_safety_issue(
+            issues,
+            severity=severity,
+            code="DUPLICATE_COLLISION_RISK",
+            message=(
+                "Duplicate collision risk is high; review duplicates before apply."
+                if severity == "blocking"
+                else "Duplicate files detected; review before apply."
+            ),
+            value=round(duplicate_rate, 4),
+            threshold=0.3,
+        )
+    if unsupported > 0:
+        _append_bulk_safety_issue(
+            issues,
+            severity="blocking",
+            code="UNSUPPORTED_FILE_FORMAT",
+            message="Unsupported file formats were detected in the batch.",
+            value=unsupported,
+            threshold=0,
+        )
+    if missing_identity > 0:
+        severity = "blocking" if missing_identity >= 50 else "warning"
+        _append_bulk_safety_issue(
+            issues,
+            severity=severity,
+            code="MISSING_MATCH_IDENTITY_FIELDS",
+            message="Missing match identity fields were detected in dry-run results.",
+            value=missing_identity,
+            threshold=50,
+        )
+    if unknown_formats > 0:
+        severity = "blocking" if unknown_format_rate >= 0.5 and unknown_formats >= 25 else "warning"
+        _append_bulk_safety_issue(
+            issues,
+            severity=severity,
+            code="UNKNOWN_FORMAT_THRESHOLD",
+            message=(
+                "Unknown match types exceed threshold."
+                if severity == "blocking"
+                else "Unknown match types detected."
+            ),
+            value=round(unknown_format_rate, 4),
+            threshold=0.5,
+        )
+    if unknown_competitions > 0:
+        severity = (
+            "blocking"
+            if unknown_competition_rate >= 0.75 and unknown_competitions >= 25
+            else "warning"
+        )
+        _append_bulk_safety_issue(
+            issues,
+            severity=severity,
+            code="UNRESOLVED_COMPETITION_THRESHOLD",
+            message=(
+                "Unknown competitions exceed safe threshold."
+                if severity == "blocking"
+                else "Unknown competitions detected."
+            ),
+            value=round(unknown_competition_rate, 4),
+            threshold=0.75,
+        )
+    if unresolved_venues > 0:
+        severity = (
+            "blocking" if unresolved_venue_rate >= 0.75 and unresolved_venues >= 25 else "warning"
+        )
+        _append_bulk_safety_issue(
+            issues,
+            severity=severity,
+            code="UNRESOLVED_VENUE_THRESHOLD",
+            message=(
+                "Unresolved venues exceed safe threshold."
+                if severity == "blocking"
+                else "Unresolved venues detected."
+            ),
+            value=round(unresolved_venue_rate, 4),
+            threshold=0.75,
+        )
+
+    blocking_count = sum(1 for issue in issues if issue.get("severity") == "blocking")
+    warning_count = sum(1 for issue in issues if issue.get("severity") == "warning")
+    status: Literal["safe", "warning", "blocking"]
+    if blocking_count > 0:
+        status = "blocking"
+    elif warning_count > 0:
+        status = "warning"
+    else:
+        status = "safe"
+    if files_scanned > 0:
+        _append_bulk_safety_issue(
+            issues,
+            severity="info",
+            code="BATCH_SCANNED",
+            message="Dry-run safety scan completed.",
+            value=files_scanned,
+        )
+    return {
+        "status": status,
+        "blocking_count": blocking_count,
+        "warning_count": warning_count,
+        "info_count": sum(1 for issue in issues if issue.get("severity") == "info"),
+        "issues": issues,
+    }
+
+
 def _scan_zip_members(payload_bytes: bytes) -> list[zipfile.ZipInfo]:
     try:
         with zipfile.ZipFile(io.BytesIO(payload_bytes)) as archive:
             members = [m for m in archive.infolist() if not m.is_dir()]
-            if len(members) > PHASE_5L_MAX_FILES:
+            if len(members) > PHASE_10S3C_MAX_DRY_RUN_FILES:
                 raise HTTPException(
                     status_code=422,
                     detail=(
                         f"ZIP contains too many files ({len(members)}). "
-                        f"Maximum supported is {PHASE_5L_MAX_FILES}."
+                        f"Maximum supported is {PHASE_10S3C_MAX_DRY_RUN_FILES}."
                     ),
                 )
 
@@ -1876,8 +2068,18 @@ async def _build_bulk_zip_preview(
         "format_categories": {},
         "gender_categories": {},
         "completeness_grades": {},
+        "competition_groups_detected": [],
+        "seasons_detected": [],
+        "match_types_detected": [],
+        "venue_raw_names_detected": [],
+        "venue_canonical_names_detected": [],
+        "unresolved_venues": [],
+        "low_confidence_venues": [],
+        "unknown_competitions": [],
+        "unknown_formats": [],
     }
     aggregate_counts = {
+        "files_scanned": 0,
         "files_recognized": 0,
         "files_skipped": sum(
             1 for f in files if f.status in {"invalid", "duplicate", "unsupported", "error"}
@@ -1896,7 +2098,20 @@ async def _build_bulk_zip_preview(
         "unknown_venues": 0,
         "multi_day_matches": 0,
         "limited_analysis_ready": 0,
+        "expected_delivery_complete_count": 0,
+        "expected_training_eligible_count": 0,
+        "estimated_database_records_to_create": 0,
+        "duplicate_semantic_keys_detected": 0,
     }
+    competition_groups_detected: set[str] = set()
+    seasons_detected: set[str] = set()
+    match_types_detected: set[str] = set()
+    venue_raw_names_detected: set[str] = set()
+    venue_canonical_names_detected: set[str] = set()
+    unresolved_venues: set[str] = set()
+    unknown_competitions: set[str] = set()
+    unknown_formats: set[str] = set()
+    low_confidence_venues: list[dict[str, str]] = []
     player_cross_gender: dict[str, set[str]] = {}
     for candidate in candidates.values():
         dry_run = candidate.dry_run
@@ -1908,6 +2123,7 @@ async def _build_bulk_zip_preview(
         venue_check = _as_any_dict(diagnostics.get("venue_check"))
 
         aggregate_counts["files_recognized"] += int(scan_summary.get("files_recognized", 0))
+        aggregate_counts["files_scanned"] += int(scan_summary.get("files_scanned", 0))
         aggregate_counts["expected_matches"] += int(scan_summary.get("expected_matches", 0))
         aggregate_counts["parse_failures"] += int(scan_summary.get("parse_failures", 0))
         aggregate_counts["missing_dates"] += int(not bool(dry_run.metadata_preview.date))
@@ -1944,6 +2160,56 @@ async def _build_bulk_zip_preview(
         aggregate_counts["limited_analysis_ready"] += int(
             classification.get("analysis_readiness") == "limited"
         )
+        aggregate_counts["expected_delivery_complete_count"] += int(
+            classification.get("completeness_grade") == "delivery_complete"
+        )
+        aggregate_counts["expected_training_eligible_count"] += int(
+            classification.get("analysis_readiness") == "full"
+            and classification.get("completeness_grade")
+            in {"delivery_complete", "multi_day_complete"}
+        )
+        aggregate_counts["estimated_database_records_to_create"] += int(candidate.status == "valid")
+        aggregate_counts["duplicate_semantic_keys_detected"] += int(candidate.semantic_duplicate)
+
+        competition_code = str(classification.get("competition_code") or "").strip()
+        if competition_code:
+            competition_groups_detected.add(competition_code)
+        season_value = (dry_run.metadata_preview.season or "").strip()
+        if season_value:
+            seasons_detected.add(season_value)
+        match_type_value = (dry_run.metadata_preview.match_type or "").strip()
+        if match_type_value:
+            match_types_detected.add(match_type_value)
+
+        raw_venue_names = venue_check.get("raw_venue_names", [])
+        if isinstance(raw_venue_names, list):
+            for raw_name in raw_venue_names:
+                if isinstance(raw_name, str) and raw_name.strip():
+                    venue_raw_names_detected.add(raw_name.strip())
+        canonical_venue = str(venue_check.get("canonical_venue_name") or "").strip()
+        if canonical_venue:
+            venue_canonical_names_detected.add(canonical_venue)
+        if competition_code in {"UNKNOWN", "CUSTOM"}:
+            competition_name = str(classification.get("competition_name") or "").strip()
+            if competition_name:
+                unknown_competitions.add(competition_name)
+        if classification.get("format_category") == "unknown" and match_type_value:
+            unknown_formats.add(match_type_value)
+        if isinstance(unknown_venues, list):
+            for venue_name in unknown_venues:
+                if isinstance(venue_name, str) and venue_name.strip():
+                    unresolved_venues.add(venue_name.strip())
+        venue_confidence = str(venue_check.get("venue_confidence") or "").strip().lower()
+        if venue_confidence in {"low", "medium"}:
+            raw_for_conf = str(venue_check.get("venue_raw") or "").strip()
+            canonical_for_conf = str(venue_check.get("venue_canonical") or "").strip()
+            low_confidence_venues.append(
+                {
+                    "raw": raw_for_conf,
+                    "canonical": canonical_for_conf,
+                    "confidence": venue_confidence,
+                }
+            )
 
         for bucket_name, value in (
             ("competition_codes", classification.get("competition_code")),
@@ -1967,7 +2233,20 @@ async def _build_bulk_zip_preview(
         for player_name, gender_categories in player_cross_gender.items()
         if len(gender_categories - {"unknown"}) > 1
     )
+    diagnostics_summary["competition_groups_detected"] = sorted(competition_groups_detected)
+    diagnostics_summary["seasons_detected"] = sorted(seasons_detected)
+    diagnostics_summary["match_types_detected"] = sorted(match_types_detected)
+    diagnostics_summary["venue_raw_names_detected"] = sorted(venue_raw_names_detected)
+    diagnostics_summary["venue_canonical_names_detected"] = sorted(venue_canonical_names_detected)
+    diagnostics_summary["unresolved_venues"] = sorted(unresolved_venues)
+    diagnostics_summary["low_confidence_venues"] = low_confidence_venues
+    diagnostics_summary["unknown_competitions"] = sorted(unknown_competitions)
+    diagnostics_summary["unknown_formats"] = sorted(unknown_formats)
     summary.update(aggregate_counts)
+    safety_gate = _build_bulk_zip_safety_gate(
+        summary=summary,
+        diagnostics_summary=diagnostics_summary,
+    )
 
     preview = HistoricalImportBulkZipDryRunResponse(
         status="preview_ready",
@@ -1990,12 +2269,13 @@ async def _build_bulk_zip_preview(
         ),
         full_import_deferred=metadata_only_intake_required,
         selected_apply_requires_confirm=True,
-        max_files=PHASE_5L_MAX_FILES,
+        max_files=PHASE_10S3C_MAX_DRY_RUN_FILES,
         max_file_size_bytes=PHASE_5L_MAX_FILE_SIZE_BYTES,
         max_total_uncompressed_bytes=PHASE_5L_MAX_TOTAL_UNCOMPRESSED_BYTES,
         max_total_compressed_bytes=PHASE_5L_MAX_TOTAL_COMPRESSED_BYTES,
         summary=summary,
         diagnostics_summary=diagnostics_summary,
+        safety_gate=safety_gate,
         files=files,
     )
     return preview, candidates
@@ -2562,6 +2842,7 @@ async def historical_json_bulk_zip_apply(
     file: UploadFile = File(...),
     confirm: bool = Form(False),
     selected_files: str = Form(...),
+    allow_apply_limit_override: bool = Form(False),
     db: AsyncSession = Depends(_get_import_db),
     current_user: Annotated[models.User | None, Depends(get_current_user_optional)] = None,
 ) -> HistoricalImportBulkZipApplyResponse:
@@ -2585,6 +2866,14 @@ async def historical_json_bulk_zip_apply(
         raise HTTPException(
             status_code=422, detail="At least one selected file is required for bulk apply."
         )
+    if len(selected_names) > PHASE_10S3C_MAX_APPLY_FILES and not allow_apply_limit_override:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Selected files exceed the configured bulk apply safety limit "
+                f"({PHASE_10S3C_MAX_APPLY_FILES}). Reduce selection size or provide an explicit override."
+            ),
+        )
 
     payload_bytes = await file.read()
     owner_user_id: str | None = current_user.id if current_user else None
@@ -2602,6 +2891,23 @@ async def historical_json_bulk_zip_apply(
         candidates=candidates,
         total_entries=preview.total_entries,
     )
+    safety_gate = preview.safety_gate if isinstance(preview.safety_gate, dict) else {}
+    if safety_gate.get("status") == "blocking" and not preview.metadata_only_intake_required:
+        safety_issues = safety_gate.get("issues")
+        safety_issues_list = safety_issues if isinstance(safety_issues, list) else []
+        blocking_issues = [
+            issue.get("message", "")
+            for issue in safety_issues_list
+            if isinstance(issue, dict) and issue.get("severity") == "blocking"
+        ]
+        details = (
+            "; ".join(str(item) for item in blocking_issues if item)
+            or "Dry-run safety gate blocked apply."
+        )
+        raise HTTPException(
+            status_code=422,
+            detail=f"Dry-run safety gate blocked apply: {details}",
+        )
 
     results: list[HistoricalImportBulkZipApplyFileResult] = []
     metadata_archive = (
@@ -2825,6 +3131,53 @@ async def historical_json_bulk_zip_apply(
     metadata_only_count = sum(1 for r in results if r.status == "metadata_extracted")
     skipped_count = sum(1 for r in results if r.status == "skipped")
     error_count = sum(1 for r in results if r.status == "error")
+    duplicate_skipped_count = sum(
+        1 for r in results if r.status == "skipped" and "duplicate" in r.message.lower()
+    )
+    rejected_count = max(skipped_count - duplicate_skipped_count, 0) + error_count
+    applied_competition_season_groups = {
+        (
+            str(candidate.dry_run.metadata_preview.event_name or "").strip(),
+            str(candidate.dry_run.metadata_preview.season or "").strip(),
+        )
+        for file_name, candidate in candidates.items()
+        if any(result.file_name == file_name and result.status == "applied" for result in results)
+    }
+    post_import_audit: dict[str, object] = {
+        "records_created": applied_count,
+        "records_skipped_duplicates": duplicate_skipped_count,
+        "records_rejected": rejected_count,
+        "competitions_added_or_updated": 0,
+        "venues_added_or_merged": 0,
+        "unknown_venue_aliases_requiring_review": (
+            preview.diagnostics_summary.get("unresolved_venues", [])
+            if isinstance(preview.diagnostics_summary, dict)
+            else []
+        ),
+        "unknown_competitions_requiring_mapping": (
+            preview.diagnostics_summary.get("unknown_competitions", [])
+            if isinstance(preview.diagnostics_summary, dict)
+            else []
+        ),
+        "delivery_complete_count": sum(
+            1
+            for file_name, candidate in candidates.items()
+            if any(
+                result.file_name == file_name and result.status == "applied" for result in results
+            )
+            and _as_any_dict(candidate.dry_run.diagnostics)
+            .get("classification", {})
+            .get("completeness_grade")
+            == "delivery_complete"
+        ),
+        "archive_groups_changed": len(
+            {
+                (competition, season)
+                for competition, season in applied_competition_season_groups
+                if competition or season
+            }
+        ),
+    }
     if metadata_only_count > 0 and applied_count == 0 and error_count == 0:
         status_value = "metadata_recorded"
     elif applied_count == len(results):
@@ -2844,6 +3197,7 @@ async def historical_json_bulk_zip_apply(
         metadata_only_count=metadata_only_count,
         full_import_deferred=preview.metadata_only_intake_required,
         selected_apply_requires_confirm=True,
+        post_import_audit=post_import_audit,
         results=results,
     )
 
