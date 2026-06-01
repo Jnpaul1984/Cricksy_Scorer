@@ -43,7 +43,7 @@ from backend.api.schemas.historical_stats import (
 )
 from backend.services.analyst_registry_service import classify_competition, classify_gender
 from backend.services.cpl_team_alias_registry import canonicalize_team_name, normalize_team_name
-from backend.services.cpl_venue_alias_registry import canonicalize_venue_name
+from backend.services.cpl_venue_alias_registry import canonicalize_venue_name, normalize_venue_name
 from backend.services.analyst_access import scoped_games_stmt
 from backend.sql_app.models import Game, GameStatus, HistoricalImportBatch
 from sqlalchemy import select
@@ -843,6 +843,7 @@ def _build_venue_aggregates(
             "total_runs": [],
             "total_wickets": [],
             "raw_venues": set(),
+            "display_venue": None,
             "canonical_venue": None,
             "continuity_group": None,
         }
@@ -853,11 +854,23 @@ def _build_venue_aggregates(
         if not venue_raw:
             continue
         canonical_venue, continuity_group = canonicalize_venue_name(venue_raw)
-        venue_key = canonical_venue or venue_raw
+        normalized_raw_venue = normalize_venue_name(venue_raw)
+        has_alias_resolution = bool(continuity_group and continuity_group != normalized_raw_venue)
+        if has_alias_resolution:
+            assert continuity_group is not None
+            venue_key = continuity_group
+        else:
+            venue_key = canonical_venue or venue_raw
 
         innings_list = _innings_summary(_game)
         acc = venue_acc[venue_key]
         acc["raw_venues"].add(venue_raw)
+        display_venue = acc["display_venue"]
+        if display_venue is None or (len(venue_raw), venue_raw.lower()) < (
+            len(display_venue),
+            str(display_venue).lower(),
+        ):
+            acc["display_venue"] = venue_raw
         acc["canonical_venue"] = canonical_venue or venue_key
         acc["continuity_group"] = continuity_group
         acc["match_count"] += 1
@@ -900,7 +913,7 @@ def _build_venue_aggregates(
 
         result.append(
             VenueAggregate(
-                venue=venue_name,
+                venue=str(acc.get("display_venue") or venue_name),
                 canonical_venue=acc.get("canonical_venue"),
                 continuity_group=acc.get("continuity_group"),
                 raw_venues=sorted(acc["raw_venues"]),

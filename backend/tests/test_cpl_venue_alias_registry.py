@@ -5,8 +5,13 @@ def test_merges_daren_sammy_missing_country_suffix() -> None:
     resolved = resolve_venue_identity("Daren Sammy National Cricket Stadium, Gros Islet")
 
     assert resolved is not None
-    assert resolved.canonical_display_name == "Daren Sammy National Cricket Stadium, Gros Islet, St Lucia"
-    assert resolved.canonical_venue_key == "daren_sammy_national_cricket_stadium_gros_islet_st_lucia"
+    assert (
+        resolved.canonical_display_name
+        == "Daren Sammy National Cricket Stadium, Gros Islet, St Lucia"
+    )
+    assert (
+        resolved.canonical_venue_key == "daren_sammy_national_cricket_stadium_gros_islet_st_lucia"
+    )
     assert resolved.source_method == "explicit_alias"
     assert resolved.confidence == "high"
 
