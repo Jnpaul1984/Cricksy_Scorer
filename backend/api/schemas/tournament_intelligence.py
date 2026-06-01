@@ -317,6 +317,10 @@ class ArchiveVenueTrend(BaseModel):
     total_wickets: int | None = None
     wickets_per_match: float | None = None
     sample_note: str = ""
+    alias_count: int = 1
+    raw_variants: list[str] = Field(default_factory=list)
+    source_method: str = "raw_fallback"
+    source_confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
     confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
     note: str = (
         "Venue trends are derived from imported match data. Wicket trends use delivery-derived "
@@ -363,8 +367,9 @@ class HistoricalArchiveExplorerResponse(BaseModel):
     trust_note: str = (
         "All archive views are derived from imported match data and are not official. "
         "Incomplete seasons may affect comparisons. Wicket trends use delivery-derived "
-        "dismissal records only where available. Player leaderboards require player-level "
-        "data and are not invented."
+        "dismissal records only where available. Venue trends use canonical venue aliases "
+        "where available; raw venue names are preserved in imported records. "
+        "Player leaderboards require player-level data and are not invented."
     )
     note: str = (
         "Historical Archive Explorer is deterministic and read-only. "

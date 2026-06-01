@@ -1452,6 +1452,10 @@ export interface ArchiveVenueTrend {
   total_wickets: number | null;
   wickets_per_match: number | null;
   sample_note: string;
+  alias_count: number;
+  raw_variants: string[];
+  source_method: string;
+  source_confidence: 'high' | 'medium' | 'low' | 'unknown';
   confidence: 'high' | 'medium' | 'low' | 'unknown';
   note: string;
 }

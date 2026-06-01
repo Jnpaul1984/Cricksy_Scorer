@@ -233,13 +233,23 @@
             </thead>
             <tbody>
               <tr v-for="venue in archive.venue_trends" :key="venue.venue">
-                <td>{{ venue.venue }}</td>
+                <td>
+                  <div>{{ venue.venue }}</div>
+                  <div v-if="venue.alias_count > 1" class="hae-table-note">
+                    merged aliases: {{ venue.alias_count }}
+                  </div>
+                </td>
                 <td>{{ venue.matches }}</td>
                 <td>{{ venue.total_runs.toLocaleString() }}</td>
                 <td>{{ formatMetric(venue.average_runs_per_match) }}</td>
                 <td>{{ venue.total_wickets ?? 'Unavailable' }}</td>
                 <td>{{ formatMetric(venue.wickets_per_match) }}</td>
-                <td>{{ venue.sample_note }}</td>
+                <td>
+                  <div>{{ venue.sample_note }}</div>
+                  <div v-if="venue.alias_count > 1" class="hae-table-note">
+                    raw variants: {{ venue.raw_variants.join(' · ') }}
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>

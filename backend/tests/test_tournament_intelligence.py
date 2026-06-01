@@ -1155,6 +1155,73 @@ class TestHistoricalArchiveExplorer:
             "delivery-derived dismissal records only where available"
             in response.research_summary.markdown.lower()
         )
+        assert (
+            "canonical venue aliases where available" in response.research_summary.markdown.lower()
+        )
+
+    def test_merges_archive_venue_aliases_into_canonical_rows(self) -> None:
+        entries = [
+            _make_eligible_entry(
+                game_id="cpl-2021-daren-short",
+                season="2021",
+                venue="Daren Sammy National Cricket Stadium, Gros Islet",
+            ),
+            _make_eligible_entry(
+                game_id="cpl-2022-daren-long",
+                season="2022",
+                venue="Daren Sammy National Cricket Stadium, Gros Islet, St Lucia",
+            ),
+            _make_eligible_entry(
+                game_id="cpl-2021-viv-short",
+                season="2021",
+                venue="Sir Vivian Richards Stadium, North Sound",
+            ),
+            _make_eligible_entry(
+                game_id="cpl-2022-viv-long",
+                season="2022",
+                venue="Sir Vivian Richards Stadium, North Sound, Antigua",
+            ),
+            _make_eligible_entry(
+                game_id="cpl-2021-queens-short",
+                season="2021",
+                venue="Queen's Park Oval, Port of Spain",
+            ),
+            _make_eligible_entry(
+                game_id="cpl-2022-queens-city-only",
+                season="2022",
+                venue="Port of Spain",
+            ),
+        ]
+
+        response = _build_archive_response(entries)
+        trends = {row.venue: row for row in response.venue_trends}
+
+        daren = trends["Daren Sammy National Cricket Stadium, Gros Islet, St Lucia"]
+        assert daren.matches == 2
+        assert daren.alias_count == 2
+        assert sorted(daren.raw_variants) == sorted(
+            [
+                "Daren Sammy National Cricket Stadium, Gros Islet",
+                "Daren Sammy National Cricket Stadium, Gros Islet, St Lucia",
+            ]
+        )
+
+        viv = trends["Sir Vivian Richards Stadium, North Sound, Antigua"]
+        assert viv.matches == 2
+        assert viv.alias_count == 2
+        assert sorted(viv.raw_variants) == sorted(
+            [
+                "Sir Vivian Richards Stadium, North Sound",
+                "Sir Vivian Richards Stadium, North Sound, Antigua",
+            ]
+        )
+
+        queens = trends["Queen's Park Oval, Port of Spain, Trinidad"]
+        assert queens.matches == 2
+        assert queens.alias_count == 2
+        assert sorted(queens.raw_variants) == sorted(
+            ["Port of Spain", "Queen's Park Oval, Port of Spain"]
+        )
 
     def test_returns_empty_archive_fallback_when_filters_exclude_all_rows(self) -> None:
         entries = [
