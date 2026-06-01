@@ -1847,7 +1847,41 @@ def _summary_confidence(summary: TournamentSummaryResponse) -> str:
     return summary.data_completeness.confidence_level or "unknown"
 
 
-def _build_archive_comparison_row(summary: TournamentSummaryResponse) -> ArchiveComparisonRow:
+DEFAULT_ARCHIVE_RELIABILITY_MIN_MATCHES = 5
+
+
+def _archive_sample_size_note(match_count: int, minimum_matches: int) -> tuple[bool, str]:
+    threshold = max(1, minimum_matches)
+    if match_count < threshold:
+        return (
+            False,
+            f"Withheld from headline comparison because it has fewer than {threshold} matches.",
+        )
+    if match_count < DEFAULT_ARCHIVE_RELIABILITY_MIN_MATCHES:
+        thin_label = "match" if match_count == 1 else "matches"
+        return (
+            True,
+            (
+                "Exploratory only — below default reliability threshold "
+                f"({DEFAULT_ARCHIVE_RELIABILITY_MIN_MATCHES} matches). Thin sample: {match_count} {thin_label}."
+            ),
+        )
+    return True, "Meets default reliability threshold."
+
+
+def _append_sample_note(subtitle: str | None, match_count: int, minimum_matches: int) -> str | None:
+    if subtitle is None:
+        return None
+    _qualifies, sample_note = _archive_sample_size_note(match_count, minimum_matches)
+    if sample_note == "Meets default reliability threshold.":
+        return subtitle
+    return f"{subtitle}. {sample_note}"
+
+
+def _build_archive_comparison_row(
+    summary: TournamentSummaryResponse,
+    minimum_matches: int,
+) -> ArchiveComparisonRow:
     dc = summary.data_completeness
     total_wickets = summary.total_wickets if summary.total_wickets > 0 else None
     average_runs_per_match = (
@@ -1861,6 +1895,10 @@ def _build_archive_comparison_row(summary: TournamentSummaryResponse) -> Archive
     completeness_label = (
         f"{dc.matches_with_result}/{dc.total_matches} matches with results. "
         f"{dc.delivery_complete_matches} delivery-complete."
+    )
+    qualifies_headline, sample_size_note = _archive_sample_size_note(
+        summary.match_count,
+        minimum_matches,
     )
     return ArchiveComparisonRow(
         group_key=summary.group_key,
@@ -1883,6 +1921,8 @@ def _build_archive_comparison_row(summary: TournamentSummaryResponse) -> Archive
         data_completeness_label=completeness_label,
         confidence=_summary_confidence(summary),  # type: ignore[arg-type]
         incomplete_season=_is_incomplete_summary(summary),
+        qualifies_headline=qualifies_headline,
+        sample_size_note=sample_size_note,
         wicket_source_label=summary.wicket_source_label,
     )
 
@@ -1904,16 +1944,21 @@ def _build_archive_era_cards(
     venue_trends: list[ArchiveVenueTrend],
     minimum_matches: int,
 ) -> list[ArchiveEraComparisonCard]:
-    enough_data_threshold = max(2, minimum_matches)
+    enough_data_threshold = max(1, minimum_matches)
 
     def _row_label(row: ArchiveComparisonRow) -> str:
         return _format_archive_group_label(row.group_key)
 
     cards: list[ArchiveEraComparisonCard] = []
 
-    if comparison_rows:
+    highest_candidates = [
+        row
+        for row in comparison_rows
+        if row.imported_matches >= enough_data_threshold and row.average_runs_per_match is not None
+    ]
+    if highest_candidates:
         highest_scoring = max(
-            comparison_rows,
+            highest_candidates,
             key=lambda row: (
                 row.average_runs_per_match or 0.0,
                 row.total_runs,
@@ -1925,9 +1970,11 @@ def _build_archive_era_cards(
                 card_key="highest_scoring_season",
                 title="Highest-scoring season",
                 value=_row_label(highest_scoring),
-                subtitle=(
+                subtitle=_append_sample_note(
                     f"{highest_scoring.average_runs_per_match:.2f} runs per match "
-                    f"across {highest_scoring.imported_matches} matches"
+                    f"across {highest_scoring.imported_matches} matches",
+                    highest_scoring.imported_matches,
+                    enough_data_threshold,
                 )
                 if highest_scoring.average_runs_per_match is not None
                 else None,
@@ -1939,7 +1986,10 @@ def _build_archive_era_cards(
             _fallback_archive_card(
                 "highest_scoring_season",
                 "Highest-scoring season",
-                "Import more completed archive seasons to compare scoring.",
+                (
+                    "No reliable highest-scoring season is available under the current minimum-match "
+                    "threshold."
+                ),
             )
         )
 
@@ -1958,9 +2008,11 @@ def _build_archive_era_cards(
                 card_key="lowest_scoring_season",
                 title="Lowest-scoring season",
                 value=_row_label(lowest_scoring),
-                subtitle=(
+                subtitle=_append_sample_note(
                     f"{lowest_scoring.average_runs_per_match:.2f} runs per match "
-                    f"with the minimum {enough_data_threshold}-match safeguard"
+                    f"with the minimum {enough_data_threshold}-match safeguard",
+                    lowest_scoring.imported_matches,
+                    enough_data_threshold,
                 )
                 if lowest_scoring.average_runs_per_match is not None
                 else None,
@@ -1972,12 +2024,21 @@ def _build_archive_era_cards(
             _fallback_archive_card(
                 "lowest_scoring_season",
                 "Lowest-scoring season",
-                "Unavailable until at least one season clears the minimum-match safeguard.",
+                (
+                    "Unavailable until at least one season clears the current minimum-match safeguard "
+                    f"({enough_data_threshold} matches)."
+                ),
             )
         )
 
     wicket_candidates = [
-        row for row in comparison_rows if row.total_wickets is not None and row.imported_matches > 0
+        row
+        for row in comparison_rows
+        if (
+            row.total_wickets is not None
+            and row.imported_matches >= enough_data_threshold
+            and row.imported_matches > 0
+        )
     ]
     if wicket_candidates:
         wicket_heavy = max(
@@ -1993,7 +2054,14 @@ def _build_archive_era_cards(
                 card_key="most_wicket_heavy_season",
                 title="Most wicket-heavy season",
                 value=_row_label(wicket_heavy),
-                subtitle=f"{wickets_per_match:.2f} wickets per match from delivery-derived or innings wicket totals",
+                subtitle=_append_sample_note(
+                    (
+                        f"{wickets_per_match:.2f} wickets per match from delivery-derived or innings "
+                        "wicket totals"
+                    ),
+                    wicket_heavy.imported_matches,
+                    enough_data_threshold,
+                ),
                 confidence=wicket_heavy.confidence,
             )
         )
@@ -2002,12 +2070,17 @@ def _build_archive_era_cards(
             _fallback_archive_card(
                 "most_wicket_heavy_season",
                 "Most wicket-heavy season",
-                "Wicket-heavy comparisons need reliable wicket data.",
+                (
+                    "No reliable wicket-heavy season is available under the current minimum-match "
+                    "threshold."
+                ),
             )
         )
 
     runs_per_wicket_candidates = [
-        row for row in comparison_rows if row.average_runs_per_wicket is not None
+        row
+        for row in comparison_rows
+        if row.average_runs_per_wicket is not None and row.imported_matches >= enough_data_threshold
     ]
     if runs_per_wicket_candidates:
         best_runs_per_wicket = max(
@@ -2019,7 +2092,11 @@ def _build_archive_era_cards(
                 card_key="best_average_runs_per_wicket",
                 title="Best average runs per wicket",
                 value=_row_label(best_runs_per_wicket),
-                subtitle=f"{best_runs_per_wicket.average_runs_per_wicket:.2f} runs per wicket",
+                subtitle=_append_sample_note(
+                    f"{best_runs_per_wicket.average_runs_per_wicket:.2f} runs per wicket",
+                    best_runs_per_wicket.imported_matches,
+                    enough_data_threshold,
+                ),
                 confidence=best_runs_per_wicket.confidence,
             )
         )
@@ -2028,7 +2105,10 @@ def _build_archive_era_cards(
             _fallback_archive_card(
                 "best_average_runs_per_wicket",
                 "Best average runs per wicket",
-                "Runs-per-wicket comparisons need reliable wicket totals.",
+                (
+                    "Runs-per-wicket comparisons need seasons that clear the current minimum-match "
+                    "safeguard."
+                ),
             )
         )
 
@@ -2049,6 +2129,8 @@ def _build_archive_era_cards(
             None,
         )
         if champion_row:
+            if summary.match_count < enough_data_threshold:
+                continue
             dominant_candidates.append((summary, champion_row, champion_name))
     if dominant_candidates:
         dominant_summary, dominant_row, dominant_team = max(
@@ -2060,9 +2142,13 @@ def _build_archive_era_cards(
                 card_key="most_dominant_champion",
                 title="Most dominant champion",
                 value=f"{dominant_team} ({dominant_summary.group_key.season or 'Unknown season'})",
-                subtitle=(
-                    f"{dominant_row.points} derived points, {dominant_row.wins} wins "
-                    f"from estimated standings"
+                subtitle=_append_sample_note(
+                    (
+                        f"{dominant_row.points} derived points, {dominant_row.wins} wins "
+                        f"from estimated standings"
+                    ),
+                    dominant_summary.match_count,
+                    enough_data_threshold,
                 ),
                 confidence=dominant_row.confidence,
             )
@@ -2072,7 +2158,10 @@ def _build_archive_era_cards(
             _fallback_archive_card(
                 "most_dominant_champion",
                 "Most dominant champion",
-                "Dominance cards need a detected champion and derived standings row.",
+                (
+                    "Dominance cards need a detected champion, derived standings row, and enough "
+                    "matches under the current threshold."
+                ),
             )
         )
 
@@ -2091,7 +2180,11 @@ def _build_archive_era_cards(
                 card_key="closest_final",
                 title="Closest final",
                 value=_format_archive_group_label(closest_final[0].group_key),
-                subtitle=_normalize_result_text(closest_final[0].knockout_context.final_result),
+                subtitle=_append_sample_note(
+                    _normalize_result_text(closest_final[0].knockout_context.final_result),
+                    closest_final[0].match_count,
+                    enough_data_threshold,
+                ),
                 confidence=_summary_confidence(closest_final[0]),  # type: ignore[arg-type]
             )
         )
@@ -2104,7 +2197,11 @@ def _build_archive_era_cards(
                 card_key="biggest_final_win",
                 title="Biggest final win",
                 value=_format_archive_group_label(biggest_final[0].group_key),
-                subtitle=_normalize_result_text(biggest_final[0].knockout_context.final_result),
+                subtitle=_append_sample_note(
+                    _normalize_result_text(biggest_final[0].knockout_context.final_result),
+                    biggest_final[0].match_count,
+                    enough_data_threshold,
+                ),
                 confidence=_summary_confidence(biggest_final[0]),  # type: ignore[arg-type]
             )
         )
@@ -2448,6 +2545,7 @@ def _build_archive_research_summary(
     era_cards: list[ArchiveEraComparisonCard],
     dynasty_indicators: list[ArchiveDynastyIndicator],
     venue_trends: list[ArchiveVenueTrend],
+    minimum_matches: int,
 ) -> ArchiveResearchSummary:
     if not comparison_rows:
         empty_sections = [
@@ -2475,11 +2573,43 @@ def _build_archive_research_summary(
     total_matches = sum(row.imported_matches for row in comparison_rows)
     incomplete_count = sum(1 for row in comparison_rows if row.incomplete_season)
 
-    highest_scoring = next(
-        (card for card in era_cards if card.card_key == "highest_scoring_season"), None
+    enough_data_threshold = max(1, minimum_matches)
+    highest_candidates = [
+        row
+        for row in comparison_rows
+        if row.imported_matches >= enough_data_threshold and row.average_runs_per_match is not None
+    ]
+    highest_scoring_row = (
+        max(
+            highest_candidates,
+            key=lambda row: (
+                row.average_runs_per_match or 0.0,
+                row.total_runs,
+                row.imported_matches,
+            ),
+        )
+        if highest_candidates
+        else None
     )
-    wicket_card = next(
-        (card for card in era_cards if card.card_key == "most_wicket_heavy_season"), None
+    wicket_candidates = [
+        row
+        for row in comparison_rows
+        if (
+            row.imported_matches >= enough_data_threshold
+            and row.total_wickets is not None
+            and row.imported_matches > 0
+        )
+    ]
+    wicket_row = (
+        max(
+            wicket_candidates,
+            key=lambda row: (
+                (row.total_wickets or 0) / row.imported_matches,
+                row.total_wickets or 0,
+            ),
+        )
+        if wicket_candidates
+        else None
     )
     venue_card = next(
         (card for card in era_cards if card.card_key == "highest_scoring_venue"), None
@@ -2501,7 +2631,7 @@ def _build_archive_research_summary(
         else "Select a competition filter to generate a champion timeline."
     )
     debate_lines = [
-        f"Does {highest_scoring.value if highest_scoring else 'the archive leader'} represent a genuine scoring-era shift?",
+        f"Does {highest_scoring_row.group_key.competition_name or highest_scoring_row.group_key.competition_code if highest_scoring_row else 'the archive leader'} represent a genuine scoring-era shift?",
         "How much should incomplete seasons change archive comparisons?",
         "Which venue trend is signal, and which is just sample noise?",
     ]
@@ -2531,18 +2661,33 @@ def _build_archive_research_summary(
             section_key="scoring_trend_story",
             title="Scoring trend story",
             body=(
-                f"Highest-scoring season: {highest_scoring.value}. {highest_scoring.subtitle}"
-                if highest_scoring and not highest_scoring.fallback and highest_scoring.subtitle
-                else "Scoring-era comparisons are limited by the current archive sample."
+                (
+                    "Highest-scoring qualifying season: "
+                    f"{_format_archive_group_label(highest_scoring_row.group_key)}, "
+                    f"{highest_scoring_row.average_runs_per_match:.2f} runs per match across "
+                    f"{highest_scoring_row.imported_matches} matches."
+                )
+                if highest_scoring_row
+                else (
+                    "No reliable highest-scoring season is available under the current minimum-match "
+                    "threshold."
+                )
             ),
         ),
         ArchiveResearchSection(
             section_key="wicket_trend_story",
             title="Wicket trend story",
             body=(
-                f"Most wicket-heavy season: {wicket_card.value}. {wicket_card.subtitle}"
-                if wicket_card and not wicket_card.fallback and wicket_card.subtitle
-                else "Reliable wicket-era comparisons are not available for the current filters."
+                (
+                    "Most wicket-heavy qualifying season: "
+                    f"{_format_archive_group_label(wicket_row.group_key)}, "
+                    f"{((wicket_row.total_wickets or 0) / wicket_row.imported_matches):.2f} wickets per match."
+                )
+                if wicket_row
+                else (
+                    "No reliable wicket-heavy season is available under the current minimum-match "
+                    "threshold."
+                )
             ),
         ),
         ArchiveResearchSection(
@@ -2608,7 +2753,7 @@ def _build_historical_archive_explorer(
     season_end: int | None = None,
     format_family: str | None = None,
     gender_category: str | None = None,
-    minimum_matches: int = 1,
+    minimum_matches: int = DEFAULT_ARCHIVE_RELIABILITY_MIN_MATCHES,
     include_incomplete: bool = True,
 ) -> HistoricalArchiveExplorerResponse:
     groups_map = _group_eligible_games(eligible_with_agg)
@@ -2654,14 +2799,14 @@ def _build_historical_archive_explorer(
             summary.group_key.season_year is None or summary.group_key.season_year > season_end
         ):
             continue
-        if summary.match_count < minimum_matches:
-            continue
         if not include_incomplete and _is_incomplete_summary(summary):
             continue
         filtered_summaries.append(summary)
         filtered_group_games.append(group_games)
 
-    comparison_rows = [_build_archive_comparison_row(summary) for summary in filtered_summaries]
+    comparison_rows = [
+        _build_archive_comparison_row(summary, minimum_matches) for summary in filtered_summaries
+    ]
     venue_trends = _build_venue_trends(filtered_group_games)
     era_cards = _build_archive_era_cards(
         filtered_summaries,
@@ -2679,6 +2824,7 @@ def _build_historical_archive_explorer(
         era_cards=era_cards,
         dynasty_indicators=dynasty_indicators,
         venue_trends=venue_trends,
+        minimum_matches=minimum_matches,
     )
 
     return HistoricalArchiveExplorerResponse(
@@ -2993,7 +3139,7 @@ async def get_historical_archive_explorer(
     season_end: int | None = None,
     format_family: str | None = None,
     gender_category: str | None = None,
-    minimum_matches: int = 1,
+    minimum_matches: int = DEFAULT_ARCHIVE_RELIABILITY_MIN_MATCHES,
     include_incomplete: bool = True,
 ) -> HistoricalArchiveExplorerResponse:
     eligible_with_agg, _groups_map, season_outcomes = await _load_tournament_dataset(

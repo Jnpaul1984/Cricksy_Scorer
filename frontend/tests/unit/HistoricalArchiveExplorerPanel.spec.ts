@@ -63,6 +63,8 @@ const archiveFixture: HistoricalArchiveExplorerResponse = {
       data_completeness_label: '33/34 matches with results. 30 delivery-complete.',
       confidence: 'medium',
       incomplete_season: true,
+      qualifies_headline: true,
+      sample_size_note: 'Meets default reliability threshold.',
       wicket_source_label: 'Derived from delivery dismissal records',
       note: 'Derived from imported match data.',
     },
@@ -156,6 +158,20 @@ describe('HistoricalArchiveExplorerPanel', () => {
     expect(wrapper.get('[data-testid="venue-trends-table"]').text()).toContain('Warner Park')
     expect(wrapper.get('[data-testid="archive-trust-note"]').text()).toContain('not official')
     expect(archiveMock).toHaveBeenCalled()
+  })
+
+  it('uses reliability-aware default minimum matches and shows sample note column', async () => {
+    const wrapper = mount(HistoricalArchiveExplorerPanel)
+    await flushPromises()
+
+    expect(archiveMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        minimumMatches: 5,
+      }),
+    )
+    expect(wrapper.get('[data-testid="archive-comparison-table"]').text()).toContain(
+      'Meets default reliability threshold.',
+    )
   })
 
   it('copies markdown and plain text archive summaries', async () => {

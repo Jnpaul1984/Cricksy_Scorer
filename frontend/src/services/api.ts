@@ -1408,6 +1408,8 @@ export interface ArchiveComparisonRow {
   data_completeness_label: string;
   confidence: 'high' | 'medium' | 'low' | 'unknown';
   incomplete_season: boolean;
+  qualifies_headline: boolean;
+  sample_size_note: string;
   wicket_source_label: string | null;
   note: string;
 }
