@@ -224,7 +224,11 @@ async def get_historical_archive_explorer_endpoint(
     gender_category: str | None = Query(
         None, description="Optional gender filter: men | women | mixed | unknown"
     ),
-    minimum_matches: int = Query(1, ge=1, description="Minimum matches required per season row"),
+    minimum_matches: int = Query(
+        5,
+        ge=1,
+        description="Minimum matches required for headline archive comparisons",
+    ),
     include_incomplete: bool = Query(
         True, description="Whether to keep seasons with incomplete result coverage"
     ),

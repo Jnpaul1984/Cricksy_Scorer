@@ -259,6 +259,8 @@ class ArchiveComparisonRow(BaseModel):
     data_completeness_label: str = ""
     confidence: Literal["high", "medium", "low", "unknown"] = "unknown"
     incomplete_season: bool = False
+    qualifies_headline: bool = True
+    sample_size_note: str = ""
     wicket_source_label: str | None = None
     note: str = (
         "Derived from imported match data. "

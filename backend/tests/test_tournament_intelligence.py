@@ -882,6 +882,60 @@ class TestGroupEligibleGames:
 
 
 class TestHistoricalArchiveExplorer:
+    @staticmethod
+    def _reliability_entries() -> list[tuple]:
+        entries: list[tuple] = []
+        for idx in range(5):
+            entries.append(
+                _make_eligible_entry(
+                    game_id=f"cpl-2025-{idx}",
+                    season="2025",
+                    venue="Warner Park",
+                    innings_summary=[
+                        {
+                            "inning_no": 1,
+                            "team": "Team Alpha",
+                            "runs": 160,
+                            "wickets": 8,
+                            "overs": 20.0,
+                        },
+                        {
+                            "inning_no": 2,
+                            "team": "Team Beta",
+                            "runs": 160,
+                            "wickets": 8,
+                            "overs": 20.0,
+                        },
+                    ],
+                )
+            )
+
+        entries.append(
+            _make_eligible_entry(
+                game_id="test-2016-only-match",
+                event_name="South Africa in Australia Test Series",
+                season="2016",
+                venue="Melbourne Cricket Ground",
+                innings_summary=[
+                    {
+                        "inning_no": 1,
+                        "team": "South Africa",
+                        "runs": 510,
+                        "wickets": 16,
+                        "overs": 180.0,
+                    },
+                    {
+                        "inning_no": 2,
+                        "team": "Australia",
+                        "runs": 509,
+                        "wickets": 16,
+                        "overs": 175.0,
+                    },
+                ],
+            )
+        )
+        return entries
+
     def test_groups_multiple_seasons_into_archive_comparison_rows(self) -> None:
         entries = [
             _make_eligible_entry(
@@ -965,7 +1019,7 @@ class TestHistoricalArchiveExplorer:
             ),
         ]
 
-        response = _build_archive_response(entries)
+        response = _build_archive_response(entries, minimum_matches=1)
 
         assert len(response.comparison_rows) == 3
         assert [row.group_key.season for row in response.comparison_rows] == [
@@ -1107,7 +1161,7 @@ class TestHistoricalArchiveExplorer:
             ),
         ]
 
-        response = _build_archive_response(entries)
+        response = _build_archive_response(entries, minimum_matches=1)
 
         highest_scoring = next(
             card
@@ -1126,6 +1180,106 @@ class TestHistoricalArchiveExplorer:
         single_sample_venue = next(venue for venue in response.venue_trends if venue.matches == 1)
         assert single_sample_venue.average_runs_per_match is None
         assert "withheld" in single_sample_venue.sample_note.lower()
+
+    def test_default_threshold_excludes_one_match_rows_from_headline_cards(self) -> None:
+        response = _build_archive_response(self._reliability_entries())
+
+        highest_scoring = next(
+            card
+            for card in response.era_comparison_cards
+            if card.card_key == "highest_scoring_season"
+        )
+        assert highest_scoring.value == "Caribbean Premier League 2025"
+
+        wicket_heavy = next(
+            card
+            for card in response.era_comparison_cards
+            if card.card_key == "most_wicket_heavy_season"
+        )
+        assert wicket_heavy.value == "Caribbean Premier League 2025"
+
+        thin_row = next(
+            row
+            for row in response.comparison_rows
+            if row.group_key.competition_name == "South Africa in Australia Test Series"
+        )
+        assert thin_row.imported_matches == 1
+        assert thin_row.qualifies_headline is False
+        assert "fewer than 5 matches" in thin_row.sample_size_note
+
+        scoring_story = next(
+            section
+            for section in response.research_summary.sections
+            if section.section_key == "scoring_trend_story"
+        )
+        assert scoring_story.body is not None
+        assert (
+            "Highest-scoring qualifying season: Caribbean Premier League 2025" in scoring_story.body
+        )
+
+    def test_threshold_one_allows_thin_sample_with_exploratory_label(self) -> None:
+        response = _build_archive_response(self._reliability_entries(), minimum_matches=1)
+
+        highest_scoring = next(
+            card
+            for card in response.era_comparison_cards
+            if card.card_key == "highest_scoring_season"
+        )
+        assert highest_scoring.value == "South Africa in Australia Test Series 2016"
+        assert highest_scoring.subtitle is not None
+        assert "Exploratory only" in highest_scoring.subtitle
+        assert "Thin sample: 1 match" in highest_scoring.subtitle
+
+        wicket_heavy = next(
+            card
+            for card in response.era_comparison_cards
+            if card.card_key == "most_wicket_heavy_season"
+        )
+        assert wicket_heavy.value == "South Africa in Australia Test Series 2016"
+        assert wicket_heavy.subtitle is not None
+        assert "Thin sample: 1 match" in wicket_heavy.subtitle
+
+        thin_row = next(
+            row
+            for row in response.comparison_rows
+            if row.group_key.competition_name == "South Africa in Australia Test Series"
+        )
+        assert thin_row.qualifies_headline is True
+        assert "Exploratory only" in thin_row.sample_size_note
+
+    def test_summary_uses_safe_fallback_when_no_qualifying_seasons(self) -> None:
+        entries = [
+            _make_eligible_entry(
+                game_id="test-2016-only-match",
+                event_name="South Africa in Australia Test Series",
+                season="2016",
+                innings_summary=[
+                    {
+                        "inning_no": 1,
+                        "team": "South Africa",
+                        "runs": 510,
+                        "wickets": 16,
+                        "overs": 180.0,
+                    },
+                    {
+                        "inning_no": 2,
+                        "team": "Australia",
+                        "runs": 509,
+                        "wickets": 16,
+                        "overs": 175.0,
+                    },
+                ],
+            )
+        ]
+
+        response = _build_archive_response(entries)
+        scoring_story = next(
+            section
+            for section in response.research_summary.sections
+            if section.section_key == "scoring_trend_story"
+        )
+        assert scoring_story.body is not None
+        assert "No reliable highest-scoring season is available" in scoring_story.body
 
     def test_preserves_wicket_fallbacks_and_trust_note_in_copy_output(self) -> None:
         entries = [

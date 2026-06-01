@@ -122,6 +122,7 @@
                 <th>Avg runs / match</th>
                 <th>Avg runs / wicket</th>
                 <th>Data trust</th>
+                <th>Reliability / sample</th>
               </tr>
             </thead>
             <tbody>
@@ -142,6 +143,12 @@
                 <td>
                   <div>{{ row.data_completeness_label }}</div>
                   <div class="hae-table-note">{{ row.confidence }} confidence</div>
+                </td>
+                <td>
+                  <div>{{ row.sample_size_note }}</div>
+                  <div class="hae-table-note">
+                    {{ row.qualifies_headline ? 'Qualifies for headline cards' : 'Excluded from headline cards' }}
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -326,7 +333,7 @@ const filters = reactive({
   seasonEnd: '',
   formatFamily: '',
   genderCategory: '',
-  minimumMatches: '1',
+  minimumMatches: '5',
   includeIncomplete: true,
 })
 
@@ -363,7 +370,7 @@ function buildArchiveFilters(): HistoricalArchiveExplorerFilters {
     seasonEnd: filters.seasonEnd ? Number.parseInt(filters.seasonEnd, 10) : undefined,
     formatFamily: filters.formatFamily || undefined,
     genderCategory: filters.genderCategory || undefined,
-    minimumMatches: Number.parseInt(filters.minimumMatches || '1', 10) || 1,
+    minimumMatches: Number.parseInt(filters.minimumMatches || '5', 10) || 5,
     includeIncomplete: filters.includeIncomplete,
   }
 }
