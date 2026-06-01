@@ -336,6 +336,7 @@ class HistoricalImportBulkZipDryRunResponse(BaseModel):
     max_total_compressed_bytes: int
     summary: dict[str, int] = Field(default_factory=dict)
     diagnostics_summary: dict[str, object] = Field(default_factory=dict)
+    safety_gate: dict[str, object] = Field(default_factory=dict)
     files: list[HistoricalImportBulkZipFilePreview] = Field(default_factory=list)
 
 
@@ -361,6 +362,7 @@ class HistoricalImportBulkZipApplyResponse(BaseModel):
     metadata_only_count: int = 0
     full_import_deferred: bool = False
     selected_apply_requires_confirm: bool = True
+    post_import_audit: dict[str, object] = Field(default_factory=dict)
     results: list[HistoricalImportBulkZipApplyFileResult] = Field(default_factory=list)
 
 
