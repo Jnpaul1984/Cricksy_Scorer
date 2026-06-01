@@ -46,3 +46,15 @@ def test_does_not_over_resolve_ambiguous_without_context() -> None:
     assert resolved.canonical_venue_key == "north sound"
     assert resolved.source_method == "raw_fallback"
     assert resolved.confidence == "low"
+
+
+def test_merges_warner_park_missing_country_suffix() -> None:
+    resolved_short = resolve_venue_identity("Warner Park, Basseterre")
+    resolved_full = resolve_venue_identity("Warner Park, Basseterre, St Kitts")
+
+    assert resolved_short is not None
+    assert resolved_full is not None
+    assert resolved_short.canonical_display_name == "Warner Park, Basseterre, St Kitts"
+    assert resolved_full.canonical_display_name == "Warner Park, Basseterre, St Kitts"
+    assert resolved_short.canonical_venue_key == "warner_park_basseterre_st_kitts"
+    assert resolved_full.canonical_venue_key == "warner_park_basseterre_st_kitts"
