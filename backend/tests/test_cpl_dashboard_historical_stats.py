@@ -507,6 +507,57 @@ def test_summary_canonicalizes_known_venue_aliases(client: TestClient) -> None:
     assert "Brian Lara Stadium, Tarouba, Trinidad" in match_raw_venues
 
 
+def test_summary_merges_warner_park_variants_for_venues_card(client: TestClient) -> None:
+    token = _analyst_token(client)
+
+    fixture_short = _make_cpl_fixture(
+        match_number=63,
+        season="2023",
+        venue="Warner Park, Basseterre",
+    )
+    if isinstance(fixture_short.get("innings"), list) and len(fixture_short["innings"]) >= 2:
+        fixture_short["innings"][0]["runs"] = 160
+        fixture_short["innings"][0]["wickets"] = 7
+        fixture_short["innings"][1]["runs"] = 145
+        fixture_short["innings"][1]["wickets"] = 9
+    _apply_fixture(client, token, fixture_short)
+
+    fixture_full = _make_cpl_fixture(
+        match_number=64,
+        season="2023",
+        venue="Warner Park, Basseterre, St Kitts",
+    )
+    if isinstance(fixture_full.get("innings"), list) and len(fixture_full["innings"]) >= 2:
+        fixture_full["innings"][0]["runs"] = 150
+        fixture_full["innings"][0]["wickets"] = 6
+        fixture_full["innings"][1]["runs"] = 140
+        fixture_full["innings"][1]["wickets"] = 8
+    _apply_fixture(client, token, fixture_full)
+
+    resp = client.get("/analytics/historical-stats/summary", headers=_auth_headers(token))
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+
+    warner_rows = [
+        v for v in data["venues"] if v["continuity_group"] == "warner_park_basseterre_st_kitts"
+    ]
+    assert len(warner_rows) == 1
+    warner_row = warner_rows[0]
+    assert warner_row["venue"] == "Warner Park, Basseterre"
+    assert warner_row["match_count"] == 2
+    assert sorted(warner_row["raw_venues"]) == [
+        "Warner Park, Basseterre",
+        "Warner Park, Basseterre, St Kitts",
+    ]
+    assert warner_row["avg_first_innings_score"] == 155.0
+    assert warner_row["avg_total_runs"] == 297.5
+    assert warner_row["avg_wickets"] == 15.0
+
+    match_raw_venues = {m["venue_raw"] for m in data["matches"]}
+    assert "Warner Park, Basseterre" in match_raw_venues
+    assert "Warner Park, Basseterre, St Kitts" in match_raw_venues
+
+
 def test_summary_season_grouping_prefers_metadata_then_match_date_fallback(
     client: TestClient,
 ) -> None:

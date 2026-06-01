@@ -74,6 +74,12 @@ _IDENTITIES: dict[str, VenueIdentity] = {
         city="North Sound",
         country="Antigua",
     ),
+    "warner_park_basseterre_st_kitts": VenueIdentity(
+        key="warner_park_basseterre_st_kitts",
+        display_name="Warner Park, Basseterre, St Kitts",
+        city="Basseterre",
+        country="St Kitts",
+    ),
 }
 
 _ALIASES: dict[str, str] = {
@@ -108,6 +114,8 @@ _ALIASES: dict[str, str] = {
     "sir vivian richards stadium north sound antigua": (
         "sir_vivian_richards_stadium_north_sound_antigua"
     ),
+    "warner park basseterre": "warner_park_basseterre_st_kitts",
+    "warner park basseterre st kitts": "warner_park_basseterre_st_kitts",
 }
 
 _CPL_CONTEXT_ALIASES: dict[str, str] = {
