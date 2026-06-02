@@ -3440,3 +3440,177 @@ class AiInsightReview(Base):
     )
 
     __table_args__ = (Index("ix_ai_insight_review_type_id", "insight_type", "insight_id"),)
+
+
+# ---------------------------------------------------------------------------
+# Phase 10T — Podcast Prep Studio: Saved Reports
+# ---------------------------------------------------------------------------
+
+
+class PodcastPrepReportStatus(str, enum.Enum):
+    draft = "draft"
+    reviewed = "reviewed"
+    approved = "approved"
+    archived = "archived"
+
+
+class PodcastPrepTopicType(str, enum.Enum):
+    match = "match"
+    tournament = "tournament"
+    team = "team"
+    archive = "archive"
+    custom = "custom"
+
+
+class PodcastPrepReport(Base):
+    """Saved podcast prep report generated in the Podcast Prep Studio.
+
+    Phase 10T: stores deterministic research packs generated from imported
+    match/tournament/archive data. All content is derived from real data;
+    no fabricated stats are stored.
+    """
+
+    __tablename__ = "podcast_prep_reports"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    topic_type: Mapped[PodcastPrepTopicType] = mapped_column(
+        SAEnum(PodcastPrepTopicType, name="podcast_prep_topic_type"),
+        nullable=False,
+        default=PodcastPrepTopicType.custom,
+        index=True,
+    )
+    # Source entity IDs (e.g. match_id, competition_code, season)
+    source_match_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    source_competition_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_season: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_team_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Generated content
+    generated_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
+    generated_plain_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    trust_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[PodcastPrepReportStatus] = mapped_column(
+        SAEnum(PodcastPrepReportStatus, name="podcast_prep_report_status"),
+        nullable=False,
+        default=PodcastPrepReportStatus.draft,
+        server_default=PodcastPrepReportStatus.draft.value,
+        index=True,
+    )
+    # Creator identity
+    created_by_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 10T — CPL Current-Season Team / Player Registry
+# ---------------------------------------------------------------------------
+
+
+class CplRosterPlayerStatus(str, enum.Enum):
+    active = "active"
+    inactive = "inactive"
+    unknown = "unknown"
+
+
+class CplCurrentSeasonTeam(Base):
+    """Current-season CPL team registry record.
+
+    Phase 10T: allows manual registration of current CPL teams for podcast
+    prep without requiring all historical matches to be imported.
+    """
+
+    __tablename__ = "cpl_current_season_teams"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    competition_code: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="CPL_MEN", index=True
+    )
+    season: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    team_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalized_team_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    team_short_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    home_ground: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_cpl_current_team_unique",
+            "competition_code",
+            "season",
+            "normalized_team_name",
+            unique=True,
+        ),
+    )
+
+
+class CplCurrentSeasonPlayer(Base):
+    """Current-season CPL player registry record.
+
+    Phase 10T: stores manually entered / CSV-imported player data for the
+    current CPL season so podcast prep can reference current squads without
+    requiring all historical data to be imported.
+    """
+
+    __tablename__ = "cpl_current_season_players"
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    competition_code: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="CPL_MEN", index=True
+    )
+    season: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    player_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalized_player_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    aliases: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    team_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    role: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    batting_style: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    bowling_style: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[CplRosterPlayerStatus] = mapped_column(
+        SAEnum(CplRosterPlayerStatus, name="cpl_roster_player_status"),
+        nullable=False,
+        default=CplRosterPlayerStatus.active,
+        server_default=CplRosterPlayerStatus.active.value,
+        index=True,
+    )
+    # True if player appeared in a prior CPL season (derived or manually set)
+    is_returning: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    prior_season: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_cpl_current_player_unique",
+            "competition_code",
+            "season",
+            "normalized_player_name",
+            unique=True,
+        ),
+    )

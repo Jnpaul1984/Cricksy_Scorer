@@ -3676,3 +3676,392 @@ export async function identityReviewVenueDefer(
     body: JSON.stringify(payload),
   });
 }
+
+// =============================================================================
+// Phase 10T — Podcast Prep Studio + CPL Roster Registry
+// =============================================================================
+
+const PODCAST_PREP_BASE = '/api/podcast-prep'
+const CPL_ROSTER_BASE = '/api/cpl-roster'
+
+// ---------------------------------------------------------------------------
+// Podcast Prep: shared types
+// ---------------------------------------------------------------------------
+
+export type PodcastTopicType = 'match' | 'tournament' | 'team' | 'roster' | 'archive' | 'custom'
+export type PodcastReportStatus = 'draft' | 'reviewed' | 'approved' | 'archived'
+
+export interface PodcastResearchSection {
+  label: string
+  content: string
+  source_note?: string | null
+  confidence?: 'high' | 'medium' | 'low' | 'unknown'
+}
+
+export interface PodcastResearchPack {
+  topic_type: PodcastTopicType
+  title: string
+  subtitle?: string | null
+  sections: PodcastResearchSection[]
+  trust_note: string
+  overall_confidence: 'high' | 'medium' | 'low' | 'unknown'
+  generated_at: string
+}
+
+export interface PodcastPrepReportResponse {
+  id: string
+  title: string
+  topic_type: string
+  source_match_id?: string | null
+  source_competition_code?: string | null
+  source_season?: string | null
+  source_team_name?: string | null
+  generated_markdown?: string | null
+  generated_plain_text?: string | null
+  trust_summary?: string | null
+  status: string
+  created_by_id?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PodcastPrepReportListResponse {
+  reports: PodcastPrepReportResponse[]
+  total: number
+}
+
+export interface PodcastPrepReportCreate {
+  title: string
+  topic_type: PodcastTopicType
+  source_match_id?: string | null
+  source_competition_code?: string | null
+  source_season?: string | null
+  source_team_name?: string | null
+  generated_markdown?: string | null
+  generated_plain_text?: string | null
+  trust_summary?: string | null
+  status?: PodcastReportStatus
+  created_by_id?: string | null
+}
+
+export interface PodcastPrepReportUpdate {
+  title?: string | null
+  status?: PodcastReportStatus | null
+  generated_markdown?: string | null
+  generated_plain_text?: string | null
+  trust_summary?: string | null
+}
+
+export interface MatchPodcastPackRequest {
+  match_id: string
+}
+
+export interface TournamentPodcastPackRequest {
+  competition_code: string
+  season?: string | null
+  gender?: string | null
+}
+
+export interface ArchivePodcastPackRequest {
+  competition_code: string
+  era_label?: string | null
+  compare_seasons?: string[] | null
+}
+
+export interface RosterPodcastPackRequest {
+  competition_code: string
+  season: string
+  team_name?: string | null
+}
+
+// ---------------------------------------------------------------------------
+// Podcast Prep: API functions
+// ---------------------------------------------------------------------------
+
+export async function generateMatchPodcastPack(
+  payload: MatchPodcastPackRequest,
+): Promise<PodcastResearchPack> {
+  return request<PodcastResearchPack>(`${PODCAST_PREP_BASE}/pack/match`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function generateTournamentPodcastPack(
+  payload: TournamentPodcastPackRequest,
+): Promise<PodcastResearchPack> {
+  return request<PodcastResearchPack>(`${PODCAST_PREP_BASE}/pack/tournament`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function generateArchivePodcastPack(
+  payload: ArchivePodcastPackRequest,
+): Promise<PodcastResearchPack> {
+  return request<PodcastResearchPack>(`${PODCAST_PREP_BASE}/pack/archive`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function generateRosterPodcastPack(
+  payload: RosterPodcastPackRequest,
+): Promise<PodcastResearchPack> {
+  return request<PodcastResearchPack>(`${PODCAST_PREP_BASE}/pack/roster`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function listPodcastPrepReports(params?: {
+  topic_type?: string
+  status?: string
+  limit?: number
+  offset?: number
+}): Promise<PodcastPrepReportListResponse> {
+  const qs = new URLSearchParams()
+  if (params?.topic_type) qs.set('topic_type', params.topic_type)
+  if (params?.status) qs.set('status', params.status)
+  if (params?.limit != null) qs.set('limit', String(params.limit))
+  if (params?.offset != null) qs.set('offset', String(params.offset))
+  const query = qs.toString() ? `?${qs.toString()}` : ''
+  return request<PodcastPrepReportListResponse>(`${PODCAST_PREP_BASE}/reports${query}`)
+}
+
+export async function createPodcastPrepReport(
+  payload: PodcastPrepReportCreate,
+): Promise<PodcastPrepReportResponse> {
+  return request<PodcastPrepReportResponse>(`${PODCAST_PREP_BASE}/reports`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function getPodcastPrepReport(id: string): Promise<PodcastPrepReportResponse> {
+  return request<PodcastPrepReportResponse>(`${PODCAST_PREP_BASE}/reports/${id}`)
+}
+
+export async function updatePodcastPrepReport(
+  id: string,
+  payload: PodcastPrepReportUpdate,
+): Promise<PodcastPrepReportResponse> {
+  return request<PodcastPrepReportResponse>(`${PODCAST_PREP_BASE}/reports/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// CPL Roster: shared types
+// ---------------------------------------------------------------------------
+
+export type CplRosterPlayerStatus = 'active' | 'inactive' | 'unknown'
+
+export interface CplTeamResponse {
+  id: string
+  competition_code: string
+  season: string
+  team_name: string
+  normalized_team_name: string
+  short_name?: string | null
+  source_note?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CplTeamListResponse {
+  teams: CplTeamResponse[]
+  total: number
+}
+
+export interface CplPlayerResponse {
+  id: string
+  competition_code: string
+  season: string
+  player_name: string
+  normalized_player_name: string
+  display_name?: string | null
+  aliases: string[]
+  team_name?: string | null
+  role?: string | null
+  batting_style?: string | null
+  bowling_style?: string | null
+  status: string
+  is_returning: boolean
+  prior_season?: string | null
+  source_note?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CplPlayerListResponse {
+  players: CplPlayerResponse[]
+  total: number
+  returning_count: number
+  new_count: number
+  trust_note: string
+}
+
+export interface CplTeamCreate {
+  competition_code?: string
+  season: string
+  team_name: string
+  short_name?: string | null
+  source_note?: string | null
+}
+
+export interface CplPlayerCreate {
+  competition_code?: string
+  season: string
+  team_name?: string | null
+  player_name: string
+  display_name?: string | null
+  aliases?: string[]
+  role?: string | null
+  batting_style?: string | null
+  bowling_style?: string | null
+  status?: CplRosterPlayerStatus
+  source_note?: string | null
+}
+
+export interface CplPlayerUpdate {
+  display_name?: string | null
+  aliases?: string[] | null
+  team_name?: string | null
+  role?: string | null
+  batting_style?: string | null
+  bowling_style?: string | null
+  status?: CplRosterPlayerStatus | null
+  source_note?: string | null
+}
+
+export interface RosterImportRow {
+  competition?: string
+  season: string
+  team?: string | null
+  player: string
+  role?: string | null
+  batting_style?: string | null
+  bowling_style?: string | null
+  status?: CplRosterPlayerStatus
+  source_note?: string | null
+}
+
+export interface RosterImportPreviewTeam {
+  team_name: string
+  normalized: string
+}
+
+export interface RosterImportPreviewPlayer {
+  player_name: string
+  normalized: string
+  team_name?: string | null
+  status?: string | null
+  warning?: string | null
+}
+
+export interface RosterImportPreviewResponse {
+  competition_code: string
+  season: string
+  new_teams: RosterImportPreviewTeam[]
+  existing_teams_matched: string[]
+  new_players: RosterImportPreviewPlayer[]
+  existing_players_matched: string[]
+  duplicates: RosterImportPreviewPlayer[]
+  returning_players: string[]
+  warnings: string[]
+  blockers: string[]
+  total_rows: number
+}
+
+export interface RosterImportApplyRequest {
+  competition_code?: string
+  season: string
+  rows: RosterImportRow[]
+  confirmed: boolean
+}
+
+export interface RosterImportApplyResponse {
+  teams_created: number
+  players_created: number
+  players_updated: number
+  returning_flagged: number
+  skipped_duplicates: number
+  warnings: string[]
+  errors: string[]
+}
+
+// ---------------------------------------------------------------------------
+// CPL Roster: API functions
+// ---------------------------------------------------------------------------
+
+export async function listCplTeams(params?: {
+  competition_code?: string
+  season?: string
+}): Promise<CplTeamListResponse> {
+  const qs = new URLSearchParams()
+  if (params?.competition_code) qs.set('competition_code', params.competition_code)
+  if (params?.season) qs.set('season', params.season)
+  const query = qs.toString() ? `?${qs.toString()}` : ''
+  return request<CplTeamListResponse>(`${CPL_ROSTER_BASE}/teams${query}`)
+}
+
+export async function createCplTeam(payload: CplTeamCreate): Promise<CplTeamResponse> {
+  return request<CplTeamResponse>(`${CPL_ROSTER_BASE}/teams`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function listCplPlayers(params?: {
+  competition_code?: string
+  season?: string
+  team_name?: string
+  status?: string
+}): Promise<CplPlayerListResponse> {
+  const qs = new URLSearchParams()
+  if (params?.competition_code) qs.set('competition_code', params.competition_code)
+  if (params?.season) qs.set('season', params.season)
+  if (params?.team_name) qs.set('team_name', params.team_name)
+  if (params?.status) qs.set('status', params.status)
+  const query = qs.toString() ? `?${qs.toString()}` : ''
+  return request<CplPlayerListResponse>(`${CPL_ROSTER_BASE}/players${query}`)
+}
+
+export async function createCplPlayer(payload: CplPlayerCreate): Promise<CplPlayerResponse> {
+  return request<CplPlayerResponse>(`${CPL_ROSTER_BASE}/players`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateCplPlayer(
+  id: string,
+  payload: CplPlayerUpdate,
+): Promise<CplPlayerResponse> {
+  return request<CplPlayerResponse>(`${CPL_ROSTER_BASE}/players/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function rosterImportPreview(params: {
+  competition_code: string
+  season: string
+  rows: RosterImportRow[]
+}): Promise<RosterImportPreviewResponse> {
+  return request<RosterImportPreviewResponse>(`${CPL_ROSTER_BASE}/import/preview`, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+}
+
+export async function rosterImportApply(
+  payload: RosterImportApplyRequest,
+): Promise<RosterImportApplyResponse> {
+  return request<RosterImportApplyResponse>(`${CPL_ROSTER_BASE}/import/apply`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
