@@ -11,6 +11,7 @@ from typing import Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 # Revision identifiers, used by Alembic.
 revision: str = "e7f8a9b0c1d2"
@@ -18,26 +19,64 @@ down_revision: Union[str, None] = "z1a2b3c4d5e6"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
 
+# Enum type definitions reused in both upgrade() and the column declarations.
+podcast_topic_type = postgresql.ENUM(
+    "match",
+    "tournament",
+    "team",
+    "archive",
+    "custom",
+    name="podcast_prep_topic_type",
+    create_type=False,
+)
+podcast_report_status = postgresql.ENUM(
+    "draft",
+    "reviewed",
+    "approved",
+    "archived",
+    name="podcast_prep_report_status",
+    create_type=False,
+)
+roster_status_enum = postgresql.ENUM(
+    "active",
+    "inactive",
+    "unknown",
+    name="cpl_roster_player_status",
+    create_type=False,
+)
+
+
+def _create_enum_if_not_exists(name: str, values: list[str]) -> None:
+    """Create a PostgreSQL ENUM type only when it does not yet exist.
+
+    On SQLite this is a no-op — SQLAlchemy maps ENUMs to VARCHAR there.
+    """
+    bind = op.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+    existing = bind.execute(
+        sa.text("SELECT 1 FROM pg_type WHERE typname = :n"),
+        {"n": name},
+    ).scalar()
+    if not existing:
+        quoted = ", ".join(f"'{v}'" for v in values)
+        bind.execute(sa.text(f"CREATE TYPE {name} AS ENUM ({quoted})"))
+
 
 def upgrade() -> None:
-    # --- podcast_prep_report_status enum ---
-    podcast_topic_type = sa.Enum(
-        "match",
-        "tournament",
-        "team",
-        "archive",
-        "custom",
-        name="podcast_prep_topic_type",
+    # --- Create PostgreSQL ENUM types idempotently ---
+    _create_enum_if_not_exists(
+        "podcast_prep_topic_type",
+        ["match", "tournament", "team", "archive", "custom"],
     )
-    podcast_report_status = sa.Enum(
-        "draft",
-        "reviewed",
-        "approved",
-        "archived",
-        name="podcast_prep_report_status",
+    _create_enum_if_not_exists(
+        "podcast_prep_report_status",
+        ["draft", "reviewed", "approved", "archived"],
     )
-    podcast_topic_type.create(op.get_bind(), checkfirst=True)
-    podcast_report_status.create(op.get_bind(), checkfirst=True)
+    _create_enum_if_not_exists(
+        "cpl_roster_player_status",
+        ["active", "inactive", "unknown"],
+    )
 
     op.create_table(
         "podcast_prep_reports",
@@ -87,15 +126,6 @@ def upgrade() -> None:
     op.create_index(
         "ix_podcast_prep_report_created_by", "podcast_prep_reports", ["created_by_id"]
     )
-
-    # --- cpl_roster_player_status enum ---
-    roster_status_enum = sa.Enum(
-        "active",
-        "inactive",
-        "unknown",
-        name="cpl_roster_player_status",
-    )
-    roster_status_enum.create(op.get_bind(), checkfirst=True)
 
     op.create_table(
         "cpl_current_season_teams",
@@ -205,10 +235,16 @@ def downgrade() -> None:
     op.drop_table("cpl_current_season_teams")
     op.drop_table("podcast_prep_reports")
 
-    # Drop enums (PostgreSQL specific; safe to catch errors on SQLite)
-    try:
-        sa.Enum(name="podcast_prep_topic_type").drop(op.get_bind(), checkfirst=True)
-        sa.Enum(name="podcast_prep_report_status").drop(op.get_bind(), checkfirst=True)
-        sa.Enum(name="cpl_roster_player_status").drop(op.get_bind(), checkfirst=True)
-    except Exception:
-        pass
+    # Drop PostgreSQL ENUM types; no-op on SQLite.
+    bind = op.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+    for type_name in (
+        "podcast_prep_topic_type",
+        "podcast_prep_report_status",
+        "cpl_roster_player_status",
+    ):
+        try:
+            bind.execute(sa.text(f"DROP TYPE IF EXISTS {type_name}"))
+        except sa.exc.ProgrammingError:
+            pass

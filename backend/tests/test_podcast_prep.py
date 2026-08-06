@@ -175,7 +175,7 @@ def _minimal_archive_data() -> dict:
         ],
         "era_comparisons": [
             {
-                "era_label": "Early Era (2014–2016)",
+                "era_label": "Early Era (2014-2016)",
                 "notes": "High-scoring era with many close finishes.",
             }
         ],

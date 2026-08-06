@@ -573,19 +573,15 @@ def build_archive_research_pack(
 
     total_matches = archive_data.get("total_matches", 0)
     total_groups = archive_data.get("total_groups", 0)
-    trust_note_from_data = archive_data.get(
-        "trust_note",
-        "All archive views are derived from imported match data and are not official.",
-    )
     comparison_rows = archive_data.get("comparison_rows", [])
     champion_history = archive_data.get("champion_history", [])
     dynasty_indicators = archive_data.get("dynasty_indicators", [])
     era_comparisons = archive_data.get("era_comparison_cards", [])
 
     comp_filter = request.competition_code or "All competitions"
-    episode_title = f"Historical Archive — {comp_filter}"
+    episode_title = f"Historical Archive \u2014 {comp_filter}"
     if request.season_start and request.season_end:
-        episode_title += f" ({request.season_start}–{request.season_end})"
+        episode_title += f" ({request.season_start}-{request.season_end})"
 
     sections: list[PodcastResearchSection] = []
     sections.append(
