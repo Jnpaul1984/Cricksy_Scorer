@@ -7,17 +7,18 @@ Create Date: 2026-06-02
 
 from __future__ import annotations
 
-from typing import Union
+import contextlib
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # Revision identifiers, used by Alembic.
 revision: str = "e7f8a9b0c1d2"
-down_revision: Union[str, None] = "z1a2b3c4d5e6"
-branch_labels: Union[str, None] = None
-depends_on: Union[str, None] = None
+down_revision: str | None = "z1a2b3c4d5e6"
+branch_labels: str | None = None
+depends_on: str | None = None
 
 # Enum type definitions reused in both upgrade() and the column declarations.
 podcast_topic_type = postgresql.ENUM(
@@ -113,19 +114,13 @@ def upgrade() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["created_by_id"], ["users.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["created_by_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_podcast_prep_report_topic", "podcast_prep_reports", ["topic_type"])
     op.create_index("ix_podcast_prep_report_status", "podcast_prep_reports", ["status"])
-    op.create_index(
-        "ix_podcast_prep_report_match", "podcast_prep_reports", ["source_match_id"]
-    )
-    op.create_index(
-        "ix_podcast_prep_report_created_by", "podcast_prep_reports", ["created_by_id"]
-    )
+    op.create_index("ix_podcast_prep_report_match", "podcast_prep_reports", ["source_match_id"])
+    op.create_index("ix_podcast_prep_report_created_by", "podcast_prep_reports", ["created_by_id"])
 
     op.create_table(
         "cpl_current_season_teams",
@@ -154,9 +149,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_cpl_current_team_comp_code", "cpl_current_season_teams", ["competition_code"]
     )
-    op.create_index(
-        "ix_cpl_current_team_season", "cpl_current_season_teams", ["season"]
-    )
+    op.create_index("ix_cpl_current_team_season", "cpl_current_season_teams", ["season"])
     op.create_index(
         "ix_cpl_current_team_normalized", "cpl_current_season_teams", ["normalized_team_name"]
     )
@@ -208,20 +201,14 @@ def upgrade() -> None:
         "cpl_current_season_players",
         ["competition_code"],
     )
-    op.create_index(
-        "ix_cpl_current_player_season", "cpl_current_season_players", ["season"]
-    )
+    op.create_index("ix_cpl_current_player_season", "cpl_current_season_players", ["season"])
     op.create_index(
         "ix_cpl_current_player_normalized",
         "cpl_current_season_players",
         ["normalized_player_name"],
     )
-    op.create_index(
-        "ix_cpl_current_player_team", "cpl_current_season_players", ["team_name"]
-    )
-    op.create_index(
-        "ix_cpl_current_player_status", "cpl_current_season_players", ["status"]
-    )
+    op.create_index("ix_cpl_current_player_team", "cpl_current_season_players", ["team_name"])
+    op.create_index("ix_cpl_current_player_status", "cpl_current_season_players", ["status"])
     op.create_index(
         "ix_cpl_current_player_unique",
         "cpl_current_season_players",
@@ -244,7 +231,5 @@ def downgrade() -> None:
         "podcast_prep_report_status",
         "cpl_roster_player_status",
     ):
-        try:
+        with contextlib.suppress(sa.exc.ProgrammingError):
             bind.execute(sa.text(f"DROP TYPE IF EXISTS {type_name}"))
-        except sa.exc.ProgrammingError:
-            pass
