@@ -8,15 +8,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+from alembic.script.revision import Revision
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
-
-from alembic.config import Config
-from alembic.script import ScriptDirectory
-from alembic.script.revision import Revision
 
 MigrationStatus = Literal["at_head", "behind", "uninitialized", "multiple_heads", "unknown"]
 
@@ -138,8 +137,7 @@ def classify_migration_state(
             status="uninitialized",
             behind=True,
             detail=(
-                "Production database has no alembic_version row and is behind the "
-                "repository head."
+                "Production database has no alembic_version row and is behind the repository head."
             ),
         )
 

@@ -1,6 +1,6 @@
 """Phase 10T — Add podcast_prep_reports, cpl_current_season_teams, cpl_current_season_players tables.
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: e7f8a9b0c1d2
 Revises: z1a2b3c4d5e6
 Create Date: 2026-06-02
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # Revision identifiers, used by Alembic.
-revision: str = "a1b2c3d4e5f6"
+revision: str = "e7f8a9b0c1d2"
 down_revision: Union[str, None] = "z1a2b3c4d5e6"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
