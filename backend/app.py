@@ -69,6 +69,8 @@ from backend.routes.health import router as health_router
 from backend.routes.historical_import import router as historical_import_router
 from backend.routes.historical_stats import router as historical_stats_router
 from backend.routes.tournament_intelligence import router as tournament_intelligence_router
+from backend.routes.podcast_prep import router as podcast_prep_router
+from backend.routes.cpl_roster import router as cpl_roster_router
 from backend.routes.interruptions import router as interruptions_router
 from backend.routes.matches import router as matches_router
 from backend.routes.mental_questionnaires import router as mental_questionnaires_router
@@ -454,6 +456,8 @@ def create_app(
     fastapi_app.include_router(historical_import_router)
     fastapi_app.include_router(historical_stats_router)
     fastapi_app.include_router(tournament_intelligence_router)
+    fastapi_app.include_router(podcast_prep_router)
+    fastapi_app.include_router(cpl_roster_router)
     fastapi_app.include_router(sponsors_router)
     fastapi_app.include_router(games_core_router)
     fastapi_app.include_router(prediction_router)

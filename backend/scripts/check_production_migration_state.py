@@ -138,8 +138,7 @@ def classify_migration_state(
             status="uninitialized",
             behind=True,
             detail=(
-                "Production database has no alembic_version row and is behind the "
-                "repository head."
+                "Production database has no alembic_version row and is behind the repository head."
             ),
         )
 
