@@ -1,10 +1,10 @@
 """Phase 10T — Podcast Prep Studio: FastAPI routes.
 
 Exposes:
-  POST /api/podcast-prep/match          → generate match research pack
-  POST /api/podcast-prep/tournament     → generate tournament research pack
-  POST /api/podcast-prep/archive        → generate archive research pack
-  POST /api/podcast-prep/roster         → generate roster research pack
+  POST /api/podcast-prep/pack/match          → generate match research pack
+  POST /api/podcast-prep/pack/tournament     → generate tournament research pack
+  POST /api/podcast-prep/pack/archive        → generate archive research pack
+  POST /api/podcast-prep/pack/roster         → generate roster research pack
 
   POST   /api/podcast-prep/reports      → save report
   GET    /api/podcast-prep/reports      → list reports
@@ -127,7 +127,7 @@ async def _load_archive_data(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/match", response_model=PodcastResearchPack)
+@router.post("/pack/match", response_model=PodcastResearchPack)
 async def generate_match_podcast_pack(
     body: MatchPodcastPackRequest,
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
@@ -150,7 +150,7 @@ async def generate_match_podcast_pack(
     return build_match_research_pack(body.match_id, match_data)
 
 
-@router.post("/tournament", response_model=PodcastResearchPack)
+@router.post("/pack/tournament", response_model=PodcastResearchPack)
 async def generate_tournament_podcast_pack(
     body: TournamentPodcastPackRequest,
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
@@ -177,7 +177,7 @@ async def generate_tournament_podcast_pack(
     )
 
 
-@router.post("/archive", response_model=PodcastResearchPack)
+@router.post("/pack/archive", response_model=PodcastResearchPack)
 async def generate_archive_podcast_pack(
     body: ArchivePodcastPackRequest,
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
@@ -192,7 +192,7 @@ async def generate_archive_podcast_pack(
     return build_archive_research_pack(archive_data, body)
 
 
-@router.post("/roster", response_model=PodcastResearchPack)
+@router.post("/pack/roster", response_model=PodcastResearchPack)
 async def generate_roster_podcast_pack(
     body: RosterPodcastPackRequest,
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
@@ -251,17 +251,13 @@ async def get_podcast_prep_reports(
 ) -> PodcastPrepReportListResponse:
     """List saved podcast prep reports (scoped to current user)."""
     user_id = getattr(current_user, "id", None) or getattr(current_user, "sub", None)
-    reports, total = await list_podcast_prep_reports(
+    return await list_podcast_prep_reports(
         db,
         created_by_id=user_id,
         topic_type=topic_type,
         status=report_status,
         limit=limit,
         offset=offset,
-    )
-    return PodcastPrepReportListResponse(
-        reports=[PodcastPrepReportResponse.model_validate(r) for r in reports],
-        total=total,
     )
 
 
