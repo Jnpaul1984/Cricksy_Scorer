@@ -829,3 +829,258 @@ class TestSavedPodcastPrepReports:
         )
         assert report.generated_plain_text
         assert len(report.generated_plain_text) > 20
+
+
+# ---------------------------------------------------------------------------
+# Integration: rich case study data (Phase 10T.1)
+# ---------------------------------------------------------------------------
+
+
+def _rich_match_data() -> dict:
+    """Match data structured like MatchCaseStudyResponse.model_dump()."""
+    base = _minimal_match_data()
+    # Override innings to use CaseStudyInningsSummary 'team' key (no batting_team)
+    base["match"]["innings"] = [
+        {"team": "Team A", "runs": 185, "wickets": 6, "overs": 20.0, "run_rate": 9.25},
+        {"team": "Team B", "runs": 140, "wickets": 10, "overs": 18.3, "run_rate": 7.57},
+    ]
+    # Remove top-level innings so function reads from match.innings
+    base.pop("innings", None)
+    base["momentum_summary"] = {
+        "title": "Team A dominated from ball one",
+        "subtitle": "Consistent scoring across all phases.",
+        "winning_side": "Team A",
+    }
+    base["key_phase"] = {
+        "title": "Death overs (17-20)",
+        "detail": "Team A smashed 48 runs in the final four overs.",
+        "team": "Team A",
+    }
+    base["dismissal_patterns"] = {
+        "summary": "Three wickets fell in a cluster during overs 8-11.",
+        "wicket_cluster_callout": "Possible collapse window: overs 8-11 — 3 wickets in 4 overs.",
+        "total_wickets": 10,
+    }
+    base["match_level_summary"] = "Team A dominated this T20 from the powerplay onwards."
+    base["analysis_mode"] = "t20_limited_overs"
+    base["match_callouts"] = [
+        {"explanation": "Powerplay domination set up Team A's total.", "title": "Powerplay"}
+    ]
+    return base
+
+
+def _rich_match_data_odi() -> dict:
+    base = _rich_match_data()
+    base["match"]["format"] = "ODI"
+    base["odi_intelligence"] = {
+        "chase_intelligence": {
+            "target": 256,
+            "chasing_team": "Team B",
+            "initial_required_rate": 5.12,
+            "chase_pressure_note": "Team B needed 12 an over from over 40.",
+            "chase_result": "fell_short",
+        },
+        "turning_point_candidate": "The wicket of the captain in over 35 proved decisive.",
+    }
+    return base
+
+
+def _rich_match_data_test() -> dict:
+    base = _rich_match_data()
+    base["match"]["format"] = "TEST"
+    base["multi_day_summary"] = {
+        "match_status": "won",
+        "first_innings_lead_note": "Team A took a 67-run first innings lead.",
+        "lead_swing_notes": ["Team B's second innings collapse shifted momentum."],
+        "match_turning_point": "Wicket cluster in Team B's second innings (overs 23-28).",
+        "fourth_innings_chase": {
+            "target": 145,
+            "chasing_team": "Team A",
+            "chase_result": "completed",
+        },
+    }
+    return base
+
+
+def _rich_tournament_data() -> dict:
+    base = _minimal_tournament_data()
+    base["total_runs"] = 4830
+    base["total_wickets"] = 220
+    base["highest_team_total"] = 217
+    base["highest_team_total_by"] = "TKR"
+    base["venues"] = ["Queen's Park Oval", "Providence Stadium", "Sabina Park"]
+    base["biggest_win_by_runs"] = {
+        "match_id": "m1",
+        "match_title": "TKR vs GF 2024",
+        "highlight_type": "biggest_win_runs",
+        "detail": "Won by 82 runs",
+    }
+    base["biggest_win_by_wickets"] = {
+        "match_id": "m2",
+        "match_title": "BAR vs JT 2024",
+        "highlight_type": "biggest_win_wickets",
+        "detail": "Won by 9 wickets",
+    }
+    base["closest_match"] = {
+        "match_id": "m3",
+        "match_title": "GF vs BAR 2024",
+        "highlight_type": "closest_match",
+        "detail": "Won by 1 run",
+    }
+    # Augment podcast_facts
+    base.setdefault("podcast_facts", {})
+    base["podcast_facts"]["strongest_team_by_wins"] = "Trinbago Knight Riders"
+    base["podcast_facts"]["key_journey_note"] = "TKR won all three knockout stage matches."
+    base["podcast_facts"]["closest_finish_match_title"] = "GF vs BAR 2024"
+    base["knockout_context"] = {
+        "champion_team": "Trinbago Knight Riders",
+        "runner_up_team": "Barbados Royals",
+        "final_result": "TKR won by 28 runs",
+        "semi_final_matches": [
+            {
+                "match_id": "sf1",
+                "match_title": "TKR vs SLK Semi-Final",
+                "highlight_type": "semi_final",
+                "result": "TKR won by 5 wickets",
+            },
+            {
+                "match_id": "sf2",
+                "match_title": "BAR vs GF Semi-Final",
+                "highlight_type": "semi_final",
+                "result": "BAR won by 3 runs",
+            },
+        ],
+    }
+    return base
+
+
+class TestMatchPackRichCaseStudy:
+    """Phase 10T.1: match pack reads from MatchCaseStudyResponse format."""
+
+    def test_scoreboard_from_match_innings(self) -> None:
+        """Innings from match.innings (CaseStudyInningsSummary format) appear in scoreboard."""
+        pack = build_match_research_pack("m1", _rich_match_data())
+        kf = next((s for s in pack.sections if s.section_key == "key_facts"), None)
+        assert kf is not None
+        assert kf.body is not None
+        assert "Team A" in kf.body
+        assert "185" in kf.body
+
+    def test_momentum_verdict_section_present(self) -> None:
+        pack = build_match_research_pack("m1", _rich_match_data())
+        mv = next((s for s in pack.sections if s.section_key == "momentum_verdict"), None)
+        assert mv is not None
+        assert mv.body is not None
+        assert "Team A dominated" in mv.body
+
+    def test_key_phase_section_present(self) -> None:
+        pack = build_match_research_pack("m1", _rich_match_data())
+        kp = next((s for s in pack.sections if s.section_key == "key_phase"), None)
+        assert kp is not None
+        assert kp.body is not None
+        assert "Death overs" in kp.body
+
+    def test_dismissal_patterns_section_present(self) -> None:
+        pack = build_match_research_pack("m1", _rich_match_data())
+        dp = next((s for s in pack.sections if s.section_key == "dismissal_patterns"), None)
+        assert dp is not None
+        assert dp.body is not None
+        assert "cluster" in dp.body.lower()
+
+    def test_callout_explanation_used(self) -> None:
+        """CaseStudyAnalystCallout uses 'explanation' not 'text'."""
+        pack = build_match_research_pack("m1", _rich_match_data())
+        ttp = next(
+            (s for s in pack.sections if s.section_key == "tactical_talking_points"), None
+        )
+        assert ttp is not None
+        assert ttp.body is not None
+        assert "Powerplay domination" in ttp.body
+
+    def test_odi_intelligence_section(self) -> None:
+        pack = build_match_research_pack("m-odi", _rich_match_data_odi())
+        odi = next((s for s in pack.sections if s.section_key == "odi_intelligence"), None)
+        assert odi is not None
+        assert odi.body is not None
+        assert "256" in odi.body
+
+    def test_test_match_section(self) -> None:
+        pack = build_match_research_pack("m-test", _rich_match_data_test())
+        tmi = next(
+            (s for s in pack.sections if s.section_key == "test_match_intelligence"), None
+        )
+        assert tmi is not None
+        assert tmi.body is not None
+        assert "first innings" in tmi.body.lower() or "lead" in tmi.body.lower()
+
+    def test_source_note_references_case_study(self) -> None:
+        """Section notes mention Match Case Study as source."""
+        pack = build_match_research_pack("m1", _rich_match_data())
+        mv = next((s for s in pack.sections if s.section_key == "momentum_verdict"), None)
+        assert mv is not None
+        assert "Case Study" in mv.note
+
+
+class TestTournamentPackRichIntelligence:
+    """Phase 10T.1: tournament pack uses rich TournamentSummaryResponse data."""
+
+    def test_total_runs_in_setup(self) -> None:
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _rich_tournament_data())
+        setup = next((s for s in pack.sections if s.section_key == "tournament_setup"), None)
+        assert setup is not None
+        assert setup.body is not None
+        assert "4830" in setup.body
+
+    def test_biggest_win_runs_section(self) -> None:
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _rich_tournament_data())
+        mm = next((s for s in pack.sections if s.section_key == "key_match_moments"), None)
+        assert mm is not None
+        assert mm.body is not None
+        assert "82 runs" in mm.body
+
+    def test_biggest_win_wickets_section(self) -> None:
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _rich_tournament_data())
+        mm = next((s for s in pack.sections if s.section_key == "key_match_moments"), None)
+        assert mm is not None
+        assert mm.body is not None
+        assert "9 wickets" in mm.body
+
+    def test_closest_match_section(self) -> None:
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _rich_tournament_data())
+        mm = next((s for s in pack.sections if s.section_key == "key_match_moments"), None)
+        assert mm is not None
+        assert "1 run" in mm.body
+
+    def test_venue_patterns_section(self) -> None:
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _rich_tournament_data())
+        vp = next((s for s in pack.sections if s.section_key == "venue_scoring_patterns"), None)
+        assert vp is not None
+        assert vp.body is not None
+        assert "Queen's Park Oval" in vp.body
+
+    def test_strongest_team_in_key_facts(self) -> None:
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _rich_tournament_data())
+        kf = next((s for s in pack.sections if s.section_key == "key_facts"), None)
+        assert kf is not None
+        assert kf.body is not None
+        assert "Trinbago" in kf.body
+
+    def test_semi_finals_in_champion_story(self) -> None:
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _rich_tournament_data())
+        cs = next((s for s in pack.sections if s.section_key == "champion_story"), None)
+        assert cs is not None
+        assert cs.body is not None
+        assert "Semi-final" in cs.body
+
+    def test_key_journey_note_in_champion_story(self) -> None:
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _rich_tournament_data())
+        cs = next((s for s in pack.sections if s.section_key == "champion_story"), None)
+        assert cs is not None
+        assert cs.body is not None
+        assert "knockout stage" in cs.body
+
+    def test_source_note_references_tournament_intelligence(self) -> None:
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _rich_tournament_data())
+        mm = next((s for s in pack.sections if s.section_key == "key_match_moments"), None)
+        assert mm is not None
+        assert "Tournament Intelligence" in mm.note
