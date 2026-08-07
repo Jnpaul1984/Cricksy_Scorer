@@ -227,7 +227,6 @@ def build_match_research_pack(
     multi_day_summary: dict[str, Any] = match_data.get("multi_day_summary") or {}
     odi_intelligence: dict[str, Any] = match_data.get("odi_intelligence") or {}
     match_level_summary: str | None = match_data.get("match_level_summary")
-    analysis_mode: str | None = match_data.get("analysis_mode")
 
     teams_label: str = match.get("teams_label") or "Unknown teams"
     match_date: str | None = match.get("date")
