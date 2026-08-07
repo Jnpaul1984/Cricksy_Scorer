@@ -36,31 +36,80 @@ const listReportsMock = vi.mocked(listPodcastPrepReports)
 const createReportMock = vi.mocked(createPodcastPrepReport)
 const updateReportMock = vi.mocked(updatePodcastPrepReport)
 
+// ---------------------------------------------------------------------------
+// Sample data — uses correct backend schema field names
+// ---------------------------------------------------------------------------
+
 const samplePack: PodcastResearchPack = {
   topic_type: 'match',
-  title: 'CPL 2024 Final — TKR vs Barbados Royals',
-  subtitle: 'T20 match — 2024-09-01',
+  episode_title: 'CPL 2024 Final — TKR vs Barbados Royals',
+  match_context: 'TKR won by 7 wickets',
+  competition_label: 'CPL Men',
+  season_label: '2024',
+  venue_context: 'Queen\'s Park Oval',
+  format_label: 'T20',
   overall_confidence: 'high',
   trust_note: 'Match facts are derived from imported match data.',
   generated_at: '2024-09-02T10:00:00Z',
+  generated_markdown: '# CPL 2024 Final\n\nBackend markdown content.',
+  generated_plain_text: 'CPL 2024 FINAL\n\nBackend plain text content.',
   sections: [
     {
-      label: 'Episode Topic',
-      content: 'CPL 2024 Final — TKR vs Barbados Royals',
-      source_note: 'Match registry',
+      section_key: 'episode_topic',
+      title: 'Episode Topic',
+      body: 'CPL 2024 Final — TKR vs Barbados Royals',
+      note: 'Match registry',
       confidence: 'high',
     },
     {
-      label: 'Key Facts',
-      content: 'TKR won by 7 wickets. Kieron Pollard scored 45 runs.',
-      source_note: 'Derived from delivery data',
+      section_key: 'key_facts',
+      title: 'Key Facts',
+      body: 'TKR won by 7 wickets. Kieron Pollard scored 45 runs.',
+      note: 'Derived from delivery data',
       confidence: 'high',
     },
     {
-      label: 'Trust Note',
-      content: 'Match facts are derived from imported match data.',
-      source_note: null,
+      section_key: 'trust_note',
+      title: 'Trust Note',
+      body: 'Match facts are derived from imported match data.',
+      note: 'Governance',
       confidence: 'high',
+    },
+  ],
+}
+
+const packWithNullBody: PodcastResearchPack = {
+  ...samplePack,
+  sections: [
+    {
+      section_key: 'empty_section',
+      title: 'Thin Data Section',
+      body: null,
+      note: 'No records found',
+      confidence: 'unknown',
+    },
+  ],
+  generated_markdown: null,
+  generated_plain_text: null,
+}
+
+const rosterEmptyPack: PodcastResearchPack = {
+  topic_type: 'roster',
+  episode_title: 'CPL_MEN 2025 Roster — No Records',
+  competition_label: 'CPL Men',
+  season_label: '2025',
+  overall_confidence: 'unknown',
+  trust_note: 'No current-season roster records exist for this selection.',
+  generated_at: '2025-01-01T00:00:00Z',
+  generated_markdown: null,
+  generated_plain_text: null,
+  sections: [
+    {
+      section_key: 'roster_status',
+      title: 'Roster Status',
+      body: null,
+      note: 'No roster data found for CPL_MEN 2025',
+      confidence: 'unknown',
     },
   ],
 }
@@ -153,7 +202,7 @@ describe('PodcastPrepStudioPanel', () => {
   })
 
   // ---------------------------------------------------------------------------
-  // Research pack generation
+  // Research pack generation — schema contract regression tests
   // ---------------------------------------------------------------------------
 
   describe('match pack generation', () => {
@@ -167,14 +216,58 @@ describe('PodcastPrepStudioPanel', () => {
       expect(matchPackMock).toHaveBeenCalledWith({ match_id: 'match-abc' })
     })
 
-    it('displays pack title after generation', async () => {
+    it('renders episode_title as the report title', async () => {
       matchPackMock.mockResolvedValue(samplePack)
       const wrapper = mount(PodcastPrepStudioPanel)
       await flushPromises()
       await wrapper.find('#pps-match-id').setValue('match-abc')
       await wrapper.find('.pps-generate-btn').trigger('click')
       await flushPromises()
-      expect(wrapper.text()).toContain(samplePack.title)
+      expect(wrapper.find('.pps-pack-title').text()).toContain(samplePack.episode_title)
+    })
+
+    it('renders section title as section heading', async () => {
+      matchPackMock.mockResolvedValue(samplePack)
+      const wrapper = mount(PodcastPrepStudioPanel)
+      await flushPromises()
+      await wrapper.find('#pps-match-id').setValue('match-abc')
+      await wrapper.find('.pps-generate-btn').trigger('click')
+      await flushPromises()
+      for (const section of samplePack.sections) {
+        expect(wrapper.text()).toContain(section.title)
+      }
+    })
+
+    it('renders section body as section content', async () => {
+      matchPackMock.mockResolvedValue(samplePack)
+      const wrapper = mount(PodcastPrepStudioPanel)
+      await flushPromises()
+      await wrapper.find('#pps-match-id').setValue('match-abc')
+      await wrapper.find('.pps-generate-btn').trigger('click')
+      await flushPromises()
+      for (const section of samplePack.sections) {
+        if (section.body) expect(wrapper.text()).toContain(section.body)
+      }
+    })
+
+    it('renders section note as source note', async () => {
+      matchPackMock.mockResolvedValue(samplePack)
+      const wrapper = mount(PodcastPrepStudioPanel)
+      await flushPromises()
+      await wrapper.find('#pps-match-id').setValue('match-abc')
+      await wrapper.find('.pps-generate-btn').trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).toContain(samplePack.sections[0].note)
+    })
+
+    it('renders null section body as fallback message', async () => {
+      matchPackMock.mockResolvedValue(packWithNullBody)
+      const wrapper = mount(PodcastPrepStudioPanel)
+      await flushPromises()
+      await wrapper.find('#pps-match-id').setValue('match-abc')
+      await wrapper.find('.pps-generate-btn').trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).toContain('No supporting data is available for this section.')
     })
 
     it('displays trust note after generation', async () => {
@@ -186,18 +279,6 @@ describe('PodcastPrepStudioPanel', () => {
       await flushPromises()
       expect(wrapper.text()).toContain('Trust note:')
       expect(wrapper.text()).toContain(samplePack.trust_note)
-    })
-
-    it('displays all section labels after generation', async () => {
-      matchPackMock.mockResolvedValue(samplePack)
-      const wrapper = mount(PodcastPrepStudioPanel)
-      await flushPromises()
-      await wrapper.find('#pps-match-id').setValue('match-abc')
-      await wrapper.find('.pps-generate-btn').trigger('click')
-      await flushPromises()
-      for (const section of samplePack.sections) {
-        expect(wrapper.text()).toContain(section.label)
-      }
     })
 
     it('shows confidence badge', async () => {
@@ -223,10 +304,9 @@ describe('PodcastPrepStudioPanel', () => {
 
   describe('tournament pack generation', () => {
     it('switches to tournament topic and calls correct API', async () => {
-      tournamentPackMock.mockResolvedValue({ ...samplePack, topic_type: 'tournament', title: 'CPL_MEN 2024 Season' })
+      tournamentPackMock.mockResolvedValue({ ...samplePack, topic_type: 'tournament', episode_title: 'CPL_MEN 2024 Season' })
       const wrapper = mount(PodcastPrepStudioPanel)
       await flushPromises()
-      // Click tournament topic button
       const topicBtns = wrapper.findAll('.pps-topic-btn')
       const tournamentBtn = topicBtns.find(b => b.text().includes('Tournament'))
       await tournamentBtn?.trigger('click')
@@ -241,7 +321,7 @@ describe('PodcastPrepStudioPanel', () => {
 
   describe('roster pack generation', () => {
     it('calls generateRosterPodcastPack with competition and season', async () => {
-      rosterPackMock.mockResolvedValue({ ...samplePack, topic_type: 'roster', title: 'CPL_MEN 2025 Roster' })
+      rosterPackMock.mockResolvedValue({ ...samplePack, topic_type: 'roster', episode_title: 'CPL_MEN 2025 Roster' })
       const wrapper = mount(PodcastPrepStudioPanel)
       await flushPromises()
       const topicBtns = wrapper.findAll('.pps-topic-btn')
@@ -267,6 +347,20 @@ describe('PodcastPrepStudioPanel', () => {
       const btn = wrapper.find('.pps-generate-btn')
       expect(btn.attributes('disabled')).toBeDefined()
     })
+
+    it('shows explicit empty-state message for roster pack with no records', async () => {
+      rosterPackMock.mockResolvedValue(rosterEmptyPack)
+      const wrapper = mount(PodcastPrepStudioPanel)
+      await flushPromises()
+      const topicBtns = wrapper.findAll('.pps-topic-btn')
+      const rosterBtn = topicBtns.find(b => b.text().includes('Roster'))
+      await rosterBtn?.trigger('click')
+      await wrapper.find('#pps-ros-comp').setValue('CPL_MEN')
+      await wrapper.find('#pps-ros-season').setValue('2025')
+      await wrapper.find('.pps-generate-btn').trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).toContain('No supporting data is available for this section.')
+    })
   })
 
   // ---------------------------------------------------------------------------
@@ -286,6 +380,66 @@ describe('PodcastPrepStudioPanel', () => {
       expect(exportRow.text()).toContain('Copy Plain Text')
     })
 
+    it('copy markdown uses backend generated_markdown when present', async () => {
+      const mockClipboard = { writeText: vi.fn().mockResolvedValue(undefined) }
+      Object.defineProperty(navigator, 'clipboard', { value: mockClipboard, configurable: true })
+      matchPackMock.mockResolvedValue(samplePack)
+      const wrapper = mount(PodcastPrepStudioPanel)
+      await flushPromises()
+      await wrapper.find('#pps-match-id').setValue('match-abc')
+      await wrapper.find('.pps-generate-btn').trigger('click')
+      await flushPromises()
+      await wrapper.findAll('.pps-copy-btn')[0].trigger('click')
+      await flushPromises()
+      expect(mockClipboard.writeText).toHaveBeenCalledWith(samplePack.generated_markdown)
+    })
+
+    it('copy plain text uses backend generated_plain_text when present', async () => {
+      const mockClipboard = { writeText: vi.fn().mockResolvedValue(undefined) }
+      Object.defineProperty(navigator, 'clipboard', { value: mockClipboard, configurable: true })
+      matchPackMock.mockResolvedValue(samplePack)
+      const wrapper = mount(PodcastPrepStudioPanel)
+      await flushPromises()
+      await wrapper.find('#pps-match-id').setValue('match-abc')
+      await wrapper.find('.pps-generate-btn').trigger('click')
+      await flushPromises()
+      await wrapper.findAll('.pps-copy-btn')[1].trigger('click')
+      await flushPromises()
+      expect(mockClipboard.writeText).toHaveBeenCalledWith(samplePack.generated_plain_text)
+    })
+
+    it('fallback markdown contains episode_title when generated_markdown is null', async () => {
+      const mockClipboard = { writeText: vi.fn().mockResolvedValue(undefined) }
+      Object.defineProperty(navigator, 'clipboard', { value: mockClipboard, configurable: true })
+      matchPackMock.mockResolvedValue(packWithNullBody)
+      const wrapper = mount(PodcastPrepStudioPanel)
+      await flushPromises()
+      await wrapper.find('#pps-match-id').setValue('match-abc')
+      await wrapper.find('.pps-generate-btn').trigger('click')
+      await flushPromises()
+      await wrapper.findAll('.pps-copy-btn')[0].trigger('click')
+      await flushPromises()
+      const copied = mockClipboard.writeText.mock.calls[0][0]
+      expect(copied).toContain(packWithNullBody.episode_title)
+      expect(copied.length).toBeGreaterThan(0)
+    })
+
+    it('fallback plain text contains episode_title when generated_plain_text is null', async () => {
+      const mockClipboard = { writeText: vi.fn().mockResolvedValue(undefined) }
+      Object.defineProperty(navigator, 'clipboard', { value: mockClipboard, configurable: true })
+      matchPackMock.mockResolvedValue(packWithNullBody)
+      const wrapper = mount(PodcastPrepStudioPanel)
+      await flushPromises()
+      await wrapper.find('#pps-match-id').setValue('match-abc')
+      await wrapper.find('.pps-generate-btn').trigger('click')
+      await flushPromises()
+      await wrapper.findAll('.pps-copy-btn')[1].trigger('click')
+      await flushPromises()
+      const copied = mockClipboard.writeText.mock.calls[0][0]
+      expect(copied).toContain(packWithNullBody.episode_title.toUpperCase())
+      expect(copied.length).toBeGreaterThan(0)
+    })
+
     it('shows save report button after generation', async () => {
       matchPackMock.mockResolvedValue(samplePack)
       const wrapper = mount(PodcastPrepStudioPanel)
@@ -302,7 +456,7 @@ describe('PodcastPrepStudioPanel', () => {
   // ---------------------------------------------------------------------------
 
   describe('save report', () => {
-    it('calls createPodcastPrepReport with correct payload', async () => {
+    it('calls createPodcastPrepReport with correct payload including non-empty content', async () => {
       matchPackMock.mockResolvedValue(samplePack)
       createReportMock.mockResolvedValue(sampleReport)
       listReportsMock.mockResolvedValue(listWithReport)
@@ -325,8 +479,30 @@ describe('PodcastPrepStudioPanel', () => {
           title: 'My Test Report',
           topic_type: 'match',
           trust_summary: samplePack.trust_note,
+          generated_markdown: samplePack.generated_markdown,
+          generated_plain_text: samplePack.generated_plain_text,
         })
       )
+    })
+
+    it('save payload contains non-empty generated_markdown', async () => {
+      matchPackMock.mockResolvedValue(samplePack)
+      createReportMock.mockResolvedValue(sampleReport)
+      listReportsMock.mockResolvedValue(listWithReport)
+      const wrapper = mount(PodcastPrepStudioPanel)
+      await flushPromises()
+      await wrapper.find('#pps-match-id').setValue('match-abc')
+      await wrapper.find('.pps-generate-btn').trigger('click')
+      await flushPromises()
+      await wrapper.find('.pps-save-btn').trigger('click')
+      await flushPromises()
+      await wrapper.find('#pps-report-title').setValue('Report')
+      const confirmBtn = wrapper.findAll('.pps-generate-btn').find(b => b.text().includes('Confirm'))
+      await confirmBtn?.trigger('click')
+      await flushPromises()
+      const call = createReportMock.mock.calls[0][0]
+      expect(call.generated_markdown).toBeTruthy()
+      expect(call.generated_markdown!.length).toBeGreaterThan(0)
     })
   })
 
