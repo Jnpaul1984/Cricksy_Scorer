@@ -210,12 +210,23 @@ def build_match_research_pack(
     """Build a podcast research pack from match case study data.
 
     All values derived from the provided match_data dict (case study payload).
+    Reads from MatchCaseStudyResponse.model_dump() structure where available,
+    with fallback to legacy flat-dict format for backward compatibility.
     No stats are invented.
     """
     match = match_data.get("match", {})
-    innings_list = match_data.get("innings", [])
+    # Support both MatchCaseStudyResponse.model_dump() (match.innings) and
+    # legacy flat dict (top-level innings with batting_team keys).
+    innings_list = match.get("innings") or match_data.get("innings", [])
     key_players = match_data.get("key_players", [])
     innings_analysis = match_data.get("innings_analysis", [])
+    # Rich case study fields (present when data comes from analytics_case_study)
+    momentum_summary: dict[str, Any] = match_data.get("momentum_summary") or {}
+    key_phase_data: dict[str, Any] = match_data.get("key_phase") or {}
+    dismissal_patterns: dict[str, Any] = match_data.get("dismissal_patterns") or {}
+    multi_day_summary: dict[str, Any] = match_data.get("multi_day_summary") or {}
+    odi_intelligence: dict[str, Any] = match_data.get("odi_intelligence") or {}
+    match_level_summary: str | None = match_data.get("match_level_summary")
 
     teams_label: str = match.get("teams_label") or "Unknown teams"
     match_date: str | None = match.get("date")
@@ -259,7 +270,8 @@ def build_match_research_pack(
     # Scoreboard / key facts
     scoreboard_lines: list[str] = []
     for inns in innings_list:
-        inns_team = inns.get("batting_team") or "Unknown"
+        # MatchCaseStudyResponse uses 'team'; legacy flat dict uses 'batting_team'
+        inns_team = inns.get("batting_team") or inns.get("team") or "Unknown"
         runs = inns.get("runs")
         wickets = inns.get("wickets")
         overs = inns.get("overs")
@@ -275,6 +287,135 @@ def build_match_research_pack(
             note="Derived from innings data in imported match.",
         )
     )
+
+    # Momentum verdict (from analyst case study)
+    if momentum_summary:
+        mom_title = momentum_summary.get("title", "")
+        mom_subtitle = momentum_summary.get("subtitle", "")
+        mom_side = momentum_summary.get("winning_side")
+        mom_parts: list[str] = []
+        if mom_title:
+            mom_parts.append(mom_title)
+        if mom_subtitle:
+            mom_parts.append(mom_subtitle)
+        if mom_side:
+            mom_parts.append(f"Momentum winner: {mom_side}")
+        sections.append(
+            PodcastResearchSection(
+                section_key="momentum_verdict",
+                title="Momentum verdict",
+                body="\n".join(mom_parts) if mom_parts else None,
+                confidence="high" if mom_parts else "unknown",
+                note="Derived from innings-level momentum analysis. Sourced from Match Case Study.",
+            )
+        )
+
+    # Key phase (the single most impactful phase)
+    if key_phase_data:
+        kp_title = key_phase_data.get("title", "")
+        kp_detail = key_phase_data.get("detail", "")
+        kp_team = key_phase_data.get("team")
+        kp_parts: list[str] = []
+        if kp_title:
+            kp_parts.append(kp_title)
+        if kp_detail:
+            kp_parts.append(kp_detail)
+        if kp_team:
+            kp_parts.append(f"Phase team: {kp_team}")
+        sections.append(
+            PodcastResearchSection(
+                section_key="key_phase",
+                title="Key phase",
+                body="\n".join(kp_parts) if kp_parts else None,
+                confidence="high" if kp_parts else "unknown",
+                note="Single most impactful phase. Derived from Match Case Study.",
+            )
+        )
+
+    # Dismissal patterns (wicket clusters / dismissal intelligence)
+    if dismissal_patterns:
+        dp_summary = dismissal_patterns.get("summary")
+        dp_cluster = dismissal_patterns.get("wicket_cluster_callout")
+        dp_total = dismissal_patterns.get("total_wickets")
+        dp_parts: list[str] = []
+        if dp_summary:
+            dp_parts.append(dp_summary)
+        if dp_cluster:
+            dp_parts.append(dp_cluster)
+        if dp_total is not None:
+            dp_parts.append(f"Total wickets analysed: {dp_total}")
+        if dp_parts:
+            sections.append(
+                PodcastResearchSection(
+                    section_key="dismissal_patterns",
+                    title="Dismissal patterns / wicket intelligence",
+                    body="\n".join(dp_parts),
+                    confidence="medium",
+                    note="Derived from delivery-level wicket data. Sourced from Match Case Study.",
+                )
+            )
+
+    # Test/multi-day summary
+    if multi_day_summary:
+        mds_parts: list[str] = []
+        mds_status = multi_day_summary.get("match_status")
+        if mds_status and mds_status != "unknown":
+            mds_parts.append(f"Match status: {mds_status}")
+        first_innings_lead = multi_day_summary.get("first_innings_lead_note")
+        if first_innings_lead:
+            mds_parts.append(first_innings_lead)
+        for note_text in (multi_day_summary.get("lead_swing_notes") or [])[:2]:
+            mds_parts.append(note_text)
+        turning_point = multi_day_summary.get("match_turning_point")
+        if turning_point:
+            mds_parts.append(f"Turning point: {turning_point}")
+        chase_data = multi_day_summary.get("fourth_innings_chase") or {}
+        if chase_data:
+            chase_result = chase_data.get("chase_result")
+            target = chase_data.get("target")
+            if target and chase_result:
+                mds_parts.append(f"Fourth innings: chasing {target} — {chase_result}")
+        if mds_parts:
+            sections.append(
+                PodcastResearchSection(
+                    section_key="test_match_intelligence",
+                    title="Test match intelligence",
+                    body="\n".join(mds_parts),
+                    confidence="medium",
+                    note=(
+                        "Test/multi-day match analysis. Innings-safe phase bands applied. "
+                        "Derived from Match Case Study."
+                    ),
+                )
+            )
+
+    # ODI-specific intelligence
+    if odi_intelligence:
+        odi_parts: list[str] = []
+        chase_intel = odi_intelligence.get("chase_intelligence") or {}
+        if chase_intel:
+            ci_note = chase_intel.get("chase_pressure_note")
+            ci_result = chase_intel.get("chase_result")
+            ci_target = chase_intel.get("target")
+            if ci_target:
+                odi_parts.append(f"Chase target: {ci_target}")
+            if ci_note:
+                odi_parts.append(ci_note)
+            if ci_result and ci_result not in ("unknown", "in_progress"):
+                odi_parts.append(f"Chase result: {ci_result}")
+        turning_point = odi_intelligence.get("turning_point_candidate")
+        if turning_point:
+            odi_parts.append(f"Turning point candidate: {turning_point}")
+        if odi_parts:
+            sections.append(
+                PodcastResearchSection(
+                    section_key="odi_intelligence",
+                    title="ODI match intelligence",
+                    body="\n".join(odi_parts),
+                    confidence="medium",
+                    note="ODI-specific chase and partnership intelligence. Derived from Match Case Study.",
+                )
+            )
 
     # Player focus
     player_lines: list[str] = []
@@ -306,31 +447,54 @@ def build_match_research_pack(
     )
 
     # Key storylines (from innings analysis story blocks)
+    # CaseStudyStoryBlocks is an object (dict when serialized), not a list.
+    # Legacy flat-dict format uses a list of {"body": ...} items.
     storyline_lines: list[str] = []
     for ia in innings_analysis[:2]:
-        for block in (ia.get("story_blocks") or [])[:3]:
-            body_text = block.get("body")
-            if body_text:
-                storyline_lines.append(f"• {body_text}")
+        story_blocks = ia.get("story_blocks")
+        if isinstance(story_blocks, dict):
+            # CaseStudyStoryBlocks serialized as dict
+            _story_fields = [
+                "opening_story",
+                "middle_overs_story",
+                "death_overs_story",
+                "strongest_phase",
+                "wickets_by_phase",
+            ]
+            for field in _story_fields:
+                val = story_blocks.get(field)
+                if val:
+                    storyline_lines.append(f"• {val}")
+                    if len(storyline_lines) >= 4:
+                        break
+        elif isinstance(story_blocks, list):
+            for block in story_blocks[:3]:
+                body_text = block.get("body")
+                if body_text:
+                    storyline_lines.append(f"• {body_text}")
+    # Also include match_level_summary if present
+    if match_level_summary and not storyline_lines:
+        storyline_lines.append(match_level_summary)
     sections.append(
         PodcastResearchSection(
             section_key="key_storylines",
             title="Key storylines",
             body="\n".join(storyline_lines) if storyline_lines else None,
             confidence="medium" if storyline_lines else "unknown",
-            note="Derived from innings story analysis.",
+            note="Derived from innings story analysis. Sourced from Match Case Study.",
         )
     )
 
     # Tactical talking points
+    # CaseStudyAnalystCallout uses 'explanation' (not 'text'); legacy uses 'text'.
     tactical_lines: list[str] = []
     for ia in innings_analysis[:2]:
         for callout in (ia.get("callouts") or [])[:2]:
-            txt = callout.get("text")
+            txt = callout.get("explanation") or callout.get("text")
             if txt:
                 tactical_lines.append(f"• {txt}")
     for callout in (match_data.get("match_callouts") or [])[:3]:
-        txt = callout.get("text")
+        txt = callout.get("explanation") or callout.get("text")
         if txt:
             tactical_lines.append(f"• {txt}")
     sections.append(
@@ -408,6 +572,7 @@ def build_tournament_research_pack(
     champion = knockout.get("champion_team")
     finalist = knockout.get("runner_up_team")
     final_result = knockout.get("final_result")
+    semi_finals = knockout.get("semi_final_matches") or []
     podcast_facts = tournament_summary.get("podcast_facts") or {}
     completeness = tournament_summary.get("data_completeness") or {}
     standings = tournament_summary.get("derived_standings") or []
@@ -415,6 +580,16 @@ def build_tournament_research_pack(
     top_wicket_taker = tournament_summary.get("top_wicket_taker")
     total_matches = completeness.get("total_matches", 0)
     confidence_level = completeness.get("confidence_level", "unknown")
+    # Additional rich fields from TournamentSummaryResponse
+    total_runs: int = tournament_summary.get("total_runs") or 0
+    total_wickets: int = tournament_summary.get("total_wickets") or 0
+    highest_team_total: int | None = tournament_summary.get("highest_team_total")
+    highest_team_total_by: str | None = tournament_summary.get("highest_team_total_by")
+    venues: list[str] = tournament_summary.get("venues") or []
+    biggest_win_runs: dict[str, Any] = tournament_summary.get("biggest_win_by_runs") or {}
+    biggest_win_wkts: dict[str, Any] = tournament_summary.get("biggest_win_by_wickets") or {}
+    closest_match: dict[str, Any] = tournament_summary.get("closest_match") or {}
+    wicket_intelligence: dict[str, Any] = tournament_summary.get("wicket_intelligence") or {}
 
     season_str = f" {season_label}" if season_label else ""
     episode_title = f"{comp_label}{season_str} — Season Review"
@@ -436,6 +611,13 @@ def build_tournament_research_pack(
         setup_lines.append(f"Champion (derived): {champion}")
     elif knockout.get("final_match_title"):
         setup_lines.append(f"Final: {knockout['final_match_title']}")
+    if total_runs:
+        setup_lines.append(f"Total runs scored: {total_runs} (derived from imported data)")
+    if total_wickets:
+        setup_lines.append(f"Total wickets: {total_wickets} (derived from imported data)")
+    if highest_team_total:
+        htb = f" by {highest_team_total_by}" if highest_team_total_by else ""
+        setup_lines.append(f"Highest team total: {highest_team_total}{htb}")
     sections.append(
         PodcastResearchSection(
             section_key="tournament_setup",
@@ -454,6 +636,19 @@ def build_tournament_research_pack(
         champ_lines.append(f"Runner-up: {finalist}")
     if final_result:
         champ_lines.append(f"Final result: {final_result}")
+    # Semi-final matches
+    for sf in semi_finals[:2]:
+        sf_title = sf.get("match_title")
+        sf_result = sf.get("result")
+        if sf_title:
+            sf_line = f"Semi-final: {sf_title}"
+            if sf_result:
+                sf_line += f" — {sf_result}"
+            champ_lines.append(sf_line)
+    # Team journey note from podcast_facts
+    key_journey = podcast_facts.get("key_journey_note")
+    if key_journey:
+        champ_lines.append(key_journey)
     sections.append(
         PodcastResearchSection(
             section_key="champion_story",
@@ -508,25 +703,98 @@ def build_tournament_research_pack(
         )
     )
 
-    # Podcast facts
+    # Podcast facts / key tournament moments
     fact_lines: list[str] = []
     if podcast_facts:
         top_venue = podcast_facts.get("top_scoring_venue")
         highest_title = podcast_facts.get("highest_scoring_match_title")
         highest_runs = podcast_facts.get("highest_match_total_runs")
+        strongest_team = podcast_facts.get("strongest_team_by_wins")
+        closest_finish = podcast_facts.get("closest_finish_match_title")
         if top_venue:
             fact_lines.append(f"Top scoring venue: {top_venue}")
         if highest_title and highest_runs:
             fact_lines.append(f"Highest match total: {highest_runs} runs ({highest_title})")
+        if strongest_team:
+            fact_lines.append(f"Strongest team by wins (derived): {strongest_team}")
+        if closest_finish:
+            fact_lines.append(f"Closest finish: {closest_finish}")
     sections.append(
         PodcastResearchSection(
             section_key="key_facts",
             title="Key facts",
             body="\n".join(fact_lines) if fact_lines else None,
             confidence="medium" if fact_lines else "unknown",
-            note="Derived from tournament-level aggregation.",
+            note="Derived from tournament-level aggregation. Sourced from Tournament Intelligence.",
         )
     )
+
+    # Key match moments (biggest win, closest finish)
+    moments_lines: list[str] = []
+    if biggest_win_runs:
+        bwr_detail = biggest_win_runs.get("detail")
+        bwr_title = biggest_win_runs.get("match_title")
+        if bwr_detail and bwr_title:
+            moments_lines.append(f"Biggest win (runs): {bwr_detail} ({bwr_title})")
+        elif bwr_title:
+            moments_lines.append(f"Biggest win by runs: {bwr_title}")
+    if biggest_win_wkts:
+        bww_detail = biggest_win_wkts.get("detail")
+        bww_title = biggest_win_wkts.get("match_title")
+        if bww_detail and bww_title:
+            moments_lines.append(f"Biggest win (wickets): {bww_detail} ({bww_title})")
+        elif bww_title:
+            moments_lines.append(f"Biggest win by wickets: {bww_title}")
+    if closest_match:
+        cm_detail = closest_match.get("detail")
+        cm_title = closest_match.get("match_title")
+        if cm_detail and cm_title:
+            moments_lines.append(f"Closest match: {cm_detail} ({cm_title})")
+        elif cm_title:
+            moments_lines.append(f"Closest match: {cm_title}")
+    if moments_lines:
+        sections.append(
+            PodcastResearchSection(
+                section_key="key_match_moments",
+                title="Key match moments",
+                body="\n".join(moments_lines),
+                confidence="medium",
+                note=(
+                    "Derived from imported match results. "
+                    "Sourced from Tournament Intelligence match highlight detection."
+                ),
+            )
+        )
+
+    # Venue and scoring patterns
+    venue_lines: list[str] = []
+    if venues:
+        venue_lines.append(f"Venues used: {_safe_join(venues[:5])}")
+    if podcast_facts:
+        top_venue = podcast_facts.get("top_scoring_venue")
+        if top_venue:
+            venue_lines.append(f"Highest-scoring venue: {top_venue} (derived from match totals)")
+    if wicket_intelligence:
+        wkts_by_venue = wicket_intelligence.get("wickets_by_venue") or {}
+        if wkts_by_venue:
+            top_wkt_venue = max(wkts_by_venue, key=lambda k: wkts_by_venue[k])
+            venue_lines.append(
+                f"Most wicket-taking venue: {top_wkt_venue} "
+                f"({wkts_by_venue[top_wkt_venue]} wickets — delivery-derived)"
+            )
+    if venue_lines:
+        sections.append(
+            PodcastResearchSection(
+                section_key="venue_scoring_patterns",
+                title="Venue and scoring patterns",
+                body="\n".join(venue_lines),
+                confidence="medium",
+                note=(
+                    "Derived from imported match and delivery data. "
+                    "Sourced from Tournament Intelligence."
+                ),
+            )
+        )
 
     # Debate questions
     sections.append(_build_debate_questions("tournament", comp_label))
