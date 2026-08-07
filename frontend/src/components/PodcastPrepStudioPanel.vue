@@ -148,8 +148,14 @@
     <div v-if="pack" class="pps-pack">
       <!-- Pack header -->
       <div class="pps-pack-header">
-        <h4 class="pps-pack-title">{{ pack.title }}</h4>
-        <p v-if="pack.subtitle" class="pps-pack-subtitle">{{ pack.subtitle }}</p>
+        <h4 class="pps-pack-title">{{ pack.episode_title }}</h4>
+        <p class="pps-pack-subtitle">
+          <span v-if="pack.competition_label">{{ pack.competition_label }}</span>
+          <span v-if="pack.season_label"> · {{ pack.season_label }}</span>
+          <span v-if="pack.format_label"> · {{ pack.format_label }}</span>
+          <span v-if="pack.venue_context"> · {{ pack.venue_context }}</span>
+          <span v-if="pack.match_context"> · {{ pack.match_context }}</span>
+        </p>
         <span :class="['pps-confidence-badge', `pps-confidence-badge--${pack.overall_confidence}`]">
           Confidence: {{ pack.overall_confidence }}
         </span>
@@ -167,9 +173,14 @@
           :key="idx"
           class="pps-section"
         >
-          <div class="pps-section-label">{{ section.label }}</div>
-          <div class="pps-section-content">{{ section.content }}</div>
-          <div v-if="section.source_note" class="pps-section-source">{{ section.source_note }}</div>
+          <div class="pps-section-label">{{ section.title }}</div>
+          <div class="pps-section-content">
+            {{ section.body ?? 'No supporting data is available for this section.' }}
+          </div>
+          <div v-if="section.note" class="pps-section-source">{{ section.note }}</div>
+          <span :class="['pps-confidence-badge', `pps-confidence-badge--${section.confidence}`]">
+            {{ section.confidence }}
+          </span>
         </div>
       </div>
 
@@ -392,34 +403,40 @@ function formatDate(iso: string): string {
 }
 
 function buildMarkdown(p: PodcastResearchPack): string {
+  if (p.generated_markdown) return p.generated_markdown
   const lines: string[] = []
-  lines.push(`# ${p.title}`)
-  if (p.subtitle) lines.push(`> ${p.subtitle}`)
+  lines.push(`# ${p.episode_title}`)
+  const ctx = [p.competition_label, p.season_label, p.format_label, p.venue_context, p.match_context]
+    .filter(Boolean).join(' · ')
+  if (ctx) lines.push(`> ${ctx}`)
   lines.push('')
   lines.push(`**Trust note:** ${p.trust_note}`)
   lines.push(`**Confidence:** ${p.overall_confidence}`)
   lines.push('')
   for (const s of p.sections) {
-    lines.push(`## ${s.label}`)
-    lines.push(s.content)
-    if (s.source_note) lines.push(`*Source: ${s.source_note}*`)
+    lines.push(`## ${s.title}`)
+    lines.push(s.body ?? 'No supporting data is available for this section.')
+    if (s.note) lines.push(`*Source: ${s.note}*`)
     lines.push('')
   }
   return lines.join('\n')
 }
 
 function buildPlainText(p: PodcastResearchPack): string {
+  if (p.generated_plain_text) return p.generated_plain_text
   const lines: string[] = []
-  lines.push(p.title.toUpperCase())
-  if (p.subtitle) lines.push(p.subtitle)
+  lines.push(p.episode_title.toUpperCase())
+  const ctx = [p.competition_label, p.season_label, p.format_label, p.venue_context, p.match_context]
+    .filter(Boolean).join(' · ')
+  if (ctx) lines.push(ctx)
   lines.push('')
   lines.push(`Trust note: ${p.trust_note}`)
   lines.push(`Confidence: ${p.overall_confidence}`)
   lines.push('')
   for (const s of p.sections) {
-    lines.push(`--- ${s.label.toUpperCase()} ---`)
-    lines.push(s.content)
-    if (s.source_note) lines.push(`(${s.source_note})`)
+    lines.push(`--- ${s.title.toUpperCase()} ---`)
+    lines.push(s.body ?? 'No supporting data is available for this section.')
+    if (s.note) lines.push(`(${s.note})`)
     lines.push('')
   }
   return lines.join('\n')
@@ -466,7 +483,7 @@ async function generatePack() {
       })
     }
     if (pack.value) {
-      saveTitle.value = pack.value.title
+      saveTitle.value = pack.value.episode_title
     }
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to generate research pack.'
@@ -501,6 +518,10 @@ async function copyReportPlainText(report: PodcastPrepReportResponse) {
 
 async function saveReport() {
   if (!pack.value || !saveTitle.value.trim()) return
+  if (!renderedMarkdown.value && !renderedPlainText.value) {
+    saveError.value = 'Cannot save: report body is empty. Please generate a pack first.'
+    return
+  }
   saveError.value = ''
   saveSuccess.value = false
   saving.value = true

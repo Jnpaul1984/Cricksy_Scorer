@@ -3692,20 +3692,31 @@ export type PodcastTopicType = 'match' | 'tournament' | 'team' | 'roster' | 'arc
 export type PodcastReportStatus = 'draft' | 'reviewed' | 'approved' | 'archived'
 
 export interface PodcastResearchSection {
-  label: string
-  content: string
-  source_note?: string | null
-  confidence?: 'high' | 'medium' | 'low' | 'unknown'
+  section_key: string
+  title: string
+  body: string | null
+  confidence: 'high' | 'medium' | 'low' | 'unknown'
+  note: string
 }
 
 export interface PodcastResearchPack {
   topic_type: PodcastTopicType
-  title: string
-  subtitle?: string | null
+  episode_title: string
+  match_context?: string | null
+  competition_label?: string | null
+  season_label?: string | null
+  venue_context?: string | null
+  format_label?: string | null
   sections: PodcastResearchSection[]
   trust_note: string
   overall_confidence: 'high' | 'medium' | 'low' | 'unknown'
   generated_at: string
+  generated_markdown?: string | null
+  generated_plain_text?: string | null
+  source_match_id?: string | null
+  source_competition_code?: string | null
+  source_season?: string | null
+  source_team_name?: string | null
 }
 
 export interface PodcastPrepReportResponse {
