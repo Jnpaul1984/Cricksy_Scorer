@@ -93,7 +93,7 @@
           </div>
           <div class="crp-form-col">
             <label class="crp-label" for="at-short">Short Name</label>
-            <input id="at-short" v-model="newTeam.short_name" class="crp-input" placeholder="TKR" />
+            <input id="at-short" v-model="newTeam.team_short_name" class="crp-input" placeholder="TKR" />
           </div>
         </div>
         <div class="crp-form-row">
@@ -129,7 +129,7 @@
           <tbody>
             <tr v-for="team in teams" :key="team.id">
               <td>{{ team.team_name }}</td>
-              <td>{{ team.short_name ?? '—' }}</td>
+              <td>{{ team.team_short_name ?? '—' }}</td>
               <td>{{ team.season }}</td>
               <td>{{ team.competition_code }}</td>
               <td class="crp-td-muted">{{ team.source_note ?? '—' }}</td>
@@ -428,8 +428,8 @@
           <li>Teams created: <strong>{{ importResult.teams_created }}</strong></li>
           <li>Players created: <strong>{{ importResult.players_created }}</strong></li>
           <li>Players updated: <strong>{{ importResult.players_updated }}</strong></li>
-          <li>Returning flagged: <strong>{{ importResult.returning_flagged }}</strong></li>
-          <li>Duplicates skipped: <strong>{{ importResult.skipped_duplicates }}</strong></li>
+          <li>Returning flagged: <strong>{{ importResult.returning_players_detected }}</strong></li>
+          <li>Duplicates skipped: <strong>{{ importResult.players_skipped_duplicate }}</strong></li>
         </ul>
         <div v-if="importResult.warnings.length > 0" class="crp-preview-warnings">
           <strong>Warnings:</strong>
@@ -499,7 +499,7 @@ const newTeam = reactive({
   competition_code: 'CPL_MEN',
   season: '',
   team_name: '',
-  short_name: '',
+  team_short_name: '',
   source_note: '',
 })
 
@@ -583,12 +583,12 @@ async function addTeam() {
       competition_code: newTeam.competition_code || 'CPL_MEN',
       season: newTeam.season,
       team_name: newTeam.team_name,
-      short_name: newTeam.short_name || null,
+      team_short_name: newTeam.team_short_name || null,
       source_note: newTeam.source_note || null,
     })
     teams.value.push(created)
     addTeamSuccess.value = true
-    Object.assign(newTeam, { team_name: '', short_name: '', source_note: '' })
+    Object.assign(newTeam, { team_name: '', team_short_name: '', source_note: '' })
     showAddTeam.value = false
   } catch (e: unknown) {
     addTeamError.value = e instanceof Error ? e.message : 'Failed to add team.'
@@ -737,7 +737,7 @@ async function applyImport() {
       competition_code: importCompetition.value || 'CPL_MEN',
       season: importSeason.value,
       rows,
-      confirmed: true,
+      confirm: true,
     })
     importPreview.value = null
   } catch (e: unknown) {

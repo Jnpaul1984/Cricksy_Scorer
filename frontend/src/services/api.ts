@@ -3867,7 +3867,11 @@ export interface CplTeamResponse {
   season: string
   team_name: string
   normalized_team_name: string
-  short_name?: string | null
+  team_short_name?: string | null
+  country?: string | null
+  coach_name?: string | null
+  captain_name?: string | null
+  status?: 'active' | 'inactive'
   source_note?: string | null
   created_at: string
   updated_at: string
@@ -3876,6 +3880,7 @@ export interface CplTeamResponse {
 export interface CplTeamListResponse {
   teams: CplTeamResponse[]
   total: number
+  trust_note?: string
 }
 
 export interface CplPlayerResponse {
@@ -3910,7 +3915,11 @@ export interface CplTeamCreate {
   competition_code?: string
   season: string
   team_name: string
-  short_name?: string | null
+  team_short_name?: string | null
+  country?: string | null
+  coach_name?: string | null
+  captain_name?: string | null
+  status?: 'active' | 'inactive'
   source_note?: string | null
 }
 
@@ -3922,6 +3931,8 @@ export interface CplPlayerCreate {
   display_name?: string | null
   aliases?: string[]
   role?: string | null
+  nationality?: string | null
+  date_of_birth?: string | null
   batting_style?: string | null
   bowling_style?: string | null
   status?: CplRosterPlayerStatus
@@ -3933,6 +3944,8 @@ export interface CplPlayerUpdate {
   aliases?: string[] | null
   team_name?: string | null
   role?: string | null
+  nationality?: string | null
+  date_of_birth?: string | null
   batting_style?: string | null
   bowling_style?: string | null
   status?: CplRosterPlayerStatus | null
@@ -3945,6 +3958,8 @@ export interface RosterImportRow {
   team?: string | null
   player: string
   role?: string | null
+  nationality?: string | null
+  date_of_birth?: string | null
   batting_style?: string | null
   bowling_style?: string | null
   status?: CplRosterPlayerStatus
@@ -3953,14 +3968,24 @@ export interface RosterImportRow {
 
 export interface RosterImportPreviewTeam {
   team_name: string
-  normalized: string
+  is_new: boolean
+  is_existing_match: boolean
 }
 
 export interface RosterImportPreviewPlayer {
+  row_index: number
   player_name: string
-  normalized: string
   team_name?: string | null
-  status?: string | null
+  status: CplRosterPlayerStatus
+  role?: string | null
+  nationality?: string | null
+  is_transfer: boolean
+  previous_team_name?: string | null
+  similar_existing_player?: string | null
+  is_new: boolean
+  is_duplicate: boolean
+  is_returning: boolean
+  prior_season?: string | null
   warning?: string | null
 }
 
@@ -3973,26 +3998,35 @@ export interface RosterImportPreviewResponse {
   existing_players_matched: string[]
   duplicates: RosterImportPreviewPlayer[]
   returning_players: string[]
+  transfers: RosterImportPreviewPlayer[]
+  possible_duplicates: RosterImportPreviewPlayer[]
   warnings: string[]
   blockers: string[]
   total_rows: number
+  can_apply?: boolean
+  trust_note?: string
 }
 
 export interface RosterImportApplyRequest {
   competition_code?: string
   season: string
   rows: RosterImportRow[]
-  confirmed: boolean
+  confirm: boolean
 }
 
 export interface RosterImportApplyResponse {
+  competition_code: string
+  season: string
   teams_created: number
+  teams_matched: number
   players_created: number
   players_updated: number
-  returning_flagged: number
-  skipped_duplicates: number
+  players_skipped_duplicate: number
+  returning_players_detected: number
   warnings: string[]
   errors: string[]
+  applied: boolean
+  trust_note?: string
 }
 
 // ---------------------------------------------------------------------------

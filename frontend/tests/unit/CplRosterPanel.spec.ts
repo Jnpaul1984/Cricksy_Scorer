@@ -45,7 +45,7 @@ const sampleTeam: CplTeamResponse = {
   season: '2025',
   team_name: 'Trinbago Knight Riders',
   normalized_team_name: 'trinbago knight riders',
-  short_name: 'TKR',
+  team_short_name: 'TKR',
   source_note: 'Manual entry',
   created_at: '2025-01-01T00:00:00Z',
   updated_at: '2025-01-01T00:00:00Z',
@@ -85,25 +85,35 @@ const playersWithOne: CplPlayerListResponse = {
 const samplePreview: RosterImportPreviewResponse = {
   competition_code: 'CPL_MEN',
   season: '2025',
-  new_teams: [{ team_name: 'New Team A', normalized: 'new team a' }],
+  new_teams: [{ team_name: 'New Team A', is_new: true, is_existing_match: false }],
   existing_teams_matched: ['Trinbago Knight Riders'],
-  new_players: [{ player_name: 'New Player', normalized: 'new player', team_name: 'New Team A', status: 'active' }],
+  new_players: [{
+    row_index: 0, player_name: 'New Player', team_name: 'New Team A', status: 'active',
+    role: null, nationality: null, is_transfer: false, previous_team_name: null,
+    similar_existing_player: null, is_new: true, is_duplicate: false, is_returning: false, prior_season: null,
+  }],
   existing_players_matched: ['Kieron Pollard'],
   duplicates: [],
   returning_players: ['Kieron Pollard'],
+  transfers: [],
+  possible_duplicates: [],
   warnings: [],
   blockers: [],
   total_rows: 3,
 }
 
 const sampleApplyResult: RosterImportApplyResponse = {
+  competition_code: 'CPL_MEN',
+  season: '2025',
   teams_created: 1,
+  teams_matched: 0,
   players_created: 1,
   players_updated: 1,
-  returning_flagged: 1,
-  skipped_duplicates: 0,
+  players_skipped_duplicate: 0,
+  returning_players_detected: 1,
   warnings: [],
   errors: [],
+  applied: true,
 }
 
 describe('CplRosterPanel', () => {
@@ -186,7 +196,7 @@ describe('CplRosterPanel', () => {
         expect.objectContaining({
           season: '2025',
           team_name: 'Trinbago Knight Riders',
-          short_name: 'TKR',
+          team_short_name: 'TKR',
         })
       )
     })
@@ -379,7 +389,7 @@ describe('CplRosterPanel', () => {
       expect(applyBtn?.attributes('disabled')).toBeDefined()
     })
 
-    it('calls rosterImportApply with confirmed=true', async () => {
+    it('calls rosterImportApply with confirm=true', async () => {
       previewMock.mockResolvedValue(samplePreview)
       applyMock.mockResolvedValue(sampleApplyResult)
       const wrapper = mount(CplRosterPanel)
@@ -394,7 +404,7 @@ describe('CplRosterPanel', () => {
       await applyBtn?.trigger('click')
       await flushPromises()
       expect(applyMock).toHaveBeenCalledWith(
-        expect.objectContaining({ confirmed: true, season: '2025' })
+        expect.objectContaining({ confirm: true, season: '2025' })
       )
     })
 

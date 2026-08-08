@@ -27,6 +27,7 @@ from backend.api.schemas.cpl_roster import (
     CplPlayerCreate,
     CplPlayerUpdate,
     CplTeamCreate,
+    CplTeamUpdate,
     RosterImportApplyRequest,
     RosterImportRow,
 )
@@ -35,9 +36,14 @@ from backend.services.cpl_roster_service import (
     apply_roster_import,
     create_player,
     create_team,
+    delete_player,
+    delete_team,
+    disable_player,
     list_players,
     list_teams,
     preview_roster_import,
+    retire_player,
+    update_team,
     update_player,
 )
 from backend.sql_app import models
@@ -102,8 +108,9 @@ def _import_row(
         team=team,
         player=player,
         role=role,
-        batting_style=None,
-        bowling_style=None,
+        nationality="West Indies",
+        batting_style="right-hand bat",
+        bowling_style="right-arm medium",
         status=status,
         source_note=source_note,
     )
@@ -215,6 +222,23 @@ class TestTeamRegistry:
         assert result.total == 1
         assert result.teams[0].team_name == "Barbados Royals"
 
+    def test_update_team_name(self, session) -> None:
+        team = run(create_team(session, _team_create("St Lucia Kings")))
+        updated = run(update_team(session, team.id, CplTeamUpdate(team_name="Saint Lucia Kings")))
+        assert updated is not None
+        assert updated.team_name == "Saint Lucia Kings"
+
+    def test_delete_team_unused(self, session) -> None:
+        team = run(create_team(session, _team_create("St Kitts & Nevis Patriots")))
+        deleted = run(delete_team(session, team.id))
+        assert deleted is True
+
+    def test_delete_team_in_use_raises(self, session) -> None:
+        team = run(create_team(session, _team_create("Guyana Amazon Warriors")))
+        run(create_player(session, _player_create("Player One", team_name=team.team_name)))
+        with pytest.raises(ValueError, match="cannot be deleted"):
+            run(delete_team(session, team.id))
+
 
 # ---------------------------------------------------------------------------
 # Player tests
@@ -297,6 +321,23 @@ class TestPlayerRegistry:
         result = run(update_player(session, "does-not-exist", CplPlayerUpdate()))
         assert result is None
 
+    def test_disable_and_delete_player(self, session) -> None:
+        player = run(create_player(session, _player_create("Andre Russell")))
+        run(disable_player(session, player.id))
+        deleted = run(delete_player(session, player.id))
+        assert deleted is True
+
+    def test_delete_active_player_raises(self, session) -> None:
+        player = run(create_player(session, _player_create("Sunil Narine")))
+        with pytest.raises(ValueError, match="Active players cannot be deleted"):
+            run(delete_player(session, player.id))
+
+    def test_retire_player_sets_retired_status(self, session) -> None:
+        player = run(create_player(session, _player_create("Kraigg Brathwaite")))
+        retired = run(retire_player(session, player.id))
+        assert retired is not None
+        assert retired.status == "retired"
+
     def test_list_players_by_team(self, session) -> None:
         run(create_player(session, _player_create("Player A", team_name="Team X")))
         run(create_player(session, _player_create("Player B", team_name="Team Y")))
@@ -369,7 +410,29 @@ class TestRosterImportPreview:
         result = run(
             preview_roster_import(session, rows=rows, competition_code="CPL_MEN", season="2024")
         )
-        assert len(result.duplicates) >= 1
+        assert len(result.blockers) >= 1
+
+    def test_preview_missing_team_is_blocker(self, session) -> None:
+        rows = [_import_row("Chris Gayle", "")]
+        result = run(
+            preview_roster_import(session, rows=rows, competition_code="CPL_MEN", season="2024")
+        )
+        assert any("team is required" in b for b in result.blockers)
+
+    def test_preview_transfer_detected(self, session) -> None:
+        run(create_player(session, _player_create("Darren Bravo", team_name="Team A", season="2023")))
+        rows = [_import_row("Darren Bravo", "Team B", season="2024")]
+        result = run(
+            preview_roster_import(session, rows=rows, competition_code="CPL_MEN", season="2024")
+        )
+        assert len(result.transfers) == 1
+
+    def test_preview_unknown_role_warns(self, session) -> None:
+        rows = [_import_row("Shimron Hetmyer", "Guyana Amazon Warriors", role="mystery-role")]
+        result = run(
+            preview_roster_import(session, rows=rows, competition_code="CPL_MEN", season="2024")
+        )
+        assert any("unknown role" in w for w in result.warnings)
 
     def test_preview_does_not_mutate_db(self, session) -> None:
         rows = [_import_row("Preview Player", "Preview Team")]
@@ -409,6 +472,15 @@ class TestRosterImportApply:
         assert result.teams_created >= 1
         assert result.players_created >= 1
         assert result.errors == []
+
+    def test_apply_rejects_invalid_competition(self, session) -> None:
+        rows = [_import_row("Chris Gayle", "Jamaica Tallawahs", competition="INVALID_CODE")]
+        req = RosterImportApplyRequest(
+            rows=rows, competition_code="INVALID_CODE", season="2024", confirm=True
+        )
+        result = run(apply_roster_import(session, req))
+        assert result.applied is False
+        assert any("Invalid competition code" in e for e in result.errors)
 
     def test_apply_requires_confirm(self, session) -> None:
         rows = [_import_row("Chris Gayle", "Jamaica Tallawahs")]

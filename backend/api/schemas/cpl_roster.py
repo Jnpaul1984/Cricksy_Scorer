@@ -16,7 +16,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-CplRosterStatusType = Literal["active", "inactive", "unknown"]
+CplRosterStatusType = Literal["active", "inactive", "retired", "disabled", "unknown"]
+CplRosterTeamStatusType = Literal["active", "inactive"]
 
 
 # ---------------------------------------------------------------------------
@@ -31,6 +32,21 @@ class CplTeamCreate(BaseModel):
     season: str
     team_name: str = Field(..., min_length=1, max_length=255)
     team_short_name: str | None = None
+    country: str | None = None
+    coach_name: str | None = None
+    captain_name: str | None = None
+    status: CplRosterTeamStatusType = "active"
+    home_ground: str | None = None
+    source_note: str | None = None
+
+
+class CplTeamUpdate(BaseModel):
+    team_name: str | None = Field(None, min_length=1, max_length=255)
+    team_short_name: str | None = None
+    country: str | None = None
+    coach_name: str | None = None
+    captain_name: str | None = None
+    status: CplRosterTeamStatusType | None = None
     home_ground: str | None = None
     source_note: str | None = None
 
@@ -44,6 +60,10 @@ class CplTeamResponse(BaseModel):
     team_name: str
     normalized_team_name: str
     team_short_name: str | None = None
+    country: str | None = None
+    coach_name: str | None = None
+    captain_name: str | None = None
+    status: str = "active"
     home_ground: str | None = None
     source_note: str | None = None
     created_at: dt.datetime
@@ -77,6 +97,8 @@ class CplPlayerCreate(BaseModel):
     aliases: list[str] = Field(default_factory=list)
     team_name: str | None = None
     role: str | None = None
+    nationality: str | None = None
+    date_of_birth: dt.date | None = None
     batting_style: str | None = None
     bowling_style: str | None = None
     status: CplRosterStatusType = "active"
@@ -90,6 +112,8 @@ class CplPlayerUpdate(BaseModel):
     aliases: list[str] | None = None
     team_name: str | None = None
     role: str | None = None
+    nationality: str | None = None
+    date_of_birth: dt.date | None = None
     batting_style: str | None = None
     bowling_style: str | None = None
     status: CplRosterStatusType | None = None
@@ -108,6 +132,8 @@ class CplPlayerResponse(BaseModel):
     aliases: list[str] = Field(default_factory=list)
     team_name: str | None = None
     role: str | None = None
+    nationality: str | None = None
+    date_of_birth: dt.date | None = None
     batting_style: str | None = None
     bowling_style: str | None = None
     status: str
@@ -150,6 +176,8 @@ class RosterImportRow(BaseModel):
     team: str | None = None
     player: str
     role: str | None = None
+    nationality: str | None = None
+    date_of_birth: dt.date | None = None
     batting_style: str | None = None
     bowling_style: str | None = None
     status: CplRosterStatusType = "active"
@@ -163,6 +191,11 @@ class RosterImportPreviewPlayer(BaseModel):
     player_name: str
     team_name: str | None = None
     status: CplRosterStatusType
+    role: str | None = None
+    nationality: str | None = None
+    is_transfer: bool = False
+    previous_team_name: str | None = None
+    similar_existing_player: str | None = None
     is_new: bool
     is_duplicate: bool
     is_returning: bool
@@ -190,6 +223,8 @@ class RosterImportPreviewResponse(BaseModel):
     existing_players_matched: list[str] = Field(default_factory=list)
     duplicates: list[RosterImportPreviewPlayer] = Field(default_factory=list)
     returning_players: list[str] = Field(default_factory=list)
+    transfers: list[RosterImportPreviewPlayer] = Field(default_factory=list)
+    possible_duplicates: list[RosterImportPreviewPlayer] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     blockers: list[str] = Field(default_factory=list)
     can_apply: bool = True

@@ -3518,7 +3518,14 @@ class PodcastPrepReport(Base):
 class CplRosterPlayerStatus(str, enum.Enum):
     active = "active"
     inactive = "inactive"
+    retired = "retired"
+    disabled = "disabled"
     unknown = "unknown"
+
+
+class CplRosterTeamStatus(str, enum.Enum):
+    active = "active"
+    inactive = "inactive"
 
 
 class CplCurrentSeasonTeam(Base):
@@ -3540,6 +3547,16 @@ class CplCurrentSeasonTeam(Base):
     team_name: Mapped[str] = mapped_column(String(255), nullable=False)
     normalized_team_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     team_short_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    coach_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    captain_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[CplRosterTeamStatus] = mapped_column(
+        SAEnum(CplRosterTeamStatus, name="cpl_roster_team_status"),
+        nullable=False,
+        default=CplRosterTeamStatus.active,
+        server_default=CplRosterTeamStatus.active.value,
+        index=True,
+    )
     home_ground: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
@@ -3583,6 +3600,8 @@ class CplCurrentSeasonPlayer(Base):
     aliases: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     team_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     role: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    nationality: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    date_of_birth: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     batting_style: Mapped[str | None] = mapped_column(String(64), nullable=True)
     bowling_style: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[CplRosterPlayerStatus] = mapped_column(
