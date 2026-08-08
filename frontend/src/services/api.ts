@@ -3759,13 +3759,16 @@ export interface MatchPodcastPackRequest {
 export interface TournamentPodcastPackRequest {
   competition_code: string
   season?: string | null
-  gender?: string | null
+  gender_category?: string | null
 }
 
 export interface ArchivePodcastPackRequest {
-  competition_code: string
-  era_label?: string | null
-  compare_seasons?: string[] | null
+  competition_code?: string | null
+  season_start?: number | null
+  season_end?: number | null
+  format_family?: string | null
+  gender_category?: string | null
+  minimum_matches?: number | null
 }
 
 export interface RosterPodcastPackRequest {

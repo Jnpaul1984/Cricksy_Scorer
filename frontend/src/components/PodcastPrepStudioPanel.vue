@@ -30,35 +30,110 @@
 
     <!-- ── Match topic form ── -->
     <div v-if="topicType === 'match'" class="pps-form-section">
-      <label class="pps-label" for="pps-match-id">Match ID</label>
-      <input
-        id="pps-match-id"
-        v-model="matchId"
-        class="pps-input"
-        placeholder="Paste a match ID from the Match Registry"
-      />
+      <div class="pps-form-row">
+        <div class="pps-form-col">
+          <label class="pps-label" for="pps-match-competition">Competition (optional)</label>
+          <select id="pps-match-competition" v-model="matchCompetition" class="pps-select">
+            <option value="">— any —</option>
+            <option v-for="c in matchCompetitionOptions" :key="c.value" :value="c.value">
+              {{ c.label }}
+            </option>
+          </select>
+        </div>
+        <div class="pps-form-col">
+          <label class="pps-label" for="pps-match-season">Season (optional)</label>
+          <select id="pps-match-season" v-model="matchSeason" class="pps-select">
+            <option value="">— any —</option>
+            <option v-for="s in matchSeasonOptions" :key="s" :value="s">{{ s }}</option>
+          </select>
+        </div>
+        <div class="pps-form-col">
+          <label class="pps-label" for="pps-match-format">Format (optional)</label>
+          <select id="pps-match-format" v-model="matchFormat" class="pps-select">
+            <option value="">— any —</option>
+            <option v-for="f in matchFormatOptions" :key="f" :value="f">{{ f }}</option>
+          </select>
+        </div>
+      </div>
+      <div class="pps-form-row">
+        <div class="pps-form-col">
+          <label class="pps-label" for="pps-match-team">Team search</label>
+          <input id="pps-match-team" v-model="matchTeam" class="pps-input" placeholder="e.g. Trinbago Knight Riders" />
+        </div>
+        <div class="pps-form-col">
+          <label class="pps-label" for="pps-match-opponent">Opponent (optional)</label>
+          <input id="pps-match-opponent" v-model="matchOpponent" class="pps-input" placeholder="e.g. St Lucia Kings" />
+        </div>
+      </div>
+      <div class="pps-form-row">
+        <div class="pps-form-col">
+          <label class="pps-label" for="pps-match-date">Date (optional)</label>
+          <input id="pps-match-date" v-model="matchDate" class="pps-input" type="date" />
+        </div>
+        <div class="pps-form-col">
+          <label class="pps-label" for="pps-match-venue">Venue (optional)</label>
+          <input id="pps-match-venue" v-model="matchVenue" class="pps-input" placeholder="e.g. Providence Stadium" />
+        </div>
+      </div>
+
+      <div v-if="matchLookupLoading" class="pps-loading" role="status" aria-live="polite">
+        Searching imported matches…
+      </div>
+      <div v-else-if="matchLookupError" class="pps-error">{{ matchLookupError }}</div>
+      <div v-else-if="matchResults.length === 0" class="pps-empty">
+        No imported matches match these filters.
+      </div>
+      <div v-else class="pps-match-results">
+        <button
+          v-for="entry in matchResults"
+          :key="entry.match_id"
+          type="button"
+          class="pps-match-result"
+          :class="{ 'pps-match-result--selected': entry.match_id === matchId }"
+          @click="selectMatch(entry)"
+        >
+          <span class="pps-match-result-title">{{ entry.match_title }}</span>
+          <span class="pps-match-result-meta">
+            {{ entry.match_date || 'Unknown date' }} •
+            {{ entry.competition_name || entry.competition_code }} •
+            {{ entry.format }}
+            <template v-if="entry.venue_canonical || entry.venue_raw"> • {{ entry.venue_canonical || entry.venue_raw }}</template>
+            <template v-if="entry.season"> • {{ entry.season }}</template>
+          </span>
+          <span v-if="entry.result" class="pps-match-result-outcome">{{ entry.result }}</span>
+        </button>
+      </div>
+
+      <details class="pps-advanced">
+        <summary>Advanced</summary>
+        <label class="pps-label" for="pps-match-id">Raw Match ID (optional)</label>
+        <input
+          id="pps-match-id"
+          v-model="matchId"
+          class="pps-input"
+          placeholder="Use only for debug scenarios"
+        />
+      </details>
     </div>
 
     <!-- ── Tournament topic form ── -->
     <div v-if="topicType === 'tournament'" class="pps-form-section">
       <div class="pps-form-row">
         <div class="pps-form-col">
-          <label class="pps-label" for="pps-comp-code">Competition Code</label>
-          <input
-            id="pps-comp-code"
-            v-model="competitionCode"
-            class="pps-input"
-            placeholder="e.g. CPL_MEN"
-          />
+          <label class="pps-label" for="pps-comp-code">Competition</label>
+          <select id="pps-comp-code" v-model="competitionCode" class="pps-select">
+            <option value="">— select competition —</option>
+            <option v-for="c in tournamentCompetitionOptions" :key="c.value" :value="c.value">
+              {{ c.label }}
+            </option>
+          </select>
         </div>
         <div class="pps-form-col">
           <label class="pps-label" for="pps-season">Season</label>
-          <input
-            id="pps-season"
-            v-model="season"
-            class="pps-input"
-            placeholder="e.g. 2024"
-          />
+          <select id="pps-season" v-model="season" class="pps-select">
+            <option value="">— any —</option>
+            <option v-for="s in tournamentSeasonOptions" :key="s" :value="s">{{ s }}</option>
+          </select>
         </div>
         <div class="pps-form-col">
           <label class="pps-label" for="pps-gender">Gender</label>
@@ -66,31 +141,70 @@
             <option value="">— any —</option>
             <option value="men">Men</option>
             <option value="women">Women</option>
+            <option value="mixed">Mixed</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </div>
+        <div class="pps-form-col">
+          <label class="pps-label" for="pps-tournament-format">Format</label>
+          <select id="pps-tournament-format" v-model="tournamentFormat" class="pps-select">
+            <option value="">— any —</option>
+            <option value="T20">T20</option>
+            <option value="ODI">ODI</option>
+            <option value="TEST">TEST</option>
+            <option value="unknown">Unknown</option>
           </select>
         </div>
       </div>
+      <div v-if="tournamentGroupsLoading" class="pps-loading">Loading tournament groups…</div>
+      <div v-else-if="tournamentGroupsError" class="pps-error">{{ tournamentGroupsError }}</div>
     </div>
 
     <!-- ── Archive topic form ── -->
     <div v-if="topicType === 'archive'" class="pps-form-section">
       <div class="pps-form-row">
         <div class="pps-form-col">
-          <label class="pps-label" for="pps-arch-comp">Competition Code</label>
-          <input
-            id="pps-arch-comp"
-            v-model="competitionCode"
-            class="pps-input"
-            placeholder="e.g. CPL_MEN"
-          />
+          <label class="pps-label" for="pps-arch-comp">Competition</label>
+          <select id="pps-arch-comp" v-model="archiveCompetitionCode" class="pps-select">
+            <option value="">All competitions</option>
+            <option v-for="c in tournamentCompetitionOptions" :key="`arch-${c.value}`" :value="c.value">
+              {{ c.label }}
+            </option>
+          </select>
         </div>
         <div class="pps-form-col">
-          <label class="pps-label" for="pps-era">Era Label (optional)</label>
-          <input
-            id="pps-era"
-            v-model="eraLabel"
-            class="pps-input"
-            placeholder="e.g. 2013–2016"
-          />
+          <label class="pps-label" for="pps-arch-format">Format</label>
+          <select id="pps-arch-format" v-model="archiveFormatFamily" class="pps-select">
+            <option value="">All formats</option>
+            <option value="T20">T20</option>
+            <option value="ODI">ODI</option>
+            <option value="TEST">TEST</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </div>
+        <div class="pps-form-col">
+          <label class="pps-label" for="pps-arch-gender">Gender</label>
+          <select id="pps-arch-gender" v-model="archiveGenderCategory" class="pps-select">
+            <option value="">All</option>
+            <option value="men">Men</option>
+            <option value="women">Women</option>
+            <option value="mixed">Mixed</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </div>
+      </div>
+      <div class="pps-form-row">
+        <div class="pps-form-col">
+          <label class="pps-label" for="pps-arch-season-start">Season start</label>
+          <input id="pps-arch-season-start" v-model.number="archiveSeasonStart" type="number" class="pps-input" />
+        </div>
+        <div class="pps-form-col">
+          <label class="pps-label" for="pps-arch-season-end">Season end</label>
+          <input id="pps-arch-season-end" v-model.number="archiveSeasonEnd" type="number" class="pps-input" />
+        </div>
+        <div class="pps-form-col">
+          <label class="pps-label" for="pps-arch-min">Minimum matches</label>
+          <input id="pps-arch-min" v-model.number="archiveMinimumMatches" type="number" min="1" class="pps-input" />
         </div>
       </div>
     </div>
@@ -99,10 +213,10 @@
     <div v-if="topicType === 'roster'" class="pps-form-section">
       <div class="pps-form-row">
         <div class="pps-form-col">
-          <label class="pps-label" for="pps-ros-comp">Competition Code</label>
+          <label class="pps-label" for="pps-ros-comp">Competition</label>
           <input
             id="pps-ros-comp"
-            v-model="competitionCode"
+            v-model="rosterCompetitionCode"
             class="pps-input"
             placeholder="e.g. CPL_MEN"
           />
@@ -111,20 +225,28 @@
           <label class="pps-label" for="pps-ros-season">Season</label>
           <input
             id="pps-ros-season"
-            v-model="season"
+            v-model="rosterSeason"
             class="pps-input"
             placeholder="e.g. 2025"
           />
         </div>
         <div class="pps-form-col">
           <label class="pps-label" for="pps-ros-team">Team (optional)</label>
-          <input
-            id="pps-ros-team"
-            v-model="teamName"
-            class="pps-input"
-            placeholder="Team name filter"
-          />
+          <select id="pps-ros-team" v-model="rosterTeamName" class="pps-select">
+            <option value="">All teams</option>
+            <option v-for="team in rosterTeams" :key="team.id" :value="team.team_name">
+              {{ team.team_name }}
+            </option>
+          </select>
         </div>
+      </div>
+      <div v-if="rosterLookupLoading" class="pps-loading">Loading current roster teams…</div>
+      <div v-else-if="rosterLookupError" class="pps-error">{{ rosterLookupError }}</div>
+      <div
+        v-else-if="rosterCompetitionCode.trim() && rosterSeason.trim() && rosterTeams.length === 0"
+        class="pps-empty"
+      >
+        This competition/season has no current roster records yet. Import a roster first.
       </div>
     </div>
 
@@ -299,20 +421,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import {
   generateMatchPodcastPack,
   generateTournamentPodcastPack,
   generateArchivePodcastPack,
   generateRosterPodcastPack,
+  getAnalystRegistry,
+  getTournamentGroups,
+  listCplTeams,
   listPodcastPrepReports,
   createPodcastPrepReport,
   updatePodcastPrepReport,
 } from '@/services/api'
 import type {
+  AnalystRegistryEntry,
+  CplTeamResponse,
   PodcastResearchPack,
   PodcastPrepReportResponse,
   PodcastTopicType,
+  TournamentGroupSummary,
 } from '@/services/api'
 
 // ---------------------------------------------------------------------------
@@ -332,11 +460,40 @@ const topicTypes: { value: PodcastTopicType; label: string; icon: string }[] = [
 
 const topicType = ref<PodcastTopicType>('match')
 const matchId = ref('')
-const competitionCode = ref('CPL_MEN')
+const competitionCode = ref('')
 const season = ref('')
 const gender = ref('')
-const teamName = ref('')
-const eraLabel = ref('')
+const tournamentFormat = ref('')
+
+const matchCompetition = ref('')
+const matchSeason = ref('')
+const matchTeam = ref('')
+const matchOpponent = ref('')
+const matchDate = ref('')
+const matchVenue = ref('')
+const matchFormat = ref('')
+const matchRegistryEntries = ref<AnalystRegistryEntry[]>([])
+const matchLookupLoading = ref(false)
+const matchLookupError = ref('')
+const MATCH_RESULT_LIMIT = 50
+
+const archiveCompetitionCode = ref('')
+const archiveSeasonStart = ref<number | null>(null)
+const archiveSeasonEnd = ref<number | null>(null)
+const archiveFormatFamily = ref('')
+const archiveGenderCategory = ref('')
+const archiveMinimumMatches = ref<number>(5)
+
+const rosterCompetitionCode = ref('CPL_MEN')
+const rosterSeason = ref('')
+const rosterTeamName = ref('')
+const rosterTeams = ref<CplTeamResponse[]>([])
+const rosterLookupLoading = ref(false)
+const rosterLookupError = ref('')
+
+const tournamentGroups = ref<TournamentGroupSummary[]>([])
+const tournamentGroupsLoading = ref(false)
+const tournamentGroupsError = ref('')
 
 const pack = ref<PodcastResearchPack | null>(null)
 const generating = ref(false)
@@ -365,6 +522,78 @@ const REPORTS_PAGE_SIZE = 20
 const renderedMarkdown = computed(() => pack.value ? buildMarkdown(pack.value) : '')
 const renderedPlainText = computed(() => pack.value ? buildPlainText(pack.value) : '')
 
+const matchCompetitionOptions = computed(() => {
+  const seen = new Map<string, string>()
+  for (const e of matchRegistryEntries.value) {
+    if (!seen.has(e.competition_code)) {
+      seen.set(e.competition_code, e.competition_name || e.competition_code)
+    }
+  }
+  return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
+})
+
+const matchSeasonOptions = computed(() => {
+  const seasons = new Set<string>()
+  for (const e of matchRegistryEntries.value) {
+    if (e.season) seasons.add(e.season)
+  }
+  return [...seasons].sort((a, b) => b.localeCompare(a))
+})
+
+const matchFormatOptions = computed(() => {
+  const formats = new Set<string>()
+  for (const e of matchRegistryEntries.value) {
+    if (e.format) formats.add(e.format)
+  }
+  return [...formats].sort((a, b) => a.localeCompare(b))
+})
+
+const tournamentCompetitionOptions = computed(() => {
+  const seen = new Map<string, string>()
+  for (const g of tournamentGroups.value) {
+    if (!seen.has(g.group_key.competition_code)) {
+      seen.set(g.group_key.competition_code, g.group_key.competition_name || g.group_key.competition_code)
+    }
+  }
+  return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
+})
+
+const tournamentSeasonOptions = computed(() => {
+  const seasons = new Set<string>()
+  for (const g of filteredTournamentGroups.value) {
+    if (g.group_key.season) seasons.add(g.group_key.season)
+  }
+  return [...seasons].sort((a, b) => b.localeCompare(a))
+})
+
+const filteredTournamentGroups = computed(() => tournamentGroups.value.filter(g => {
+  if (competitionCode.value && g.group_key.competition_code !== competitionCode.value) return false
+  if (gender.value && g.group_key.gender_category !== gender.value) return false
+  if (tournamentFormat.value && g.group_key.format_family !== tournamentFormat.value) return false
+  return true
+}))
+
+const matchResults = computed(() => {
+  const matchTeamQuery = normalize(matchTeam.value)
+  const matchOpponentQuery = normalize(matchOpponent.value)
+  const matchVenueQuery = normalize(matchVenue.value)
+  const filtered = matchRegistryEntries.value.filter(e => {
+    if (matchCompetition.value && e.competition_code !== matchCompetition.value) return false
+    if (matchSeason.value && e.season !== matchSeason.value) return false
+    if (matchFormat.value && e.format !== matchFormat.value) return false
+    if (matchDate.value && e.match_date !== matchDate.value) return false
+
+    const teamHaystack = normalize(`${e.team_a} ${e.team_b} ${e.canonical_team_a || ''} ${e.canonical_team_b || ''}`)
+    const venueHaystack = normalize(`${e.venue_canonical || ''} ${e.venue_raw || ''}`)
+
+    if (matchTeamQuery && !teamHaystack.includes(matchTeamQuery)) return false
+    if (matchOpponentQuery && !teamHaystack.includes(matchOpponentQuery)) return false
+    if (matchVenueQuery && !venueHaystack.includes(matchVenueQuery)) return false
+    return true
+  })
+  return filtered.slice(0, MATCH_RESULT_LIMIT)
+})
+
 // ---------------------------------------------------------------------------
 // Computed
 // ---------------------------------------------------------------------------
@@ -372,8 +601,8 @@ const renderedPlainText = computed(() => pack.value ? buildPlainText(pack.value)
 const canGenerate = computed(() => {
   if (topicType.value === 'match') return matchId.value.trim().length > 0
   if (topicType.value === 'tournament') return competitionCode.value.trim().length > 0
-  if (topicType.value === 'archive') return competitionCode.value.trim().length > 0
-  if (topicType.value === 'roster') return competitionCode.value.trim().length > 0 && season.value.trim().length > 0
+  if (topicType.value === 'archive') return true
+  if (topicType.value === 'roster') return rosterCompetitionCode.value.trim().length > 0 && rosterSeason.value.trim().length > 0
   return false
 })
 
@@ -384,6 +613,24 @@ const canGenerate = computed(() => {
 function selectTopic(t: PodcastTopicType) {
   topicType.value = t
   pack.value = null
+  error.value = ''
+  if (t === 'match' && matchRegistryEntries.value.length === 0) {
+    void loadMatchRegistry()
+  }
+  if ((t === 'tournament' || t === 'archive') && tournamentGroups.value.length === 0) {
+    void loadTournamentGroups()
+  }
+  if (t === 'roster') {
+    void maybeLoadRosterTeams()
+  }
+}
+
+function normalize(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+function selectMatch(entry: AnalystRegistryEntry) {
+  matchId.value = entry.match_id
   error.value = ''
 }
 
@@ -451,25 +698,33 @@ async function generatePack() {
       pack.value = await generateTournamentPodcastPack({
         competition_code: competitionCode.value.trim(),
         season: season.value.trim() || null,
-        gender: gender.value || null,
+        gender_category: gender.value || null,
       })
     } else if (topicType.value === 'archive') {
       pack.value = await generateArchivePodcastPack({
-        competition_code: competitionCode.value.trim(),
-        era_label: eraLabel.value.trim() || null,
+        competition_code: archiveCompetitionCode.value.trim() || null,
+        season_start: archiveSeasonStart.value,
+        season_end: archiveSeasonEnd.value,
+        format_family: archiveFormatFamily.value || null,
+        gender_category: archiveGenderCategory.value || null,
+        minimum_matches: archiveMinimumMatches.value,
       })
     } else if (topicType.value === 'roster') {
       pack.value = await generateRosterPodcastPack({
-        competition_code: competitionCode.value.trim(),
-        season: season.value.trim(),
-        team_name: teamName.value.trim() || null,
+        competition_code: rosterCompetitionCode.value.trim(),
+        season: rosterSeason.value.trim(),
+        team_name: rosterTeamName.value.trim() || null,
       })
     }
     if (pack.value) {
       saveTitle.value = pack.value.title
     }
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Failed to generate research pack.'
+    if (topicType.value === 'match') {
+      error.value = 'Unable to generate this match pack. Select an imported fixture (or use Advanced match ID) and try again.'
+    } else {
+      error.value = e instanceof Error ? e.message : 'Failed to generate research pack.'
+    }
   } finally {
     generating.value = false
   }
@@ -508,10 +763,10 @@ async function saveReport() {
     await createPodcastPrepReport({
       title: saveTitle.value.trim(),
       topic_type: topicType.value,
-      source_competition_code: competitionCode.value.trim() || null,
-      source_season: season.value.trim() || null,
-      source_team_name: teamName.value.trim() || null,
-      source_match_id: matchId.value.trim() || null,
+      source_competition_code: sourceCompetitionCode.value,
+      source_season: sourceSeason.value,
+      source_team_name: sourceTeamName.value,
+      source_match_id: topicType.value === 'match' ? matchId.value.trim() || null : null,
       generated_markdown: renderedMarkdown.value,
       generated_plain_text: renderedPlainText.value,
       trust_summary: pack.value.trust_note,
@@ -577,11 +832,94 @@ async function changeReportStatus(id: string, newStatus: string) {
   }
 }
 
+const sourceCompetitionCode = computed(() => {
+  if (topicType.value === 'tournament') return competitionCode.value.trim() || null
+  if (topicType.value === 'archive') return archiveCompetitionCode.value.trim() || null
+  if (topicType.value === 'roster') return rosterCompetitionCode.value.trim() || null
+  return null
+})
+
+const sourceSeason = computed(() => {
+  if (topicType.value === 'tournament') return season.value.trim() || null
+  if (topicType.value === 'roster') return rosterSeason.value.trim() || null
+  if (topicType.value === 'archive' && archiveSeasonStart.value && archiveSeasonEnd.value) {
+    return `${archiveSeasonStart.value}-${archiveSeasonEnd.value}`
+  }
+  return null
+})
+
+const sourceTeamName = computed(() => {
+  if (topicType.value === 'roster') return rosterTeamName.value.trim() || null
+  return null
+})
+
+async function loadMatchRegistry() {
+  matchLookupLoading.value = true
+  matchLookupError.value = ''
+  try {
+    const response = await getAnalystRegistry()
+    matchRegistryEntries.value = response.entries.filter(e => e.source_type === 'historical_import')
+  } catch (e: unknown) {
+    matchLookupError.value = e instanceof Error ? e.message : 'Failed to load imported matches.'
+  } finally {
+    matchLookupLoading.value = false
+  }
+}
+
+async function loadTournamentGroups() {
+  tournamentGroupsLoading.value = true
+  tournamentGroupsError.value = ''
+  try {
+    const response = await getTournamentGroups()
+    tournamentGroups.value = response.groups
+  } catch (e: unknown) {
+    tournamentGroupsError.value = e instanceof Error ? e.message : 'Failed to load tournament groups.'
+  } finally {
+    tournamentGroupsLoading.value = false
+  }
+}
+
+async function maybeLoadRosterTeams() {
+  if (!rosterCompetitionCode.value.trim() || !rosterSeason.value.trim()) {
+    rosterTeams.value = []
+    rosterLookupError.value = ''
+    return
+  }
+  rosterLookupLoading.value = true
+  rosterLookupError.value = ''
+  try {
+    const response = await listCplTeams({
+      competition_code: rosterCompetitionCode.value.trim(),
+      season: rosterSeason.value.trim(),
+    })
+    rosterTeams.value = response.teams
+  } catch (e: unknown) {
+    rosterLookupError.value = e instanceof Error ? e.message : 'Failed to load roster teams.'
+    rosterTeams.value = []
+  } finally {
+    rosterLookupLoading.value = false
+  }
+}
+
+watch([rosterCompetitionCode, rosterSeason, topicType], () => {
+  if (topicType.value === 'roster') {
+    void maybeLoadRosterTeams()
+  }
+})
+
+watch([competitionCode, gender, tournamentFormat], () => {
+  if (season.value && !tournamentSeasonOptions.value.includes(season.value)) {
+    season.value = ''
+  }
+})
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 
 onMounted(() => {
+  void loadMatchRegistry()
+  void loadTournamentGroups()
   loadReports()
 })
 </script>
@@ -1010,5 +1348,54 @@ onMounted(() => {
 .pps-load-more {
   padding: 0.75rem 1rem;
   text-align: center;
+}
+
+.pps-match-results {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 18rem;
+  overflow: auto;
+}
+
+.pps-match-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  cursor: pointer;
+}
+
+.pps-match-result--selected {
+  border-color: var(--color-primary, #1d4ed8);
+  background: color-mix(in srgb, var(--color-primary, #1d4ed8) 6%, transparent);
+}
+
+.pps-match-result-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.pps-match-result-meta,
+.pps-match-result-outcome {
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.pps-advanced {
+  margin-top: 0.75rem;
+}
+
+.pps-advanced summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #4b5563);
+  margin-bottom: 0.5rem;
 }
 </style>

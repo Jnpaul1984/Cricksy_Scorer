@@ -116,7 +116,7 @@ async def _load_archive_data(
         season_end=request.season_end,
         format_family=request.format_family,
         gender_category=request.gender_category,
-        minimum_matches=1,
+        minimum_matches=request.minimum_matches or 1,
         include_incomplete=True,
     )
     return result.model_dump()
