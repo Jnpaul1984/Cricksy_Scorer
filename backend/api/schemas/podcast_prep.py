@@ -164,6 +164,7 @@ class ArchivePodcastPackRequest(BaseModel):
     season_end: int | None = None
     format_family: str | None = None
     gender_category: str | None = None
+    minimum_matches: int | None = Field(default=None, ge=1, le=1000)
 
 
 class RosterPodcastPackRequest(BaseModel):
