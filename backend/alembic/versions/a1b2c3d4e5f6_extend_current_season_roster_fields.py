@@ -1,6 +1,6 @@
 """Extend current-season roster fields for management workflows.
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: ab12cd34ef56
 Revises: f0a1b2c3d4e5
 Create Date: 2026-08-08
 """
@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "a1b2c3d4e5f6"
+revision: str = "ab12cd34ef56"
 down_revision: str | None = "f0a1b2c3d4e5"
 branch_labels: str | None = None
 depends_on: str | None = None
@@ -22,15 +22,9 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         # Extend existing player status enum safely.
+        op.execute(sa.text("ALTER TYPE cpl_roster_player_status ADD VALUE IF NOT EXISTS 'retired'"))
         op.execute(
-            sa.text(
-                "ALTER TYPE cpl_roster_player_status ADD VALUE IF NOT EXISTS 'retired'"
-            )
-        )
-        op.execute(
-            sa.text(
-                "ALTER TYPE cpl_roster_player_status ADD VALUE IF NOT EXISTS 'disabled'"
-            )
+            sa.text("ALTER TYPE cpl_roster_player_status ADD VALUE IF NOT EXISTS 'disabled'")
         )
         team_status = postgresql.ENUM(
             "active",
