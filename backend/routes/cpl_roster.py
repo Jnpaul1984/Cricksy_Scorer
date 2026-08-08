@@ -35,6 +35,7 @@ from backend.api.schemas.cpl_roster import (
     CplTeamCreate,
     CplTeamListResponse,
     CplTeamResponse,
+    CplTeamUpdate,
     RosterImportApplyRequest,
     RosterImportApplyResponse,
     RosterImportPreviewResponse,
@@ -42,11 +43,16 @@ from backend.api.schemas.cpl_roster import (
 )
 from backend.services.cpl_roster_service import (
     apply_roster_import,
+    delete_player,
+    delete_team,
+    disable_player,
     create_player,
     create_team,
     list_players,
     list_teams,
     preview_roster_import,
+    retire_player,
+    update_team,
     update_player,
 )
 from backend.sql_app.database import get_db
@@ -67,12 +73,20 @@ async def list_cpl_teams(
     db: AsyncSession = Depends(get_db),
     competition_code: str = Query("CPL_MEN"),
     season: str | None = Query(None),
+    search: str | None = Query(None),
+    team_status: str | None = Query(None, alias="status"),
 ) -> CplTeamListResponse:
     """List registered CPL teams for a season.
 
     If season is omitted, returns teams from all seasons.
     """
-    return await list_teams(db, competition_code=competition_code, season=season)
+    return await list_teams(
+        db,
+        competition_code=competition_code,
+        season=season,
+        search=search,
+        status=team_status,
+    )
 
 
 @router.post("/teams", response_model=CplTeamResponse, status_code=201)
@@ -92,6 +106,33 @@ async def register_cpl_team(
     return CplTeamResponse.model_validate(team)
 
 
+@router.patch("/teams/{team_id}", response_model=CplTeamResponse)
+async def patch_cpl_team(
+    team_id: str,
+    body: CplTeamUpdate,
+    current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    db: AsyncSession = Depends(get_db),
+) -> CplTeamResponse:
+    team = await update_team(db, team_id, body)
+    if team is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found.")
+    return CplTeamResponse.model_validate(team)
+
+
+@router.delete("/teams/{team_id}", status_code=204)
+async def remove_cpl_team(
+    team_id: str,
+    current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    try:
+        deleted = await delete_team(db, team_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found.")
+
+
 # ---------------------------------------------------------------------------
 # Player endpoints
 # ---------------------------------------------------------------------------
@@ -104,6 +145,9 @@ async def list_cpl_players(
     competition_code: str = Query("CPL_MEN"),
     season: str | None = Query(None),
     team_name: str | None = Query(None),
+    role: str | None = Query(None),
+    nationality: str | None = Query(None),
+    player_search: str | None = Query(None, alias="player"),
     player_status: str | None = Query(None, alias="status"),
 ) -> CplPlayerListResponse:
     """List registered CPL players.
@@ -116,6 +160,9 @@ async def list_cpl_players(
         competition_code=competition_code,
         season=season,
         team_name=team_name,
+        role=role,
+        nationality=nationality,
+        player_search=player_search,
         status=player_status,
     )
 
@@ -136,6 +183,44 @@ async def register_cpl_player(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return CplPlayerResponse.model_validate(player)
+
+
+@router.post("/players/{player_id}/retire", response_model=CplPlayerResponse)
+async def retire_cpl_player(
+    player_id: str,
+    current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    db: AsyncSession = Depends(get_db),
+) -> CplPlayerResponse:
+    player = await retire_player(db, player_id)
+    if player is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found.")
+    return CplPlayerResponse.model_validate(player)
+
+
+@router.post("/players/{player_id}/disable", response_model=CplPlayerResponse)
+async def disable_cpl_player(
+    player_id: str,
+    current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    db: AsyncSession = Depends(get_db),
+) -> CplPlayerResponse:
+    player = await disable_player(db, player_id)
+    if player is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found.")
+    return CplPlayerResponse.model_validate(player)
+
+
+@router.delete("/players/{player_id}", status_code=204)
+async def remove_cpl_player(
+    player_id: str,
+    current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    try:
+        deleted = await delete_player(db, player_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found.")
 
 
 @router.patch("/players/{player_id}", response_model=CplPlayerResponse)
