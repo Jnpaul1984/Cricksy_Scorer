@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from numbers import Real
 from typing import Any
 
@@ -76,8 +77,11 @@ def infer_validity_state(
             ValidityState.NOT_MEASURABLE,
             "The metric could not be measured from the available input.",
         )
-    if valid_range and isinstance(raw_value, Real) and (
-        raw_value < valid_range[0] or raw_value > valid_range[1]
+    numeric_raw_value = _safe_float(raw_value)
+    if (
+        numeric_raw_value is not None
+        and valid_range
+        and (numeric_raw_value < valid_range[0] or numeric_raw_value > valid_range[1])
     ):
         return (
             ValidityState.INVALID_RANGE,
@@ -114,7 +118,9 @@ def build_capture_profile(
     return CaptureProfile(
         camera_view=camera_view,
         sample_fps=sample_fps,
-        effective_analysis_fps=effective_analysis_fps if effective_analysis_fps is not None else sample_fps,
+        effective_analysis_fps=effective_analysis_fps
+        if effective_analysis_fps is not None
+        else sample_fps,
         source_video_fps=source_video_fps,
         resolution_class=resolution_class,
         analysis_mode=discipline,
@@ -459,7 +465,9 @@ def _build_metric_limitations(
 ) -> list[str]:
     limitations: list[str] = []
     if confidence_score is not None and confidence_score < LOW_CONFIDENCE_THRESHOLD:
-        limitations.append("Low confidence measurement; confirm with additional compatible capture.")
+        limitations.append(
+            "Low confidence measurement; confirm with additional compatible capture."
+        )
     if sample_fps < 5:
         limitations.append("Low sampling rate may reduce motion timing fidelity.")
     if validity_state != ValidityState.VALID:
@@ -530,7 +538,8 @@ def _extract_aggregate_stats(raw_metric: dict[str, Any]) -> dict[str, Any] | Non
     aggregate_stats = {
         key: value
         for key, value in raw_metric.items()
-        if key not in {"score", "per_frame_scores", "per_frame_frame_nums", "per_frame_timestamps_s"}
+        if key
+        not in {"score", "per_frame_scores", "per_frame_frame_nums", "per_frame_timestamps_s"}
     }
     return aggregate_stats or None
 
@@ -546,9 +555,20 @@ def _normalized_score_for_metric(metric_id: str, raw_value: Any) -> float | None
 
 
 def _safe_float(value: Any, scale: float | None = None) -> float | None:
-    if not isinstance(value, Real):
+    if isinstance(value, bool):
         return None
-    result = float(value)
+    if isinstance(value, int):
+        result = float(value)
+    elif isinstance(value, float):
+        if not math.isfinite(value):
+            return None
+        result = value
+    elif isinstance(value, Real):
+        result = float(value)
+        if not math.isfinite(result):
+            return None
+    else:
+        return None
     if scale and scale != 0:
         result /= scale
     return result
@@ -557,7 +577,11 @@ def _safe_float(value: Any, scale: float | None = None) -> float | None:
 def _safe_int(value: Any) -> int:
     if isinstance(value, bool):
         return int(value)
-    if isinstance(value, Real):
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return 0
         return int(value)
     return 0
 
@@ -565,6 +589,10 @@ def _safe_int(value: Any) -> int:
 def _safe_optional_int(value: Any) -> int | None:
     if isinstance(value, bool):
         return int(value)
-    if isinstance(value, Real):
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return None
         return int(value)
     return None

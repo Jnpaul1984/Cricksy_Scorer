@@ -224,7 +224,7 @@ def test_build_analysis_v2_contract_is_additive_and_keeps_empty_phase_repetition
             "metrics": {
                 "head_stability_score": {
                     "score": 0.82,
-                    "num_frames": 18,
+                    "num_frames": 18.0,
                     "avg_movement": 0.07,
                 },
                 "hip_shoulder_separation_timing": {
@@ -240,8 +240,8 @@ def test_build_analysis_v2_contract_is_additive_and_keeps_empty_phase_repetition
                     "bad_segments": [{"start_frame": 7, "end_frame": 9, "start_timestamp_s": 0.7}],
                 }
             },
-            "frames_with_pose": 18,
-            "sampled_frames": 20,
+            "frames_with_pose": 18.0,
+            "sampled_frames": 20.0,
             "detection_rate_percent": 90.0,
         },
     )
@@ -251,8 +251,36 @@ def test_build_analysis_v2_contract_is_additive_and_keeps_empty_phase_repetition
     assert dumped["metric_results"][0]["metric_version"] == DEFAULT_POSE_METRIC_VERSION
     assert dumped["repetitions"] == []
     assert dumped["phases"] == []
-    hip_metric = next(item for item in dumped["metric_results"] if item["metric_id"] == "hip_shoulder_separation_timing")
+    hip_metric = next(
+        item
+        for item in dumped["metric_results"]
+        if item["metric_id"] == "hip_shoulder_separation_timing"
+    )
     assert hip_metric["normalized_score"] is None
+
+
+def test_build_analysis_v2_contract_ignores_non_finite_numeric_metadata() -> None:
+    contract = build_analysis_v2_contract(
+        discipline="bowling",
+        sample_fps=10.0,
+        source_video_fps=30.0,
+        camera_view="side",
+        source_model="MediaPipe Pose Landmarker Full",
+        metrics_payload={
+            "metrics": {
+                "head_stability_score": {
+                    "score": 0.82,
+                    "num_frames": float("inf"),
+                }
+            },
+            "frames_with_pose": float("nan"),
+            "sampled_frames": 20.0,
+            "detection_rate_percent": 90.0,
+        },
+    )
+
+    metric = contract.metric_results[0]
+    assert metric.validity_state == ValidityState.INSUFFICIENT_VISIBILITY
 
 
 def test_compare_metric_results_allows_same_player_metric_version_and_capture() -> None:

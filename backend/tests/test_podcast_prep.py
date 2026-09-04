@@ -30,7 +30,6 @@ from backend.api.schemas.podcast_prep import (
     PodcastPrepReportCreate,
     PodcastPrepReportUpdate,
     PodcastResearchPack,
-    PodcastResearchSection,
 )
 from backend.services.podcast_prep_service import (
     _clean_result_text,
@@ -321,25 +320,19 @@ class TestBuildMatchResearchPack:
     def test_no_delivered_scored_in_output(self) -> None:
         data = _minimal_match_data(result="Team A delivered scored 50 runs")
         pack = build_match_research_pack("match-1", data)
-        combined = " ".join(
-            s.body for s in pack.sections if s.body
-        ) + (pack.match_context or "")
+        combined = " ".join(s.body for s in pack.sections if s.body) + (pack.match_context or "")
         assert "delivered scored" not in combined.lower()
 
     def test_no_1_runs_in_output(self) -> None:
         data = _minimal_match_data(result="Team A won by 1 runs")
         pack = build_match_research_pack("match-1", data)
-        combined = " ".join(
-            s.body for s in pack.sections if s.body
-        ) + (pack.match_context or "")
+        combined = " ".join(s.body for s in pack.sections if s.body) + (pack.match_context or "")
         assert "1 runs" not in combined
 
     def test_no_1_wickets_in_output(self) -> None:
         data = _minimal_match_data(result="Team A won by 1 wickets")
         pack = build_match_research_pack("match-1", data)
-        combined = " ".join(
-            s.body for s in pack.sections if s.body
-        ) + (pack.match_context or "")
+        combined = " ".join(s.body for s in pack.sections if s.body) + (pack.match_context or "")
         assert "1 wickets" not in combined
 
     def test_sections_include_key_facts(self) -> None:
@@ -386,9 +379,7 @@ class TestBuildMatchResearchPack:
             }
         ]
         pack = build_match_research_pack("match-1", data)
-        player_section = next(
-            (s for s in pack.sections if s.section_key == "player_focus"), None
-        )
+        player_section = next((s for s in pack.sections if s.section_key == "player_focus"), None)
         assert player_section is not None
         assert "1 wicket" in (player_section.body or "")
         assert "1 wickets" not in (player_section.body or "")
@@ -401,42 +392,30 @@ class TestBuildMatchResearchPack:
 
 class TestBuildTournamentResearchPack:
     def test_returns_pack(self) -> None:
-        pack = build_tournament_research_pack(
-            "CPL_MEN", "2024", "men", _minimal_tournament_data()
-        )
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _minimal_tournament_data())
         assert isinstance(pack, PodcastResearchPack)
 
     def test_topic_type_is_tournament(self) -> None:
-        pack = build_tournament_research_pack(
-            "CPL_MEN", "2024", "men", _minimal_tournament_data()
-        )
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _minimal_tournament_data())
         assert pack.topic_type == "tournament"
 
     def test_trust_note_present(self) -> None:
-        pack = build_tournament_research_pack(
-            "CPL_MEN", "2024", "men", _minimal_tournament_data()
-        )
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _minimal_tournament_data())
         assert pack.trust_note
         assert "not official" in pack.trust_note.lower() or "derived" in pack.trust_note.lower()
 
     def test_trust_note_section_present(self) -> None:
-        pack = build_tournament_research_pack(
-            "CPL_MEN", "2024", "men", _minimal_tournament_data()
-        )
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _minimal_tournament_data())
         keys = [s.section_key for s in pack.sections]
         assert "data_trust_note" in keys or "trust_note" in keys
 
     def test_sections_include_opening_hook(self) -> None:
-        pack = build_tournament_research_pack(
-            "CPL_MEN", "2024", "men", _minimal_tournament_data()
-        )
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _minimal_tournament_data())
         keys = [s.section_key for s in pack.sections]
         assert "opening_hook" in keys
 
     def test_generated_markdown_not_empty(self) -> None:
-        pack = build_tournament_research_pack(
-            "CPL_MEN", "2024", "men", _minimal_tournament_data()
-        )
+        pack = build_tournament_research_pack("CPL_MEN", "2024", "men", _minimal_tournament_data())
         assert isinstance(pack.generated_markdown, str)
         assert len(pack.generated_markdown) > 30
 
@@ -508,36 +487,26 @@ class TestBuildRosterResearchPack:
         ]
 
     def test_returns_pack(self) -> None:
-        pack = build_roster_research_pack(
-            "CPL_MEN", "2024", None, self._players(), self._teams()
-        )
+        pack = build_roster_research_pack("CPL_MEN", "2024", None, self._players(), self._teams())
         assert isinstance(pack, PodcastResearchPack)
 
     def test_topic_type_is_roster(self) -> None:
-        pack = build_roster_research_pack(
-            "CPL_MEN", "2024", None, self._players(), self._teams()
-        )
+        pack = build_roster_research_pack("CPL_MEN", "2024", None, self._players(), self._teams())
         assert pack.topic_type == "roster"
 
     def test_trust_note_present(self) -> None:
-        pack = build_roster_research_pack(
-            "CPL_MEN", "2024", None, self._players(), self._teams()
-        )
+        pack = build_roster_research_pack("CPL_MEN", "2024", None, self._players(), self._teams())
         assert pack.trust_note
         assert "roster" in pack.trust_note.lower() or "maintained" in pack.trust_note.lower()
 
     def test_trust_note_section_present(self) -> None:
-        pack = build_roster_research_pack(
-            "CPL_MEN", "2024", None, self._players(), self._teams()
-        )
+        pack = build_roster_research_pack("CPL_MEN", "2024", None, self._players(), self._teams())
         keys = [s.section_key for s in pack.sections]
         assert "data_trust_note" in keys or "trust_note" in keys
 
     def test_no_invented_stats(self) -> None:
         """Roster packs must not invent batting/bowling statistics."""
-        pack = build_roster_research_pack(
-            "CPL_MEN", "2024", None, self._players(), self._teams()
-        )
+        pack = build_roster_research_pack("CPL_MEN", "2024", None, self._players(), self._teams())
         combined = " ".join(s.body for s in pack.sections if s.body).lower()
         # Should not contain invented stat phrases
         assert "average" not in combined or "stats unavailable" in combined
@@ -545,16 +514,12 @@ class TestBuildRosterResearchPack:
         assert "strike rate" not in combined or "stats unavailable" in combined
 
     def test_squad_uncertainty_section_present(self) -> None:
-        pack = build_roster_research_pack(
-            "CPL_MEN", "2024", None, self._players(), self._teams()
-        )
+        pack = build_roster_research_pack("CPL_MEN", "2024", None, self._players(), self._teams())
         keys = [s.section_key for s in pack.sections]
         assert "squad_uncertainty" in keys or "trust_note" in keys
 
     def test_returning_players_mentioned(self) -> None:
-        pack = build_roster_research_pack(
-            "CPL_MEN", "2024", None, self._players(), self._teams()
-        )
+        pack = build_roster_research_pack("CPL_MEN", "2024", None, self._players(), self._teams())
         combined = " ".join(s.body for s in pack.sections if s.body).lower()
         assert "chris gayle" in combined or "returning" in combined
 
@@ -690,9 +655,7 @@ class TestSavedPodcastPrepReports:
             update_podcast_prep_report(
                 session,
                 created.id,
-                PodcastPrepReportUpdate(
-                    status="reviewed"
-                ),
+                PodcastPrepReportUpdate(status="reviewed"),
             )
         )
         assert updated is not None
@@ -775,9 +738,7 @@ class TestSavedPodcastPrepReports:
             update_podcast_prep_report(
                 session,
                 created.id,
-                PodcastPrepReportUpdate(
-                    status="approved"
-                ),
+                PodcastPrepReportUpdate(status="approved"),
             )
         )
         run(
@@ -790,11 +751,7 @@ class TestSavedPodcastPrepReports:
                 ),
             )
         )
-        approved = run(
-            list_podcast_prep_reports(
-                session, status="approved"
-            )
-        )
+        approved = run(list_podcast_prep_reports(session, status="approved"))
         assert approved.total == 1
         assert approved.reports[0].title == "Draft Report"
 
@@ -990,9 +947,7 @@ class TestMatchPackRichCaseStudy:
     def test_callout_explanation_used(self) -> None:
         """CaseStudyAnalystCallout uses 'explanation' not 'text'."""
         pack = build_match_research_pack("m1", _rich_match_data())
-        ttp = next(
-            (s for s in pack.sections if s.section_key == "tactical_talking_points"), None
-        )
+        ttp = next((s for s in pack.sections if s.section_key == "tactical_talking_points"), None)
         assert ttp is not None
         assert ttp.body is not None
         assert "Powerplay domination" in ttp.body
@@ -1006,9 +961,7 @@ class TestMatchPackRichCaseStudy:
 
     def test_test_match_section(self) -> None:
         pack = build_match_research_pack("m-test", _rich_match_data_test())
-        tmi = next(
-            (s for s in pack.sections if s.section_key == "test_match_intelligence"), None
-        )
+        tmi = next((s for s in pack.sections if s.section_key == "test_match_intelligence"), None)
         assert tmi is not None
         assert tmi.body is not None
         assert "first innings" in tmi.body.lower() or "lead" in tmi.body.lower()

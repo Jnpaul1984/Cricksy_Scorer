@@ -134,8 +134,7 @@ class CoachingMetricResultV2(BaseModel):
     @model_validator(mode="after")
     def _validate_unavailable_reason(self) -> CoachingMetricResultV2:
         if (
-            self.validity_state
-            not in {ValidityState.VALID, ValidityState.LOW_CONFIDENCE}
+            self.validity_state not in {ValidityState.VALID, ValidityState.LOW_CONFIDENCE}
             and not self.unavailable_reason
         ):
             raise ValueError("unavailable_reason is required for non-measurable metric states")

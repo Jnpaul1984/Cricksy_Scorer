@@ -3,12 +3,6 @@ name: Docs Check
 on:
   pull_request:
     branches: [ main ]
-    paths:
-      - '**/*.md'
-      - 'docs/**'
-      - '.mcp/**'
-      - '**/*checklist*'
-      - '.github/workflows/docs-check.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,6 +21,30 @@ jobs:
         with:
           fetch-depth: 0
 
+      - id: filter
+        name: Classify docs-only changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            docs_scope:
+              - '**/*.md'
+              - 'docs/**'
+              - '.mcp/**'
+              - '**/*checklist*'
+              - '.github/workflows/docs-check.yml'
+            non_docs:
+              - '**'
+              - '!**/*.md'
+              - '!docs/**'
+              - '!.mcp/**'
+              - '!**/*checklist*'
+              - '!.github/workflows/docs-check.yml'
+
+      - id: docs_only
+        name: Compute docs-only flag
+        run: |
+          echo "value=${{ steps.filter.outputs.docs_scope == 'true' && steps.filter.outputs.non_docs != 'true' }}" >> "$GITHUB_OUTPUT"
+
       - name: List changed files
         id: changed
         env:
@@ -37,7 +55,13 @@ jobs:
           echo "Comparing $BASE_SHA..$HEAD_SHA"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" | tee changed_files.txt
 
+      - name: Skip runtime or mixed PRs
+        if: ${{ steps.docs_only.outputs.value != 'true' }}
+        run: |
+          echo "Docs-only guard skipped: PR is runtime-only or mixed, not docs-only."
+
       - name: Enforce docs-only scope
+        if: ${{ steps.docs_only.outputs.value == 'true' }}
         run: |
           set -euo pipefail
 
