@@ -9,10 +9,6 @@ on:
       - '.mcp/**'
   pull_request:
     branches: [ main ]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.mcp/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,8 +18,34 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Changes (docs-only detector)
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.docs_only.outputs.value }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - id: filter
+        name: Detect non-doc changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            non_docs:
+              - '**'
+              - '!**.md'
+              - '!docs/**'
+              - '!.mcp/**'
+
+      - id: docs_only
+        name: Compute docs-only flag
+        run: echo "value=${{ github.event_name == 'pull_request' && steps.filter.outputs.non_docs != 'true' }}" >> "$GITHUB_OUTPUT"
+
   pre-commit:
     name: Pre-commit (all files)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -51,6 +73,8 @@ jobs:
 
   lint:
     name: Lint (ruff + ruff format + mypy)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -85,6 +109,8 @@ jobs:
 
   security:
     name: Security (bandit + pip-audit)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -119,6 +145,8 @@ jobs:
 
   backend-migration-graph:
     name: Backend (Alembic migration graph)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -163,6 +191,8 @@ jobs:
 
   backend-deploy-validation:
     name: Backend (deploy validation parity)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -242,6 +272,8 @@ jobs:
 
   backend-tests:
     name: Backend (fast tests)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -272,6 +304,8 @@ jobs:
 
   backend-integration-tests:
     name: Backend (integration tests)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -311,6 +345,8 @@ jobs:
 
   backend-dls-tests:
     name: Backend (DLS calculation tests)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -341,6 +377,8 @@ jobs:
 
   frontend-build:
     name: Frontend (build + type-check)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -384,6 +422,8 @@ jobs:
 
   frontend-analyst-e2e:
     name: Frontend (analyst workspace E2E)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -414,6 +454,8 @@ jobs:
 
   frontend-coach-e2e:
     name: Frontend (coach workspace E2E)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
