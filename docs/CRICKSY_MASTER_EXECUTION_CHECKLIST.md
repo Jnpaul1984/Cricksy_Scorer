@@ -3979,7 +3979,775 @@ approved and merged with green CI, with large-scale imports still gated by expli
 
 ---
 
-# Phase 10 — Coaching Analysis Engine V2 / Individual Player Development Upgrade.
+# ## PHASE 10J — Coaching Analysis Engine V2 / Individual Player Development Upgrade
+
+**Status:** PLANNED — AUDIT AND SPEC LOCK REQUIRED BEFORE IMPLEMENTATION
+
+### Objective
+
+Upgrade the existing Coach Pro Plus video-analysis system into a player-centred **Coaching Analysis Engine V2** capable of supporting long-term individual player development.
+
+This is an enhancement of the existing Cricksy coaching-video, player-development, video-evidence, goals/outcomes, session-comparison, reporting, governance, and Coach Pro Plus infrastructure.
+
+This is **not a rebuild** of the existing video-analysis system.
+
+The completed Phase 10J system must allow a coach to:
+
+1. Sign in to Cricksy.
+2. Select an existing player or create/select an appropriate player profile.
+3. Create a new coaching-analysis session for that player.
+4. Select the cricket discipline being analysed:
+
+   * Batting
+   * Pace Bowling
+   * Spin Bowling
+   * Wicketkeeping
+   * Fielding
+5. Define the coaching focus or development goal for the session.
+6. Record or upload appropriate video evidence.
+7. Run cricket-specific analysis rather than generic pose-only analysis.
+8. Analyse individual repetitions/actions within the video.
+9. Analyse the technical phases within each repetition where reliably measurable.
+10. Identify both strengths and weaknesses.
+11. Measure consistency and repeatability across repetitions.
+12. Attach timestamped/video evidence to findings.
+13. Expose measurement confidence and limitations.
+14. Refuse invalid or unreliable measurements instead of returning misleading values.
+15. Compare the player with their own previous sessions.
+16. Build longitudinal progress history across weeks, months, and future seasons.
+17. Track coaching goals, interventions, drills, targets, outcomes, and reassessment.
+18. Produce coach-reviewable recommendations.
+19. Preserve explicit coach approval before governed recommendations become player-facing.
+20. Produce appropriate Coach, Player, and Parent interpretations from the same governed evidence.
+21. Generate an improved Coaching Analysis PDF/report using the richer V2 analysis.
+
+---
+
+### Core Product Principle
+
+Phase 10J must evolve Cricksy from:
+
+**Video → Generic Pose Metrics → Findings → PDF**
+
+toward:
+
+**Player**
+→ **Coaching Session**
+→ **Cricket Discipline**
+→ **Video Evidence**
+→ **Individual Repetitions**
+→ **Movement Phases**
+→ **Deterministic Technical Measurements**
+→ **Strengths / Weaknesses**
+→ **Consistency**
+→ **Coach Interpretation**
+→ **Development Goals / Interventions**
+→ **Progress Tracking**
+→ **Reassessment**
+
+The player must become the long-term development anchor rather than an individual video-analysis job.
+
+---
+
+### Required Analysis Families
+
+#### Batting V2
+
+The audit must determine how the existing pipeline can be safely extended to support technical analysis across appropriate batting phases such as:
+
+* Setup
+* Trigger movement
+* Backlift
+* Downswing
+* Contact
+* Follow-through
+
+Potential analysis areas include:
+
+* stance
+* stance width
+* knee flexion
+* head position and displacement
+* balance
+* shoulder alignment
+* hip alignment
+* torso posture
+* initial movement
+* foot movement
+* front-foot placement
+* front-knee stability
+* elbow relationships
+* hip rotation
+* shoulder rotation
+* hip/shoulder sequencing
+* body alignment
+* contact-position proxies
+* follow-through balance
+* repetition consistency
+
+Bat/bat-path measurements must only be introduced where the available model/object-detection evidence supports them reliably.
+
+---
+
+#### Pace Bowling V2
+
+The audit must determine how to support phases such as:
+
+* Approach/run-up
+* Gather
+* Back-foot contact
+* Delivery stride
+* Front-foot contact
+* Release
+* Follow-through
+
+Potential analysis areas include:
+
+* run-up rhythm
+* gather balance
+* back-foot orientation
+* front-foot orientation
+* delivery-stride characteristics
+* front-knee mechanics
+* front-leg brace
+* hip/shoulder separation
+* sequencing
+* trunk position
+* head alignment
+* bowling-arm position
+* release-point consistency
+* release-height proxies
+* follow-through direction
+* balance
+* existing ball-tracking integration
+
+---
+
+#### Spin Bowling V2
+
+Spin bowling must be treated as a distinct technical subtype rather than simply sharing all pace-bowling thresholds.
+
+Potential areas include:
+
+* approach rhythm
+* gather
+* pivot
+* front-foot position
+* front-leg stability
+* hip rotation
+* shoulder rotation
+* torso position
+* bowling-arm path
+* release consistency
+* balance
+* follow-through
+
+Measurements that cannot reliably be determined from normal coaching video must not be fabricated.
+
+---
+
+#### Wicketkeeping V2
+
+Wicketkeeping must become a genuine specialist analysis mode.
+
+Potential analysis areas include:
+
+**Base / Setup**
+
+* stance width
+* squat depth
+* knee angles
+* torso angle
+* head position
+* hand position
+* left/right symmetry
+
+**Movement**
+
+* movement initiation
+* first movement direction
+* first-step efficiency
+* lateral displacement
+* head stability
+* body height
+* balance
+
+**Taking the Ball**
+
+* collection position
+* body position relative to ball
+* glove position/path
+* elbow positioning
+* head alignment
+* balance after collection
+
+**Specialist Actions**
+
+* standing back
+* standing up
+* leg-side takes
+* stumpings
+* recovery
+
+Where frame rate and evidence permit, timing metrics such as collection-to-stumps time may be evaluated.
+
+---
+
+#### Fielding V2
+
+Fielding must become a genuine specialist analysis mode.
+
+Potential action classes include:
+
+* ground fielding
+* catching
+* throwing
+* pickup and transfer
+* boundary fielding where appropriate
+
+Potential technical analysis includes:
+
+**Ground Fielding**
+
+* ready position
+* reaction
+* approach
+* approach line
+* deceleration
+* body height
+* head position
+* pickup position
+* hand position
+* momentum through collection
+
+**Transfer**
+
+* collection-to-throwing-hand transition
+
+**Throwing**
+
+* foot alignment
+* throwing stride
+* hip rotation
+* shoulder rotation
+* elbow/arm path
+* trunk rotation
+* release
+* follow-through
+
+**Catching**
+
+* reaction
+* movement
+* hand preparation
+* body positioning
+* collection
+* balance
+
+The system should support relevant catch/action classification where reliable.
+
+---
+
+### Repetition / Action Segmentation Requirement
+
+Phase 10J must investigate and implement a reliable method to segment videos into individual actions rather than analysing the entire recording as one undifferentiated movement stream.
+
+Examples:
+
+**Batting**
+
+* Shot 1
+* Shot 2
+* Shot 3
+
+**Bowling**
+
+* Delivery 1
+* Delivery 2
+* Delivery 3
+
+**Wicketkeeping**
+
+* Take 1
+* Take 2
+* Stumping 1
+* Leg-side take 1
+
+**Fielding**
+
+* Pickup 1
+* Catch 1
+* Throw 1
+
+Each repetition must be capable of carrying its own measurements, evidence, confidence, phase information, and validity state.
+
+---
+
+### Standard Analysis Metric Contract
+
+Phase 10J must audit and design a reusable standard metric/evidence contract.
+
+The final contract should support, where applicable:
+
+* metric_id
+* discipline
+* action/repetition id
+* movement phase
+* raw value
+* unit
+* normalized score where appropriate
+* status/classification
+* confidence
+* validity
+* invalid/unavailable reason
+* measurement limitations
+* evidence references
+* timestamp/frame evidence
+* repetition values
+* aggregate values
+* consistency
+* baseline value
+* previous value
+* personal-best value
+* coach target
+* trend
+
+Do not assume all metrics should be normalized to percentages.
+
+Raw physical measurements, derived scores, classifications, and timing measurements may require different representations.
+
+---
+
+### Confidence and Measurement Safety
+
+Every V2 metric must support measurement-quality validation.
+
+The engine must consider factors such as:
+
+* pose landmark confidence
+* landmark visibility
+* occlusion
+* camera view
+* frame rate
+* incomplete action capture
+* physically implausible values
+* insufficient samples
+* poor repetition segmentation
+* unsupported model capability
+
+Invalid or unreliable results must produce a safe state such as:
+
+* NOT_MEASURABLE
+* INSUFFICIENT_VISIBILITY
+* UNSUPPORTED_CAMERA_VIEW
+* INSUFFICIENT_FRAME_RATE
+* LOW_CONFIDENCE
+* INVALID_RANGE
+
+The system must not silently substitute arbitrary/default technical measurements.
+
+---
+
+### Strength and Consistency Analysis
+
+Phase 10J must identify strengths as well as weaknesses.
+
+The system should distinguish states such as:
+
+* Strength
+* Acceptable
+* Needs Attention
+* Priority
+
+It must also calculate useful repetition-level information such as:
+
+* number of repetitions analysed
+* successful/acceptable repetitions
+* percentage consistency where meaningful
+* variation across repetitions
+* recurring patterns
+* isolated faults
+* persistent faults
+
+Example concept:
+
+**Head stability**
+8 of 10 shots within the acceptable range.
+
+**Front-leg stability**
+4 of 10 deliveries acceptable.
+
+This information must be available to downstream reporting and player-development systems.
+
+---
+
+### Player-Centred Longitudinal Progress Tracking
+
+Progress tracking is part of Phase 10J and must not be deferred.
+
+The audit must evaluate the current `session_comparison` implementation and determine how it can be safely extended or complemented so that development can be tracked primarily by:
+
+**Player**
+→ **Discipline**
+→ **Metric**
+→ **Date / Session**
+→ **Trend**
+
+The final system should support:
+
+* initial baseline
+* previous result
+* current result
+* change
+* personal best
+* recent trend
+* long-term trend
+* consistency trend
+* coach target
+* persistent issues
+* resolved issues
+* emerging issues
+
+Existing comparison infrastructure should be reused where safe.
+
+---
+
+### Development Goals and Intervention Tracking
+
+Existing Coach Goals, Outcomes, Goal Compliance, Coach Suggestions, Player Development Plans, and governed recommendation systems must be audited for reuse.
+
+The final system should support:
+
+**Finding**
+→ **Coach-selected priority**
+→ **Development goal**
+→ **Drill/intervention**
+→ **Target**
+→ **Future reassessment**
+→ **Progress result**
+→ **Coach decision**
+
+Example:
+
+Front-leg stability:
+
+* Baseline: 43%
+* Target: 80%
+* Session 2: 58%
+* Session 3: 72%
+* Session 4: 82%
+* Status: Target reached
+
+No automated coaching recommendation may bypass existing governance/coach-review requirements.
+
+---
+
+### Coach / Player / Parent Interpretation
+
+Phase 10J must investigate using one governed technical evidence set to produce audience-appropriate explanations.
+
+The underlying analysis must remain the same.
+
+Possible presentation layers:
+
+**Coach**
+
+* technical measurements
+* phase analysis
+* repetition evidence
+* coaching interpretation
+* limitations
+* intervention recommendations
+
+**Player**
+
+* simplified explanation
+* strengths
+* key focus areas
+* cues
+* goals
+* progress
+
+**Parent**
+
+* understandable development summary
+* areas of improvement
+* current focus
+* progress
+* coach-approved next steps
+
+No parent/player output may invent analysis not present in the technical evidence.
+
+---
+
+### Coaching Report / PDF V2
+
+The existing PDF infrastructure must be reused where safe.
+
+The audit must design a future V2 report capable of including:
+
+1. Player/session information
+2. Analysis discipline
+3. Analysis confidence/coverage
+4. Coach executive summary
+5. Strengths
+6. Priority development areas
+7. Technical scorecard
+8. Phase-by-phase analysis
+9. Repetition consistency
+10. Measurements/evidence
+11. Progress since previous sessions
+12. Longitudinal trends
+13. Coaching goals
+14. Recommended drills/interventions
+15. Reassessment targets
+16. Coach-approved player/parent summary
+
+PDF redesign must follow the engine/data improvements rather than compensating for missing analysis by generating additional prose.
+
+---
+
+### Existing Infrastructure Expected to Be Reused
+
+The audit must verify the current implementation and preserve working systems wherever possible, including:
+
+* Coach Pro Plus authentication/RBAC
+* VideoSession
+* VideoAnalysisJob
+* S3 video upload
+* SQS processing
+* CPU video-analysis worker
+* existing GPU/chunk support where appropriate
+* MediaPipe pose extraction
+* existing deterministic pose metrics
+* video evidence/timestamps
+* ball-tracking integration
+* quick/deep results
+* PDF export infrastructure
+* coach goals
+* outcomes
+* goal compliance
+* coach suggestions
+* player summaries
+* session comparison
+* player development plans
+* governed coaching-video evidence
+* recommendation approval/review
+* audit/governance infrastructure
+* feature gating
+* CI/CD
+
+Nothing in this phase authorizes a wholesale replacement of these systems.
+
+---
+
+### AI / Deterministic Boundary
+
+The existing Cricksy intelligence rules remain mandatory.
+
+Deterministic code owns:
+
+* measurements
+* geometry
+* timing
+* thresholds
+* calculations
+* metric validation
+* repetition counts
+* consistency calculations
+* comparisons
+* progress calculations
+
+AI may:
+
+* interpret
+* explain
+* summarize
+* recommend
+* communicate
+* generate coach-reviewable narrative
+
+AI must not fabricate measurements or overwrite deterministic results.
+
+---
+
+### Phase 10J Execution Gate
+
+Before any Phase 10J runtime implementation:
+
+**Phase 10J.0 — Coaching Analysis Engine V2 Repository Audit + Spec Lock**
+
+must be completed.
+
+10J.0 must perform a read-only audit of the current repository and determine:
+
+* what already exists
+* what is completed
+* what is partially implemented
+* what can be reused
+* what should be extended
+* what must not change
+* what is genuinely missing
+* DB/schema implications
+* API implications
+* frontend implications
+* backend implications
+* worker implications
+* AI/model implications
+* storage implications
+* performance implications
+* CPU/GPU implications
+* RBAC implications
+* youth/player-safety implications
+* test implications
+* CI implications
+* rollback implications
+* implementation dependencies
+
+The audit must specifically cross-check this phase against completed or active work in:
+
+* Coach Pro Plus Video Analysis
+* Player Development
+* Phase 9G
+* Phase 9H
+* coaching video evidence skills
+* goals/outcomes
+* session comparison
+* existing PDF/report work
+
+No duplicate implementation should be proposed where existing infrastructure can be safely extended.
+
+---
+
+### Phase 10J.0 Required Output
+
+Create:
+
+`docs/PHASE_10J_COACHING_ANALYSIS_ENGINE_V2_AUDIT_AND_SPEC_LOCK.md`
+
+The audit/spec-lock document must contain:
+
+1. Executive summary
+2. Current architecture map
+3. Current coaching-session workflow
+4. Current player linkage
+5. Current analysis engine capabilities
+6. Current batting capability
+7. Current bowling capability
+8. Current wicketkeeping capability
+9. Current fielding capability
+10. Current progress/comparison capability
+11. Current goals/intervention capability
+12. Current player-development integration
+13. Current PDF/report capability
+14. Reusable infrastructure
+15. Gap analysis
+16. Metric/data-contract recommendation
+17. Required DB/schema changes
+18. Required API changes
+19. Required frontend changes
+20. Required analysis-engine changes
+21. Required worker changes
+22. Model/vision capability gaps
+23. CPU/GPU impact
+24. Safety/confidence requirements
+25. Tests required
+26. CI impact
+27. Migration/rollback strategy
+28. Protected files/areas
+29. Recommended implementation order
+30. Final Phase 10J sub-phase breakdown
+31. Recommended GitHub issue breakdown
+32. Dependency map
+33. Risk level for every proposed sub-phase
+34. Acceptance criteria for every proposed sub-phase
+
+---
+
+### Sub-Phase Planning
+
+The following areas are provisional planning targets and are **not yet locked implementation tasks**:
+
+* Player-centred coaching session workflow
+* Standard V2 metric/evidence contract
+* Repetition/action segmentation
+* Movement phase recognition
+* Batting V2
+* Pace Bowling V2
+* Spin Bowling V2
+* Wicketkeeping V2
+* Fielding V2
+* Metric confidence and sanity validation
+* Strength and consistency engine
+* Longitudinal player progress
+* Goals/intervention integration
+* Coach/player/parent interpretation
+* Coaching Report/PDF V2
+* Full integration/production validation
+
+Phase 10J.0 must determine the correct number, naming, order, scope, and dependencies of the final implementation sub-phases.
+
+After the audit is approved, update this Phase 10J section with the final locked:
+
+* 10J.1
+* 10J.2
+* 10J.3
+* etc.
+
+Each implementation sub-phase must then receive its own GitHub issue and be executed independently.
+
+---
+
+### GitHub Issue Requirement
+
+After Phase 10J.0 is completed and its spec is validated:
+
+1. Derive the final implementation issue list from the audit.
+2. Do not create duplicate issues for already-completed functionality.
+3. Each issue must contain:
+
+   * objective
+   * repository context
+   * dependencies
+   * strict scope
+   * files expected to change
+   * protected files
+   * DB/API impact
+   * frontend/backend impact
+   * tests
+   * CI validation
+   * acceptance criteria
+   * rollback considerations
+4. Execute one implementation issue at a time.
+5. Do not begin a dependent issue until its prerequisite has passed validation.
+
+---
+
+### Phase 10J.0 Acceptance Criteria
+
+Phase 10J.0 is complete only when:
+
+* current `main` has been audited
+* existing runtime code was not modified
+* every referenced repository file was verified
+* existing Phase 9G/9H/player-development work was cross-checked
+* existing video-analysis infrastructure was mapped
+* existing comparison/progress capability was mapped
+* existing goals/outcomes capability was mapped
+* existing governance/review capability was mapped
+* analysis-engine gaps were identified
+* batting/bowling/wicketkeeping/fielding gaps were separately identified
+* confidence/sanity requirements were specified
+* recommended sub-phases were dependency ordered
+* recommended GitHub issues were defined
+* risk levels were assigned
+* acceptance criteria were defined
+* master checklist was updated
+* `.mcp/checklist.md` and `.mcp/checklist.yaml` were synchronized
+* checklist validation passes
+* no runtime implementation occurred
+
+**Implementation status after Phase 10J.0:** PENDING USER APPROVAL.
 
 ---
 # Phase 11 — Organization Pro + League Operations
