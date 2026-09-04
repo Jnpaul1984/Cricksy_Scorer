@@ -15,8 +15,6 @@ Saved reports are stored in the podcast_prep_reports table.
 
 from __future__ import annotations
 
-import datetime as dt
-import unicodedata
 from typing import Any
 
 from sqlalchemy import select
@@ -24,15 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.schemas.podcast_prep import (
     ArchivePodcastPackRequest,
-    MatchPodcastPackRequest,
     PodcastPrepReportCreate,
     PodcastPrepReportListResponse,
     PodcastPrepReportResponse,
     PodcastPrepReportUpdate,
     PodcastResearchPack,
     PodcastResearchSection,
-    RosterPodcastPackRequest,
-    TournamentPodcastPackRequest,
 )
 from backend.sql_app.models import PodcastPrepReport, PodcastPrepTopicType
 
@@ -176,13 +171,15 @@ def _build_debate_questions(
     )
 
 
-def _build_closing_question(
-    topic_type: str, episode_title: str
-) -> PodcastResearchSection:
+def _build_closing_question(topic_type: str, episode_title: str) -> PodcastResearchSection:
     if topic_type == "match":
-        body = "Final thought: does this result change how you'd rate either of these teams right now?"
+        body = (
+            "Final thought: does this result change how you'd rate either of these teams right now?"
+        )
     elif topic_type == "tournament":
-        body = "Closing question for the room: was this the most competitive edition in the archive?"
+        body = (
+            "Closing question for the room: was this the most competitive edition in the archive?"
+        )
     elif topic_type == "archive":
         body = "We'll leave it there — but tell us: which era of cricket would you most want to watch again?"
     elif topic_type == "roster":
@@ -245,9 +242,7 @@ def build_match_research_pack(
     sections: list[PodcastResearchSection] = []
 
     # Opening hook
-    sections.append(
-        _build_opening_hook("match", episode_title, result_display, competition, None)
-    )
+    sections.append(_build_opening_hook("match", episode_title, result_display, competition, None))
 
     # Match context
     context_lines: list[str] = []
@@ -653,7 +648,9 @@ def build_tournament_research_pack(
         PodcastResearchSection(
             section_key="champion_story",
             title="Champion story",
-            body="\n".join(champ_lines) if champ_lines else "Champion data not available in archive.",
+            body="\n".join(champ_lines)
+            if champ_lines
+            else "Champion data not available in archive.",
             confidence=confidence_level if champ_lines else "unknown",  # type: ignore[arg-type]
             note="Derived from knockout context — not official records.",
         )
@@ -697,7 +694,9 @@ def build_tournament_research_pack(
         PodcastResearchSection(
             section_key="player_storylines",
             title="Player storylines",
-            body="\n".join(player_lines) if player_lines else "Player stats unavailable — delivery data required.",
+            body="\n".join(player_lines)
+            if player_lines
+            else "Player stats unavailable — delivery data required.",
             confidence="medium" if player_lines else "unknown",
             note="Derived from delivery-level data where available.",
         )
@@ -852,9 +851,7 @@ def build_archive_research_pack(
         episode_title += f" ({request.season_start}-{request.season_end})"
 
     sections: list[PodcastResearchSection] = []
-    sections.append(
-        _build_opening_hook("archive", episode_title, None, comp_filter, None)
-    )
+    sections.append(_build_opening_hook("archive", episode_title, None, comp_filter, None))
 
     # Archive context
     archive_lines: list[str] = []
@@ -922,8 +919,7 @@ def build_archive_research_pack(
         seasons = d.get("seasons_appeared")
         if team and titles:
             dynasty_lines.append(
-                f"• {team}: {_pluralize(titles, 'derived title')}, "
-                f"{seasons} seasons (derived)"
+                f"• {team}: {_pluralize(titles, 'derived title')}, " f"{seasons} seasons (derived)"
             )
     sections.append(
         PodcastResearchSection(
@@ -999,9 +995,7 @@ def build_roster_research_pack(
         episode_title = f"{team_name} ({comp_label} {season}) — Squad Rundown"
 
     sections: list[PodcastResearchSection] = []
-    sections.append(
-        _build_opening_hook("roster", episode_title, None, comp_label, season)
-    )
+    sections.append(_build_opening_hook("roster", episode_title, None, comp_label, season))
 
     # Squad overview
     total_players = len(players)
@@ -1043,7 +1037,9 @@ def build_roster_research_pack(
         PodcastResearchSection(
             section_key="returning_players",
             title="Returning players to watch",
-            body="\n".join(returning_lines) if returning_lines else "No returning players detected.",
+            body="\n".join(returning_lines)
+            if returning_lines
+            else "No returning players detected.",
             confidence="high" if returning_lines else "medium",
             note="Based on user-maintained roster registry. No historical stats are attached to current-season entries.",
         )
@@ -1159,15 +1155,11 @@ def _render_markdown(pack: PodcastResearchPack) -> str:
             lines.append(section.body)
         else:
             lines.append("_Not available_")
-        lines.append(
-            f"_Confidence: {section.confidence} — {section.note}_"
-        )
+        lines.append(f"_Confidence: {section.confidence} — {section.note}_")
         lines.append("")
     lines.append("---")
     lines.append(f"**Trust note:** {pack.trust_note}")
-    lines.append(
-        f"_Generated: {pack.generated_at.strftime('%Y-%m-%d %H:%M UTC')}_"
-    )
+    lines.append(f"_Generated: {pack.generated_at.strftime('%Y-%m-%d %H:%M UTC')}_")
     return "\n".join(lines)
 
 
@@ -1196,9 +1188,7 @@ def _render_plain_text(pack: PodcastResearchPack) -> str:
         lines.append("")
     lines.append("TRUST NOTE:")
     lines.append(pack.trust_note)
-    lines.append(
-        f"Generated: {pack.generated_at.strftime('%Y-%m-%d %H:%M UTC')}"
-    )
+    lines.append(f"Generated: {pack.generated_at.strftime('%Y-%m-%d %H:%M UTC')}")
     return "\n".join(lines)
 
 
@@ -1262,9 +1252,7 @@ async def update_podcast_prep_report(
     data: PodcastPrepReportUpdate,
 ) -> PodcastPrepReport | None:
     """Update an existing podcast prep report."""
-    result = await db.execute(
-        select(PodcastPrepReport).where(PodcastPrepReport.id == report_id)
-    )
+    result = await db.execute(select(PodcastPrepReport).where(PodcastPrepReport.id == report_id))
     report = result.scalar_one_or_none()
     if report is None:
         return None
@@ -1278,6 +1266,7 @@ async def update_podcast_prep_report(
         report.trust_summary = data.trust_summary
     if data.status is not None:
         from backend.sql_app.models import PodcastPrepReportStatus
+
         report.status = PodcastPrepReportStatus(data.status)
     await db.commit()
     await db.refresh(report)
@@ -1288,9 +1277,7 @@ async def get_podcast_prep_report(
     db: AsyncSession,
     report_id: str,
 ) -> PodcastPrepReport | None:
-    result = await db.execute(
-        select(PodcastPrepReport).where(PodcastPrepReport.id == report_id)
-    )
+    result = await db.execute(select(PodcastPrepReport).where(PodcastPrepReport.id == report_id))
     return result.scalar_one_or_none()
 
 
@@ -1314,6 +1301,7 @@ async def list_podcast_prep_reports(
         )
     if status:
         from backend.sql_app.models import PodcastPrepReportStatus as _Status
+
         stmt = stmt.where(PodcastPrepReport.status == _Status(status))
         count_stmt = count_stmt.where(PodcastPrepReport.status == _Status(status))
     stmt = stmt.order_by(PodcastPrepReport.updated_at.desc())

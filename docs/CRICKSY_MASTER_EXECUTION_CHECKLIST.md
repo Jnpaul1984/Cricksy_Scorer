@@ -4668,7 +4668,7 @@ The audit/spec-lock document must contain:
 
 Derived from the Phase 10J.0 repository audit/spec lock:
 
-* **10J.1 — V2 Contract + Compatibility Foundations** — **PENDING USER APPROVAL**
+* **10J.1 — V2 Contract + Compatibility Foundations** — **COMPLETE**
 * **10J.2 — Player-Centered Session Flow Upgrade** — **PENDING USER APPROVAL**
 * **10J.3 — Repetition Segmentation Backbone** — **PENDING USER APPROVAL**
 * **10J.4 — Phase Recognition Backbone** — **PENDING USER APPROVAL**
@@ -4681,7 +4681,7 @@ Derived from the Phase 10J.0 repository audit/spec lock:
 * **10J.11 — Goal/Intervention + Interpretation + PDF V2 Integration** — **PENDING USER APPROVAL**
 * **10J.12 — Hardening, Performance, CI, and Rollout Controls** — **PENDING USER APPROVAL**
 
-No implementation sub-phase is authorized until explicit user approval.
+Further implementation sub-phases beyond 10J.1 require explicit user approval.
 
 ---
 
@@ -4734,7 +4734,7 @@ Phase 10J.0 is complete only when:
 * checklist validation passes
 * no runtime implementation occurred
 
-**Implementation status after Phase 10J.0:** PENDING USER APPROVAL.
+**Implementation status after Phase 10J.1:** 10J.1 COMPLETE; 10J.2+ PENDING USER APPROVAL.
 
 ---
 # Phase 11 — Organization Pro + League Operations

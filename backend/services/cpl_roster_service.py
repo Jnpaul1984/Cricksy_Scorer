@@ -18,7 +18,6 @@ from __future__ import annotations
 import unicodedata
 import re
 import difflib
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -120,13 +119,10 @@ async def create_team(
     if not _is_valid_season(data.season):
         raise ValueError(f"Invalid season '{data.season}'. Expected YYYY format.")
     normalized = _normalize_name(data.team_name)
-    existing = await _get_team_by_normalized(
-        db, data.competition_code, data.season, normalized
-    )
+    existing = await _get_team_by_normalized(db, data.competition_code, data.season, normalized)
     if existing:
         raise ValueError(
-            f"Team '{data.team_name}' already exists for "
-            f"{data.competition_code} {data.season}."
+            f"Team '{data.team_name}' already exists for " f"{data.competition_code} {data.season}."
         )
     team = CplCurrentSeasonTeam(
         competition_code=data.competition_code,
@@ -178,7 +174,9 @@ async def update_team(
     team_id: str,
     data: CplTeamUpdate,
 ) -> CplCurrentSeasonTeam | None:
-    result = await db.execute(select(CplCurrentSeasonTeam).where(CplCurrentSeasonTeam.id == team_id))
+    result = await db.execute(
+        select(CplCurrentSeasonTeam).where(CplCurrentSeasonTeam.id == team_id)
+    )
     team = result.scalar_one_or_none()
     if team is None:
         return None
@@ -205,16 +203,20 @@ async def update_team(
 
 
 async def delete_team(db: AsyncSession, team_id: str) -> bool:
-    result = await db.execute(select(CplCurrentSeasonTeam).where(CplCurrentSeasonTeam.id == team_id))
+    result = await db.execute(
+        select(CplCurrentSeasonTeam).where(CplCurrentSeasonTeam.id == team_id)
+    )
     team = result.scalar_one_or_none()
     if team is None:
         return False
     in_use = await db.execute(
-        select(CplCurrentSeasonPlayer.id).where(
+        select(CplCurrentSeasonPlayer.id)
+        .where(
             CplCurrentSeasonPlayer.competition_code == team.competition_code,
             CplCurrentSeasonPlayer.season == team.season,
             CplCurrentSeasonPlayer.team_name == team.team_name,
-        ).limit(1)
+        )
+        .limit(1)
     )
     if in_use.scalar_one_or_none() is not None:
         raise ValueError("Team cannot be deleted because players are still assigned to it.")
@@ -320,9 +322,7 @@ async def create_player(
     if not _is_valid_season(data.season):
         raise ValueError(f"Invalid season '{data.season}'. Expected YYYY format.")
     normalized = _normalize_name(data.player_name)
-    existing = await _get_player_by_normalized(
-        db, data.competition_code, data.season, normalized
-    )
+    existing = await _get_player_by_normalized(db, data.competition_code, data.season, normalized)
     if existing:
         raise ValueError(
             f"Player '{data.player_name}' already exists for "
@@ -409,9 +409,7 @@ async def list_players(
     if team_name:
         stmt = stmt.where(CplCurrentSeasonPlayer.team_name == team_name)
     if status:
-        stmt = stmt.where(
-            CplCurrentSeasonPlayer.status == CplRosterPlayerStatus(status)
-        )
+        stmt = stmt.where(CplCurrentSeasonPlayer.status == CplRosterPlayerStatus(status))
     if role:
         stmt = stmt.where(CplCurrentSeasonPlayer.role.ilike(f"%{role.strip()}%"))
     if nationality:
@@ -474,8 +472,7 @@ async def preview_roster_import(
         )
     )
     existing_teams = {
-        t.normalized_team_name: t.team_name
-        for t in existing_teams_result.scalars().all()
+        t.normalized_team_name: t.team_name for t in existing_teams_result.scalars().all()
     }
 
     existing_players_result = await db.execute(
@@ -485,8 +482,7 @@ async def preview_roster_import(
         )
     )
     existing_players = {
-        p.normalized_player_name: p.player_name
-        for p in existing_players_result.scalars().all()
+        p.normalized_player_name: p.player_name for p in existing_players_result.scalars().all()
     }
 
     new_teams: list[RosterImportPreviewTeam] = []
@@ -592,9 +588,9 @@ async def preview_roster_import(
             is_duplicate=is_dup_in_batch or is_existing,
             is_returning=is_returning,
             prior_season=prior_season,
-            warning=f"Duplicate in import batch (row {idx})" if is_dup_in_batch else (
-                "Already in roster for this season" if is_existing else None
-            ),
+            warning=f"Duplicate in import batch (row {idx})"
+            if is_dup_in_batch
+            else ("Already in roster for this season" if is_existing else None),
         )
 
         if is_dup_in_batch:

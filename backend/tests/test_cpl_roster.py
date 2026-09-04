@@ -420,7 +420,11 @@ class TestRosterImportPreview:
         assert any("team is required" in b for b in result.blockers)
 
     def test_preview_transfer_detected(self, session) -> None:
-        run(create_player(session, _player_create("Darren Bravo", team_name="Team A", season="2023")))
+        run(
+            create_player(
+                session, _player_create("Darren Bravo", team_name="Team A", season="2023")
+            )
+        )
         rows = [_import_row("Darren Bravo", "Team B", season="2024")]
         result = run(
             preview_roster_import(session, rows=rows, competition_code="CPL_MEN", season="2024")

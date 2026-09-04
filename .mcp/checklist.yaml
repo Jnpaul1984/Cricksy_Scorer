@@ -30,14 +30,29 @@
   category: "Phase 10J"
   title: "10J.1 V2 Contract + Compatibility Foundations"
   description: "Define and implement versioned contracts for metrics, repetitions, phases, and compatibility"
-  status: todo
+  status: done
   confidence: high
   risk_level: medium
   acceptance_criteria:
     - "Versioned V2 contracts are available with backward compatibility"
     - "Compatibility rules prevent unsafe comparisons"
   verification_commands:
-    - "cd backend && pytest tests/ -q"
+    - "cd backend && python -m pytest -q tests/test_coach_analysis_v2_contracts.py tests/test_analysis_mode_enforcement.py tests/test_session_comparison.py tests/test_coach_report_service.py tests/test_pdf_export_restrictions.py tests/test_health.py tests/test_results_endpoint.py"
+    - "cd backend && python -m pytest -q tests/test_coach_pro_features.py -k analysis_history_endpoint"
+    - "python scripts/checklist.py status"
+    - "python -m ruff check backend/domain/coach_analysis_v2_contract.py backend/services/coach_analysis_v2_compatibility.py backend/services/coach_plus_analysis.py backend/workers/analysis_worker.py backend/tests/test_coach_analysis_v2_contracts.py"
+  files_touched:
+    - "backend/domain/coach_analysis_v2_contract.py"
+    - "backend/services/coach_analysis_v2_compatibility.py"
+    - "backend/services/coach_plus_analysis.py"
+    - "backend/workers/analysis_worker.py"
+    - "backend/tests/test_coach_analysis_v2_contracts.py"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "copilot"
+  completed_at: "2026-09-04"
+  notes: "Implemented additive V2 payload contracts in analysis results without a database migration."
 
 - id: phase10j-2-player-centered-session-flow-upgrade
   week: 10

@@ -77,9 +77,7 @@ class CplTeamListResponse(BaseModel):
 
     teams: list[CplTeamResponse] = Field(default_factory=list)
     total: int = 0
-    trust_note: str = (
-        "Team registry is user-maintained. Review before use in podcast output."
-    )
+    trust_note: str = "Team registry is user-maintained. Review before use in podcast output."
 
 
 # ---------------------------------------------------------------------------
@@ -229,8 +227,7 @@ class RosterImportPreviewResponse(BaseModel):
     blockers: list[str] = Field(default_factory=list)
     can_apply: bool = True
     trust_note: str = (
-        "Preview only — no data has been changed. "
-        "Review warnings and blockers before applying."
+        "Preview only — no data has been changed. " "Review warnings and blockers before applying."
     )
 
 
