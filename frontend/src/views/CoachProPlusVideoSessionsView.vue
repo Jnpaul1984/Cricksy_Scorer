@@ -18,7 +18,7 @@
         <h1>Video Sessions</h1>
         <p class="subtitle">Upload, manage, and analyze coaching session videos</p>
         <div class="header-actions">
-          <button class="btn-primary" @click="showCreateModal = true">+ New Video Session</button>
+          <button class="btn-primary" @click="openCreateModal">+ New Video Session</button>
         </div>
       </header>
 
@@ -60,7 +60,7 @@
       <div v-if="!loading && sessions.length === 0" class="empty-state">
         <p>No video sessions yet.</p>
         <p class="hint">Create your first video session to get started.</p>
-        <button class="btn-primary" @click="showCreateModal = true">Create Session</button>
+        <button class="btn-primary" @click="openCreateModal">Create Session</button>
       </div>
 
       <!-- Sessions List -->
@@ -143,26 +143,74 @@
           </div>
 
           <div class="form-group">
-            <label for="analysis-context">What are we analyzing? <span class="required">*</span></label>
+            <label for="player-search">Player <span class="required">*</span></label>
+            <div v-if="loadingPlayers" class="field-hint">Loading assigned players…</div>
+            <div v-else-if="playerLoadError" class="field-error">{{ playerLoadError }}</div>
+            <div v-else-if="assignedPlayers.length === 0" class="field-hint">
+              No assigned players found yet.
+            </div>
+            <input
+              id="player-search"
+              v-model="playerSearch"
+              type="text"
+              placeholder="Search player name or ID"
+              :disabled="loadingPlayers || assignedPlayers.length === 0"
+            />
             <select
-              id="analysis-context"
-              v-model="formData.analysis_context"
+              id="primary-player"
+              v-model="selectedPrimaryPlayerId"
+              :disabled="loadingPlayers || filteredAssignedPlayers.length === 0"
               required
             >
-              <option value="">Select analysis type...</option>
+              <option value="">Select a player...</option>
+              <option v-for="player in filteredAssignedPlayers" :key="player.id" :value="player.id">
+                {{ player.name }} ({{ player.id }})
+              </option>
+            </select>
+            <div class="inline-actions">
+              <button type="button" class="btn-secondary btn-small" @click="selectedPrimaryPlayerId = ''">
+                Clear
+              </button>
+              <router-link to="/setup" class="btn-link-inline">Create new player</router-link>
+            </div>
+            <p class="field-hint">
+              New player creation currently uses the existing Match Setup workflow.
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label for="discipline">Discipline <span class="required">*</span></label>
+            <select
+              id="discipline"
+              v-model="formData.discipline"
+              required
+            >
+              <option value="">Select discipline...</option>
               <option value="batting">Batting</option>
-              <option value="bowling">Bowling</option>
+              <option value="pace_bowling">Pace Bowling</option>
+              <option value="spin_bowling">Spin Bowling</option>
               <option value="wicketkeeping">Wicketkeeping</option>
               <option value="fielding">Fielding</option>
-              <option value="mixed">Mixed/General</option>
             </select>
           </div>
 
           <div class="form-group">
-            <label for="camera-view">Camera Angle/View</label>
+            <label for="coaching-focus">Coaching Focus</label>
+            <input
+              id="coaching-focus"
+              v-model="formData.coaching_focus"
+              type="text"
+              maxlength="160"
+              placeholder="e.g., front-foot batting, release consistency"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="camera-view">Camera Angle/View <span class="required">*</span></label>
             <select
               id="camera-view"
               v-model="formData.camera_view"
+              required
             >
               <option value="">Select camera angle...</option>
               <option value="side">Side View</option>
@@ -170,16 +218,6 @@
               <option value="behind">Behind View</option>
               <option value="other">Other</option>
             </select>
-          </div>
-
-          <div class="form-group">
-            <label for="players">Player IDs (comma-separated)</label>
-            <textarea
-              id="players"
-              v-model="playersText"
-              placeholder="player1_id, player2_id"
-              rows="3"
-            ></textarea>
           </div>
 
           <div class="form-group">
@@ -756,13 +794,16 @@ import {
   getCoachSuggestions,
 } from '@/services/coachPlusVideoService';
 import {
+  listCoachAssignedPlayers,
   listPlayerDevelopmentPlans,
   reviewPlayerDevelopmentPlan,
   PlayerDevelopmentApiError,
+  type CoachPlayerAssignmentRead,
   type PlayerDevelopmentPlanDraftBundle,
   type PlayerDevelopmentPlanReviewResponse,
   type PlayerDevelopmentReviewDecision,
 } from '@/services/playerDevelopmentApi';
+import { getPlayerProfile } from '@/services/playerApi';
 import { useAuthStore } from '@/stores/authStore';
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
 import { buildCoachNarrative } from '@/utils/coachVideoAnalysisNarrative';
@@ -822,10 +863,18 @@ const offset = ref(0);
 const limit = ref(10);
 const excludeFailed = ref(true); // Performance: hide failed sessions by default
 const statusFilter = ref<string | null>(null);
+const assignedPlayers = ref<Array<{ id: string; name: string }>>([]);
+const loadingPlayers = ref(false);
+const playerLoadError = ref<string | null>(null);
+const playerSearch = ref('');
+const selectedPrimaryPlayerId = ref('');
 
 const formData = ref({
   title: '',
   player_ids: [] as string[],
+  primary_player_id: '',
+  discipline: '',
+  coaching_focus: '',
   notes: '',
   analysis_context: '',
   camera_view: '',
@@ -836,7 +885,21 @@ const uploadSettings = ref({
   includeFrames: false,
 });
 
-const playersText = ref('');
+const DISCIPLINE_TO_ANALYSIS_CONTEXT: Record<string, string> = {
+  batting: 'batting',
+  pace_bowling: 'bowling',
+  spin_bowling: 'bowling',
+  wicketkeeping: 'wicketkeeping',
+  fielding: 'fielding',
+};
+
+const filteredAssignedPlayers = computed(() => {
+  const query = playerSearch.value.trim().toLowerCase();
+  if (!query) return assignedPlayers.value;
+  return assignedPlayers.value.filter(
+    (player) => player.name.toLowerCase().includes(query) || player.id.toLowerCase().includes(query),
+  );
+});
 
 // PDF export state
 const exportingPdf = ref(false);
@@ -1226,6 +1289,48 @@ function formatReviewSubmissionError(error: unknown): string {
 // Methods
 // ============================================================================
 
+async function fetchAssignedPlayers() {
+  loadingPlayers.value = true;
+  playerLoadError.value = null;
+  try {
+    const assignments: CoachPlayerAssignmentRead[] = await listCoachAssignedPlayers();
+    const playerRows = await Promise.all(
+      assignments.map(async (assignment) => {
+        try {
+          const profile = await getPlayerProfile(assignment.player_profile_id);
+          return {
+            id: assignment.player_profile_id,
+            name: profile.player_name || assignment.player_profile_id,
+          };
+        } catch {
+          return {
+            id: assignment.player_profile_id,
+            name: assignment.player_profile_id,
+          };
+        }
+      }),
+    );
+    const uniqueById = new Map<string, { id: string; name: string }>();
+    for (const player of playerRows) {
+      uniqueById.set(player.id, player);
+    }
+    assignedPlayers.value = Array.from(uniqueById.values()).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  } catch (err) {
+    playerLoadError.value =
+      err instanceof Error ? err.message : 'Failed to load assigned players';
+    assignedPlayers.value = [];
+  } finally {
+    loadingPlayers.value = false;
+  }
+}
+
+async function openCreateModal() {
+  await fetchAssignedPlayers();
+  showCreateModal.value = true;
+}
+
 async function fetchSessions() {
   loading.value = true;
   error.value = null;
@@ -1336,16 +1441,27 @@ async function submitPlanReview(
 
 async function submitForm() {
   try {
-    // Parse player IDs
-    formData.value.player_ids = playersText.value
-      .split(',')
-      .map((id) => id.trim())
-      .filter((id) => id.length > 0);
-
     if (!formData.value.title.trim()) {
       error.value = 'Session title is required';
       return;
     }
+    if (!selectedPrimaryPlayerId.value.trim()) {
+      error.value = 'Please select a player';
+      return;
+    }
+    if (!formData.value.discipline) {
+      error.value = 'Please select a discipline';
+      return;
+    }
+    if (!formData.value.camera_view) {
+      error.value = 'Please select a camera view';
+      return;
+    }
+
+    const primaryPlayerId = selectedPrimaryPlayerId.value.trim();
+    formData.value.primary_player_id = primaryPlayerId;
+    formData.value.player_ids = [primaryPlayerId];
+    formData.value.analysis_context = DISCIPLINE_TO_ANALYSIS_CONTEXT[formData.value.discipline] || '';
 
     if (editingId.value) {
       // TODO: Update session via API
@@ -1639,9 +1755,9 @@ async function selectSession(sessionId: string) {
   }
 }
 
-function editSession(sessionId: string) {
+async function editSession(sessionId: string) {
   editingId.value = sessionId;
-  showCreateModal.value = true;
+  await openCreateModal();
 }
 
 async function bulkDeleteOldSessions() {
@@ -1741,11 +1857,15 @@ function closeModal() {
   formData.value = {
     title: '',
     player_ids: [],
+    primary_player_id: '',
+    discipline: '',
+    coaching_focus: '',
     notes: '',
     analysis_context: '',
     camera_view: '',
   };
-  playersText.value = '';
+  playerSearch.value = '';
+  selectedPrimaryPlayerId.value = '';
 }
 
 function closeHistoryModal() {
@@ -2702,6 +2822,35 @@ onBeforeUnmount(() => {
   font-size: 0.85rem;
   color: #999;
   margin-top: 0.3rem;
+}
+
+.field-hint {
+  font-size: 0.85rem;
+  color: #666;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.field-error {
+  font-size: 0.85rem;
+  color: #c0392b;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.btn-link-inline {
+  color: #667eea;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.btn-link-inline:hover {
+  text-decoration: underline;
 }
 
 .file-selected {

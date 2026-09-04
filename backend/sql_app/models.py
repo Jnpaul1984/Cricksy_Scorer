@@ -2362,6 +2362,22 @@ class VideoSession(Base):
         nullable=False,
         comment="Player IDs involved (handles both ARRAY and JSON types)",
     )
+    primary_player_id: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+        index=True,
+        comment="Primary player anchor for player-centered sessions",
+    )
+    discipline: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        comment="V2 discipline context (batting, pace_bowling, spin_bowling, wicketkeeping, fielding)",
+    )
+    coaching_focus: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+        comment="Optional coaching focus entered when creating a session",
+    )
 
     # S3 storage details
     s3_bucket: Mapped[str | None] = mapped_column(

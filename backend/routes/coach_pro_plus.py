@@ -31,7 +31,9 @@ from backend.services.video_job_recovery import (
 )
 from backend.sql_app.database import get_db
 from backend.sql_app.models import (
+    CoachPlayerAssignment,
     OwnerTypeEnum,
+    PlayerProfile,
     RoleEnum,
     TargetZone,
     User,
@@ -44,7 +46,7 @@ from backend.sql_app.models import (
 )
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -66,6 +68,23 @@ JOB_RESULT_FIELDS = (
     "deep_results_s3_key",
 )
 
+ALLOWED_ANALYSIS_CONTEXTS = {"batting", "bowling", "wicketkeeping", "fielding", "mixed"}
+ALLOWED_CAMERA_VIEWS = {"side", "front", "behind", "other"}
+ALLOWED_V2_DISCIPLINES = {
+    "batting",
+    "pace_bowling",
+    "spin_bowling",
+    "wicketkeeping",
+    "fielding",
+}
+V2_DISCIPLINE_TO_ANALYSIS_CONTEXT = {
+    "batting": "batting",
+    "pace_bowling": "bowling",
+    "spin_bowling": "bowling",
+    "wicketkeeping": "wicketkeeping",
+    "fielding": "fielding",
+}
+
 
 # ============================================================================
 # Helper Functions
@@ -81,6 +100,72 @@ async def _check_feature_access(user: User, feature: str) -> bool:
     return bool(user.is_superuser)
 
 
+async def _get_active_assignment(
+    db: AsyncSession, coach_user_id: str, player_id: str
+) -> CoachPlayerAssignment | None:
+    result = await db.execute(
+        select(CoachPlayerAssignment).where(
+            CoachPlayerAssignment.coach_user_id == coach_user_id,
+            CoachPlayerAssignment.player_profile_id == player_id,
+            CoachPlayerAssignment.is_active.is_(True),
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def _ensure_player_exists(db: AsyncSession, player_id: str) -> PlayerProfile:
+    profile = await db.get(PlayerProfile, player_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Selected player was not found")
+    return profile
+
+
+async def _ensure_video_player_access(
+    db: AsyncSession, current_user: User, player_id: str
+) -> PlayerProfile:
+    profile = await _ensure_player_exists(db, player_id)
+    if current_user.is_superuser:
+        return profile
+
+    if current_user.role == RoleEnum.coach_pro_plus:
+        assignment = await _get_active_assignment(db, current_user.id, player_id)
+        if assignment is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not assigned to the selected player",
+            )
+        return profile
+
+    if current_user.role == RoleEnum.org_pro and current_user.org_id:
+        result = await db.execute(
+            select(CoachPlayerAssignment)
+            .join(User, User.id == CoachPlayerAssignment.coach_user_id)
+            .where(
+                CoachPlayerAssignment.player_profile_id == player_id,
+                CoachPlayerAssignment.is_active.is_(True),
+                User.org_id == current_user.org_id,
+            )
+        )
+        assignment = result.scalar_one_or_none()
+        if assignment is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Selected player is not assigned within your organization",
+            )
+        return profile
+
+    if current_user.role == RoleEnum.org_pro:
+        assignment = await _get_active_assignment(db, current_user.id, player_id)
+        if assignment is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not assigned to the selected player",
+            )
+        return profile
+
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
+
+
 # ============================================================================
 # Schemas (Pydantic Models)
 # ============================================================================
@@ -90,10 +175,95 @@ class VideoSessionCreate(BaseModel):
     """Request schema for creating a video session"""
 
     title: str
-    player_ids: list[str] = []
+    player_ids: list[str] = Field(default_factory=list)
+    primary_player_id: str | None = None
+    discipline: str | None = None
+    coaching_focus: str | None = Field(default=None, max_length=160)
     notes: str | None = None
     analysis_context: str | None = None  # batting, bowling, wicketkeeping, fielding, mixed
     camera_view: str | None = None  # side, front, behind, other
+
+    @field_validator("player_ids", mode="before")
+    @classmethod
+    def _normalize_player_ids(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("player_ids must be a list")
+        normalized: list[str] = []
+        for item in value:
+            if item is None:
+                continue
+            player_id = str(item).strip()
+            if player_id:
+                normalized.append(player_id)
+        return normalized
+
+    @field_validator(
+        "title",
+        "primary_player_id",
+        "discipline",
+        "analysis_context",
+        "camera_view",
+        "coaching_focus",
+        "notes",
+        mode="before",
+    )
+    @classmethod
+    def _normalize_optional_text(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            trimmed = value.strip()
+            return trimmed or None
+        return value
+
+    @field_validator("analysis_context")
+    @classmethod
+    def _validate_analysis_context(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in ALLOWED_ANALYSIS_CONTEXTS:
+            raise ValueError(
+                "analysis_context must be one of: batting, bowling, wicketkeeping, fielding, mixed"
+            )
+        return value
+
+    @field_validator("camera_view")
+    @classmethod
+    def _validate_camera_view(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in ALLOWED_CAMERA_VIEWS:
+            raise ValueError("camera_view must be one of: side, front, behind, other")
+        return value
+
+    @field_validator("discipline")
+    @classmethod
+    def _validate_discipline(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in ALLOWED_V2_DISCIPLINES:
+            raise ValueError(
+                "discipline must be one of: batting, pace_bowling, spin_bowling, "
+                "wicketkeeping, fielding"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _validate_primary_player_constraints(self) -> VideoSessionCreate:
+        if self.discipline and not self.primary_player_id:
+            raise ValueError("primary_player_id is required when discipline is provided")
+
+        if self.primary_player_id and self.primary_player_id not in self.player_ids:
+            self.player_ids = [self.primary_player_id, *self.player_ids]
+
+        if self.discipline and self.analysis_context:
+            expected_context = V2_DISCIPLINE_TO_ANALYSIS_CONTEXT[self.discipline]
+            if self.analysis_context != expected_context:
+                raise ValueError(
+                    "analysis_context "
+                    f"'{self.analysis_context}' does not match discipline '{self.discipline}'"
+                )
+        return self
 
 
 class VideoSessionRead(BaseModel):
@@ -104,6 +274,9 @@ class VideoSessionRead(BaseModel):
     owner_id: str
     title: str
     player_ids: list[str]
+    primary_player_id: str | None = None
+    discipline: str | None = None
+    coaching_focus: str | None = None
     status: str  # "pending", "uploaded", "processing", "ready", "failed"
     notes: str | None = None
     analysis_context: str | None = None  # batting, bowling, wicketkeeping, fielding, mixed
@@ -278,14 +451,30 @@ async def create_video_session(
         owner_type = OwnerTypeEnum.coach
         owner_id = current_user.id
 
+    primary_player_id = session_data.primary_player_id
+    if primary_player_id is None and session_data.player_ids:
+        primary_player_id = session_data.player_ids[0]
+
+    if primary_player_id:
+        await _ensure_video_player_access(db, current_user, primary_player_id)
+
+    resolved_analysis_context = (
+        V2_DISCIPLINE_TO_ANALYSIS_CONTEXT.get(session_data.discipline)
+        if session_data.discipline
+        else session_data.analysis_context
+    )
+
     # Create database record
     session = VideoSession(
         owner_type=owner_type,
         owner_id=owner_id,
         title=session_data.title,
         player_ids=session_data.player_ids,
+        primary_player_id=primary_player_id,
+        discipline=session_data.discipline,
+        coaching_focus=session_data.coaching_focus,
         notes=session_data.notes,
-        analysis_context=session_data.analysis_context,
+        analysis_context=resolved_analysis_context,
         camera_view=session_data.camera_view,
         status=VideoSessionStatus.pending,
         s3_bucket=None,  # Will be populated after upload

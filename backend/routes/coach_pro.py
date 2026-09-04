@@ -2,10 +2,6 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend import security
 from backend.sql_app.database import get_db
 from backend.sql_app.models import (
@@ -22,6 +18,9 @@ from backend.sql_app.schemas import (
     CoachPlayerAssignmentCreate,
     CoachPlayerAssignmentRead,
 )
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/coaches", tags=["coach_pro"])
 
@@ -48,7 +47,11 @@ async def _get_active_assignment(
 
 async def _ensure_coach_user(db: AsyncSession, coach_user_id: str) -> User:
     coach = await db.get(User, coach_user_id)
-    if coach is None or coach.role not in (RoleEnum.coach_pro, RoleEnum.org_pro):
+    if coach is None or coach.role not in (
+        RoleEnum.coach_pro,
+        RoleEnum.coach_pro_plus,
+        RoleEnum.org_pro,
+    ):
         raise HTTPException(status_code=400, detail="Coach user not found or invalid role")
     return coach
 
@@ -91,11 +94,13 @@ async def assign_player(
 
 @router.get("/me/players", response_model=list[CoachPlayerAssignmentRead])
 async def list_assigned_players(
-    current_user: Annotated[User, Depends(security.require_roles(["coach_pro", "org_pro"]))],
+    current_user: Annotated[
+        User, Depends(security.require_roles(["coach_pro", "coach_pro_plus", "org_pro"]))
+    ],
     db: AsyncSession = Depends(get_db),
 ) -> list[CoachPlayerAssignment]:
     stmt = select(CoachPlayerAssignment).where(CoachPlayerAssignment.is_active.is_(True))
-    if current_user.role == RoleEnum.coach_pro:
+    if current_user.role in (RoleEnum.coach_pro, RoleEnum.coach_pro_plus):
         stmt = stmt.where(CoachPlayerAssignment.coach_user_id == current_user.id)
     result = await db.execute(stmt.order_by(CoachPlayerAssignment.created_at.desc()))
     return result.scalars().all()
