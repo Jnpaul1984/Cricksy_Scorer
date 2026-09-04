@@ -16,8 +16,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from backend.config import settings
+from backend.domain.coach_analysis_v2_contract import RepetitionActionRecordV2
 from backend.services.chunk_aggregation import aggregate_chunks_and_finalize
 from backend.services.coach_plus_analysis import run_pose_metrics_findings_report
+from backend.services.repetition_segmentation import refine_bowling_repetitions_with_ball_tracking
 from backend.sql_app.database import get_engine, get_session_local
 from backend.sql_app.models import VideoAnalysisJob, VideoAnalysisJobStatus, VideoSessionStatus
 
@@ -210,6 +212,8 @@ async def _process_job(job_id: str) -> None:
                     )
                 },
                 analysis_mode=job.analysis_mode,
+                session_id=video_session.id,
+                job_id=job.id,
             )
 
             quick_payload = quick_artifacts.results
@@ -332,6 +336,8 @@ async def _process_job(job_id: str) -> None:
                     )
                 },
                 analysis_mode=job.analysis_mode,
+                session_id=video_session.id,
+                job_id=job.id,
             )
 
             deep_payload = deep_artifacts.results
@@ -361,6 +367,7 @@ async def _process_job(job_id: str) -> None:
                             "max_velocity": trajectory.max_velocity,
                             "trajectory_length": trajectory.trajectory_length,
                             "release_point": {
+                                "frame_num": trajectory.release_point.frame_num,
                                 "x": trajectory.release_point.x,
                                 "y": trajectory.release_point.y,
                                 "timestamp": trajectory.release_point.timestamp,
@@ -368,6 +375,7 @@ async def _process_job(job_id: str) -> None:
                             if trajectory.release_point
                             else None,
                             "bounce_point": {
+                                "frame_num": trajectory.bounce_point.frame_num,
                                 "x": trajectory.bounce_point.x,
                                 "y": trajectory.bounce_point.y,
                                 "timestamp": trajectory.bounce_point.timestamp,
@@ -404,6 +412,58 @@ async def _process_job(job_id: str) -> None:
                     deep_payload["ball_tracking"] = ball_tracking_payload
                     deep_payload.setdefault("outputs", {})
                     deep_payload["outputs"]["ball_tracking_s3_key"] = ball_tracking_s3_key
+                    v2_payload = deep_payload.get("v2")
+                    segmentation_meta = deep_payload.get("meta", {}).get("repetition_segmentation")
+                    if isinstance(v2_payload, dict):
+                        repetition_payloads = v2_payload.get("repetitions")
+                        parsed_repetitions = []
+                        if isinstance(repetition_payloads, list):
+                            for payload in repetition_payloads:
+                                try:
+                                    parsed_repetitions.append(
+                                        RepetitionActionRecordV2.model_validate(payload)
+                                    )
+                                except Exception:
+                                    logger.warning(
+                                        (
+                                            "Skipping invalid repetition payload during "
+                                            "ball-tracking refinement"
+                                        )
+                                    )
+                        repetitions, used_ball_tracking = (
+                            refine_bowling_repetitions_with_ball_tracking(
+                                repetitions=parsed_repetitions,
+                                ball_tracking=ball_tracking_payload,
+                                job_id=job.id,
+                                session_id=video_session.id,
+                                metric_refs=[
+                                    str(metric_id)
+                                    for metric_id, raw_metric in deep_payload.get("metrics", {})
+                                    .get("metrics", {})
+                                    .items()
+                                    if isinstance(raw_metric, dict)
+                                ],
+                            )
+                        )
+                        if used_ball_tracking:
+                            v2_payload["repetitions"] = [
+                                item.model_dump(mode="json") for item in repetitions
+                            ]
+                            if isinstance(segmentation_meta, dict):
+                                segmentation_meta["segmentation_method"] = (
+                                    "pose_motion_ball_hybrid_v1"
+                                )
+                                segmentation_meta["repetitions_count"] = len(repetitions)
+                                confidences = [
+                                    rep.segmentation_confidence
+                                    for rep in repetitions
+                                    if rep.segmentation_confidence is not None
+                                ]
+                                segmentation_meta["segmentation_confidence"] = (
+                                    round(sum(confidences) / len(confidences), 3)
+                                    if confidences
+                                    else 0.0
+                                )
 
                 except Exception as e:
                     logger.warning(

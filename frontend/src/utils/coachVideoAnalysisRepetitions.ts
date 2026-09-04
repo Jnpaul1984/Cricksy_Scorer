@@ -1,0 +1,117 @@
+import type { VideoAnalysisJob, VideoAnalysisResults } from '@/services/coachPlusVideoService';
+
+export type CoachVideoRepetition = {
+  repetitionId: string;
+  discipline: string;
+  actionType: string;
+  startFrame: number | null;
+  endFrame: number | null;
+  startSeconds: number | null;
+  endSeconds: number | null;
+  segmentationMethod: string | null;
+  segmentationConfidence: number | null;
+  validityState: string;
+  insufficientReason: string | null;
+};
+
+export type CoachVideoRepetitionSummary = {
+  enabled?: boolean;
+  discipline?: string;
+  segmentation_method?: string;
+  validity_state?: string;
+  segmentation_confidence?: number;
+  repetitions_count?: number;
+  insufficient_reason?: string | null;
+} | null;
+
+type AnyObj = Record<string, unknown>;
+
+function isObject(value: unknown): value is AnyObj {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function asResults(value: unknown): VideoAnalysisResults | null {
+  return isObject(value) ? (value as VideoAnalysisResults) : null;
+}
+
+function toNumber(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function pickBestCoachVideoResults(
+  analysisJob: VideoAnalysisJob | null | undefined,
+): VideoAnalysisResults | null {
+  const direct = analysisJob?.deep_results ?? analysisJob?.quick_results ?? null;
+  if (direct && isObject(direct)) return direct;
+
+  const combined = analysisJob?.results;
+  if (!isObject(combined)) return asResults(combined);
+  const combinedObj = combined as AnyObj;
+
+  return (
+    asResults(combinedObj['deep']) ??
+    asResults(combinedObj['quick']) ??
+    asResults(combinedObj)
+  );
+}
+
+export function getCoachVideoJobFps(analysisJob: VideoAnalysisJob | null | undefined): number | null {
+  const results = pickBestCoachVideoResults(analysisJob);
+  if (!results) return null;
+  return (
+    toNumber(results.pose_summary?.video_fps) ??
+    toNumber(results.video_fps) ??
+    toNumber(results.pose?.video_fps) ??
+    toNumber((results.pose as Record<string, unknown> | undefined)?.fps) ??
+    null
+  );
+}
+
+export function extractCoachVideoRepetitionSummary(
+  analysisJob: VideoAnalysisJob | null | undefined,
+): CoachVideoRepetitionSummary {
+  const results = pickBestCoachVideoResults(analysisJob);
+  const summary = results?.meta?.repetition_segmentation;
+  return summary && isObject(summary) ? summary : null;
+}
+
+export function extractCoachVideoRepetitions(
+  analysisJob: VideoAnalysisJob | null | undefined,
+): CoachVideoRepetition[] {
+  const results = pickBestCoachVideoResults(analysisJob);
+  const rawRepetitions = results?.v2?.repetitions;
+  if (!Array.isArray(rawRepetitions)) return [];
+
+  return rawRepetitions
+    .map((item) => (isObject(item) ? item : null))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .map((item) => ({
+      repetitionId: String(item.repetition_id ?? ''),
+      discipline: typeof item.discipline === 'string' ? item.discipline : 'unknown',
+      actionType:
+        typeof item.action_type === 'string' && item.action_type.trim().length > 0
+          ? item.action_type
+          : 'repetition',
+      startFrame: toNumber(item.start_frame),
+      endFrame: toNumber(item.end_frame),
+      startSeconds: toNumber(item.start_ts),
+      endSeconds: toNumber(item.end_ts),
+      segmentationMethod:
+        typeof item.segmentation_method === 'string' ? item.segmentation_method : null,
+      segmentationConfidence: toNumber(item.segmentation_confidence),
+      validityState:
+        typeof item.validity_state === 'string' ? item.validity_state : 'NOT_MEASURABLE',
+      insufficientReason:
+        typeof item.insufficient_reason === 'string' ? item.insufficient_reason : null,
+    }))
+    .filter((item) => item.repetitionId.length > 0)
+    .sort((left, right) => {
+      const leftStart = left.startSeconds ?? Number.MAX_SAFE_INTEGER;
+      const rightStart = right.startSeconds ?? Number.MAX_SAFE_INTEGER;
+      if (leftStart !== rightStart) return leftStart - rightStart;
+      const leftFrame = left.startFrame ?? Number.MAX_SAFE_INTEGER;
+      const rightFrame = right.startFrame ?? Number.MAX_SAFE_INTEGER;
+      return leftFrame - rightFrame;
+    });
+}

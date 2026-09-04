@@ -4,10 +4,12 @@ import logging
 from dataclasses import dataclass
 from typing import Any, cast
 
+from backend.config import settings
 from backend.services.coach_analysis_v2_compatibility import build_analysis_v2_contract
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
+from backend.services.repetition_segmentation import attach_repetition_segmentation
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +119,8 @@ def run_pose_metrics_findings_report(
     max_seconds: float | None = None,
     player_context: dict[str, Any] | None = None,
     analysis_mode: str | None = None,
+    session_id: str | None = None,
+    job_id: str | None = None,
 ) -> AnalysisArtifacts:
     """Shared analysis pipeline used by the background worker.
 
@@ -219,5 +223,33 @@ def run_pose_metrics_findings_report(
         },
         "v2": v2_contract.model_dump(mode="json"),
     }
+
+    frames_for_segmentation = (
+        pose_data.get("frames")
+        or pose_data.get("frames_data")
+        or pose_data.get("pose_frames")
+        or []
+    )
+    metric_refs = [
+        str(metric_id)
+        for metric_id, raw_metric in metrics_result.get("metrics", {}).items()
+        if isinstance(raw_metric, dict)
+    ]
+    attach_repetition_segmentation(
+        results_payload=results,
+        discipline=analysis_mode,
+        frames=frames_for_segmentation if isinstance(frames_for_segmentation, list) else [],
+        session_id=session_id,
+        job_id=job_id,
+        sample_fps=float(sample_fps),
+        source_video_fps=normalized["video_fps"],
+        camera_view=(
+            str(player_context.get("camera_view"))
+            if isinstance(player_context, dict) and player_context.get("camera_view") is not None
+            else None
+        ),
+        metric_refs=metric_refs,
+        enabled=bool(settings.COACH_PLUS_REPETITION_SEGMENTATION_ENABLED),
+    )
 
     return AnalysisArtifacts(results=results, frames=frames_out)

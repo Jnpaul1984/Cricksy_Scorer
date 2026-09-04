@@ -416,6 +416,141 @@ async def test_analysis_history_endpoint(client: TestClient):
 
 
 @pytest.mark.asyncio
+async def test_repetition_retrieval_endpoints_are_authorized_and_legacy_safe(
+    client: TestClient,
+) -> None:
+    coach = register_user(client, "coach-repetitions@example.com")
+    intruder = register_user(client, "coach-repetitions-intruder@example.com")
+    await set_role(client, coach["email"], models.RoleEnum.coach_pro_plus)
+    await set_role(client, intruder["email"], models.RoleEnum.coach_pro_plus)
+    coach_token = login_user(client, coach["email"])
+    intruder_token = login_user(client, intruder["email"])
+
+    session_resp = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(coach_token),
+        json={"title": "Repetition Session", "analysis_context": "bowling", "camera_view": "side"},
+    )
+    assert session_resp.status_code == 200, session_resp.text
+    session_id = session_resp.json()["id"]
+
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as db:
+        segmented_job = models.VideoAnalysisJob(
+            session_id=session_id,
+            sample_fps=10,
+            include_frames=False,
+            status=models.VideoAnalysisJobStatus.done,
+            deep_results={
+                "meta": {
+                    "repetition_segmentation": {
+                        "enabled": True,
+                        "discipline": "bowling",
+                        "segmentation_method": "pose_motion_ball_hybrid_v1",
+                        "validity_state": "VALID",
+                        "segmentation_confidence": 0.84,
+                        "repetitions_count": 1,
+                        "insufficient_reason": None,
+                    }
+                },
+                "v2": {
+                    "repetitions": [
+                        {
+                            "schema_version": "coach_analysis_v2.contract.v1",
+                            "repetition_id": "rep-1",
+                            "session_id": session_id,
+                            "job_id": "placeholder",
+                            "discipline": "bowling",
+                            "action_type": "bowling_delivery",
+                            "start_ts": 0.6,
+                            "end_ts": 1.5,
+                            "start_frame": 18,
+                            "end_frame": 45,
+                            "segmentation_method": "pose_motion_ball_hybrid_v1",
+                            "segmentation_confidence": 0.84,
+                            "manual_override": False,
+                            "validity_state": "VALID",
+                            "insufficient_reason": None,
+                            "evidence_refs": [
+                                {"ref_type": "ball_tracking", "label": "release_to_bounce"}
+                            ],
+                            "metric_refs": ["head_stability_score"],
+                        }
+                    ]
+                },
+            },
+        )
+        legacy_job = models.VideoAnalysisJob(
+            session_id=session_id,
+            sample_fps=10,
+            include_frames=False,
+            status=models.VideoAnalysisJobStatus.done,
+            deep_results={"report": {"summary": "legacy-only"}},
+        )
+        db.add(segmented_job)
+        db.add(legacy_job)
+        await db.commit()
+        await db.refresh(segmented_job)
+        await db.refresh(legacy_job)
+        segmented_job.deep_results = {
+            **(segmented_job.deep_results or {}),
+            "v2": {
+                **((segmented_job.deep_results or {}).get("v2", {})),
+                "repetitions": [
+                    {
+                        **(
+                            (segmented_job.deep_results or {})
+                            .get("v2", {})
+                            .get("repetitions", [{}])[0]
+                        ),
+                        "job_id": segmented_job.id,
+                    }
+                ],
+            },
+        }
+        await db.commit()
+        segmented_job_id = segmented_job.id
+        legacy_job_id = legacy_job.id
+
+    job_resp = client.get(
+        f"/api/coaches/plus/analysis-jobs/{segmented_job_id}/repetitions",
+        headers=_auth_headers(coach_token),
+    )
+    assert job_resp.status_code == 200, job_resp.text
+    job_payload = job_resp.json()
+    assert job_payload["job_id"] == segmented_job_id
+    assert job_payload["source"] == "deep_results"
+    assert len(job_payload["repetitions"]) == 1
+    assert job_payload["repetitions"][0]["action_type"] == "bowling_delivery"
+
+    legacy_resp = client.get(
+        f"/api/coaches/plus/analysis-jobs/{legacy_job_id}/repetitions",
+        headers=_auth_headers(coach_token),
+    )
+    assert legacy_resp.status_code == 200, legacy_resp.text
+    legacy_payload = legacy_resp.json()
+    assert legacy_payload["source"] == "none"
+    assert legacy_payload["repetitions"] == []
+    assert legacy_payload["summary"] is None
+
+    session_repetitions_resp = client.get(
+        f"/api/coaches/plus/sessions/{session_id}/repetitions",
+        headers=_auth_headers(coach_token),
+    )
+    assert session_repetitions_resp.status_code == 200, session_repetitions_resp.text
+    session_payload = session_repetitions_resp.json()
+    assert session_payload["session_id"] == session_id
+    assert len(session_payload["jobs"]) == 2
+    assert {job["job_id"] for job in session_payload["jobs"]} == {segmented_job_id, legacy_job_id}
+
+    forbidden_resp = client.get(
+        f"/api/coaches/plus/analysis-jobs/{segmented_job_id}/repetitions",
+        headers=_auth_headers(intruder_token),
+    )
+    assert forbidden_resp.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_coach_pro_plus_can_list_assigned_players(client: TestClient) -> None:
     player_id = "player-coach-plus-assigned"
     await ensure_profile(client, player_id)

@@ -95,6 +95,44 @@ export interface VideoStreamUrl {
 }
 
 export interface VideoAnalysisResults {
+  meta?: {
+    sample_fps?: number;
+    max_seconds?: number | null;
+    analysis_mode?: string;
+    analysis_mode_used?: string;
+    repetition_segmentation?: {
+      enabled?: boolean;
+      discipline?: string;
+      segmentation_method?: string;
+      validity_state?: string;
+      segmentation_confidence?: number;
+      repetitions_count?: number;
+      insufficient_reason?: string | null;
+    };
+  };
+
+  v2?: {
+    validity_state?: string;
+    repetitions?: Array<{
+      repetition_id: string;
+      session_id?: string | null;
+      job_id?: string | null;
+      discipline: string;
+      action_type?: string | null;
+      start_ts?: number | null;
+      end_ts?: number | null;
+      start_frame?: number | null;
+      end_frame?: number | null;
+      segmentation_method?: string | null;
+      segmentation_confidence?: number | null;
+      manual_override?: boolean;
+      validity_state: string;
+      insufficient_reason?: string | null;
+      evidence_refs?: Array<{ ref_type: string; ref_id?: string | null; label?: string | null }>;
+      metric_refs?: string[];
+    }>;
+  };
+
   // New (extend-only) evidence markers + convenience top-level fields
   evidence?: Record<
     string,

@@ -16,9 +16,11 @@ from uuid import uuid4
 import boto3
 from backend import security
 from backend.config import settings
+from backend.domain.coach_analysis_v2_contract import RepetitionActionRecordV2
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
+from backend.services.repetition_segmentation import extract_repetition_segmentation
 from backend.services.s3_service import s3_service
 from backend.services.video_chunking import (
     create_chunk_specs,
@@ -177,14 +179,14 @@ class VideoSessionCreate(BaseModel):
     title: str
     player_ids: list[str] = Field(default_factory=list)
     primary_player_id: str | None = None
-    discipline: Literal[
-        "batting", "pace_bowling", "spin_bowling", "wicketkeeping", "fielding"
-    ] | None = None
+    discipline: (
+        Literal["batting", "pace_bowling", "spin_bowling", "wicketkeeping", "fielding"] | None
+    ) = None
     coaching_focus: str | None = Field(default=None, max_length=160)
     notes: str | None = None
-    analysis_context: Literal[
-        "batting", "bowling", "wicketkeeping", "fielding", "mixed"
-    ] | None = None
+    analysis_context: Literal["batting", "bowling", "wicketkeeping", "fielding", "mixed"] | None = (
+        None
+    )
     camera_view: Literal["side", "front", "behind", "other"] | None = None
 
     @field_validator("player_ids", mode="before")
@@ -320,6 +322,20 @@ class VideoAnalysisJobRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class VideoAnalysisJobRepetitionsRead(BaseModel):
+    job_id: str
+    session_id: str
+    status: str
+    source: str
+    repetitions: list[RepetitionActionRecordV2] = Field(default_factory=list)
+    summary: dict[str, Any] | None = None
+
+
+class VideoSessionRepetitionsRead(BaseModel):
+    session_id: str
+    jobs: list[VideoAnalysisJobRepetitionsRead] = Field(default_factory=list)
 
 
 class VideoUploadInitiateRequest(BaseModel):
@@ -523,6 +539,29 @@ def _build_session_history_metadata(session: VideoSession) -> dict[str, Any]:
         "latest_job_pdf_available": latest_job_metadata.get("pdf_available", False),
         "missing_artifacts": latest_job_metadata.get("missing_artifacts", []),
     }
+
+
+def _extract_job_repetitions(
+    job: VideoAnalysisJob,
+) -> tuple[str, list[RepetitionActionRecordV2], dict[str, Any] | None]:
+    candidates = [
+        ("deep_results", job.deep_results),
+        ("quick_results", job.quick_results),
+        (
+            "results.deep",
+            job.results.get("deep") if isinstance(job.results, dict) else None,
+        ),
+        (
+            "results.quick",
+            job.results.get("quick") if isinstance(job.results, dict) else None,
+        ),
+        ("results", job.results),
+    ]
+    for source, payload in candidates:
+        repetitions, summary = extract_repetition_segmentation(payload)
+        if repetitions or summary:
+            return (source, repetitions, summary)
+    return ("none", [], None)
 
 
 @router.get("/sessions", response_model=list[VideoSessionRead])
@@ -1071,6 +1110,44 @@ async def get_analysis_job(
     return job_read
 
 
+@router.get("/analysis-jobs/{job_id}/repetitions", response_model=VideoAnalysisJobRepetitionsRead)
+async def get_analysis_job_repetitions(
+    job_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> VideoAnalysisJobRepetitionsRead:
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    result = await db.execute(
+        select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session))
+        .where(VideoAnalysisJob.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+
+    if not _can_access_video_session(current_user, job.session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this job",
+        )
+
+    source, repetitions, summary = _extract_job_repetitions(job)
+    return VideoAnalysisJobRepetitionsRead(
+        job_id=job.id,
+        session_id=job.session_id,
+        status=job.status.value,
+        source=source,
+        repetitions=repetitions,
+        summary=summary,
+    )
+
+
 @router.post("/analysis-jobs/{job_id}/retry", response_model=VideoAnalysisJobRead)
 async def retry_analysis_job(
     job_id: str,
@@ -1117,6 +1194,55 @@ async def retry_analysis_job(
             "camera_view": session.camera_view,
             "retryable": is_retryable_video_job(job),
         }
+    )
+
+
+@router.get("/sessions/{session_id}/repetitions", response_model=VideoSessionRepetitionsRead)
+async def get_session_repetitions(
+    session_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> VideoSessionRepetitionsRead:
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    result = await db.execute(
+        select(VideoSession)
+        .options(selectinload(VideoSession.analysis_jobs))
+        .where(VideoSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Video session not found")
+
+    if not _can_access_video_session(current_user, session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this video session",
+        )
+
+    jobs = sorted(
+        session.analysis_jobs,
+        key=lambda item: item.created_at or item.updated_at or datetime.min.replace(tzinfo=UTC),
+        reverse=True,
+    )
+    return VideoSessionRepetitionsRead(
+        session_id=session.id,
+        jobs=[
+            VideoAnalysisJobRepetitionsRead(
+                job_id=job.id,
+                session_id=job.session_id,
+                status=job.status.value,
+                source=source,
+                repetitions=repetitions,
+                summary=summary,
+            )
+            for job in jobs
+            for source, repetitions, summary in [_extract_job_repetitions(job)]
+        ],
     )
 
 

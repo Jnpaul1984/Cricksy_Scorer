@@ -636,6 +636,61 @@
             </div>
           </section>
 
+          <section class="results-section">
+            <h3>Repetitions</h3>
+            <p v-if="selectedJobRepetitions.length === 0" class="status-text">
+              {{
+                selectedJobRepetitionSummary?.insufficient_reason ||
+                'No repetition windows were returned for this analysis.'
+              }}
+            </p>
+            <div v-else>
+              <div v-if="videoDurationSec" class="timeline repetition-timeline">
+                <div class="timeline-bar">
+                  <div
+                    v-for="repetition in selectedJobRepetitions"
+                    :key="repetition.repetitionId"
+                    class="timeline-seg timeline-seg-repetition"
+                    :style="timelineSegStyle(repetitionSegment(repetition))"
+                  />
+                </div>
+              </div>
+              <ul class="repetition-list">
+                <li
+                  v-for="(repetition, repetitionIndex) in selectedJobRepetitions"
+                  :key="repetition.repetitionId"
+                  class="repetition-row"
+                >
+                  <div>
+                    <strong>
+                      Rep {{ repetitionIndex + 1 }} — {{ formatRepetitionAction(repetition.actionType) }}
+                    </strong>
+                    <span class="evidence-time">
+                      {{ formatRepetitionTime(repetition) }}
+                    </span>
+                    <div class="status-text">
+                      {{ formatRepetitionValidity(repetition.validityState) }}
+                      <span v-if="repetition.segmentationConfidence !== null">
+                        • Confidence {{ formatPercent01(repetition.segmentationConfidence) }}
+                      </span>
+                    </div>
+                    <div v-if="repetition.insufficientReason" class="status-text">
+                      {{ repetition.insufficientReason }}
+                    </div>
+                  </div>
+                  <button
+                    v-if="canSeekToSegment(repetitionSegment(repetition))"
+                    type="button"
+                    class="btn-secondary btn-small"
+                    @click="jumpToSegment(repetitionSegment(repetition))"
+                  >
+                    Jump to
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </section>
+
           <section v-if="isFreeTier" class="results-section">
             <h3>Upgrade to see priorities</h3>
             <p class="status-text">
@@ -807,6 +862,12 @@ import { getPlayerProfile } from '@/services/playerApi';
 import { useAuthStore } from '@/stores/authStore';
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
 import { buildCoachNarrative } from '@/utils/coachVideoAnalysisNarrative';
+import {
+  extractCoachVideoRepetitions,
+  extractCoachVideoRepetitionSummary,
+  getCoachVideoJobFps,
+  type CoachVideoRepetition,
+} from '@/utils/coachVideoAnalysisRepetitions';
 
 // ============================================================================
 // State
@@ -918,6 +979,10 @@ watch(
 const selectedJob = ref<VideoAnalysisJob | null>(null);
 
 const coachNarrative = computed(() => buildCoachNarrative(selectedJob.value));
+const selectedJobRepetitions = computed(() => extractCoachVideoRepetitions(selectedJob.value));
+const selectedJobRepetitionSummary = computed(() =>
+  extractCoachVideoRepetitionSummary(selectedJob.value),
+);
 
 watch(
   () => [showResultsModal.value, selectedJob.value?.id, selectedJob.value?.status, videoPreviewUrl.value] as const,
@@ -1620,12 +1685,7 @@ function formatMmSs(seconds: number): string {
 }
 
 function getJobFps(): number | null {
-  const results: any = selectedJob.value?.results as any;
-  const fps =
-    (typeof results?.video_fps === 'number' ? results.video_fps : null) ??
-    (typeof results?.pose?.video_fps === 'number' ? results.pose.video_fps : null) ??
-    (typeof results?.pose?.fps === 'number' ? results.pose.fps : null) ??
-    null;
+  const fps = getCoachVideoJobFps(selectedJob.value);
   return fps && Number.isFinite(fps) && fps > 0 ? fps : null;
 }
 
@@ -1675,6 +1735,46 @@ function formatSegmentTime(seg: {
   const e = segmentEndSeconds(seg);
   if (s == null || e == null) return null;
   return `${formatMmSs(s)}–${formatMmSs(e)}`;
+}
+
+function repetitionSegment(repetition: CoachVideoRepetition): {
+  startFrame: number;
+  endFrame: number;
+  startSeconds?: number;
+  endSeconds?: number;
+} {
+  return {
+    startFrame: repetition.startFrame ?? 0,
+    endFrame: repetition.endFrame ?? 0,
+    ...(repetition.startSeconds !== null ? { startSeconds: repetition.startSeconds } : {}),
+    ...(repetition.endSeconds !== null ? { endSeconds: repetition.endSeconds } : {}),
+  };
+}
+
+function formatRepetitionAction(actionType: string): string {
+  return actionType
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatRepetitionValidity(validityState: string): string {
+  return validityState
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function formatRepetitionTime(repetition: CoachVideoRepetition): string {
+  if (repetition.startSeconds !== null && repetition.endSeconds !== null) {
+    return `${formatMmSs(repetition.startSeconds)}–${formatMmSs(repetition.endSeconds)}`;
+  }
+  if (repetition.startFrame !== null && repetition.endFrame !== null) {
+    return `Frames ${repetition.startFrame}–${repetition.endFrame}`;
+  }
+  return 'Timing unavailable';
 }
 
 function canSeekToMoment(w: { frameNum: number; timeSeconds?: number }): boolean {
@@ -2367,6 +2467,30 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   padding: 1rem;
   margin-top: 0.75rem;
+}
+
+.repetition-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.repetition-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-top: 1px solid #eee;
+}
+
+.repetition-row:first-child {
+  border-top: 0;
+}
+
+.timeline-seg-repetition {
+  background: #667eea;
+  opacity: 0.8;
 }
 
 .priority-header {

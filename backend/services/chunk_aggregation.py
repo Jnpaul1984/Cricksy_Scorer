@@ -15,6 +15,7 @@ from backend.config import settings
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
+from backend.services.repetition_segmentation import attach_repetition_segmentation
 from backend.sql_app.models import VideoAnalysisChunk, VideoAnalysisJob
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -200,6 +201,28 @@ async def aggregate_chunks_and_finalize(db: AsyncSession, job: VideoAnalysisJob)
             "video_duration_seconds": job.video_duration_seconds,
         },
     }
+    attach_repetition_segmentation(
+        results_payload=final_results,
+        discipline=str(resolved_mode),
+        frames=all_frames,
+        session_id=job.session_id,
+        job_id=job.id,
+        sample_fps=float(job.sample_fps or settings.SAMPLE_FPS),
+        source_video_fps=30.0,
+        camera_view=(
+            job.session.camera_view.value
+            if getattr(job.session.camera_view, "value", None)
+            else job.session.camera_view
+        )
+        if job.session
+        else None,
+        metric_refs=[
+            str(metric_id)
+            for metric_id, raw_metric in metrics_result.get("metrics", {}).items()
+            if isinstance(raw_metric, dict)
+        ],
+        enabled=bool(settings.COACH_PLUS_REPETITION_SEGMENTATION_ENABLED),
+    )
 
     # Upload final report to S3
     final_key = f"jobs/{job.id}/final_results.json"
