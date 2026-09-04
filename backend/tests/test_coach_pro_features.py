@@ -17,7 +17,6 @@ from backend.main import fastapi_app
 from backend.sql_app import models
 from backend.sql_app.database import get_db
 
-
 UTC = getattr(dt, "UTC", dt.UTC)
 
 
@@ -351,8 +350,9 @@ async def test_analysis_history_endpoint(client: TestClient):
     assert len(history) == 0
 
     # Create an analysis job manually for testing
-    from backend.sql_app.database import SessionLocal
     from datetime import datetime, timezone
+
+    from backend.sql_app.database import SessionLocal
 
     async with SessionLocal() as db:
         job = models.VideoAnalysisJob(
@@ -413,3 +413,230 @@ async def test_analysis_history_endpoint(client: TestClient):
     # Newest (job2) should be first
     assert history[0]["id"] == job2_id
     assert history[1]["id"] == job1_id
+
+
+@pytest.mark.asyncio
+async def test_coach_pro_plus_can_list_assigned_players(client: TestClient) -> None:
+    player_id = "player-coach-plus-assigned"
+    await ensure_profile(client, player_id)
+
+    coach_plus = register_user(client, "coach-plus-players@example.com")
+    await set_role(client, coach_plus["email"], models.RoleEnum.coach_pro_plus)
+    coach_plus_token = login_user(client, coach_plus["email"])
+
+    org = register_user(client, "org-plus-players@example.com")
+    await set_role(client, org["email"], models.RoleEnum.org_pro)
+    org_token = login_user(client, org["email"])
+
+    assign_resp = client.post(
+        "/api/coaches/assign-player",
+        headers=_auth_headers(org_token),
+        json={"coach_user_id": coach_plus["id"], "player_profile_id": player_id},
+    )
+    assert assign_resp.status_code == 200, assign_resp.text
+
+    resp = client.get("/api/coaches/me/players", headers=_auth_headers(coach_plus_token))
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert any(item["player_profile_id"] == player_id for item in payload)
+
+
+@pytest.mark.asyncio
+async def test_player_centered_session_requires_assigned_primary_player(client: TestClient) -> None:
+    assigned_player_id = "player-v2-assigned"
+    unassigned_player_id = "player-v2-unassigned"
+    await ensure_profile(client, assigned_player_id)
+    await ensure_profile(client, unassigned_player_id)
+
+    coach_plus = register_user(client, "coach-plus-v2@example.com")
+    await set_role(client, coach_plus["email"], models.RoleEnum.coach_pro_plus)
+    coach_plus_token = login_user(client, coach_plus["email"])
+
+    org = register_user(client, "org-v2@example.com")
+    await set_role(client, org["email"], models.RoleEnum.org_pro)
+    org_token = login_user(client, org["email"])
+
+    assign_resp = client.post(
+        "/api/coaches/assign-player",
+        headers=_auth_headers(org_token),
+        json={"coach_user_id": coach_plus["id"], "player_profile_id": assigned_player_id},
+    )
+    assert assign_resp.status_code == 200, assign_resp.text
+
+    create_resp = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(coach_plus_token),
+        json={
+            "title": "V2 Pace Session",
+            "primary_player_id": assigned_player_id,
+            "player_ids": [assigned_player_id],
+            "discipline": "pace_bowling",
+            "coaching_focus": "release consistency",
+            "camera_view": "side",
+        },
+    )
+    assert create_resp.status_code == 200, create_resp.text
+    created_payload = create_resp.json()
+    assert created_payload["primary_player_id"] == assigned_player_id
+    assert created_payload["player_ids"] == [assigned_player_id]
+    assert created_payload["discipline"] == "pace_bowling"
+    assert created_payload["analysis_context"] == "bowling"
+    assert created_payload["coaching_focus"] == "release consistency"
+    assert created_payload["camera_view"] == "side"
+
+    nonexistent_resp = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(coach_plus_token),
+        json={
+            "title": "Missing Player",
+            "primary_player_id": "missing-player-id",
+            "discipline": "batting",
+            "camera_view": "front",
+        },
+    )
+    assert nonexistent_resp.status_code == 404
+    assert "not found" in nonexistent_resp.json()["detail"].lower()
+
+    unauthorized_resp = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(coach_plus_token),
+        json={
+            "title": "Unauthorized Player",
+            "primary_player_id": unassigned_player_id,
+            "discipline": "batting",
+            "camera_view": "front",
+        },
+    )
+    assert unauthorized_resp.status_code == 403
+    assert "not assigned" in unauthorized_resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_player_centered_session_validation_and_legacy_compatibility(
+    client: TestClient,
+) -> None:
+    player_id = "player-v2-validation"
+    await ensure_profile(client, player_id)
+
+    coach_plus = register_user(client, "coach-plus-validation@example.com")
+    await set_role(client, coach_plus["email"], models.RoleEnum.coach_pro_plus)
+    coach_plus_token = login_user(client, coach_plus["email"])
+
+    org = register_user(client, "org-validation@example.com")
+    await set_role(client, org["email"], models.RoleEnum.org_pro)
+    org_token = login_user(client, org["email"])
+
+    assign_resp = client.post(
+        "/api/coaches/assign-player",
+        headers=_auth_headers(org_token),
+        json={"coach_user_id": coach_plus["id"], "player_profile_id": player_id},
+    )
+    assert assign_resp.status_code == 200, assign_resp.text
+
+    invalid_discipline_resp = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(coach_plus_token),
+        json={
+            "title": "Invalid discipline",
+            "primary_player_id": player_id,
+            "discipline": "mixed",
+            "camera_view": "side",
+        },
+    )
+    assert invalid_discipline_resp.status_code == 422
+
+    invalid_context_resp = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(coach_plus_token),
+        json={
+            "title": "Mismatched context",
+            "primary_player_id": player_id,
+            "discipline": "spin_bowling",
+            "analysis_context": "batting",
+            "camera_view": "side",
+        },
+    )
+    assert invalid_context_resp.status_code == 422
+
+    invalid_camera_resp = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(coach_plus_token),
+        json={
+            "title": "Invalid camera",
+            "primary_player_id": player_id,
+            "discipline": "batting",
+            "camera_view": "skycam",
+        },
+    )
+    assert invalid_camera_resp.status_code == 422
+
+    legacy_resp = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(coach_plus_token),
+        json={
+            "title": "Legacy Session",
+            "player_ids": [],
+            "analysis_context": "mixed",
+        },
+    )
+    assert legacy_resp.status_code == 200, legacy_resp.text
+    legacy_payload = legacy_resp.json()
+    assert legacy_payload["primary_player_id"] is None
+    assert legacy_payload["player_ids"] == []
+    assert legacy_payload["analysis_context"] == "mixed"
+
+
+@pytest.mark.asyncio
+async def test_player_centered_session_rbac_for_org_and_superuser(client: TestClient) -> None:
+    org_player_id = "player-v2-org"
+    super_player_id = "player-v2-super"
+    await ensure_profile(client, org_player_id)
+    await ensure_profile(client, super_player_id)
+
+    org_user = register_user(client, "org-v2-rbac@example.com")
+    await set_role(client, org_user["email"], models.RoleEnum.org_pro)
+    org_token = login_user(client, org_user["email"])
+
+    assign_resp = client.post(
+        "/api/coaches/assign-player",
+        headers=_auth_headers(org_token),
+        json={"coach_user_id": org_user["id"], "player_profile_id": org_player_id},
+    )
+    assert assign_resp.status_code == 200, assign_resp.text
+
+    org_create_resp = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(org_token),
+        json={
+            "title": "Org V2 Session",
+            "primary_player_id": org_player_id,
+            "discipline": "fielding",
+            "camera_view": "front",
+        },
+    )
+    assert org_create_resp.status_code == 200, org_create_resp.text
+
+    super_user = register_user(client, "super-v2-rbac@example.com")
+    await set_role(client, super_user["email"], models.RoleEnum.coach_pro_plus)
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        result = await session.execute(
+            select(models.User).where(models.User.email == super_user["email"])
+        )
+        super_row = result.scalar_one()
+        super_row.is_superuser = True
+        await session.commit()
+    super_token = login_user(client, super_user["email"])
+
+    super_create_resp = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(super_token),
+        json={
+            "title": "Superuser V2 Session",
+            "primary_player_id": super_player_id,
+            "discipline": "spin_bowling",
+            "camera_view": "behind",
+        },
+    )
+    assert super_create_resp.status_code == 200, super_create_resp.text
+    assert super_create_resp.json()["analysis_context"] == "bowling"

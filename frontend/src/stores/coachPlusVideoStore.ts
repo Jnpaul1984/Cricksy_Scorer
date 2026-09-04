@@ -118,7 +118,12 @@ export const useCoachPlusVideoStore = defineStore('coachPlusVideo', () => {
   async function createSession(data: {
     title: string
     player_ids?: string[]
+    primary_player_id?: string
+    discipline?: string
+    coaching_focus?: string | null
     notes?: string
+    analysis_context?: string | null
+    camera_view?: string | null
   }): Promise<VideoSession | null> {
     error.value = null
 

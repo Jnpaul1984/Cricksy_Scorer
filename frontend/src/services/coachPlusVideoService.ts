@@ -38,6 +38,9 @@ export interface VideoSession {
   owner_id: string;
   title: string;
   player_ids: string[];
+  primary_player_id?: string | null;
+  discipline?: string | null;
+  coaching_focus?: string | null;
   status: string; // "pending" | "uploaded" | "processing" | "ready" | "failed"
   notes: string | null;
   analysis_context: string | null; // "batting" | "bowling" | "wicketkeeping" | "fielding" | "mixed"
@@ -198,6 +201,9 @@ function url(path: string): string {
 export async function createVideoSession(data: {
   title: string;
   player_ids?: string[];
+  primary_player_id?: string;
+  discipline?: string;
+  coaching_focus?: string | null;
   notes?: string | null;
   analysis_context?: string | null;
   camera_view?: string | null;

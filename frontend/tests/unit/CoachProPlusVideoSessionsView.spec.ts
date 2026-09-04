@@ -60,8 +60,13 @@ vi.mock('@/services/playerDevelopmentApi', () => ({
       return false
     }
   },
+  listCoachAssignedPlayers: vi.fn(),
   listPlayerDevelopmentPlans: vi.fn(),
   reviewPlayerDevelopmentPlan: vi.fn(),
+}))
+
+vi.mock('@/services/playerApi', () => ({
+  getPlayerProfile: vi.fn(),
 }))
 
 async function flushAsync() {
@@ -114,6 +119,39 @@ describe('CoachProPlusVideoSessionsView', () => {
 
     expect(wrapper.text()).toContain('Video Sessions')
     expect(wrapper.text()).not.toContain('Unlock Video Sessions')
+  })
+
+  it('uses player-centered create form fields instead of manual player ID textarea', async () => {
+    authStoreMock.canCoach = true
+    authStoreMock.isCoachProPlus = true
+    authStoreMock.role = 'coach_pro_plus'
+
+    const playerDevApi = await import('@/services/playerDevelopmentApi')
+    const playerApi = await import('@/services/playerApi')
+    vi.mocked(playerDevApi.listCoachAssignedPlayers).mockResolvedValue([
+      {
+        id: 'assign-1',
+        coach_user_id: 'coach-1',
+        player_profile_id: 'player-1',
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ])
+    vi.mocked(playerApi.getPlayerProfile).mockResolvedValue({
+      player_id: 'player-1',
+      player_name: 'Player One',
+    } as any)
+
+    const wrapper = mountView()
+    await flushAsync()
+
+    await wrapper.find('button.btn-primary').trigger('click')
+    await flushAsync()
+
+    expect(wrapper.text()).toContain('Discipline')
+    expect(wrapper.text()).toContain('Create new player')
+    expect(wrapper.text()).not.toContain('Player IDs (comma-separated)')
   })
 
   it('keeps the upgrade gate for users without coach access', async () => {
