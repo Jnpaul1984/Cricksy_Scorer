@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, reactive } from 'vue'
 
-import { listVideoSessions } from '@/services/coachPlusVideoService'
+import { listVideoSessions, type VideoAnalysisJob } from '@/services/coachPlusVideoService'
 import CoachProPlusVideoSessionsView from '@/views/CoachProPlusVideoSessionsView.vue'
 
 const authStoreMock = reactive({
@@ -159,5 +159,67 @@ describe('CoachProPlusVideoSessionsView', () => {
     await flushAsync()
 
     expect(wrapper.text()).toContain('Unlock Video Sessions')
+  })
+
+  it('renders repetition windows in the results modal when V2 repetitions are present', async () => {
+    authStoreMock.canCoach = true
+    authStoreMock.isCoachPro = true
+    authStoreMock.role = 'coach_pro'
+
+    const wrapper = mountView()
+    await flushAsync()
+
+    const vm = wrapper.vm as unknown as {
+      showResultsModal: boolean
+      selectedJob: VideoAnalysisJob | null
+    }
+
+    vm.selectedJob = {
+      id: 'job-reps',
+      session_id: 'session-reps',
+      sample_fps: 10,
+      include_frames: false,
+      status: 'done',
+      error_message: null,
+      sqs_message_id: null,
+      deep_results: {
+        pose_summary: { total_frames: 120, sampled_frames: 30, frames_with_pose: 28, detection_rate_percent: 93, video_fps: 30 },
+        report: { summary: 'Done' },
+        findings: { findings: [] },
+        meta: {
+          repetition_segmentation: {
+            enabled: true,
+            validity_state: 'VALID',
+            repetitions_count: 1,
+          },
+        },
+        v2: {
+          repetitions: [
+            {
+              repetition_id: 'rep-1',
+              discipline: 'bowling',
+              action_type: 'bowling_delivery',
+              start_ts: 0.5,
+              end_ts: 1.1,
+              start_frame: 15,
+              end_frame: 33,
+              segmentation_confidence: 0.84,
+              validity_state: 'VALID',
+            },
+          ],
+        },
+      },
+      results: null,
+      created_at: new Date().toISOString(),
+      started_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as unknown as VideoAnalysisJob
+    vm.showResultsModal = true
+    await flushAsync()
+
+    expect(wrapper.text()).toContain('Repetitions')
+    expect(wrapper.text()).toContain('Rep 1 — Bowling Delivery')
+    expect(wrapper.text()).toContain('Valid')
   })
 })

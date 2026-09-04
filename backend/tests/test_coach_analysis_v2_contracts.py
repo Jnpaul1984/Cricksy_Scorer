@@ -383,8 +383,10 @@ def test_run_pose_metrics_findings_report_embeds_v2_contract_without_breaking_le
                         "right_knee": [0.6, 1.0, 0.9],
                         "left_ankle": [0.4, 1.2, 0.9],
                         "right_ankle": [0.6, 1.2, 0.9],
-                        "left_elbow": [0.35, 0.7, 0.9],
-                        "right_elbow": [0.65, 0.7, 0.9],
+                        "left_elbow": [0.35 + (0.01 * index), 0.7 - (0.01 * min(index, 5)), 0.9],
+                        "right_elbow": [0.65 + (0.015 * index), 0.7 - (0.03 * min(index, 5)), 0.9],
+                        "left_wrist": [0.32 + (0.015 * index), 0.78 - (0.01 * min(index, 5)), 0.9],
+                        "right_wrist": [0.68 + (0.02 * index), 0.78 - (0.04 * min(index, 5)), 0.9],
                     },
                 }
                 for index in range(12)
@@ -403,6 +405,8 @@ def test_run_pose_metrics_findings_report_embeds_v2_contract_without_breaking_le
             include_frames=False,
             player_context={"camera_view": "side"},
             analysis_mode="bowling",
+            session_id="session-1",
+            job_id="job-1",
         )
 
     payload = result.results
@@ -413,3 +417,6 @@ def test_run_pose_metrics_findings_report_embeds_v2_contract_without_breaking_le
     assert "v2" in payload
     assert payload["v2"]["capture_profile"]["camera_view"] == "side"
     assert payload["v2"]["metric_results"]
+    assert payload["v2"]["repetitions"]
+    assert payload["v2"]["repetitions"][0]["job_id"] == "job-1"
+    assert payload["meta"]["repetition_segmentation"]["repetitions_count"] >= 1

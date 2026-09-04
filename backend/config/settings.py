@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     COACH_PLUS_DEEP_ANALYSIS_ENABLED: bool = Field(
         default=True, alias="COACH_PLUS_DEEP_ANALYSIS_ENABLED"
     )
+    COACH_PLUS_REPETITION_SEGMENTATION_ENABLED: bool = Field(
+        default=True, alias="COACH_PLUS_REPETITION_SEGMENTATION_ENABLED"
+    )
     COACH_PLUS_QUICK_MAX_SECONDS: int = Field(default=30, alias="COACH_PLUS_QUICK_MAX_SECONDS")
     COACH_PLUS_STALE_JOB_THRESHOLD_SECONDS: int = Field(
         default=1800, alias="COACH_PLUS_STALE_JOB_THRESHOLD_SECONDS"
@@ -139,6 +142,10 @@ class Settings(BaseSettings):
     @property
     def coach_plus_deep_analysis_enabled(self) -> bool:
         return self.COACH_PLUS_DEEP_ANALYSIS_ENABLED
+
+    @property
+    def coach_plus_repetition_segmentation_enabled(self) -> bool:
+        return self.COACH_PLUS_REPETITION_SEGMENTATION_ENABLED
 
     @property
     def coach_plus_quick_max_seconds(self) -> int:
