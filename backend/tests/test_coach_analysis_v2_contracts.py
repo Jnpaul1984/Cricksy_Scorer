@@ -11,6 +11,7 @@ from backend.domain.coach_analysis_v2_contract import (
     CaptureProfile,
     CoachingMetricResultV2,
     CompatibilityReasonCode,
+    PhaseRecordV2,
     RepetitionActionRecordV2,
     ValidityState,
 )
@@ -211,6 +212,30 @@ def test_repetition_contract_exists_without_segmentation_logic() -> None:
 
     assert repetition.repetition_id == "rep-1"
     assert repetition.segmentation_method == "pending_v2_segmentation"
+
+
+def test_phase_contract_supports_evidence_and_limitations_fields() -> None:
+    phase = PhaseRecordV2(
+        phase_id="rep-1:phase:1",
+        repetition_id="rep-1",
+        phase_name="contact_proxy_window",
+        start_ts=1.2,
+        end_ts=1.4,
+        start_frame=36,
+        end_frame=42,
+        detection_method="repetition_relative_heuristic_v1",
+        confidence=0.58,
+        requires_object_evidence=True,
+        camera_view_compatibility=["side", "front", "behind"],
+        manual_correction_supported=False,
+        validity_state=ValidityState.LOW_CONFIDENCE,
+        evidence_refs=[{"ref_type": "repetition_window", "ref_id": "rep-1"}],
+        limitations=["Object evidence unavailable; proxy only."],
+    )
+
+    payload = phase.model_dump(mode="json")
+    assert payload["evidence_refs"][0]["ref_type"] == "repetition_window"
+    assert payload["limitations"] == ["Object evidence unavailable; proxy only."]
 
 
 def test_build_analysis_v2_contract_is_additive_and_keeps_empty_phase_repetition_lists() -> None:

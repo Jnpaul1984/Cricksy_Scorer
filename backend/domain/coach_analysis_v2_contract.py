@@ -178,6 +178,8 @@ class PhaseRecordV2(BaseModel):
     camera_view_compatibility: list[str] = Field(default_factory=list)
     manual_correction_supported: bool = False
     validity_state: ValidityState
+    evidence_refs: list[EvidenceRef] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
 

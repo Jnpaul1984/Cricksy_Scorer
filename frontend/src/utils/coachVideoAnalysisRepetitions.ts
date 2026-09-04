@@ -24,6 +24,31 @@ export type CoachVideoRepetitionSummary = {
   insufficient_reason?: string | null;
 } | null;
 
+export type CoachVideoPhase = {
+  phaseId: string;
+  repetitionId: string;
+  phaseName: string;
+  startFrame: number | null;
+  endFrame: number | null;
+  startSeconds: number | null;
+  endSeconds: number | null;
+  confidence: number | null;
+  validityState: string;
+  detectionMethod: string | null;
+  requiresObjectEvidence: boolean;
+  limitations: string[];
+};
+
+export type CoachVideoPhaseSummary = {
+  enabled?: boolean;
+  discipline?: string;
+  detection_method?: string;
+  validity_state?: string;
+  phases_count?: number;
+  recognized_repetitions?: number;
+  insufficient_reason?: string | null;
+} | null;
+
 type AnyObj = Record<string, unknown>;
 
 function isObject(value: unknown): value is AnyObj {
@@ -76,6 +101,14 @@ export function extractCoachVideoRepetitionSummary(
   return summary && isObject(summary) ? summary : null;
 }
 
+export function extractCoachVideoPhaseSummary(
+  analysisJob: VideoAnalysisJob | null | undefined,
+): CoachVideoPhaseSummary {
+  const results = pickBestCoachVideoResults(analysisJob);
+  const summary = results?.meta?.phase_recognition;
+  return summary && isObject(summary) ? summary : null;
+}
+
 export function extractCoachVideoRepetitions(
   analysisJob: VideoAnalysisJob | null | undefined,
 ): CoachVideoRepetition[] {
@@ -106,6 +139,46 @@ export function extractCoachVideoRepetitions(
         typeof item.insufficient_reason === 'string' ? item.insufficient_reason : null,
     }))
     .filter((item) => item.repetitionId.length > 0)
+    .sort((left, right) => {
+      const leftStart = left.startSeconds ?? Number.MAX_SAFE_INTEGER;
+      const rightStart = right.startSeconds ?? Number.MAX_SAFE_INTEGER;
+      if (leftStart !== rightStart) return leftStart - rightStart;
+      const leftFrame = left.startFrame ?? Number.MAX_SAFE_INTEGER;
+      const rightFrame = right.startFrame ?? Number.MAX_SAFE_INTEGER;
+      return leftFrame - rightFrame;
+    });
+}
+
+export function extractCoachVideoPhases(
+  analysisJob: VideoAnalysisJob | null | undefined,
+): CoachVideoPhase[] {
+  const results = pickBestCoachVideoResults(analysisJob);
+  const rawPhases = results?.v2?.phases;
+  if (!Array.isArray(rawPhases)) return [];
+
+  return rawPhases
+    .map((item) => (isObject(item) ? item : null))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .map((item) => ({
+      phaseId: String(item.phase_id ?? ''),
+      repetitionId: String(item.repetition_id ?? ''),
+      phaseName:
+        typeof item.phase_name === 'string' && item.phase_name.trim().length > 0
+          ? item.phase_name
+          : 'phase',
+      startFrame: toNumber(item.start_frame),
+      endFrame: toNumber(item.end_frame),
+      startSeconds: toNumber(item.start_ts),
+      endSeconds: toNumber(item.end_ts),
+      confidence: toNumber(item.confidence),
+      validityState: typeof item.validity_state === 'string' ? item.validity_state : 'NOT_MEASURABLE',
+      detectionMethod: typeof item.detection_method === 'string' ? item.detection_method : null,
+      requiresObjectEvidence: Boolean(item.requires_object_evidence),
+      limitations: Array.isArray(item.limitations)
+        ? item.limitations.filter((entry): entry is string => typeof entry === 'string')
+        : [],
+    }))
+    .filter((item) => item.phaseId.length > 0 && item.repetitionId.length > 0)
     .sort((left, right) => {
       const leftStart = left.startSeconds ?? Number.MAX_SAFE_INTEGER;
       const rightStart = right.startSeconds ?? Number.MAX_SAFE_INTEGER;

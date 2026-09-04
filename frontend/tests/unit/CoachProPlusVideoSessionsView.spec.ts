@@ -192,6 +192,11 @@ describe('CoachProPlusVideoSessionsView', () => {
             validity_state: 'VALID',
             repetitions_count: 1,
           },
+          phase_recognition: {
+            enabled: true,
+            validity_state: 'LOW_CONFIDENCE',
+            phases_count: 1,
+          },
         },
         v2: {
           repetitions: [
@@ -205,6 +210,21 @@ describe('CoachProPlusVideoSessionsView', () => {
               end_frame: 33,
               segmentation_confidence: 0.84,
               validity_state: 'VALID',
+            },
+          ],
+          phases: [
+            {
+              phase_id: 'rep-1:phase:1',
+              repetition_id: 'rep-1',
+              phase_name: 'contact_proxy_window',
+              start_ts: 0.8,
+              end_ts: 0.9,
+              start_frame: 24,
+              end_frame: 27,
+              confidence: 0.58,
+              validity_state: 'LOW_CONFIDENCE',
+              requires_object_evidence: true,
+              limitations: ['proxy only'],
             },
           ],
         },
@@ -221,5 +241,7 @@ describe('CoachProPlusVideoSessionsView', () => {
     expect(wrapper.text()).toContain('Repetitions')
     expect(wrapper.text()).toContain('Rep 1 — Bowling Delivery')
     expect(wrapper.text()).toContain('Valid')
+    expect(wrapper.text()).toContain('Contact Proxy Window')
+    expect(wrapper.text()).toContain('object evidence')
   })
 })
