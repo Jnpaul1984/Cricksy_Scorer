@@ -3981,7 +3981,7 @@ approved and merged with green CI, with large-scale imports still gated by expli
 
 # ## PHASE 10J — Coaching Analysis Engine V2 / Individual Player Development Upgrade
 
-**Status:** PLANNED — AUDIT AND SPEC LOCK REQUIRED BEFORE IMPLEMENTATION
+**Status:** PHASE 10J.0 COMPLETE — IMPLEMENTATION PENDING USER APPROVAL
 
 ### Objective
 
@@ -4664,37 +4664,24 @@ The audit/spec-lock document must contain:
 
 ---
 
-### Sub-Phase Planning
+### Final Locked Implementation Sub-Phases (Dependency Ordered)
 
-The following areas are provisional planning targets and are **not yet locked implementation tasks**:
+Derived from the Phase 10J.0 repository audit/spec lock:
 
-* Player-centred coaching session workflow
-* Standard V2 metric/evidence contract
-* Repetition/action segmentation
-* Movement phase recognition
-* Batting V2
-* Pace Bowling V2
-* Spin Bowling V2
-* Wicketkeeping V2
-* Fielding V2
-* Metric confidence and sanity validation
-* Strength and consistency engine
-* Longitudinal player progress
-* Goals/intervention integration
-* Coach/player/parent interpretation
-* Coaching Report/PDF V2
-* Full integration/production validation
+* **10J.1 — V2 Contract + Compatibility Foundations** — **PENDING USER APPROVAL**
+* **10J.2 — Player-Centered Session Flow Upgrade** — **PENDING USER APPROVAL**
+* **10J.3 — Repetition Segmentation Backbone** — **PENDING USER APPROVAL**
+* **10J.4 — Phase Recognition Backbone** — **PENDING USER APPROVAL**
+* **10J.5 — Batting V2 Deterministic Metric Pack** — **PENDING USER APPROVAL**
+* **10J.6 — Pace Bowling V2 + Ball-Tracking Integration Hardening** — **PENDING USER APPROVAL**
+* **10J.7 — Spin Bowling V2 Distinct Model** — **PENDING USER APPROVAL**
+* **10J.8 — Wicketkeeping + Fielding V2 Foundations** — **PENDING USER APPROVAL**
+* **10J.9 — Strength + Consistency Engine V2** — **PENDING USER APPROVAL**
+* **10J.10 — Longitudinal Player Progress V2** — **PENDING USER APPROVAL**
+* **10J.11 — Goal/Intervention + Interpretation + PDF V2 Integration** — **PENDING USER APPROVAL**
+* **10J.12 — Hardening, Performance, CI, and Rollout Controls** — **PENDING USER APPROVAL**
 
-Phase 10J.0 must determine the correct number, naming, order, scope, and dependencies of the final implementation sub-phases.
-
-After the audit is approved, update this Phase 10J section with the final locked:
-
-* 10J.1
-* 10J.2
-* 10J.3
-* etc.
-
-Each implementation sub-phase must then receive its own GitHub issue and be executed independently.
+No implementation sub-phase is authorized until explicit user approval.
 
 ---
 
