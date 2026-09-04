@@ -3979,6 +3979,9 @@ approved and merged with green CI, with large-scale imports still gated by expli
 
 ---
 
+# Phase 10 — Coaching Analysis Engine V2 / Individual Player Development Upgrade.
+
+---
 # Phase 11 — Organization Pro + League Operations
 
 ## Purpose
