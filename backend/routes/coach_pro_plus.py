@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import uuid4
 
 import boto3
@@ -46,7 +46,7 @@ from backend.sql_app.models import (
 )
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -177,11 +177,15 @@ class VideoSessionCreate(BaseModel):
     title: str
     player_ids: list[str] = Field(default_factory=list)
     primary_player_id: str | None = None
-    discipline: str | None = None
+    discipline: Literal[
+        "batting", "pace_bowling", "spin_bowling", "wicketkeeping", "fielding"
+    ] | None = None
     coaching_focus: str | None = Field(default=None, max_length=160)
     notes: str | None = None
-    analysis_context: str | None = None  # batting, bowling, wicketkeeping, fielding, mixed
-    camera_view: str | None = None  # side, front, behind, other
+    analysis_context: Literal[
+        "batting", "bowling", "wicketkeeping", "fielding", "mixed"
+    ] | None = None
+    camera_view: Literal["side", "front", "behind", "other"] | None = None
 
     @field_validator("player_ids", mode="before")
     @classmethod
@@ -189,7 +193,7 @@ class VideoSessionCreate(BaseModel):
         if value is None:
             return []
         if not isinstance(value, list):
-            raise ValueError("player_ids must be a list")
+            return value
         normalized: list[str] = []
         for item in value:
             if item is None:
@@ -215,55 +219,6 @@ class VideoSessionCreate(BaseModel):
             trimmed = value.strip()
             return trimmed or None
         return value
-
-    @field_validator("analysis_context")
-    @classmethod
-    def _validate_analysis_context(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        if value not in ALLOWED_ANALYSIS_CONTEXTS:
-            raise ValueError(
-                "analysis_context must be one of: batting, bowling, wicketkeeping, fielding, mixed"
-            )
-        return value
-
-    @field_validator("camera_view")
-    @classmethod
-    def _validate_camera_view(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        if value not in ALLOWED_CAMERA_VIEWS:
-            raise ValueError("camera_view must be one of: side, front, behind, other")
-        return value
-
-    @field_validator("discipline")
-    @classmethod
-    def _validate_discipline(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        if value not in ALLOWED_V2_DISCIPLINES:
-            raise ValueError(
-                "discipline must be one of: batting, pace_bowling, spin_bowling, "
-                "wicketkeeping, fielding"
-            )
-        return value
-
-    @model_validator(mode="after")
-    def _validate_primary_player_constraints(self) -> VideoSessionCreate:
-        if self.discipline and not self.primary_player_id:
-            raise ValueError("primary_player_id is required when discipline is provided")
-
-        if self.primary_player_id and self.primary_player_id not in self.player_ids:
-            self.player_ids = [self.primary_player_id, *self.player_ids]
-
-        if self.discipline and self.analysis_context:
-            expected_context = V2_DISCIPLINE_TO_ANALYSIS_CONTEXT[self.discipline]
-            if self.analysis_context != expected_context:
-                raise ValueError(
-                    "analysis_context "
-                    f"'{self.analysis_context}' does not match discipline '{self.discipline}'"
-                )
-        return self
 
 
 class VideoSessionRead(BaseModel):
@@ -454,6 +409,27 @@ async def create_video_session(
     primary_player_id = session_data.primary_player_id
     if primary_player_id is None and session_data.player_ids:
         primary_player_id = session_data.player_ids[0]
+
+    if session_data.discipline and not primary_player_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="primary_player_id is required when discipline is provided",
+        )
+
+    if primary_player_id and primary_player_id not in session_data.player_ids:
+        session_data.player_ids = [primary_player_id, *session_data.player_ids]
+
+    if session_data.discipline and session_data.analysis_context:
+        expected_context = V2_DISCIPLINE_TO_ANALYSIS_CONTEXT[session_data.discipline]
+        if session_data.analysis_context != expected_context:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "analysis_context "
+                    f"'{session_data.analysis_context}' does not match discipline "
+                    f"'{session_data.discipline}'"
+                ),
+            )
 
     if primary_player_id:
         await _ensure_video_player_access(db, current_user, primary_player_id)
