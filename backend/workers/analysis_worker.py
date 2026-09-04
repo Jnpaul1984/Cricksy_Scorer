@@ -202,7 +202,13 @@ async def _process_job(job_id: str) -> None:
                 include_frames=False,
                 max_width=640,
                 max_seconds=30.0,
-                player_context=None,
+                player_context={
+                    "camera_view": (
+                        video_session.camera_view.value
+                        if getattr(video_session.camera_view, "value", None)
+                        else video_session.camera_view
+                    )
+                },
                 analysis_mode=job.analysis_mode,
             )
 
@@ -318,7 +324,13 @@ async def _process_job(job_id: str) -> None:
                 include_frames=include_frames,
                 max_width=640,
                 max_seconds=None,
-                player_context=None,
+                player_context={
+                    "camera_view": (
+                        video_session.camera_view.value
+                        if getattr(video_session.camera_view, "value", None)
+                        else video_session.camera_view
+                    )
+                },
                 analysis_mode=job.analysis_mode,
             )
 

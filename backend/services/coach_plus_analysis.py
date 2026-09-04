@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, cast
 
+from backend.services.coach_analysis_v2_compatibility import build_analysis_v2_contract
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
@@ -177,6 +178,18 @@ def run_pose_metrics_findings_report(
     # Pass analysis_mode to findings generation
     findings_result = generate_findings(metrics_result, analysis_mode=analysis_mode)
     report_result = cast(dict[str, Any], generate_report_text(findings_result, player_context))
+    v2_contract = build_analysis_v2_contract(
+        discipline=analysis_mode,
+        sample_fps=float(sample_fps),
+        source_video_fps=normalized["video_fps"],
+        camera_view=(
+            str(player_context.get("camera_view"))
+            if isinstance(player_context, dict) and player_context.get("camera_view") is not None
+            else None
+        ),
+        source_model=normalized["model"],
+        metrics_payload=metrics_result,
+    )
 
     frames_out: list[dict[str, Any]] | None = None
     if include_frames:
@@ -204,6 +217,7 @@ def run_pose_metrics_findings_report(
             "analysis_mode": analysis_mode,
             "analysis_mode_used": analysis_mode,  # Explicit confirmation for frontend
         },
+        "v2": v2_contract.model_dump(mode="json"),
     }
 
     return AnalysisArtifacts(results=results, frames=frames_out)
