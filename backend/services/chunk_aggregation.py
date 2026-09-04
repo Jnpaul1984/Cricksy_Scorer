@@ -12,6 +12,8 @@ from typing import Any, cast
 
 import boto3
 from backend.config import settings
+from backend.services.batting_v2_metric_pack import attach_batting_v2_metric_pack
+from backend.services.coach_analysis_v2_compatibility import build_analysis_v2_contract
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
 from backend.services.phase_recognition import attach_phase_recognition
@@ -181,6 +183,20 @@ async def aggregate_chunks_and_finalize(db: AsyncSession, job: VideoAnalysisJob)
     # Generate findings and report
     findings_result = generate_findings(metrics_result, context={"analysis_mode": resolved_mode})
     report_result = cast(dict[str, Any], generate_report_text(findings_result, None))
+    v2_contract = build_analysis_v2_contract(
+        discipline=str(resolved_mode),
+        sample_fps=float(job.sample_fps or settings.SAMPLE_FPS),
+        source_video_fps=30.0,
+        camera_view=(
+            job.session.camera_view.value
+            if job.session and getattr(job.session.camera_view, "value", None)
+            else job.session.camera_view
+            if job.session
+            else None
+        ),
+        source_model="MediaPipe Pose Landmarker Full",
+        metrics_payload=metrics_result,
+    )
 
     # Build final results payload
     final_results = {
@@ -196,6 +212,7 @@ async def aggregate_chunks_and_finalize(db: AsyncSession, job: VideoAnalysisJob)
         "findings": findings_result,
         "report": report_result,
         "analysis_mode_used": resolved_mode,  # NEW: Persist resolved mode
+        "v2": v2_contract.model_dump(mode="json"),
         "meta": {
             "processing_mode": "gpu_chunked",
             "total_chunks": job.total_chunks,
@@ -240,6 +257,21 @@ async def aggregate_chunks_and_finalize(db: AsyncSession, job: VideoAnalysisJob)
             str(job.session.discipline) if job.session and job.session.discipline else None
         ),
         enabled=bool(settings.COACH_PLUS_PHASE_RECOGNITION_ENABLED),
+    )
+    attach_batting_v2_metric_pack(
+        results_payload=final_results,
+        discipline=str(resolved_mode),
+        frames=all_frames,
+        sample_fps=float(job.sample_fps or settings.SAMPLE_FPS),
+        source_video_fps=30.0,
+        camera_view=(
+            job.session.camera_view.value
+            if job.session and getattr(job.session.camera_view, "value", None)
+            else job.session.camera_view
+            if job.session
+            else None
+        ),
+        source_model="MediaPipe Pose Landmarker Full",
     )
 
     # Upload final report to S3

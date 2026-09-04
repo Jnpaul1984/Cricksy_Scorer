@@ -122,6 +122,23 @@ export interface VideoAnalysisResults {
 
   v2?: {
     validity_state?: string;
+    metric_results?: Array<{
+      metric_id: string;
+      metric_version?: string;
+      discipline?: string;
+      repetition_id?: string | null;
+      phase?: string | null;
+      raw_value?: number | null;
+      unit?: string | null;
+      normalized_score?: number | null;
+      classification_status?: string | null;
+      confidence_score?: number | null;
+      validity_state: string;
+      unavailable_reason?: string | null;
+      limitations?: string[];
+      repetition_values?: Array<number | string>;
+      aggregate_stats?: Record<string, unknown> | null;
+    }>;
     repetitions?: Array<{
       repetition_id: string;
       session_id?: string | null;

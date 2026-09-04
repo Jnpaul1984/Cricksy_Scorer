@@ -3981,7 +3981,7 @@ approved and merged with green CI, with large-scale imports still gated by expli
 
 # ## PHASE 10J — Coaching Analysis Engine V2 / Individual Player Development Upgrade
 
-**Status:** PHASE 10J.0-10J.4 COMPLETE — 10J.5+ PENDING USER APPROVAL
+**Status:** PHASE 10J.0-10J.5 COMPLETE — 10J.6+ PENDING USER APPROVAL
 
 ### Objective
 
@@ -4672,7 +4672,7 @@ Derived from the Phase 10J.0 repository audit/spec lock:
 * **10J.2 — Player-Centered Session Flow Upgrade** — **COMPLETE**
 * **10J.3 — Repetition Segmentation Backbone** — **COMPLETE**
 * **10J.4 — Phase Recognition Backbone** — **COMPLETE**
-* **10J.5 — Batting V2 Deterministic Metric Pack** — **PENDING USER APPROVAL**
+* **10J.5 — Batting V2 Deterministic Metric Pack** — **COMPLETE**
 * **10J.6 — Pace Bowling V2 + Ball-Tracking Integration Hardening** — **PENDING USER APPROVAL**
 * **10J.7 — Spin Bowling V2 Distinct Model** — **PENDING USER APPROVAL**
 * **10J.8 — Wicketkeeping + Fielding V2 Foundations** — **PENDING USER APPROVAL**
@@ -4734,7 +4734,7 @@ Phase 10J.0 is complete only when:
 * checklist validation passes
 * no runtime implementation occurred
 
-**Implementation status after Phase 10J.4:** 10J.1-10J.4 COMPLETE; 10J.5+ PENDING USER APPROVAL.
+**Implementation status after Phase 10J.5:** 10J.1-10J.5 COMPLETE; 10J.6+ PENDING USER APPROVAL.
 
 ---
 # Phase 11 — Organization Pro + League Operations
