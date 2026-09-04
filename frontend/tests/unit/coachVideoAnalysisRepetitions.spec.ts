@@ -1,5 +1,7 @@
 import type { VideoAnalysisJob } from '@/services/coachPlusVideoService';
 import {
+  extractCoachVideoPhases,
+  extractCoachVideoPhaseSummary,
   extractCoachVideoRepetitions,
   extractCoachVideoRepetitionSummary,
   getCoachVideoJobFps,
@@ -22,6 +24,11 @@ describe('coachVideoAnalysisRepetitions', () => {
             enabled: true,
             validity_state: 'VALID',
             repetitions_count: 2,
+          },
+          phase_recognition: {
+            enabled: true,
+            validity_state: 'LOW_CONFIDENCE',
+            phases_count: 2,
           },
         },
         v2: {
@@ -47,6 +54,34 @@ describe('coachVideoAnalysisRepetitions', () => {
               validity_state: 'VALID',
             },
           ],
+          phases: [
+            {
+              phase_id: 'rep-1:phase:1',
+              repetition_id: 'rep-1',
+              phase_name: 'setup',
+              start_ts: 0.4,
+              end_ts: 0.6,
+              start_frame: 12,
+              end_frame: 18,
+              confidence: 0.7,
+              validity_state: 'VALID',
+              requires_object_evidence: false,
+              limitations: [],
+            },
+            {
+              phase_id: 'rep-2:phase:1',
+              repetition_id: 'rep-2',
+              phase_name: 'contact_proxy_window',
+              start_ts: 1.7,
+              end_ts: 1.8,
+              start_frame: 51,
+              end_frame: 54,
+              confidence: 0.58,
+              validity_state: 'LOW_CONFIDENCE',
+              requires_object_evidence: true,
+              limitations: ['proxy only'],
+            },
+          ],
         },
       },
       quick_results: {
@@ -62,8 +97,13 @@ describe('coachVideoAnalysisRepetitions', () => {
     expect(repetitions).toHaveLength(2);
     expect(repetitions[0]?.repetitionId).toBe('rep-1');
     expect(repetitions[1]?.repetitionId).toBe('rep-2');
+    const phases = extractCoachVideoPhases(job);
+    expect(phases).toHaveLength(2);
+    expect(phases[0]?.repetitionId).toBe('rep-1');
+    expect(phases[1]?.phaseName).toBe('contact_proxy_window');
     expect(getCoachVideoJobFps(job)).toBe(30);
     expect(extractCoachVideoRepetitionSummary(job)?.repetitions_count).toBe(2);
+    expect(extractCoachVideoPhaseSummary(job)?.phases_count).toBe(2);
   });
 
   it('keeps legacy jobs safe when repetition data is absent', () => {
@@ -86,6 +126,8 @@ describe('coachVideoAnalysisRepetitions', () => {
 
     expect(extractCoachVideoRepetitions(job)).toEqual([]);
     expect(extractCoachVideoRepetitionSummary(job)).toBeNull();
+    expect(extractCoachVideoPhases(job)).toEqual([]);
+    expect(extractCoachVideoPhaseSummary(job)).toBeNull();
     expect(getCoachVideoJobFps(job)).toBeNull();
   });
 });

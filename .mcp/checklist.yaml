@@ -93,13 +93,39 @@
   category: "Phase 10J"
   title: "10J.4 Phase Recognition Backbone"
   description: "Add per-repetition movement-phase recognition contract and baseline detection"
-  status: todo
+  status: done
   confidence: high
   risk_level: high
   acceptance_criteria:
     - "Phases are produced with confidence and camera/fps constraints"
   verification_commands:
-    - "cd backend && pytest tests/ -q"
+    - "cd backend && python -m pytest -q tests/test_phase_recognition.py tests/test_repetition_segmentation.py tests/test_coach_analysis_v2_contracts.py tests/test_coach_pro_features.py -k 'repetition or phase'"
+    - "cd backend && python -m pytest -q tests/test_video_job_recovery.py tests/test_ball_tracking.py tests/test_ball_tracking_integration.py tests/test_health.py tests/test_results_endpoint.py"
+    - "cd frontend && npm run test:unit -- tests/unit/coachVideoAnalysisRepetitions.spec.ts tests/unit/CoachProPlusVideoSessionsView.spec.ts"
+    - "cd frontend && npm run guard:fake-data && npm run type-check && npm run build"
+    - "python scripts/checklist.py status"
+    - "pre-commit run --files backend/services/phase_recognition.py backend/routes/coach_pro_plus.py frontend/src/views/CoachProPlusVideoSessionsView.vue"
+  files_touched:
+    - "backend/domain/coach_analysis_v2_contract.py"
+    - "backend/services/phase_recognition.py"
+    - "backend/services/coach_plus_analysis.py"
+    - "backend/services/chunk_aggregation.py"
+    - "backend/workers/analysis_worker.py"
+    - "backend/routes/coach_pro_plus.py"
+    - "backend/tests/test_phase_recognition.py"
+    - "backend/tests/test_coach_analysis_v2_contracts.py"
+    - "backend/tests/test_coach_pro_features.py"
+    - "frontend/src/services/coachPlusVideoService.ts"
+    - "frontend/src/utils/coachVideoAnalysisRepetitions.ts"
+    - "frontend/src/views/CoachProPlusVideoSessionsView.vue"
+    - "frontend/tests/unit/coachVideoAnalysisRepetitions.spec.ts"
+    - "frontend/tests/unit/CoachProPlusVideoSessionsView.spec.ts"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "copilot"
+  completed_at: "2026-09-04"
+  notes: "CPU-first deterministic/hybrid phase recognition shipped with safe fallback and additive phase retrieval/UI plumbing."
 
 - id: phase10j-5-batting-v2-deterministic-metric-pack
   week: 10

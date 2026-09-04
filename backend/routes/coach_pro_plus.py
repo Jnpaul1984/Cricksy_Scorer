@@ -16,9 +16,10 @@ from uuid import uuid4
 import boto3
 from backend import security
 from backend.config import settings
-from backend.domain.coach_analysis_v2_contract import RepetitionActionRecordV2
+from backend.domain.coach_analysis_v2_contract import PhaseRecordV2, RepetitionActionRecordV2
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
+from backend.services.phase_recognition import extract_phase_recognition
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
 from backend.services.repetition_segmentation import extract_repetition_segmentation
 from backend.services.s3_service import s3_service
@@ -338,6 +339,20 @@ class VideoSessionRepetitionsRead(BaseModel):
     jobs: list[VideoAnalysisJobRepetitionsRead] = Field(default_factory=list)
 
 
+class VideoAnalysisJobPhasesRead(BaseModel):
+    job_id: str
+    session_id: str
+    status: str
+    source: str
+    phases: list[PhaseRecordV2] = Field(default_factory=list)
+    summary: dict[str, Any] | None = None
+
+
+class VideoSessionPhasesRead(BaseModel):
+    session_id: str
+    jobs: list[VideoAnalysisJobPhasesRead] = Field(default_factory=list)
+
+
 class VideoUploadInitiateRequest(BaseModel):
     """Request schema for initiating a video upload"""
 
@@ -561,6 +576,29 @@ def _extract_job_repetitions(
         repetitions, summary = extract_repetition_segmentation(payload)
         if repetitions or summary:
             return (source, repetitions, summary)
+    return ("none", [], None)
+
+
+def _extract_job_phases(
+    job: VideoAnalysisJob,
+) -> tuple[str, list[PhaseRecordV2], dict[str, Any] | None]:
+    candidates = [
+        ("deep_results", job.deep_results),
+        ("quick_results", job.quick_results),
+        (
+            "results.deep",
+            job.results.get("deep") if isinstance(job.results, dict) else None,
+        ),
+        (
+            "results.quick",
+            job.results.get("quick") if isinstance(job.results, dict) else None,
+        ),
+        ("results", job.results),
+    ]
+    for source, payload in candidates:
+        phases, summary = extract_phase_recognition(payload)
+        if phases or summary:
+            return (source, phases, summary)
     return ("none", [], None)
 
 
@@ -1242,6 +1280,93 @@ async def get_session_repetitions(
             )
             for job in jobs
             for source, repetitions, summary in [_extract_job_repetitions(job)]
+        ],
+    )
+
+
+@router.get("/analysis-jobs/{job_id}/phases", response_model=VideoAnalysisJobPhasesRead)
+async def get_analysis_job_phases(
+    job_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> VideoAnalysisJobPhasesRead:
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    result = await db.execute(
+        select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session))
+        .where(VideoAnalysisJob.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+
+    if not _can_access_video_session(current_user, job.session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this job",
+        )
+
+    source, phases, summary = _extract_job_phases(job)
+    return VideoAnalysisJobPhasesRead(
+        job_id=job.id,
+        session_id=job.session_id,
+        status=job.status.value,
+        source=source,
+        phases=phases,
+        summary=summary,
+    )
+
+
+@router.get("/sessions/{session_id}/phases", response_model=VideoSessionPhasesRead)
+async def get_session_phases(
+    session_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> VideoSessionPhasesRead:
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    result = await db.execute(
+        select(VideoSession)
+        .options(selectinload(VideoSession.analysis_jobs))
+        .where(VideoSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Video session not found")
+
+    if not _can_access_video_session(current_user, session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this video session",
+        )
+
+    jobs = sorted(
+        session.analysis_jobs,
+        key=lambda item: item.created_at or item.updated_at or datetime.min.replace(tzinfo=UTC),
+        reverse=True,
+    )
+    return VideoSessionPhasesRead(
+        session_id=session.id,
+        jobs=[
+            VideoAnalysisJobPhasesRead(
+                job_id=job.id,
+                session_id=job.session_id,
+                status=job.status.value,
+                source=source,
+                phases=phases,
+                summary=summary,
+            )
+            for job in jobs
+            for source, phases, summary in [_extract_job_phases(job)]
         ],
     )
 

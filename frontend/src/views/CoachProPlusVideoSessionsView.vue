@@ -677,6 +677,30 @@
                     <div v-if="repetition.insufficientReason" class="status-text">
                       {{ repetition.insufficientReason }}
                     </div>
+                    <div
+                      v-if="phasesForRepetition(repetition.repetitionId).length > 0"
+                      class="phase-list"
+                    >
+                      <div
+                        v-for="phase in phasesForRepetition(repetition.repetitionId)"
+                        :key="phase.phaseId"
+                        class="phase-row"
+                      >
+                        <span>
+                          {{ formatRepetitionAction(phase.phaseName) }}
+                          <span class="evidence-time">
+                            {{ formatPhaseTime(phase) }}
+                          </span>
+                        </span>
+                        <span class="status-text">
+                          {{ formatRepetitionValidity(phase.validityState) }}
+                          <span v-if="phase.confidence !== null">
+                            • {{ formatPercent01(phase.confidence) }}
+                          </span>
+                          <span v-if="phase.requiresObjectEvidence"> • object evidence</span>
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   <button
                     v-if="canSeekToSegment(repetitionSegment(repetition))"
@@ -688,6 +712,15 @@
                   </button>
                 </li>
               </ul>
+              <p
+                v-if="selectedJobPhaseSummary?.validity_state && selectedJobPhases.length === 0"
+                class="status-text"
+              >
+                {{
+                  selectedJobPhaseSummary.insufficient_reason ||
+                  formatRepetitionValidity(selectedJobPhaseSummary.validity_state)
+                }}
+              </p>
             </div>
           </section>
 
@@ -863,9 +896,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
 import { buildCoachNarrative } from '@/utils/coachVideoAnalysisNarrative';
 import {
+  extractCoachVideoPhases,
+  extractCoachVideoPhaseSummary,
   extractCoachVideoRepetitions,
   extractCoachVideoRepetitionSummary,
   getCoachVideoJobFps,
+  type CoachVideoPhase,
   type CoachVideoRepetition,
 } from '@/utils/coachVideoAnalysisRepetitions';
 
@@ -983,6 +1019,8 @@ const selectedJobRepetitions = computed(() => extractCoachVideoRepetitions(selec
 const selectedJobRepetitionSummary = computed(() =>
   extractCoachVideoRepetitionSummary(selectedJob.value),
 );
+const selectedJobPhases = computed(() => extractCoachVideoPhases(selectedJob.value));
+const selectedJobPhaseSummary = computed(() => extractCoachVideoPhaseSummary(selectedJob.value));
 
 watch(
   () => [showResultsModal.value, selectedJob.value?.id, selectedJob.value?.status, videoPreviewUrl.value] as const,
@@ -1777,6 +1815,20 @@ function formatRepetitionTime(repetition: CoachVideoRepetition): string {
   return 'Timing unavailable';
 }
 
+function formatPhaseTime(phase: CoachVideoPhase): string {
+  if (phase.startSeconds !== null && phase.endSeconds !== null) {
+    return `${formatMmSs(phase.startSeconds)}–${formatMmSs(phase.endSeconds)}`;
+  }
+  if (phase.startFrame !== null && phase.endFrame !== null) {
+    return `Frames ${phase.startFrame}–${phase.endFrame}`;
+  }
+  return 'Timing unavailable';
+}
+
+function phasesForRepetition(repetitionId: string): CoachVideoPhase[] {
+  return selectedJobPhases.value.filter((phase) => phase.repetitionId === repetitionId);
+}
+
 function canSeekToMoment(w: { frameNum: number; timeSeconds?: number }): boolean {
   return !!resultsVideoEl.value && momentSeconds(w) != null;
 }
@@ -2486,6 +2538,19 @@ onBeforeUnmount(() => {
 
 .repetition-row:first-child {
   border-top: 0;
+}
+
+.phase-list {
+  margin-top: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.phase-row {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
 }
 
 .timeline-seg-repetition {

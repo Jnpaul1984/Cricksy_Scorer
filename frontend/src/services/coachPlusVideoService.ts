@@ -109,6 +109,15 @@ export interface VideoAnalysisResults {
       repetitions_count?: number;
       insufficient_reason?: string | null;
     };
+    phase_recognition?: {
+      enabled?: boolean;
+      discipline?: string;
+      detection_method?: string;
+      validity_state?: string;
+      phases_count?: number;
+      recognized_repetitions?: number;
+      insufficient_reason?: string | null;
+    };
   };
 
   v2?: {
@@ -130,6 +139,23 @@ export interface VideoAnalysisResults {
       insufficient_reason?: string | null;
       evidence_refs?: Array<{ ref_type: string; ref_id?: string | null; label?: string | null }>;
       metric_refs?: string[];
+    }>;
+    phases?: Array<{
+      phase_id: string;
+      repetition_id: string;
+      phase_name: string;
+      start_ts?: number | null;
+      end_ts?: number | null;
+      start_frame?: number | null;
+      end_frame?: number | null;
+      detection_method?: string | null;
+      confidence?: number | null;
+      requires_object_evidence?: boolean;
+      camera_view_compatibility?: string[];
+      manual_correction_supported?: boolean;
+      validity_state: string;
+      evidence_refs?: Array<{ ref_type: string; ref_id?: string | null; label?: string | null }>;
+      limitations?: string[];
     }>;
   };
 

@@ -416,7 +416,7 @@ async def test_analysis_history_endpoint(client: TestClient):
 
 
 @pytest.mark.asyncio
-async def test_repetition_retrieval_endpoints_are_authorized_and_legacy_safe(
+async def test_repetition_and_phase_retrieval_endpoints_are_authorized_and_legacy_safe(
     client: TestClient,
 ) -> None:
     coach = register_user(client, "coach-repetitions@example.com")
@@ -451,7 +451,16 @@ async def test_repetition_retrieval_endpoints_are_authorized_and_legacy_safe(
                         "segmentation_confidence": 0.84,
                         "repetitions_count": 1,
                         "insufficient_reason": None,
-                    }
+                    },
+                    "phase_recognition": {
+                        "enabled": True,
+                        "discipline": "pace_bowling",
+                        "detection_method": "repetition_relative_heuristic_v1",
+                        "validity_state": "LOW_CONFIDENCE",
+                        "phases_count": 1,
+                        "recognized_repetitions": 1,
+                        "insufficient_reason": None,
+                    },
                 },
                 "v2": {
                     "repetitions": [
@@ -476,7 +485,27 @@ async def test_repetition_retrieval_endpoints_are_authorized_and_legacy_safe(
                             ],
                             "metric_refs": ["head_stability_score"],
                         }
-                    ]
+                    ],
+                    "phases": [
+                        {
+                            "schema_version": "coach_analysis_v2.contract.v1",
+                            "phase_id": "rep-1:phase:1",
+                            "repetition_id": "rep-1",
+                            "phase_name": "approach",
+                            "start_ts": 0.6,
+                            "end_ts": 0.8,
+                            "start_frame": 18,
+                            "end_frame": 24,
+                            "detection_method": "repetition_relative_heuristic_v1",
+                            "confidence": 0.76,
+                            "requires_object_evidence": False,
+                            "camera_view_compatibility": ["side", "front", "behind"],
+                            "manual_correction_supported": False,
+                            "validity_state": "VALID",
+                            "evidence_refs": [{"ref_type": "repetition_window", "ref_id": "rep-1"}],
+                            "limitations": [],
+                        }
+                    ],
                 },
             },
         )
@@ -533,6 +562,27 @@ async def test_repetition_retrieval_endpoints_are_authorized_and_legacy_safe(
     assert legacy_payload["repetitions"] == []
     assert legacy_payload["summary"] is None
 
+    phase_job_resp = client.get(
+        f"/api/coaches/plus/analysis-jobs/{segmented_job_id}/phases",
+        headers=_auth_headers(coach_token),
+    )
+    assert phase_job_resp.status_code == 200, phase_job_resp.text
+    phase_job_payload = phase_job_resp.json()
+    assert phase_job_payload["job_id"] == segmented_job_id
+    assert phase_job_payload["source"] == "deep_results"
+    assert len(phase_job_payload["phases"]) == 1
+    assert phase_job_payload["phases"][0]["phase_name"] == "approach"
+
+    legacy_phase_resp = client.get(
+        f"/api/coaches/plus/analysis-jobs/{legacy_job_id}/phases",
+        headers=_auth_headers(coach_token),
+    )
+    assert legacy_phase_resp.status_code == 200, legacy_phase_resp.text
+    legacy_phase_payload = legacy_phase_resp.json()
+    assert legacy_phase_payload["source"] == "none"
+    assert legacy_phase_payload["phases"] == []
+    assert legacy_phase_payload["summary"] is None
+
     session_repetitions_resp = client.get(
         f"/api/coaches/plus/sessions/{session_id}/repetitions",
         headers=_auth_headers(coach_token),
@@ -543,11 +593,26 @@ async def test_repetition_retrieval_endpoints_are_authorized_and_legacy_safe(
     assert len(session_payload["jobs"]) == 2
     assert {job["job_id"] for job in session_payload["jobs"]} == {segmented_job_id, legacy_job_id}
 
+    session_phases_resp = client.get(
+        f"/api/coaches/plus/sessions/{session_id}/phases",
+        headers=_auth_headers(coach_token),
+    )
+    assert session_phases_resp.status_code == 200, session_phases_resp.text
+    session_phase_payload = session_phases_resp.json()
+    assert session_phase_payload["session_id"] == session_id
+    assert len(session_phase_payload["jobs"]) == 2
+
     forbidden_resp = client.get(
         f"/api/coaches/plus/analysis-jobs/{segmented_job_id}/repetitions",
         headers=_auth_headers(intruder_token),
     )
     assert forbidden_resp.status_code == 403
+
+    forbidden_phase_resp = client.get(
+        f"/api/coaches/plus/analysis-jobs/{segmented_job_id}/phases",
+        headers=_auth_headers(intruder_token),
+    )
+    assert forbidden_phase_resp.status_code == 403
 
 
 @pytest.mark.asyncio

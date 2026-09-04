@@ -19,6 +19,7 @@ from backend.config import settings
 from backend.domain.coach_analysis_v2_contract import RepetitionActionRecordV2
 from backend.services.chunk_aggregation import aggregate_chunks_and_finalize
 from backend.services.coach_plus_analysis import run_pose_metrics_findings_report
+from backend.services.phase_recognition import attach_phase_recognition
 from backend.services.repetition_segmentation import refine_bowling_repetitions_with_ball_tracking
 from backend.sql_app.database import get_engine, get_session_local
 from backend.sql_app.models import VideoAnalysisJob, VideoAnalysisJobStatus, VideoSessionStatus
@@ -209,7 +210,8 @@ async def _process_job(job_id: str) -> None:
                         video_session.camera_view.value
                         if getattr(video_session.camera_view, "value", None)
                         else video_session.camera_view
-                    )
+                    ),
+                    "session_discipline": video_session.discipline,
                 },
                 analysis_mode=job.analysis_mode,
                 session_id=video_session.id,
@@ -333,7 +335,8 @@ async def _process_job(job_id: str) -> None:
                         video_session.camera_view.value
                         if getattr(video_session.camera_view, "value", None)
                         else video_session.camera_view
-                    )
+                    ),
+                    "session_discipline": video_session.discipline,
                 },
                 analysis_mode=job.analysis_mode,
                 session_id=video_session.id,
@@ -464,6 +467,24 @@ async def _process_job(job_id: str) -> None:
                                     if confidences
                                     else 0.0
                                 )
+                    attach_phase_recognition(
+                        results_payload=deep_payload,
+                        discipline=job.analysis_mode,
+                        sample_fps=deep_fps,
+                        source_video_fps=float(
+                            (deep_payload.get("pose_summary") or {}).get("video_fps") or 30.0
+                        ),
+                        camera_view=(
+                            video_session.camera_view.value
+                            if getattr(video_session.camera_view, "value", None)
+                            else video_session.camera_view
+                        ),
+                        session_discipline=(
+                            str(video_session.discipline) if video_session.discipline else None
+                        ),
+                        ball_tracking=ball_tracking_payload,
+                        enabled=bool(settings.COACH_PLUS_PHASE_RECOGNITION_ENABLED),
+                    )
 
                 except Exception as e:
                     logger.warning(
