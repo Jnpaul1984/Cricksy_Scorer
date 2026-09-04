@@ -416,7 +416,9 @@ async def test_analysis_history_endpoint(client: TestClient):
 
 
 @pytest.mark.asyncio
-async def test_repetition_retrieval_endpoints_are_authorized_and_legacy_safe(client: TestClient) -> None:
+async def test_repetition_retrieval_endpoints_are_authorized_and_legacy_safe(
+    client: TestClient,
+) -> None:
     coach = register_user(client, "coach-repetitions@example.com")
     intruder = register_user(client, "coach-repetitions-intruder@example.com")
     await set_role(client, coach["email"], models.RoleEnum.coach_pro_plus)
@@ -469,7 +471,9 @@ async def test_repetition_retrieval_endpoints_are_authorized_and_legacy_safe(cli
                             "manual_override": False,
                             "validity_state": "VALID",
                             "insufficient_reason": None,
-                            "evidence_refs": [{"ref_type": "ball_tracking", "label": "release_to_bounce"}],
+                            "evidence_refs": [
+                                {"ref_type": "ball_tracking", "label": "release_to_bounce"}
+                            ],
                             "metric_refs": ["head_stability_score"],
                         }
                     ]
@@ -494,7 +498,11 @@ async def test_repetition_retrieval_endpoints_are_authorized_and_legacy_safe(cli
                 **((segmented_job.deep_results or {}).get("v2", {})),
                 "repetitions": [
                     {
-                        **((segmented_job.deep_results or {}).get("v2", {}).get("repetitions", [{}])[0]),
+                        **(
+                            (segmented_job.deep_results or {})
+                            .get("v2", {})
+                            .get("repetitions", [{}])[0]
+                        ),
                         "job_id": segmented_job.id,
                     }
                 ],

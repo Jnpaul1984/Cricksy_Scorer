@@ -4,7 +4,11 @@ import math
 from statistics import median
 from typing import Any
 
-from backend.domain.coach_analysis_v2_contract import EvidenceRef, RepetitionActionRecordV2, ValidityState
+from backend.domain.coach_analysis_v2_contract import (
+    EvidenceRef,
+    RepetitionActionRecordV2,
+    ValidityState,
+)
 
 _GENERIC_ACTION_TYPES = {
     "batting": "batting_shot",
@@ -241,7 +245,9 @@ def segment_repetitions(
         )
         return ([], summary)
 
-    detected_frames = [frame for frame in sampled_frames if frame["detected"] and frame["keypoints"]]
+    detected_frames = [
+        frame for frame in sampled_frames if frame["detected"] and frame["keypoints"]
+    ]
     if len(detected_frames) < 2:
         summary.update(
             {
@@ -294,7 +300,9 @@ def segment_repetitions(
         return ([], summary)
 
     confidences = [
-        rep.segmentation_confidence for rep in repetitions if rep.segmentation_confidence is not None
+        rep.segmentation_confidence
+        for rep in repetitions
+        if rep.segmentation_confidence is not None
     ]
     summary.update(
         {
@@ -346,7 +354,10 @@ def refine_bowling_repetitions_with_ball_tracking(
             end_frame=bounce_frame,
             segmentation_method="ball_tracking_assist_v1",
             segmentation_confidence=round(
-                min(0.95, max(0.6, (_safe_float(trajectory.get("detection_rate"), scale=100.0) or 0.6))),
+                min(
+                    0.95,
+                    max(0.6, (_safe_float(trajectory.get("detection_rate"), scale=100.0) or 0.6)),
+                ),
                 3,
             ),
             validity_state=ValidityState.VALID,
@@ -374,7 +385,9 @@ def refine_bowling_repetitions_with_ball_tracking(
                 update={
                     "start_ts": round(start_ts, 3),
                     "end_ts": round(end_ts, 3),
-                    "start_frame": release_frame if release_frame is not None else repetition.start_frame,
+                    "start_frame": release_frame
+                    if release_frame is not None
+                    else repetition.start_frame,
                     "end_frame": bounce_frame if bounce_frame is not None else repetition.end_frame,
                     "segmentation_method": "pose_motion_ball_hybrid_v1",
                     "segmentation_confidence": round(min(0.98, confidence + 0.08), 3),
@@ -428,12 +441,15 @@ def _build_repetition_records(
             continue
 
         coverage = (
-            len([frame for frame in full_window_frames if frame["detected"]]) / len(full_window_frames)
+            len([frame for frame in full_window_frames if frame["detected"]])
+            / len(full_window_frames)
             if full_window_frames
             else 0.0
         )
         peak_motion = max(motion_scores[start_idx : end_idx + 1], default=0.0)
-        duration_fit = 1.0 - min(1.0, abs(duration - ((min_duration + max_duration) / 2.0)) / max_duration)
+        duration_fit = 1.0 - min(
+            1.0, abs(duration - ((min_duration + max_duration) / 2.0)) / max_duration
+        )
         motion_fit = min(1.0, peak_motion / max(threshold * 2.0, 0.001))
         confidence = round(
             max(0.0, min(1.0, coverage * 0.45 + motion_fit * 0.4 + duration_fit * 0.15)),
@@ -442,7 +458,10 @@ def _build_repetition_records(
 
         subtype, subtype_confidence = _infer_action_type(discipline, detected_window_frames)
         action_type = subtype if subtype_confidence >= 0.72 else _GENERIC_ACTION_TYPES[discipline]
-        confidence = round(min(1.0, max(confidence, subtype_confidence if action_type == subtype else confidence)), 3)
+        confidence = round(
+            min(1.0, max(confidence, subtype_confidence if action_type == subtype else confidence)),
+            3,
+        )
 
         validity_state = ValidityState.VALID
         insufficient_reason = None
@@ -524,7 +543,9 @@ def _build_candidate_windows(
             continue
         current_end = idx - inactive_run
         if current_end - current_start + 1 >= min_active_len:
-            windows.append((max(0, current_start - padding), min(len(active) - 1, current_end + padding)))
+            windows.append(
+                (max(0, current_start - padding), min(len(active) - 1, current_end + padding))
+            )
         current_start = None
         inactive_run = 0
 
@@ -568,7 +589,7 @@ def _compute_motion_scores(
 ) -> list[float]:
     joints = _JOINTS_BY_DISCIPLINE[discipline]
     scores: list[float] = [0.0]
-    for current, previous in zip(detected_frames[1:], detected_frames[:-1]):
+    for current, previous in zip(detected_frames[1:], detected_frames[:-1], strict=False):
         dt = float(current["timestamp"]) - float(previous["timestamp"])
         if dt <= 0:
             scores.append(0.0)
@@ -580,7 +601,9 @@ def _compute_motion_scores(
             if current_point is None or previous_point is None:
                 continue
             distances.append(
-                math.dist((current_point[0], current_point[1]), (previous_point[0], previous_point[1]))
+                math.dist(
+                    (current_point[0], current_point[1]), (previous_point[0], previous_point[1])
+                )
             )
         if not distances:
             scores.append(0.0)
@@ -644,11 +667,7 @@ def _infer_action_type(
 
     if left_shoulder_end is not None or right_shoulder_end is not None:
         shoulder_height = _mean(
-            [
-                point[1]
-                for point in (left_shoulder_end, right_shoulder_end)
-                if point is not None
-            ]
+            [point[1] for point in (left_shoulder_end, right_shoulder_end) if point is not None]
         )
     else:
         shoulder_height = None

@@ -225,7 +225,10 @@ def run_pose_metrics_findings_report(
     }
 
     frames_for_segmentation = (
-        pose_data.get("frames") or pose_data.get("frames_data") or pose_data.get("pose_frames") or []
+        pose_data.get("frames")
+        or pose_data.get("frames_data")
+        or pose_data.get("pose_frames")
+        or []
     )
     metric_refs = [
         str(metric_id)

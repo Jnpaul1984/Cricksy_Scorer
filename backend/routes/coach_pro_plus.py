@@ -179,14 +179,14 @@ class VideoSessionCreate(BaseModel):
     title: str
     player_ids: list[str] = Field(default_factory=list)
     primary_player_id: str | None = None
-    discipline: Literal[
-        "batting", "pace_bowling", "spin_bowling", "wicketkeeping", "fielding"
-    ] | None = None
+    discipline: (
+        Literal["batting", "pace_bowling", "spin_bowling", "wicketkeeping", "fielding"] | None
+    ) = None
     coaching_focus: str | None = Field(default=None, max_length=160)
     notes: str | None = None
-    analysis_context: Literal[
-        "batting", "bowling", "wicketkeeping", "fielding", "mixed"
-    ] | None = None
+    analysis_context: Literal["batting", "bowling", "wicketkeeping", "fielding", "mixed"] | None = (
+        None
+    )
     camera_view: Literal["side", "front", "behind", "other"] | None = None
 
     @field_validator("player_ids", mode="before")
@@ -541,7 +541,9 @@ def _build_session_history_metadata(session: VideoSession) -> dict[str, Any]:
     }
 
 
-def _extract_job_repetitions(job: VideoAnalysisJob) -> tuple[str, list[RepetitionActionRecordV2], dict[str, Any] | None]:
+def _extract_job_repetitions(
+    job: VideoAnalysisJob,
+) -> tuple[str, list[RepetitionActionRecordV2], dict[str, Any] | None]:
     candidates = [
         ("deep_results", job.deep_results),
         ("quick_results", job.quick_results),

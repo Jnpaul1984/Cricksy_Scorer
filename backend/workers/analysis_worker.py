@@ -425,20 +425,25 @@ async def _process_job(job_id: str) -> None:
                                     )
                                 except Exception:
                                     logger.warning(
-                                        "Skipping invalid repetition payload during ball-tracking refinement"
+                                        (
+                                            "Skipping invalid repetition payload during "
+                                            "ball-tracking refinement"
+                                        )
                                     )
-                        repetitions, used_ball_tracking = refine_bowling_repetitions_with_ball_tracking(
-                            repetitions=parsed_repetitions,
-                            ball_tracking=ball_tracking_payload,
-                            job_id=job.id,
-                            session_id=video_session.id,
-                            metric_refs=[
-                                str(metric_id)
-                                for metric_id, raw_metric in deep_payload.get("metrics", {})
-                                .get("metrics", {})
-                                .items()
-                                if isinstance(raw_metric, dict)
-                            ],
+                        repetitions, used_ball_tracking = (
+                            refine_bowling_repetitions_with_ball_tracking(
+                                repetitions=parsed_repetitions,
+                                ball_tracking=ball_tracking_payload,
+                                job_id=job.id,
+                                session_id=video_session.id,
+                                metric_refs=[
+                                    str(metric_id)
+                                    for metric_id, raw_metric in deep_payload.get("metrics", {})
+                                    .get("metrics", {})
+                                    .items()
+                                    if isinstance(raw_metric, dict)
+                                ],
+                            )
                         )
                         if used_ball_tracking:
                             v2_payload["repetitions"] = [
@@ -454,9 +459,11 @@ async def _process_job(job_id: str) -> None:
                                     for rep in repetitions
                                     if rep.segmentation_confidence is not None
                                 ]
-                                segmentation_meta["segmentation_confidence"] = round(
-                                    sum(confidences) / len(confidences), 3
-                                ) if confidences else 0.0
+                                segmentation_meta["segmentation_confidence"] = (
+                                    round(sum(confidences) / len(confidences), 3)
+                                    if confidences
+                                    else 0.0
+                                )
 
                 except Exception as e:
                     logger.warning(

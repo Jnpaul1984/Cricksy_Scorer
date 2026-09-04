@@ -101,7 +101,9 @@ def test_segment_repetitions_returns_insufficient_result_for_low_motion_input() 
     assert "Insufficient motion/action evidence" in str(summary["insufficient_reason"])
 
 
-def test_segment_repetitions_falls_back_to_generic_fielding_type_when_subtype_is_uncertain() -> None:
+def test_segment_repetitions_falls_back_to_generic_fielding_type_when_subtype_is_uncertain() -> (
+    None
+):
     frames = [
         _frame(0, 0.0, (0.40, 0.62), (0.60, 0.60)),
         _frame(1, 0.1, (0.42, 0.61), (0.64, 0.56)),
@@ -170,7 +172,9 @@ def test_attach_repetition_segmentation_serializes_summary_and_records() -> None
     assert repetition["metric_refs"] == ["head_stability_score"]
 
 
-def test_refine_bowling_repetitions_with_ball_tracking_handles_missing_tracking_gracefully() -> None:
+def test_refine_bowling_repetitions_with_ball_tracking_handles_missing_tracking_gracefully() -> (
+    None
+):
     repetitions, _ = segment_repetitions(
         discipline="bowling",
         frames=[
