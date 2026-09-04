@@ -445,3 +445,59 @@ def test_run_pose_metrics_findings_report_embeds_v2_contract_without_breaking_le
     assert payload["v2"]["repetitions"]
     assert payload["v2"]["repetitions"][0]["job_id"] == "job-1"
     assert payload["meta"]["repetition_segmentation"]["repetitions_count"] >= 1
+
+
+def test_run_pose_metrics_findings_report_adds_batting_v2_metric_pack() -> None:
+    with patch("backend.services.pose_service.extract_pose_keypoints_from_video") as mock_extract:
+        mock_extract.return_value = {
+            "frames": [
+                {
+                    "frame_id": index,
+                    "t": index / 10,
+                    "detected": True,
+                    "keypoints": {
+                        "nose": [0.5 + (0.01 if index in {2, 3} else 0.0), 0.5, 0.9],
+                        "left_shoulder": [0.42, 0.6, 0.9],
+                        "right_shoulder": [0.58, 0.6, 0.9],
+                        "left_hip": [0.45, 0.8, 0.9],
+                        "right_hip": [0.55, 0.8, 0.9],
+                        "left_knee": [0.45, 1.0, 0.9],
+                        "right_knee": [0.55, 1.0, 0.9],
+                        "left_ankle": [0.42, 1.2, 0.9],
+                        "right_ankle": [0.58, 1.2, 0.9],
+                        "left_elbow": [0.40 + (0.01 * index), 0.7, 0.9],
+                        "right_elbow": [0.60 + (0.01 * index), 0.7, 0.9],
+                        "left_wrist": [0.38 + (0.01 * index), 0.78, 0.9],
+                        "right_wrist": [0.62 + (0.01 * index), 0.78, 0.9],
+                    },
+                }
+                for index in range(12)
+            ],
+            "total_frames": 12,
+            "sampled_frames": 12,
+            "frames_with_pose": 12,
+            "detection_rate_percent": 100.0,
+            "video_fps": 30.0,
+            "model": "MediaPipe Pose Landmarker Full",
+        }
+
+        result = run_pose_metrics_findings_report(
+            video_path="dummy.mp4",
+            sample_fps=10,
+            include_frames=False,
+            player_context={"camera_view": "side"},
+            analysis_mode="batting",
+            session_id="session-1",
+            job_id="job-1",
+        )
+
+    payload = result.results
+    batting_v2_metrics = [
+        metric
+        for metric in payload["v2"]["metric_results"]
+        if isinstance(metric, dict) and str(metric.get("metric_id", "")).startswith("batting_")
+    ]
+    assert len(batting_v2_metrics) == 6
+    assert payload["meta"]["batting_v2_metric_pack"]["metrics_count"] == 6
+    assert "batting_v2" in payload["findings"]
+    assert "batting_v2" in payload["report"]

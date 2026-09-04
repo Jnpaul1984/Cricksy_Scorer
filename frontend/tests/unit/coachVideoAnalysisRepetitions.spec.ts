@@ -1,5 +1,6 @@
 import type { VideoAnalysisJob } from '@/services/coachPlusVideoService';
 import {
+  extractCoachVideoBattingMetrics,
   extractCoachVideoPhases,
   extractCoachVideoPhaseSummary,
   extractCoachVideoRepetitions,
@@ -32,6 +33,24 @@ describe('coachVideoAnalysisRepetitions', () => {
           },
         },
         v2: {
+          metric_results: [
+            {
+              metric_id: 'batting_setup_stance_width_ratio',
+              phase: 'setup',
+              raw_value: 1.1,
+              unit: 'ratio',
+              confidence_score: 0.8,
+              classification_status: 'STRONG',
+              validity_state: 'VALID',
+              repetition_values: [1.0, 1.2],
+            },
+            {
+              metric_id: 'head_stability_score',
+              raw_value: 0.75,
+              unit: 'score',
+              validity_state: 'VALID',
+            },
+          ],
           repetitions: [
             {
               repetition_id: 'rep-2',
@@ -104,6 +123,10 @@ describe('coachVideoAnalysisRepetitions', () => {
     expect(getCoachVideoJobFps(job)).toBe(30);
     expect(extractCoachVideoRepetitionSummary(job)?.repetitions_count).toBe(2);
     expect(extractCoachVideoPhaseSummary(job)?.phases_count).toBe(2);
+    const battingMetrics = extractCoachVideoBattingMetrics(job);
+    expect(battingMetrics).toHaveLength(1);
+    expect(battingMetrics[0]?.metricId).toBe('batting_setup_stance_width_ratio');
+    expect(battingMetrics[0]?.repetitionValues).toEqual([1.0, 1.2]);
   });
 
   it('keeps legacy jobs safe when repetition data is absent', () => {

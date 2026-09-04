@@ -49,6 +49,19 @@ export type CoachVideoPhaseSummary = {
   insufficient_reason?: string | null;
 } | null;
 
+export type CoachVideoBattingMetric = {
+  metricId: string;
+  phase: string | null;
+  rawValue: number | null;
+  unit: string | null;
+  confidenceScore: number | null;
+  validityState: string;
+  classificationStatus: string | null;
+  unavailableReason: string | null;
+  limitations: string[];
+  repetitionValues: number[];
+};
+
 type AnyObj = Record<string, unknown>;
 
 function isObject(value: unknown): value is AnyObj {
@@ -187,4 +200,36 @@ export function extractCoachVideoPhases(
       const rightFrame = right.startFrame ?? Number.MAX_SAFE_INTEGER;
       return leftFrame - rightFrame;
     });
+}
+
+export function extractCoachVideoBattingMetrics(
+  analysisJob: VideoAnalysisJob | null | undefined,
+): CoachVideoBattingMetric[] {
+  const results = pickBestCoachVideoResults(analysisJob);
+  const rawMetricResults = results?.v2?.metric_results;
+  if (!Array.isArray(rawMetricResults)) return [];
+
+  return rawMetricResults
+    .map((item) => (isObject(item) ? item : null))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .filter((item) => typeof item.metric_id === 'string' && item.metric_id.startsWith('batting_'))
+    .map((item) => ({
+      metricId: String(item.metric_id),
+      phase: typeof item.phase === 'string' ? item.phase : null,
+      rawValue: toNumber(item.raw_value),
+      unit: typeof item.unit === 'string' ? item.unit : null,
+      confidenceScore: toNumber(item.confidence_score),
+      validityState: typeof item.validity_state === 'string' ? item.validity_state : 'NOT_MEASURABLE',
+      classificationStatus:
+        typeof item.classification_status === 'string' ? item.classification_status : null,
+      unavailableReason:
+        typeof item.unavailable_reason === 'string' ? item.unavailable_reason : null,
+      limitations: Array.isArray(item.limitations)
+        ? item.limitations.filter((entry): entry is string => typeof entry === 'string')
+        : [],
+      repetitionValues: Array.isArray(item.repetition_values)
+        ? item.repetition_values.map((value) => toNumber(value)).filter((value): value is number => value !== null)
+        : [],
+    }))
+    .sort((left, right) => left.metricId.localeCompare(right.metricId));
 }
