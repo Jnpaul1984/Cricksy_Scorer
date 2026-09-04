@@ -59,7 +59,7 @@
   category: "Phase 10J"
   title: "10J.2 Player-Centered Session Flow Upgrade"
   description: "Upgrade session creation to validated player-centered workflow"
-  status: todo
+  status: done
   confidence: high
   risk_level: medium
   acceptance_criteria:
@@ -68,19 +68,25 @@
   verification_commands:
     - "cd backend && pytest tests/ -q"
     - "cd frontend && npm run test:unit"
+  completed_by: "copilot"
+  completed_at: "2026-09-04"
+  notes: "Player-centered Coach Pro Plus session flow shipped in the merged Phase 10J.2 implementation."
 
 - id: phase10j-3-repetition-segmentation-backbone
   week: 10
   category: "Phase 10J"
   title: "10J.3 Repetition Segmentation Backbone"
   description: "Add deterministic repetition/action segmentation infrastructure"
-  status: todo
+  status: done
   confidence: high
   risk_level: high
   acceptance_criteria:
     - "Repetitions are produced with confidence and validity state"
   verification_commands:
     - "cd backend && pytest tests/ -q"
+  completed_by: "copilot"
+  completed_at: "2026-09-04"
+  notes: "Implemented additive V2 repetition segmentation, retrieval endpoints, and minimal review UI without a database migration."
 
 - id: phase10j-4-phase-recognition-backbone
   week: 10
