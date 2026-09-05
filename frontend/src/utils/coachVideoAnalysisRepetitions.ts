@@ -61,9 +61,59 @@ export type CoachVideoV2Metric = {
   unavailableReason: string | null;
   limitations: string[];
   repetitionValues: number[];
+  consistency: {
+    status: string | null;
+    method: string | null;
+    classification: string | null;
+    value: number | null;
+    validSampleCount: number | null;
+    excludedRepetitionCount: number | null;
+    limitations: string[];
+  } | null;
 };
 
 export type CoachVideoBattingMetric = CoachVideoV2Metric;
+
+export type CoachVideoSessionSignal = {
+  metricId: string;
+  discipline: string | null;
+  phase: string | null;
+  severity: string | null;
+  confidenceScore: number | null;
+  validSampleCount: number | null;
+  summary: string;
+  supportingRepetitionIds: string[];
+  limitations: string[];
+};
+
+export type CoachVideoConsistencyObservation = {
+  metricId: string;
+  discipline: string | null;
+  phase: string | null;
+  method: string | null;
+  classification: string | null;
+  value: number | null;
+  confidenceScore: number | null;
+  validSampleCount: number | null;
+  excludedRepetitionCount: number | null;
+  limitations: string[];
+};
+
+export type CoachVideoRepetitionSelection = {
+  available: boolean;
+  repetitionId: string | null;
+  rationale: string | null;
+  confidenceScore: number | null;
+  supportingMetrics: string[];
+};
+
+export type CoachVideoSessionAnalysis = {
+  strengths: CoachVideoSessionSignal[];
+  recurringConcerns: CoachVideoSessionSignal[];
+  consistencyObservations: CoachVideoConsistencyObservation[];
+  bestRepetition: CoachVideoRepetitionSelection | null;
+  needsWorkRepetition: CoachVideoRepetitionSelection | null;
+};
 
 type AnyObj = Record<string, unknown>;
 
@@ -78,6 +128,10 @@ function asResults(value: unknown): VideoAnalysisResults | null {
 function toNumber(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
 export function pickBestCoachVideoResults(
@@ -240,6 +294,18 @@ export function extractCoachVideoDisciplineV2Metrics(
       repetitionValues: Array.isArray(item.repetition_values)
         ? item.repetition_values.map((value) => toNumber(value)).filter((value): value is number => value !== null)
         : [],
+      consistency: isObject(item.consistency)
+        ? {
+            status: typeof item.consistency.status === 'string' ? item.consistency.status : null,
+            method: typeof item.consistency.method === 'string' ? item.consistency.method : null,
+            classification:
+              typeof item.consistency.classification === 'string' ? item.consistency.classification : null,
+            value: toNumber(item.consistency.value),
+            validSampleCount: toNumber(item.consistency.valid_sample_count),
+            excludedRepetitionCount: toNumber(item.consistency.excluded_repetition_count),
+            limitations: toStringArray(item.consistency.limitations),
+          }
+        : null,
     }))
     .sort((left, right) => left.metricId.localeCompare(right.metricId));
 }
@@ -250,4 +316,78 @@ export function extractCoachVideoBattingMetrics(
   return extractCoachVideoDisciplineV2Metrics(analysisJob).filter((item) =>
     item.metricId.startsWith('batting_'),
   );
+}
+
+export function extractCoachVideoSessionAnalysis(
+  analysisJob: VideoAnalysisJob | null | undefined,
+): CoachVideoSessionAnalysis | null {
+  const results = pickBestCoachVideoResults(analysisJob);
+  const source =
+    (isObject(results?.findings) && isObject(results?.findings['v2_session_analysis'])
+      ? results?.findings['v2_session_analysis']
+      : null) ??
+    (isObject(results?.report) && isObject(results?.report['v2_session_analysis'])
+      ? results?.report['v2_session_analysis']
+      : null);
+  if (!isObject(source)) return null;
+
+  const mapSignal = (item: unknown): CoachVideoSessionSignal | null => {
+    if (!isObject(item)) return null;
+    return {
+      metricId: typeof item.metric_id === 'string' ? item.metric_id : '',
+      discipline: typeof item.discipline === 'string' ? item.discipline : null,
+      phase: typeof item.phase === 'string' ? item.phase : null,
+      severity: typeof item.severity === 'string' ? item.severity : null,
+      confidenceScore: toNumber(item.confidence_score),
+      validSampleCount: toNumber(item.valid_sample_count),
+      summary: typeof item.summary === 'string' ? item.summary : '',
+      supportingRepetitionIds: toStringArray(item.supporting_repetition_ids),
+      limitations: toStringArray(item.limitations),
+    };
+  };
+
+  const mapObservation = (item: unknown): CoachVideoConsistencyObservation | null => {
+    if (!isObject(item)) return null;
+    return {
+      metricId: typeof item.metric_id === 'string' ? item.metric_id : '',
+      discipline: typeof item.discipline === 'string' ? item.discipline : null,
+      phase: typeof item.phase === 'string' ? item.phase : null,
+      method: typeof item.method === 'string' ? item.method : null,
+      classification: typeof item.classification === 'string' ? item.classification : null,
+      value: toNumber(item.value),
+      confidenceScore: toNumber(item.confidence_score),
+      validSampleCount: toNumber(item.valid_sample_count),
+      excludedRepetitionCount: toNumber(item.excluded_repetition_count),
+      limitations: toStringArray(item.limitations),
+    };
+  };
+
+  const mapSelection = (item: unknown): CoachVideoRepetitionSelection | null => {
+    if (!isObject(item)) return null;
+    return {
+      available: Boolean(item.available),
+      repetitionId: typeof item.repetition_id === 'string' ? item.repetition_id : null,
+      rationale: typeof item.rationale === 'string' ? item.rationale : typeof item.reason === 'string' ? item.reason : null,
+      confidenceScore: toNumber(item.confidence_score),
+      supportingMetrics: toStringArray(item.supporting_metrics),
+    };
+  };
+
+  return {
+    strengths: Array.isArray(source.strengths)
+      ? source.strengths.map(mapSignal).filter((item): item is CoachVideoSessionSignal => Boolean(item?.metricId))
+      : [],
+    recurringConcerns: Array.isArray(source.recurring_concerns)
+      ? source.recurring_concerns
+          .map(mapSignal)
+          .filter((item): item is CoachVideoSessionSignal => Boolean(item?.metricId))
+      : [],
+    consistencyObservations: Array.isArray(source.consistency_observations)
+      ? source.consistency_observations
+          .map(mapObservation)
+          .filter((item): item is CoachVideoConsistencyObservation => Boolean(item?.metricId))
+      : [],
+    bestRepetition: mapSelection(source.best_repetition),
+    needsWorkRepetition: mapSelection(source.needs_work_repetition),
+  };
 }

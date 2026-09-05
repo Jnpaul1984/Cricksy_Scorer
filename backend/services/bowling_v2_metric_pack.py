@@ -22,6 +22,7 @@ from backend.services.coach_analysis_v2_compatibility import (
     resolve_metric_unavailability,
     sanitize_metric_output,
 )
+from backend.services.coach_strength_consistency import build_metric_consistency
 
 _BOWLING_V2_METRIC_VERSION = "bowling_pose_metrics.v2.0.0"
 _PACE_BOWLING_METRIC_IDS = {
@@ -234,6 +235,12 @@ def _build_pace_metric_results(
 ) -> list[CoachingMetricResultV2]:
     repetitions_available = bool(repetitions)
     phases_available = bool(phase_lookup)
+    candidate_repetition_count = sum(
+        1
+        for repetition in repetitions
+        if str(repetition.action_type or "").strip().lower() == "bowling_delivery"
+        and has_measurable_validity_state(repetition.validity_state)
+    )
     return [
         _build_metric_result(
             metric_id="pace_bowling_approach_head_stability_score",
@@ -263,6 +270,7 @@ def _build_pace_metric_results(
             limitations=["Head stability score is a pose-only movement proxy over the approach."],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="pace_bowling_gather_balance_drift_ratio",
@@ -294,6 +302,7 @@ def _build_pace_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="pace_bowling_front_foot_contact_front_knee_angle_deg",
@@ -329,6 +338,7 @@ def _build_pace_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="pace_bowling_release_proxy_bowling_arm_angle_deg",
@@ -361,6 +371,7 @@ def _build_pace_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="pace_bowling_release_proxy_trunk_lean_deg",
@@ -396,6 +407,7 @@ def _build_pace_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="pace_bowling_follow_through_balance_drift_ratio",
@@ -427,6 +439,7 @@ def _build_pace_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
     ]
 
@@ -443,6 +456,12 @@ def _build_spin_metric_results(
 ) -> list[CoachingMetricResultV2]:
     repetitions_available = bool(repetitions)
     phases_available = bool(phase_lookup)
+    candidate_repetition_count = sum(
+        1
+        for repetition in repetitions
+        if str(repetition.action_type or "").strip().lower() == "bowling_delivery"
+        and has_measurable_validity_state(repetition.validity_state)
+    )
     return [
         _build_metric_result(
             metric_id="spin_bowling_approach_head_stability_score",
@@ -472,6 +491,7 @@ def _build_spin_metric_results(
             limitations=["Head stability score is a pose-only movement proxy over the approach."],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="spin_bowling_coil_balance_drift_ratio",
@@ -503,6 +523,7 @@ def _build_spin_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="spin_bowling_pivot_shoulder_hip_separation_deg",
@@ -538,6 +559,7 @@ def _build_spin_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="spin_bowling_delivery_stride_head_base_offset_ratio",
@@ -569,6 +591,7 @@ def _build_spin_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="spin_bowling_release_proxy_bowling_arm_angle_deg",
@@ -601,6 +624,7 @@ def _build_spin_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="spin_bowling_follow_through_balance_drift_ratio",
@@ -632,6 +656,7 @@ def _build_spin_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
     ]
 
@@ -653,6 +678,7 @@ def _build_metric_result(
     limitations: list[str],
     repetitions_available: bool = True,
     phases_available: bool = True,
+    candidate_repetition_count: int | None = None,
     unavailable_hint: str | None = None,
 ) -> CoachingMetricResultV2:
     values = [sample.value for sample in samples]
@@ -698,13 +724,24 @@ def _build_metric_result(
     )
     aggregate_stats = _aggregate_stats(
         values,
-        len(samples),
+        candidate_repetition_count or len(samples),
         measurable=has_measurable_validity_state(validity_state),
     )
     classification_status = (
         classification_fn(safe_raw_value)
         if safe_raw_value is not None and has_measurable_validity_state(validity_state)
         else None
+    )
+    consistency = build_metric_consistency(
+        metric_id=metric_id,
+        unit=unit,
+        samples=samples,
+        valid_range=valid_range,
+        classification_fn=classification_fn,
+        validity_state=validity_state,
+        confidence_score=avg_confidence,
+        candidate_repetition_count=candidate_repetition_count,
+        unavailable_reason=unavailable_reason,
     )
     metric_limitations = list(limitations)
     if validity_state != ValidityState.VALID:
@@ -732,6 +769,7 @@ def _build_metric_result(
         frame_refs=_frame_refs(samples),
         repetition_values=safe_repetition_values,
         aggregate_stats=aggregate_stats,
+        consistency=consistency,
     )
 
 

@@ -17,6 +17,7 @@ from backend.services.bowling_v2_metric_pack import attach_bowling_v2_metric_pac
 from backend.services.coach_analysis_v2_compatibility import build_analysis_v2_contract
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
+from backend.services.coach_strength_consistency import attach_strength_consistency_engine
 from backend.services.fielding_v2_metric_pack import attach_fielding_v2_metric_pack
 from backend.services.phase_recognition import attach_phase_recognition
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
@@ -184,7 +185,9 @@ async def aggregate_chunks_and_finalize(db: AsyncSession, job: VideoAnalysisJob)
     )
 
     # Generate findings and report
-    findings_result = generate_findings(metrics_result, context={"analysis_mode": resolved_mode})
+    findings_result = generate_findings(
+        metrics_result, context={"analysis_mode": resolved_mode}, analysis_mode=str(resolved_mode)
+    )
     report_result = cast(dict[str, Any], generate_report_text(findings_result, None))
     v2_contract = build_analysis_v2_contract(
         discipline=str(resolved_mode),
@@ -324,6 +327,7 @@ async def aggregate_chunks_and_finalize(db: AsyncSession, job: VideoAnalysisJob)
         ),
         source_model="MediaPipe Pose Landmarker Full",
     )
+    attach_strength_consistency_engine(final_results)
 
     # Upload final report to S3
     final_key = f"jobs/{job.id}/final_results.json"

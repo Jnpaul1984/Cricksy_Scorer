@@ -118,6 +118,14 @@ export interface VideoAnalysisResults {
       recognized_repetitions?: number;
       insufficient_reason?: string | null;
     };
+    strength_consistency_engine?: {
+      analysis_version?: string;
+      strengths_count?: number;
+      recurring_concerns_count?: number;
+      consistency_metrics_count?: number;
+      best_repetition_id?: string | null;
+      needs_work_repetition_id?: string | null;
+    };
   };
 
   v2?: {
@@ -138,6 +146,7 @@ export interface VideoAnalysisResults {
       limitations?: string[];
       repetition_values?: Array<number | string>;
       aggregate_stats?: Record<string, unknown> | null;
+      consistency?: Record<string, unknown> | null;
     }>;
     repetitions?: Array<{
       repetition_id: string;
