@@ -9,7 +9,7 @@ Feature-gated by role (coach_pro_plus, org_pro).
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 from uuid import uuid4
 
@@ -53,7 +53,7 @@ from backend.sql_app.models import (
 )
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -267,6 +267,29 @@ class VideoSessionCreate(BaseModel):
         return value
 
 
+class CoachPrivatePlayerCreate(BaseModel):
+    """Minimal identity data for a coach-private player profile."""
+
+    player_name: str | None = Field(default=None, max_length=120)
+    date_of_birth: date | None = None
+
+    @field_validator("player_name", mode="before")
+    @classmethod
+    def _normalize_player_name(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
+
+class CoachPlayerRead(BaseModel):
+    player_id: str
+    player_name: str
+    date_of_birth: date | None = None
+    assignment_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class VideoSessionRead(BaseModel):
     """Response schema for a video session"""
 
@@ -438,6 +461,96 @@ class VideoUploadCompleteResponse(BaseModel):
 # ============================================================================
 # Endpoints
 # ============================================================================
+
+
+@router.get("/players", response_model=list[CoachPlayerRead])
+async def list_coach_players(
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> list[CoachPlayerRead]:
+    """List player profiles available to the current Coach Pro Plus scope."""
+    if (
+        current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro)
+        and not current_user.is_superuser
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
+    stmt = (
+        select(PlayerProfile)
+        .join(
+            CoachPlayerAssignment,
+            CoachPlayerAssignment.player_profile_id == PlayerProfile.player_id,
+        )
+        .where(CoachPlayerAssignment.is_active.is_(True))
+    )
+    if not current_user.is_superuser:
+        if current_user.role == RoleEnum.org_pro and current_user.org_id:
+            stmt = stmt.join(User, User.id == CoachPlayerAssignment.coach_user_id).where(
+                User.org_id == current_user.org_id
+            )
+        else:
+            stmt = stmt.where(CoachPlayerAssignment.coach_user_id == current_user.id)
+
+    result = await db.execute(
+        stmt.distinct().order_by(PlayerProfile.player_name.asc(), PlayerProfile.player_id.asc())
+    )
+    return [
+        CoachPlayerRead(
+            player_id=profile.player_id,
+            player_name=profile.player_name,
+            date_of_birth=profile.date_of_birth,
+            assignment_active=True,
+        )
+        for profile in result.scalars().all()
+    ]
+
+
+@router.post("/players", response_model=CoachPlayerRead, status_code=status.HTTP_201_CREATED)
+async def create_coach_private_player(
+    player_data: CoachPrivatePlayerCreate,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CoachPlayerRead:
+    """Create a standalone player profile and active assignment atomically."""
+    if (
+        current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro)
+        and not current_user.is_superuser
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
+    if (
+        player_data.date_of_birth is not None
+        and player_data.date_of_birth > datetime.now(UTC).date()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="date_of_birth cannot be in the future",
+        )
+
+    player_id = f"coach-player-{uuid4().hex}"
+    player_name = player_data.player_name or f"Test Player {player_id[-8:].upper()}"
+    profile = PlayerProfile(
+        player_id=player_id,
+        player_name=player_name,
+        date_of_birth=player_data.date_of_birth,
+    )
+    assignment = CoachPlayerAssignment(
+        coach_user_id=current_user.id,
+        player_profile_id=player_id,
+        is_active=True,
+    )
+    db.add_all((profile, assignment))
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    await db.refresh(profile)
+
+    return CoachPlayerRead(
+        player_id=profile.player_id,
+        player_name=profile.player_name,
+        date_of_birth=profile.date_of_birth,
+        assignment_active=True,
+    )
 
 
 @router.post("/sessions", response_model=VideoSessionRead)

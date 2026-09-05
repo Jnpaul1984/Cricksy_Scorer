@@ -705,6 +705,7 @@ class PlayerProfile(Base):
 
     player_id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     player_name: Mapped[str] = mapped_column(String, nullable=False)
+    date_of_birth: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
 
     # Batting statistics
     total_matches: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

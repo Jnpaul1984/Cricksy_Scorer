@@ -97,6 +97,15 @@ async def set_role(client: TestClient, email: str, role: models.RoleEnum) -> Non
     await _set_user_role(session_maker, email, role)
 
 
+async def set_org(client: TestClient, email: str, org_id: str) -> None:
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        result = await session.execute(select(models.User).where(models.User.email == email))
+        user = result.scalar_one()
+        user.org_id = org_id
+        await session.commit()
+
+
 async def ensure_profile(client: TestClient, player_id: str) -> None:
     session_maker = client.session_maker  # type: ignore[attr-defined]
     await _ensure_player_profile(session_maker, player_id)
@@ -639,6 +648,224 @@ async def test_coach_pro_plus_can_list_assigned_players(client: TestClient) -> N
     assert resp.status_code == 200, resp.text
     payload = resp.json()
     assert any(item["player_profile_id"] == player_id for item in payload)
+
+
+@pytest.mark.asyncio
+async def test_coach_pro_plus_creates_private_player_and_uses_existing_player_paths(
+    client: TestClient,
+) -> None:
+    existing_player_id = "player-existing-team-assignment"
+    await ensure_profile(client, existing_player_id)
+
+    coach_plus = register_user(client, "coach-plus-private-player@example.com")
+    await set_role(client, coach_plus["email"], models.RoleEnum.coach_pro_plus)
+    coach_token = login_user(client, coach_plus["email"])
+
+    org = register_user(client, "org-private-player@example.com")
+    await set_role(client, org["email"], models.RoleEnum.org_pro)
+    org_token = login_user(client, org["email"])
+    assignment_response = client.post(
+        "/api/coaches/assign-player",
+        headers=_auth_headers(org_token),
+        json={
+            "coach_user_id": coach_plus["id"],
+            "player_profile_id": existing_player_id,
+        },
+    )
+    assert assignment_response.status_code == 200, assignment_response.text
+
+    create_response = client.post(
+        "/api/coaches/plus/players",
+        headers=_auth_headers(coach_token),
+        json={"player_name": "  Private Player  ", "date_of_birth": "2011-03-14"},
+    )
+    assert create_response.status_code == 201, create_response.text
+    created = create_response.json()
+    assert created["player_id"].startswith("coach-player-")
+    assert created["player_name"] == "Private Player"
+    assert created["date_of_birth"] == "2011-03-14"
+    assert created["assignment_active"] is True
+
+    list_response = client.get("/api/coaches/plus/players", headers=_auth_headers(coach_token))
+    assert list_response.status_code == 200, list_response.text
+    listed_ids = {player["player_id"] for player in list_response.json()}
+    assert created["player_id"] in listed_ids
+    assert existing_player_id in listed_ids
+
+    session_maker = client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        profile = await session.get(models.PlayerProfile, created["player_id"])
+        assert profile is not None
+        assert profile.date_of_birth == dt.date(2011, 3, 14)
+        assignments = list(
+            (
+                await session.execute(
+                    select(models.CoachPlayerAssignment).where(
+                        models.CoachPlayerAssignment.coach_user_id == coach_plus["id"],
+                        models.CoachPlayerAssignment.player_profile_id == created["player_id"],
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(assignments) == 1
+        assert assignments[0].is_active is True
+
+    video_response = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(coach_token),
+        json={
+            "title": "Private player session",
+            "primary_player_id": created["player_id"],
+            "discipline": "batting",
+            "camera_view": "side",
+        },
+    )
+    assert video_response.status_code == 200, video_response.text
+    assert video_response.json()["primary_player_id"] == created["player_id"]
+
+    development_response = client.post(
+        f"/api/player-development/players/{created['player_id']}/draft-plan",
+        headers=_auth_headers(coach_token),
+        json={},
+    )
+    assert development_response.status_code == 200, development_response.text
+
+    longitudinal_response = client.get(
+        f"/api/coaches/plus/players/{created['player_id']}/longitudinal-progress",
+        headers=_auth_headers(coach_token),
+    )
+    assert longitudinal_response.status_code == 200, longitudinal_response.text
+    assert longitudinal_response.json()["player_id"] == created["player_id"]
+
+
+@pytest.mark.asyncio
+async def test_private_player_optional_identity_and_cross_coach_isolation(
+    client: TestClient,
+) -> None:
+    owner = register_user(client, "private-player-owner@example.com")
+    intruder = register_user(client, "private-player-intruder@example.com")
+    await set_role(client, owner["email"], models.RoleEnum.coach_pro_plus)
+    await set_role(client, intruder["email"], models.RoleEnum.coach_pro_plus)
+    owner_token = login_user(client, owner["email"])
+    intruder_token = login_user(client, intruder["email"])
+
+    create_response = client.post(
+        "/api/coaches/plus/players",
+        headers=_auth_headers(owner_token),
+        json={"player_name": "", "date_of_birth": None},
+    )
+    assert create_response.status_code == 201, create_response.text
+    created = create_response.json()
+    assert created["player_name"].startswith("Test Player ")
+    assert created["date_of_birth"] is None
+
+    future_date_response = client.post(
+        "/api/coaches/plus/players",
+        headers=_auth_headers(owner_token),
+        json={"date_of_birth": "2999-01-01"},
+    )
+    assert future_date_response.status_code == 422
+
+    intruder_list = client.get("/api/coaches/plus/players", headers=_auth_headers(intruder_token))
+    assert intruder_list.status_code == 200
+    assert created["player_id"] not in {player["player_id"] for player in intruder_list.json()}
+
+    intruder_video = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(intruder_token),
+        json={
+            "title": "Forbidden private player session",
+            "primary_player_id": created["player_id"],
+            "discipline": "fielding",
+            "camera_view": "front",
+        },
+    )
+    assert intruder_video.status_code == 403
+
+    intruder_development = client.post(
+        f"/api/player-development/players/{created['player_id']}/draft-plan",
+        headers=_auth_headers(intruder_token),
+        json={},
+    )
+    assert intruder_development.status_code == 403
+
+    intruder_longitudinal = client.get(
+        f"/api/coaches/plus/players/{created['player_id']}/longitudinal-progress",
+        headers=_auth_headers(intruder_token),
+    )
+    assert intruder_longitudinal.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_private_player_org_scope_and_non_privileged_denial(client: TestClient) -> None:
+    org_owner = register_user(client, "private-org-owner@example.com")
+    org_peer = register_user(client, "private-org-peer@example.com")
+    cross_org = register_user(client, "private-cross-org@example.com")
+    free_user = register_user(client, "private-free@example.com")
+    for user in (org_owner, org_peer, cross_org):
+        await set_role(client, user["email"], models.RoleEnum.org_pro)
+    await set_org(client, org_owner["email"], "org-private-a")
+    await set_org(client, org_peer["email"], "org-private-a")
+    await set_org(client, cross_org["email"], "org-private-b")
+    owner_token = login_user(client, org_owner["email"])
+    peer_token = login_user(client, org_peer["email"])
+    cross_org_token = login_user(client, cross_org["email"])
+    free_token = login_user(client, free_user["email"])
+
+    create_response = client.post(
+        "/api/coaches/plus/players",
+        headers=_auth_headers(owner_token),
+        json={"player_name": "Organization Private Player"},
+    )
+    assert create_response.status_code == 201, create_response.text
+    player_id = create_response.json()["player_id"]
+
+    peer_list = client.get("/api/coaches/plus/players", headers=_auth_headers(peer_token))
+    assert peer_list.status_code == 200
+    assert player_id in {player["player_id"] for player in peer_list.json()}
+
+    peer_video = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(peer_token),
+        json={
+            "title": "Same organization session",
+            "primary_player_id": player_id,
+            "discipline": "wicketkeeping",
+            "camera_view": "behind",
+        },
+    )
+    assert peer_video.status_code == 200, peer_video.text
+
+    cross_org_list = client.get("/api/coaches/plus/players", headers=_auth_headers(cross_org_token))
+    assert cross_org_list.status_code == 200
+    assert player_id not in {player["player_id"] for player in cross_org_list.json()}
+
+    cross_org_video = client.post(
+        "/api/coaches/plus/sessions",
+        headers=_auth_headers(cross_org_token),
+        json={
+            "title": "Cross organization session",
+            "primary_player_id": player_id,
+            "discipline": "batting",
+            "camera_view": "front",
+        },
+    )
+    assert cross_org_video.status_code == 403
+
+    assert (
+        client.post(
+            "/api/coaches/plus/players",
+            headers=_auth_headers(free_token),
+            json={},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.get("/api/coaches/plus/players", headers=_auth_headers(free_token)).status_code
+        == 403
+    )
 
 
 @pytest.mark.asyncio

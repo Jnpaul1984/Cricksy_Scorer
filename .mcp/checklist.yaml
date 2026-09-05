@@ -289,7 +289,7 @@
   category: "Phase 10J"
   title: "10J.10 Strength + Consistency Engine"
   description: "Add deterministic within-session strengths, recurring concerns, repeatability, and representative repetition selection"
-  status: todo
+  status: done
   confidence: high
   risk_level: high
   acceptance_criteria:
@@ -303,7 +303,7 @@
   category: "Phase 10J"
   title: "10J.11 Goal/Intervention + Interpretation + PDF V2 Integration"
   description: "Integrate V2 findings/progress into goals, governed interpretation, and PDF V2"
-  status: todo
+  status: done
   confidence: high
   risk_level: medium
   acceptance_criteria:
@@ -317,7 +317,7 @@
   category: "Phase 10J"
   title: "10J.12 Hardening, Performance, CI, and Rollout Controls"
   description: "Finalize hardening, perf budgets, CI matrix, and rollout/rollback controls"
-  status: todo
+  status: done
   confidence: high
   risk_level: medium
   acceptance_criteria:
@@ -326,3 +326,40 @@
     - "cd backend && pytest tests/ -q"
     - "cd frontend && npm run test:unit"
     - "cd frontend && npm run build"
+
+- id: phase10j-13-coach-private-player-setup
+  week: 10
+  category: "Phase 10J"
+  title: "10J.13 Coach-Private Player Setup & Match Setup Decoupling"
+  description: "Create standalone coaching players through PlayerProfile and CoachPlayerAssignment without Match Setup"
+  status: done
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "Coach Pro Plus and org_pro can create a player without a team, match, account, email, or parent"
+    - "Player and active assignment are created atomically with coach and organization isolation"
+    - "New and existing assigned players remain selectable for Video Sessions"
+    - "Player Development, longitudinal progress, legacy Video Sessions, and Match Setup remain compatible"
+  verification_commands:
+    - "python scripts/checklist.py status"
+    - "python -m pytest -q backend/tests/test_coach_pro_features.py backend/tests/test_player_development_routes.py backend/tests/test_player_longitudinal_progress.py"
+    - "cd frontend && npm run test:unit -- tests/unit/CoachProPlusVideoSessionsView.spec.ts"
+    - "cd frontend && npm run guard:fake-data && npm run type-check && npm run build"
+    - "python -m ruff check . && python -m ruff format --check ."
+    - "cd backend && mypy --config-file pyproject.toml --explicit-package-bases ."
+    - "pre-commit run --all-files"
+  files_touched:
+    - "backend/routes/coach_pro_plus.py"
+    - "backend/sql_app/models.py"
+    - "backend/alembic/versions/20260905103000_add_player_profile_date_of_birth.py"
+    - "backend/tests/test_coach_pro_features.py"
+    - "frontend/src/services/coachPlusVideoService.ts"
+    - "frontend/src/views/CoachProPlusVideoSessionsView.vue"
+    - "frontend/tests/unit/CoachProPlusVideoSessionsView.spec.ts"
+    - "docs/PHASE_10J13_COACH_PRIVATE_PLAYER_SETUP.md"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "codex"
+  completed_at: "2026-09-05"
+  notes: "Reused canonical player and assignment records; added only nullable PlayerProfile.date_of_birth and a reversible single-head migration."
