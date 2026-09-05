@@ -541,7 +541,9 @@ def render_goals_vs_outcomes(
         elements.append(Spacer(1, SPACE_SUBSECTION))
         v2_table_data = [["Goal", "Baseline", "Latest", "Status", "Confidence"]]
         for item in v2_goal_evidence:
-            metric_label = item.get("metric_id") or item.get("technical_area") or item.get("goal_id")
+            metric_label = (
+                item.get("metric_id") or item.get("technical_area") or item.get("goal_id")
+            )
             baseline = item.get("baseline") or {}
             latest = item.get("latest") or {}
             baseline_value = baseline.get("raw_value")
@@ -584,7 +586,12 @@ def render_goals_vs_outcomes(
         elements.append(Paragraph("Recorded Interventions", styles["heading"]))
         elements.append(Spacer(1, SPACE_SUBSECTION))
         for item in interventions[:8]:
-            activity = item.get("activity") or item.get("title") or item.get("intervention_type") or "Intervention"
+            activity = (
+                item.get("activity")
+                or item.get("title")
+                or item.get("intervention_type")
+                or "Intervention"
+            )
             completion = item.get("completion_state")
             frequency = item.get("frequency")
             line = f"• {activity}"

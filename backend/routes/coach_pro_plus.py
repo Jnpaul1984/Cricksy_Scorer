@@ -1629,7 +1629,11 @@ def _validate_v2_goals_payload(v2_goals: list[dict[str, Any]]) -> None:
                 ),
             )
 
-        if target_type in {"increase_to_threshold", "decrease_to_threshold", "min_normalized_score"}:
+        if target_type in {
+            "increase_to_threshold",
+            "decrease_to_threshold",
+            "min_normalized_score",
+        }:
             if goal.get("target_value") is None:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -1782,7 +1786,9 @@ async def set_job_goals(
 
     supported_metric_ids: set[str] = set()
     for payload in (job.deep_results, job.quick_results, job.results):
-        metric_results = payload.get("v2", {}).get("metric_results") if isinstance(payload, dict) else None
+        metric_results = (
+            payload.get("v2", {}).get("metric_results") if isinstance(payload, dict) else None
+        )
         if not isinstance(metric_results, list):
             continue
         for item in metric_results:

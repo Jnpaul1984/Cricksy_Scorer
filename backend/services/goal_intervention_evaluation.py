@@ -36,7 +36,9 @@ def evaluate_v2_goals_against_longitudinal(
     evaluations: list[dict[str, Any]] = []
     for goal in v2_goals:
         evaluations.append(
-            _evaluate_single_goal(goal=goal, longitudinal_series=series, latest_job_id=latest_job_id)
+            _evaluate_single_goal(
+                goal=goal, longitudinal_series=series, latest_job_id=latest_job_id
+            )
         )
     return evaluations
 
@@ -132,7 +134,11 @@ def _evaluate_single_goal(
     baseline = comparable_history[0]
     if baseline_job_id:
         baseline = next(
-            (item for item in comparable_history if str(item.get("job_id")) == str(baseline_job_id)),
+            (
+                item
+                for item in comparable_history
+                if str(item.get("job_id")) == str(baseline_job_id)
+            ),
             baseline,
         )
 
@@ -281,7 +287,9 @@ def _evaluate_target(
             "status": "unsupported",
             "change": None,
             "confidence": _confidence_for([baseline, latest]),
-            "limitations": ["Numeric baseline/latest values are required for deterministic evaluation."],
+            "limitations": [
+                "Numeric baseline/latest values are required for deterministic evaluation."
+            ],
         }
 
     if target.target_type == "increase_to_threshold":
@@ -460,8 +468,10 @@ def _evaluate_range_target(
     else:
         status = "regressing"
 
-    on_track = status == "improving_but_not_achieved" and baseline_distance > 0 and (
-        latest_distance <= baseline_distance * 0.4
+    on_track = (
+        status == "improving_but_not_achieved"
+        and baseline_distance > 0
+        and (latest_distance <= baseline_distance * 0.4)
     )
 
     return {
@@ -556,22 +566,26 @@ def _trend_limitations(series: dict[str, Any], comparable_session_count: int) ->
 
 
 def _confidence_for(observations: list[dict[str, Any]]) -> float | None:
-    values = [
-        _as_float(item.get("confidence_score"))
-        for item in observations
-        if _as_float(item.get("confidence_score")) is not None
-    ]
+    values: list[float] = []
+    for item in observations:
+        value = _as_float(item.get("confidence_score"))
+        if value is not None:
+            values.append(value)
     return _safe_round(mean(values), 4) if values else None
 
 
-def _progress_to_target_higher(*, baseline_value: float, latest_value: float, target_value: float) -> float:
+def _progress_to_target_higher(
+    *, baseline_value: float, latest_value: float, target_value: float
+) -> float:
     denom = target_value - baseline_value
     if denom <= 0:
         return 1.0 if latest_value >= target_value else 0.0
     return max(0.0, min(1.0, (latest_value - baseline_value) / denom))
 
 
-def _progress_to_target_lower(*, baseline_value: float, latest_value: float, target_value: float) -> float:
+def _progress_to_target_lower(
+    *, baseline_value: float, latest_value: float, target_value: float
+) -> float:
     denom = baseline_value - target_value
     if denom <= 0:
         return 1.0 if latest_value <= target_value else 0.0

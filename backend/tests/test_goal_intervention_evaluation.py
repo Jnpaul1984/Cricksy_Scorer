@@ -3,7 +3,9 @@ from __future__ import annotations
 from backend.services.goal_intervention_evaluation import evaluate_v2_goals_against_longitudinal
 
 
-def _observation(job_id: str, raw: float | None, *, comparable: bool = True, normalized: float | None = None):
+def _observation(
+    job_id: str, raw: float | None, *, comparable: bool = True, normalized: float | None = None
+):
     return {
         "session_id": f"session-{job_id}",
         "job_id": job_id,
@@ -73,13 +75,15 @@ def test_goal_evaluation_lower_target_regressing() -> None:
             "target_value": 0.4,
         }
     ]
-    payload = _progress([
-        _series(
-            [_observation("j1", 0.5), _observation("j2", 0.7)],
-            metric_id="wicketkeeping_movement_lateral_displacement_ratio",
-            discipline="wicketkeeping",
-        )
-    ])
+    payload = _progress(
+        [
+            _series(
+                [_observation("j1", 0.5), _observation("j2", 0.7)],
+                metric_id="wicketkeeping_movement_lateral_displacement_ratio",
+                discipline="wicketkeeping",
+            )
+        ]
+    )
 
     result = evaluate_v2_goals_against_longitudinal(
         v2_goals=goals,
@@ -102,12 +106,14 @@ def test_goal_evaluation_range_target_unchanged() -> None:
             "target_max": 1.3,
         }
     ]
-    payload = _progress([
-        _series(
-            [_observation("j1", 1.6), _observation("j2", 1.61)],
-            metric_id="batting_setup_stance_width_ratio",
-        )
-    ])
+    payload = _progress(
+        [
+            _series(
+                [_observation("j1", 1.6), _observation("j2", 1.61)],
+                metric_id="batting_setup_stance_width_ratio",
+            )
+        ]
+    )
 
     result = evaluate_v2_goals_against_longitudinal(
         v2_goals=goals,
@@ -151,12 +157,16 @@ def test_goal_evaluation_non_comparable_latest_session() -> None:
             "target_value": 0.7,
         }
     ]
-    payload = _progress([
-        _series([
-            _observation("j1", 0.55, comparable=True),
-            _observation("j2", 0.74, comparable=False),
-        ])
-    ])
+    payload = _progress(
+        [
+            _series(
+                [
+                    _observation("j1", 0.55, comparable=True),
+                    _observation("j2", 0.74, comparable=False),
+                ]
+            )
+        ]
+    )
 
     result = evaluate_v2_goals_against_longitudinal(
         v2_goals=goals,
