@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 
 from backend.config import settings
 from backend.domain.coach_analysis_v2_contract import RepetitionActionRecordV2
+from backend.services.bowling_v2_metric_pack import attach_bowling_v2_metric_pack
 from backend.services.chunk_aggregation import aggregate_chunks_and_finalize
 from backend.services.coach_plus_analysis import run_pose_metrics_findings_report
 from backend.services.phase_recognition import attach_phase_recognition
@@ -50,7 +51,7 @@ async def _download_from_s3(
     loop = asyncio.get_running_loop()
 
     logger.info(
-        f"Downloading from S3: bucket={bucket} key={key} -> {dst_path} " f"job_id={job_id or 'N/A'}"
+        f"Downloading from S3: bucket={bucket} key={key} -> {dst_path} job_id={job_id or 'N/A'}"
     )
 
     def _dl() -> None:
@@ -251,9 +252,7 @@ async def _process_job(job_id: str) -> None:
                 f"results_s3_key={quick_out_key} "
                 f"findings_len={len(quick_findings.get('findings', [])) if quick_findings else 0} "
                 f"report_summary_len={
-                    len(str(quick_report.get('summary', '')))
-                    if quick_report
-                    else 0
+                    len(str(quick_report.get('summary', ''))) if quick_report else 0
                 }"
             )
 
@@ -293,14 +292,10 @@ async def _process_job(job_id: str) -> None:
                     f"progress={job.progress_pct}% "
                     f"quick_results_s3_key={quick_out_key} "
                     f"findings_len={
-                        len(quick_findings.get('findings', []))
-                        if quick_findings
-                        else 0
+                        len(quick_findings.get('findings', [])) if quick_findings else 0
                     } "
                     f"report_summary_len={
-                        len(str(quick_report.get('summary', '')))
-                        if quick_report
-                        else 0
+                        len(str(quick_report.get('summary', ''))) if quick_report else 0
                     }"
                 )
                 return
@@ -428,10 +423,8 @@ async def _process_job(job_id: str) -> None:
                                     )
                                 except Exception:
                                     logger.warning(
-                                        (
-                                            "Skipping invalid repetition payload during "
-                                            "ball-tracking refinement"
-                                        )
+                                        "Skipping invalid repetition payload during "
+                                        "ball-tracking refinement"
                                     )
                         repetitions, used_ball_tracking = (
                             refine_bowling_repetitions_with_ball_tracking(
@@ -484,6 +477,27 @@ async def _process_job(job_id: str) -> None:
                         ),
                         ball_tracking=ball_tracking_payload,
                         enabled=bool(settings.COACH_PLUS_PHASE_RECOGNITION_ENABLED),
+                    )
+                    attach_bowling_v2_metric_pack(
+                        results_payload=deep_payload,
+                        discipline=job.analysis_mode,
+                        session_discipline=(
+                            str(video_session.discipline) if video_session.discipline else None
+                        ),
+                        frames=deep_artifacts.frames or [],
+                        sample_fps=deep_fps,
+                        source_video_fps=float(
+                            (deep_payload.get("pose_summary") or {}).get("video_fps") or 30.0
+                        ),
+                        camera_view=(
+                            video_session.camera_view.value
+                            if getattr(video_session.camera_view, "value", None)
+                            else video_session.camera_view
+                        ),
+                        source_model=str(
+                            (deep_payload.get("pose_summary") or {}).get("model")
+                            or "MediaPipe Pose Landmarker Full"
+                        ),
                     )
 
                 except Exception as e:
@@ -575,9 +589,7 @@ async def _process_job(job_id: str) -> None:
                 f"deep_report={'present' if job.deep_report else 'MISSING'} "
                 f"findings_len={len(deep_findings.get('findings', [])) if deep_findings else 0} "
                 f"report_summary_len={
-                    len(str(deep_report.get('summary', '')))
-                    if deep_report
-                    else 0
+                    len(str(deep_report.get('summary', ''))) if deep_report else 0
                 } "
                 f"report_keys={list(deep_report.keys()) if deep_report else []}"
             )

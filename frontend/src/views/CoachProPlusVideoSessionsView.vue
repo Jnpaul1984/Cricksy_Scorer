@@ -725,22 +725,22 @@
           </section>
 
           <section class="results-section">
-            <h3>Batting V2 metrics</h3>
-            <p v-if="selectedJobBattingV2Metrics.length === 0" class="status-text">
-              No batting-specific V2 metrics were returned for this job.
+            <h3>Discipline V2 metrics</h3>
+            <p v-if="selectedJobV2Metrics.length === 0" class="status-text">
+              No discipline-specific V2 metrics were returned for this job.
             </p>
             <div v-else class="phase-list">
               <div
-                v-for="metric in selectedJobBattingV2Metrics"
+                v-for="metric in selectedJobV2Metrics"
                 :key="metric.metricId"
                 class="phase-row"
               >
                 <span>
-                  {{ formatBattingMetricLabel(metric.metricId) }}
+                  {{ formatV2MetricLabel(metric.metricId) }}
                   <span v-if="metric.phase" class="evidence-time">({{ formatRepetitionAction(metric.phase) }})</span>
                 </span>
                 <span class="status-text">
-                  {{ formatBattingMetricValue(metric) }} • {{ formatRepetitionValidity(metric.validityState) }}
+                  {{ formatV2MetricValue(metric) }} • {{ formatRepetitionValidity(metric.validityState) }}
                   <span v-if="metric.classificationStatus"> • {{ metric.classificationStatus }}</span>
                   <span v-if="metric.confidenceScore !== null">
                     • {{ formatPercent01(metric.confidenceScore) }}
@@ -922,15 +922,15 @@ import { useAuthStore } from '@/stores/authStore';
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
 import { buildCoachNarrative } from '@/utils/coachVideoAnalysisNarrative';
 import {
-  extractCoachVideoBattingMetrics,
+  extractCoachVideoDisciplineV2Metrics,
   extractCoachVideoPhases,
   extractCoachVideoPhaseSummary,
   extractCoachVideoRepetitions,
   extractCoachVideoRepetitionSummary,
   getCoachVideoJobFps,
-  type CoachVideoBattingMetric,
   type CoachVideoPhase,
   type CoachVideoRepetition,
+  type CoachVideoV2Metric,
 } from '@/utils/coachVideoAnalysisRepetitions';
 
 // ============================================================================
@@ -1049,7 +1049,7 @@ const selectedJobRepetitionSummary = computed(() =>
 );
 const selectedJobPhases = computed(() => extractCoachVideoPhases(selectedJob.value));
 const selectedJobPhaseSummary = computed(() => extractCoachVideoPhaseSummary(selectedJob.value));
-const selectedJobBattingV2Metrics = computed(() => extractCoachVideoBattingMetrics(selectedJob.value));
+const selectedJobV2Metrics = computed(() => extractCoachVideoDisciplineV2Metrics(selectedJob.value));
 
 watch(
   () => [showResultsModal.value, selectedJob.value?.id, selectedJob.value?.status, videoPreviewUrl.value] as const,
@@ -1858,7 +1858,7 @@ function phasesForRepetition(repetitionId: string): CoachVideoPhase[] {
   return selectedJobPhases.value.filter((phase) => phase.repetitionId === repetitionId);
 }
 
-function formatBattingMetricValue(metric: CoachVideoBattingMetric): string {
+function formatV2MetricValue(metric: CoachVideoV2Metric): string {
   if (metric.rawValue === null) return 'N/A';
   if (metric.unit === 'degrees') return `${metric.rawValue.toFixed(1)}°`;
   if (metric.unit === 'score') return formatPercent01(metric.rawValue);
@@ -1866,9 +1866,9 @@ function formatBattingMetricValue(metric: CoachVideoBattingMetric): string {
   return metric.rawValue.toFixed(3);
 }
 
-function formatBattingMetricLabel(metricId: string): string {
+function formatV2MetricLabel(metricId: string): string {
   return metricId
-    .replace(/^batting_/, '')
+    .replace(/^(batting|pace_bowling|spin_bowling)_/, '')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }

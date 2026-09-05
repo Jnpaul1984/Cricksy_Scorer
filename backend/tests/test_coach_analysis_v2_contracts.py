@@ -501,3 +501,80 @@ def test_run_pose_metrics_findings_report_adds_batting_v2_metric_pack() -> None:
     assert payload["meta"]["batting_v2_metric_pack"]["metrics_count"] == 6
     assert "batting_v2" in payload["findings"]
     assert "batting_v2" in payload["report"]
+
+
+@pytest.mark.parametrize(
+    ("session_discipline", "prefix"),
+    [("pace_bowling", "pace_bowling_"), ("spin_bowling", "spin_bowling_")],
+)
+def test_run_pose_metrics_findings_report_adds_bowling_v2_metric_pack(
+    session_discipline: str, prefix: str
+) -> None:
+    with patch("backend.services.pose_service.extract_pose_keypoints_from_video") as mock_extract:
+        mock_extract.return_value = {
+            "frames": [
+                {
+                    "frame_id": index,
+                    "t": index / 10,
+                    "detected": True,
+                    "keypoints": {
+                        "nose": [0.5 + (0.005 if index in {1, 2} else 0.0), 0.2, 0.9],
+                        "left_shoulder": [
+                            0.42,
+                            0.42
+                            + (
+                                0.01 if session_discipline == "spin_bowling" and index == 3 else 0.0
+                            ),
+                            0.9,
+                        ],
+                        "right_shoulder": [
+                            0.58,
+                            0.42
+                            - (
+                                0.03 if session_discipline == "spin_bowling" and index == 3 else 0.0
+                            ),
+                            0.9,
+                        ],
+                        "left_hip": [0.45 + (0.02 if index >= 5 else 0.0), 0.68, 0.9],
+                        "right_hip": [0.55 + (0.02 if index >= 5 else 0.0), 0.68, 0.9],
+                        "left_knee": [0.44, 0.84, 0.9],
+                        "right_knee": [0.56, 0.84, 0.9],
+                        "left_ankle": [0.42, 0.96, 0.9],
+                        "right_ankle": [0.58, 0.96, 0.9],
+                        "left_elbow": [0.40, 0.52, 0.9],
+                        "right_elbow": [0.60, 0.52, 0.9],
+                        "left_wrist": [0.43, 0.16 if index >= 5 else 0.58, 0.9],
+                        "right_wrist": [0.61, 0.60, 0.9],
+                    },
+                }
+                for index in range(12)
+            ],
+            "total_frames": 12,
+            "sampled_frames": 12,
+            "frames_with_pose": 12,
+            "detection_rate_percent": 100.0,
+            "video_fps": 30.0,
+            "model": "MediaPipe Pose Landmarker Full",
+        }
+
+        result = run_pose_metrics_findings_report(
+            video_path="dummy.mp4",
+            sample_fps=10,
+            include_frames=False,
+            player_context={"camera_view": "side", "session_discipline": session_discipline},
+            analysis_mode="bowling",
+            session_id="session-1",
+            job_id="job-1",
+        )
+
+    payload = result.results
+    bowling_v2_metrics = [
+        metric
+        for metric in payload["v2"]["metric_results"]
+        if isinstance(metric, dict) and str(metric.get("metric_id", "")).startswith(prefix)
+    ]
+    assert len(bowling_v2_metrics) == 6
+    assert payload["meta"]["bowling_v2_metric_pack"]["discipline"] == session_discipline
+    assert payload["meta"]["bowling_v2_metric_pack"]["metrics_count"] == 6
+    assert "bowling_v2" in payload["findings"]
+    assert "bowling_v2" in payload["report"]
