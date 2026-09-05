@@ -1811,9 +1811,7 @@ async def get_player_longitudinal_progress(
     player_id: str,
     current_user: Annotated[User, Depends(security.get_current_active_user)],
     db: AsyncSession = Depends(get_db),
-    discipline: Literal[
-        "batting", "pace_bowling", "spin_bowling", "wicketkeeping", "fielding"
-    ]
+    discipline: Literal["batting", "pace_bowling", "spin_bowling", "wicketkeeping", "fielding"]
     | None = Query(default=None),
 ) -> dict[str, Any]:
     """Return deterministic longitudinal progress for one player across accessible V2 sessions."""

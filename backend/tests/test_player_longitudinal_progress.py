@@ -5,16 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.security import create_access_token
 from backend.services.player_longitudinal_progress import build_player_longitudinal_progress
 from backend.sql_app import models
 
 UTC = getattr(dt, "UTC", dt.UTC)
-
-
-def _token_headers(user: models.User) -> dict[str, str]:
-    token = create_access_token({"sub": user.id, "email": user.email, "role": user.role.value})
-    return {"Authorization": f"******"}
 
 
 def _metric_payload(
@@ -170,7 +164,9 @@ def test_longitudinal_progress_builds_baseline_latest_best_and_excludes_camera_m
     assert series["history_count"] == 4
     excluded = next(item for item in series["history"] if item["session_id"] == "s4")
     assert excluded["comparable"] is False
-    assert any("Camera views do not match." in reason for reason in excluded["comparability_reasons"])
+    assert any(
+        "Camera views do not match." in reason for reason in excluded["comparability_reasons"]
+    )
 
 
 def test_longitudinal_progress_uses_target_range_best_and_mixed_trend() -> None:
@@ -213,7 +209,9 @@ def test_longitudinal_progress_uses_target_range_best_and_mixed_trend() -> None:
         ),
     ]
 
-    result = build_player_longitudinal_progress(sessions, player_id="player-1", discipline_filter="batting")
+    result = build_player_longitudinal_progress(
+        sessions, player_id="player-1", discipline_filter="batting"
+    )
 
     series = result["series"][0]
     assert series["best_direction"] == "target_range"
@@ -251,7 +249,9 @@ def test_longitudinal_progress_marks_unknown_metric_best_unavailable_and_insuffi
         ),
     ]
 
-    result = build_player_longitudinal_progress(sessions, player_id="player-1", discipline_filter="batting")
+    result = build_player_longitudinal_progress(
+        sessions, player_id="player-1", discipline_filter="batting"
+    )
 
     series = result["series"][0]
     assert series["best_available"] is False
@@ -319,43 +319,20 @@ def test_longitudinal_progress_reports_across_session_variability() -> None:
 async def test_longitudinal_progress_route_enforces_assignments_and_player_isolation(
     async_client,
     db_session,
+    auth_headers,
+    other_auth_headers,
+    test_user,
+    other_user,
 ) -> None:
-    assigned_coach = models.User(
-        id="coach-long-001",
-        email="coach-long@example.com",
-        hashed_password="hashed",
-        role=models.RoleEnum.coach_pro_plus,
-        org_id="org-long-001",
-        is_active=True,
-    )
-    unassigned_coach = models.User(
-        id="coach-long-002",
-        email="coach-long-2@example.com",
-        hashed_password="hashed",
-        role=models.RoleEnum.coach_pro_plus,
-        org_id="org-long-001",
-        is_active=True,
-    )
-    org_user = models.User(
-        id="org-long-001-user",
-        email="org-long@example.com",
-        hashed_password="hashed",
-        role=models.RoleEnum.org_pro,
-        org_id="org-long-001",
-        is_active=True,
-    )
     profile = models.PlayerProfile(player_id="player-long-001", player_name="Longitudinal Player")
     other_profile = models.PlayerProfile(player_id="player-long-002", player_name="Other Player")
     db_session.add_all(
         [
-            assigned_coach,
-            unassigned_coach,
-            org_user,
             profile,
             other_profile,
             models.CoachPlayerAssignment(
                 id="assign-long-001",
-                coach_user_id=assigned_coach.id,
+                coach_user_id=test_user.id,
                 player_profile_id=profile.player_id,
                 is_active=True,
             ),
@@ -366,7 +343,7 @@ async def test_longitudinal_progress_route_enforces_assignments_and_player_isola
     session_one = models.VideoSession(
         id="video-long-001",
         owner_type=models.OwnerTypeEnum.coach,
-        owner_id=assigned_coach.id,
+        owner_id=test_user.id,
         title="Batting Day 1",
         player_ids=[profile.player_id],
         primary_player_id=profile.player_id,
@@ -378,7 +355,7 @@ async def test_longitudinal_progress_route_enforces_assignments_and_player_isola
     session_two = models.VideoSession(
         id="video-long-002",
         owner_type=models.OwnerTypeEnum.coach,
-        owner_id=assigned_coach.id,
+        owner_id=test_user.id,
         title="Batting Day 2",
         player_ids=[profile.player_id],
         primary_player_id=profile.player_id,
@@ -390,7 +367,7 @@ async def test_longitudinal_progress_route_enforces_assignments_and_player_isola
     hidden_session = models.VideoSession(
         id="video-long-hidden",
         owner_type=models.OwnerTypeEnum.coach,
-        owner_id=assigned_coach.id,
+        owner_id=other_user.id,
         title="Other Player Session",
         player_ids=[other_profile.player_id],
         primary_player_id=other_profile.player_id,
@@ -441,7 +418,7 @@ async def test_longitudinal_progress_route_enforces_assignments_and_player_isola
 
     ok_resp = await async_client.get(
         f"/api/coaches/plus/players/{profile.player_id}/longitudinal-progress?discipline=batting",
-        headers=_token_headers(assigned_coach),
+        headers=auth_headers,
     )
     assert ok_resp.status_code == 200, ok_resp.text
     payload = ok_resp.json()
@@ -453,6 +430,6 @@ async def test_longitudinal_progress_route_enforces_assignments_and_player_isola
 
     forbidden_resp = await async_client.get(
         f"/api/coaches/plus/players/{profile.player_id}/longitudinal-progress?discipline=batting",
-        headers=_token_headers(unassigned_coach),
+        headers=other_auth_headers,
     )
     assert forbidden_resp.status_code == 403

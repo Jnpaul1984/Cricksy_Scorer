@@ -4,6 +4,7 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import pairwise
 from statistics import mean, pstdev
 from typing import Any
 
@@ -58,10 +59,14 @@ def build_player_longitudinal_progress(
     grouped: dict[tuple[str, str, str | None, str | None], list[_Observation]] = defaultdict(list)
     sessions_considered: list[dict[str, Any]] = []
 
-    for session in sorted(sessions, key=lambda item: _timestamp_or_min(getattr(item, "created_at", None))):
+    for session in sorted(
+        sessions, key=lambda item: _timestamp_or_min(getattr(item, "created_at", None))
+    ):
         primary_player_id = getattr(session, "primary_player_id", None)
         session_player_ids = [
-            str(item) for item in (getattr(session, "player_ids", None) or []) if isinstance(item, str)
+            str(item)
+            for item in (getattr(session, "player_ids", None) or [])
+            if isinstance(item, str)
         ]
         if primary_player_id != player_id and player_id not in session_player_ids:
             continue
@@ -88,7 +93,9 @@ def build_player_longitudinal_progress(
 
         metrics = _extract_metric_results(job)
         if not metrics:
-            session_summary["reason"] = "No V2 metric results were available for longitudinal analysis."
+            session_summary["reason"] = (
+                "No V2 metric results were available for longitudinal analysis."
+            )
             sessions_considered.append(session_summary)
             continue
 
@@ -110,7 +117,9 @@ def build_player_longitudinal_progress(
 
         session_summary["included"] = matched_metrics > 0
         session_summary["reason"] = (
-            None if matched_metrics > 0 else "No longitudinal metrics matched the requested discipline."
+            None
+            if matched_metrics > 0
+            else "No longitudinal metrics matched the requested discipline."
         )
         sessions_considered.append(session_summary)
 
@@ -149,13 +158,19 @@ def build_player_longitudinal_progress(
 def _build_metric_series(*, observations: list[_Observation], player_id: str) -> dict[str, Any]:
     sorted_observations = sorted(
         observations,
-        key=lambda item: (item.session_timestamp, item.job_timestamp, str(getattr(item.job, "id", ""))),
+        key=lambda item: (
+            item.session_timestamp,
+            item.job_timestamp,
+            str(getattr(item.job, "id", "")),
+        ),
     )
     semantics = _metric_semantics(sorted_observations[0].metric)
     numeric_candidates = [
         item for item in sorted_observations if _metric_numeric_value(item.metric) is not None
     ]
-    comparable_component = _select_primary_comparable_component(numeric_candidates, player_id=player_id)
+    comparable_component = _select_primary_comparable_component(
+        numeric_candidates, player_id=player_id
+    )
     comparable_ids = {id(item) for item in comparable_component}
     anchor = comparable_component[0] if comparable_component else None
     history = [
@@ -195,7 +210,11 @@ def _build_metric_series(*, observations: list[_Observation], player_id: str) ->
             else None
         ),
         "metric_versions_seen": sorted(
-            {str(item.metric.metric_version) for item in sorted_observations if item.metric.metric_version}
+            {
+                str(item.metric.metric_version)
+                for item in sorted_observations
+                if item.metric.metric_version
+            }
         ),
         "comparable_session_count": len(comparable_history),
         "history_count": len(history),
@@ -309,14 +328,16 @@ def _build_trend(
             "change_unit": comparable_history[0].get("unit"),
             "percent_change": None,
             "confidence_score": comparable_history[0].get("confidence_score"),
-            "limitations": ["At least two comparable sessions are required for longitudinal trend."],
+            "limitations": [
+                "At least two comparable sessions are required for longitudinal trend."
+            ],
         }
 
     baseline = comparable_history[0]
     latest = comparable_history[-1]
     step_directions = [
         _compare_observation_values(left, right, semantics)
-        for left, right in zip(comparable_history, comparable_history[1:], strict=False)
+        for left, right in pairwise(comparable_history)
     ]
     improving_steps = sum(1 for step in step_directions if step["direction"] > 0)
     regressing_steps = sum(1 for step in step_directions if step["direction"] < 0)
@@ -341,31 +362,49 @@ def _build_trend(
         else None
     )
     percent_change = None
-    if semantics.best_direction in {"higher", "lower"} and baseline_raw not in {None, 0.0} and latest_raw is not None:
+    if (
+        semantics.best_direction in {"higher", "lower"}
+        and baseline_raw is not None
+        and baseline_raw != 0.0
+        and latest_raw is not None
+    ):
         percent_change = round(((latest_raw - baseline_raw) / abs(baseline_raw)) * 100.0, 2)
     elif semantics.best_direction == "target_range":
         baseline_distance = _target_distance(baseline_raw, semantics)
         latest_distance = _target_distance(latest_raw, semantics)
-        if baseline_distance not in {None, 0.0} and latest_distance is not None:
+        if (
+            baseline_distance is not None
+            and baseline_distance != 0.0
+            and latest_distance is not None
+        ):
             percent_change = round(
                 ((baseline_distance - latest_distance) / baseline_distance) * 100.0,
                 2,
             )
 
     confidence_values = [
-        _as_float(item.get("confidence_score")) for item in comparable_history if item.get("confidence_score") is not None
+        _as_float(item.get("confidence_score"))
+        for item in comparable_history
+        if item.get("confidence_score") is not None
     ]
+    numeric_confidence_values = [item for item in confidence_values if item is not None]
     confidence_score = (
-        round(mean(confidence_values) * min(1.0, len(comparable_history) / 4), 4)
-        if confidence_values
+        round(mean(numeric_confidence_values) * min(1.0, len(comparable_history) / 4), 4)
+        if numeric_confidence_values
         else None
     )
-    method = "baseline_latest_delta" if len(comparable_history) == 2 else "directional_step_consensus"
+    method = (
+        "baseline_latest_delta" if len(comparable_history) == 2 else "directional_step_consensus"
+    )
     limitations = []
     if len(comparable_history) == 2:
-        limitations.append("Trend uses recent-versus-baseline change only because only two comparable sessions were available.")
+        limitations.append(
+            "Trend uses recent-versus-baseline change only because only two comparable sessions were available."
+        )
     if any(item.get("validity_state") == "LOW_CONFIDENCE" for item in comparable_history):
-        limitations.append("Low-confidence observations were retained for visibility but may weaken trend certainty.")
+        limitations.append(
+            "Low-confidence observations were retained for visibility but may weaken trend certainty."
+        )
 
     return {
         "state": state,
@@ -387,22 +426,24 @@ def _build_across_session_consistency(comparable_history: list[dict[str, Any]]) 
             "method": None,
             "value": None,
             "comparable_session_count": len(comparable_history),
-            "limitations": ["At least two comparable sessions are required for across-session stability."],
+            "limitations": [
+                "At least two comparable sessions are required for across-session stability."
+            ],
         }
 
     values = [_as_float(item.get("raw_value")) for item in comparable_history]
-    values = [item for item in values if item is not None]
-    if len(values) < 2:
+    numeric_values = [item for item in values if item is not None]
+    if len(numeric_values) < 2:
         return {
             "classification": "non_comparable",
             "method": None,
             "value": None,
-            "comparable_session_count": len(values),
+            "comparable_session_count": len(numeric_values),
             "limitations": ["Across-session stability requires numeric comparable values."],
         }
 
-    spread = pstdev(values) if len(values) > 1 else 0.0
-    mean_value = mean(values)
+    spread = pstdev(numeric_values) if len(numeric_values) > 1 else 0.0
+    mean_value = mean(numeric_values)
     if abs(mean_value) > 1e-9:
         method = "coefficient_of_variation"
         value = round(spread / abs(mean_value), 4)
@@ -482,7 +523,11 @@ def _select_primary_comparable_component(
         components.append(
             sorted(
                 [observations[item] for item in component_indexes],
-                key=lambda item: (item.session_timestamp, item.job_timestamp, str(getattr(item.job, "id", ""))),
+                key=lambda item: (
+                    item.session_timestamp,
+                    item.job_timestamp,
+                    str(getattr(item.job, "id", "")),
+                ),
             )
         )
 
@@ -539,7 +584,9 @@ def _extract_metric_results(job: Any | None) -> list[CoachingMetricResultV2]:
             candidate = candidate["deep"]
         elif isinstance(candidate, dict) and isinstance(candidate.get("quick"), dict):
             candidate = candidate["quick"]
-        metric_results = candidate.get("v2", {}).get("metric_results") if isinstance(candidate, dict) else None
+        metric_results = (
+            candidate.get("v2", {}).get("metric_results") if isinstance(candidate, dict) else None
+        )
         if not isinstance(metric_results, list):
             continue
         parsed: list[CoachingMetricResultV2] = []
@@ -646,7 +693,11 @@ def _target_distance(raw_value: float | None, semantics: _MetricSemantics) -> fl
 
 
 def _metric_numeric_value(metric: CoachingMetricResultV2) -> float | None:
-    return _metric_raw_value(metric) if _metric_raw_value(metric) is not None else _as_float(metric.normalized_score)
+    return (
+        _metric_raw_value(metric)
+        if _metric_raw_value(metric) is not None
+        else _as_float(metric.normalized_score)
+    )
 
 
 def _metric_raw_value(metric: CoachingMetricResultV2) -> float | None:

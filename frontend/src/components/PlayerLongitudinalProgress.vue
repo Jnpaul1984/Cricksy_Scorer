@@ -167,7 +167,11 @@ async function loadProgress() {
 
 watch(
   () => [props.playerId, props.discipline, props.visible] as const,
-  ([playerId, _discipline, visible], [previousPlayerId, previousDiscipline, previousVisible]) => {
+  (current, previous) => {
+    const [playerId, _discipline, visible] = current;
+    const previousPlayerId = previous?.[0];
+    const previousDiscipline = previous?.[1];
+    const previousVisible = previous?.[2];
     if (!playerId || !visible) return;
     if (playerId !== previousPlayerId || props.discipline !== previousDiscipline || visible !== previousVisible) {
       loadProgress();
