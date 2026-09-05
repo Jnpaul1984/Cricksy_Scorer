@@ -4677,11 +4677,12 @@ Derived from the Phase 10J.0 repository audit/spec lock:
 * **10J.7 — Wicketkeeping V2 Deterministic Metric Pack** — **COMPLETE**
 * **10J.8 — Fielding V2 Deterministic Metric Pack** — **COMPLETE**
 * **10J.9 — Confidence, Validity & Metric Sanity Hardening** — **COMPLETE**
-* **10J.10 — Strength + Consistency Engine** — **PENDING USER APPROVAL**
-* **10J.11 — Player Longitudinal Progress Engine** — **PENDING USER APPROVAL**
-* **10J.12 — Hardening, Performance, CI, and Rollout Controls** — **PENDING USER APPROVAL**
+* **10J.10 — Strength + Consistency Engine** — **COMPLETE**
+* **10J.11 — Player Longitudinal Progress Engine** — **COMPLETE**
+* **10J.12 — Hardening, Performance, CI, and Rollout Controls** — **COMPLETE**
+* **10J.13 — Coach-Private Player Setup & Match Setup Decoupling** — **COMPLETE**
 
-Further implementation sub-phases beyond 10J.8 require explicit user approval.
+Phase 10J.13 was explicitly authorized by Issue #501 as a bounded decoupling follow-up.
 
 ---
 
@@ -4734,7 +4735,7 @@ Phase 10J.0 is complete only when:
 * checklist validation passes
 * no runtime implementation occurred
 
-**Implementation status after Phase 10J.9:** 10J.1-10J.9 COMPLETE; 10J.10+ PENDING USER APPROVAL.
+**Implementation status after Phase 10J.13:** 10J.1-10J.13 COMPLETE.
 
 ---
 # Phase 11 — Organization Pro + League Operations

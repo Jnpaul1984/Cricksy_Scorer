@@ -51,6 +51,18 @@ export interface VideoSession {
   updated_at: string;
 }
 
+export interface CoachPlayer {
+  player_id: string;
+  player_name: string;
+  date_of_birth: string | null;
+  assignment_active: boolean;
+}
+
+export interface CoachPrivatePlayerCreate {
+  player_name?: string | null;
+  date_of_birth?: string | null;
+}
+
 export interface VideoAnalysisJob {
   id: string;
   session_id: string;
@@ -284,6 +296,45 @@ function url(path: string): string {
   const base = (API_BASE || '').replace(/\/+$/, '');
   const p = path.startsWith('/') ? path : `/${path}`;
   return base ? `${base}${p}` : p;
+}
+
+export async function listCoachPlayers(): Promise<CoachPlayer[]> {
+  const res = await fetch(url('/api/coaches/plus/players'), {
+    headers: getAuthHeader() || {},
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new ApiError(
+      `Failed to load coaching players: ${res.status}`,
+      res.status,
+      detail?.detail || res.statusText,
+      detail?.code || undefined,
+    );
+  }
+  return res.json();
+}
+
+export async function createCoachPrivatePlayer(
+  data: CoachPrivatePlayerCreate,
+): Promise<CoachPlayer> {
+  const res = await fetch(url('/api/coaches/plus/players'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(getAuthHeader() || {}),
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new ApiError(
+      `Failed to create coaching player: ${res.status}`,
+      res.status,
+      detail?.detail || res.statusText,
+      detail?.code || undefined,
+    );
+  }
+  return res.json();
 }
 
 /**

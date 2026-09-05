@@ -2,7 +2,12 @@ import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, reactive } from 'vue'
 
-import { listVideoSessions, type VideoAnalysisJob } from '@/services/coachPlusVideoService'
+import {
+  createCoachPrivatePlayer,
+  listCoachPlayers,
+  listVideoSessions,
+  type VideoAnalysisJob,
+} from '@/services/coachPlusVideoService'
 import CoachProPlusVideoSessionsView from '@/views/CoachProPlusVideoSessionsView.vue'
 
 const authStoreMock = reactive({
@@ -17,11 +22,13 @@ const authStoreMock = reactive({
 })
 
 const videoStoreCleanup = vi.fn()
+const videoStoreCreateSession = vi.fn()
 const videoStoreMock = reactive({
   error: null as string | null,
   uploading: null as { status: string } | null,
   uploadProgress: 0,
   cleanup: videoStoreCleanup,
+  createSession: videoStoreCreateSession,
 })
 
 vi.mock('@/stores/authStore', () => ({
@@ -35,6 +42,8 @@ vi.mock('@/stores/coachPlusVideoStore', () => ({
 vi.mock('@/services/coachPlusVideoService', () => ({
   ApiError: class ApiError extends Error {},
   listVideoSessions: vi.fn(),
+  listCoachPlayers: vi.fn(),
+  createCoachPrivatePlayer: vi.fn(),
   getVideoStreamUrl: vi.fn(),
   calculateCompliance: vi.fn(),
   getJobOutcomes: vi.fn(),
@@ -60,13 +69,8 @@ vi.mock('@/services/playerDevelopmentApi', () => ({
       return false
     }
   },
-  listCoachAssignedPlayers: vi.fn(),
   listPlayerDevelopmentPlans: vi.fn(),
   reviewPlayerDevelopmentPlan: vi.fn(),
-}))
-
-vi.mock('@/services/playerApi', () => ({
-  getPlayerProfile: vi.fn(),
 }))
 
 async function flushAsync() {
@@ -106,7 +110,9 @@ describe('CoachProPlusVideoSessionsView', () => {
     videoStoreMock.uploading = null
     videoStoreMock.uploadProgress = 0
     videoStoreMock.cleanup = videoStoreCleanup
+    videoStoreMock.createSession = videoStoreCreateSession
     vi.mocked(listVideoSessions).mockResolvedValue([])
+    vi.mocked(listCoachPlayers).mockResolvedValue([])
   })
 
   it('shows the video sessions workspace for authorized org pro reviewers', async () => {
@@ -126,22 +132,14 @@ describe('CoachProPlusVideoSessionsView', () => {
     authStoreMock.isCoachProPlus = true
     authStoreMock.role = 'coach_pro_plus'
 
-    const playerDevApi = await import('@/services/playerDevelopmentApi')
-    const playerApi = await import('@/services/playerApi')
-    vi.mocked(playerDevApi.listCoachAssignedPlayers).mockResolvedValue([
+    vi.mocked(listCoachPlayers).mockResolvedValue([
       {
-        id: 'assign-1',
-        coach_user_id: 'coach-1',
-        player_profile_id: 'player-1',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        player_id: 'player-1',
+        player_name: 'Player One',
+        date_of_birth: null,
+        assignment_active: true,
       },
     ])
-    vi.mocked(playerApi.getPlayerProfile).mockResolvedValue({
-      player_id: 'player-1',
-      player_name: 'Player One',
-    } as any)
 
     const wrapper = mountView()
     await flushAsync()
@@ -150,8 +148,90 @@ describe('CoachProPlusVideoSessionsView', () => {
     await flushAsync()
 
     expect(wrapper.text()).toContain('Discipline')
-    expect(wrapper.text()).toContain('Create new player')
+    expect(wrapper.text()).toContain('Add coaching player')
+    expect(wrapper.text()).not.toContain('existing Match Setup workflow')
     expect(wrapper.text()).not.toContain('Player IDs (comma-separated)')
+  })
+
+  it('creates a private coaching player and immediately selects it', async () => {
+    authStoreMock.canCoach = true
+    authStoreMock.isCoachProPlus = true
+    authStoreMock.role = 'coach_pro_plus'
+
+    const createdPlayer = {
+      player_id: 'coach-player-new',
+      player_name: 'Private Player',
+      date_of_birth: '2010-06-15',
+      assignment_active: true,
+    }
+    vi.mocked(listCoachPlayers)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([createdPlayer])
+    vi.mocked(createCoachPrivatePlayer).mockResolvedValue(createdPlayer)
+
+    const wrapper = mountView()
+    await flushAsync()
+    await wrapper.find('button.btn-primary').trigger('click')
+    await flushAsync()
+    await wrapper.find('.btn-link-inline').trigger('click')
+    await wrapper.find('#new-player-name').setValue('Private Player')
+    await wrapper.find('#new-player-dob').setValue('2010-06-15')
+    await wrapper.find('.player-create-panel .btn-primary').trigger('click')
+    await flushAsync()
+
+    expect(createCoachPrivatePlayer).toHaveBeenCalledWith({
+      player_name: 'Private Player',
+      date_of_birth: '2010-06-15',
+    })
+    expect((wrapper.find('#primary-player').element as HTMLSelectElement).value).toBe(
+      'coach-player-new',
+    )
+    expect(wrapper.findAll('#primary-player option[value="coach-player-new"]')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('Quick add coaching player')
+  })
+
+  it('preserves a created player when refresh fails and reconciles it without duplicates later', async () => {
+    authStoreMock.canCoach = true
+    authStoreMock.isCoachProPlus = true
+    authStoreMock.role = 'coach_pro_plus'
+
+    const createdPlayer = {
+      player_id: 'coach-player-preserved',
+      player_name: 'Preserved Player',
+      date_of_birth: null,
+      assignment_active: true,
+    }
+    vi.mocked(listCoachPlayers)
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error('Temporary player refresh failure'))
+      .mockResolvedValueOnce([createdPlayer])
+    vi.mocked(createCoachPrivatePlayer).mockResolvedValue(createdPlayer)
+
+    const wrapper = mountView()
+    await flushAsync()
+    await wrapper.find('button.btn-primary').trigger('click')
+    await flushAsync()
+    await wrapper.find('.btn-link-inline').trigger('click')
+    await wrapper.find('#new-player-name').setValue('Preserved Player')
+    await wrapper.find('.player-create-panel .btn-primary').trigger('click')
+    await flushAsync()
+
+    const selector = wrapper.find('#primary-player')
+    expect((selector.element as HTMLSelectElement).value).toBe('coach-player-preserved')
+    expect(wrapper.findAll('#primary-player option[value="coach-player-preserved"]')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Temporary player refresh failure')
+    expect(wrapper.text()).not.toContain('Quick add coaching player')
+    expect(createCoachPrivatePlayer).toHaveBeenCalledTimes(1)
+
+    await (wrapper.vm as unknown as { fetchAssignedPlayers: () => Promise<void> }).fetchAssignedPlayers()
+    await flushAsync()
+
+    expect(wrapper.findAll('#primary-player option[value="coach-player-preserved"]')).toHaveLength(1)
+    expect((wrapper.find('#primary-player').element as HTMLSelectElement).value).toBe(
+      'coach-player-preserved',
+    )
+    expect(wrapper.text()).not.toContain('Temporary player refresh failure')
+    expect(createCoachPrivatePlayer).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the upgrade gate for users without coach access', async () => {

@@ -171,11 +171,33 @@
               <button type="button" class="btn-secondary btn-small" @click="selectedPrimaryPlayerId = ''">
                 Clear
               </button>
-              <router-link to="/setup" class="btn-link-inline">Create new player</router-link>
+              <button type="button" class="btn-link-inline" @click="togglePlayerCreator">
+                {{ showPlayerCreator ? 'Cancel player setup' : 'Add coaching player' }}
+              </button>
             </div>
-            <p class="field-hint">
-              New player creation currently uses the existing Match Setup workflow.
-            </p>
+            <div v-if="showPlayerCreator" class="player-create-panel">
+              <h3>Quick add coaching player</h3>
+              <p class="field-hint">No team, match, player account, email, or parent details required.</p>
+              <label for="new-player-name">Name (optional)</label>
+              <input
+                id="new-player-name"
+                v-model="newPlayerName"
+                type="text"
+                maxlength="120"
+                placeholder="A safe placeholder is generated if blank"
+              />
+              <label for="new-player-dob">Date of birth (optional)</label>
+              <input id="new-player-dob" v-model="newPlayerDateOfBirth" type="date" />
+              <p v-if="playerCreateError" class="field-error">{{ playerCreateError }}</p>
+              <button
+                type="button"
+                class="btn-primary btn-small"
+                :disabled="creatingPlayer"
+                @click="createPrivatePlayer"
+              >
+                {{ creatingPlayer ? 'Adding player…' : 'Add and select player' }}
+              </button>
+            </div>
           </div>
 
           <div class="form-group">
@@ -1029,23 +1051,22 @@ import type {
 } from '@/services/coachPlusVideoService';
 import {
   ApiError,
+  createCoachPrivatePlayer,
   getVideoStreamUrl,
+  listCoachPlayers,
   calculateCompliance,
   getJobOutcomes,
   generateCoachSuggestions,
   getCoachSuggestions,
 } from '@/services/coachPlusVideoService';
 import {
-  listCoachAssignedPlayers,
   listPlayerDevelopmentPlans,
   reviewPlayerDevelopmentPlan,
   PlayerDevelopmentApiError,
-  type CoachPlayerAssignmentRead,
   type PlayerDevelopmentPlanDraftBundle,
   type PlayerDevelopmentPlanReviewResponse,
   type PlayerDevelopmentReviewDecision,
 } from '@/services/playerDevelopmentApi';
-import { getPlayerProfile } from '@/services/playerApi';
 import { useAuthStore } from '@/stores/authStore';
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
 import { buildCoachNarrative } from '@/utils/coachVideoAnalysisNarrative';
@@ -1122,11 +1143,18 @@ const offset = ref(0);
 const limit = ref(10);
 const excludeFailed = ref(true); // Performance: hide failed sessions by default
 const statusFilter = ref<string | null>(null);
-const assignedPlayers = ref<Array<{ id: string; name: string }>>([]);
+type AssignedPlayer = { id: string; name: string };
+
+const assignedPlayers = ref<AssignedPlayer[]>([]);
 const loadingPlayers = ref(false);
 const playerLoadError = ref<string | null>(null);
 const playerSearch = ref('');
 const selectedPrimaryPlayerId = ref('');
+const showPlayerCreator = ref(false);
+const creatingPlayer = ref(false);
+const playerCreateError = ref<string | null>(null);
+const newPlayerName = ref('');
+const newPlayerDateOfBirth = ref('');
 
 const formData = ref({
   title: '',
@@ -1571,27 +1599,23 @@ function formatReviewSubmissionError(error: unknown): string {
 // Methods
 // ============================================================================
 
-async function fetchAssignedPlayers() {
+function upsertAssignedPlayer(player: AssignedPlayer) {
+  const uniqueById = new Map(assignedPlayers.value.map((item) => [item.id, item]));
+  uniqueById.set(player.id, player);
+  assignedPlayers.value = Array.from(uniqueById.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+}
+
+async function fetchAssignedPlayers(preservePlayer?: AssignedPlayer) {
   loadingPlayers.value = true;
   playerLoadError.value = null;
   try {
-    const assignments: CoachPlayerAssignmentRead[] = await listCoachAssignedPlayers();
-    const playerRows = await Promise.all(
-      assignments.map(async (assignment) => {
-        try {
-          const profile = await getPlayerProfile(assignment.player_profile_id);
-          return {
-            id: assignment.player_profile_id,
-            name: profile.player_name || assignment.player_profile_id,
-          };
-        } catch {
-          return {
-            id: assignment.player_profile_id,
-            name: assignment.player_profile_id,
-          };
-        }
-      }),
-    );
+    const profiles = await listCoachPlayers();
+    const playerRows = profiles.map((profile) => ({
+      id: profile.player_id,
+      name: profile.player_name || profile.player_id,
+    }));
     const uniqueById = new Map<string, { id: string; name: string }>();
     for (const player of playerRows) {
       uniqueById.set(player.id, player);
@@ -1599,12 +1623,51 @@ async function fetchAssignedPlayers() {
     assignedPlayers.value = Array.from(uniqueById.values()).sort((a, b) =>
       a.name.localeCompare(b.name),
     );
+    if (preservePlayer) {
+      upsertAssignedPlayer(preservePlayer);
+    }
   } catch (err) {
     playerLoadError.value =
       err instanceof Error ? err.message : 'Failed to load assigned players';
-    assignedPlayers.value = [];
+    if (preservePlayer) {
+      upsertAssignedPlayer(preservePlayer);
+    } else {
+      assignedPlayers.value = [];
+    }
   } finally {
     loadingPlayers.value = false;
+  }
+}
+
+function togglePlayerCreator() {
+  showPlayerCreator.value = !showPlayerCreator.value;
+  playerCreateError.value = null;
+}
+
+async function createPrivatePlayer() {
+  creatingPlayer.value = true;
+  playerCreateError.value = null;
+  try {
+    const created = await createCoachPrivatePlayer({
+      player_name: newPlayerName.value.trim() || null,
+      date_of_birth: newPlayerDateOfBirth.value || null,
+    });
+    const createdPlayer = {
+      id: created.player_id,
+      name: created.player_name || created.player_id,
+    };
+    upsertAssignedPlayer(createdPlayer);
+    selectedPrimaryPlayerId.value = createdPlayer.id;
+    await fetchAssignedPlayers(createdPlayer);
+    selectedPrimaryPlayerId.value = createdPlayer.id;
+    playerSearch.value = '';
+    newPlayerName.value = '';
+    newPlayerDateOfBirth.value = '';
+    showPlayerCreator.value = false;
+  } catch (err) {
+    playerCreateError.value = err instanceof Error ? err.message : 'Failed to add coaching player';
+  } finally {
+    creatingPlayer.value = false;
   }
 }
 
@@ -2259,6 +2322,11 @@ function closeModal() {
   };
   playerSearch.value = '';
   selectedPrimaryPlayerId.value = '';
+  showPlayerCreator.value = false;
+  creatingPlayer.value = false;
+  playerCreateError.value = null;
+  newPlayerName.value = '';
+  newPlayerDateOfBirth.value = '';
 }
 
 function closeHistoryModal() {
@@ -3224,6 +3292,7 @@ onBeforeUnmount(() => {
 .form-group input[type='text'],
 .form-group input[type='file'],
 .form-group input[type='number'],
+.form-group input[type='date'],
 .form-group select,
 .form-group textarea {
   width: 100%;
@@ -3277,10 +3346,30 @@ onBeforeUnmount(() => {
   margin-top: 0.5rem;
 }
 
+.player-create-panel {
+  margin-top: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #dfe3f0;
+  border-radius: 6px;
+  background: #f8f9ff;
+}
+
+.player-create-panel h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.player-create-panel label {
+  margin-top: 0.75rem;
+}
+
 .btn-link-inline {
+  border: 0;
+  background: transparent;
   color: #667eea;
   text-decoration: none;
   font-size: 0.9rem;
+  cursor: pointer;
 }
 
 .btn-link-inline:hover {
