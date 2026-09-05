@@ -741,10 +741,17 @@
                 </span>
                 <span class="status-text">
                   {{ formatV2MetricValue(metric) }} • {{ formatRepetitionValidity(metric.validityState) }}
+                  <span v-if="metricMeasurementKind(metric)"> • {{ metricMeasurementKind(metric) }}</span>
                   <span v-if="metric.classificationStatus"> • {{ metric.classificationStatus }}</span>
                   <span v-if="metric.confidenceScore !== null">
                     • {{ formatPercent01(metric.confidenceScore) }}
                   </span>
+                </span>
+                <span
+                  v-if="metric.unavailableReason || metric.limitations.length > 0"
+                  class="status-text"
+                >
+                  {{ metric.unavailableReason || metric.limitations[0] }}
                 </span>
               </div>
             </div>
@@ -1859,11 +1866,22 @@ function phasesForRepetition(repetitionId: string): CoachVideoPhase[] {
 }
 
 function formatV2MetricValue(metric: CoachVideoV2Metric): string {
+  if (!isMeasurableValidityState(metric.validityState)) {
+    return metric.unavailableReason ?? 'Unavailable';
+  }
   if (metric.rawValue === null) return 'N/A';
   if (metric.unit === 'degrees') return `${metric.rawValue.toFixed(1)}°`;
   if (metric.unit === 'score') return formatPercent01(metric.rawValue);
   if (metric.unit === 'ratio') return metric.rawValue.toFixed(3);
   return metric.rawValue.toFixed(3);
+}
+
+function isMeasurableValidityState(validityState: string): boolean {
+  return validityState === 'VALID' || validityState === 'LOW_CONFIDENCE';
+}
+
+function metricMeasurementKind(metric: CoachVideoV2Metric): string | null {
+  return metric.metricId.includes('_proxy_') || metric.phase?.includes('proxy') ? 'proxy' : null;
 }
 
 function formatV2MetricLabel(metricId: string): string {

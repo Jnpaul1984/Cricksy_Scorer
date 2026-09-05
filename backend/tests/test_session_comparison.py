@@ -57,6 +57,7 @@ class TestCompareJobs:
                 self.completed_at = completed_at
                 self.created_at = completed_at
                 self.analysis_mode = analysis_mode
+                self.player_id = "player-1"
                 self.deep_findings = {
                     "findings": [
                         {
@@ -65,6 +66,32 @@ class TestCompareJobs:
                         }
                         for code, score in metric_scores.items()
                     ]
+                }
+                self.deep_results = {
+                    "v2": {
+                        "metric_results": [
+                            {
+                                "metric_version": "pose_metrics.v1",
+                                "metric_id": "head_stability_score",
+                                "discipline": analysis_mode,
+                                "raw_value": 0.8,
+                                "unit": "score",
+                                "normalized_score": 0.8,
+                                "confidence_score": 0.9,
+                                "validity_state": "VALID",
+                                "capture_profile": {
+                                    "camera_view": "side",
+                                    "sample_fps": 10.0,
+                                    "effective_analysis_fps": 10.0,
+                                    "source_video_fps": 30.0,
+                                    "analysis_mode": analysis_mode,
+                                    "discipline": analysis_mode,
+                                    "metric_version": "pose_metrics.v1",
+                                    "source_model": "MediaPipe Pose Landmarker Full",
+                                },
+                            }
+                        ]
+                    }
                 }
 
         return [
@@ -95,6 +122,7 @@ class TestCompareJobs:
         assert result["timeline"] == []
         assert result["deltas"] == []
         assert result["persistent_issues"] == []
+        assert result["comparability"]["state"] == "UNAVAILABLE"
 
     def test_compare_jobs_single_job(self, mock_jobs):
         """Test comparing single job."""
@@ -104,6 +132,7 @@ class TestCompareJobs:
         assert result["timeline"][0]["job_id"] == "job1"
         assert result["deltas"] == []
         assert result["persistent_issues"] == []
+        assert result["comparability"]["state"] == "UNAVAILABLE"
 
     def test_compare_jobs_timeline(self, mock_jobs):
         """Test timeline generation."""
@@ -118,6 +147,7 @@ class TestCompareJobs:
         assert result["timeline"][0]["metric_scores"]["HEAD_MOVEMENT"] == 0.50
         assert result["timeline"][1]["metric_scores"]["HEAD_MOVEMENT"] == 0.70
         assert result["timeline"][2]["metric_scores"]["HEAD_MOVEMENT"] == 0.75
+        assert result["comparability"]["state"] == "COMPARABLE"
 
     def test_compare_jobs_improvements(self, mock_jobs):
         """Test improvement detection."""
@@ -205,6 +235,7 @@ class TestCompareJobs:
                 self.completed_at = completed_at
                 self.created_at = completed_at
                 self.analysis_mode = "bowling"
+                self.player_id = "player-1"
                 self.deep_findings = {
                     "findings": [
                         {
@@ -212,6 +243,32 @@ class TestCompareJobs:
                             "metrics": {"metric": {"score": score}},
                         }
                     ]
+                }
+                self.deep_results = {
+                    "v2": {
+                        "metric_results": [
+                            {
+                                "metric_version": "pose_metrics.v1",
+                                "metric_id": "head_stability_score",
+                                "discipline": "bowling",
+                                "raw_value": 0.8,
+                                "unit": "score",
+                                "normalized_score": 0.8,
+                                "confidence_score": 0.9,
+                                "validity_state": "VALID",
+                                "capture_profile": {
+                                    "camera_view": "side",
+                                    "sample_fps": 10.0,
+                                    "effective_analysis_fps": 10.0,
+                                    "source_video_fps": 30.0,
+                                    "analysis_mode": "bowling",
+                                    "discipline": "bowling",
+                                    "metric_version": "pose_metrics.v1",
+                                    "source_model": "MediaPipe Pose Landmarker Full",
+                                },
+                            }
+                        ]
+                    }
                 }
 
         jobs = [
@@ -226,3 +283,31 @@ class TestCompareJobs:
         persistent = result["persistent_issues"]
         assert len(persistent) == 1
         assert persistent[0]["trend"] == "declining"
+
+    def test_compare_jobs_fails_safe_when_v2_metadata_is_missing(self):
+        class MockJob:
+            def __init__(self, job_id, completed_at, score):
+                self.id = job_id
+                self.completed_at = completed_at
+                self.created_at = completed_at
+                self.analysis_mode = "bowling"
+                self.deep_findings = {
+                    "findings": [
+                        {
+                            "code": "LEGACY_METRIC",
+                            "metrics": {"metric": {"score": score}},
+                        }
+                    ]
+                }
+
+        jobs = [
+            MockJob("job1", datetime(2026, 1, 1, tzinfo=UTC), 0.55),
+            MockJob("job2", datetime(2026, 1, 5, tzinfo=UTC), 0.65),
+        ]
+
+        result = compare_jobs(jobs)
+
+        assert result["comparability"]["comparable"] is False
+        assert result["comparability"]["state"] == "NON_COMPARABLE"
+        assert result["deltas"][0]["improvements"] == []
+        assert result["persistent_issues"] == []

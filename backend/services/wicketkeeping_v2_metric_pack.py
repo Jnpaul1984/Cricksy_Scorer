@@ -17,7 +17,12 @@ from backend.domain.coach_analysis_v2_contract import (
     TimestampRef,
     ValidityState,
 )
-from backend.services.coach_analysis_v2_compatibility import infer_validity_state
+from backend.services.coach_analysis_v2_compatibility import (
+    has_measurable_validity_state,
+    infer_validity_state,
+    resolve_metric_unavailability,
+    sanitize_metric_output,
+)
 
 _WICKETKEEPING_V2_METRIC_VERSION = "wicketkeeping_pose_metrics.v2.0.0"
 _WICKETKEEPING_V2_METRIC_IDS = {
@@ -136,14 +141,18 @@ def build_wicketkeeping_v2_findings_insights(
             and metric.classification_status == "STRONG"
         ):
             strengths.append({"metric_id": metric.metric_id, "summary": f"Strong {label}."})
-        elif metric.validity_state in {ValidityState.VALID, ValidityState.LOW_CONFIDENCE}:
+        elif metric.validity_state == ValidityState.VALID:
             concerns.append({"metric_id": metric.metric_id, "summary": f"Refine {label}."})
         else:
             limitations.append(
                 {
                     "metric_id": metric.metric_id,
                     "summary": metric.unavailable_reason
-                    or "Metric unavailable for this wicketkeeping capture.",
+                    or (
+                        "Measurement confidence was too low to treat this as a coaching weakness."
+                        if metric.validity_state == ValidityState.LOW_CONFIDENCE
+                        else "Metric unavailable for this wicketkeeping capture."
+                    ),
                 }
             )
     return {
@@ -176,6 +185,29 @@ def _build_wicketkeeping_metric_results(
     )
 
     subtype_map = _infer_repetition_subtypes(repetitions, phase_lookup)
+    repetitions_available = bool(repetitions)
+    phases_available = bool(phase_lookup)
+    standing_up_available = any(
+        subtype_map.get(rep.repetition_id, {}).get("standing") == "up" for rep in repetitions
+    )
+    standing_back_available = any(
+        subtype_map.get(rep.repetition_id, {}).get("standing") == "back" for rep in repetitions
+    )
+    leg_side_available = any(
+        subtype_map.get(rep.repetition_id, {}).get("leg_side", False) for rep in repetitions
+    )
+    stumping_available = any(
+        subtype_map.get(rep.repetition_id, {}).get("stumping", False) for rep in repetitions
+    )
+    stumping_object_evidence_available = any(
+        (
+            phase is not None
+            and _phase_has_object_hint(phase, {"stumps", "ball_tracking", "collection"})
+        )
+        for rep in repetitions
+        for phase in [_phase_for_names(rep.repetition_id, phase_lookup, ("action",))]
+        if subtype_map.get(rep.repetition_id, {}).get("stumping", False)
+    )
     base_requirements = CameraRequirements(
         supported_views=["side", "front", "behind"],
         minimum_sample_fps=6.0,
@@ -210,6 +242,8 @@ def _build_wicketkeeping_metric_results(
             limitations=[
                 "Pose-only ratio; perspective and crease angle can affect absolute scale.",
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="wicketkeeping_set_knee_flexion_angle_deg",
@@ -238,6 +272,8 @@ def _build_wicketkeeping_metric_results(
             limitations=[
                 "Knee flexion is a squat-depth proxy and does not model ankle mobility limits.",
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="wicketkeeping_reaction_head_stability_score",
@@ -262,6 +298,8 @@ def _build_wicketkeeping_metric_results(
             limitations=[
                 "Represents pose-based steadiness during read/move initiation; no ball reaction-time claim.",
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="wicketkeeping_movement_lateral_displacement_ratio",
@@ -286,6 +324,8 @@ def _build_wicketkeeping_metric_results(
             limitations=[
                 "Movement scale is normalized by shoulder width and does not infer footwork type (shuffle/crossover).",
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="wicketkeeping_collection_balance_drift_ratio",
@@ -310,6 +350,8 @@ def _build_wicketkeeping_metric_results(
             limitations=[
                 "Collection balance is a body-control proxy and does not claim exact glove-ball contact timing.",
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="wicketkeeping_recovery_head_base_offset_ratio",
@@ -334,6 +376,8 @@ def _build_wicketkeeping_metric_results(
             limitations=[
                 "Recovery alignment uses head-over-base proxy and not full center-of-mass tracking.",
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="wicketkeeping_context_standing_set_depth_delta_ratio",
@@ -357,6 +401,8 @@ def _build_wicketkeeping_metric_results(
             limitations=[
                 "Computed only when both standing_up and standing_back tags exist in deterministic repetition/phase evidence.",
             ],
+            repetitions_available=standing_up_available and standing_back_available,
+            phases_available=phases_available,
             unavailable_hint=(
                 "Standing-up/back context is unavailable; no deterministic standing-context comparison was emitted."
             ),
@@ -387,6 +433,8 @@ def _build_wicketkeeping_metric_results(
             limitations=[
                 "Leg-side metric is emitted only for repetitions tagged leg_side in deterministic evidence.",
             ],
+            repetitions_available=leg_side_available,
+            phases_available=phases_available,
             unavailable_hint="No deterministic leg-side repetition tags were available.",
         ),
         _build_metric_result(
@@ -420,8 +468,12 @@ def _build_wicketkeeping_metric_results(
             limitations=[
                 "This is a stumping action compactness proxy only; exact collection-to-stumps timing is not inferred.",
             ],
+            repetitions_available=stumping_available,
+            phases_available=phases_available,
+            requires_object_evidence=True,
+            object_evidence_available=stumping_object_evidence_available,
             unavailable_hint=(
-                "No deterministic stumping-tagged repetitions were available, so stumping timing/precision was not inferred."
+                "Required stumping object evidence was unavailable, so stumping timing/precision was not inferred."
             ),
         ),
     ]
@@ -441,6 +493,10 @@ def _build_metric_result(
     valid_range: tuple[float, float],
     classification_fn: Callable[[float], str],
     limitations: list[str],
+    repetitions_available: bool = True,
+    phases_available: bool = True,
+    requires_object_evidence: bool = False,
+    object_evidence_available: bool | None = None,
     unavailable_hint: str | None = None,
 ) -> CoachingMetricResultV2:
     values = [sample.value for sample in samples]
@@ -477,11 +533,30 @@ def _build_metric_result(
     ):
         unavailable_reason = unavailable_hint
 
-    aggregate_stats = _aggregate_stats(values, len(samples))
+    validity_state, unavailable_reason = resolve_metric_unavailability(
+        validity_state=validity_state,
+        unavailable_reason=unavailable_reason,
+        repetitions_available=repetitions_available,
+        phases_available=phases_available,
+        requires_object_evidence=requires_object_evidence,
+        object_evidence_available=object_evidence_available,
+        unavailable_hint=unavailable_hint,
+    )
+    normalized_score = raw_value if unit == "score" and isinstance(raw_value, float) else None
+    safe_raw_value, safe_normalized_score, safe_repetition_values = sanitize_metric_output(
+        validity_state=validity_state,
+        raw_value=raw_value,
+        normalized_score=normalized_score,
+        repetition_values=[round(value, 4) for value in values],
+    )
+    aggregate_stats = _aggregate_stats(
+        values,
+        len(samples),
+        measurable=has_measurable_validity_state(validity_state),
+    )
     classification_status = (
-        classification_fn(raw_value)
-        if raw_value is not None
-        and validity_state in {ValidityState.VALID, ValidityState.LOW_CONFIDENCE}
+        classification_fn(safe_raw_value)
+        if safe_raw_value is not None and has_measurable_validity_state(validity_state)
         else None
     )
 
@@ -495,9 +570,9 @@ def _build_metric_result(
         discipline="wicketkeeping",
         action_type="wicketkeeping_action",
         phase=phase,
-        raw_value=raw_value,
+        raw_value=safe_raw_value,
         unit=unit,
-        normalized_score=raw_value if unit == "score" and isinstance(raw_value, float) else None,
+        normalized_score=safe_normalized_score,
         classification_status=classification_status,
         confidence_score=avg_confidence,
         validity_state=validity_state,
@@ -509,13 +584,15 @@ def _build_metric_result(
         evidence_refs=_evidence_refs(samples),
         timestamp_refs=_timestamp_refs(samples),
         frame_refs=_frame_refs(samples),
-        repetition_values=[round(value, 4) for value in values],
+        repetition_values=safe_repetition_values,
         aggregate_stats=aggregate_stats,
     )
 
 
-def _aggregate_stats(values: list[float], repetition_count: int) -> dict[str, Any] | None:
-    if not values:
+def _aggregate_stats(
+    values: list[float], repetition_count: int, *, measurable: bool
+) -> dict[str, Any] | None:
+    if not values or not measurable:
         return {"count": 0, "valid_repetition_count": 0, "repetition_count": repetition_count}
     payload: dict[str, Any] = {
         "count": len(values),
@@ -546,10 +623,14 @@ def _single_phase_metric(
         action_type = str(repetition.action_type or "").strip().lower()
         if not action_type.startswith("wicketkeeping"):
             continue
+        if not has_measurable_validity_state(repetition.validity_state):
+            continue
         if repetition_filter is not None and not repetition_filter(repetition):
             continue
         phase = _phase_for_names(repetition.repetition_id, phase_lookup, phase_names)
         if phase is None:
+            continue
+        if not has_measurable_validity_state(phase.validity_state):
             continue
         window = _window_frames(frames, phase)
         value, visibility = measure_fn(window)

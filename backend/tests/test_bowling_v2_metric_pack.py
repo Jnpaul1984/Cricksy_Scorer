@@ -411,6 +411,6 @@ def test_attach_bowling_v2_metric_pack_handles_missing_phase_data_safely() -> No
     )
 
     assert all(
-        item["validity_state"] in {ValidityState.INSUFFICIENT_REPETITIONS.value}
+        item["validity_state"] == ValidityState.MISSING_PHASE.value
         for item in updated["v2"]["metric_results"]
     )

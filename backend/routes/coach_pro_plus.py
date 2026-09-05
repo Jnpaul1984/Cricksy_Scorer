@@ -1545,6 +1545,7 @@ class CompareJobsResponse(BaseModel):
     timeline: list[dict[str, Any]]
     deltas: list[dict[str, Any]]
     persistent_issues: list[dict[str, Any]]
+    comparability: dict[str, Any] | None = None
 
 
 @router.post("/analysis-jobs/{job_id}/set-goals")
