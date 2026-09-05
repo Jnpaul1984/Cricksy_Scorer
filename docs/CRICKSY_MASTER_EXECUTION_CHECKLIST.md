@@ -4678,7 +4678,7 @@ Derived from the Phase 10J.0 repository audit/spec lock:
 * **10J.8 — Fielding V2 Deterministic Metric Pack** — **COMPLETE**
 * **10J.9 — Confidence, Validity & Metric Sanity Hardening** — **COMPLETE**
 * **10J.10 — Strength + Consistency Engine** — **PENDING USER APPROVAL**
-* **10J.11 — Goal/Intervention + Interpretation + PDF V2 Integration** — **PENDING USER APPROVAL**
+* **10J.11 — Player Longitudinal Progress Engine** — **PENDING USER APPROVAL**
 * **10J.12 — Hardening, Performance, CI, and Rollout Controls** — **PENDING USER APPROVAL**
 
 Further implementation sub-phases beyond 10J.8 require explicit user approval.

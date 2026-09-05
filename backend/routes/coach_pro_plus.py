@@ -20,6 +20,7 @@ from backend.domain.coach_analysis_v2_contract import PhaseRecordV2, RepetitionA
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
 from backend.services.phase_recognition import extract_phase_recognition
+from backend.services.player_longitudinal_progress import build_player_longitudinal_progress
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
 from backend.services.repetition_segmentation import extract_repetition_segmentation
 from backend.services.s3_service import s3_service
@@ -1803,6 +1804,76 @@ async def compare_session_jobs(
     logger.info(f"Compared {len(jobs)} jobs for session {session_id}")
 
     return CompareJobsResponse(**comparison)
+
+
+@router.get("/players/{player_id}/longitudinal-progress", response_model=dict[str, Any])
+async def get_player_longitudinal_progress(
+    player_id: str,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+    discipline: Literal[
+        "batting", "pace_bowling", "spin_bowling", "wicketkeeping", "fielding"
+    ]
+    | None = Query(default=None),
+) -> dict[str, Any]:
+    """Return deterministic longitudinal progress for one player across accessible V2 sessions."""
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    if (
+        current_user.role not in (RoleEnum.coach_pro_plus, RoleEnum.org_pro)
+        and not current_user.is_superuser
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Coach Pro Plus users can access player longitudinal progress",
+        )
+
+    await _ensure_video_player_access(db, current_user, player_id)
+
+    if current_user.is_superuser:
+        query = select(VideoSession).options(selectinload(VideoSession.analysis_jobs))
+    elif current_user.role == RoleEnum.org_pro:
+        query = (
+            select(VideoSession)
+            .where(
+                (
+                    (VideoSession.owner_type == OwnerTypeEnum.org)
+                    & (VideoSession.owner_id == current_user.org_id)
+                )
+                | (
+                    (VideoSession.owner_type == OwnerTypeEnum.coach)
+                    & (VideoSession.owner_id == current_user.id)
+                )
+            )
+            .options(selectinload(VideoSession.analysis_jobs))
+        )
+    else:
+        query = (
+            select(VideoSession)
+            .where(
+                (VideoSession.owner_type == OwnerTypeEnum.coach)
+                & (VideoSession.owner_id == current_user.id)
+            )
+            .options(selectinload(VideoSession.analysis_jobs))
+        )
+
+    result = await db.execute(query.order_by(VideoSession.created_at.asc()))
+    sessions = [
+        session
+        for session in result.scalars().all()
+        if player_id == getattr(session, "primary_player_id", None)
+        or player_id in (getattr(session, "player_ids", None) or [])
+    ]
+
+    return build_player_longitudinal_progress(
+        sessions,
+        player_id=player_id,
+        discipline_filter=discipline,
+    )
 
 
 # ============================================================================

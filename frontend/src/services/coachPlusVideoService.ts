@@ -894,6 +894,106 @@ export interface CompareJobsResponse {
   }>;
 }
 
+export interface PlayerLongitudinalProgressResponse {
+  analysis_version: string;
+  generated_at: string | null;
+  player_id: string;
+  discipline_filter: string | null;
+  session_count: number;
+  series_count: number;
+  summary: {
+    improving: number;
+    regressing: number;
+    stable: number;
+    mixed: number;
+    insufficient_data: number;
+    non_comparable: number;
+  };
+  sessions_considered: Array<{
+    session_id: string;
+    session_title: string | null;
+    session_timestamp: string | null;
+    primary_player_id: string | null;
+    discipline: string | null;
+    job_id: string | null;
+    job_timestamp: string | null;
+    included: boolean;
+    reason: string | null;
+  }>;
+  series: Array<{
+    discipline: string | null;
+    metric_id: string;
+    metric_label: string;
+    phase: string | null;
+    action_type: string | null;
+    unit: string | null;
+    measurement_type: string;
+    best_direction: string;
+    target_range: { min: number; max: number } | null;
+    metric_versions_seen: string[];
+    comparable_session_count: number;
+    history_count: number;
+    baseline: LongitudinalObservation | null;
+    latest: LongitudinalObservation | null;
+    best: LongitudinalObservation | null;
+    best_available: boolean;
+    trend: {
+      state: 'improving' | 'regressing' | 'stable' | 'mixed' | 'insufficient_data' | 'non_comparable';
+      method: string | null;
+      comparable_session_count: number;
+      time_span_days: number;
+      change_amount: number | null;
+      change_unit: string | null;
+      percent_change: number | null;
+      confidence_score: number | null;
+      limitations: string[];
+    };
+    across_session_consistency: {
+      classification: 'stable' | 'variable' | 'insufficient_data' | 'non_comparable';
+      method: string | null;
+      value: number | null;
+      comparable_session_count: number;
+      limitations: string[];
+    };
+    history: LongitudinalObservation[];
+  }>;
+}
+
+export interface LongitudinalObservation {
+  session_id: string;
+  session_title: string | null;
+  session_timestamp: string | null;
+  job_id: string | null;
+  job_timestamp: string | null;
+  coaching_focus: string | null;
+  metric_version: string;
+  discipline: string | null;
+  phase: string | null;
+  action_type: string | null;
+  raw_value: number | null;
+  normalized_score: number | null;
+  unit: string | null;
+  measurement_type: string;
+  validity_state: string;
+  confidence_score: number | null;
+  camera_view: string | null;
+  sample_fps: number | null;
+  effective_analysis_fps: number | null;
+  source_video_fps: number | null;
+  source_model: string | null;
+  capture_profile_version: string | null;
+  repetition_count: number | null;
+  valid_sample_count: number | null;
+  within_session_consistency: Record<string, unknown> | null;
+  evidence_refs: Array<Record<string, unknown>>;
+  timestamp_refs: Array<Record<string, unknown>>;
+  frame_refs: Array<Record<string, unknown>>;
+  limitations: string[];
+  comparable: boolean;
+  comparability_state: string;
+  comparability_reasons: string[];
+}
+
 export async function compareJobs(
   sessionId: string,
   jobIds: string[],
@@ -913,6 +1013,38 @@ export async function compareJobs(
     const errorCode = detail?.code || undefined;
     throw new ApiError(
       `Failed to compare jobs: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
+  }
+
+  return res.json();
+}
+
+export async function getPlayerLongitudinalProgress(
+  playerId: string,
+  discipline?: string | null,
+): Promise<PlayerLongitudinalProgressResponse> {
+  const params = new URLSearchParams();
+  if (discipline) params.set('discipline', discipline);
+  const query = params.toString();
+  const res = await fetch(
+    url(`/api/coaches/plus/players/${playerId}/longitudinal-progress${query ? `?${query}` : ''}`),
+    {
+      method: 'GET',
+      headers: {
+        ...(getAuthHeader() || {}),
+      },
+    },
+  );
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to load player longitudinal progress: ${res.status}`,
       res.status,
       errorDetail,
       errorCode,
