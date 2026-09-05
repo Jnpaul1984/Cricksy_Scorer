@@ -19,6 +19,9 @@ from backend.config import settings
 from backend.domain.coach_analysis_v2_contract import PhaseRecordV2, RepetitionActionRecordV2
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
+from backend.services.goal_intervention_evaluation import (
+    evaluate_v2_goals_against_longitudinal,
+)
 from backend.services.phase_recognition import extract_phase_recognition
 from backend.services.player_longitudinal_progress import build_player_longitudinal_progress
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
@@ -168,6 +171,45 @@ async def _ensure_video_player_access(
         return profile
 
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
+
+
+async def _load_accessible_video_sessions_for_player(
+    db: AsyncSession, current_user: User, player_id: str
+) -> list[VideoSession]:
+    if current_user.is_superuser:
+        query = select(VideoSession).options(selectinload(VideoSession.analysis_jobs))
+    elif current_user.role == RoleEnum.org_pro:
+        query = (
+            select(VideoSession)
+            .where(
+                (
+                    (VideoSession.owner_type == OwnerTypeEnum.org)
+                    & (VideoSession.owner_id == current_user.org_id)
+                )
+                | (
+                    (VideoSession.owner_type == OwnerTypeEnum.coach)
+                    & (VideoSession.owner_id == current_user.id)
+                )
+            )
+            .options(selectinload(VideoSession.analysis_jobs))
+        )
+    else:
+        query = (
+            select(VideoSession)
+            .where(
+                (VideoSession.owner_type == OwnerTypeEnum.coach)
+                & (VideoSession.owner_id == current_user.id)
+            )
+            .options(selectinload(VideoSession.analysis_jobs))
+        )
+
+    result = await db.execute(query.order_by(VideoSession.created_at.asc()))
+    return [
+        session
+        for session in result.scalars().all()
+        if player_id == getattr(session, "primary_player_id", None)
+        or player_id in (getattr(session, "player_ids", None) or [])
+    ]
 
 
 # ============================================================================
@@ -1524,6 +1566,119 @@ class SetGoalsRequest(BaseModel):
         default_factory=list,
         description="Metric goals: [{code, target_score}, ...]",
     )
+    v2_goals: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "V2 deterministic goals: "
+            "[{goal_id, player_id, discipline, metric_id, technical_area, phase, action_type, "
+            "target_type, target_value|target_min+target_max, baseline_job_id, unit, due_date, "
+            "approval_state, visible_to_player, notes}]"
+        ),
+    )
+    interventions: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Coach-entered intervention metadata: "
+            "[{intervention_id, intervention_type, activity, frequency, repetitions, "
+            "date_start, date_end, notes, linked_goal_ids, completion_state, adherence_notes}]"
+        ),
+    )
+
+
+_SUPPORTED_V2_TARGET_TYPES = {
+    "increase_to_threshold",
+    "decrease_to_threshold",
+    "stay_within_range",
+    "min_normalized_score",
+    "improve_consistency",
+}
+_SUPPORTED_APPROVAL_STATES = {"coach_only", "approved_for_player", "hidden"}
+_SUPPORTED_INTERVENTION_STATES = {"planned", "in_progress", "completed"}
+
+
+def _validate_v2_goals_payload(v2_goals: list[dict[str, Any]]) -> None:
+    for index, goal in enumerate(v2_goals):
+        target_type = goal.get("target_type")
+        if target_type not in _SUPPORTED_V2_TARGET_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"v2_goals[{index}].target_type must be one of "
+                    f"{sorted(_SUPPORTED_V2_TARGET_TYPES)}"
+                ),
+            )
+
+        if not goal.get("player_id"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"v2_goals[{index}].player_id is required",
+            )
+
+        if not goal.get("discipline"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"v2_goals[{index}].discipline is required",
+            )
+
+        if not goal.get("metric_id") and not goal.get("technical_area"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"v2_goals[{index}] requires metric_id for deterministic evaluation "
+                    "or technical_area for coach-managed qualitative tracking"
+                ),
+            )
+
+        if target_type in {
+            "increase_to_threshold",
+            "decrease_to_threshold",
+            "min_normalized_score",
+        }:
+            if goal.get("target_value") is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"v2_goals[{index}].target_value is required for {target_type}",
+                )
+
+        if target_type == "stay_within_range":
+            if goal.get("target_min") is None or goal.get("target_max") is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"v2_goals[{index}] requires target_min and target_max for range targets",
+                )
+
+        approval_state = goal.get("approval_state", "coach_only")
+        if approval_state not in _SUPPORTED_APPROVAL_STATES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"v2_goals[{index}].approval_state must be one of "
+                    f"{sorted(_SUPPORTED_APPROVAL_STATES)}"
+                ),
+            )
+
+
+def _validate_interventions_payload(interventions: list[dict[str, Any]]) -> None:
+    for index, intervention in enumerate(interventions):
+        if not intervention.get("intervention_type"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"interventions[{index}].intervention_type is required",
+            )
+        if not intervention.get("activity"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"interventions[{index}].activity is required",
+            )
+        completion_state = intervention.get("completion_state")
+        if completion_state and completion_state not in _SUPPORTED_INTERVENTION_STATES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"interventions[{index}].completion_state must be one of "
+                    f"{sorted(_SUPPORTED_INTERVENTION_STATES)}"
+                ),
+            )
 
 
 class OutcomesResponse(BaseModel):
@@ -1532,6 +1687,8 @@ class OutcomesResponse(BaseModel):
     zones: list[dict[str, Any]]
     metrics: list[dict[str, Any]]
     overall_compliance_pct: float
+    v2_target_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    interventions: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class CompareJobsRequest(BaseModel):
@@ -1547,6 +1704,19 @@ class CompareJobsResponse(BaseModel):
     deltas: list[dict[str, Any]]
     persistent_issues: list[dict[str, Any]]
     comparability: dict[str, Any] | None = None
+
+
+class RecordInterventionRequest(BaseModel):
+    intervention_type: str
+    activity: str
+    frequency: str | None = None
+    repetitions: int | None = Field(default=None, ge=0)
+    date_start: str | None = None
+    date_end: str | None = None
+    notes: str | None = None
+    linked_goal_ids: list[str] = Field(default_factory=list)
+    completion_state: Literal["planned", "in_progress", "completed"] | None = None
+    adherence_notes: str | None = None
 
 
 @router.post("/analysis-jobs/{job_id}/set-goals")
@@ -1587,10 +1757,61 @@ async def set_job_goals(
             detail="You don't have access to this job",
         )
 
+    _validate_v2_goals_payload(request.v2_goals)
+    _validate_interventions_payload(request.interventions)
+
+    session_player_id = getattr(session, "primary_player_id", None)
+    if request.v2_goals and not session_player_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="V2 goals require a session primary_player_id",
+        )
+
+    for index, goal in enumerate(request.v2_goals):
+        goal_player_id = goal.get("player_id")
+        if session_player_id and str(goal_player_id) != str(session_player_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Goal linkage rejected: "
+                    f"v2_goals[{index}] player_id does not match the session player"
+                ),
+            )
+        goal_discipline = goal.get("discipline")
+        if goal_discipline and goal_discipline not in ALLOWED_V2_DISCIPLINES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"v2_goals[{index}].discipline is unsupported",
+            )
+
+    supported_metric_ids: set[str] = set()
+    for payload in (job.deep_results, job.quick_results, job.results):
+        metric_results = (
+            payload.get("v2", {}).get("metric_results") if isinstance(payload, dict) else None
+        )
+        if not isinstance(metric_results, list):
+            continue
+        for item in metric_results:
+            if isinstance(item, dict) and isinstance(item.get("metric_id"), str):
+                supported_metric_ids.add(item["metric_id"])
+
+    for index, goal in enumerate(request.v2_goals):
+        metric_id = goal.get("metric_id")
+        if metric_id and supported_metric_ids and metric_id not in supported_metric_ids:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"v2_goals[{index}].metric_id '{metric_id}' is not available in this analysis "
+                    "and cannot be linked deterministically"
+                ),
+            )
+
     # Save goals
     coach_goals = {
         "zones": request.zones,
         "metrics": request.metrics,
+        "v2_goals": request.v2_goals,
+        "interventions": request.interventions,
     }
     job.coach_goals = coach_goals
     await db.commit()
@@ -1604,6 +1825,67 @@ async def set_job_goals(
         "job_id": job_id,
         "coach_goals": job.coach_goals,
         "message": "Goals saved successfully",
+    }
+
+
+@router.post("/analysis-jobs/{job_id}/interventions")
+async def record_job_intervention(
+    job_id: str,
+    request: RecordInterventionRequest,
+    current_user: Annotated[User, Depends(security.get_current_active_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    if not await _check_feature_access(current_user, "video_analysis_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient feature access: video_analysis_enabled",
+        )
+
+    result = await db.execute(
+        select(VideoAnalysisJob)
+        .options(selectinload(VideoAnalysisJob.session))
+        .where(VideoAnalysisJob.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+
+    session = job.session
+    if current_user.role == RoleEnum.coach_pro_plus and session.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this job",
+        )
+
+    coach_goals = job.coach_goals if isinstance(job.coach_goals, dict) else {}
+    interventions = coach_goals.get("interventions", [])
+    if not isinstance(interventions, list):
+        interventions = []
+
+    intervention_payload = request.model_dump(mode="json")
+    intervention_payload["recorded_by_user_id"] = current_user.id
+    intervention_payload["recorded_at"] = datetime.now(UTC).isoformat()
+    interventions.append(intervention_payload)
+
+    coach_goals["interventions"] = interventions
+    if "zones" not in coach_goals:
+        coach_goals["zones"] = []
+    if "metrics" not in coach_goals:
+        coach_goals["metrics"] = []
+    if "v2_goals" not in coach_goals:
+        coach_goals["v2_goals"] = []
+
+    _validate_interventions_payload([intervention_payload])
+
+    job.coach_goals = coach_goals
+    await db.commit()
+    await db.refresh(job)
+
+    return {
+        "job_id": job_id,
+        "interventions": interventions,
+        "message": "Intervention recorded",
     }
 
 
@@ -1679,6 +1961,33 @@ async def calculate_job_compliance(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to calculate compliance: {e!s}",
         )
+
+    player_id = getattr(session, "primary_player_id", None)
+    v2_goals = job.coach_goals.get("v2_goals", []) if isinstance(job.coach_goals, dict) else []
+    interventions = (
+        job.coach_goals.get("interventions", []) if isinstance(job.coach_goals, dict) else []
+    )
+    if isinstance(v2_goals, list) and player_id:
+        accessible_sessions = await _load_accessible_video_sessions_for_player(
+            db, current_user, str(player_id)
+        )
+        longitudinal = build_player_longitudinal_progress(
+            accessible_sessions,
+            player_id=str(player_id),
+            discipline_filter=session.discipline,
+        )
+        outcomes["v2_target_evidence"] = evaluate_v2_goals_against_longitudinal(
+            v2_goals=[item for item in v2_goals if isinstance(item, dict)],
+            longitudinal_progress=longitudinal,
+            latest_job_id=job.id,
+        )
+    else:
+        outcomes["v2_target_evidence"] = []
+    outcomes["interventions"] = (
+        [item for item in interventions if isinstance(item, dict)]
+        if isinstance(interventions, list)
+        else []
+    )
 
     # Save outcomes
     job.outcomes = outcomes
@@ -1832,40 +2141,7 @@ async def get_player_longitudinal_progress(
 
     await _ensure_video_player_access(db, current_user, player_id)
 
-    if current_user.is_superuser:
-        query = select(VideoSession).options(selectinload(VideoSession.analysis_jobs))
-    elif current_user.role == RoleEnum.org_pro:
-        query = (
-            select(VideoSession)
-            .where(
-                (
-                    (VideoSession.owner_type == OwnerTypeEnum.org)
-                    & (VideoSession.owner_id == current_user.org_id)
-                )
-                | (
-                    (VideoSession.owner_type == OwnerTypeEnum.coach)
-                    & (VideoSession.owner_id == current_user.id)
-                )
-            )
-            .options(selectinload(VideoSession.analysis_jobs))
-        )
-    else:
-        query = (
-            select(VideoSession)
-            .where(
-                (VideoSession.owner_type == OwnerTypeEnum.coach)
-                & (VideoSession.owner_id == current_user.id)
-            )
-            .options(selectinload(VideoSession.analysis_jobs))
-        )
-
-    result = await db.execute(query.order_by(VideoSession.created_at.asc()))
-    sessions = [
-        session
-        for session in result.scalars().all()
-        if player_id == getattr(session, "primary_player_id", None)
-        or player_id in (getattr(session, "player_ids", None) or [])
-    ]
+    sessions = await _load_accessible_video_sessions_for_player(db, current_user, player_id)
 
     return build_player_longitudinal_progress(
         sessions,

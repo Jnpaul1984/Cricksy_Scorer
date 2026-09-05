@@ -75,6 +75,41 @@
 
         <button class="add-btn" @click="addMetricGoal">+ Add Metric Goal</button>
       </section>
+
+      <section class="goals-section">
+        <h3>Deterministic V2 Goals</h3>
+        <p class="section-description">
+          Link a goal to a V2 metric ID and explicit target direction.
+        </p>
+
+        <div v-for="(v2Goal, index) in v2Goals" :key="`v2-${index}`" class="goal-row">
+          <input v-model="v2Goal.metric_id" class="metric-select" placeholder="Metric ID (e.g. batting_downswing_head_stability_score)" />
+
+          <select v-model="v2Goal.target_type" class="metric-select">
+            <option value="increase_to_threshold">Increase to threshold</option>
+            <option value="decrease_to_threshold">Decrease to threshold</option>
+            <option value="stay_within_range">Stay within range</option>
+          </select>
+
+          <div v-if="v2Goal.target_type !== 'stay_within_range'" class="score-input">
+            <label>Target value</label>
+            <input v-model.number="v2Goal.target_value" type="number" step="0.01" class="zone-select" />
+          </div>
+          <div v-else class="score-input">
+            <label>Target range</label>
+            <div style="display: flex; gap: 8px;">
+              <input v-model.number="v2Goal.target_min" type="number" step="0.01" class="zone-select" placeholder="Min" />
+              <input v-model.number="v2Goal.target_max" type="number" step="0.01" class="zone-select" placeholder="Max" />
+            </div>
+          </div>
+
+          <button class="remove-btn" title="Remove" @click="removeV2Goal(index)">
+            🗑️
+          </button>
+        </div>
+
+        <button class="add-btn" @click="addV2Goal">+ Add V2 Goal</button>
+      </section>
     </div>
 
     <div class="modal-footer">
@@ -96,6 +131,8 @@ import { setJobGoals, type SetGoalsRequest } from '@/services/coachPlusVideoServ
 interface Props {
   jobId: string;
   sessionId: string;
+  playerId?: string | null;
+  discipline?: 'batting' | 'pace_bowling' | 'spin_bowling' | 'wicketkeeping' | 'fielding' | null;
   existingGoals?: SetGoalsRequest;
   availableZones?: Array<{ id: string; name: string }>;
   availableMetrics?: Array<{ code: string; title: string }>;
@@ -112,6 +149,15 @@ const zoneGoals = ref<Array<{ zone_id: string; target_accuracy: number }>>([]);
 
 // Metric goals state
 const metricGoals = ref<Array<{ code: string; target_score: number }>>([]);
+const v2Goals = ref<
+  Array<{
+    metric_id: string;
+    target_type: 'increase_to_threshold' | 'decrease_to_threshold' | 'stay_within_range';
+    target_value: number;
+    target_min: number;
+    target_max: number;
+  }>
+>([]);
 
 // UI state
 const saving = ref(false);
@@ -137,7 +183,8 @@ const availableMetrics = computed(() => props.availableMetrics || defaultMetrics
 const hasValidGoals = computed(() => {
   const validZoneGoals = zoneGoals.value.filter((zg) => zg.zone_id).length > 0;
   const validMetricGoals = metricGoals.value.filter((mg) => mg.code).length > 0;
-  return validZoneGoals || validMetricGoals;
+  const validV2Goals = v2Goals.value.filter((goal) => goal.metric_id).length > 0;
+  return validZoneGoals || validMetricGoals || validV2Goals;
 });
 
 // Methods
@@ -157,6 +204,20 @@ function removeMetricGoal(index: number) {
   metricGoals.value.splice(index, 1);
 }
 
+function addV2Goal() {
+  v2Goals.value.push({
+    metric_id: '',
+    target_type: 'increase_to_threshold',
+    target_value: 0.7,
+    target_min: 0.0,
+    target_max: 1.0,
+  });
+}
+
+function removeV2Goal(index: number) {
+  v2Goals.value.splice(index, 1);
+}
+
 async function saveGoals() {
   saving.value = true;
   error.value = null;
@@ -165,10 +226,24 @@ async function saveGoals() {
     // Filter out incomplete goals
     const validZoneGoals = zoneGoals.value.filter((zg) => zg.zone_id);
     const validMetricGoals = metricGoals.value.filter((mg) => mg.code);
+    const validV2Goals = v2Goals.value.filter((goal) => goal.metric_id);
 
     const goals: SetGoalsRequest = {
       zones: validZoneGoals,
       metrics: validMetricGoals,
+      v2_goals: validV2Goals.map((goal, index) => ({
+        goal_id: `goal-${Date.now()}-${index}`,
+        player_id: props.playerId || '',
+        discipline: props.discipline || 'batting',
+        metric_id: goal.metric_id,
+        target_type: goal.target_type,
+        target_value: goal.target_type === 'stay_within_range' ? null : goal.target_value,
+        target_min: goal.target_type === 'stay_within_range' ? goal.target_min : null,
+        target_max: goal.target_type === 'stay_within_range' ? goal.target_max : null,
+        baseline_job_id: props.jobId,
+        approval_state: 'coach_only',
+        visible_to_player: false,
+      })),
     };
 
     await setJobGoals(props.jobId, goals);
@@ -186,6 +261,13 @@ onMounted(() => {
   if (props.existingGoals) {
     zoneGoals.value = [...(props.existingGoals.zones || [])];
     metricGoals.value = [...(props.existingGoals.metrics || [])];
+    v2Goals.value = (props.existingGoals.v2_goals || []).map((item) => ({
+      metric_id: item.metric_id || '',
+      target_type: item.target_type === 'stay_within_range' ? 'stay_within_range' : item.target_type === 'decrease_to_threshold' ? 'decrease_to_threshold' : 'increase_to_threshold',
+      target_value: item.target_value ?? 0.7,
+      target_min: item.target_min ?? 0,
+      target_max: item.target_max ?? 1,
+    }));
   }
 
   // Add at least one empty row if no existing goals
@@ -194,6 +276,9 @@ onMounted(() => {
   }
   if (metricGoals.value.length === 0) {
     addMetricGoal();
+  }
+  if (v2Goals.value.length === 0) {
+    addV2Goal();
   }
 });
 </script>

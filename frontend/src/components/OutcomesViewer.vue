@@ -34,6 +34,41 @@
       </table>
     </section>
 
+    <section v-if="v2GoalEvidence.length > 0" class="outcomes-section">
+      <h4>Deterministic V2 Goal Progress</h4>
+      <table class="outcomes-table">
+        <thead>
+          <tr>
+            <th>Goal</th>
+            <th>Baseline</th>
+            <th>Latest</th>
+            <th>Status</th>
+            <th>Confidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="goal in v2GoalEvidence" :key="goal.goal_id">
+            <td>{{ goal.metric_id || goal.technical_area || goal.goal_id }}</td>
+            <td>{{ formatObservation(goal.baseline) }}</td>
+            <td>{{ formatObservation(goal.latest) }}</td>
+            <td>{{ goal.status.replace(/_/g, ' ') }}</td>
+            <td>{{ goal.confidence === null ? 'N/A' : `${Math.round(goal.confidence * 100)}%` }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section v-if="interventionItems.length > 0" class="outcomes-section">
+      <h4>Recorded Interventions</h4>
+      <ul class="no-outcomes" style="text-align: left; padding: 0;">
+        <li v-for="(item, idx) in interventionItems" :key="idx">
+          <strong>{{ String(item.activity || item.title || item.intervention_type || 'Intervention') }}</strong>
+          <span v-if="item.completion_state"> · {{ String(item.completion_state) }}</span>
+          <span v-if="item.frequency"> · {{ String(item.frequency) }}</span>
+        </li>
+      </ul>
+    </section>
+
     <!-- Metric Outcomes Table -->
     <section v-if="metricOutcomes.length > 0" class="outcomes-section">
       <h4>Performance Metric Scores</h4>
@@ -85,8 +120,8 @@ const props = defineProps<Props>();
 
 // Computed: Overall compliance percentage
 const overallCompliance = computed(() => {
-  if (!props.outcomes?.overall_compliance_pct) return 0;
-  return Math.round(props.outcomes.overall_compliance_pct * 100);
+  if (props.outcomes?.overall_compliance_pct === null || props.outcomes?.overall_compliance_pct === undefined) return 0;
+  return Math.round(props.outcomes.overall_compliance_pct);
 });
 
 // Computed: Compliance badge CSS class
@@ -116,6 +151,9 @@ const metricOutcomes = computed(() => {
   }));
 });
 
+const v2GoalEvidence = computed(() => props.outcomes?.v2_target_evidence || []);
+const interventionItems = computed(() => props.outcomes?.interventions || []);
+
 // Utility: Format delta with + or - prefix
 function formatDelta(delta: number | null): string {
   if (delta === null) return 'N/A';
@@ -129,6 +167,11 @@ function deltaClass(delta: number | null): string {
   if (delta >= 0.05) return 'positive';
   if (delta <= -0.05) return 'negative';
   return 'neutral';
+}
+
+function formatObservation(observation: { raw_value?: number | null; unit?: string | null } | null): string {
+  if (!observation || observation.raw_value === null || observation.raw_value === undefined) return 'N/A';
+  return `${observation.raw_value.toFixed(3)}${observation.unit ? ` ${observation.unit}` : ''}`;
 }
 </script>
 
