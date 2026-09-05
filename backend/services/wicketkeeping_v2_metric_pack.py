@@ -23,6 +23,7 @@ from backend.services.coach_analysis_v2_compatibility import (
     resolve_metric_unavailability,
     sanitize_metric_output,
 )
+from backend.services.coach_strength_consistency import build_metric_consistency
 
 _WICKETKEEPING_V2_METRIC_VERSION = "wicketkeeping_pose_metrics.v2.0.0"
 _WICKETKEEPING_V2_METRIC_IDS = {
@@ -187,6 +188,12 @@ def _build_wicketkeeping_metric_results(
     subtype_map = _infer_repetition_subtypes(repetitions, phase_lookup)
     repetitions_available = bool(repetitions)
     phases_available = bool(phase_lookup)
+    candidate_repetition_count = sum(
+        1
+        for repetition in repetitions
+        if str(repetition.action_type or "").strip().lower().startswith("wicketkeeping")
+        and has_measurable_validity_state(repetition.validity_state)
+    )
     standing_up_available = any(
         subtype_map.get(rep.repetition_id, {}).get("standing") == "up" for rep in repetitions
     )
@@ -244,6 +251,7 @@ def _build_wicketkeeping_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="wicketkeeping_set_knee_flexion_angle_deg",
@@ -274,6 +282,7 @@ def _build_wicketkeeping_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="wicketkeeping_reaction_head_stability_score",
@@ -300,6 +309,7 @@ def _build_wicketkeeping_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="wicketkeeping_movement_lateral_displacement_ratio",
@@ -326,6 +336,7 @@ def _build_wicketkeeping_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="wicketkeeping_collection_balance_drift_ratio",
@@ -352,6 +363,7 @@ def _build_wicketkeeping_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="wicketkeeping_recovery_head_base_offset_ratio",
@@ -378,6 +390,7 @@ def _build_wicketkeeping_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="wicketkeeping_context_standing_set_depth_delta_ratio",
@@ -403,6 +416,7 @@ def _build_wicketkeeping_metric_results(
             ],
             repetitions_available=standing_up_available and standing_back_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
             unavailable_hint=(
                 "Standing-up/back context is unavailable; no deterministic standing-context comparison was emitted."
             ),
@@ -435,6 +449,7 @@ def _build_wicketkeeping_metric_results(
             ],
             repetitions_available=leg_side_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
             unavailable_hint="No deterministic leg-side repetition tags were available.",
         ),
         _build_metric_result(
@@ -470,6 +485,7 @@ def _build_wicketkeeping_metric_results(
             ],
             repetitions_available=stumping_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
             requires_object_evidence=True,
             object_evidence_available=stumping_object_evidence_available,
             unavailable_hint=(
@@ -495,6 +511,7 @@ def _build_metric_result(
     limitations: list[str],
     repetitions_available: bool = True,
     phases_available: bool = True,
+    candidate_repetition_count: int | None = None,
     requires_object_evidence: bool = False,
     object_evidence_available: bool | None = None,
     unavailable_hint: str | None = None,
@@ -551,13 +568,24 @@ def _build_metric_result(
     )
     aggregate_stats = _aggregate_stats(
         values,
-        len(samples),
+        candidate_repetition_count or len(samples),
         measurable=has_measurable_validity_state(validity_state),
     )
     classification_status = (
         classification_fn(safe_raw_value)
         if safe_raw_value is not None and has_measurable_validity_state(validity_state)
         else None
+    )
+    consistency = build_metric_consistency(
+        metric_id=metric_id,
+        unit=unit,
+        samples=samples,
+        valid_range=valid_range,
+        classification_fn=classification_fn,
+        validity_state=validity_state,
+        confidence_score=avg_confidence,
+        candidate_repetition_count=candidate_repetition_count,
+        unavailable_reason=unavailable_reason,
     )
 
     metric_limitations = list(limitations)
@@ -586,6 +614,7 @@ def _build_metric_result(
         frame_refs=_frame_refs(samples),
         repetition_values=safe_repetition_values,
         aggregate_stats=aggregate_stats,
+        consistency=consistency,
     )
 
 

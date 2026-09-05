@@ -757,6 +757,117 @@
             </div>
           </section>
 
+          <section class="results-section">
+            <h3>Technical strengths</h3>
+            <p v-if="selectedJobStrengths.length === 0" class="status-text">
+              No reproducible strengths were available from comparable V2 repetition evidence.
+            </p>
+            <div v-else>
+              <div v-for="strength in selectedJobStrengths" :key="strength.metricId" class="finding-card">
+                <div class="priority-header">
+                  <h4>{{ formatV2MetricLabel(strength.metricId) }}</h4>
+                  <span v-if="strength.severity" :class="['severity-badge', `sev-${strength.severity}`]">
+                    {{ severityLabel(strength.severity as 'low' | 'medium' | 'high') }}
+                  </span>
+                </div>
+                <p class="finding-line">{{ strength.summary }}</p>
+                <p class="status-text">
+                  {{ formatCount(strength.validSampleCount ?? undefined) }} valid reps
+                  <span v-if="strength.confidenceScore !== null">
+                    • {{ formatPercent01(strength.confidenceScore) }} confidence
+                  </span>
+                  <span v-if="strength.supportingRepetitionIds.length > 0">
+                    • Reps {{ strength.supportingRepetitionIds.join(', ') }}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section class="results-section">
+            <h3>Recurring concerns</h3>
+            <p v-if="selectedJobRecurringConcerns.length === 0" class="status-text">
+              No recurring concerns were confirmed from comparable V2 repetition evidence.
+            </p>
+            <div v-else>
+              <div
+                v-for="concern in selectedJobRecurringConcerns"
+                :key="concern.metricId"
+                class="finding-card"
+              >
+                <div class="priority-header">
+                  <h4>{{ formatV2MetricLabel(concern.metricId) }}</h4>
+                  <span v-if="concern.severity" :class="['severity-badge', `sev-${concern.severity}`]">
+                    {{ severityLabel(concern.severity as 'low' | 'medium' | 'high') }}
+                  </span>
+                </div>
+                <p class="finding-line">{{ concern.summary }}</p>
+                <p class="status-text">
+                  {{ formatCount(concern.validSampleCount ?? undefined) }} valid reps
+                  <span v-if="concern.confidenceScore !== null">
+                    • {{ formatPercent01(concern.confidenceScore) }} confidence
+                  </span>
+                  <span v-if="concern.supportingRepetitionIds.length > 0">
+                    • Reps {{ concern.supportingRepetitionIds.join(', ') }}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section class="results-section">
+            <h3>Consistency & repeatability</h3>
+            <p v-if="selectedJobConsistencyObservations.length === 0" class="status-text">
+              No consistency observations were available for this job.
+            </p>
+            <div v-else class="phase-list">
+              <div
+                v-for="observation in selectedJobConsistencyObservations"
+                :key="observation.metricId"
+                class="phase-row"
+              >
+                <span>
+                  {{ formatV2MetricLabel(observation.metricId) }}
+                  <span v-if="observation.phase" class="evidence-time">
+                    ({{ formatRepetitionAction(observation.phase) }})
+                  </span>
+                </span>
+                <span class="status-text">
+                  {{ formatConsistencyClassification(observation.classification) }}
+                  <span v-if="observation.method"> • {{ formatConsistencyMethod(observation.method) }}</span>
+                  <span v-if="observation.value !== null"> • {{ formatConsistencyValue(observation.value) }}</span>
+                  <span v-if="observation.validSampleCount !== null">
+                    • {{ formatCount(observation.validSampleCount) }} valid reps
+                  </span>
+                  <span
+                    v-if="
+                      observation.excludedRepetitionCount !== null && observation.excludedRepetitionCount > 0
+                    "
+                  >
+                    • {{ formatCount(observation.excludedRepetitionCount) }} excluded
+                  </span>
+                </span>
+                <span v-if="observation.limitations.length > 0" class="status-text">
+                  {{ observation.limitations[0] }}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section class="results-section">
+            <h3>Representative repetitions</h3>
+            <div class="phase-list">
+              <div class="phase-row">
+                <span>Best repetition</span>
+                <span class="status-text">{{ formatRepetitionSelection(selectedJobBestRepetition) }}</span>
+              </div>
+              <div class="phase-row">
+                <span>Needs-work repetition</span>
+                <span class="status-text">{{ formatRepetitionSelection(selectedJobNeedsWorkRepetition) }}</span>
+              </div>
+            </div>
+          </section>
+
           <section v-if="isFreeTier" class="results-section">
             <h3>Upgrade to see priorities</h3>
             <p class="status-text">
@@ -934,9 +1045,13 @@ import {
   extractCoachVideoPhaseSummary,
   extractCoachVideoRepetitions,
   extractCoachVideoRepetitionSummary,
+  extractCoachVideoSessionAnalysis,
   getCoachVideoJobFps,
+  type CoachVideoConsistencyObservation,
   type CoachVideoPhase,
   type CoachVideoRepetition,
+  type CoachVideoRepetitionSelection,
+  type CoachVideoSessionSignal,
   type CoachVideoV2Metric,
 } from '@/utils/coachVideoAnalysisRepetitions';
 
@@ -1057,6 +1172,22 @@ const selectedJobRepetitionSummary = computed(() =>
 const selectedJobPhases = computed(() => extractCoachVideoPhases(selectedJob.value));
 const selectedJobPhaseSummary = computed(() => extractCoachVideoPhaseSummary(selectedJob.value));
 const selectedJobV2Metrics = computed(() => extractCoachVideoDisciplineV2Metrics(selectedJob.value));
+const selectedJobSessionAnalysis = computed(() => extractCoachVideoSessionAnalysis(selectedJob.value));
+const selectedJobStrengths = computed<CoachVideoSessionSignal[]>(
+  () => selectedJobSessionAnalysis.value?.strengths ?? [],
+);
+const selectedJobRecurringConcerns = computed<CoachVideoSessionSignal[]>(
+  () => selectedJobSessionAnalysis.value?.recurringConcerns ?? [],
+);
+const selectedJobConsistencyObservations = computed<CoachVideoConsistencyObservation[]>(
+  () => selectedJobSessionAnalysis.value?.consistencyObservations ?? [],
+);
+const selectedJobBestRepetition = computed<CoachVideoRepetitionSelection | null>(
+  () => selectedJobSessionAnalysis.value?.bestRepetition ?? null,
+);
+const selectedJobNeedsWorkRepetition = computed<CoachVideoRepetitionSelection | null>(
+  () => selectedJobSessionAnalysis.value?.needsWorkRepetition ?? null,
+);
 
 watch(
   () => [showResultsModal.value, selectedJob.value?.id, selectedJob.value?.status, videoPreviewUrl.value] as const,
@@ -1889,6 +2020,42 @@ function formatV2MetricLabel(metricId: string): string {
     .replace(/^(batting|pace_bowling|spin_bowling)_/, '')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatConsistencyClassification(classification: string | null): string {
+  if (!classification) return 'Consistency unavailable';
+  if (classification === 'high') return 'High consistency';
+  if (classification === 'moderate') return 'Moderate consistency';
+  if (classification === 'low') return 'Variable consistency';
+  return classification
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function formatConsistencyMethod(method: string): string {
+  return method
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function formatConsistencyValue(value: number): string {
+  return value.toFixed(3);
+}
+
+function formatRepetitionSelection(selection: CoachVideoRepetitionSelection | null): string {
+  if (!selection?.available) return selection?.rationale ?? 'Insufficient repetition evidence.';
+  const repetitionLabel = selection.repetitionId ? `Rep ${selection.repetitionId}` : 'Selected repetition';
+  const confidence =
+    selection.confidenceScore !== null ? ` • ${formatPercent01(selection.confidenceScore)} confidence` : '';
+  const metrics =
+    selection.supportingMetrics.length > 0
+      ? ` • ${selection.supportingMetrics.map((metricId) => formatV2MetricLabel(metricId)).join(', ')}`
+      : '';
+  return `${repetitionLabel} • ${selection.rationale ?? 'Selected from comparable evidence.'}${confidence}${metrics}`;
 }
 
 function canSeekToMoment(w: { frameNum: number; timeSeconds?: number }): boolean {

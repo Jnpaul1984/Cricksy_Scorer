@@ -184,7 +184,61 @@ describe('CoachProPlusVideoSessionsView', () => {
       sqs_message_id: null,
       deep_results: {
         pose_summary: { total_frames: 120, sampled_frames: 30, frames_with_pose: 28, detection_rate_percent: 93, video_fps: 30 },
-        report: { summary: 'Done' },
+        report: {
+          summary: 'Done',
+          v2_session_analysis: {
+            strengths: [
+              {
+                metric_id: 'bowling_release_height_ratio',
+                discipline: 'bowling',
+                severity: 'medium',
+                confidence_score: 0.84,
+                valid_sample_count: 3,
+                summary: 'Repeated strong release height evidence.',
+                supporting_repetition_ids: ['rep-1'],
+                limitations: [],
+              },
+            ],
+            recurring_concerns: [
+              {
+                metric_id: 'bowling_head_alignment_ratio',
+                discipline: 'bowling',
+                severity: 'low',
+                confidence_score: 0.71,
+                valid_sample_count: 3,
+                summary: 'Repeated needs-attention head alignment evidence.',
+                supporting_repetition_ids: ['rep-1'],
+                limitations: [],
+              },
+            ],
+            consistency_observations: [
+              {
+                metric_id: 'bowling_release_height_ratio',
+                discipline: 'bowling',
+                phase: 'release',
+                method: 'normalized_spread',
+                classification: 'high',
+                value: 0.03,
+                confidence_score: 0.84,
+                valid_sample_count: 3,
+                excluded_repetition_count: 0,
+                limitations: [],
+              },
+            ],
+            best_repetition: {
+              available: true,
+              repetition_id: 'rep-1',
+              rationale: 'Selected because this repetition had 2 strong metric signals and 0 needs-attention signals.',
+              confidence_score: 0.84,
+              supporting_metrics: ['bowling_release_height_ratio'],
+            },
+            needs_work_repetition: {
+              available: false,
+              reason: 'No repetition had enough negative metric evidence for needs-work selection.',
+              supporting_metrics: [],
+            },
+          },
+        },
         findings: { findings: [] },
         meta: {
           repetition_segmentation: {
@@ -243,5 +297,10 @@ describe('CoachProPlusVideoSessionsView', () => {
     expect(wrapper.text()).toContain('Valid')
     expect(wrapper.text()).toContain('Contact Proxy Window')
     expect(wrapper.text()).toContain('object evidence')
+    expect(wrapper.text()).toContain('Technical strengths')
+    expect(wrapper.text()).toContain('Repeated strong release height evidence.')
+    expect(wrapper.text()).toContain('Recurring concerns')
+    expect(wrapper.text()).toContain('Consistency & repeatability')
+    expect(wrapper.text()).toContain('Representative repetitions')
   })
 })

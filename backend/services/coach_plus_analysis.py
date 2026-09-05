@@ -10,6 +10,7 @@ from backend.services.bowling_v2_metric_pack import attach_bowling_v2_metric_pac
 from backend.services.coach_analysis_v2_compatibility import build_analysis_v2_contract
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
+from backend.services.coach_strength_consistency import attach_strength_consistency_engine
 from backend.services.fielding_v2_metric_pack import attach_fielding_v2_metric_pack
 from backend.services.phase_recognition import attach_phase_recognition
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
@@ -340,5 +341,6 @@ def run_pose_metrics_findings_report(
         ),
         source_model=normalized["model"],
     )
+    attach_strength_consistency_engine(results)
 
     return AnalysisArtifacts(results=results, frames=frames_out)

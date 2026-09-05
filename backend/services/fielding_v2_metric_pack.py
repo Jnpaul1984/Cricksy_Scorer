@@ -23,6 +23,7 @@ from backend.services.coach_analysis_v2_compatibility import (
     resolve_metric_unavailability,
     sanitize_metric_output,
 )
+from backend.services.coach_strength_consistency import build_metric_consistency
 
 _FIELDING_V2_METRIC_VERSION = "fielding_pose_metrics.v2.0.0"
 _FIELDING_V2_METRIC_IDS = {
@@ -194,6 +195,12 @@ def _build_fielding_metric_results(
     subtype_map = _infer_repetition_subtypes(repetitions, phase_lookup)
     repetitions_available = bool(repetitions)
     phases_available = bool(phase_lookup)
+    candidate_repetition_count = sum(
+        1
+        for repetition in repetitions
+        if str(repetition.action_type or "").strip().lower().startswith("fielding")
+        and has_measurable_validity_state(repetition.validity_state)
+    )
     non_catch_available = any(
         not subtype_map.get(rep.repetition_id, {}).get("catch", False) for rep in repetitions
     )
@@ -259,6 +266,7 @@ def _build_fielding_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="fielding_reaction_head_stability_score",
@@ -286,6 +294,7 @@ def _build_fielding_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="fielding_approach_balance_drift_ratio",
@@ -314,6 +323,7 @@ def _build_fielding_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="fielding_ground_collection_body_drop_ratio",
@@ -348,6 +358,7 @@ def _build_fielding_metric_results(
             ),
             repetitions_available=non_catch_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="fielding_ground_collection_knee_flexion_angle_deg",
@@ -385,6 +396,7 @@ def _build_fielding_metric_results(
             ),
             repetitions_available=non_catch_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="fielding_ground_collection_head_base_offset_ratio",
@@ -418,6 +430,7 @@ def _build_fielding_metric_results(
             ),
             repetitions_available=non_catch_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="fielding_transfer_balance_drift_ratio",
@@ -451,6 +464,7 @@ def _build_fielding_metric_results(
             ),
             repetitions_available=non_catch_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
         _build_metric_result(
             metric_id="fielding_catch_collection_wrist_compactness_ratio",
@@ -492,6 +506,7 @@ def _build_fielding_metric_results(
             unavailable_hint="Required catch object evidence was unavailable, so catching compactness was not inferred.",
             repetitions_available=catch_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
             requires_object_evidence=True,
             object_evidence_available=catch_object_evidence_available,
         ),
@@ -539,6 +554,7 @@ def _build_fielding_metric_results(
             ),
             repetitions_available=throw_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
             requires_object_evidence=True,
             object_evidence_available=throw_object_evidence_available,
         ),
@@ -568,6 +584,7 @@ def _build_fielding_metric_results(
             ],
             repetitions_available=repetitions_available,
             phases_available=phases_available,
+            candidate_repetition_count=candidate_repetition_count,
         ),
     ]
 
@@ -589,6 +606,7 @@ def _build_metric_result(
     limitations: list[str],
     repetitions_available: bool = True,
     phases_available: bool = True,
+    candidate_repetition_count: int | None = None,
     requires_object_evidence: bool = False,
     object_evidence_available: bool | None = None,
     unavailable_hint: str | None = None,
@@ -644,13 +662,24 @@ def _build_metric_result(
     )
     aggregate_stats = _aggregate_stats(
         values,
-        len(samples),
+        candidate_repetition_count or len(samples),
         measurable=has_measurable_validity_state(validity_state),
     )
     classification_status = (
         classification_fn(safe_raw_value)
         if safe_raw_value is not None and has_measurable_validity_state(validity_state)
         else None
+    )
+    consistency = build_metric_consistency(
+        metric_id=metric_id,
+        unit=unit,
+        samples=samples,
+        valid_range=valid_range,
+        classification_fn=classification_fn,
+        validity_state=validity_state,
+        confidence_score=avg_confidence,
+        candidate_repetition_count=candidate_repetition_count,
+        unavailable_reason=unavailable_reason,
     )
 
     metric_limitations = list(limitations)
@@ -679,6 +708,7 @@ def _build_metric_result(
         frame_refs=_frame_refs(samples),
         repetition_values=safe_repetition_values,
         aggregate_stats=aggregate_stats,
+        consistency=consistency,
     )
 
 

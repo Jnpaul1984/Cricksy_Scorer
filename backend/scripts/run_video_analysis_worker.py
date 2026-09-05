@@ -156,7 +156,12 @@ def run_analysis_pipeline(
 
         # Step 3: Generate findings
         logger.info("Step 3/4: Generating findings...")
-        findings = generate_findings(metrics, context=session_context)
+        session_context = session_context or {}
+        findings = generate_findings(
+            metrics,
+            context=session_context,
+            analysis_mode=str(session_context.get("analysis_mode") or "batting"),
+        )
         logger.info(f"  Generated {len(findings.get('findings', []))} findings")
 
         # Step 4: Generate report

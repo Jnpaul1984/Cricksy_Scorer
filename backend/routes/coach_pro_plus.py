@@ -2653,7 +2653,10 @@ async def analyze_video(
             metrics_result.setdefault("model", normalized["model"])
 
         # Step 3: Generate findings
-        findings_result = generate_findings(metrics_result)
+        findings_result = generate_findings(
+            metrics_result,
+            analysis_mode=str(request.analysis_mode or "batting"),
+        )
 
         # Step 4: Generate coaching report
         player_context = None
