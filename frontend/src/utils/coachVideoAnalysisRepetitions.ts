@@ -218,7 +218,7 @@ export function extractCoachVideoDisciplineV2Metrics(
     .filter(
       (item) =>
         typeof item.metric_id === 'string' &&
-        ['batting_', 'pace_bowling_', 'spin_bowling_'].some((prefix) =>
+        ['batting_', 'pace_bowling_', 'spin_bowling_', 'wicketkeeping_'].some((prefix) =>
           item.metric_id.startsWith(prefix),
         ),
     )

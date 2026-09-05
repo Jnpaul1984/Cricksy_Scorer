@@ -13,6 +13,7 @@ from backend.services.coach_report_service import generate_report_text
 from backend.services.phase_recognition import attach_phase_recognition
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
 from backend.services.repetition_segmentation import attach_repetition_segmentation
+from backend.services.wicketkeeping_v2_metric_pack import attach_wicketkeeping_v2_metric_pack
 
 logger = logging.getLogger(__name__)
 
@@ -300,6 +301,19 @@ def run_pose_metrics_findings_report(
             and player_context.get("session_discipline") is not None
             else None
         ),
+        frames=frames_for_segmentation if isinstance(frames_for_segmentation, list) else [],
+        sample_fps=float(sample_fps),
+        source_video_fps=normalized["video_fps"],
+        camera_view=(
+            str(player_context.get("camera_view"))
+            if isinstance(player_context, dict) and player_context.get("camera_view") is not None
+            else None
+        ),
+        source_model=normalized["model"],
+    )
+    attach_wicketkeeping_v2_metric_pack(
+        results_payload=results,
+        discipline=analysis_mode,
         frames=frames_for_segmentation if isinstance(frames_for_segmentation, list) else [],
         sample_fps=float(sample_fps),
         source_video_fps=normalized["video_fps"],

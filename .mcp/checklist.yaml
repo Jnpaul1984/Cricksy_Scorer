@@ -190,24 +190,40 @@
     - ".mcp/checklist.yaml"
   notes: "Implemented additive pace/spin bowling V2 metric packs with phase-aware pose measurements, validity guards, evidence refs, worker reattachment after ball-tracking phase enrichment, and existing results-view exposure."
 
-- id: phase10j-7-spin-bowling-v2-distinct-model
+- id: phase10j-7-wicketkeeping-v2-deterministic-metric-pack
   week: 10
   category: "Phase 10J"
-  title: "10J.7 Spin Bowling V2 Distinct Model (superseded by 10J.6 scope merge)"
-  description: "Reserved after Issue #487 merged spin deterministic metric-pack scope into 10J.6"
-  status: todo
+  title: "10J.7 Wicketkeeping V2 Deterministic Metric Pack"
+  description: "Ship production-safe wicketkeeping V2 deterministic metrics with phase/repetition validity guards"
+  status: done
   confidence: high
-  risk_level: medium
+  risk_level: high
   acceptance_criteria:
-    - "Spin model has distinct metrics/thresholds and explicit limitations"
+    - "Wicketkeeping V2 metrics are additive, deterministic, and compatibility-safe"
   verification_commands:
-    - "cd backend && pytest tests/ -q"
+    - "python scripts/checklist.py status"
+    - "cd backend && PYTHONPATH=/home/runner/work/Cricksy_Scorer/Cricksy_Scorer CRICKSY_IN_MEMORY_DB=1 DATABASE_URL=sqlite+aiosqlite:///:memory:?cache=shared APP_SECRET_KEY=test-secret-key python -m pytest -q tests/test_health.py tests/test_results_endpoint.py tests/test_wicketkeeping_v2_metric_pack.py tests/test_coach_analysis_v2_contracts.py tests/test_phase_recognition.py tests/test_repetition_segmentation.py tests/test_pose_metrics.py tests/test_coach_findings.py tests/test_coach_report_service.py tests/test_ball_tracking.py tests/test_ball_tracking_integration.py tests/test_batting_v2_metric_pack.py tests/test_bowling_v2_metric_pack.py"
+    - "cd frontend && CYPRESS_INSTALL_BINARY=0 npm ci && npm run guard:fake-data && npm run type-check && npm run build"
+    - "python -m ruff check backend/services/wicketkeeping_v2_metric_pack.py backend/services/coach_plus_analysis.py backend/services/chunk_aggregation.py backend/tests/test_wicketkeeping_v2_metric_pack.py backend/tests/test_coach_analysis_v2_contracts.py"
+    - "python -m mypy --config-file backend/pyproject.toml --explicit-package-bases backend/services/wicketkeeping_v2_metric_pack.py backend/services/coach_plus_analysis.py backend/services/chunk_aggregation.py"
+  files_touched:
+    - "backend/services/wicketkeeping_v2_metric_pack.py"
+    - "backend/services/coach_plus_analysis.py"
+    - "backend/services/chunk_aggregation.py"
+    - "backend/tests/test_wicketkeeping_v2_metric_pack.py"
+    - "backend/tests/test_coach_analysis_v2_contracts.py"
+    - "frontend/src/utils/coachVideoAnalysisRepetitions.ts"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "copilot"
+  completed_at: "2026-09-05"
+  notes: "Implemented additive wicketkeeping V2 metrics with explicit camera/FPS/visibility/invalid-range guards, context-aware standing/leg-side/stumping gating, and existing results-view compatibility."
 
 - id: phase10j-8-wicketkeeping-fielding-v2-foundations
   week: 10
   category: "Phase 10J"
-  title: "10J.8 Wicketkeeping + Fielding V2 Foundations"
-  description: "Add specialist baseline analysis for wicketkeeping and fielding"
+  title: "10J.8 Fielding V2 Foundations"
+  description: "Add specialist baseline analysis for fielding"
   status: todo
   confidence: high
   risk_level: high

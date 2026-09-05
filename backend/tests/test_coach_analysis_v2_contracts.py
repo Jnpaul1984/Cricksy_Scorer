@@ -578,3 +578,60 @@ def test_run_pose_metrics_findings_report_adds_bowling_v2_metric_pack(
     assert payload["meta"]["bowling_v2_metric_pack"]["metrics_count"] == 6
     assert "bowling_v2" in payload["findings"]
     assert "bowling_v2" in payload["report"]
+
+
+def test_run_pose_metrics_findings_report_adds_wicketkeeping_v2_metric_pack() -> None:
+    with patch("backend.services.pose_service.extract_pose_keypoints_from_video") as mock_extract:
+        mock_extract.return_value = {
+            "frames": [
+                {
+                    "frame_id": index,
+                    "t": index / 10,
+                    "detected": True,
+                    "keypoints": {
+                        "nose": [0.5 + (0.04 if 4 <= index <= 6 else 0.0), 0.2, 0.9],
+                        "left_shoulder": [0.42, 0.42, 0.9],
+                        "right_shoulder": [0.58, 0.42, 0.9],
+                        "left_hip": [0.45 + (0.01 if index in {7, 8} else 0.0), 0.68, 0.9],
+                        "right_hip": [0.55 + (0.01 if index in {7, 8} else 0.0), 0.68, 0.9],
+                        "left_knee": [0.45, 0.84, 0.9],
+                        "right_knee": [0.55, 0.84, 0.9],
+                        "left_ankle": [0.42, 0.96, 0.9],
+                        "right_ankle": [0.58, 0.96, 0.9],
+                        "left_elbow": [0.40, 0.52, 0.9],
+                        "right_elbow": [0.60, 0.52, 0.9],
+                        "left_wrist": [0.47, 0.58, 0.9],
+                        "right_wrist": [0.53, 0.58, 0.9],
+                    },
+                }
+                for index in range(12)
+            ],
+            "total_frames": 12,
+            "sampled_frames": 12,
+            "frames_with_pose": 12,
+            "detection_rate_percent": 100.0,
+            "video_fps": 30.0,
+            "model": "MediaPipe Pose Landmarker Full",
+        }
+
+        result = run_pose_metrics_findings_report(
+            video_path="dummy.mp4",
+            sample_fps=10,
+            include_frames=False,
+            player_context={"camera_view": "side", "session_discipline": "wicketkeeping"},
+            analysis_mode="wicketkeeping",
+            session_id="session-1",
+            job_id="job-1",
+        )
+
+    payload = result.results
+    wicketkeeping_v2_metrics = [
+        metric
+        for metric in payload["v2"]["metric_results"]
+        if isinstance(metric, dict)
+        and str(metric.get("metric_id", "")).startswith("wicketkeeping_")
+    ]
+    assert len(wicketkeeping_v2_metrics) == 9
+    assert payload["meta"]["wicketkeeping_v2_metric_pack"]["metrics_count"] == 9
+    assert "wicketkeeping_v2" in payload["findings"]
+    assert "wicketkeeping_v2" in payload["report"]
