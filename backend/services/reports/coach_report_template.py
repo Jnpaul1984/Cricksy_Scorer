@@ -535,6 +535,66 @@ def render_goals_vs_outcomes(
         elements.append(metric_table)
         elements.append(Spacer(1, SPACE_SECTION))
 
+    v2_goal_evidence = outcomes.get("v2_target_evidence", []) if outcomes else []
+    if v2_goal_evidence:
+        elements.append(Paragraph("Deterministic V2 Goal Progress", styles["heading"]))
+        elements.append(Spacer(1, SPACE_SUBSECTION))
+        v2_table_data = [["Goal", "Baseline", "Latest", "Status", "Confidence"]]
+        for item in v2_goal_evidence:
+            metric_label = item.get("metric_id") or item.get("technical_area") or item.get("goal_id")
+            baseline = item.get("baseline") or {}
+            latest = item.get("latest") or {}
+            baseline_value = baseline.get("raw_value")
+            latest_value = latest.get("raw_value")
+            unit = latest.get("unit") or baseline.get("unit") or ""
+            confidence = item.get("confidence")
+            v2_table_data.append(
+                [
+                    str(metric_label),
+                    "N/A" if baseline_value is None else f"{baseline_value:.3f} {unit}".strip(),
+                    "N/A" if latest_value is None else f"{latest_value:.3f} {unit}".strip(),
+                    str(item.get("status", "unsupported")).replace("_", " ").title(),
+                    "N/A" if confidence is None else f"{confidence * 100:.0f}%",
+                ]
+            )
+
+        v2_table = Table(
+            v2_table_data, colWidths=[2.3 * inch, 1.1 * inch, 1.1 * inch, 1.3 * inch, 1.0 * inch]
+        )
+        v2_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), COLOR_HEADING),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), FONT_BODY),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+                    ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                    ("GRID", (0, 0), (-1, -1), 1, COLOR_SUBHEADING),
+                    ("FONTSIZE", (0, 1), (-1, -1), FONT_SMALL),
+                ]
+            )
+        )
+        elements.append(v2_table)
+        elements.append(Spacer(1, SPACE_SECTION))
+
+    interventions = goals.get("interventions", []) if goals else []
+    if interventions:
+        elements.append(Paragraph("Recorded Interventions", styles["heading"]))
+        elements.append(Spacer(1, SPACE_SUBSECTION))
+        for item in interventions[:8]:
+            activity = item.get("activity") or item.get("title") or item.get("intervention_type") or "Intervention"
+            completion = item.get("completion_state")
+            frequency = item.get("frequency")
+            line = f"• {activity}"
+            if completion:
+                line += f" ({completion})"
+            if frequency:
+                line += f" — {frequency}"
+            elements.append(Paragraph(line, styles["body"]))
+        elements.append(Spacer(1, SPACE_SECTION))
+
     # Add page break after goals page
     elements.append(PageBreak())
 

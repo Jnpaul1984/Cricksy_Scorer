@@ -760,6 +760,42 @@ export async function exportAnalysisPdf(jobId: string): Promise<PdfExportRespons
 export interface SetGoalsRequest {
   zones: Array<{ zone_id: string; target_accuracy: number }>;
   metrics: Array<{ code: string; target_score: number }>;
+  v2_goals?: Array<{
+    goal_id?: string;
+    player_id: string;
+    discipline: 'batting' | 'pace_bowling' | 'spin_bowling' | 'wicketkeeping' | 'fielding';
+    metric_id?: string | null;
+    technical_area?: string | null;
+    phase?: string | null;
+    action_type?: string | null;
+    target_type:
+      | 'increase_to_threshold'
+      | 'decrease_to_threshold'
+      | 'stay_within_range'
+      | 'min_normalized_score'
+      | 'improve_consistency';
+    target_value?: number | null;
+    target_min?: number | null;
+    target_max?: number | null;
+    baseline_job_id?: string | null;
+    unit?: string | null;
+    due_date?: string | null;
+    approval_state?: 'coach_only' | 'approved_for_player' | 'hidden';
+    visible_to_player?: boolean;
+    notes?: string | null;
+  }>;
+  interventions?: Array<{
+    intervention_type: string;
+    activity: string;
+    frequency?: string | null;
+    repetitions?: number | null;
+    date_start?: string | null;
+    date_end?: string | null;
+    notes?: string | null;
+    linked_goal_ids?: string[];
+    completion_state?: 'planned' | 'in_progress' | 'completed' | null;
+    adherence_notes?: string | null;
+  }>;
 }
 
 export async function setJobGoals(jobId: string, goals: SetGoalsRequest): Promise<any> {
@@ -808,6 +844,30 @@ export interface OutcomesResponse {
     delta: number;
   }>;
   overall_compliance_pct: number;
+  v2_target_evidence?: Array<{
+    goal_id: string;
+    metric_id?: string | null;
+    technical_area?: string | null;
+    discipline?: string | null;
+    target: Record<string, unknown>;
+    baseline: LongitudinalObservation | null;
+    latest: LongitudinalObservation | null;
+    change: { absolute?: number | null; normalized?: number | null; unit?: string | null } | null;
+    comparable_session_count: number;
+    status:
+      | 'achieved'
+      | 'on_track'
+      | 'improving_but_not_achieved'
+      | 'unchanged'
+      | 'regressing'
+      | 'insufficient_data'
+      | 'non_comparable'
+      | 'unsupported';
+    confidence: number | null;
+    limitations: string[];
+    evidence?: Record<string, unknown> | null;
+  }>;
+  interventions?: Array<Record<string, unknown>>;
 }
 
 export async function calculateCompliance(jobId: string): Promise<OutcomesResponse> {
@@ -850,6 +910,34 @@ export async function getJobOutcomes(jobId: string): Promise<OutcomesResponse> {
       errorDetail,
       errorCode,
     );
+  }
+
+  export async function recordIntervention(
+    jobId: string,
+    payload: NonNullable<SetGoalsRequest['interventions']>[number],
+  ): Promise<{ job_id: string; interventions: Array<Record<string, unknown>>; message: string }> {
+    const res = await fetch(url(`/api/coaches/plus/analysis-jobs/${jobId}/interventions`), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(getAuthHeader() || {}),
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({ detail: res.statusText }));
+      const errorDetail = detail?.detail || res.statusText;
+      const errorCode = detail?.code || undefined;
+      throw new ApiError(
+        `Failed to record intervention: ${res.status}`,
+        res.status,
+        errorDetail,
+        errorCode,
+      );
+    }
+
+    return res.json();
   }
 
   return res.json();

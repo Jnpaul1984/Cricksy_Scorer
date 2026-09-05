@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import datetime as dt
+import sys
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
+
+sys.modules.setdefault("cv2", MagicMock())
+sys.modules.setdefault("mediapipe", MagicMock())
 
 from backend.services.player_longitudinal_progress import build_player_longitudinal_progress
 from backend.sql_app import models
@@ -433,3 +438,223 @@ async def test_longitudinal_progress_route_enforces_assignments_and_player_isola
         headers=other_auth_headers,
     )
     assert forbidden_resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_v2_goal_linkage_and_evaluation_is_additive_and_deterministic(
+    async_client,
+    db_session,
+    auth_headers,
+    test_user,
+) -> None:
+    profile = models.PlayerProfile(player_id="player-goal-001", player_name="Goal Player")
+    db_session.add_all(
+        [
+            profile,
+            models.CoachPlayerAssignment(
+                id="assign-goal-001",
+                coach_user_id=test_user.id,
+                player_profile_id=profile.player_id,
+                is_active=True,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    session_one = models.VideoSession(
+        id="video-goal-001",
+        owner_type=models.OwnerTypeEnum.coach,
+        owner_id=test_user.id,
+        title="Batting Baseline",
+        player_ids=[profile.player_id],
+        primary_player_id=profile.player_id,
+        discipline="batting",
+        analysis_context=models.AnalysisContext.batting,
+        camera_view=models.CameraView.side,
+        status=models.VideoSessionStatus.ready,
+    )
+    session_two = models.VideoSession(
+        id="video-goal-002",
+        owner_type=models.OwnerTypeEnum.coach,
+        owner_id=test_user.id,
+        title="Batting Follow-up",
+        player_ids=[profile.player_id],
+        primary_player_id=profile.player_id,
+        discipline="batting",
+        analysis_context=models.AnalysisContext.batting,
+        camera_view=models.CameraView.side,
+        status=models.VideoSessionStatus.ready,
+    )
+    db_session.add_all([session_one, session_two])
+    await db_session.commit()
+
+    baseline_metric = _metric_payload(
+        metric_id="batting_downswing_head_stability_score",
+        raw_value=0.55,
+        unit="score",
+        phase="downswing",
+    )
+    followup_metric = _metric_payload(
+        metric_id="batting_downswing_head_stability_score",
+        raw_value=0.78,
+        unit="score",
+        phase="downswing",
+    )
+    baseline_job = models.VideoAnalysisJob(
+        id="job-goal-001",
+        session_id=session_one.id,
+        status=models.VideoAnalysisJobStatus.completed,
+        deep_results={"v2": {"metric_results": [baseline_metric]}},
+        deep_findings={"findings": []},
+    )
+    followup_job = models.VideoAnalysisJob(
+        id="job-goal-002",
+        session_id=session_two.id,
+        status=models.VideoAnalysisJobStatus.completed,
+        deep_results={"v2": {"metric_results": [followup_metric]}},
+        deep_findings={"findings": []},
+    )
+    db_session.add_all([baseline_job, followup_job])
+    await db_session.commit()
+
+    set_resp = await async_client.post(
+        f"/api/coaches/plus/analysis-jobs/{followup_job.id}/set-goals",
+        headers=auth_headers,
+        json={
+            "zones": [],
+            "metrics": [],
+            "v2_goals": [
+                {
+                    "goal_id": "goal-v2-001",
+                    "player_id": profile.player_id,
+                    "discipline": "batting",
+                    "metric_id": "batting_downswing_head_stability_score",
+                    "phase": "downswing",
+                    "target_type": "increase_to_threshold",
+                    "target_value": 0.7,
+                    "baseline_job_id": baseline_job.id,
+                    "approval_state": "coach_only",
+                    "visible_to_player": False,
+                }
+            ],
+            "interventions": [
+                {
+                    "intervention_type": "drill",
+                    "activity": "Head stability net drill",
+                    "frequency": "3x weekly",
+                    "linked_goal_ids": ["goal-v2-001"],
+                    "completion_state": "planned",
+                }
+            ],
+        },
+    )
+    assert set_resp.status_code == 200, set_resp.text
+
+    calc_resp = await async_client.post(
+        f"/api/coaches/plus/analysis-jobs/{followup_job.id}/calculate-compliance",
+        headers=auth_headers,
+    )
+    assert calc_resp.status_code == 200, calc_resp.text
+    payload = calc_resp.json()
+    assert "v2_target_evidence" in payload
+    assert payload["v2_target_evidence"][0]["status"] == "achieved"
+    assert payload["v2_target_evidence"][0]["baseline"]["job_id"] == baseline_job.id
+    assert payload["v2_target_evidence"][0]["latest"]["job_id"] == followup_job.id
+    assert payload["interventions"][0]["completion_state"] == "planned"
+    assert "inferred_adherence" not in payload["interventions"][0]
+
+
+@pytest.mark.asyncio
+async def test_v2_goal_linkage_rejects_cross_player_and_unsupported_metric(
+    async_client,
+    db_session,
+    auth_headers,
+    test_user,
+) -> None:
+    owner_profile = models.PlayerProfile(player_id="player-goal-010", player_name="Owner Player")
+    other_profile = models.PlayerProfile(player_id="player-goal-011", player_name="Other Player")
+    db_session.add_all(
+        [
+            owner_profile,
+            other_profile,
+            models.CoachPlayerAssignment(
+                id="assign-goal-010",
+                coach_user_id=test_user.id,
+                player_profile_id=owner_profile.player_id,
+                is_active=True,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    session = models.VideoSession(
+        id="video-goal-010",
+        owner_type=models.OwnerTypeEnum.coach,
+        owner_id=test_user.id,
+        title="Goal Link Test",
+        player_ids=[owner_profile.player_id],
+        primary_player_id=owner_profile.player_id,
+        discipline="batting",
+        analysis_context=models.AnalysisContext.batting,
+        camera_view=models.CameraView.side,
+        status=models.VideoSessionStatus.ready,
+    )
+    db_session.add(session)
+    await db_session.commit()
+
+    job = models.VideoAnalysisJob(
+        id="job-goal-010",
+        session_id=session.id,
+        status=models.VideoAnalysisJobStatus.completed,
+        deep_results={
+            "v2": {
+                "metric_results": [
+                    _metric_payload(
+                        metric_id="batting_downswing_head_stability_score",
+                        raw_value=0.6,
+                        unit="score",
+                        phase="downswing",
+                    )
+                ]
+            }
+        },
+        deep_findings={"findings": []},
+    )
+    db_session.add(job)
+    await db_session.commit()
+
+    cross_player_resp = await async_client.post(
+        f"/api/coaches/plus/analysis-jobs/{job.id}/set-goals",
+        headers=auth_headers,
+        json={
+            "v2_goals": [
+                {
+                    "goal_id": "goal-v2-cross",
+                    "player_id": other_profile.player_id,
+                    "discipline": "batting",
+                    "metric_id": "batting_downswing_head_stability_score",
+                    "target_type": "increase_to_threshold",
+                    "target_value": 0.75,
+                }
+            ]
+        },
+    )
+    assert cross_player_resp.status_code == 403
+
+    unsupported_metric_resp = await async_client.post(
+        f"/api/coaches/plus/analysis-jobs/{job.id}/set-goals",
+        headers=auth_headers,
+        json={
+            "v2_goals": [
+                {
+                    "goal_id": "goal-v2-unsupported",
+                    "player_id": owner_profile.player_id,
+                    "discipline": "batting",
+                    "metric_id": "batting_non_existent_metric",
+                    "target_type": "increase_to_threshold",
+                    "target_value": 0.75,
+                }
+            ]
+        },
+    )
+    assert unsupported_metric_resp.status_code == 422

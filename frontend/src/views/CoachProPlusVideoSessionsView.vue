@@ -987,6 +987,8 @@
         <GoalSetter
           :job-id="goalsJobId"
           :session-id="goalsSessionId"
+          :player-id="goalsPlayerId"
+          :discipline="goalsDiscipline"
           @close="closeGoalsModal"
           @goals-saved="handleGoalsSaved"
         />
@@ -1084,6 +1086,8 @@ const uploadingSessionId = ref<string | null>(null);
 const showGoalsModal = ref(false);
 const goalsJobId = ref<string | null>(null);
 const goalsSessionId = ref<string | null>(null);
+const goalsPlayerId = ref<string | null>(null);
+const goalsDiscipline = ref<'batting' | 'pace_bowling' | 'spin_bowling' | 'wicketkeeping' | 'fielding' | null>(null);
 const jobOutcomes = ref<OutcomesResponse | null>(null);
 const showComparisonModal = ref(false);
 const comparisonMode = ref(false);
@@ -2273,6 +2277,8 @@ function closeHistoryModal() {
 function openGoalsModal(jobId: string, sessionId: string) {
   goalsJobId.value = jobId;
   goalsSessionId.value = sessionId;
+  goalsPlayerId.value = selectedSession.value?.primary_player_id || null;
+  goalsDiscipline.value = (selectedSession.value?.discipline as typeof goalsDiscipline.value) || null;
   showGoalsModal.value = true;
 }
 
@@ -2280,6 +2286,8 @@ function closeGoalsModal() {
   showGoalsModal.value = false;
   goalsJobId.value = null;
   goalsSessionId.value = null;
+  goalsPlayerId.value = null;
+  goalsDiscipline.value = null;
 }
 
 async function handleGoalsSaved() {
