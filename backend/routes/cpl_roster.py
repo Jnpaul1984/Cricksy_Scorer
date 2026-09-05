@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -119,18 +119,19 @@ async def patch_cpl_team(
     return CplTeamResponse.model_validate(team)
 
 
-@router.delete("/teams/{team_id}", status_code=204)
+@router.delete("/teams/{team_id}", status_code=204, response_class=Response, response_model=None)
 async def remove_cpl_team(
     team_id: str,
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
     db: AsyncSession = Depends(get_db),
-) -> None:
+) -> Response:
     try:
         deleted = await delete_team(db, team_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------------------
@@ -209,18 +210,21 @@ async def disable_cpl_player(
     return CplPlayerResponse.model_validate(player)
 
 
-@router.delete("/players/{player_id}", status_code=204)
+@router.delete(
+    "/players/{player_id}", status_code=204, response_class=Response, response_model=None
+)
 async def remove_cpl_player(
     player_id: str,
     current_user: Annotated[Any, Depends(security.require_roles(AllowedRoles))],
     db: AsyncSession = Depends(get_db),
-) -> None:
+) -> Response:
     try:
         deleted = await delete_player(db, player_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch("/players/{player_id}", response_model=CplPlayerResponse)

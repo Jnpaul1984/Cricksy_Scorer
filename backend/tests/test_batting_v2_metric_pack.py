@@ -197,11 +197,6 @@ def test_attach_batting_v2_metric_pack_handles_missing_phase_data_safely() -> No
     )
 
     assert all(
-        item["validity_state"]
-        in {
-            ValidityState.NOT_MEASURABLE.value,
-            ValidityState.INSUFFICIENT_VISIBILITY.value,
-            ValidityState.INSUFFICIENT_REPETITIONS.value,
-        }
+        item["validity_state"] == ValidityState.MISSING_PHASE.value
         for item in updated["v2"]["metric_results"]
     )

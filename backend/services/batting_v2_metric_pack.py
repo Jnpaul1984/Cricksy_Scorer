@@ -16,7 +16,12 @@ from backend.domain.coach_analysis_v2_contract import (
     TimestampRef,
     ValidityState,
 )
-from backend.services.coach_analysis_v2_compatibility import infer_validity_state
+from backend.services.coach_analysis_v2_compatibility import (
+    has_measurable_validity_state,
+    infer_validity_state,
+    resolve_metric_unavailability,
+    sanitize_metric_output,
+)
 
 _BATTING_V2_METRIC_VERSION = "batting_pose_metrics.v2.0.0"
 _BATTING_V2_METRIC_IDS = {
@@ -130,13 +135,18 @@ def build_batting_v2_findings_insights(
             and metric.classification_status == "STRONG"
         ):
             strengths.append({"metric_id": metric.metric_id, "summary": f"Strong {label}."})
-        elif metric.validity_state in {ValidityState.VALID, ValidityState.LOW_CONFIDENCE}:
+        elif metric.validity_state == ValidityState.VALID:
             concerns.append({"metric_id": metric.metric_id, "summary": f"Refine {label}."})
         else:
             limitations.append(
                 {
                     "metric_id": metric.metric_id,
-                    "summary": metric.unavailable_reason or "Metric unavailable for this capture.",
+                    "summary": metric.unavailable_reason
+                    or (
+                        "Measurement confidence was too low to treat this as a coaching weakness."
+                        if metric.validity_state == ValidityState.LOW_CONFIDENCE
+                        else "Metric unavailable for this capture."
+                    ),
                 }
             )
     return {
@@ -208,6 +218,8 @@ def _build_batting_metric_results(
         metric_version=_BATTING_V2_METRIC_VERSION,
         source_model=source_model,
     )
+    repetitions_available = bool(repetitions)
+    phases_available = bool(phase_lookup)
 
     return [
         _build_metric_result(
@@ -235,6 +247,8 @@ def _build_batting_metric_results(
             limitations=[
                 "Pose-only setup ratio; footwear/depth perspective can affect absolute scale.",
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="batting_setup_head_base_offset_ratio",
@@ -257,6 +271,8 @@ def _build_batting_metric_results(
             limitations=[
                 "Head-over-base estimate uses ankle midpoint as a center-of-support proxy."
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="batting_trigger_head_displacement_ratio",
@@ -279,6 +295,8 @@ def _build_batting_metric_results(
             limitations=[
                 "Trigger displacement compares trigger head position against setup baseline."
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="batting_downswing_head_stability_score",
@@ -299,6 +317,8 @@ def _build_batting_metric_results(
                 "STRONG" if value >= 0.65 else "DEVELOPING" if value >= 0.5 else "NEEDS_ATTENTION"
             ),
             limitations=["Head stability score is a frame-to-frame movement proxy over downswing."],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="batting_contact_proxy_front_knee_angle_deg",
@@ -326,6 +346,8 @@ def _build_batting_metric_results(
                 "Contact remains a proxy phase and does not claim exact bat-ball impact.",
                 "Lead-leg side could not be inferred deterministically; lower knee angle is used as the safety proxy.",
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="batting_follow_through_balance_drift_ratio",
@@ -348,6 +370,8 @@ def _build_batting_metric_results(
             limitations=[
                 "Balance drift uses hip-to-ankle horizontal offset during follow-through."
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
     ]
 
@@ -366,6 +390,9 @@ def _build_metric_result(
     valid_range: tuple[float, float],
     classification_fn: Any,
     limitations: list[str],
+    repetitions_available: bool = True,
+    phases_available: bool = True,
+    unavailable_hint: str | None = None,
 ) -> CoachingMetricResultV2:
     values = [sample.value for sample in samples]
     raw_value = round(mean(values), 4) if values else None
@@ -394,11 +421,28 @@ def _build_metric_result(
             f"{camera_requirements.minimum_source_video_fps:.2f}."
         )
 
-    aggregate_stats = _aggregate_stats(values, len(samples))
+    validity_state, unavailable_reason = resolve_metric_unavailability(
+        validity_state=validity_state,
+        unavailable_reason=unavailable_reason,
+        repetitions_available=repetitions_available,
+        phases_available=phases_available,
+        unavailable_hint=unavailable_hint,
+    )
+    normalized_score = raw_value if unit == "score" and isinstance(raw_value, float) else None
+    safe_raw_value, safe_normalized_score, safe_repetition_values = sanitize_metric_output(
+        validity_state=validity_state,
+        raw_value=raw_value,
+        normalized_score=normalized_score,
+        repetition_values=[round(value, 4) for value in values],
+    )
+    aggregate_stats = _aggregate_stats(
+        values,
+        len(samples),
+        measurable=has_measurable_validity_state(validity_state),
+    )
     classification_status = (
-        classification_fn(raw_value)
-        if raw_value is not None
-        and validity_state in {ValidityState.VALID, ValidityState.LOW_CONFIDENCE}
+        classification_fn(safe_raw_value)
+        if safe_raw_value is not None and has_measurable_validity_state(validity_state)
         else None
     )
 
@@ -411,9 +455,9 @@ def _build_metric_result(
         metric_id=metric_id,
         discipline="batting",
         phase=phase,
-        raw_value=raw_value,
+        raw_value=safe_raw_value,
         unit=unit,
-        normalized_score=raw_value if unit == "score" and isinstance(raw_value, float) else None,
+        normalized_score=safe_normalized_score,
         classification_status=classification_status,
         confidence_score=avg_confidence,
         validity_state=validity_state,
@@ -425,13 +469,15 @@ def _build_metric_result(
         evidence_refs=_evidence_refs(samples),
         timestamp_refs=_timestamp_refs(samples),
         frame_refs=_frame_refs(samples),
-        repetition_values=[round(value, 4) for value in values],
+        repetition_values=safe_repetition_values,
         aggregate_stats=aggregate_stats,
     )
 
 
-def _aggregate_stats(values: list[float], repetition_count: int) -> dict[str, Any] | None:
-    if not values:
+def _aggregate_stats(
+    values: list[float], repetition_count: int, *, measurable: bool
+) -> dict[str, Any] | None:
+    if not values or not measurable:
         return {"count": 0, "valid_repetition_count": 0, "repetition_count": repetition_count}
     payload: dict[str, Any] = {
         "count": len(values),
@@ -458,8 +504,12 @@ def _single_phase_metric(
     for repetition in repetitions:
         if (repetition.discipline or "").strip().lower() != "batting":
             continue
+        if not has_measurable_validity_state(repetition.validity_state):
+            continue
         phase = _phase_for_names(repetition.repetition_id, phase_lookup, phase_names)
         if phase is None:
+            continue
+        if not has_measurable_validity_state(phase.validity_state):
             continue
         window = _window_frames(frames, phase)
         value, visibility = measure_fn(window)
@@ -491,9 +541,16 @@ def _setup_trigger_displacement_metric(
     for repetition in repetitions:
         if (repetition.discipline or "").strip().lower() != "batting":
             continue
+        if not has_measurable_validity_state(repetition.validity_state):
+            continue
         setup_phase = _phase_for_names(repetition.repetition_id, phase_lookup, ("setup",))
         trigger_phase = _phase_for_names(repetition.repetition_id, phase_lookup, ("trigger",))
         if setup_phase is None or trigger_phase is None:
+            continue
+        if not (
+            has_measurable_validity_state(setup_phase.validity_state)
+            and has_measurable_validity_state(trigger_phase.validity_state)
+        ):
             continue
         setup_window = _window_frames(frames, setup_phase)
         trigger_window = _window_frames(frames, trigger_phase)

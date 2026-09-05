@@ -254,18 +254,35 @@
   completed_at: "2026-09-05"
   notes: "Implemented additive fielding V2 metrics with explicit camera/FPS/visibility/invalid-range guards, subtype-aware catch/throw gating, frontend V2 exposure, and checklist synchronization."
 
-- id: phase10j-9-strength-consistency-engine-v2
+- id: phase10j-9-confidence-validity-metric-sanity-hardening
   week: 10
   category: "Phase 10J"
-  title: "10J.9 Strength + Consistency Engine V2"
-  description: "Add strengths and consistency classification atop discipline metrics"
-  status: todo
+  title: "10J.9 Confidence, Validity & Metric Sanity Hardening"
+  description: "Harden V2 validity, confidence, metric sanity, unsupported-state handling, and comparability safeguards"
+  status: done
   confidence: high
   risk_level: medium
   acceptance_criteria:
-    - "Strength/acceptable/priority states and consistency outputs are available"
+    - "Invalid or unsupported metrics fail safely and compare only when technically defensible"
   verification_commands:
     - "cd backend && pytest tests/ -q"
+    - "cd frontend && npm run type-check"
+    - "cd frontend && npm run build"
+  completed_files:
+    - "backend/domain/coach_analysis_v2_contract.py"
+    - "backend/services/coach_analysis_v2_compatibility.py"
+    - "backend/services/batting_v2_metric_pack.py"
+    - "backend/services/bowling_v2_metric_pack.py"
+    - "backend/services/wicketkeeping_v2_metric_pack.py"
+    - "backend/services/fielding_v2_metric_pack.py"
+    - "backend/services/session_comparison.py"
+    - "backend/routes/coach_pro_plus.py"
+    - "frontend/src/views/CoachProPlusVideoSessionsView.vue"
+    - "backend/tests/test_session_comparison.py"
+    - "backend/tests/test_v2_metric_findings_hardening.py"
+  completed_by: "copilot"
+  completed_at: "2026-09-05"
+  notes: "Implemented additive V2 validity hardening, safe aggregate filtering, explicit unsupported/object-evidence reasons, V2 comparability metadata, findings suppression, frontend limitation visibility, and regression coverage."
 
 - id: phase10j-10-longitudinal-player-progress-v2
   week: 10

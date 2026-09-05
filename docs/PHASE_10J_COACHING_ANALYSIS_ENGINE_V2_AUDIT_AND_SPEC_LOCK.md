@@ -459,21 +459,21 @@ Mitigations:
 - Rollback: retain context-only baseline outputs.
 - Acceptance: usable specialist baseline without unsupported claims.
 
-### 10J.9 — Strength + Consistency Engine V2
-- Objective: compute strengths/acceptable/needs-attention/priority states and repetition consistency.
-- Why: current findings are issue-leaning and need richer coaching utility.
+### 10J.9 — Confidence, Validity & Metric Sanity Hardening
+- Objective: harden V2 confidence, validity, sanity bounds, capture suitability, unsupported-state handling, and comparability safeguards.
+- Why: metric outputs must refuse unsupported or misleading calculations before later progress/reporting phases build on them.
 - Dependencies: 10J.5–10J.8.
-- Reuse: coach_findings/report structures.
-- Likely files: findings/report/comparison/frontend/tests.
+- Reuse: V2 contracts, metric packs, findings/report structures, comparison/frontend presentation.
+- Likely files: contracts/metric packs/findings/report/comparison/frontend/tests.
 - Migrations: no/low.
-- API impact: additive findings dimensions.
-- Frontend impact: strength/consistency panels.
+- API impact: additive validity/confidence/comparability metadata.
+- Frontend impact: minimal limitation/proxy visibility.
 - Worker impact: low-medium.
 - Model/AI impact: none.
-- Tests: consistency math + trend state tests.
+- Tests: validity/confidence/comparability regression and unsupported-state safety tests.
 - Risk: Medium.
-- Rollback: keep legacy findings format.
-- Acceptance: strengths and repeatability surfaced with evidence and counts.
+- Rollback: keep legacy outputs readable while disabling additive hardening paths.
+- Acceptance: invalid or unsupported metrics fail safely, stay out of negative findings, and compare only when technically defensible.
 
 ### 10J.10 — Longitudinal Player Progress V2
 - Objective: shift comparison to player-discipline-metric trend model with compatibility guards.

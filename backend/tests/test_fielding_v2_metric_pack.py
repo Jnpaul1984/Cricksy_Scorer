@@ -373,11 +373,26 @@ def test_attach_fielding_v2_metric_pack_handles_missing_phase_data_safely() -> N
     )
 
     assert all(
-        item["validity_state"]
-        in {
-            ValidityState.NOT_MEASURABLE.value,
-            ValidityState.INSUFFICIENT_VISIBILITY.value,
-            ValidityState.INSUFFICIENT_REPETITIONS.value,
-        }
+        item["validity_state"] == ValidityState.MISSING_PHASE.value
         for item in updated["v2"]["metric_results"]
     )
+
+
+def test_attach_fielding_v2_metric_pack_requires_object_evidence_for_catch_metric() -> None:
+    updated = attach_fielding_v2_metric_pack(
+        results_payload=_build_payload(include_action_evidence=False),
+        discipline="fielding",
+        frames=_frames(),
+        sample_fps=10.0,
+        source_video_fps=30.0,
+        camera_view="side",
+        source_model="MediaPipe Pose Landmarker Full",
+    )
+
+    catch_metric = next(
+        item
+        for item in updated["v2"]["metric_results"]
+        if item["metric_id"] == "fielding_catch_collection_wrist_compactness_ratio"
+    )
+    assert catch_metric["validity_state"] == ValidityState.MISSING_OBJECT_EVIDENCE.value
+    assert catch_metric["raw_value"] is None

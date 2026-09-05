@@ -17,7 +17,12 @@ from backend.domain.coach_analysis_v2_contract import (
     TimestampRef,
     ValidityState,
 )
-from backend.services.coach_analysis_v2_compatibility import infer_validity_state
+from backend.services.coach_analysis_v2_compatibility import (
+    has_measurable_validity_state,
+    infer_validity_state,
+    resolve_metric_unavailability,
+    sanitize_metric_output,
+)
 
 _FIELDING_V2_METRIC_VERSION = "fielding_pose_metrics.v2.0.0"
 _FIELDING_V2_METRIC_IDS = {
@@ -139,14 +144,18 @@ def build_fielding_v2_findings_insights(
             and metric.classification_status == "STRONG"
         ):
             strengths.append({"metric_id": metric.metric_id, "summary": f"Strong {label}."})
-        elif metric.validity_state in {ValidityState.VALID, ValidityState.LOW_CONFIDENCE}:
+        elif metric.validity_state == ValidityState.VALID:
             concerns.append({"metric_id": metric.metric_id, "summary": f"Refine {label}."})
         else:
             limitations.append(
                 {
                     "metric_id": metric.metric_id,
                     "summary": metric.unavailable_reason
-                    or "Metric unavailable for this fielding capture.",
+                    or (
+                        "Measurement confidence was too low to treat this as a coaching weakness."
+                        if metric.validity_state == ValidityState.LOW_CONFIDENCE
+                        else "Metric unavailable for this fielding capture."
+                    ),
                 }
             )
     return {
@@ -183,6 +192,41 @@ def _build_fielding_metric_results(
         minimum_source_video_fps=12.0,
     )
     subtype_map = _infer_repetition_subtypes(repetitions, phase_lookup)
+    repetitions_available = bool(repetitions)
+    phases_available = bool(phase_lookup)
+    non_catch_available = any(
+        not subtype_map.get(rep.repetition_id, {}).get("catch", False) for rep in repetitions
+    )
+    catch_available = any(
+        subtype_map.get(rep.repetition_id, {}).get("catch", False) for rep in repetitions
+    )
+    throw_available = any(
+        subtype_map.get(rep.repetition_id, {}).get("throw", False) for rep in repetitions
+    )
+    catch_object_evidence_available = any(
+        (
+            phase is not None
+            and _phase_has_object_hint(
+                phase,
+                {"ball", "catch_window", "object_tracking", "ball_tracking"},
+            )
+        )
+        for rep in repetitions
+        for phase in [_phase_for_names(rep.repetition_id, phase_lookup, ("collection",))]
+        if subtype_map.get(rep.repetition_id, {}).get("catch", False)
+    )
+    throw_object_evidence_available = any(
+        (
+            phase is not None
+            and _phase_has_object_hint(
+                phase,
+                {"release", "target", "ball_tracking", "object_tracking"},
+            )
+        )
+        for rep in repetitions
+        for phase in [_phase_for_names(rep.repetition_id, phase_lookup, ("throw_action",))]
+        if subtype_map.get(rep.repetition_id, {}).get("throw", False)
+    )
 
     return [
         _build_metric_result(
@@ -213,6 +257,8 @@ def _build_fielding_metric_results(
             limitations=[
                 "Ready stance width is a pose-only base-width proxy and can shift with perspective.",
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="fielding_reaction_head_stability_score",
@@ -238,6 +284,8 @@ def _build_fielding_metric_results(
             limitations=[
                 "Reaction score is a movement-control proxy only; exact reaction timing is not inferred.",
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="fielding_approach_balance_drift_ratio",
@@ -264,6 +312,8 @@ def _build_fielding_metric_results(
                 "Approach control uses hip-to-base drift normalized by shoulder width.",
                 "Boundary awareness is not inferred; this remains a generic approach-control proxy.",
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="fielding_ground_collection_body_drop_ratio",
@@ -296,6 +346,8 @@ def _build_fielding_metric_results(
             unavailable_hint=(
                 "No non-catching fielding repetitions were available for a deterministic body-drop proxy."
             ),
+            repetitions_available=non_catch_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="fielding_ground_collection_knee_flexion_angle_deg",
@@ -331,6 +383,8 @@ def _build_fielding_metric_results(
             unavailable_hint=(
                 "No non-catching fielding repetitions were available for ground-collection knee flexion."
             ),
+            repetitions_available=non_catch_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="fielding_ground_collection_head_base_offset_ratio",
@@ -362,6 +416,8 @@ def _build_fielding_metric_results(
             unavailable_hint=(
                 "No non-catching fielding repetitions were available for a deterministic pickup-alignment proxy."
             ),
+            repetitions_available=non_catch_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="fielding_transfer_balance_drift_ratio",
@@ -393,6 +449,8 @@ def _build_fielding_metric_results(
             unavailable_hint=(
                 "No non-catching fielding repetitions were available for a deterministic transfer metric."
             ),
+            repetitions_available=non_catch_available,
+            phases_available=phases_available,
         ),
         _build_metric_result(
             metric_id="fielding_catch_collection_wrist_compactness_ratio",
@@ -431,7 +489,11 @@ def _build_fielding_metric_results(
                 "One-hand versus two-hand catch technique is not classified unless future visibility evidence supports it.",
                 "Exact catch-completion timing is not inferred.",
             ],
-            unavailable_hint="No catch-tagged repetitions were available, so catching compactness was not inferred.",
+            unavailable_hint="Required catch object evidence was unavailable, so catching compactness was not inferred.",
+            repetitions_available=catch_available,
+            phases_available=phases_available,
+            requires_object_evidence=True,
+            object_evidence_available=catch_object_evidence_available,
         ),
         _build_metric_result(
             metric_id="fielding_throw_action_shoulder_hip_separation_deg",
@@ -473,8 +535,12 @@ def _build_fielding_metric_results(
                 "Throw metric measures trunk/shoulder separation only; exact release timing, speed, and accuracy are not inferred.",
             ],
             unavailable_hint=(
-                "No throw-tagged repetitions were available, so throwing rotation was not inferred."
+                "Required throw object evidence was unavailable, so throwing rotation was not inferred."
             ),
+            repetitions_available=throw_available,
+            phases_available=phases_available,
+            requires_object_evidence=True,
+            object_evidence_available=throw_object_evidence_available,
         ),
         _build_metric_result(
             metric_id="fielding_recovery_balance_drift_ratio",
@@ -500,6 +566,8 @@ def _build_fielding_metric_results(
             limitations=[
                 "Recovery metric describes post-action balance only and does not infer boundary awareness.",
             ],
+            repetitions_available=repetitions_available,
+            phases_available=phases_available,
         ),
     ]
 
@@ -519,6 +587,10 @@ def _build_metric_result(
     valid_range: tuple[float, float],
     classification_fn: Callable[[float], str],
     limitations: list[str],
+    repetitions_available: bool = True,
+    phases_available: bool = True,
+    requires_object_evidence: bool = False,
+    object_evidence_available: bool | None = None,
     unavailable_hint: str | None = None,
 ) -> CoachingMetricResultV2:
     values = [sample.value for sample in samples]
@@ -554,11 +626,30 @@ def _build_metric_result(
     ):
         unavailable_reason = unavailable_hint
 
-    aggregate_stats = _aggregate_stats(values, len(samples))
+    validity_state, unavailable_reason = resolve_metric_unavailability(
+        validity_state=validity_state,
+        unavailable_reason=unavailable_reason,
+        repetitions_available=repetitions_available,
+        phases_available=phases_available,
+        requires_object_evidence=requires_object_evidence,
+        object_evidence_available=object_evidence_available,
+        unavailable_hint=unavailable_hint,
+    )
+    normalized_score = raw_value if unit == "score" and isinstance(raw_value, float) else None
+    safe_raw_value, safe_normalized_score, safe_repetition_values = sanitize_metric_output(
+        validity_state=validity_state,
+        raw_value=raw_value,
+        normalized_score=normalized_score,
+        repetition_values=[round(value, 4) for value in values],
+    )
+    aggregate_stats = _aggregate_stats(
+        values,
+        len(samples),
+        measurable=has_measurable_validity_state(validity_state),
+    )
     classification_status = (
-        classification_fn(raw_value)
-        if raw_value is not None
-        and validity_state in {ValidityState.VALID, ValidityState.LOW_CONFIDENCE}
+        classification_fn(safe_raw_value)
+        if safe_raw_value is not None and has_measurable_validity_state(validity_state)
         else None
     )
 
@@ -572,9 +663,9 @@ def _build_metric_result(
         discipline="fielding",
         action_type=action_type,
         phase=phase,
-        raw_value=raw_value,
+        raw_value=safe_raw_value,
         unit=unit,
-        normalized_score=raw_value if unit == "score" and isinstance(raw_value, float) else None,
+        normalized_score=safe_normalized_score,
         classification_status=classification_status,
         confidence_score=avg_confidence,
         validity_state=validity_state,
@@ -586,13 +677,15 @@ def _build_metric_result(
         evidence_refs=_evidence_refs(samples),
         timestamp_refs=_timestamp_refs(samples),
         frame_refs=_frame_refs(samples),
-        repetition_values=[round(value, 4) for value in values],
+        repetition_values=safe_repetition_values,
         aggregate_stats=aggregate_stats,
     )
 
 
-def _aggregate_stats(values: list[float], repetition_count: int) -> dict[str, Any] | None:
-    if not values:
+def _aggregate_stats(
+    values: list[float], repetition_count: int, *, measurable: bool
+) -> dict[str, Any] | None:
+    if not values or not measurable:
         return {"count": 0, "valid_repetition_count": 0, "repetition_count": repetition_count}
     payload: dict[str, Any] = {
         "count": len(values),
@@ -623,10 +716,14 @@ def _single_phase_metric(
         action_type = str(repetition.action_type or "").strip().lower()
         if not action_type.startswith("fielding"):
             continue
+        if not has_measurable_validity_state(repetition.validity_state):
+            continue
         if repetition_filter is not None and not repetition_filter(repetition):
             continue
         phase = _phase_for_names(repetition.repetition_id, phase_lookup, phase_names)
         if phase is None:
+            continue
+        if not has_measurable_validity_state(phase.validity_state):
             continue
         window = _window_frames(frames, phase)
         value, visibility = measure_fn(window)
@@ -667,12 +764,19 @@ def _ready_to_collection_metric(
         action_type = str(repetition.action_type or "").strip().lower()
         if not action_type.startswith("fielding"):
             continue
+        if not has_measurable_validity_state(repetition.validity_state):
+            continue
         if subtype_map.get(repetition.repetition_id, {}).get("catch", False):
             continue
 
         ready_phase = _phase_for_names(repetition.repetition_id, phase_lookup, ("ready",))
         collection_phase = _phase_for_names(repetition.repetition_id, phase_lookup, ("collection",))
         if ready_phase is None or collection_phase is None:
+            continue
+        if not (
+            has_measurable_validity_state(ready_phase.validity_state)
+            and has_measurable_validity_state(collection_phase.validity_state)
+        ):
             continue
 
         ready_window = _window_frames(frames, ready_phase)

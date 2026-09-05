@@ -29,6 +29,8 @@ _METRIC_UNITS: dict[str, str] = {
     "elbow_drop_score": "score",
 }
 
+MEASURABLE_VALIDITY_STATES = frozenset({ValidityState.VALID, ValidityState.LOW_CONFIDENCE})
+
 
 def infer_validity_state(
     *,
@@ -93,6 +95,67 @@ def infer_validity_state(
             "Measurement is available but confidence is below the preferred threshold.",
         )
     return (ValidityState.VALID, None)
+
+
+def has_measurable_validity_state(validity_state: ValidityState | str | None) -> bool:
+    if isinstance(validity_state, ValidityState):
+        return validity_state in MEASURABLE_VALIDITY_STATES
+    if validity_state is None:
+        return False
+    try:
+        return ValidityState(validity_state) in MEASURABLE_VALIDITY_STATES
+    except Exception:
+        return False
+
+
+def resolve_metric_unavailability(
+    *,
+    validity_state: ValidityState,
+    unavailable_reason: str | None,
+    repetitions_available: bool = True,
+    phases_available: bool = True,
+    requires_object_evidence: bool = False,
+    object_evidence_available: bool | None = None,
+    unavailable_hint: str | None = None,
+) -> tuple[ValidityState, str | None]:
+    if validity_state not in {
+        ValidityState.VALID,
+        ValidityState.LOW_CONFIDENCE,
+        ValidityState.NOT_MEASURABLE,
+        ValidityState.INSUFFICIENT_REPETITIONS,
+        ValidityState.UNAVAILABLE,
+    }:
+        return (validity_state, unavailable_reason)
+    if not phases_available:
+        return (
+            ValidityState.MISSING_PHASE,
+            unavailable_hint or "Required phase windows were unavailable for this metric.",
+        )
+    if not repetitions_available:
+        return (
+            ValidityState.MISSING_REPETITION,
+            unavailable_hint or "No valid repetitions were available for this metric.",
+        )
+    if requires_object_evidence and object_evidence_available is False:
+        return (
+            ValidityState.MISSING_OBJECT_EVIDENCE,
+            unavailable_hint or "Required object evidence was unavailable for this metric.",
+        )
+    if has_measurable_validity_state(validity_state):
+        return (validity_state, unavailable_reason)
+    return (validity_state, unavailable_reason)
+
+
+def sanitize_metric_output(
+    *,
+    validity_state: ValidityState,
+    raw_value: float | None,
+    normalized_score: float | None,
+    repetition_values: list[float],
+) -> tuple[float | None, float | None, list[float]]:
+    if has_measurable_validity_state(validity_state):
+        return (raw_value, normalized_score, repetition_values)
+    return (None, None, [])
 
 
 def build_capture_profile(
@@ -213,14 +276,21 @@ def build_metric_results(
             sample_fps=sample_fps,
         )
         evidence_payload = evidence_map.get(metric_id)
+        normalized_score = _normalized_score_for_metric(str(metric_id), raw_value)
+        safe_raw_value, safe_normalized_score, _ = sanitize_metric_output(
+            validity_state=validity_state,
+            raw_value=_safe_float(raw_value) if isinstance(raw_value, Real) else raw_value,
+            normalized_score=normalized_score,
+            repetition_values=[],
+        )
         results.append(
             CoachingMetricResultV2(
                 metric_version=metric_version,
                 metric_id=str(metric_id),
                 discipline=discipline,
-                raw_value=raw_value,
+                raw_value=safe_raw_value,
                 unit=_METRIC_UNITS.get(str(metric_id)),
-                normalized_score=_normalized_score_for_metric(str(metric_id), raw_value),
+                normalized_score=safe_normalized_score,
                 confidence_score=confidence,
                 validity_state=validity_state,
                 unavailable_reason=unavailable_reason,
