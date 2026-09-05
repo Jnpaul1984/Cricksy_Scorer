@@ -475,21 +475,21 @@ Mitigations:
 - Rollback: keep legacy outputs readable while disabling additive hardening paths.
 - Acceptance: invalid or unsupported metrics fail safely, stay out of negative findings, and compare only when technically defensible.
 
-### 10J.10 — Longitudinal Player Progress V2
-- Objective: shift comparison to player-discipline-metric trend model with compatibility guards.
-- Why: progress is core requirement and currently job/session bounded.
-- Dependencies: 10J.1 and metric packs.
-- Reuse: session_comparison service/UI patterns.
-- Likely files: comparison service/routes/models/frontend/tests.
-- Migrations: likely yes (history/indexing metadata).
-- API impact: new progress/trend endpoints.
-- Frontend impact: trend dashboards.
+### 10J.10 — Strength + Consistency Engine
+- Objective: add deterministic within-session strength, recurring-concern, repeatability, and representative-repetition analysis on top of V2 metric evidence.
+- Why: coaches need transparent reproducibility signals without introducing opaque overall scores or longitudinal trend claims.
+- Dependencies: 10J.1-10J.9 metric, validity, repetition, and phase foundations.
+- Reuse: existing V2 metric packs, findings/report payloads, session-comparison comparability rules, and Coach Pro Plus UI patterns.
+- Likely files: V2 metric packs, analysis aggregation services, findings/report payload extenders, frontend results rendering, tests.
+- Migrations: no; additive JSON payload extension is sufficient for existing results storage.
+- API impact: additive findings/report/result fields only.
+- Frontend impact: minimal additive session-analysis sections in existing results surfaces.
 - Worker impact: low.
 - Model/AI impact: none.
-- Tests: compatibility and longitudinal regression.
+- Tests: metric-pack regression, validity/confidence safety, session-analysis, and representative-repetition selection.
 - Risk: High.
-- Rollback: fallback to existing compare-jobs endpoint.
-- Acceptance: guarded trend outputs baseline/previous/current/delta and issue lifecycle flags.
+- Rollback: disable additive strength/consistency payloads while preserving legacy findings/report behavior.
+- Acceptance: valid comparable repetition evidence deterministically yields strengths, recurring concerns, consistency observations, and transparent best/needs-work repetition selection.
 
 ### 10J.11 — Goal/Intervention + Interpretation + PDF V2 Integration
 - Objective: connect V2 findings/progress to goals/interventions and audience-layer reporting/PDF.

@@ -18,7 +18,7 @@
 | 10J.7 | Wicketkeeping V2 Deterministic Metric Pack | ✅ DONE |
 | 10J.8 | Fielding V2 Deterministic Metric Pack | ✅ DONE |
 | 10J.9 | Confidence, Validity & Metric Sanity Hardening | ✅ DONE |
-| 10J.10 | Longitudinal Player Progress V2 | ⏳ TODO (PENDING USER APPROVAL) |
+| 10J.10 | Strength + Consistency Engine | ⏳ TODO (PENDING USER APPROVAL) |
 | 10J.11 | Goal/Intervention + Interpretation + PDF V2 Integration | ⏳ TODO (PENDING USER APPROVAL) |
 | 10J.12 | Hardening, Performance, CI, and Rollout Controls | ⏳ TODO (PENDING USER APPROVAL) |
 

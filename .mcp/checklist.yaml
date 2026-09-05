@@ -287,8 +287,8 @@
 - id: phase10j-10-longitudinal-player-progress-v2
   week: 10
   category: "Phase 10J"
-  title: "10J.10 Longitudinal Player Progress V2"
-  description: "Shift comparison to player-discipline-metric trends with compatibility guards"
+  title: "10J.10 Strength + Consistency Engine"
+  description: "Add deterministic within-session strengths, recurring concerns, repeatability, and representative repetition selection"
   status: todo
   confidence: high
   risk_level: high
