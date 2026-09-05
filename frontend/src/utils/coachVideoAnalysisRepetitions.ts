@@ -49,8 +49,9 @@ export type CoachVideoPhaseSummary = {
   insufficient_reason?: string | null;
 } | null;
 
-export type CoachVideoBattingMetric = {
+export type CoachVideoV2Metric = {
   metricId: string;
+  discipline: string | null;
   phase: string | null;
   rawValue: number | null;
   unit: string | null;
@@ -61,6 +62,8 @@ export type CoachVideoBattingMetric = {
   limitations: string[];
   repetitionValues: number[];
 };
+
+export type CoachVideoBattingMetric = CoachVideoV2Metric;
 
 type AnyObj = Record<string, unknown>;
 
@@ -202,9 +205,9 @@ export function extractCoachVideoPhases(
     });
 }
 
-export function extractCoachVideoBattingMetrics(
+export function extractCoachVideoDisciplineV2Metrics(
   analysisJob: VideoAnalysisJob | null | undefined,
-): CoachVideoBattingMetric[] {
+): CoachVideoV2Metric[] {
   const results = pickBestCoachVideoResults(analysisJob);
   const rawMetricResults = results?.v2?.metric_results;
   if (!Array.isArray(rawMetricResults)) return [];
@@ -212,9 +215,16 @@ export function extractCoachVideoBattingMetrics(
   return rawMetricResults
     .map((item) => (isObject(item) ? item : null))
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
-    .filter((item) => typeof item.metric_id === 'string' && item.metric_id.startsWith('batting_'))
+    .filter(
+      (item) =>
+        typeof item.metric_id === 'string' &&
+        ['batting_', 'pace_bowling_', 'spin_bowling_'].some((prefix) =>
+          item.metric_id.startsWith(prefix),
+        ),
+    )
     .map((item) => ({
       metricId: String(item.metric_id),
+      discipline: typeof item.discipline === 'string' ? item.discipline : null,
       phase: typeof item.phase === 'string' ? item.phase : null,
       rawValue: toNumber(item.raw_value),
       unit: typeof item.unit === 'string' ? item.unit : null,
@@ -232,4 +242,12 @@ export function extractCoachVideoBattingMetrics(
         : [],
     }))
     .sort((left, right) => left.metricId.localeCompare(right.metricId));
+}
+
+export function extractCoachVideoBattingMetrics(
+  analysisJob: VideoAnalysisJob | null | undefined,
+): CoachVideoBattingMetric[] {
+  return extractCoachVideoDisciplineV2Metrics(analysisJob).filter((item) =>
+    item.metricId.startsWith('batting_'),
+  );
 }

@@ -411,31 +411,31 @@ Mitigations:
 - Rollback: keep old batting metrics and gate V2 via config.
 - Acceptance: vetted batting metric set with validity states and evidence references.
 
-### 10J.6 — Pace Bowling V2 + Ball-Tracking Integration Hardening
-- Objective: split pace-specific metrics and harden ball-tracking linkage.
-- Why: existing bowling capability is strongest and must be formalized.
+### 10J.6 — Pace + Spin Bowling V2 Deterministic Metric Packs
+- Objective: ship production-safe pace and spin bowling metric packs with additive ball-tracking-aware evidence hardening.
+- Why: existing bowling capability is strongest and must be formalized without silently reusing pace assumptions for spin.
 - Dependencies: 10J.3, 10J.4, 10J.5 foundations.
-- Reuse: ball_tracking_service + current bowling findings.
-- Likely files: ball tracking/findings/worker/comparison/report/tests.
-- Migrations: maybe.
-- API impact: additive pace metric fields.
-- Frontend impact: pace bowling panels.
-- Worker impact: medium-heavy.
+- Reuse: ball_tracking_service + current bowling findings + batting V2 contract patterns.
+- Likely files: bowling metric pack/findings/worker/report/frontend/tests.
+- Migrations: none preferred; keep additive JSON payloads.
+- API impact: additive pace/spin metric fields.
+- Frontend impact: bowling metric panels in the existing V2 results view.
+- Worker impact: medium, CPU-first pose math with optional confidence uplift from existing ball tracking.
 - Model/AI impact: deterministic first.
-- Tests: bowl metric validity and compatibility.
+- Tests: pace/spin metric validity, compatibility, and ball-evidence safety.
 - Risk: High.
-- Rollback: fallback to existing bowling summary.
-- Acceptance: pace-specific metrics with stable confidence/validity behavior.
+- Rollback: fallback to existing bowling summary and omit bowling V2 metric pack.
+- Acceptance: pace and spin metric packs expose stable confidence/validity behavior with explicit limitations.
 
-### 10J.7 — Spin Bowling V2 Distinct Model
-- Objective: introduce spin-specific technical model distinct from pace thresholds.
-- Why: avoid false equivalence and preserve coaching validity.
+### 10J.7 — Spin Bowling V2 Distinct Model (superseded by 10J.6 scope merge)
+- Objective: reserved after Issue #487 merged spin deterministic metric-pack scope into 10J.6.
+- Why: avoid duplicating already-approved deterministic spin metric-pack scope.
 - Dependencies: 10J.6.
-- Reuse: shared bowling infrastructure where safe.
-- Likely files: metric/findings/report/comparison/tests.
-- Migrations: minimal/none if using shared versioned metric catalog.
-- API impact: additive discipline subtype.
-- Frontend impact: spin-specific interpretations.
+- Reuse: n/a until a new post-10J.6 scope is approved.
+- Likely files: TBD only if future approved scope is created.
+- Migrations: none.
+- API impact: none in current spec state.
+- Frontend impact: none in current spec state.
 - Worker impact: medium.
 - Model/AI impact: no fake spin-rate.
 - Tests: spin vs pace differentiation.

@@ -13,6 +13,7 @@ from typing import Any, cast
 import boto3
 from backend.config import settings
 from backend.services.batting_v2_metric_pack import attach_batting_v2_metric_pack
+from backend.services.bowling_v2_metric_pack import attach_bowling_v2_metric_pack
 from backend.services.coach_analysis_v2_compatibility import build_analysis_v2_contract
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
@@ -261,6 +262,24 @@ async def aggregate_chunks_and_finalize(db: AsyncSession, job: VideoAnalysisJob)
     attach_batting_v2_metric_pack(
         results_payload=final_results,
         discipline=str(resolved_mode),
+        frames=all_frames,
+        sample_fps=float(job.sample_fps or settings.SAMPLE_FPS),
+        source_video_fps=30.0,
+        camera_view=(
+            job.session.camera_view.value
+            if job.session and getattr(job.session.camera_view, "value", None)
+            else job.session.camera_view
+            if job.session
+            else None
+        ),
+        source_model="MediaPipe Pose Landmarker Full",
+    )
+    attach_bowling_v2_metric_pack(
+        results_payload=final_results,
+        discipline=str(resolved_mode),
+        session_discipline=str(job.session.discipline)
+        if job.session and job.session.discipline
+        else None,
         frames=all_frames,
         sample_fps=float(job.sample_fps or settings.SAMPLE_FPS),
         source_video_fps=30.0,

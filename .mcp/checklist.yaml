@@ -160,24 +160,41 @@
   completed_at: "2026-09-04"
   notes: "Shipped deterministic batting V2 metric pack with repetition/phase-aware outputs, validity/camera/FPS guards, evidence refs, and additive UI exposure."
 
-- id: phase10j-6-pace-bowling-v2-ball-tracking-hardening
+- id: phase10j-6-pace-spin-bowling-v2-metric-packs
   week: 10
   category: "Phase 10J"
-  title: "10J.6 Pace Bowling V2 + Ball-Tracking Integration Hardening"
-  description: "Harden pace-specific metrics and ball-tracking integration"
-  status: todo
+  title: "10J.6 Pace + Spin Bowling V2 Deterministic Metric Packs"
+  description: "Ship deterministic pace/spin bowling metric packs with additive ball-tracking-aware evidence handling"
+  status: done
   confidence: high
   risk_level: high
   acceptance_criteria:
-    - "Pace bowling metrics are stable and compatibility-safe"
+    - "Pace and spin bowling metrics are stable, distinct, and compatibility-safe"
   verification_commands:
-    - "cd backend && pytest tests/ -q"
+    - "python scripts/checklist.py status"
+    - "cd backend && pytest -q tests/test_health.py tests/test_results_endpoint.py tests/test_bowling_v2_metric_pack.py tests/test_coach_analysis_v2_contracts.py tests/test_phase_recognition.py tests/test_repetition_segmentation.py tests/test_ball_tracking.py tests/test_ball_tracking_integration.py tests/test_coach_findings.py tests/test_coach_report_service.py tests/test_batting_v2_metric_pack.py"
+  completed_by: "copilot"
+  completed_at: "2026-09-05"
+  files_touched:
+    - "backend/services/bowling_v2_metric_pack.py"
+    - "backend/services/coach_plus_analysis.py"
+    - "backend/services/chunk_aggregation.py"
+    - "backend/workers/analysis_worker.py"
+    - "backend/tests/test_bowling_v2_metric_pack.py"
+    - "backend/tests/test_coach_analysis_v2_contracts.py"
+    - "frontend/src/utils/coachVideoAnalysisRepetitions.ts"
+    - "frontend/src/views/CoachProPlusVideoSessionsView.vue"
+    - "docs/PHASE_10J_COACHING_ANALYSIS_ENGINE_V2_AUDIT_AND_SPEC_LOCK.md"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  notes: "Implemented additive pace/spin bowling V2 metric packs with phase-aware pose measurements, validity guards, evidence refs, worker reattachment after ball-tracking phase enrichment, and existing results-view exposure."
 
 - id: phase10j-7-spin-bowling-v2-distinct-model
   week: 10
   category: "Phase 10J"
-  title: "10J.7 Spin Bowling V2 Distinct Model"
-  description: "Introduce spin-specific technical model distinct from pace"
+  title: "10J.7 Spin Bowling V2 Distinct Model (superseded by 10J.6 scope merge)"
+  description: "Reserved after Issue #487 merged spin deterministic metric-pack scope into 10J.6"
   status: todo
   confidence: high
   risk_level: medium
