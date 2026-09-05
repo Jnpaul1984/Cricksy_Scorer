@@ -156,6 +156,7 @@ def run_analysis_pipeline(
 
         # Step 3: Generate findings
         logger.info("Step 3/4: Generating findings...")
+        session_context = session_context or {}
         findings = generate_findings(
             metrics,
             context=session_context,

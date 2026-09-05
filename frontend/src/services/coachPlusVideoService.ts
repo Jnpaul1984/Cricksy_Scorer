@@ -252,6 +252,7 @@ export interface VideoAnalysisResults {
       focus_areas?: string[];
     }[];
     one_week_plan?: string;
+    v2_session_analysis?: Record<string, unknown> | null;
   };
 
   frames?: Array<Record<string, unknown>>;

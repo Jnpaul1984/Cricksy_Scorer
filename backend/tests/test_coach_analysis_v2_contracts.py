@@ -447,6 +447,12 @@ def test_run_pose_metrics_findings_report_embeds_v2_contract_without_breaking_le
     assert payload["v2"]["repetitions"]
     assert payload["v2"]["repetitions"][0]["job_id"] == "job-1"
     assert payload["meta"]["repetition_segmentation"]["repetitions_count"] >= 1
+    assert (
+        payload["meta"]["strength_consistency_engine"]["analysis_version"]
+        == "strength_consistency.v1"
+    )
+    assert "v2_session_analysis" in payload["findings"]
+    assert "v2_session_analysis" in payload["report"]
 
 
 def test_run_pose_metrics_findings_report_adds_batting_v2_metric_pack() -> None:
@@ -505,6 +511,7 @@ def test_run_pose_metrics_findings_report_adds_batting_v2_metric_pack() -> None:
     assert payload["meta"]["batting_v2_metric_pack"]["metrics_count"] == 6
     assert "batting_v2" in payload["findings"]
     assert "batting_v2" in payload["report"]
+    assert all("consistency" in metric for metric in batting_v2_metrics)
 
 
 @pytest.mark.parametrize(
@@ -584,6 +591,7 @@ def test_run_pose_metrics_findings_report_adds_bowling_v2_metric_pack(
     assert payload["meta"]["bowling_v2_metric_pack"]["metrics_count"] == 6
     assert "bowling_v2" in payload["findings"]
     assert "bowling_v2" in payload["report"]
+    assert all("consistency" in metric for metric in bowling_v2_metrics)
 
 
 def test_run_pose_metrics_findings_report_adds_wicketkeeping_v2_metric_pack() -> None:
@@ -643,6 +651,7 @@ def test_run_pose_metrics_findings_report_adds_wicketkeeping_v2_metric_pack() ->
     assert payload["meta"]["wicketkeeping_v2_metric_pack"]["metrics_count"] == 9
     assert "wicketkeeping_v2" in payload["findings"]
     assert "wicketkeeping_v2" in payload["report"]
+    assert all("consistency" in metric for metric in wicketkeeping_v2_metrics)
 
 
 def test_run_pose_metrics_findings_report_adds_fielding_v2_metric_pack() -> None:
@@ -701,3 +710,4 @@ def test_run_pose_metrics_findings_report_adds_fielding_v2_metric_pack() -> None
     assert payload["meta"]["fielding_v2_metric_pack"]["metrics_count"] == 10
     assert "fielding_v2" in payload["findings"]
     assert "fielding_v2" in payload["report"]
+    assert all("consistency" in metric for metric in fielding_v2_metrics)

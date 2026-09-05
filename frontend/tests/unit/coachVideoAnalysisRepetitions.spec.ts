@@ -6,6 +6,7 @@ import {
   extractCoachVideoPhaseSummary,
   extractCoachVideoRepetitions,
   extractCoachVideoRepetitionSummary,
+  extractCoachVideoSessionAnalysis,
   getCoachVideoJobFps,
 } from '@/utils/coachVideoAnalysisRepetitions';
 
@@ -44,6 +45,15 @@ describe('coachVideoAnalysisRepetitions', () => {
               classification_status: 'STRONG',
               validity_state: 'VALID',
               repetition_values: [1.0, 1.2],
+              consistency: {
+                status: 'ANALYZED',
+                method: 'normalized_spread',
+                classification: 'high',
+                value: 0.04,
+                valid_sample_count: 2,
+                excluded_repetition_count: 0,
+                limitations: [],
+              },
             },
             {
               metric_id: 'fielding_reaction_head_stability_score',
@@ -113,6 +123,48 @@ describe('coachVideoAnalysisRepetitions', () => {
             },
           ],
         },
+        findings: {
+          v2_session_analysis: {
+            strengths: [
+              {
+                metric_id: 'batting_setup_stance_width_ratio',
+                discipline: 'batting',
+                severity: 'medium',
+                confidence_score: 0.8,
+                valid_sample_count: 3,
+                summary: 'Repeated strong stance width evidence.',
+                supporting_repetition_ids: ['rep-1', 'rep-2'],
+                limitations: [],
+              },
+            ],
+            recurring_concerns: [],
+            consistency_observations: [
+              {
+                metric_id: 'batting_setup_stance_width_ratio',
+                discipline: 'batting',
+                method: 'normalized_spread',
+                classification: 'high',
+                value: 0.04,
+                confidence_score: 0.8,
+                valid_sample_count: 2,
+                excluded_repetition_count: 0,
+                limitations: [],
+              },
+            ],
+            best_repetition: {
+              available: true,
+              repetition_id: 'rep-2',
+              rationale: 'Selected from strong metric evidence.',
+              confidence_score: 0.8,
+              supporting_metrics: ['batting_setup_stance_width_ratio'],
+            },
+            needs_work_repetition: {
+              available: false,
+              reason: 'No repetition had enough negative metric evidence for needs-work selection.',
+              supporting_metrics: [],
+            },
+          },
+        },
       },
       quick_results: {
         pose_summary: { video_fps: 24 },
@@ -143,6 +195,11 @@ describe('coachVideoAnalysisRepetitions', () => {
     expect(battingMetrics).toHaveLength(1);
     expect(battingMetrics[0]?.metricId).toBe('batting_setup_stance_width_ratio');
     expect(battingMetrics[0]?.repetitionValues).toEqual([1.0, 1.2]);
+    expect(battingMetrics[0]?.consistency?.classification).toBe('high');
+    expect(extractCoachVideoSessionAnalysis(job)?.strengths[0]?.metricId).toBe(
+      'batting_setup_stance_width_ratio',
+    );
+    expect(extractCoachVideoSessionAnalysis(job)?.bestRepetition?.repetitionId).toBe('rep-2');
   });
 
   it('keeps legacy jobs safe when repetition data is absent', () => {
@@ -168,5 +225,6 @@ describe('coachVideoAnalysisRepetitions', () => {
     expect(extractCoachVideoPhases(job)).toEqual([]);
     expect(extractCoachVideoPhaseSummary(job)).toBeNull();
     expect(getCoachVideoJobFps(job)).toBeNull();
+    expect(extractCoachVideoSessionAnalysis(job)).toBeNull();
   });
 });

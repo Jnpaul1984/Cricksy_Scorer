@@ -34,7 +34,9 @@ def build_metric_consistency(
     unavailable_reason: str | None = None,
 ) -> dict[str, Any]:
     sample_payloads = [_sample_payload(sample, classification_fn) for sample in samples]
-    values = [sample["value"] for sample in sample_payloads if isinstance(sample.get("value"), float)]
+    values = [
+        sample["value"] for sample in sample_payloads if isinstance(sample.get("value"), float)
+    ]
     valid_sample_count = len(values)
     total_candidates = max(candidate_repetition_count or valid_sample_count, valid_sample_count)
     excluded_repetition_count = max(0, total_candidates - valid_sample_count)
@@ -48,7 +50,8 @@ def build_metric_consistency(
 
     if not has_measurable_validity_state(validity_state):
         limitations.append(
-            unavailable_reason or "This metric was not safely measurable for repeatability analysis."
+            unavailable_reason
+            or "This metric was not safely measurable for repeatability analysis."
         )
         return {
             "analysis_version": CONSISTENCY_ANALYSIS_VERSION,
@@ -220,7 +223,9 @@ def build_strength_consistency_analysis(
         if len(samples) < MIN_RECURRING_SAMPLES:
             continue
 
-        strong_samples = [sample for sample in samples if sample.get("classification_status") == "STRONG"]
+        strong_samples = [
+            sample for sample in samples if sample.get("classification_status") == "STRONG"
+        ]
         weak_samples = [
             sample for sample in samples if sample.get("classification_status") == "NEEDS_ATTENTION"
         ]
@@ -416,7 +421,9 @@ def _build_session_signal(
             else f"Repeated needs-attention {metric_label} evidence across {len(supporting_samples)} of {valid_sample_count} comparable repetitions."
         ),
         "consistency_classification": (
-            metric.consistency.get("classification") if isinstance(metric.consistency, dict) else None
+            metric.consistency.get("classification")
+            if isinstance(metric.consistency, dict)
+            else None
         ),
         "evidence_refs": _supporting_evidence_refs(metric.evidence_refs, supporting_repetition_ids),
         "timestamp_refs": _supporting_timestamp_refs(supporting_samples),
@@ -509,13 +516,19 @@ def _select_repetition_signal(
         )
         top_positive = len(sorted_candidates[0][1].get("positive", []))
         top_negative = len(sorted_candidates[0][1].get("negative", []))
-        if sum(
-            1
-            for _, payload in sorted_candidates
-            if len(payload.get("positive", [])) == top_positive
-            and len(payload.get("negative", [])) == top_negative
-        ) > 1:
-            return {"available": False, "reason": "Best repetition evidence was tied across repetitions."}
+        if (
+            sum(
+                1
+                for _, payload in sorted_candidates
+                if len(payload.get("positive", [])) == top_positive
+                and len(payload.get("negative", [])) == top_negative
+            )
+            > 1
+        ):
+            return {
+                "available": False,
+                "reason": "Best repetition evidence was tied across repetitions.",
+            }
         repetition_id, payload = sorted_candidates[0]
     else:
         candidates = [
@@ -537,12 +550,15 @@ def _select_repetition_signal(
         )
         top_negative = len(sorted_candidates[0][1].get("negative", []))
         top_positive = len(sorted_candidates[0][1].get("positive", []))
-        if sum(
-            1
-            for _, payload in sorted_candidates
-            if len(payload.get("negative", [])) == top_negative
-            and len(payload.get("positive", [])) == top_positive
-        ) > 1:
+        if (
+            sum(
+                1
+                for _, payload in sorted_candidates
+                if len(payload.get("negative", [])) == top_negative
+                and len(payload.get("positive", [])) == top_positive
+            )
+            > 1
+        ):
             return {
                 "available": False,
                 "reason": "Needs-work repetition evidence was tied across repetitions.",
@@ -576,7 +592,11 @@ def _select_repetition_signal(
             else f"Selected because this repetition had {len(negative_metrics)} needs-attention metric signals and only {len(positive_metrics)} strong signals."
         ),
         "evidence_refs": [
-            {"ref_type": "repetition_window", "ref_id": repetition_id, "label": f"repetition:{repetition_id}"}
+            {
+                "ref_type": "repetition_window",
+                "ref_id": repetition_id,
+                "label": f"repetition:{repetition_id}",
+            }
         ],
         "timestamp_refs": _supporting_timestamp_refs(selection_metrics),
         "frame_refs": _supporting_frame_refs(selection_metrics),
