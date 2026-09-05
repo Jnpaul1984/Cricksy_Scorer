@@ -912,32 +912,32 @@ export async function getJobOutcomes(jobId: string): Promise<OutcomesResponse> {
     );
   }
 
-  export async function recordIntervention(
-    jobId: string,
-    payload: NonNullable<SetGoalsRequest['interventions']>[number],
-  ): Promise<{ job_id: string; interventions: Array<Record<string, unknown>>; message: string }> {
-    const res = await fetch(url(`/api/coaches/plus/analysis-jobs/${jobId}/interventions`), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(getAuthHeader() || {}),
-      },
-      body: JSON.stringify(payload),
-    });
+  return res.json();
+}
 
-    if (!res.ok) {
-      const detail = await res.json().catch(() => ({ detail: res.statusText }));
-      const errorDetail = detail?.detail || res.statusText;
-      const errorCode = detail?.code || undefined;
-      throw new ApiError(
-        `Failed to record intervention: ${res.status}`,
-        res.status,
-        errorDetail,
-        errorCode,
-      );
-    }
+export async function recordIntervention(
+  jobId: string,
+  payload: NonNullable<SetGoalsRequest['interventions']>[number],
+): Promise<{ job_id: string; interventions: Array<Record<string, unknown>>; message: string }> {
+  const res = await fetch(url(`/api/coaches/plus/analysis-jobs/${jobId}/interventions`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(getAuthHeader() || {}),
+    },
+    body: JSON.stringify(payload),
+  });
 
-    return res.json();
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const errorDetail = detail?.detail || res.statusText;
+    const errorCode = detail?.code || undefined;
+    throw new ApiError(
+      `Failed to record intervention: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
   }
 
   return res.json();

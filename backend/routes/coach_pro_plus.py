@@ -19,12 +19,12 @@ from backend.config import settings
 from backend.domain.coach_analysis_v2_contract import PhaseRecordV2, RepetitionActionRecordV2
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
-from backend.services.phase_recognition import extract_phase_recognition
-from backend.services.player_longitudinal_progress import build_player_longitudinal_progress
-from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
 from backend.services.goal_intervention_evaluation import (
     evaluate_v2_goals_against_longitudinal,
 )
+from backend.services.phase_recognition import extract_phase_recognition
+from backend.services.player_longitudinal_progress import build_player_longitudinal_progress
+from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
 from backend.services.repetition_segmentation import extract_repetition_segmentation
 from backend.services.s3_service import s3_service
 from backend.services.video_chunking import (
