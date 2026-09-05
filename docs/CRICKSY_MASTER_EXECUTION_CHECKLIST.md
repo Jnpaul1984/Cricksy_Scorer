@@ -3981,7 +3981,7 @@ approved and merged with green CI, with large-scale imports still gated by expli
 
 # ## PHASE 10J — Coaching Analysis Engine V2 / Individual Player Development Upgrade
 
-**Status:** PHASE 10J.0-10J.6 COMPLETE — 10J.7+ PENDING USER APPROVAL
+**Status:** PHASE 10J.0-10J.7 COMPLETE — 10J.8+ PENDING USER APPROVAL
 
 ### Objective
 
@@ -4734,7 +4734,7 @@ Phase 10J.0 is complete only when:
 * checklist validation passes
 * no runtime implementation occurred
 
-**Implementation status after Phase 10J.6:** 10J.1-10J.6 COMPLETE; 10J.7+ PENDING USER APPROVAL.
+**Implementation status after Phase 10J.7:** 10J.1-10J.7 COMPLETE; 10J.8+ PENDING USER APPROVAL.
 
 ---
 # Phase 11 — Organization Pro + League Operations

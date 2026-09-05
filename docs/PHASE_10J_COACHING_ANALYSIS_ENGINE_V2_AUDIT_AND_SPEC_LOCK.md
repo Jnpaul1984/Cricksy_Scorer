@@ -427,24 +427,24 @@ Mitigations:
 - Rollback: fallback to existing bowling summary and omit bowling V2 metric pack.
 - Acceptance: pace and spin metric packs expose stable confidence/validity behavior with explicit limitations.
 
-### 10J.7 — Spin Bowling V2 Distinct Model (superseded by 10J.6 scope merge)
-- Objective: reserved after Issue #487 merged spin deterministic metric-pack scope into 10J.6.
-- Why: avoid duplicating already-approved deterministic spin metric-pack scope.
-- Dependencies: 10J.6.
-- Reuse: n/a until a new post-10J.6 scope is approved.
-- Likely files: TBD only if future approved scope is created.
-- Migrations: none.
-- API impact: none in current spec state.
-- Frontend impact: none in current spec state.
-- Worker impact: medium.
-- Model/AI impact: no fake spin-rate.
-- Tests: spin vs pace differentiation.
-- Risk: Medium-High.
-- Rollback: disable spin-specific overlays, keep shared bowling view.
-- Acceptance: distinct spin metrics with documented limits.
+### 10J.7 — Wicketkeeping V2 Deterministic Metric Pack
+- Objective: deliver production-safe wicketkeeping-specific deterministic metrics over repetition/phase windows.
+- Why: wicketkeeping support was previously generic and needed specialist, validity-aware coverage.
+- Dependencies: 10J.1–10J.6.
+- Reuse: existing V2 metric contract, repetition segmentation, phase recognition, and findings/report plumbing.
+- Likely files: wicketkeeping metric pack service, analysis orchestration, tests, and existing V2 results views.
+- Migrations: none preferred (additive JSON payload extension).
+- API impact: additive `wicketkeeping_*` metric results and `meta.wicketkeeping_v2_metric_pack`.
+- Frontend impact: existing V2 metric extraction accepts wicketkeeping prefixes.
+- Worker impact: low-cost CPU pose math.
+- Model/AI impact: deterministic first; no new LLM measurement behavior.
+- Tests: wicketkeeping metric validity, context gating, and regression coverage.
+- Risk: High.
+- Rollback: disable wicketkeeping V2 pack while retaining legacy outputs.
+- Acceptance: wicketkeeping V2 metrics are deterministic, evidence-aware, and compatibility-safe.
 
-### 10J.8 — Wicketkeeping + Fielding V2 Foundations
-- Objective: deliver specialist baseline metrics and action classes for wicketkeeping/fielding.
+### 10J.8 — Fielding V2 Foundations
+- Objective: deliver specialist baseline metrics and action classes for fielding.
 - Why: current support is limited and required by final 10J target.
 - Dependencies: 10J.3, 10J.4.
 - Reuse: existing context modes, pose pipeline.
