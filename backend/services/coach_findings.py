@@ -1373,9 +1373,7 @@ def generate_fielding_findings(
     metrics: dict[str, Any], context: dict[str, Any] | None = None, analysis_mode: str = "fielding"
 ) -> dict[str, Any]:
     """Generate fielding-specific findings from metrics."""
-    # Fielding uses same base checks but with fielding-specific drill suggestions
-    # Could be expanded with fielding-specific metrics in the future
-    return _generate_findings_internal(metrics, context, BATTING_DRILL_SUGGESTIONS, analysis_mode)
+    return _generate_findings_internal(metrics, context, DRILLS_BY_MODE["fielding"], analysis_mode)
 
 
 def _filter_findings_by_mode(findings: list[dict[str, Any]], mode: str) -> list[dict[str, Any]]:

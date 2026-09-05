@@ -391,7 +391,9 @@ def test_extract_metric_results_keeps_legacy_payloads_readable() -> None:
 
 
 def test_run_pose_metrics_findings_report_embeds_v2_contract_without_breaking_legacy_keys() -> None:
-    with patch("backend.services.pose_service.extract_pose_keypoints_from_video") as mock_extract:
+    with patch(
+        "backend.services.coach_plus_analysis.extract_pose_keypoints_from_video"
+    ) as mock_extract:
         mock_extract.return_value = {
             "frames": [
                 {
@@ -448,7 +450,9 @@ def test_run_pose_metrics_findings_report_embeds_v2_contract_without_breaking_le
 
 
 def test_run_pose_metrics_findings_report_adds_batting_v2_metric_pack() -> None:
-    with patch("backend.services.pose_service.extract_pose_keypoints_from_video") as mock_extract:
+    with patch(
+        "backend.services.coach_plus_analysis.extract_pose_keypoints_from_video"
+    ) as mock_extract:
         mock_extract.return_value = {
             "frames": [
                 {
@@ -510,7 +514,9 @@ def test_run_pose_metrics_findings_report_adds_batting_v2_metric_pack() -> None:
 def test_run_pose_metrics_findings_report_adds_bowling_v2_metric_pack(
     session_discipline: str, prefix: str
 ) -> None:
-    with patch("backend.services.pose_service.extract_pose_keypoints_from_video") as mock_extract:
+    with patch(
+        "backend.services.coach_plus_analysis.extract_pose_keypoints_from_video"
+    ) as mock_extract:
         mock_extract.return_value = {
             "frames": [
                 {
@@ -581,7 +587,9 @@ def test_run_pose_metrics_findings_report_adds_bowling_v2_metric_pack(
 
 
 def test_run_pose_metrics_findings_report_adds_wicketkeeping_v2_metric_pack() -> None:
-    with patch("backend.services.pose_service.extract_pose_keypoints_from_video") as mock_extract:
+    with patch(
+        "backend.services.coach_plus_analysis.extract_pose_keypoints_from_video"
+    ) as mock_extract:
         mock_extract.return_value = {
             "frames": [
                 {
@@ -635,3 +643,61 @@ def test_run_pose_metrics_findings_report_adds_wicketkeeping_v2_metric_pack() ->
     assert payload["meta"]["wicketkeeping_v2_metric_pack"]["metrics_count"] == 9
     assert "wicketkeeping_v2" in payload["findings"]
     assert "wicketkeeping_v2" in payload["report"]
+
+
+def test_run_pose_metrics_findings_report_adds_fielding_v2_metric_pack() -> None:
+    with patch(
+        "backend.services.coach_plus_analysis.extract_pose_keypoints_from_video"
+    ) as mock_extract:
+        mock_extract.return_value = {
+            "frames": [
+                {
+                    "frame_id": index,
+                    "t": index / 10,
+                    "detected": True,
+                    "keypoints": {
+                        "nose": [0.5 + (0.005 if index in {2, 3} else 0.0), 0.2, 0.9],
+                        "left_shoulder": [0.42, 0.42, 0.9],
+                        "right_shoulder": [0.58, 0.42, 0.9],
+                        "left_hip": [0.45, 0.68 + (0.12 if 6 <= index <= 7 else 0.0), 0.9],
+                        "right_hip": [0.55, 0.68 + (0.12 if 6 <= index <= 7 else 0.0), 0.9],
+                        "left_knee": [0.41, 0.84, 0.9],
+                        "right_knee": [0.59, 0.84, 0.9],
+                        "left_ankle": [0.44, 0.96, 0.9],
+                        "right_ankle": [0.56, 0.96, 0.9],
+                        "left_elbow": [0.43, 0.52, 0.9],
+                        "right_elbow": [0.57, 0.52, 0.9],
+                        "left_wrist": [0.46 if index < 8 else 0.48, 0.58, 0.9],
+                        "right_wrist": [0.54 if index < 8 else 0.52, 0.58, 0.9],
+                    },
+                }
+                for index in range(12)
+            ],
+            "total_frames": 12,
+            "sampled_frames": 12,
+            "frames_with_pose": 12,
+            "detection_rate_percent": 100.0,
+            "video_fps": 30.0,
+            "model": "MediaPipe Pose Landmarker Full",
+        }
+
+        result = run_pose_metrics_findings_report(
+            video_path="dummy.mp4",
+            sample_fps=10,
+            include_frames=False,
+            player_context={"camera_view": "side", "session_discipline": "fielding"},
+            analysis_mode="fielding",
+            session_id="session-1",
+            job_id="job-1",
+        )
+
+    payload = result.results
+    fielding_v2_metrics = [
+        metric
+        for metric in payload["v2"]["metric_results"]
+        if isinstance(metric, dict) and str(metric.get("metric_id", "")).startswith("fielding_")
+    ]
+    assert len(fielding_v2_metrics) == 10
+    assert payload["meta"]["fielding_v2_metric_pack"]["metrics_count"] == 10
+    assert "fielding_v2" in payload["findings"]
+    assert "fielding_v2" in payload["report"]

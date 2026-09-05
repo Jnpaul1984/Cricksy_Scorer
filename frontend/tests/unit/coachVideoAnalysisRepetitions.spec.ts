@@ -1,6 +1,7 @@
 import type { VideoAnalysisJob } from '@/services/coachPlusVideoService';
 import {
   extractCoachVideoBattingMetrics,
+  extractCoachVideoDisciplineV2Metrics,
   extractCoachVideoPhases,
   extractCoachVideoPhaseSummary,
   extractCoachVideoRepetitions,
@@ -43,6 +44,16 @@ describe('coachVideoAnalysisRepetitions', () => {
               classification_status: 'STRONG',
               validity_state: 'VALID',
               repetition_values: [1.0, 1.2],
+            },
+            {
+              metric_id: 'fielding_reaction_head_stability_score',
+              phase: 'reaction',
+              raw_value: 0.82,
+              unit: 'score',
+              confidence_score: 0.74,
+              classification_status: 'STRONG',
+              validity_state: 'VALID',
+              repetition_values: [0.8, 0.84],
             },
             {
               metric_id: 'head_stability_score',
@@ -123,6 +134,11 @@ describe('coachVideoAnalysisRepetitions', () => {
     expect(getCoachVideoJobFps(job)).toBe(30);
     expect(extractCoachVideoRepetitionSummary(job)?.repetitions_count).toBe(2);
     expect(extractCoachVideoPhaseSummary(job)?.phases_count).toBe(2);
+    const v2Metrics = extractCoachVideoDisciplineV2Metrics(job);
+    expect(v2Metrics).toHaveLength(2);
+    expect(v2Metrics.map((metric) => metric.metricId)).toContain(
+      'fielding_reaction_head_stability_score',
+    );
     const battingMetrics = extractCoachVideoBattingMetrics(job);
     expect(battingMetrics).toHaveLength(1);
     expect(battingMetrics[0]?.metricId).toBe('batting_setup_stance_width_ratio');
