@@ -1143,7 +1143,9 @@ const offset = ref(0);
 const limit = ref(10);
 const excludeFailed = ref(true); // Performance: hide failed sessions by default
 const statusFilter = ref<string | null>(null);
-const assignedPlayers = ref<Array<{ id: string; name: string }>>([]);
+type AssignedPlayer = { id: string; name: string };
+
+const assignedPlayers = ref<AssignedPlayer[]>([]);
 const loadingPlayers = ref(false);
 const playerLoadError = ref<string | null>(null);
 const playerSearch = ref('');
@@ -1597,7 +1599,15 @@ function formatReviewSubmissionError(error: unknown): string {
 // Methods
 // ============================================================================
 
-async function fetchAssignedPlayers() {
+function upsertAssignedPlayer(player: AssignedPlayer) {
+  const uniqueById = new Map(assignedPlayers.value.map((item) => [item.id, item]));
+  uniqueById.set(player.id, player);
+  assignedPlayers.value = Array.from(uniqueById.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+}
+
+async function fetchAssignedPlayers(preservePlayer?: AssignedPlayer) {
   loadingPlayers.value = true;
   playerLoadError.value = null;
   try {
@@ -1613,10 +1623,17 @@ async function fetchAssignedPlayers() {
     assignedPlayers.value = Array.from(uniqueById.values()).sort((a, b) =>
       a.name.localeCompare(b.name),
     );
+    if (preservePlayer) {
+      upsertAssignedPlayer(preservePlayer);
+    }
   } catch (err) {
     playerLoadError.value =
       err instanceof Error ? err.message : 'Failed to load assigned players';
-    assignedPlayers.value = [];
+    if (preservePlayer) {
+      upsertAssignedPlayer(preservePlayer);
+    } else {
+      assignedPlayers.value = [];
+    }
   } finally {
     loadingPlayers.value = false;
   }
@@ -1635,8 +1652,14 @@ async function createPrivatePlayer() {
       player_name: newPlayerName.value.trim() || null,
       date_of_birth: newPlayerDateOfBirth.value || null,
     });
-    await fetchAssignedPlayers();
-    selectedPrimaryPlayerId.value = created.player_id;
+    const createdPlayer = {
+      id: created.player_id,
+      name: created.player_name || created.player_id,
+    };
+    upsertAssignedPlayer(createdPlayer);
+    selectedPrimaryPlayerId.value = createdPlayer.id;
+    await fetchAssignedPlayers(createdPlayer);
+    selectedPrimaryPlayerId.value = createdPlayer.id;
     playerSearch.value = '';
     newPlayerName.value = '';
     newPlayerDateOfBirth.value = '';

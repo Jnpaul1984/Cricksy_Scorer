@@ -186,7 +186,52 @@ describe('CoachProPlusVideoSessionsView', () => {
     expect((wrapper.find('#primary-player').element as HTMLSelectElement).value).toBe(
       'coach-player-new',
     )
+    expect(wrapper.findAll('#primary-player option[value="coach-player-new"]')).toHaveLength(1)
     expect(wrapper.text()).not.toContain('Quick add coaching player')
+  })
+
+  it('preserves a created player when refresh fails and reconciles it without duplicates later', async () => {
+    authStoreMock.canCoach = true
+    authStoreMock.isCoachProPlus = true
+    authStoreMock.role = 'coach_pro_plus'
+
+    const createdPlayer = {
+      player_id: 'coach-player-preserved',
+      player_name: 'Preserved Player',
+      date_of_birth: null,
+      assignment_active: true,
+    }
+    vi.mocked(listCoachPlayers)
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error('Temporary player refresh failure'))
+      .mockResolvedValueOnce([createdPlayer])
+    vi.mocked(createCoachPrivatePlayer).mockResolvedValue(createdPlayer)
+
+    const wrapper = mountView()
+    await flushAsync()
+    await wrapper.find('button.btn-primary').trigger('click')
+    await flushAsync()
+    await wrapper.find('.btn-link-inline').trigger('click')
+    await wrapper.find('#new-player-name').setValue('Preserved Player')
+    await wrapper.find('.player-create-panel .btn-primary').trigger('click')
+    await flushAsync()
+
+    const selector = wrapper.find('#primary-player')
+    expect((selector.element as HTMLSelectElement).value).toBe('coach-player-preserved')
+    expect(wrapper.findAll('#primary-player option[value="coach-player-preserved"]')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Temporary player refresh failure')
+    expect(wrapper.text()).not.toContain('Quick add coaching player')
+    expect(createCoachPrivatePlayer).toHaveBeenCalledTimes(1)
+
+    await (wrapper.vm as unknown as { fetchAssignedPlayers: () => Promise<void> }).fetchAssignedPlayers()
+    await flushAsync()
+
+    expect(wrapper.findAll('#primary-player option[value="coach-player-preserved"]')).toHaveLength(1)
+    expect((wrapper.find('#primary-player').element as HTMLSelectElement).value).toBe(
+      'coach-player-preserved',
+    )
+    expect(wrapper.text()).not.toContain('Temporary player refresh failure')
+    expect(createCoachPrivatePlayer).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the upgrade gate for users without coach access', async () => {
