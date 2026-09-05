@@ -17,6 +17,7 @@ from backend.services.bowling_v2_metric_pack import attach_bowling_v2_metric_pac
 from backend.services.coach_analysis_v2_compatibility import build_analysis_v2_contract
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
+from backend.services.fielding_v2_metric_pack import attach_fielding_v2_metric_pack
 from backend.services.phase_recognition import attach_phase_recognition
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
 from backend.services.repetition_segmentation import attach_repetition_segmentation
@@ -294,6 +295,21 @@ async def aggregate_chunks_and_finalize(db: AsyncSession, job: VideoAnalysisJob)
         source_model="MediaPipe Pose Landmarker Full",
     )
     attach_wicketkeeping_v2_metric_pack(
+        results_payload=final_results,
+        discipline=str(resolved_mode),
+        frames=all_frames,
+        sample_fps=float(job.sample_fps or settings.SAMPLE_FPS),
+        source_video_fps=30.0,
+        camera_view=(
+            job.session.camera_view.value
+            if job.session and getattr(job.session.camera_view, "value", None)
+            else job.session.camera_view
+            if job.session
+            else None
+        ),
+        source_model="MediaPipe Pose Landmarker Full",
+    )
+    attach_fielding_v2_metric_pack(
         results_payload=final_results,
         discipline=str(resolved_mode),
         frames=all_frames,

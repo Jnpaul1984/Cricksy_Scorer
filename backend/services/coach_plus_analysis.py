@@ -10,12 +10,19 @@ from backend.services.bowling_v2_metric_pack import attach_bowling_v2_metric_pac
 from backend.services.coach_analysis_v2_compatibility import build_analysis_v2_contract
 from backend.services.coach_findings import generate_findings
 from backend.services.coach_report_service import generate_report_text
+from backend.services.fielding_v2_metric_pack import attach_fielding_v2_metric_pack
 from backend.services.phase_recognition import attach_phase_recognition
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
 from backend.services.repetition_segmentation import attach_repetition_segmentation
 from backend.services.wicketkeeping_v2_metric_pack import attach_wicketkeeping_v2_metric_pack
 
 logger = logging.getLogger(__name__)
+
+
+def extract_pose_keypoints_from_video(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    from backend.services.pose_service import extract_pose_keypoints_from_video as _extract
+
+    return cast(dict[str, Any], _extract(*args, **kwargs))
 
 
 def extract_pose_landmarks(
@@ -39,8 +46,6 @@ def extract_pose_landmarks(
     Returns:
         List of pose frames with landmarks
     """
-    from backend.services.pose_service import extract_pose_keypoints_from_video
-
     pose_data = extract_pose_keypoints_from_video(
         video_path=video_path,
         sample_fps=sample_fps,
@@ -138,8 +143,6 @@ def run_pose_metrics_findings_report(
     VALID_MODES = {"batting", "bowling", "wicketkeeping", "fielding"}
     if not analysis_mode or analysis_mode not in VALID_MODES:
         raise ValueError(f"Invalid analysis_mode: {analysis_mode}. Must be one of {VALID_MODES}")
-
-    from backend.services.pose_service import extract_pose_keypoints_from_video
 
     pose_data = extract_pose_keypoints_from_video(
         video_path=video_path,
@@ -312,6 +315,19 @@ def run_pose_metrics_findings_report(
         source_model=normalized["model"],
     )
     attach_wicketkeeping_v2_metric_pack(
+        results_payload=results,
+        discipline=analysis_mode,
+        frames=frames_for_segmentation if isinstance(frames_for_segmentation, list) else [],
+        sample_fps=float(sample_fps),
+        source_video_fps=normalized["video_fps"],
+        camera_view=(
+            str(player_context.get("camera_view"))
+            if isinstance(player_context, dict) and player_context.get("camera_view") is not None
+            else None
+        ),
+        source_model=normalized["model"],
+    )
+    attach_fielding_v2_metric_pack(
         results_payload=results,
         discipline=analysis_mode,
         frames=frames_for_segmentation if isinstance(frames_for_segmentation, list) else [],

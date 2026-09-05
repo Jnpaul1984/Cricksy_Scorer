@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-09-05
 **Scope:** Phase 10J Coaching Analysis Engine V2
-**Implementation Status:** 10J.1-10J.7 COMPLETE; 10J.8+ PENDING
+**Implementation Status:** 10J.1-10J.8 COMPLETE; 10J.9+ PENDING
 
 ## Progress Summary
 
@@ -16,7 +16,7 @@
 | 10J.5 | Batting V2 Deterministic Metric Pack | ✅ DONE |
 | 10J.6 | Pace + Spin Bowling V2 Deterministic Metric Packs | ✅ DONE |
 | 10J.7 | Wicketkeeping V2 Deterministic Metric Pack | ✅ DONE |
-| 10J.8 | Fielding V2 Foundations | ⏳ TODO (PENDING USER APPROVAL) |
+| 10J.8 | Fielding V2 Deterministic Metric Pack | ✅ DONE |
 | 10J.9 | Strength + Consistency Engine V2 | ⏳ TODO (PENDING USER APPROVAL) |
 | 10J.10 | Longitudinal Player Progress V2 | ⏳ TODO (PENDING USER APPROVAL) |
 | 10J.11 | Goal/Intervention + Interpretation + PDF V2 Integration | ⏳ TODO (PENDING USER APPROVAL) |
@@ -25,4 +25,4 @@
 ## Notes
 
 - Sequence is dependency-ordered and locked by `docs/PHASE_10J_COACHING_ANALYSIS_ENGINE_V2_AUDIT_AND_SPEC_LOCK.md`.
-- Additional implementation sub-phases beyond 10J.5 are not to be started until user approval.
+- Additional implementation sub-phases beyond 10J.8 are not to be started until user approval.

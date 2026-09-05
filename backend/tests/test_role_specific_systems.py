@@ -10,17 +10,17 @@ This test suite verifies:
 """
 
 import pytest
+
 from backend.services.coach_findings import (
     DRILLS_BY_MODE,
-    THRESHOLDS_BY_MODE,
     THRESHOLDS,
-    generate_findings,
-    _calculate_job_confidence,
+    THRESHOLDS_BY_MODE,
     _calculate_finding_confidence,
-    _check_head_movement,
+    _calculate_job_confidence,
     _check_balance_drift,
+    _check_head_movement,
+    generate_findings,
 )
-
 
 # Batting-specific terminology to check for leakage in why_it_matters and drills
 # NOTE: Avoid false positives like "hip drive" (throwing term), "combat" (general), etc.
@@ -411,6 +411,20 @@ def test_check_functions_use_mode_drills():
     assert any(
         term in fielding_text for term in ["field", "movement", "position"]
     ), f"Fielding drills should contain fielding terminology: {fielding_drills}"
+
+
+def test_generate_findings_fielding_uses_fielding_drills() -> None:
+    metrics = {
+        "metrics": {"balance_drift_score": {"score": 0.30, "num_frames": 100}},
+        "summary": {"total_frames": 100, "frames_with_pose": 100},
+    }
+
+    result = generate_findings(metrics, analysis_mode="fielding")
+    finding = next(item for item in result["findings"] if item["code"] == "BALANCE_DRIFT")
+    drills_text = " ".join(finding["suggested_drills"]).lower()
+
+    assert "batting" not in drills_text
+    assert any(term in drills_text for term in ["field", "movement", "position", "balance"])
 
 
 def test_mode_validation_hard_guardrail():
