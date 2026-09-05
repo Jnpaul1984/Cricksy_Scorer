@@ -868,6 +868,13 @@
             </div>
           </section>
 
+          <PlayerLongitudinalProgress
+            v-if="selectedSession?.primary_player_id && selectedSession?.discipline"
+            :visible="showResultsModal"
+            :player-id="selectedSession.primary_player_id"
+            :discipline="selectedSession.discipline"
+          />
+
           <section v-if="isFreeTier" class="results-section">
             <h3>Upgrade to see priorities</h3>
             <p class="status-text">
@@ -1007,6 +1014,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 
 import GoalSetter from '@/components/GoalSetter.vue';
 import OutcomesViewer from '@/components/OutcomesViewer.vue';
+import PlayerLongitudinalProgress from '@/components/PlayerLongitudinalProgress.vue';
 import SessionComparison from '@/components/SessionComparison.vue';
 import CoachSuggestionsPanel from '@/components/CoachSuggestionsPanel.vue';
 import CoachingSkillRecommendationReviewCard from '@/components/CoachingSkillRecommendationReviewCard.vue';

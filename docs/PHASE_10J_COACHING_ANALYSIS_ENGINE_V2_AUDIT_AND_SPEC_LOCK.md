@@ -491,21 +491,21 @@ Mitigations:
 - Rollback: disable additive strength/consistency payloads while preserving legacy findings/report behavior.
 - Acceptance: valid comparable repetition evidence deterministically yields strengths, recurring concerns, consistency observations, and transparent best/needs-work repetition selection.
 
-### 10J.11 — Goal/Intervention + Interpretation + PDF V2 Integration
-- Objective: connect V2 findings/progress to goals/interventions and audience-layer reporting/PDF.
-- Why: closes coaching loop while preserving governance.
+### 10J.11 — Player Longitudinal Progress Engine
+- Objective: compare technically comparable player evidence across sessions and expose deterministic baseline/latest/best/trend/stability outputs without introducing an opaque overall development score.
+- Why: coaches need transparent progress evidence built on the 10J.9 comparability safeguards and 10J.10 within-session consistency outputs before any future goals/interventions layer.
 - Dependencies: 10J.9, 10J.10.
-- Reuse: goals/outcomes/compliance, recommendation review, PDF export service.
-- Likely files: coach goals/suggestions/report/pdf/frontend components/tests.
-- Migrations: optional linkage enrichment.
-- API impact: additive report data.
-- Frontend impact: goal reassessment and audience toggles.
-- Worker impact: low.
-- Model/AI impact: interpretation only.
-- Tests: approval gates and output-layer safety.
-- Risk: Medium-High.
-- Rollback: keep legacy report sections and governance behavior.
-- Acceptance: coach/player/parent outputs derive from same approved evidence.
+- Reuse: V2 metric contracts, compatibility metadata, strength/consistency payloads, player-centered session ownership, and existing Coach Pro Plus comparison surfaces.
+- Likely files: session comparison/history services, coach pro plus routes, player-facing progress service/frontend components/tests.
+- Migrations: none preferred; derive longitudinal outputs from additive JSON results when possible.
+- API impact: additive player longitudinal progress data only.
+- Frontend impact: minimal player → discipline/skill → metric progress views.
+- Worker impact: low; no pose/video recomputation.
+- Model/AI impact: none; deterministic evidence only.
+- Tests: comparability, baseline/latest/best, trend, across-session stability, RBAC, and regression coverage.
+- Risk: High.
+- Rollback: disable additive longitudinal progress views while preserving legacy comparison/report/PDF behavior.
+- Acceptance: only technically comparable valid observations influence player longitudinal claims, and non-comparable history remains visible with limitations.
 
 ### 10J.12 — Hardening, Performance, CI, and Rollout Controls
 - Objective: finalize perf budgets, safety checks, CI coverage, and production rollout gates.
