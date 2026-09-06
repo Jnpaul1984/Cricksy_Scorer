@@ -363,3 +363,37 @@
   completed_by: "codex"
   completed_at: "2026-09-05"
   notes: "Reused canonical player and assignment records; added only nullable PlayerProfile.date_of_birth and a reversible single-head migration."
+
+- id: phase10j-14-coaching-analysis-report-v2
+  week: 10
+  category: "Phase 10J"
+  title: "10J.14 Coaching Analysis Report V2 & Governed Cricket Coaching Actions"
+  description: "Render persisted V2 evidence consistently and map valid priorities to versioned coach-governed cricket actions"
+  status: done
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "V2 PDFs use the same persisted repetitions, phases, metrics, and strength/consistency interpretation as the UI"
+    - "Unavailable evidence remains explicit and no metric direction or Pass/Fail state is guessed"
+    - "Action candidates are discipline/phase isolated, versioned, provenanced, and require coach approval"
+    - "Unsafe legacy suggestions cannot enter V2 reports while historical non-V2 exports remain compatible"
+  verification_commands:
+    - "python scripts/checklist.py status"
+    - "python -m pytest -q backend/tests/test_coaching_action_registry.py backend/tests/test_coach_report_v2.py backend/tests/test_evidence_driven_reports.py"
+    - "python -m ruff check . && python -m ruff format --check ."
+    - "cd backend && mypy --config-file pyproject.toml --explicit-package-bases ."
+    - "pre-commit run --all-files"
+  files_touched:
+    - "backend/services/coaching_action_registry.py"
+    - "backend/services/coach_report_v2.py"
+    - "backend/services/pdf_export_service.py"
+    - "backend/services/reports/coach_report_template.py"
+    - "backend/tests/test_coaching_action_registry.py"
+    - "backend/tests/test_coach_report_v2.py"
+    - "docs/PHASE_10J14_COACHING_ANALYSIS_REPORT_V2.md"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "codex"
+  completed_at: "2026-09-06"
+  notes: "No migration; V2 reports consume persisted artifacts only and legacy-only jobs retain their historical renderer."
