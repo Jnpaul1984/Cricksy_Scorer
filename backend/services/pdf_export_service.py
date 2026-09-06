@@ -5,15 +5,21 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from backend.services.coach_report_v2 import (
+    build_coaching_analysis_report_v2,
+    has_persisted_v2_evidence,
+)
 from backend.services.reports.coach_report_template import (
     get_styles,
     render_appendix_evidence,
     render_coach_summary,
+    render_coaching_analysis_report_v2,
     render_coaching_suggestions,
     render_consolidated_findings,
     render_goals_vs_outcomes,
 )
 from backend.services.reports.findings_adapter import (
+    CommonFinding,
     consolidate_findings,
     extract_secondary_focus,
     extract_top_priorities,
@@ -95,9 +101,63 @@ def generate_analysis_pdf(
         )
     )
 
-    # Consolidate Quick + Deep findings
-    consolidated = consolidate_findings(quick_findings, deep_findings)
+    results_data = deep_results or quick_results
+    if has_persisted_v2_evidence(results_data):
+        report = build_coaching_analysis_report_v2(
+            results=results_data or {},
+            analysis_mode=analysis_mode,
+            coach_goals=coach_goals,
+            outcomes=outcomes,
+        )
+        elements.extend(render_coaching_analysis_report_v2(report))
+    else:
+        # Historical jobs remain on the legacy rendering path. V2 reports never
+        # merge legacy findings or free-form suggestions into governed output.
+        consolidated = consolidate_findings(quick_findings, deep_findings)
+        elements.extend(
+            _render_legacy_report(
+                consolidated=consolidated,
+                quick_findings=quick_findings,
+                deep_findings=deep_findings,
+                quick_results=quick_results,
+                deep_results=deep_results,
+                coach_goals=coach_goals,
+                outcomes=outcomes,
+                coach_suggestions=coach_suggestions,
+                player_summary=player_summary,
+                analysis_mode=analysis_mode,
+            )
+        )
 
+    # Build PDF
+    doc.build(elements)
+
+    # Get PDF bytes
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    pdf_size_kb = len(pdf_bytes) / 1024
+    logger.info(f"Generated Coach Report V2 PDF for job {job_id}: {pdf_size_kb:.2f} KB")
+
+    return pdf_bytes
+
+
+def _render_legacy_report(
+    *,
+    consolidated: list[CommonFinding],
+    quick_findings: dict[str, Any] | None,
+    deep_findings: dict[str, Any] | None,
+    quick_results: dict[str, Any] | None,
+    deep_results: dict[str, Any] | None,
+    coach_goals: dict[str, Any] | None,
+    outcomes: dict[str, Any] | None,
+    coach_suggestions: dict[str, Any] | None,
+    player_summary: dict[str, Any] | None,
+    analysis_mode: str | None,
+) -> list:
+    """Preserve the historical report path for jobs without persisted V2 evidence."""
+    elements: list[Any] = []
+    styles = get_styles()
     if not consolidated:
         # No findings available - render simple message
         elements.append(Paragraph("No findings to report.", styles["body"]))
@@ -105,9 +165,9 @@ def generate_analysis_pdf(
 
         # Add basic metadata if available
         if quick_results or deep_results:
-            results_data = deep_results or quick_results
-            if results_data:  # Additional safety check for type checker
-                summary_text = _extract_summary_from_results(results_data, "Analysis")
+            legacy_results = deep_results or quick_results
+            if legacy_results:  # Additional safety check for type checker
+                summary_text = _extract_summary_from_results(legacy_results, "Analysis")
                 elements.append(Paragraph(summary_text, styles["body"]))
 
     else:
@@ -142,17 +202,7 @@ def generate_analysis_pdf(
             render_appendix_evidence(consolidated, detection_rate, total_frames, frames_with_pose)
         )
 
-    # Build PDF
-    doc.build(elements)
-
-    # Get PDF bytes
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-
-    pdf_size_kb = len(pdf_bytes) / 1024
-    logger.info(f"Generated Coach Report V2 PDF for job {job_id}: {pdf_size_kb:.2f} KB")
-
-    return pdf_bytes
+    return elements
 
 
 def _render_metadata_header(
