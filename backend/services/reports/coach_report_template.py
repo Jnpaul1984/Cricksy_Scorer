@@ -349,7 +349,7 @@ def _build_metrics_table(metrics: dict[str, Any]) -> Table | None:
     rows = [["Metric", "Score", "Status"]]
 
     for key, value in metrics.items():
-        if isinstance(value, int | float):
+        if isinstance(value, (int, float)):
             metric_name = key.replace("_", " ").title()
             score_str = f"{value:.2f}" if isinstance(value, float) else str(value)
 
