@@ -11,6 +11,7 @@ class GovernedCoachingAction:
     version: str
     discipline: str
     phases: tuple[str, ...]
+    metric_ids: tuple[str, ...]
     metric_terms: tuple[str, ...]
     technical_area: str
     why_it_matters: str
@@ -28,6 +29,7 @@ class GovernedCoachingAction:
     def as_payload(self) -> dict[str, object]:
         payload = asdict(self)
         payload["phases"] = list(self.phases)
+        payload["metric_ids"] = list(self.metric_ids)
         payload["metric_terms"] = list(self.metric_terms)
         payload["drills"] = list(self.drills)
         payload["provenance"] = list(self.provenance)
@@ -47,12 +49,248 @@ _PROVENANCE = (
 )
 
 
+# Production V2 metric-pack contracts are the authority for governed action
+# selection. Each entry is (discipline, phase, action_id).
+PRODUCTION_METRIC_ACTION_CONTRACTS: dict[str, tuple[str, str, str]] = {
+    "batting_setup_stance_width_ratio": ("batting", "setup", "batting-base-alignment"),
+    "batting_setup_head_base_offset_ratio": (
+        "batting",
+        "setup",
+        "batting-base-alignment",
+    ),
+    "batting_trigger_head_displacement_ratio": (
+        "batting",
+        "trigger",
+        "batting-base-alignment",
+    ),
+    "batting_downswing_head_stability_score": (
+        "batting",
+        "downswing",
+        "batting-swing-balance",
+    ),
+    "batting_contact_proxy_front_knee_angle_deg": (
+        "batting",
+        "contact_proxy_window",
+        "batting-swing-balance",
+    ),
+    "batting_follow_through_balance_drift_ratio": (
+        "batting",
+        "follow_through",
+        "batting-swing-balance",
+    ),
+    "pace_bowling_approach_head_stability_score": (
+        "pace_bowling",
+        "approach",
+        "pace-gather-delivery",
+    ),
+    "pace_bowling_gather_balance_drift_ratio": (
+        "pace_bowling",
+        "gather",
+        "pace-gather-delivery",
+    ),
+    "pace_bowling_front_foot_contact_front_knee_angle_deg": (
+        "pace_bowling",
+        "front_foot_contact",
+        "pace-release-follow-through",
+    ),
+    "pace_bowling_release_proxy_bowling_arm_angle_deg": (
+        "pace_bowling",
+        "release_proxy_window",
+        "pace-release-follow-through",
+    ),
+    "pace_bowling_release_proxy_trunk_lean_deg": (
+        "pace_bowling",
+        "release_proxy_window",
+        "pace-release-follow-through",
+    ),
+    "pace_bowling_follow_through_balance_drift_ratio": (
+        "pace_bowling",
+        "follow_through",
+        "pace-release-follow-through",
+    ),
+    "spin_bowling_approach_head_stability_score": (
+        "spin_bowling",
+        "approach",
+        "spin-gather-pivot",
+    ),
+    "spin_bowling_coil_balance_drift_ratio": (
+        "spin_bowling",
+        "coil",
+        "spin-gather-pivot",
+    ),
+    "spin_bowling_pivot_shoulder_hip_separation_deg": (
+        "spin_bowling",
+        "pivot",
+        "spin-gather-pivot",
+    ),
+    "spin_bowling_delivery_stride_head_base_offset_ratio": (
+        "spin_bowling",
+        "delivery_stride",
+        "spin-gather-pivot",
+    ),
+    "spin_bowling_release_proxy_bowling_arm_angle_deg": (
+        "spin_bowling",
+        "release_proxy_window",
+        "spin-release-consistency",
+    ),
+    "spin_bowling_follow_through_balance_drift_ratio": (
+        "spin_bowling",
+        "follow_through",
+        "spin-release-consistency",
+    ),
+    "wicketkeeping_set_stance_width_ratio": (
+        "wicketkeeping",
+        "set",
+        "keeping-ready-movement",
+    ),
+    "wicketkeeping_set_knee_flexion_angle_deg": (
+        "wicketkeeping",
+        "set",
+        "keeping-ready-movement",
+    ),
+    "wicketkeeping_reaction_head_stability_score": (
+        "wicketkeeping",
+        "reaction_read",
+        "keeping-ready-movement",
+    ),
+    "wicketkeeping_movement_lateral_displacement_ratio": (
+        "wicketkeeping",
+        "movement",
+        "keeping-ready-movement",
+    ),
+    "wicketkeeping_collection_balance_drift_ratio": (
+        "wicketkeeping",
+        "collection",
+        "keeping-take-stumping",
+    ),
+    "wicketkeeping_recovery_head_base_offset_ratio": (
+        "wicketkeeping",
+        "recovery",
+        "keeping-ready-movement",
+    ),
+    "wicketkeeping_context_standing_set_depth_delta_ratio": (
+        "wicketkeeping",
+        "set",
+        "keeping-ready-movement",
+    ),
+    "wicketkeeping_leg_side_movement_lateral_displacement_ratio": (
+        "wicketkeeping",
+        "movement",
+        "keeping-ready-movement",
+    ),
+    "wicketkeeping_stumping_action_wrist_compactness_ratio": (
+        "wicketkeeping",
+        "action",
+        "keeping-take-stumping",
+    ),
+    "fielding_ready_stance_width_ratio": (
+        "fielding",
+        "ready",
+        "fielding-collection",
+    ),
+    "fielding_reaction_head_stability_score": (
+        "fielding",
+        "reaction",
+        "fielding-collection",
+    ),
+    "fielding_approach_balance_drift_ratio": (
+        "fielding",
+        "approach",
+        "fielding-collection",
+    ),
+    "fielding_ground_collection_body_drop_ratio": (
+        "fielding",
+        "collection",
+        "fielding-collection",
+    ),
+    "fielding_ground_collection_knee_flexion_angle_deg": (
+        "fielding",
+        "collection",
+        "fielding-collection",
+    ),
+    "fielding_ground_collection_head_base_offset_ratio": (
+        "fielding",
+        "collection",
+        "fielding-collection",
+    ),
+    "fielding_catch_collection_wrist_compactness_ratio": (
+        "fielding",
+        "collection",
+        "fielding-collection",
+    ),
+    "fielding_transfer_balance_drift_ratio": (
+        "fielding",
+        "transfer",
+        "fielding-transfer-throw",
+    ),
+    "fielding_throw_action_shoulder_hip_separation_deg": (
+        "fielding",
+        "throw_action",
+        "fielding-transfer-throw",
+    ),
+    "fielding_recovery_balance_drift_ratio": (
+        "fielding",
+        "recovery",
+        "fielding-transfer-throw",
+    ),
+}
+
+# Narrow exact aliases retained for existing persisted fixtures and historical
+# V2 payloads. They are compatibility-only and never production authority.
+_COMPATIBILITY_METRIC_ACTION_CONTRACTS: dict[str, tuple[str, str, str]] = {
+    "batting_setup_head_alignment_ratio": ("batting", "setup", "batting-base-alignment"),
+    "batting_contact_proxy_alignment_ratio": (
+        "batting",
+        "contact_proxy_window",
+        "batting-swing-balance",
+    ),
+    "pace_bowling_release_arm_angle_degrees": (
+        "pace_bowling",
+        "release",
+        "pace-release-follow-through",
+    ),
+    "spin_bowling_pivot_alignment_ratio": (
+        "spin_bowling",
+        "pivot",
+        "spin-gather-pivot",
+    ),
+    "wicketkeeping_ready_base_width_ratio": (
+        "wicketkeeping",
+        "ready",
+        "keeping-ready-movement",
+    ),
+    "fielding_collection_head_base_ratio": (
+        "fielding",
+        "collection",
+        "fielding-collection",
+    ),
+    "fielding_transfer_balance_ratio": (
+        "fielding",
+        "transfer",
+        "fielding-transfer-throw",
+    ),
+}
+_METRIC_ACTION_CONTRACTS = {
+    **PRODUCTION_METRIC_ACTION_CONTRACTS,
+    **_COMPATIBILITY_METRIC_ACTION_CONTRACTS,
+}
+
+
+def _metric_ids_for(action_id: str) -> tuple[str, ...]:
+    return tuple(
+        metric_id
+        for metric_id, (_, _, mapped_action_id) in _METRIC_ACTION_CONTRACTS.items()
+        if mapped_action_id == action_id
+    )
+
+
 COACHING_ACTIONS: tuple[GovernedCoachingAction, ...] = (
     GovernedCoachingAction(
         "batting-base-alignment",
         ACTION_REGISTRY_VERSION,
         "batting",
         ("setup", "trigger", "backlift"),
+        _metric_ids_for("batting-base-alignment"),
         ("setup", "stance", "trigger", "backlift", "head"),
         "Base and early-movement alignment",
         "A repeatable base helps the batter organize movement into the scoring stroke.",
@@ -71,6 +309,7 @@ COACHING_ACTIONS: tuple[GovernedCoachingAction, ...] = (
         ACTION_REGISTRY_VERSION,
         "batting",
         ("downswing", "contact_proxy_window", "follow_through"),
+        _metric_ids_for("batting-swing-balance"),
         ("downswing", "contact_proxy", "follow_through", "balance", "knee"),
         "Swing-phase balance",
         "Controlled body organization supports a repeatable path and balanced completion.",
@@ -86,6 +325,7 @@ COACHING_ACTIONS: tuple[GovernedCoachingAction, ...] = (
         ACTION_REGISTRY_VERSION,
         "pace_bowling",
         ("approach", "gather", "back_foot_contact", "delivery_stride"),
+        _metric_ids_for("pace-gather-delivery"),
         ("approach", "gather", "back_foot", "delivery_stride", "alignment"),
         "Approach and delivery organization",
         "A repeatable gather connects approach momentum to an organized delivery stride.",
@@ -100,7 +340,8 @@ COACHING_ACTIONS: tuple[GovernedCoachingAction, ...] = (
         "pace-release-follow-through",
         ACTION_REGISTRY_VERSION,
         "pace_bowling",
-        ("front_foot_contact", "release", "follow_through"),
+        ("front_foot_contact", "release_proxy_window", "follow_through", "release"),
+        _metric_ids_for("pace-release-follow-through"),
         ("front_foot", "release", "follow_through", "arm_angle", "trunk"),
         "Release and follow-through",
         "Release repeatability and directed follow-through support consistent execution.",
@@ -115,7 +356,8 @@ COACHING_ACTIONS: tuple[GovernedCoachingAction, ...] = (
         "spin-gather-pivot",
         ACTION_REGISTRY_VERSION,
         "spin_bowling",
-        ("approach", "gather", "pivot", "front_foot_contact"),
+        ("approach", "coil", "pivot", "delivery_stride"),
+        _metric_ids_for("spin-gather-pivot"),
         ("approach", "gather", "pivot", "front_foot", "rotation"),
         "Gather and pivot",
         "A stable gather and pivot support repeatable rotation into the delivery.",
@@ -130,7 +372,8 @@ COACHING_ACTIONS: tuple[GovernedCoachingAction, ...] = (
         "spin-release-consistency",
         ACTION_REGISTRY_VERSION,
         "spin_bowling",
-        ("release", "follow_through"),
+        ("release_proxy_window", "follow_through", "release"),
+        _metric_ids_for("spin-release-consistency"),
         ("release", "arm_path", "alignment", "follow_through"),
         "Release consistency",
         "A repeatable arm path and release window support consistent delivery execution.",
@@ -145,7 +388,8 @@ COACHING_ACTIONS: tuple[GovernedCoachingAction, ...] = (
         "keeping-ready-movement",
         ACTION_REGISTRY_VERSION,
         "wicketkeeping",
-        ("setup", "ready", "lateral_movement", "movement"),
+        ("set", "reaction_read", "movement", "recovery", "ready"),
+        _metric_ids_for("keeping-ready-movement"),
         ("ready", "base", "lateral", "movement", "head"),
         "Ready position and movement",
         "A balanced ready position supports efficient movement into a take.",
@@ -160,7 +404,8 @@ COACHING_ACTIONS: tuple[GovernedCoachingAction, ...] = (
         "keeping-take-stumping",
         ACTION_REGISTRY_VERSION,
         "wicketkeeping",
-        ("taking", "take", "standing_up", "standing_back", "leg_side", "stumping"),
+        ("collection", "action", "taking", "take", "standing_up", "standing_back"),
+        _metric_ids_for("keeping-take-stumping"),
         ("take", "collection", "glove", "stumping", "standing", "leg_side"),
         "Taking and stumping",
         "Stable collection supports an efficient transfer when ball and stump evidence is visible.",
@@ -175,7 +420,8 @@ COACHING_ACTIONS: tuple[GovernedCoachingAction, ...] = (
         "fielding-collection",
         ACTION_REGISTRY_VERSION,
         "fielding",
-        ("ground_fielding", "pickup", "collection", "catch", "boundary_movement"),
+        ("ready", "reaction", "approach", "collection"),
+        _metric_ids_for("fielding-collection"),
         ("ground", "pickup", "collection", "catch", "boundary", "head_base"),
         "Approach and collection",
         "Body organization behind the ball supports controlled collection and the next action.",
@@ -190,7 +436,8 @@ COACHING_ACTIONS: tuple[GovernedCoachingAction, ...] = (
         "fielding-transfer-throw",
         ACTION_REGISTRY_VERSION,
         "fielding",
-        ("transfer", "throw", "recovery", "follow_through"),
+        ("transfer", "throw_action", "recovery"),
+        _metric_ids_for("fielding-transfer-throw"),
         ("transfer", "throw", "recovery", "shoulder_hip", "balance"),
         "Transfer and throw",
         "An organized transfer links collection to a balanced, directed throwing action.",
@@ -216,18 +463,27 @@ def discipline_from_metric(metric_id: str, fallback: str | None = None) -> str |
 def governed_actions_for(
     *, metric_id: str, discipline: str | None, phase: str | None
 ) -> list[dict[str, object]]:
-    resolved_discipline = discipline_from_metric(metric_id, discipline)
-    if resolved_discipline is None:
+    contract = _METRIC_ACTION_CONTRACTS.get(metric_id)
+    if contract is None:
         return []
-    normalized_phase = (phase or "").lower()
-    normalized_metric = metric_id.lower()
-    matches = [
-        action
-        for action in COACHING_ACTIONS
-        if action.discipline == resolved_discipline
-        and (
-            normalized_phase in action.phases
-            or any(term in normalized_metric for term in action.metric_terms)
-        )
-    ]
-    return [action.as_payload() for action in matches[:3]]
+    expected_discipline, expected_phase, action_id = contract
+    supplied_discipline = (discipline or "").strip().lower()
+    supplied_phase = (phase or "").strip().lower()
+    metric_discipline = discipline_from_metric(metric_id)
+    if (
+        metric_discipline != expected_discipline
+        or supplied_discipline != expected_discipline
+        or supplied_phase != expected_phase
+    ):
+        return []
+    action = next(
+        (
+            candidate
+            for candidate in COACHING_ACTIONS
+            if candidate.action_id == action_id
+            and candidate.discipline == expected_discipline
+            and metric_id in candidate.metric_ids
+        ),
+        None,
+    )
+    return [action.as_payload()] if action is not None else []

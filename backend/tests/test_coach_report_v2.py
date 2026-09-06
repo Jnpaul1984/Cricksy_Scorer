@@ -145,11 +145,16 @@ def _pdf_text(pdf_bytes: bytes) -> str:
 @pytest.mark.parametrize(
     ("metric_id", "discipline", "phase", "expected_action"),
     [
-        ("batting_setup_head_alignment_ratio", "batting", "setup", "batting-base-alignment"),
         (
-            "pace_bowling_release_arm_angle_degrees",
+            "batting_setup_head_base_offset_ratio",
+            "batting",
+            "setup",
+            "batting-base-alignment",
+        ),
+        (
+            "pace_bowling_release_proxy_bowling_arm_angle_deg",
             "pace_bowling",
-            "release",
+            "release_proxy_window",
             "pace-release-follow-through",
         ),
     ],
@@ -171,7 +176,7 @@ def test_v2_report_uses_persisted_evidence_and_discipline_registry(
     assert {action["discipline"] for action in report["governed_actions"]} == {discipline}
 
 
-def test_non_measurable_and_non_finite_values_are_explicitly_unavailable() -> None:
+def test_non_measurable_values_are_explicitly_unavailable() -> None:
     missing = _metric(
         "batting_contact_proxy_alignment_ratio",
         discipline="batting",
@@ -181,25 +186,69 @@ def test_non_measurable_and_non_finite_values_are_explicitly_unavailable() -> No
         validity="MISSING_OBJECT_EVIDENCE",
         unavailable_reason="Ball and bat evidence was unavailable.",
     )
-    unsafe = _metric(
-        "batting_setup_head_alignment_ratio",
-        discipline="batting",
-        phase="setup",
-        raw_value=float("nan"),
-    )
     results = _results(missing)
-    results["v2"]["metric_results"].append(unsafe)
 
     report = build_coaching_analysis_report_v2(results=results, analysis_mode="batting")
-    missing_output, unsafe_output = report["metrics"]
+    missing_output = report["metrics"][0]
 
     assert missing_output["raw_value"] is None
     assert missing_output["normalized_score"] is None
     assert missing_output["classification_status"] is None
     assert missing_output["proxy_state"] == "PROXY"
     assert missing_output["unavailable_reason"] == "Ball and bat evidence was unavailable."
-    assert unsafe_output["raw_value"] is None
     assert "Unavailable" in _paragraph_text(report)
+
+
+@pytest.mark.parametrize(
+    "raw_value",
+    [None, float("nan"), float("inf"), float("-inf")],
+    ids=["null", "nan", "positive-infinity", "negative-infinity"],
+)
+def test_invalid_numeric_concern_cannot_create_priority_or_governed_action(
+    raw_value: float | None,
+) -> None:
+    metric = _metric(
+        "batting_setup_head_base_offset_ratio",
+        discipline="batting",
+        phase="setup",
+        raw_value=raw_value,
+        classification="NEEDS_ATTENTION",
+        validity="VALID",
+    )
+
+    report = build_coaching_analysis_report_v2(
+        results=_results(metric),
+        analysis_mode="batting",
+    )
+    output = report["metrics"][0]
+
+    assert output["raw_value"] is None
+    assert output["validity_state"] == "VALID"
+    assert output["classification_status"] == "NEEDS_ATTENTION"
+    assert output["unavailable_reason"]
+    assert output["unavailable_reason"] in output["limitations"]
+    assert report["development_priorities"] == []
+    assert report["governed_actions"] == []
+    assert "Unavailable" in _paragraph_text(report)
+
+
+def test_finite_valid_concern_still_creates_priority_and_governed_action() -> None:
+    report = build_coaching_analysis_report_v2(
+        results=_results(
+            _metric(
+                "batting_setup_head_base_offset_ratio",
+                discipline="batting",
+                phase="setup",
+                raw_value=0.72,
+            )
+        ),
+        analysis_mode="batting",
+    )
+
+    assert [item["metric_id"] for item in report["development_priorities"]] == [
+        "batting_setup_head_base_offset_ratio"
+    ]
+    assert [item["action_id"] for item in report["governed_actions"]] == ["batting-base-alignment"]
 
 
 def test_governed_actions_require_coach_approval_and_longitudinal_is_non_causal() -> None:

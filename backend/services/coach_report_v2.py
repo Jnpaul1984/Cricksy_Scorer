@@ -146,7 +146,13 @@ def _sanitize_metrics(payload: Any) -> list[dict[str, Any]]:
         confidence = _finite_number(item.get("confidence_score"), minimum=0, maximum=1)
         limitations = _safe_strings(item.get("limitations"))
         unavailable_reason = _safe_text(item.get("unavailable_reason"))
-        if not measurable and not unavailable_reason:
+        if measurable and raw_value is None:
+            unavailable_reason = unavailable_reason or (
+                "The persisted raw value was unavailable or invalid and could not be used."
+            )
+            if unavailable_reason not in limitations:
+                limitations.append(unavailable_reason)
+        elif not measurable and not unavailable_reason:
             unavailable_reason = (
                 "This metric is not reliably measurable from the persisted evidence."
             )
@@ -256,6 +262,7 @@ def _build_priorities(
             metric["metric_id"] not in known
             and metric["validity_state"] == "VALID"
             and metric["classification_status"] == "NEEDS_ATTENTION"
+            and metric["raw_value"] is not None
         ):
             candidates.append(
                 {
