@@ -751,6 +751,7 @@
                     <span class="evidence-time">({{ metric.phase }})</span></span
                 >
                   <span class="status-text">
+                    <span v-if="metric.value && metric.value !== 'Unavailable'">{{ metric.value }} • </span>
                     {{ metric.confidence }}
                     <span v-if="metric.classification"> • {{ metric.classification }}</span>
                     <span v-if="metric.proxy"> • {{ metric.proxy }}</span>

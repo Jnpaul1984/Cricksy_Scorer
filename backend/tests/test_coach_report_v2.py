@@ -9,6 +9,7 @@ import pdfplumber
 import pytest
 from reportlab.platypus import Paragraph
 
+from backend.routes.coach_pro_plus import _build_job_v2_coaching_report
 from backend.services.coach_report_v2 import (
     build_coaching_analysis_report_v2,
     has_persisted_v2_evidence,
@@ -17,7 +18,6 @@ from backend.services.pdf_export_service import generate_analysis_pdf
 from backend.services.reports.coach_report_template import (
     render_coaching_analysis_report_v2,
 )
-from backend.routes.coach_pro_plus import _build_job_v2_coaching_report
 
 
 def _metric(
@@ -72,17 +72,18 @@ def _results(metric: dict[str, object]) -> dict[str, object]:
             "capture_profile": {"camera_view": "side_on"},
             "repetitions": [
                 {
-                    "repetition_id": "rep-1",
+                    "repetition_id": f"rep-{index}",
                     "discipline": discipline,
                     "action_type": "test_action",
-                    "start_ts": 0.5,
-                    "end_ts": 1.1,
-                    "start_frame": 15,
-                    "end_frame": 33,
+                    "start_ts": index - 0.5,
+                    "end_ts": index + 0.1,
+                    "start_frame": index * 15,
+                    "end_frame": index * 15 + 18,
                     "segmentation_method": "persisted_test",
                     "segmentation_confidence": 0.91,
                     "validity_state": "VALID",
                 }
+                for index in range(1, 4)
             ],
             "phases": [
                 {
@@ -328,13 +329,17 @@ def test_governed_actions_require_coach_approval_and_longitudinal_is_non_causal(
 
 
 def test_v2_pdf_bypasses_unsafe_legacy_findings_and_free_form_suggestions() -> None:
-    results = _results(
-        _metric(
-            "pace_bowling_release_arm_angle_degrees",
-            discipline="pace_bowling",
-            phase="release",
-        )
+    metric = _metric(
+        "pace_bowling_release_arm_angle_degrees",
+        discipline="pace_bowling",
+        phase="release",
     )
+    metric["evidence_refs"] = [
+        {"ref_type": "repetition_phase", "ref_id": "rep-1:release", "label": "Release"}
+    ]
+    metric["timestamp_refs"] = [{"start_ts": 28.12, "end_ts": 31.44}]
+    metric["frame_refs"] = [{"start_frame": 842, "end_frame": 943}]
+    results = _results(metric)
     with (
         patch(
             "backend.services.pdf_export_service.consolidate_findings",
@@ -378,6 +383,11 @@ def test_v2_pdf_bypasses_unsafe_legacy_findings_and_free_form_suggestions() -> N
     assert "pace_bowling_release_arm_angle_degrees" in appendix_text
     assert "pace-release-follow-through" in appendix_text
     assert "job-v2" in appendix_text
+    assert "00:28.12\u201300:31.44" in appendix_text
+    assert "Frames 842\u2013943" in appendix_text
+    assert "repetition_phase / Release / rep-1:release" in appendix_text
+    assert "00:28.12\u201300:31.44" not in player_text
+    assert "Frames 842\u2013943" not in player_text
     assert "Suspend intensive batting" not in text
     assert "Injury risk" not in text
     assert "Stop all match practice" not in text
@@ -474,6 +484,9 @@ def test_bowling_pdf_summarizes_two_delivery_insufficient_evidence_once() -> Non
         unavailable_reason="At least 3 comparable deliveries are required.",
     )
     results = _results(metric)
+    metric["evidence_refs"] = []
+    metric["timestamp_refs"] = []
+    metric["frame_refs"] = []
     results["v2"]["repetitions"] = [
         {
             **results["v2"]["repetitions"][0],
@@ -518,6 +531,7 @@ def test_bowling_pdf_summarizes_two_delivery_insufficient_evidence_once() -> Non
     assert "Release estimate" in player_text
     assert "Approximate movement phase" in player_text
     assert player_text.count("We detected 2 deliveries.") == 1
+    assert "Evidence locators: None persisted." in appendix_text
     assert "Record at least 3 comparable deliveries" in player_text
     assert "Not enough evidence was available to confirm a development priority" in player_text
     assert "No governed training action is available" in player_text

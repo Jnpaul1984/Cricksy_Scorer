@@ -17,7 +17,9 @@ from backend.services.coach_report_presentation import (
 from backend.services.coaching_action_registry import PRODUCTION_METRIC_ACTION_CONTRACTS
 
 
-def _technical_report(*, repetitions: int = 2, metric_validity: str = "INSUFFICIENT_REPETITIONS") -> dict:
+def _technical_report(
+    *, repetitions: int = 2, metric_validity: str = "INSUFFICIENT_REPETITIONS"
+) -> dict:
     return {
         "analysis_mode": "pace_bowling",
         "repetitions": [
@@ -61,6 +63,42 @@ def _technical_report(*, repetitions: int = 2, metric_validity: str = "INSUFFICI
         "representative_repetitions": {},
         "longitudinal_goal_evidence": [],
     }
+
+
+def _report_with_supported_concern(repetitions: int) -> dict:
+    report = _technical_report(repetitions=repetitions, metric_validity="VALID")
+    report["metrics"][0].update(
+        {
+            "raw_value": 145.0,
+            "classification_status": "NEEDS_ATTENTION",
+        }
+    )
+    report["development_priorities"] = [
+        {
+            "metric_id": "pace_bowling_release_proxy_bowling_arm_angle_deg",
+            "phase": "release_proxy_window",
+            "valid_sample_count": 3,
+            "confidence_score": 0.86,
+            "supporting_repetition_ids": [item["repetition_id"] for item in report["repetitions"]],
+            "observed_pattern": "This persisted V2 metric was classified as needs attention.",
+            "limitations": [],
+        }
+    ]
+    report["governed_actions"] = [
+        {
+            "linked_metric_id": "pace_bowling_release_proxy_bowling_arm_angle_deg",
+            "technical_area": "Release and follow-through",
+            "why_it_matters": "A repeatable release can improve control.",
+            "coaching_objective": "Repeat the release shape.",
+            "coaching_cue": "Reach tall through release.",
+            "drills": ["Walk-through delivery"],
+            "coach_observation": "A repeatable arm path.",
+            "reassessment_criterion": "Compare the release estimate.",
+            "requires_coach_approval": True,
+            "review_status": "approved_for_coach_review",
+        }
+    ]
+    return report
 
 
 def test_every_production_metric_has_an_explicit_player_label() -> None:
@@ -125,9 +163,7 @@ def test_confidence_band_uses_canonical_boundaries(score: float | None, expected
 def test_validity_and_proxy_states_use_player_language() -> None:
     assert validity_wording("VALID", "batting") is None
     assert validity_wording("INSUFFICIENT_VISIBILITY", "batting") == "Could not measure clearly"
-    assert validity_wording("INSUFFICIENT_REPETITIONS", "pace_bowling") == (
-        "Not enough deliveries"
-    )
+    assert validity_wording("INSUFFICIENT_REPETITIONS", "pace_bowling") == ("Not enough deliveries")
     assert validity_wording("LOW_CONFIDENCE", "batting") == "Estimate only"
     assert proxy_wording("batting_contact_proxy_front_knee_angle_deg") == (
         "Approximate measurement"
@@ -156,6 +192,30 @@ def test_two_delivery_session_gets_one_contract_derived_insufficient_summary() -
     assert presentation["priorities"] == []
     assert presentation["governed_actions"] == []
     assert presentation["metrics"] == []
+
+
+@pytest.mark.parametrize("repetition_count", [1, 2])
+def test_subminimum_valid_concern_does_not_present_priority_or_action(
+    repetition_count: int,
+) -> None:
+    presentation = build_player_presentation(_report_with_supported_concern(repetition_count))
+
+    assert presentation["insufficient_evidence"]["active"] is True
+    assert presentation["insufficient_evidence"]["minimum_repetitions"] == 3
+    assert presentation["priorities"] == []
+    assert presentation["governed_actions"] == []
+
+
+def test_minimum_recurring_samples_allow_supported_priority_and_action() -> None:
+    presentation = build_player_presentation(_report_with_supported_concern(3))
+
+    assert presentation["insufficient_evidence"]["active"] is False
+    assert [item["metric_id"] for item in presentation["priorities"]] == [
+        "pace_bowling_release_proxy_bowling_arm_angle_deg"
+    ]
+    assert [item["linked_metric_id"] for item in presentation["governed_actions"]] == [
+        "pace_bowling_release_proxy_bowling_arm_angle_deg"
+    ]
 
 
 @pytest.mark.parametrize(

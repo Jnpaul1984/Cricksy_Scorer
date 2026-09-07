@@ -362,7 +362,28 @@ describe('CoachProPlusVideoSessionsView', () => {
               proxy: 'Approximate movement phase',
             },
           ],
-          metrics: [],
+          metrics: [
+            {
+              metric_id: 'pace_bowling_release_proxy_bowling_arm_angle_deg',
+              label: 'Bowling-arm angle near release',
+              phase: 'Release estimate',
+              value: '145.0°',
+              confidence: 'High confidence',
+              validity: null,
+              proxy: 'Approximate measurement',
+              classification: 'Needs attention',
+            },
+            {
+              metric_id: 'unavailable-test-metric',
+              label: 'Unavailable test measurement',
+              phase: 'Release estimate',
+              value: 'Unavailable',
+              confidence: 'Confidence unavailable',
+              validity: 'Could not measure clearly',
+              proxy: null,
+              classification: null,
+            },
+          ],
           strengths: [],
           priorities: [
             {
@@ -419,6 +440,13 @@ describe('CoachProPlusVideoSessionsView', () => {
     expect(text).toContain('Estimate only');
     expect(text).toContain('Approximate movement phase');
     expect(text).toContain('Bowling-arm angle near release');
+    expect(text).toContain('145.0°');
+    const unavailableMetric = wrapper
+      .findAll('.phase-row')
+      .find((row) => row.text().includes('Unavailable test measurement'));
+    expect(unavailableMetric?.find('.status-text').text().replace(/\s+/g, ' ').trim()).toBe(
+      'Confidence unavailable • Could not measure clearly',
+    );
     expect(text).toContain('Release and follow-through');
     expect(wrapper.findAll('h3').map((heading) => heading.text())).not.toContain('Priorities');
     expect(text).not.toContain('rep-1:phase:1');

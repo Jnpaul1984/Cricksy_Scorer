@@ -283,8 +283,11 @@ def build_player_presentation(report: dict[str, Any]) -> dict[str, Any]:
     metrics = report.get("metrics", [])
     measurable_metrics = [item for item in metrics if item.get("raw_value") is not None]
     discipline = _discipline(report, repetitions, metrics)
-    priorities = report.get("development_priorities", [])[:3]
-    actions = report.get("governed_actions", [])
+    has_recurring_sample_minimum = len(usable_repetitions) >= MIN_RECURRING_SAMPLES
+    priorities = (
+        report.get("development_priorities", [])[:3] if has_recurring_sample_minimum else []
+    )
+    actions = report.get("governed_actions", []) if has_recurring_sample_minimum else []
     action_by_metric = {item.get("linked_metric_id"): item for item in actions}
     has_insufficient_metrics = any(
         item.get("validity_state") == "INSUFFICIENT_REPETITIONS" for item in metrics
@@ -323,15 +326,11 @@ def build_player_presentation(report: dict[str, Any]) -> dict[str, Any]:
             {
                 "phase_id": item.get("phase_id"),
                 "label": phase_display_name(item.get("phase_name")),
-                "repetition_label": repetition_labels.get(
-                    item.get("repetition_id"), "Repetition"
-                ),
+                "repetition_label": repetition_labels.get(item.get("repetition_id"), "Repetition"),
                 "confidence": confidence_band(item.get("confidence")),
                 "validity": validity_wording(item.get("validity_state"), discipline),
                 "proxy": (
-                    "Approximate movement phase"
-                    if item.get("requires_object_evidence")
-                    else None
+                    "Approximate movement phase" if item.get("requires_object_evidence") else None
                 ),
             }
             for item in report.get("phases", [])
@@ -517,14 +516,12 @@ def _session_summary(
             f"We identified {repetition_count} usable {noun}, but could not confirm reliable "
             "technique measurements from this recording."
         )
-    available_names = list(dict.fromkeys(metric_display_name(item.get("metric_id")) for item in measurable))
+    available_names = list(
+        dict.fromkeys(metric_display_name(item.get("metric_id")) for item in measurable)
+    )
     reviewed = ", ".join(name.lower() for name in available_names[:3])
     unavailable = len(metrics) - len(measurable)
-    suffix = (
-        " Some measurements could not be made clearly."
-        if unavailable
-        else ""
-    )
+    suffix = " Some measurements could not be made clearly." if unavailable else ""
     return (
         f"We identified {repetition_count} usable {noun}. The recording supported review of "
         f"{reviewed}.{suffix}"

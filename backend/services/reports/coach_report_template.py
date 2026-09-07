@@ -8,6 +8,7 @@ report layout that works across bowling, batting, wicketkeeping, and fielding.
 from __future__ import annotations
 
 import logging
+import math
 from html import escape
 from typing import Any
 
@@ -1052,6 +1053,64 @@ def _support_text(item: dict[str, Any]) -> str:
     return "Comparable repetition count unavailable."
 
 
+def _video_timestamp(value: Any) -> str | None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int | float)
+        or not math.isfinite(value)
+        or value < 0
+    ):
+        return None
+    total_seconds = float(value)
+    hours = int(total_seconds // 3600)
+    minutes = int((total_seconds % 3600) // 60)
+    seconds = total_seconds % 60
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{seconds:05.2f}"
+    return f"{minutes:02d}:{seconds:05.2f}"
+
+
+def _metric_evidence_locators(metric: dict[str, Any]) -> list[str]:
+    locators: list[str] = []
+    for ref in metric.get("timestamp_refs", []):
+        if not isinstance(ref, dict):
+            continue
+        start = _video_timestamp(ref.get("start_ts"))
+        end = _video_timestamp(ref.get("end_ts"))
+        if start and end:
+            locators.append(f"{start}\u2013{end}")
+        elif start or end:
+            locators.append(start or end or "")
+    for ref in metric.get("frame_refs", []):
+        if not isinstance(ref, dict):
+            continue
+        start = ref.get("start_frame")
+        end = ref.get("end_frame")
+        if (
+            isinstance(start, int)
+            and not isinstance(start, bool)
+            and isinstance(end, int)
+            and not isinstance(end, bool)
+        ):
+            locators.append(f"Frames {start}\u2013{end}")
+            continue
+        frame_numbers = [
+            value
+            for value in ref.get("frame_numbers", [])
+            if isinstance(value, int) and not isinstance(value, bool)
+        ]
+        if frame_numbers:
+            locators.append(f"Frames {', '.join(str(value) for value in frame_numbers)}")
+    for ref in metric.get("evidence_refs", []):
+        if not isinstance(ref, dict):
+            continue
+        parts = [ref.get("ref_type"), ref.get("label"), ref.get("ref_id")]
+        persisted = [str(value) for value in parts if value not in (None, "")]
+        if persisted:
+            locators.append(f"Evidence {' / '.join(persisted)}")
+    return locators
+
+
 def _render_v2_technical_appendix(report: dict[str, Any], styles: dict) -> list:
     elements: list[Any] = [PageBreak()]
     elements.append(Paragraph("Technical appendix", styles["heading"]))
@@ -1104,6 +1163,14 @@ def _render_v2_technical_appendix(report: dict[str, Any], styles: dict) -> list:
                 f"validity {_safe_pdf_text(metric.get('validity_state'))}; "
                 f"proxy state {_safe_pdf_text(metric.get('proxy_state'))}; "
                 f"{reference_count} evidence reference(s).",
+                styles["small"],
+            )
+        )
+        locators = _metric_evidence_locators(metric)
+        locator_text = "; ".join(locators) if locators else "None persisted"
+        elements.append(
+            Paragraph(
+                f"Evidence locators: {_safe_pdf_text(locator_text)}.",
                 styles["small"],
             )
         )
