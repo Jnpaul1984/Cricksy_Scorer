@@ -8,6 +8,7 @@ report layout that works across bowling, batting, wicketkeeping, and fielding.
 from __future__ import annotations
 
 import logging
+import math
 from html import escape
 from typing import Any
 
@@ -868,218 +869,326 @@ def render_appendix_evidence(
 
 
 def render_coaching_analysis_report_v2(report: dict[str, Any]) -> list:
-    """Render a report derived exclusively from persisted Phase 10J V2 evidence."""
+    """Render plain-language coaching pages plus a traceable technical appendix."""
     styles = get_styles()
+    presentation = report.get("player_presentation", {})
     elements: list[Any] = []
 
-    elements.append(Paragraph("1. Executive Coaching Summary", styles["heading"]))
-    mode = _safe_pdf_text(report.get("analysis_mode"), "Cricket")
-    repetitions = report.get("repetitions", [])
-    phases = report.get("phases", [])
-    metrics = report.get("metrics", [])
-    measurable_count = sum(item.get("raw_value") is not None for item in metrics)
+    elements.append(Paragraph("1. How did I do?", styles["heading"]))
+    elements.append(Paragraph(_safe_pdf_text(presentation.get("session_summary")), styles["body"]))
     elements.append(
         Paragraph(
-            f"This {mode} report uses persisted V2 analysis only: "
-            f"{len(repetitions)} repetitions, {len(phases)} phases, and "
-            f"{measurable_count} of {len(metrics)} metrics with measurable values.",
+            f"<b>Analysis quality:</b> {_safe_pdf_text(presentation.get('analysis_quality'))}",
             styles["body"],
         )
     )
-    elements.append(
-        Paragraph(
-            "Metric classifications, confidence, validity, and proxy status are reported "
-            "as persisted; this report does not infer thresholds or measurement direction.",
-            styles["small"],
+    insufficient = presentation.get("insufficient_evidence", {})
+    if insufficient.get("active"):
+        elements.extend(
+            _render_player_card(
+                insufficient.get("title"),
+                [
+                    insufficient.get("summary"),
+                    f"Recommendation: {insufficient.get('recommendation')}",
+                ],
+                styles,
+            )
         )
-    )
+    elements.extend(_render_player_repetitions(presentation, styles))
 
-    priorities = report.get("development_priorities", [])
-    if priorities:
-        elements.append(Paragraph("Evidence-led priorities", styles["subheading"]))
-        for priority in priorities:
-            elements.append(
-                Paragraph(
-                    f"<b>{_safe_pdf_text(priority.get('metric_id'))}</b>: "
-                    f"{_safe_pdf_text(priority.get('observed_pattern'))} "
-                    f"(validity: {_safe_pdf_text(priority.get('validity_state'))}; "
-                    f"confidence: {_format_v2_number(priority.get('confidence_score'))}; "
-                    f"proxy: {_safe_pdf_text(priority.get('proxy_state'))})",
-                    styles["body"],
+    elements.append(Paragraph("2. What am I doing well?", styles["heading"]))
+    strengths = presentation.get("strengths", [])
+    if strengths:
+        for strength in strengths:
+            elements.extend(
+                _render_player_card(
+                    strength.get("title"),
+                    [
+                        strength.get("observation"),
+                        _support_text(strength),
+                        strength.get("confidence"),
+                    ],
+                    styles,
                 )
             )
     else:
         elements.append(
             Paragraph(
-                "No development priority could be selected from valid persisted V2 evidence.",
+                "No repeatable strengths could be confirmed from this session yet.", styles["body"]
+            )
+        )
+
+    elements.append(PageBreak())
+    elements.append(Paragraph("3. What should I improve first?", styles["heading"]))
+    priorities = presentation.get("priorities", [])
+    if priorities:
+        for priority in priorities:
+            details = [
+                priority.get("observation"),
+                _support_text(priority),
+                f"Confidence: {priority.get('confidence')}",
+                priority.get("why_it_matters"),
+                priority.get("proxy"),
+            ]
+            elements.extend(_render_player_card(priority.get("title"), details, styles))
+    elif not insufficient.get("active"):
+        elements.append(
+            Paragraph(
+                "No evidence-supported development priority was confirmed from this session.",
+                styles["body"],
+            )
+        )
+    else:
+        elements.append(
+            Paragraph(
+                "Not enough evidence was available to confirm a development priority yet.",
                 styles["body"],
             )
         )
 
-    elements.append(PageBreak())
-    elements.append(Paragraph("2. Repetition &amp; Phase Analysis", styles["heading"]))
-    elements.extend(_render_v2_repetitions(repetitions, styles))
-    elements.extend(_render_v2_phases(phases, styles))
-    elements.extend(_render_v2_metrics(metrics, styles))
-
-    elements.append(PageBreak())
-    elements.append(Paragraph("3. Technical Development Areas", styles["heading"]))
-    if priorities:
-        for index, priority in enumerate(priorities, 1):
-            rep_ids = ", ".join(priority.get("supporting_repetition_ids", [])) or "Unavailable"
-            elements.append(
-                Paragraph(
-                    f"<b>{index}. {_safe_pdf_text(priority.get('metric_id'))}</b>",
-                    styles["subheading"],
-                )
-            )
-            details = [
-                ("Observed pattern", priority.get("observed_pattern")),
-                ("Phase", priority.get("phase")),
-                ("Supporting repetitions", rep_ids),
-                (
-                    "Measured value",
-                    _format_v2_number(priority.get("measured_value"), priority.get("unit")),
-                ),
-                ("Validity", priority.get("validity_state")),
-                ("Confidence", _format_v2_number(priority.get("confidence_score"))),
-                ("Proxy state", priority.get("proxy_state")),
-            ]
-            elements.extend(_render_v2_detail_lines(details, styles))
-            elements.extend(_render_v2_limitations(priority.get("limitations", []), styles))
-    else:
-        elements.append(
-            Paragraph("No evidence-supported development area is available.", styles["body"])
-        )
-
-    elements.append(Paragraph("4. Strengths &amp; Consistency", styles["heading"]))
-    elements.extend(_render_v2_signal_group("Strengths", report.get("strengths", []), styles))
-    elements.extend(
-        _render_v2_signal_group("Recurring concerns", report.get("recurring_concerns", []), styles)
-    )
-    consistency = report.get("consistency_observations", [])
-    elements.append(Paragraph("Consistency observations", styles["subheading"]))
-    if consistency:
-        for observation in consistency:
-            elements.append(
-                Paragraph(
-                    f"<b>{_safe_pdf_text(observation.get('metric_id'))}</b>: "
-                    f"{_safe_pdf_text(observation.get('classification'))}; "
-                    f"{_safe_pdf_text(observation.get('method'))}="
-                    f"{_format_v2_number(observation.get('value'))}; "
-                    f"valid samples={_safe_pdf_text(observation.get('valid_sample_count'))}; "
-                    f"confidence={_format_v2_number(observation.get('confidence_score'))}.",
-                    styles["body"],
-                )
-            )
-    else:
-        elements.append(Paragraph("Unavailable from the persisted V2 evidence.", styles["body"]))
-    elements.extend(_render_v2_representative_repetitions(report, styles))
-
-    elements.append(PageBreak())
-    elements.append(Paragraph("5. Coach-Approved Action Plan", styles["heading"]))
-    elements.append(
-        Paragraph(
-            "The following registry actions are coach-facing candidates. They require coach approval "
-            "before assignment or player-facing publication and are not medical or conditioning advice.",
-            styles["body"],
-        )
-    )
-    actions = report.get("governed_actions", [])
+    elements.append(Paragraph("4. What should I do in training?", styles["heading"]))
+    actions = presentation.get("governed_actions", [])
     if actions:
-        for index, action in enumerate(actions, 1):
-            elements.append(
-                Paragraph(
-                    f"<b>{index}. {_safe_pdf_text(action.get('technical_area'))}</b> "
-                    f"({_safe_pdf_text(action.get('action_id'))})",
-                    styles["subheading"],
-                )
-            )
+        for action in actions:
             details = [
-                ("Linked evidence", action.get("linked_metric_id")),
-                ("Why it matters technically", action.get("why_it_matters")),
-                ("Objective", action.get("coaching_objective")),
-                ("Cue", action.get("coaching_cue")),
-                ("Drills", "; ".join(action.get("drills", []))),
-                ("Coach should observe", action.get("coach_observation")),
-                ("Reassessment", action.get("reassessment_criterion")),
-                ("Review status", action.get("review_status")),
+                f"<b>Observed issue:</b> {_safe_pdf_text(action.get('observed_issue'))}",
+                f"<b>Coaching goal:</b> {_safe_pdf_text(action.get('coaching_goal'))}",
+                f"<b>Cue:</b> {_safe_pdf_text(action.get('cue'))}",
+                f"<b>Drills:</b> {_safe_pdf_text('; '.join(action.get('drills', [])))}",
+                f"<b>Coach watches for:</b> {_safe_pdf_text(action.get('coach_watches_for'))}",
+                f"<b>Reassess:</b> {_safe_pdf_text(action.get('reassess'))}",
             ]
-            elements.extend(_render_v2_detail_lines(details, styles))
-            elements.extend(_render_v2_limitations(action.get("evidence_limitations", []), styles))
-    else:
-        elements.append(
-            Paragraph("No governed action matched the available valid V2 evidence.", styles["body"])
-        )
-
-    interventions = report.get("coach_recorded_interventions", [])
-    if interventions:
-        elements.append(Paragraph("Coach-recorded interventions", styles["subheading"]))
-        for intervention in interventions:
-            elements.append(
-                Paragraph(
-                    f"{_safe_pdf_text(intervention.get('activity'))} "
-                    f"(state: {_safe_pdf_text(intervention.get('completion_state'))}; "
-                    f"governance: coach recorded)",
-                    styles["body"],
-                )
-            )
-
-    longitudinal = report.get("longitudinal_goal_evidence", [])
-    if longitudinal:
-        elements.append(PageBreak())
-        elements.append(Paragraph("6. Progress / Longitudinal Evidence", styles["heading"]))
+            elements.extend(_render_player_card(action.get("title"), details, styles, escaped=True))
         elements.append(
             Paragraph(
-                "Comparisons describe persisted observations only. They do not attribute change to an intervention.",
+                "These governed actions require coach review before they are assigned to a player.",
                 styles["small"],
             )
         )
-        for item in longitudinal:
-            baseline = item.get("baseline") or {}
-            latest = item.get("latest") or {}
-            elements.append(
-                Paragraph(
-                    f"<b>{_safe_pdf_text(item.get('metric_id'))}</b>: "
-                    f"baseline {_format_v2_number(baseline.get('raw_value'), baseline.get('unit'))}; "
-                    f"latest {_format_v2_number(latest.get('raw_value'), latest.get('unit'))}; "
-                    f"status {_safe_pdf_text(item.get('status'))}; "
-                    f"confidence {_format_v2_number(item.get('confidence'))}.",
-                    styles["body"],
-                )
+    else:
+        elements.append(
+            Paragraph(
+                "No governed training action is available from the evidence in this session.",
+                styles["body"],
             )
-            elements.extend(_render_v2_limitations(item.get("limitations", []), styles))
+        )
 
-    elements.append(PageBreak())
-    elements.append(Paragraph("Appendix: Evidence &amp; Limitations", styles["heading"]))
+    progress = presentation.get("progress", {})
+    elements.append(Paragraph("5. Am I improving over time?", styles["heading"]))
+    elements.extend(
+        _render_player_card(
+            progress.get("state"),
+            [
+                progress.get("summary"),
+                "Comparisons describe measured evidence only and do not claim that a drill caused change.",
+            ],
+            styles,
+        )
+    )
+
+    elements.extend(_render_v2_technical_appendix(report, styles))
+    return elements
+
+
+def _render_player_repetitions(presentation: dict[str, Any], styles: dict) -> list:
+    elements: list[Any] = [Paragraph("Session movements", styles["subheading"])]
+    repetitions = presentation.get("repetitions", [])
+    if not repetitions:
+        elements.append(Paragraph("No usable repetitions were identified.", styles["body"]))
+        return elements
+    phases = presentation.get("phases", [])
+    for repetition in repetitions:
+        label = repetition.get("label")
+        repetition_phases = []
+        for item in phases:
+            if item.get("repetition_label") != label:
+                continue
+            notes = [item.get("proxy"), item.get("validity")]
+            note_text = ", ".join(str(note) for note in notes if note)
+            phase_label = str(item.get("label") or "Movement phase")
+            repetition_phases.append(f"{phase_label} ({note_text})" if note_text else phase_label)
+        phase_text = ", ".join(dict.fromkeys(repetition_phases)) or "Phases unavailable"
+        details = [phase_text, repetition.get("confidence"), repetition.get("validity")]
+        elements.extend(_render_player_card(label, details, styles))
+    return elements
+
+
+def _render_player_card(
+    title: Any,
+    details: list[Any],
+    styles: dict,
+    *,
+    escaped: bool = False,
+) -> list:
+    title_text = _safe_pdf_text(title)
+    rows: list[list[Any]] = [[Paragraph(f"<b>{title_text}</b>", styles["body"])]]
+    for detail in details:
+        if detail:
+            text = str(detail) if escaped else _safe_pdf_text(detail)
+            rows.append([Paragraph(text, styles["body"])])
+    table = Table(rows, colWidths=[6.75 * inch])
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#ECF0F1")),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#BDC3C7")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    return [table, Spacer(1, SPACE_ITEM)]
+
+
+def _support_text(item: dict[str, Any]) -> str:
+    count = item.get("repetition_count")
+    labels = item.get("repetition_labels", [])
+    if isinstance(count, int) and count > 0:
+        suffix = f" ({', '.join(labels)})" if labels else ""
+        noun = "repetition" if count == 1 else "repetitions"
+        return f"This pattern appeared in {count} comparable {noun}{suffix}."
+    return "Comparable repetition count unavailable."
+
+
+def _video_timestamp(value: Any) -> str | None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int | float)
+        or not math.isfinite(value)
+        or value < 0
+    ):
+        return None
+    total_seconds = float(value)
+    hours = int(total_seconds // 3600)
+    minutes = int((total_seconds % 3600) // 60)
+    seconds = total_seconds % 60
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{seconds:05.2f}"
+    return f"{minutes:02d}:{seconds:05.2f}"
+
+
+def _metric_evidence_locators(metric: dict[str, Any]) -> list[str]:
+    locators: list[str] = []
+    for ref in metric.get("timestamp_refs", []):
+        if not isinstance(ref, dict):
+            continue
+        start = _video_timestamp(ref.get("start_ts"))
+        end = _video_timestamp(ref.get("end_ts"))
+        if start and end:
+            locators.append(f"{start}\u2013{end}")
+        elif start or end:
+            locators.append(start or end or "")
+    for ref in metric.get("frame_refs", []):
+        if not isinstance(ref, dict):
+            continue
+        start = ref.get("start_frame")
+        end = ref.get("end_frame")
+        if (
+            isinstance(start, int)
+            and not isinstance(start, bool)
+            and isinstance(end, int)
+            and not isinstance(end, bool)
+        ):
+            locators.append(f"Frames {start}\u2013{end}")
+            continue
+        frame_numbers = [
+            value
+            for value in ref.get("frame_numbers", [])
+            if isinstance(value, int) and not isinstance(value, bool)
+        ]
+        if frame_numbers:
+            locators.append(f"Frames {', '.join(str(value) for value in frame_numbers)}")
+    for ref in metric.get("evidence_refs", []):
+        if not isinstance(ref, dict):
+            continue
+        parts = [ref.get("ref_type"), ref.get("label"), ref.get("ref_id")]
+        persisted = [str(value) for value in parts if value not in (None, "")]
+        if persisted:
+            locators.append(f"Evidence {' / '.join(persisted)}")
+    return locators
+
+
+def _render_v2_technical_appendix(report: dict[str, Any], styles: dict) -> list:
+    elements: list[Any] = [PageBreak()]
+    elements.append(Paragraph("Technical appendix", styles["heading"]))
+    context = report.get("report_context", {})
     elements.append(
         Paragraph(
             f"Report contract: {_safe_pdf_text(report.get('report_version'))}; "
+            f"presentation contract: {_safe_pdf_text(report.get('player_presentation', {}).get('presentation_version'))}; "
             f"action registry: {_safe_pdf_text(report.get('action_registry_version'))}; "
-            f"source: {_safe_pdf_text(report.get('source'))}.",
-            styles["body"],
+            f"source: {_safe_pdf_text(report.get('source'))}; "
+            f"job ID: {_safe_pdf_text(context.get('job_id'))}.",
+            styles["small"],
         )
     )
-    elements.append(Paragraph("Metric evidence references", styles["subheading"]))
-    if metrics:
-        for metric in metrics:
-            reference_count = sum(
-                len(metric.get(name, []))
-                for name in ("evidence_refs", "timestamp_refs", "frame_refs")
+    elements.append(Paragraph("Exact repetition and phase evidence", styles["subheading"]))
+    for repetition in report.get("repetitions", []):
+        elements.append(
+            Paragraph(
+                f"Repetition ID {_safe_pdf_text(repetition.get('repetition_id'))}; "
+                f"action {_safe_pdf_text(repetition.get('action_type'))}; "
+                f"confidence {_format_v2_number(repetition.get('segmentation_confidence'))}; "
+                f"validity {_safe_pdf_text(repetition.get('validity_state'))}.",
+                styles["small"],
             )
+        )
+    for phase in report.get("phases", []):
+        elements.append(
+            Paragraph(
+                f"Phase ID {_safe_pdf_text(phase.get('phase_id'))}; "
+                f"repetition {_safe_pdf_text(phase.get('repetition_id'))}; "
+                f"phase name {_safe_pdf_text(phase.get('phase_name'))}; "
+                f"confidence {_format_v2_number(phase.get('confidence'))}; "
+                f"validity {_safe_pdf_text(phase.get('validity_state'))}.",
+                styles["small"],
+            )
+        )
+    elements.append(Paragraph("Exact metric evidence", styles["subheading"]))
+    for metric in report.get("metrics", []):
+        reference_count = sum(
+            len(metric.get(name, [])) for name in ("evidence_refs", "timestamp_refs", "frame_refs")
+        )
+        elements.append(
+            Paragraph(
+                f"Metric ID {_safe_pdf_text(metric.get('metric_id'))}; "
+                f"version {_safe_pdf_text(metric.get('metric_version'))}; "
+                f"repetition {_safe_pdf_text(metric.get('repetition_id'))}; "
+                f"phase {_safe_pdf_text(metric.get('phase'))}; "
+                f"value {_format_v2_number(metric.get('raw_value'), metric.get('unit'))}; "
+                f"confidence {_format_v2_number(metric.get('confidence_score'))}; "
+                f"validity {_safe_pdf_text(metric.get('validity_state'))}; "
+                f"proxy state {_safe_pdf_text(metric.get('proxy_state'))}; "
+                f"{reference_count} evidence reference(s).",
+                styles["small"],
+            )
+        )
+        locators = _metric_evidence_locators(metric)
+        locator_text = "; ".join(locators) if locators else "None persisted"
+        elements.append(
+            Paragraph(
+                f"Evidence locators: {_safe_pdf_text(locator_text)}.",
+                styles["small"],
+            )
+        )
+    elements.append(Paragraph("Governed action references", styles["subheading"]))
+    actions = report.get("governed_actions", [])
+    if actions:
+        for action in actions:
             elements.append(
                 Paragraph(
-                    f"{_safe_pdf_text(metric.get('metric_id'))} "
-                    f"v{_safe_pdf_text(metric.get('metric_version'))}: "
-                    f"{reference_count} persisted evidence reference(s); "
-                    f"validity {_safe_pdf_text(metric.get('validity_state'))}; "
-                    f"confidence {_format_v2_number(metric.get('confidence_score'))}.",
+                    f"Action ID {_safe_pdf_text(action.get('action_id'))}; linked metric "
+                    f"{_safe_pdf_text(action.get('linked_metric_id'))}; review status "
+                    f"{_safe_pdf_text(action.get('review_status'))}.",
                     styles["small"],
                 )
             )
     else:
-        elements.append(Paragraph("No persisted V2 metric evidence was available.", styles["body"]))
-    elements.append(Paragraph("Limitations", styles["subheading"]))
+        elements.append(Paragraph("No governed action was selected.", styles["small"]))
+    elements.append(Paragraph("Detailed limitations", styles["subheading"]))
     limitations = report.get("limitations", [])
     if limitations:
         elements.extend(_render_v2_limitations(limitations, styles))
@@ -1088,162 +1197,9 @@ def render_coaching_analysis_report_v2(report: dict[str, Any]) -> list:
     return elements
 
 
-def _render_v2_repetitions(repetitions: list[dict[str, Any]], styles: dict) -> list:
-    elements: list[Any] = [Paragraph("Repetitions", styles["subheading"])]
-    if not repetitions:
-        elements.append(Paragraph("Unavailable from the persisted V2 evidence.", styles["body"]))
-        return elements
-    rows = [["ID", "Action", "Time (s)", "Confidence", "Validity"]]
-    for repetition in repetitions:
-        time_range = (
-            f"{_format_v2_number(repetition.get('start_ts'))}-"
-            f"{_format_v2_number(repetition.get('end_ts'))}"
-        )
-        rows.append(
-            [
-                _safe_pdf_text(repetition.get("repetition_id")),
-                _safe_pdf_text(repetition.get("action_type")),
-                time_range,
-                _format_v2_number(repetition.get("segmentation_confidence")),
-                _safe_pdf_text(repetition.get("validity_state")),
-            ]
-        )
-    elements.append(_v2_table(rows, [1.0, 1.5, 1.25, 1.25, 1.5]))
-    return elements
-
-
-def _render_v2_phases(phases: list[dict[str, Any]], styles: dict) -> list:
-    elements: list[Any] = [Paragraph("Phases", styles["subheading"])]
-    if not phases:
-        elements.append(Paragraph("Unavailable from the persisted V2 evidence.", styles["body"]))
-        return elements
-    rows = [["Phase", "Repetition", "Time (s)", "Confidence", "Validity"]]
-    for phase in phases:
-        rows.append(
-            [
-                _safe_pdf_text(phase.get("phase_name")),
-                _safe_pdf_text(phase.get("repetition_id")),
-                f"{_format_v2_number(phase.get('start_ts'))}-"
-                f"{_format_v2_number(phase.get('end_ts'))}",
-                _format_v2_number(phase.get("confidence")),
-                _safe_pdf_text(phase.get("validity_state")),
-            ]
-        )
-    elements.append(_v2_table(rows, [1.4, 1.1, 1.25, 1.25, 1.5]))
-    return elements
-
-
-def _render_v2_metrics(metrics: list[dict[str, Any]], styles: dict) -> list:
-    elements: list[Any] = [Paragraph("V2 metrics", styles["subheading"])]
-    if not metrics:
-        elements.append(Paragraph("Unavailable from the persisted V2 evidence.", styles["body"]))
-        return elements
-    rows = [["Metric", "Value", "Class", "Confidence", "Validity / proxy"]]
-    for metric in metrics:
-        value = _format_v2_number(metric.get("raw_value"), metric.get("unit"))
-        classification = _safe_pdf_text(metric.get("classification_status"))
-        validity_proxy = (
-            f"{_safe_pdf_text(metric.get('validity_state'))} / "
-            f"{_safe_pdf_text(metric.get('proxy_state'))}"
-        )
-        rows.append(
-            [
-                _safe_pdf_text(metric.get("metric_id")),
-                value,
-                classification,
-                _format_v2_number(metric.get("confidence_score")),
-                validity_proxy,
-            ]
-        )
-        if value == "Unavailable":
-            rows.append(
-                [
-                    "",
-                    Paragraph(
-                        f"Unavailable: {_safe_pdf_text(metric.get('unavailable_reason'))}",
-                        styles["small"],
-                    ),
-                    "",
-                    "",
-                    "",
-                ]
-            )
-    elements.append(_v2_table(rows, [2.0, 1.0, 1.1, 1.0, 1.4]))
-    return elements
-
-
-def _render_v2_signal_group(title: str, signals: list[dict[str, Any]], styles: dict) -> list:
-    elements: list[Any] = [Paragraph(title, styles["subheading"])]
-    if not signals:
-        elements.append(Paragraph("Unavailable from the persisted V2 evidence.", styles["body"]))
-        return elements
-    for signal in signals:
-        repetitions = ", ".join(signal.get("supporting_repetition_ids", [])) or "Unavailable"
-        elements.append(
-            Paragraph(
-                f"<b>{_safe_pdf_text(signal.get('metric_id'))}</b>: "
-                f"{_safe_pdf_text(signal.get('summary'))} "
-                f"(repetitions: {_safe_pdf_text(repetitions)}; "
-                f"confidence: {_format_v2_number(signal.get('confidence_score'))})",
-                styles["body"],
-            )
-        )
-    return elements
-
-
-def _render_v2_representative_repetitions(report: dict[str, Any], styles: dict) -> list:
-    elements: list[Any] = [Paragraph("Representative repetitions", styles["subheading"])]
-    selections = report.get("representative_repetitions", {})
-    rendered = False
-    for label in ("best", "needs_work"):
-        selection = selections.get(label)
-        if not selection or not selection.get("available"):
-            continue
-        rendered = True
-        elements.append(
-            Paragraph(
-                f"<b>{label.replace('_', ' ').title()}:</b> "
-                f"{_safe_pdf_text(selection.get('repetition_id'))} - "
-                f"{_safe_pdf_text(selection.get('rationale'))} "
-                f"(confidence: {_format_v2_number(selection.get('confidence_score'))})",
-                styles["body"],
-            )
-        )
-    if not rendered:
-        elements.append(Paragraph("Unavailable from the persisted V2 evidence.", styles["body"]))
-    return elements
-
-
-def _render_v2_detail_lines(details: list[tuple[str, Any]], styles: dict) -> list:
-    return [
-        Paragraph(f"<b>{escape(label)}:</b> {_safe_pdf_text(value)}", styles["body"])
-        for label, value in details
-    ]
-
-
 def _render_v2_limitations(limitations: list[Any], styles: dict) -> list:
     return [
         Paragraph(f"Limitation: {_safe_pdf_text(limitation)}", styles["small"])
         for limitation in limitations
         if limitation
     ]
-
-
-def _v2_table(rows: list[list[Any]], widths: list[float]) -> Table:
-    table = Table(rows, colWidths=[width * inch for width in widths], repeatRows=1)
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARY),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONT", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONT", (0, 1), (-1, -1), "Helvetica"),
-                ("FONTSIZE", (0, 0), (-1, -1), FONT_SMALL),
-                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#BDC3C7")),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 4),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ]
-        )
-    )
-    return table

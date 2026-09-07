@@ -397,3 +397,45 @@
   completed_by: "codex"
   completed_at: "2026-09-06"
   notes: "No migration; V2 reports consume persisted artifacts only and legacy-only jobs retain their historical renderer."
+
+- id: phase10j-15-player-friendly-coaching-report
+  week: 10
+  category: "Phase 10J"
+  title: "10J.15 Player-Friendly Coaching Report & V2 UI Simplification"
+  description: "Present unchanged persisted V2 evidence in plain language across PDF and Analysis Results while retaining a traceable technical appendix"
+  status: done
+  confidence: high
+  risk_level: medium
+  acceptance_criteria:
+    - "V2 PDF and UI consume one deterministic player-presentation contract with readable metric, phase, repetition, confidence, validity, proxy, and progress language"
+    - "V2 jobs suppress legacy priorities and unsafe free-form coaching while preserving governed Phase 10J.14 actions"
+    - "Insufficient evidence is summarized once and exact technical evidence remains in the appendix"
+    - "Historical non-V2 reports retain their legacy rendering path"
+  verification_commands:
+    - "python scripts/checklist.py status"
+    - "python -m pytest -q backend/tests/test_coach_report_presentation.py backend/tests/test_coach_report_v2.py"
+    - "cd frontend && npm run test:unit -- tests/unit/CoachProPlusVideoSessionsView.spec.ts tests/unit/PlayerLongitudinalProgress.spec.ts"
+    - "cd frontend && npm run guard:fake-data && npm run type-check && npm run build"
+    - "python -m ruff check . && python -m ruff format --check ."
+    - "cd backend && mypy --config-file pyproject.toml --explicit-package-bases ."
+    - "pre-commit run --all-files"
+  files_touched:
+    - "backend/services/coach_report_presentation.py"
+    - "backend/services/coach_report_v2.py"
+    - "backend/services/pdf_export_service.py"
+    - "backend/services/reports/coach_report_template.py"
+    - "backend/routes/coach_pro_plus.py"
+    - "backend/tests/test_coach_report_presentation.py"
+    - "backend/tests/test_coach_report_v2.py"
+    - "frontend/src/services/coachPlusVideoService.ts"
+    - "frontend/src/views/CoachProPlusVideoSessionsView.vue"
+    - "frontend/src/components/PlayerLongitudinalProgress.vue"
+    - "frontend/tests/unit/CoachProPlusVideoSessionsView.spec.ts"
+    - "frontend/tests/unit/PlayerLongitudinalProgress.spec.ts"
+    - "docs/PHASE_10J15_PLAYER_FRIENDLY_COACHING_REPORT.md"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "codex"
+  completed_at: "2026-09-06"
+  notes: "No migration; presentation uses persisted V2 evidence only, with exact IDs retained in the technical appendix."

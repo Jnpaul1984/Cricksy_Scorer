@@ -168,7 +168,11 @@
               </option>
             </select>
             <div class="inline-actions">
-              <button type="button" class="btn-secondary btn-small" @click="selectedPrimaryPlayerId = ''">
+              <button
+                type="button"
+                class="btn-secondary btn-small"
+                @click="selectedPrimaryPlayerId = ''"
+              >
                 Clear
               </button>
               <button type="button" class="btn-link-inline" @click="togglePlayerCreator">
@@ -177,7 +181,9 @@
             </div>
             <div v-if="showPlayerCreator" class="player-create-panel">
               <h3>Quick add coaching player</h3>
-              <p class="field-hint">No team, match, player account, email, or parent details required.</p>
+              <p class="field-hint">
+                No team, match, player account, email, or parent details required.
+              </p>
               <label for="new-player-name">Name (optional)</label>
               <input
                 id="new-player-name"
@@ -202,11 +208,7 @@
 
           <div class="form-group">
             <label for="discipline">Discipline <span class="required">*</span></label>
-            <select
-              id="discipline"
-              v-model="formData.discipline"
-              required
-            >
+            <select id="discipline" v-model="formData.discipline" required>
               <option value="">Select discipline...</option>
               <option value="batting">Batting</option>
               <option value="pace_bowling">Pace Bowling</option>
@@ -229,11 +231,7 @@
 
           <div class="form-group">
             <label for="camera-view">Camera Angle/View <span class="required">*</span></label>
-            <select
-              id="camera-view"
-              v-model="formData.camera_view"
-              required
-            >
+            <select id="camera-view" v-model="formData.camera_view" required>
               <option value="">Select camera angle...</option>
               <option value="side">Side View</option>
               <option value="front">Front View</option>
@@ -329,14 +327,20 @@
             <button type="submit" class="btn-primary" :disabled="!selectedFile">
               🚀 Upload & Analyze
             </button>
-            <button type="button" class="btn-secondary" @click="() => closeUploadModal()">Cancel</button>
+            <button type="button" class="btn-secondary" @click="() => closeUploadModal()">
+              Cancel
+            </button>
           </div>
         </form>
       </div>
     </div>
 
     <!-- Session History Modal -->
-    <div v-if="showHistoryModal && selectedSession" class="modal-overlay" @click="closeHistoryModal">
+    <div
+      v-if="showHistoryModal && selectedSession"
+      class="modal-overlay"
+      @click="closeHistoryModal"
+    >
       <div class="modal-content" @click.stop>
         <button class="modal-close-btn" @click="closeHistoryModal">✕</button>
 
@@ -348,7 +352,9 @@
 
         <div v-else-if="analysisHistory.length === 0" class="empty-state">
           <p>No analysis jobs yet for this session.</p>
-          <button class="btn-primary" @click="closeHistoryModalAndUpload">Upload & Analyze Video</button>
+          <button class="btn-primary" @click="closeHistoryModalAndUpload">
+            Upload & Analyze Video
+          </button>
         </div>
 
         <div v-else class="history-list">
@@ -457,7 +463,9 @@
         <button class="modal-close-btn" @click="closeResultsModal">✕</button>
         <h2>Analysis Results</h2>
         <div v-if="selectedJob.analysis_context" class="analysis-context-header">
-          <span class="context-label">{{ formatAnalysisContext(selectedJob.analysis_context) }}</span>
+          <span class="context-label">{{
+            formatAnalysisContext(selectedJob.analysis_context)
+          }}</span>
           <span v-if="selectedJob.camera_view" class="camera-label">
             • {{ formatCameraView(selectedJob.camera_view) }}
           </span>
@@ -505,7 +513,9 @@
               :review-error="reviewErrorByPlanId[bundle.plan.id] ?? null"
               :review-success="reviewSuccessByPlanId[bundle.plan.id] ?? null"
               :reviewer-notes="latestReviewByPlanId[bundle.plan.id]?.reviewer_notes ?? null"
-              :reviewed-by-user-id="latestReviewByPlanId[bundle.plan.id]?.reviewed_by_user_id ?? null"
+              :reviewed-by-user-id="
+                latestReviewByPlanId[bundle.plan.id]?.reviewed_by_user_id ?? null
+              "
               :reviewed-at="latestReviewByPlanId[bundle.plan.id]?.reviewed_at ?? null"
               :can-review="canReviewRecommendations"
               @approve="submitPlanReview(bundle.plan.id, 'approved', $event)"
@@ -557,11 +567,7 @@
             <div class="progress-bar-indeterminate" />
           </div>
           <div class="step-labels">
-            <span
-              v-for="(step, idx) in progressSteps"
-              :key="idx"
-              class="step-label"
-            >
+            <span v-for="(step, idx) in progressSteps" :key="idx" class="step-label">
               {{ step }}
             </span>
           </div>
@@ -593,7 +599,10 @@
           </section>
 
           <!-- Phase 3: Coaching Suggestions -->
-          <section v-if="jobOutcomes && selectedJob?.status === 'completed'" class="results-section">
+          <section
+            v-if="!isV2Job && jobOutcomes && selectedJob?.status === 'completed'"
+            class="results-section"
+          >
             <CoachSuggestionsPanel
               :suggestions="coachSuggestions"
               @generate="handleGenerateSuggestions"
@@ -601,14 +610,14 @@
             />
 
             <!-- Player Summary Toggle -->
-            <div v-if="playerSummary" class="player-summary-toggle" style="margin-top: 1rem;">
+            <div v-if="playerSummary" class="player-summary-toggle" style="margin-top: 1rem">
               <button @click="togglePlayerSummary" class="btn-toggle-summary">
                 {{ showPlayerSummary ? '🙈 Hide' : '👤 Show' }} Player Summary
               </button>
             </div>
 
             <!-- Player Summary Card -->
-            <div v-if="showPlayerSummary && playerSummary" style="margin-top: 1rem;">
+            <div v-if="showPlayerSummary && playerSummary" style="margin-top: 1rem">
               <PlayerSummaryCard :summary="playerSummary" @close="showPlayerSummary = false" />
             </div>
           </section>
@@ -616,8 +625,8 @@
           <section v-if="canSeeEvidence" class="results-section">
             <h3>Video</h3>
             <p v-if="!videoPlaybackSrc" class="status-text">
-              Video preview is not available yet. Evidence markers can still be listed, but “Jump to” requires a
-              playable video source.
+              Video preview is not available yet. Evidence markers can still be listed, but “Jump
+              to” requires a playable video source.
             </p>
             <video
               v-else
@@ -630,7 +639,7 @@
             />
           </section>
 
-          <section class="results-section coach-summary-card">
+          <section v-if="!isV2Job" class="results-section coach-summary-card">
             <h3>Summary</h3>
             <p class="summary-level">
               Rating: <strong>{{ coachNarrative.summary.rating }}</strong>
@@ -640,255 +649,175 @@
             <p class="status-text">{{ coachNarrative.summary.coachSummaryText }}</p>
           </section>
 
-          <section class="results-section">
+          <section v-if="!isV2Job" class="results-section">
             <h3>Metrics</h3>
             <div class="metrics-grid">
               <div class="metric">
                 <span class="metric-label">Frames analyzed</span>
-                <span class="metric-value">{{ formatCount(coachNarrative.metrics.framesAnalyzed) }}</span>
+                <span class="metric-value">{{
+                  formatCount(coachNarrative.metrics.framesAnalyzed)
+                }}</span>
               </div>
               <div class="metric">
                 <span class="metric-label">Total frames</span>
-                <span class="metric-value">{{ formatCount(coachNarrative.metrics.totalFrames) }}</span>
+                <span class="metric-value">{{
+                  formatCount(coachNarrative.metrics.totalFrames)
+                }}</span>
               </div>
               <div class="metric">
                 <span class="metric-label">Detection rate</span>
-                <span class="metric-value">{{ formatPercent01(coachNarrative.metrics.detectionRate) }}</span>
+                <span class="metric-value">{{
+                  formatPercent01(coachNarrative.metrics.detectionRate)
+                }}</span>
               </div>
             </div>
           </section>
 
+          <template v-if="isV2Job && selectedJobV2Presentation">
           <section class="results-section">
-            <h3>Repetitions</h3>
-            <p v-if="selectedJobRepetitions.length === 0" class="status-text">
-              {{
-                selectedJobRepetitionSummary?.insufficient_reason ||
-                'No repetition windows were returned for this analysis.'
-              }}
-            </p>
-            <div v-else>
-              <div v-if="videoDurationSec" class="timeline repetition-timeline">
-                <div class="timeline-bar">
+              <h3>How did I do?</h3>
+              <p class="finding-line">{{ selectedJobV2Presentation.session_summary }}</p>
+              <p class="status-text">{{ selectedJobV2Presentation.analysis_quality }}</p>
                   <div
-                    v-for="repetition in selectedJobRepetitions"
-                    :key="repetition.repetitionId"
-                    class="timeline-seg timeline-seg-repetition"
-                    :style="timelineSegStyle(repetitionSegment(repetition))"
-                  />
-                </div>
+                v-if="selectedJobV2Presentation.insufficient_evidence.active"
+                class="finding-card"
+              >
+                <h4>{{ selectedJobV2Presentation.insufficient_evidence.title }}</h4>
+                <p>{{ selectedJobV2Presentation.insufficient_evidence.summary }}</p>
+                <p>
+                  <strong>Recommendation:</strong>
+                  {{ selectedJobV2Presentation.insufficient_evidence.recommendation }}
+                </p>
               </div>
-              <ul class="repetition-list">
+            </section>
+
+            <section class="results-section">
+              <h3>Session movements</h3>
+              <p v-if="selectedJobV2Presentation.repetitions.length === 0" class="status-text">
+                No usable repetitions were identified.
+              </p>
+              <ul v-else class="repetition-list">
                 <li
-                  v-for="(repetition, repetitionIndex) in selectedJobRepetitions"
-                  :key="repetition.repetitionId"
+                  v-for="repetition in selectedJobV2Presentation.repetitions"
+                  :key="repetition.repetition_id"
                   class="repetition-row"
                 >
                   <div>
-                    <strong>
-                      Rep {{ repetitionIndex + 1 }} — {{ formatRepetitionAction(repetition.actionType) }}
-                    </strong>
-                    <span class="evidence-time">
-                      {{ formatRepetitionTime(repetition) }}
-                    </span>
-                    <div class="status-text">
-                      {{ formatRepetitionValidity(repetition.validityState) }}
-                      <span v-if="repetition.segmentationConfidence !== null">
-                        • Confidence {{ formatPercent01(repetition.segmentationConfidence) }}
-                      </span>
-                    </div>
-                    <div v-if="repetition.insufficientReason" class="status-text">
-                      {{ repetition.insufficientReason }}
-                    </div>
-                    <div
-                      v-if="phasesForRepetition(repetition.repetitionId).length > 0"
-                      class="phase-list"
-                    >
+                    <strong>{{ repetition.label }}</strong>
+                    <span class="status-text">{{ repetition.confidence }}</span>
+                    <div class="phase-list">
                       <div
-                        v-for="phase in phasesForRepetition(repetition.repetitionId)"
-                        :key="phase.phaseId"
+                        v-for="phase in phasesForPresentedRepetition(repetition.label)"
+                        :key="phase.phase_id"
                         class="phase-row"
                       >
-                        <span>
-                          {{ formatRepetitionAction(phase.phaseName) }}
-                          <span class="evidence-time">
-                            {{ formatPhaseTime(phase) }}
-                          </span>
-                        </span>
+                        <span>{{ phase.label }}</span>
                         <span class="status-text">
-                          {{ formatRepetitionValidity(phase.validityState) }}
-                          <span v-if="phase.confidence !== null">
-                            • {{ formatPercent01(phase.confidence) }}
-                          </span>
-                          <span v-if="phase.requiresObjectEvidence"> • object evidence</span>
+                          {{ phase.confidence }}
+                          <span v-if="phase.proxy"> • {{ phase.proxy }}</span>
+                          <span v-if="phase.validity"> • {{ phase.validity }}</span>
                         </span>
                       </div>
                     </div>
                   </div>
                   <button
-                    v-if="canSeekToSegment(repetitionSegment(repetition))"
+                    v-if="canSeekToPresentedRepetition(repetition.repetition_id)"
                     type="button"
                     class="btn-secondary btn-small"
-                    @click="jumpToSegment(repetitionSegment(repetition))"
+                    @click="jumpToPresentedRepetition(repetition.repetition_id)"
                   >
                     Jump to
                   </button>
                 </li>
               </ul>
-              <p
-                v-if="selectedJobPhaseSummary?.validity_state && selectedJobPhases.length === 0"
-                class="status-text"
-              >
-                {{
-                  selectedJobPhaseSummary.insufficient_reason ||
-                  formatRepetitionValidity(selectedJobPhaseSummary.validity_state)
-                }}
-              </p>
-            </div>
           </section>
 
-          <section class="results-section">
-            <h3>Discipline V2 metrics</h3>
-            <p v-if="selectedJobV2Metrics.length === 0" class="status-text">
-              No discipline-specific V2 metrics were returned for this job.
+            <section
+              v-if="!selectedJobV2Presentation.insufficient_evidence.active"
+              class="results-section"
+            >
+              <h3>Technique measurements</h3>
+              <p v-if="selectedJobV2Presentation.metrics.length === 0" class="status-text">
+                No reliable technique measurements were available.
             </p>
             <div v-else class="phase-list">
               <div
-                v-for="metric in selectedJobV2Metrics"
-                :key="metric.metricId"
+                  v-for="metric in selectedJobV2Presentation.metrics"
+                  :key="metric.metric_id"
                 class="phase-row"
               >
-                <span>
-                  {{ formatV2MetricLabel(metric.metricId) }}
-                  <span v-if="metric.phase" class="evidence-time">({{ formatRepetitionAction(metric.phase) }})</span>
-                </span>
-                <span class="status-text">
-                  {{ formatV2MetricValue(metric) }} • {{ formatRepetitionValidity(metric.validityState) }}
-                  <span v-if="metricMeasurementKind(metric)"> • {{ metricMeasurementKind(metric) }}</span>
-                  <span v-if="metric.classificationStatus"> • {{ metric.classificationStatus }}</span>
-                  <span v-if="metric.confidenceScore !== null">
-                    • {{ formatPercent01(metric.confidenceScore) }}
-                  </span>
-                </span>
                 <span
-                  v-if="metric.unavailableReason || metric.limitations.length > 0"
-                  class="status-text"
+                    >{{ metric.label }}
+                    <span class="evidence-time">({{ metric.phase }})</span></span
                 >
-                  {{ metric.unavailableReason || metric.limitations[0] }}
+                  <span class="status-text">
+                    <span v-if="metric.value && metric.value !== 'Unavailable'">{{ metric.value }} • </span>
+                    {{ metric.confidence }}
+                    <span v-if="metric.classification"> • {{ metric.classification }}</span>
+                    <span v-if="metric.proxy"> • {{ metric.proxy }}</span>
+                    <span v-if="metric.validity"> • {{ metric.validity }}</span>
                 </span>
               </div>
             </div>
           </section>
 
           <section class="results-section">
-            <h3>Technical strengths</h3>
-            <p v-if="selectedJobStrengths.length === 0" class="status-text">
-              No reproducible strengths were available from comparable V2 repetition evidence.
+              <h3>What am I doing well?</h3>
+              <p v-if="selectedJobV2Presentation.strengths.length === 0" class="status-text">
+                No repeatable strengths could be confirmed from this session yet.
             </p>
-            <div v-else>
-              <div v-for="strength in selectedJobStrengths" :key="strength.metricId" class="finding-card">
-                <div class="priority-header">
-                  <h4>{{ formatV2MetricLabel(strength.metricId) }}</h4>
-                  <span v-if="strength.severity" :class="['severity-badge', `sev-${strength.severity}`]">
-                    {{ severityLabel(strength.severity as 'low' | 'medium' | 'high') }}
-                  </span>
-                </div>
-                <p class="finding-line">{{ strength.summary }}</p>
-                <p class="status-text">
-                  {{ formatCount(strength.validSampleCount ?? undefined) }} valid reps
-                  <span v-if="strength.confidenceScore !== null">
-                    • {{ formatPercent01(strength.confidenceScore) }} confidence
-                  </span>
-                  <span v-if="strength.supportingRepetitionIds.length > 0">
-                    • Reps {{ strength.supportingRepetitionIds.join(', ') }}
-                  </span>
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section class="results-section">
-            <h3>Recurring concerns</h3>
-            <p v-if="selectedJobRecurringConcerns.length === 0" class="status-text">
-              No recurring concerns were confirmed from comparable V2 repetition evidence.
-            </p>
-            <div v-else>
               <div
-                v-for="concern in selectedJobRecurringConcerns"
-                :key="concern.metricId"
+                v-for="strength in selectedJobV2Presentation.strengths"
+                :key="strength.metric_id"
                 class="finding-card"
               >
-                <div class="priority-header">
-                  <h4>{{ formatV2MetricLabel(concern.metricId) }}</h4>
-                  <span v-if="concern.severity" :class="['severity-badge', `sev-${concern.severity}`]">
-                    {{ severityLabel(concern.severity as 'low' | 'medium' | 'high') }}
-                  </span>
-                </div>
-                <p class="finding-line">{{ concern.summary }}</p>
+                <h4>{{ strength.title }}</h4>
+                <p>{{ strength.observation }}</p>
                 <p class="status-text">
-                  {{ formatCount(concern.validSampleCount ?? undefined) }} valid reps
-                  <span v-if="concern.confidenceScore !== null">
-                    • {{ formatPercent01(concern.confidenceScore) }} confidence
-                  </span>
-                  <span v-if="concern.supportingRepetitionIds.length > 0">
-                    • Reps {{ concern.supportingRepetitionIds.join(', ') }}
-                  </span>
+                  {{ strength.repetition_count }} comparable repetitions • {{ strength.confidence }}
                 </p>
               </div>
-            </div>
           </section>
 
           <section class="results-section">
-            <h3>Consistency & repeatability</h3>
-            <p v-if="selectedJobConsistencyObservations.length === 0" class="status-text">
-              No consistency observations were available for this job.
+              <h3>What should I improve first?</h3>
+              <p v-if="selectedJobV2Presentation.priorities.length === 0" class="status-text">
+                No evidence-supported development priority was confirmed from this session.
             </p>
-            <div v-else class="phase-list">
               <div
-                v-for="observation in selectedJobConsistencyObservations"
-                :key="observation.metricId"
-                class="phase-row"
+                v-for="priority in selectedJobV2Presentation.priorities"
+                :key="priority.metric_id"
+                class="finding-card"
               >
-                <span>
-                  {{ formatV2MetricLabel(observation.metricId) }}
-                  <span v-if="observation.phase" class="evidence-time">
-                    ({{ formatRepetitionAction(observation.phase) }})
-                  </span>
-                </span>
-                <span class="status-text">
-                  {{ formatConsistencyClassification(observation.classification) }}
-                  <span v-if="observation.method"> • {{ formatConsistencyMethod(observation.method) }}</span>
-                  <span v-if="observation.value !== null"> • {{ formatConsistencyValue(observation.value) }}</span>
-                  <span v-if="observation.validSampleCount !== null">
-                    • {{ formatCount(observation.validSampleCount) }} valid reps
-                  </span>
-                  <span
-                    v-if="
-                      observation.excludedRepetitionCount !== null && observation.excludedRepetitionCount > 0
-                    "
-                  >
-                    • {{ formatCount(observation.excludedRepetitionCount) }} excluded
-                  </span>
-                </span>
-                <span v-if="observation.limitations.length > 0" class="status-text">
-                  {{ observation.limitations[0] }}
-                </span>
-              </div>
+                <h4>{{ priority.title }}</h4>
+                <p>{{ priority.observation }}</p>
+                <p class="status-text">
+                  {{ priority.repetition_count }} comparable repetitions • {{ priority.confidence }}
+                </p>
+                <p>{{ priority.why_it_matters }}</p>
+                <p v-if="priority.proxy" class="status-text">{{ priority.proxy }}</p>
             </div>
           </section>
 
           <section class="results-section">
-            <h3>Representative repetitions</h3>
-            <div class="phase-list">
-              <div class="phase-row">
-                <span>Best repetition</span>
-                <span class="status-text">{{ formatRepetitionSelection(selectedJobBestRepetition) }}</span>
-              </div>
-              <div class="phase-row">
-                <span>Needs-work repetition</span>
-                <span class="status-text">{{ formatRepetitionSelection(selectedJobNeedsWorkRepetition) }}</span>
-              </div>
+              <h3>What should I do in training?</h3>
+              <p v-if="selectedJobV2Presentation.governed_actions.length === 0" class="status-text">
+                No governed training action is available from this session's evidence.
+            </p>
+              <div
+                v-for="action in selectedJobV2Presentation.governed_actions"
+                :key="`${action.linked_metric_id}:${action.title}`"
+                class="finding-card"
+                  >
+                <h4>{{ action.title }}</h4>
+                <p><strong>Coaching goal:</strong> {{ action.coaching_goal }}</p>
+                <p><strong>Cue:</strong> {{ action.cue }}</p>
+                <p><strong>Drills:</strong> {{ action.drills.join('; ') }}</p>
+                <p><strong>Coach watches for:</strong> {{ action.coach_watches_for }}</p>
+                <p><strong>Reassess:</strong> {{ action.reassess }}</p>
             </div>
           </section>
+          </template>
 
           <PlayerLongitudinalProgress
             v-if="selectedSession?.primary_player_id && selectedSession?.discipline"
@@ -897,26 +826,25 @@
             :discipline="selectedSession.discipline"
           />
 
-          <section v-if="isFreeTier" class="results-section">
+          <section v-if="!isV2Job && isFreeTier" class="results-section">
             <h3>Upgrade to see priorities</h3>
             <p class="status-text">
-              Your current plan shows the summary only. Upgrade to Coach Pro to unlock priorities and drills.
+              Your current plan shows the summary only. Upgrade to Coach Pro to unlock priorities
+              and drills.
             </p>
           </section>
 
-          <section v-else class="results-section">
+          <section v-else-if="!isV2Job" class="results-section">
             <h3>Priorities</h3>
             <p v-if="coachNarrative.priorities.length === 0" class="status-text">
               No actionable priorities were returned for this analysis yet.
             </p>
-            <div
-              v-for="p in coachNarrative.priorities"
-              :key="p.key"
-              class="finding-card"
-            >
+            <div v-for="p in coachNarrative.priorities" :key="p.key" class="finding-card">
               <div class="priority-header">
                 <h4>{{ p.title }}</h4>
-                <span :class="['severity-badge', `sev-${p.severity}`]">{{ severityLabel(p.severity) }}</span>
+                <span :class="['severity-badge', `sev-${p.severity}`]">{{
+                  severityLabel(p.severity)
+                }}</span>
               </div>
               <p class="finding-line">{{ p.explanation }}</p>
               <p class="finding-line">{{ p.impact }}</p>
@@ -938,10 +866,16 @@
                 <div v-if="p.evidence.worstFrames.length" class="evidence-block">
                   <h6>Worst moments</h6>
                   <ul>
-                    <li v-for="(w, widx) in p.evidence.worstFrames" :key="widx" class="evidence-row">
+                    <li
+                      v-for="(w, widx) in p.evidence.worstFrames"
+                      :key="widx"
+                      class="evidence-row"
+                    >
                       <span>
                         Frame {{ w.frameNum }}
-                        <span v-if="formatMomentTime(w)" class="evidence-time">({{ formatMomentTime(w) }})</span>
+                        <span v-if="formatMomentTime(w)" class="evidence-time"
+                          >({{ formatMomentTime(w) }})</span
+                        >
                       </span>
                       <button
                         v-if="canSeekToMoment(w)"
@@ -958,10 +892,16 @@
                 <div v-if="p.evidence.badSegments.length" class="evidence-block">
                   <h6>Problem segments</h6>
                   <ul>
-                    <li v-for="(seg, sidx) in p.evidence.badSegments" :key="sidx" class="evidence-row">
+                    <li
+                      v-for="(seg, sidx) in p.evidence.badSegments"
+                      :key="sidx"
+                      class="evidence-row"
+                    >
                       <span>
                         Frames {{ seg.startFrame }}–{{ seg.endFrame }}
-                        <span v-if="formatSegmentTime(seg)" class="evidence-time">({{ formatSegmentTime(seg) }})</span>
+                        <span v-if="formatSegmentTime(seg)" class="evidence-time"
+                          >({{ formatSegmentTime(seg) }})</span
+                        >
                       </span>
                       <button
                         v-if="canSeekToSegment(seg)"
@@ -1004,7 +944,11 @@
     </div>
 
     <!-- Phase 2: Goals Modal -->
-    <div v-if="showGoalsModal && goalsJobId && goalsSessionId" class="modal-overlay" @click="closeGoalsModal">
+    <div
+      v-if="showGoalsModal && goalsJobId && goalsSessionId"
+      class="modal-overlay"
+      @click="closeGoalsModal"
+    >
       <div class="modal-content" @click.stop>
         <GoalSetter
           :job-id="goalsJobId"
@@ -1018,7 +962,11 @@
     </div>
 
     <!-- Phase 2: Comparison Modal -->
-    <div v-if="showComparisonModal && selectedSession" class="modal-overlay" @click="closeComparisonModal">
+    <div
+      v-if="showComparisonModal && selectedSession"
+      class="modal-overlay"
+      @click="closeComparisonModal"
+    >
       <div class="modal-content modal-large" @click.stop>
         <button class="modal-close-btn" @click="closeComparisonModal">✕</button>
         <SessionComparison
@@ -1048,6 +996,7 @@ import type {
   OutcomesResponse,
   CoachSuggestionsResponse,
   PlayerSummaryResponse,
+  V2PlayerPresentation,
 } from '@/services/coachPlusVideoService';
 import {
   ApiError,
@@ -1071,19 +1020,9 @@ import { useAuthStore } from '@/stores/authStore';
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
 import { buildCoachNarrative } from '@/utils/coachVideoAnalysisNarrative';
 import {
-  extractCoachVideoDisciplineV2Metrics,
-  extractCoachVideoPhases,
-  extractCoachVideoPhaseSummary,
   extractCoachVideoRepetitions,
-  extractCoachVideoRepetitionSummary,
-  extractCoachVideoSessionAnalysis,
   getCoachVideoJobFps,
-  type CoachVideoConsistencyObservation,
-  type CoachVideoPhase,
   type CoachVideoRepetition,
-  type CoachVideoRepetitionSelection,
-  type CoachVideoSessionSignal,
-  type CoachVideoV2Metric,
 } from '@/utils/coachVideoAnalysisRepetitions';
 
 // ============================================================================
@@ -1108,7 +1047,9 @@ const showGoalsModal = ref(false);
 const goalsJobId = ref<string | null>(null);
 const goalsSessionId = ref<string | null>(null);
 const goalsPlayerId = ref<string | null>(null);
-const goalsDiscipline = ref<'batting' | 'pace_bowling' | 'spin_bowling' | 'wicketkeeping' | 'fielding' | null>(null);
+const goalsDiscipline = ref<
+  'batting' | 'pace_bowling' | 'spin_bowling' | 'wicketkeeping' | 'fielding' | null
+>(null);
 const jobOutcomes = ref<OutcomesResponse | null>(null);
 const showComparisonModal = ref(false);
 const comparisonMode = ref(false);
@@ -1184,7 +1125,8 @@ const filteredAssignedPlayers = computed(() => {
   const query = playerSearch.value.trim().toLowerCase();
   if (!query) return assignedPlayers.value;
   return assignedPlayers.value.filter(
-    (player) => player.name.toLowerCase().includes(query) || player.id.toLowerCase().includes(query),
+    (player) =>
+      player.name.toLowerCase().includes(query) || player.id.toLowerCase().includes(query),
   );
 });
 
@@ -1206,31 +1148,28 @@ const selectedJob = ref<VideoAnalysisJob | null>(null);
 
 const coachNarrative = computed(() => buildCoachNarrative(selectedJob.value));
 const selectedJobRepetitions = computed(() => extractCoachVideoRepetitions(selectedJob.value));
-const selectedJobRepetitionSummary = computed(() =>
-  extractCoachVideoRepetitionSummary(selectedJob.value),
+const selectedJobV2Presentation = computed<V2PlayerPresentation | null>(
+  () => selectedJob.value?.v2_coaching_report?.player_presentation ?? null,
 );
-const selectedJobPhases = computed(() => extractCoachVideoPhases(selectedJob.value));
-const selectedJobPhaseSummary = computed(() => extractCoachVideoPhaseSummary(selectedJob.value));
-const selectedJobV2Metrics = computed(() => extractCoachVideoDisciplineV2Metrics(selectedJob.value));
-const selectedJobSessionAnalysis = computed(() => extractCoachVideoSessionAnalysis(selectedJob.value));
-const selectedJobStrengths = computed<CoachVideoSessionSignal[]>(
-  () => selectedJobSessionAnalysis.value?.strengths ?? [],
-);
-const selectedJobRecurringConcerns = computed<CoachVideoSessionSignal[]>(
-  () => selectedJobSessionAnalysis.value?.recurringConcerns ?? [],
-);
-const selectedJobConsistencyObservations = computed<CoachVideoConsistencyObservation[]>(
-  () => selectedJobSessionAnalysis.value?.consistencyObservations ?? [],
-);
-const selectedJobBestRepetition = computed<CoachVideoRepetitionSelection | null>(
-  () => selectedJobSessionAnalysis.value?.bestRepetition ?? null,
-);
-const selectedJobNeedsWorkRepetition = computed<CoachVideoRepetitionSelection | null>(
-  () => selectedJobSessionAnalysis.value?.needsWorkRepetition ?? null,
+const isV2Job = computed(
+  () =>
+    Boolean(selectedJob.value?.v2_coaching_report) ||
+    Boolean(
+      selectedJob.value?.deep_results?.v2?.metric_results?.length ||
+      selectedJob.value?.deep_results?.v2?.repetitions?.length ||
+      selectedJob.value?.quick_results?.v2?.metric_results?.length ||
+      selectedJob.value?.quick_results?.v2?.repetitions?.length,
+    ),
 );
 
 watch(
-  () => [showResultsModal.value, selectedJob.value?.id, selectedJob.value?.status, videoPreviewUrl.value] as const,
+  () =>
+    [
+      showResultsModal.value,
+      selectedJob.value?.id,
+      selectedJob.value?.status,
+      videoPreviewUrl.value,
+    ] as const,
   async ([open]) => {
     if (!open) return;
     await ensureStreamUrlForSelectedJob();
@@ -1242,7 +1181,8 @@ const progressSteps = ['Extract pose', 'Compute metrics', 'Generate findings', '
 
 const tierRaw = computed(() => {
   const user = authStore.currentUser as unknown as { subscriptionTier?: unknown } | null;
-  const subscriptionTier = typeof user?.subscriptionTier === 'string' ? user.subscriptionTier : null;
+  const subscriptionTier =
+    typeof user?.subscriptionTier === 'string' ? user.subscriptionTier : null;
   return subscriptionTier ?? authStore.planName ?? authStore.role ?? 'free';
 });
 
@@ -1275,7 +1215,7 @@ const canExport = computed(() => {
 
 const canReviewRecommendations = computed(() => authStore.isCoachProPlus);
 const selectedJobReviewBundles = computed(() =>
-  selectedJob.value ? recommendationBundlesByJobId.value[selectedJob.value.id] ?? [] : [],
+  selectedJob.value ? (recommendationBundlesByJobId.value[selectedJob.value.id] ?? []) : [],
 );
 
 const uiPollInterval = ref<ReturnType<typeof setInterval> | null>(null);
@@ -1339,7 +1279,10 @@ function startUiPolling(jobId: string) {
     }
 
     const latest = selectedJob.value;
-    if (latest && (latest.status === 'completed' || latest.status === 'done' || latest.status === 'failed')) {
+    if (
+      latest &&
+      (latest.status === 'completed' || latest.status === 'done' || latest.status === 'failed')
+    ) {
       pollTimedOut.value = false; // Reset timeout flag when terminal status reached
       stopUiPolling();
       return;
@@ -1371,7 +1314,9 @@ async function exportPdf() {
     const { exportAnalysisPdf } = await import('@/services/coachPlusVideoService');
     const response = await exportAnalysisPdf(jobId);
 
-    console.log(`[ExportPDF] Generated PDF: ${response.pdf_size_bytes} bytes, S3 key: ${response.pdf_s3_key}`);
+    console.log(
+      `[ExportPDF] Generated PDF: ${response.pdf_size_bytes} bytes, S3 key: ${response.pdf_s3_key}`,
+    );
 
     // Download via blob or open in new tab
     // Option 1: Download as file
@@ -1434,8 +1379,12 @@ function evidenceStatusTextForJob(job: VideoAnalysisJob): string {
     if (!evidence) continue;
     momentCount += evidence.worstFrames.length;
     segmentCount += evidence.badSegments.length;
-    timestampCount += evidence.worstFrames.filter((frame) => frame.timeSeconds !== undefined).length;
-    timestampCount += evidence.badSegments.filter((segment) => segment.startSeconds !== undefined).length;
+    timestampCount += evidence.worstFrames.filter(
+      (frame) => frame.timeSeconds !== undefined,
+    ).length;
+    timestampCount += evidence.badSegments.filter(
+      (segment) => segment.startSeconds !== undefined,
+    ).length;
   }
 
   if (momentCount === 0 && segmentCount === 0) {
@@ -1471,7 +1420,8 @@ function bundleMatchesJob(
 function planRecommendationSummary(bundle: PlayerDevelopmentPlanDraftBundle): string {
   if (bundle.plan.summary) return bundle.plan.summary;
   if (bundle.goals[0]?.title) return bundle.goals[0].title;
-  if (bundle.weakness_tags[0]?.safe_display_label) return bundle.weakness_tags[0].safe_display_label;
+  if (bundle.weakness_tags[0]?.safe_display_label)
+    return bundle.weakness_tags[0].safe_display_label;
   return bundle.plan.title;
 }
 
@@ -1554,10 +1504,7 @@ function reviewSummaryForJob(job: VideoAnalysisJob): string {
   return `${linkedPlans.length} linked recommendations`;
 }
 
-function applyReviewResponse(
-  planId: string,
-  response: PlayerDevelopmentPlanReviewResponse,
-): void {
+function applyReviewResponse(planId: string, response: PlayerDevelopmentPlanReviewResponse): void {
   const nextBundles: Record<string, PlayerDevelopmentPlanDraftBundle[]> = {};
   for (const [jobId, bundles] of Object.entries(recommendationBundlesByJobId.value)) {
     nextBundles[jobId] = bundles.map((bundle) =>
@@ -1627,8 +1574,7 @@ async function fetchAssignedPlayers(preservePlayer?: AssignedPlayer) {
       upsertAssignedPlayer(preservePlayer);
     }
   } catch (err) {
-    playerLoadError.value =
-      err instanceof Error ? err.message : 'Failed to load assigned players';
+    playerLoadError.value = err instanceof Error ? err.message : 'Failed to load assigned players';
     if (preservePlayer) {
       upsertAssignedPlayer(preservePlayer);
     } else {
@@ -1806,7 +1752,8 @@ async function submitForm() {
     const primaryPlayerId = selectedPrimaryPlayerId.value.trim();
     formData.value.primary_player_id = primaryPlayerId;
     formData.value.player_ids = [primaryPlayerId];
-    formData.value.analysis_context = DISCIPLINE_TO_ANALYSIS_CONTEXT[formData.value.discipline] || '';
+    formData.value.analysis_context =
+      DISCIPLINE_TO_ANALYSIS_CONTEXT[formData.value.discipline] || '';
 
     if (editingId.value) {
       // TODO: Update session via API
@@ -1979,11 +1926,12 @@ function momentSeconds(w: { frameNum: number; timeSeconds?: number }): number | 
   return w.frameNum / fps;
 }
 
-function segmentStartSeconds(seg: {
-  startFrame: number;
-  startSeconds?: number;
-}): number | null {
-  if (typeof seg.startSeconds === 'number' && Number.isFinite(seg.startSeconds) && seg.startSeconds >= 0) {
+function segmentStartSeconds(seg: { startFrame: number; startSeconds?: number }): number | null {
+  if (
+    typeof seg.startSeconds === 'number' &&
+    Number.isFinite(seg.startSeconds) &&
+    seg.startSeconds >= 0
+  ) {
     return seg.startSeconds;
   }
   const fps = getJobFps();
@@ -1992,7 +1940,11 @@ function segmentStartSeconds(seg: {
 }
 
 function segmentEndSeconds(seg: { endFrame: number; endSeconds?: number }): number | null {
-  if (typeof seg.endSeconds === 'number' && Number.isFinite(seg.endSeconds) && seg.endSeconds >= 0) {
+  if (
+    typeof seg.endSeconds === 'number' &&
+    Number.isFinite(seg.endSeconds) &&
+    seg.endSeconds >= 0
+  ) {
     return seg.endSeconds;
   }
   const fps = getJobFps();
@@ -2031,106 +1983,33 @@ function repetitionSegment(repetition: CoachVideoRepetition): {
   };
 }
 
-function formatRepetitionAction(actionType: string): string {
-  return actionType
-    .split('_')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
+function repetitionForId(repetitionId: string): CoachVideoRepetition | null {
+  return selectedJobRepetitions.value.find((item) => item.repetitionId === repetitionId) ?? null;
 }
 
-function formatRepetitionValidity(validityState: string): string {
-  return validityState
-    .split('_')
-    .filter(Boolean)
-    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
-    .join(' ');
+function presentedRepetitionSegment(
+  repetitionId: string,
+): ReturnType<typeof repetitionSegment> | null {
+  const repetition = repetitionForId(repetitionId);
+  return repetition ? repetitionSegment(repetition) : null;
 }
 
-function formatRepetitionTime(repetition: CoachVideoRepetition): string {
-  if (repetition.startSeconds !== null && repetition.endSeconds !== null) {
-    return `${formatMmSs(repetition.startSeconds)}–${formatMmSs(repetition.endSeconds)}`;
-  }
-  if (repetition.startFrame !== null && repetition.endFrame !== null) {
-    return `Frames ${repetition.startFrame}–${repetition.endFrame}`;
-  }
-  return 'Timing unavailable';
+function canSeekToPresentedRepetition(repetitionId: string): boolean {
+  const segment = presentedRepetitionSegment(repetitionId);
+  return segment ? canSeekToSegment(segment) : false;
 }
 
-function formatPhaseTime(phase: CoachVideoPhase): string {
-  if (phase.startSeconds !== null && phase.endSeconds !== null) {
-    return `${formatMmSs(phase.startSeconds)}–${formatMmSs(phase.endSeconds)}`;
-  }
-  if (phase.startFrame !== null && phase.endFrame !== null) {
-    return `Frames ${phase.startFrame}–${phase.endFrame}`;
-  }
-  return 'Timing unavailable';
+function jumpToPresentedRepetition(repetitionId: string): void {
+  const segment = presentedRepetitionSegment(repetitionId);
+  if (segment) jumpToSegment(segment);
 }
 
-function phasesForRepetition(repetitionId: string): CoachVideoPhase[] {
-  return selectedJobPhases.value.filter((phase) => phase.repetitionId === repetitionId);
-}
-
-function formatV2MetricValue(metric: CoachVideoV2Metric): string {
-  if (!isMeasurableValidityState(metric.validityState)) {
-    return metric.unavailableReason ?? 'Unavailable';
-  }
-  if (metric.rawValue === null) return 'N/A';
-  if (metric.unit === 'degrees') return `${metric.rawValue.toFixed(1)}°`;
-  if (metric.unit === 'score') return formatPercent01(metric.rawValue);
-  if (metric.unit === 'ratio') return metric.rawValue.toFixed(3);
-  return metric.rawValue.toFixed(3);
-}
-
-function isMeasurableValidityState(validityState: string): boolean {
-  return validityState === 'VALID' || validityState === 'LOW_CONFIDENCE';
-}
-
-function metricMeasurementKind(metric: CoachVideoV2Metric): string | null {
-  return metric.metricId.includes('_proxy_') || metric.phase?.includes('proxy') ? 'proxy' : null;
-}
-
-function formatV2MetricLabel(metricId: string): string {
-  return metricId
-    .replace(/^(batting|pace_bowling|spin_bowling)_/, '')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function formatConsistencyClassification(classification: string | null): string {
-  if (!classification) return 'Consistency unavailable';
-  if (classification === 'high') return 'High consistency';
-  if (classification === 'moderate') return 'Moderate consistency';
-  if (classification === 'low') return 'Variable consistency';
-  return classification
-    .split('_')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(' ');
-}
-
-function formatConsistencyMethod(method: string): string {
-  return method
-    .split('_')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(' ');
-}
-
-function formatConsistencyValue(value: number): string {
-  return value.toFixed(3);
-}
-
-function formatRepetitionSelection(selection: CoachVideoRepetitionSelection | null): string {
-  if (!selection?.available) return selection?.rationale ?? 'Insufficient repetition evidence.';
-  const repetitionLabel = selection.repetitionId ? `Rep ${selection.repetitionId}` : 'Selected repetition';
-  const confidence =
-    selection.confidenceScore !== null ? ` • ${formatPercent01(selection.confidenceScore)} confidence` : '';
-  const metrics =
-    selection.supportingMetrics.length > 0
-      ? ` • ${selection.supportingMetrics.map((metricId) => formatV2MetricLabel(metricId)).join(', ')}`
-      : '';
-  return `${repetitionLabel} • ${selection.rationale ?? 'Selected from comparable evidence.'}${confidence}${metrics}`;
+function phasesForPresentedRepetition(repetitionLabel: string): V2PlayerPresentation['phases'] {
+  return (
+    selectedJobV2Presentation.value?.phases.filter(
+      (phase) => phase.repetition_label === repetitionLabel,
+    ) ?? []
+  );
 }
 
 function canSeekToMoment(w: { frameNum: number; timeSeconds?: number }): boolean {
@@ -2189,7 +2068,7 @@ async function selectSession(sessionId: string) {
     recommendationBundlesByJobId.value = {};
 
     // Find the session
-    const session = sessions.value.find(s => s.id === sessionId);
+    const session = sessions.value.find((s) => s.id === sessionId);
     if (!session) {
       error.value = 'Session not found';
       return;
@@ -2222,7 +2101,7 @@ async function bulkDeleteOldSessions() {
     '• Delete all FAILED sessions older than 7 days\n' +
     '• Free up storage space\n' +
     '• Improve page load performance\n\n' +
-    'This cannot be undone. Continue?'
+      'This cannot be undone. Continue?',
   );
 
   if (!confirmed) return;
@@ -2237,7 +2116,7 @@ async function bulkDeleteOldSessions() {
     alert(
       `Cleanup complete!\n\n` +
       `• Sessions deleted: ${result.deleted_count}\n` +
-      `• Storage freed: ${result.s3_files_deleted} videos removed`
+        `• Storage freed: ${result.s3_files_deleted} videos removed`,
     );
 
     // Refresh list
@@ -2249,7 +2128,11 @@ async function bulkDeleteOldSessions() {
 }
 
 async function deleteSession(sessionId: string) {
-  if (!confirm('Are you sure you want to delete this session? This will also delete the uploaded video and all analysis data.')) {
+  if (
+    !confirm(
+      'Are you sure you want to delete this session? This will also delete the uploaded video and all analysis data.',
+    )
+  ) {
     return;
   }
 
@@ -2272,20 +2155,28 @@ async function reanalyzeVideo(sessionId: string) {
     'Select analysis mode for re-analysis:\n\n' +
     'Enter one of: batting, bowling, wicketkeeping, fielding\n\n' +
     '(Leave blank to use "batting" as default)',
-    'batting'
+    'batting',
   );
 
   if (analysisMode === null) return; // User cancelled
 
   const validModes = ['batting', 'bowling', 'wicketkeeping', 'fielding'];
-  const mode = (analysisMode.trim().toLowerCase() || 'batting') as 'batting' | 'bowling' | 'wicketkeeping' | 'fielding';
+  const mode = (analysisMode.trim().toLowerCase() || 'batting') as
+    | 'batting'
+    | 'bowling'
+    | 'wicketkeeping'
+    | 'fielding';
 
   if (!validModes.includes(mode)) {
     error.value = `Invalid analysis mode: ${mode}. Must be one of: ${validModes.join(', ')}`;
     return;
   }
 
-  if (!confirm(`Re-analyze this video in "${mode}" mode? This will create a new analysis job while keeping the existing video.`)) {
+  if (
+    !confirm(
+      `Re-analyze this video in "${mode}" mode? This will create a new analysis job while keeping the existing video.`,
+    )
+  ) {
     return;
   }
 
@@ -2346,7 +2237,8 @@ function openGoalsModal(jobId: string, sessionId: string) {
   goalsJobId.value = jobId;
   goalsSessionId.value = sessionId;
   goalsPlayerId.value = selectedSession.value?.primary_player_id || null;
-  goalsDiscipline.value = (selectedSession.value?.discipline as typeof goalsDiscipline.value) || null;
+  goalsDiscipline.value =
+    (selectedSession.value?.discipline as typeof goalsDiscipline.value) || null;
   showGoalsModal.value = true;
 }
 
@@ -2516,7 +2408,9 @@ async function exportJobPdf(jobId: string) {
     const { exportAnalysisPdf } = await import('@/services/coachPlusVideoService');
     const response = await exportAnalysisPdf(jobId);
 
-    console.log(`[ExportPDF] Generated PDF: ${response.pdf_size_bytes} bytes, S3 key: ${response.pdf_s3_key}`);
+    console.log(
+      `[ExportPDF] Generated PDF: ${response.pdf_size_bytes} bytes, S3 key: ${response.pdf_s3_key}`,
+    );
 
     // Download PDF
     const link = document.createElement('a');
@@ -2716,7 +2610,7 @@ onBeforeUnmount(() => {
   user-select: none;
 }
 
-.filter-checkbox input[type="checkbox"] {
+.filter-checkbox input[type='checkbox'] {
   width: 1.2rem;
   height: 1.2rem;
   cursor: pointer;
@@ -3698,7 +3592,9 @@ onBeforeUnmount(() => {
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 
 .btn-toggle-summary:hover {

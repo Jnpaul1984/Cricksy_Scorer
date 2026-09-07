@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from backend.services.coach_report_presentation import build_player_presentation
 from backend.services.coaching_action_registry import (
     ACTION_REGISTRY_VERSION,
     governed_actions_for,
@@ -50,7 +51,7 @@ def build_coaching_analysis_report_v2(
     consistency = _sanitize_consistency(session_analysis.get("consistency_observations"), metrics)
     priorities = _build_priorities(concerns, metrics)
 
-    return {
+    report = {
         "report_version": REPORT_V2_VERSION,
         "source": "persisted_video_analysis_v2",
         "analysis_mode": analysis_mode,
@@ -79,6 +80,8 @@ def build_coaching_analysis_report_v2(
             "automated_medical_or_conditioning_prescriptions": False,
         },
     }
+    report["player_presentation"] = build_player_presentation(report)
+    return report
 
 
 def _sanitize_repetitions(payload: Any) -> list[dict[str, Any]]:

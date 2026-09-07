@@ -1,14 +1,14 @@
-import { mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick, reactive } from 'vue'
+import { mount } from '@vue/test-utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick, reactive } from 'vue';
 
 import {
   createCoachPrivatePlayer,
   listCoachPlayers,
   listVideoSessions,
   type VideoAnalysisJob,
-} from '@/services/coachPlusVideoService'
-import CoachProPlusVideoSessionsView from '@/views/CoachProPlusVideoSessionsView.vue'
+} from '@/services/coachPlusVideoService';
+import CoachProPlusVideoSessionsView from '@/views/CoachProPlusVideoSessionsView.vue';
 
 const authStoreMock = reactive({
   canCoach: false,
@@ -19,25 +19,25 @@ const authStoreMock = reactive({
   currentUser: null,
   planName: 'free',
   role: 'free',
-})
+});
 
-const videoStoreCleanup = vi.fn()
-const videoStoreCreateSession = vi.fn()
+const videoStoreCleanup = vi.fn();
+const videoStoreCreateSession = vi.fn();
 const videoStoreMock = reactive({
   error: null as string | null,
   uploading: null as { status: string } | null,
   uploadProgress: 0,
   cleanup: videoStoreCleanup,
   createSession: videoStoreCreateSession,
-})
+});
 
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: () => authStoreMock,
-}))
+}));
 
 vi.mock('@/stores/coachPlusVideoStore', () => ({
   useCoachPlusVideoStore: () => videoStoreMock,
-}))
+}));
 
 vi.mock('@/services/coachPlusVideoService', () => ({
   ApiError: class ApiError extends Error {},
@@ -49,35 +49,35 @@ vi.mock('@/services/coachPlusVideoService', () => ({
   getJobOutcomes: vi.fn(),
   generateCoachSuggestions: vi.fn(),
   getCoachSuggestions: vi.fn(),
-}))
+}));
 
 vi.mock('@/services/playerDevelopmentApi', () => ({
   PlayerDevelopmentApiError: class PlayerDevelopmentApiError extends Error {
     isUnauthorized() {
-      return false
+      return false;
     }
 
     isNotFound() {
-      return false
+      return false;
     }
 
     isConflict() {
-      return false
+      return false;
     }
 
     isValidationError() {
-      return false
+      return false;
     }
   },
   listPlayerDevelopmentPlans: vi.fn(),
   reviewPlayerDevelopmentPlan: vi.fn(),
-}))
+}));
 
 async function flushAsync() {
-  await Promise.resolve()
-  await nextTick()
-  await Promise.resolve()
-  await nextTick()
+  await Promise.resolve();
+  await nextTick();
+  await Promise.resolve();
+  await nextTick();
 }
 
 function mountView() {
@@ -92,45 +92,45 @@ function mountView() {
         PlayerSummaryCard: true,
       },
     },
-  })
+  });
 }
 
 describe('CoachProPlusVideoSessionsView', () => {
   beforeEach(() => {
-    vi.resetAllMocks()
-    authStoreMock.canCoach = false
-    authStoreMock.isCoach = false
-    authStoreMock.isCoachPro = false
-    authStoreMock.isCoachProPlus = false
-    authStoreMock.isSuperuser = false
-    authStoreMock.currentUser = null
-    authStoreMock.planName = 'free'
-    authStoreMock.role = 'free'
-    videoStoreMock.error = null
-    videoStoreMock.uploading = null
-    videoStoreMock.uploadProgress = 0
-    videoStoreMock.cleanup = videoStoreCleanup
-    videoStoreMock.createSession = videoStoreCreateSession
-    vi.mocked(listVideoSessions).mockResolvedValue([])
-    vi.mocked(listCoachPlayers).mockResolvedValue([])
-  })
+    vi.resetAllMocks();
+    authStoreMock.canCoach = false;
+    authStoreMock.isCoach = false;
+    authStoreMock.isCoachPro = false;
+    authStoreMock.isCoachProPlus = false;
+    authStoreMock.isSuperuser = false;
+    authStoreMock.currentUser = null;
+    authStoreMock.planName = 'free';
+    authStoreMock.role = 'free';
+    videoStoreMock.error = null;
+    videoStoreMock.uploading = null;
+    videoStoreMock.uploadProgress = 0;
+    videoStoreMock.cleanup = videoStoreCleanup;
+    videoStoreMock.createSession = videoStoreCreateSession;
+    vi.mocked(listVideoSessions).mockResolvedValue([]);
+    vi.mocked(listCoachPlayers).mockResolvedValue([]);
+  });
 
   it('shows the video sessions workspace for authorized org pro reviewers', async () => {
-    authStoreMock.canCoach = true
-    authStoreMock.isCoachProPlus = true
-    authStoreMock.role = 'org_pro'
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachProPlus = true;
+    authStoreMock.role = 'org_pro';
 
-    const wrapper = mountView()
-    await flushAsync()
+    const wrapper = mountView();
+    await flushAsync();
 
-    expect(wrapper.text()).toContain('Video Sessions')
-    expect(wrapper.text()).not.toContain('Unlock Video Sessions')
-  })
+    expect(wrapper.text()).toContain('Video Sessions');
+    expect(wrapper.text()).not.toContain('Unlock Video Sessions');
+  });
 
   it('uses player-centered create form fields instead of manual player ID textarea', async () => {
-    authStoreMock.canCoach = true
-    authStoreMock.isCoachProPlus = true
-    authStoreMock.role = 'coach_pro_plus'
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachProPlus = true;
+    authStoreMock.role = 'coach_pro_plus';
 
     vi.mocked(listCoachPlayers).mockResolvedValue([
       {
@@ -139,120 +139,124 @@ describe('CoachProPlusVideoSessionsView', () => {
         date_of_birth: null,
         assignment_active: true,
       },
-    ])
+    ]);
 
-    const wrapper = mountView()
-    await flushAsync()
+    const wrapper = mountView();
+    await flushAsync();
 
-    await wrapper.find('button.btn-primary').trigger('click')
-    await flushAsync()
+    await wrapper.find('button.btn-primary').trigger('click');
+    await flushAsync();
 
-    expect(wrapper.text()).toContain('Discipline')
-    expect(wrapper.text()).toContain('Add coaching player')
-    expect(wrapper.text()).not.toContain('existing Match Setup workflow')
-    expect(wrapper.text()).not.toContain('Player IDs (comma-separated)')
-  })
+    expect(wrapper.text()).toContain('Discipline');
+    expect(wrapper.text()).toContain('Add coaching player');
+    expect(wrapper.text()).not.toContain('existing Match Setup workflow');
+    expect(wrapper.text()).not.toContain('Player IDs (comma-separated)');
+  });
 
   it('creates a private coaching player and immediately selects it', async () => {
-    authStoreMock.canCoach = true
-    authStoreMock.isCoachProPlus = true
-    authStoreMock.role = 'coach_pro_plus'
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachProPlus = true;
+    authStoreMock.role = 'coach_pro_plus';
 
     const createdPlayer = {
       player_id: 'coach-player-new',
       player_name: 'Private Player',
       date_of_birth: '2010-06-15',
       assignment_active: true,
-    }
-    vi.mocked(listCoachPlayers)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([createdPlayer])
-    vi.mocked(createCoachPrivatePlayer).mockResolvedValue(createdPlayer)
+    };
+    vi.mocked(listCoachPlayers).mockResolvedValueOnce([]).mockResolvedValueOnce([createdPlayer]);
+    vi.mocked(createCoachPrivatePlayer).mockResolvedValue(createdPlayer);
 
-    const wrapper = mountView()
-    await flushAsync()
-    await wrapper.find('button.btn-primary').trigger('click')
-    await flushAsync()
-    await wrapper.find('.btn-link-inline').trigger('click')
-    await wrapper.find('#new-player-name').setValue('Private Player')
-    await wrapper.find('#new-player-dob').setValue('2010-06-15')
-    await wrapper.find('.player-create-panel .btn-primary').trigger('click')
-    await flushAsync()
+    const wrapper = mountView();
+    await flushAsync();
+    await wrapper.find('button.btn-primary').trigger('click');
+    await flushAsync();
+    await wrapper.find('.btn-link-inline').trigger('click');
+    await wrapper.find('#new-player-name').setValue('Private Player');
+    await wrapper.find('#new-player-dob').setValue('2010-06-15');
+    await wrapper.find('.player-create-panel .btn-primary').trigger('click');
+    await flushAsync();
 
     expect(createCoachPrivatePlayer).toHaveBeenCalledWith({
       player_name: 'Private Player',
       date_of_birth: '2010-06-15',
-    })
+    });
     expect((wrapper.find('#primary-player').element as HTMLSelectElement).value).toBe(
       'coach-player-new',
-    )
-    expect(wrapper.findAll('#primary-player option[value="coach-player-new"]')).toHaveLength(1)
-    expect(wrapper.text()).not.toContain('Quick add coaching player')
-  })
+    );
+    expect(wrapper.findAll('#primary-player option[value="coach-player-new"]')).toHaveLength(1);
+    expect(wrapper.text()).not.toContain('Quick add coaching player');
+  });
 
   it('preserves a created player when refresh fails and reconciles it without duplicates later', async () => {
-    authStoreMock.canCoach = true
-    authStoreMock.isCoachProPlus = true
-    authStoreMock.role = 'coach_pro_plus'
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachProPlus = true;
+    authStoreMock.role = 'coach_pro_plus';
 
     const createdPlayer = {
       player_id: 'coach-player-preserved',
       player_name: 'Preserved Player',
       date_of_birth: null,
       assignment_active: true,
-    }
+    };
     vi.mocked(listCoachPlayers)
       .mockResolvedValueOnce([])
       .mockRejectedValueOnce(new Error('Temporary player refresh failure'))
-      .mockResolvedValueOnce([createdPlayer])
-    vi.mocked(createCoachPrivatePlayer).mockResolvedValue(createdPlayer)
+      .mockResolvedValueOnce([createdPlayer]);
+    vi.mocked(createCoachPrivatePlayer).mockResolvedValue(createdPlayer);
 
-    const wrapper = mountView()
-    await flushAsync()
-    await wrapper.find('button.btn-primary').trigger('click')
-    await flushAsync()
-    await wrapper.find('.btn-link-inline').trigger('click')
-    await wrapper.find('#new-player-name').setValue('Preserved Player')
-    await wrapper.find('.player-create-panel .btn-primary').trigger('click')
-    await flushAsync()
+    const wrapper = mountView();
+    await flushAsync();
+    await wrapper.find('button.btn-primary').trigger('click');
+    await flushAsync();
+    await wrapper.find('.btn-link-inline').trigger('click');
+    await wrapper.find('#new-player-name').setValue('Preserved Player');
+    await wrapper.find('.player-create-panel .btn-primary').trigger('click');
+    await flushAsync();
 
-    const selector = wrapper.find('#primary-player')
-    expect((selector.element as HTMLSelectElement).value).toBe('coach-player-preserved')
-    expect(wrapper.findAll('#primary-player option[value="coach-player-preserved"]')).toHaveLength(1)
-    expect(wrapper.text()).toContain('Temporary player refresh failure')
-    expect(wrapper.text()).not.toContain('Quick add coaching player')
-    expect(createCoachPrivatePlayer).toHaveBeenCalledTimes(1)
+    const selector = wrapper.find('#primary-player');
+    expect((selector.element as HTMLSelectElement).value).toBe('coach-player-preserved');
+    expect(wrapper.findAll('#primary-player option[value="coach-player-preserved"]')).toHaveLength(
+      1,
+    );
+    expect(wrapper.text()).toContain('Temporary player refresh failure');
+    expect(wrapper.text()).not.toContain('Quick add coaching player');
+    expect(createCoachPrivatePlayer).toHaveBeenCalledTimes(1);
 
-    await (wrapper.vm as unknown as { fetchAssignedPlayers: () => Promise<void> }).fetchAssignedPlayers()
-    await flushAsync()
+    await (
+      wrapper.vm as unknown as { fetchAssignedPlayers: () => Promise<void> }
+    ).fetchAssignedPlayers();
+    await flushAsync();
 
-    expect(wrapper.findAll('#primary-player option[value="coach-player-preserved"]')).toHaveLength(1)
+    expect(wrapper.findAll('#primary-player option[value="coach-player-preserved"]')).toHaveLength(
+      1,
+    );
     expect((wrapper.find('#primary-player').element as HTMLSelectElement).value).toBe(
       'coach-player-preserved',
-    )
-    expect(wrapper.text()).not.toContain('Temporary player refresh failure')
-    expect(createCoachPrivatePlayer).toHaveBeenCalledTimes(1)
-  })
+    );
+    expect(wrapper.text()).not.toContain('Temporary player refresh failure');
+    expect(createCoachPrivatePlayer).toHaveBeenCalledTimes(1);
+  });
 
   it('keeps the upgrade gate for users without coach access', async () => {
-    const wrapper = mountView()
-    await flushAsync()
+    const wrapper = mountView();
+    await flushAsync();
 
-    expect(wrapper.text()).toContain('Unlock Video Sessions')
-  })
+    expect(wrapper.text()).toContain('Unlock Video Sessions');
+  });
 
-  it('renders repetition windows in the results modal when V2 repetitions are present', async () => {
-    authStoreMock.canCoach = true
-    authStoreMock.isCoachPro = true
-    authStoreMock.role = 'coach_pro'
+  it('renders the shared player presentation and suppresses legacy priorities for V2 jobs', async () => {
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachPro = true;
+    authStoreMock.role = 'coach_pro';
 
-    const wrapper = mountView()
-    await flushAsync()
+    const wrapper = mountView();
+    await flushAsync();
 
     const vm = wrapper.vm as unknown as {
-      showResultsModal: boolean
-      selectedJob: VideoAnalysisJob | null
-    }
+      showResultsModal: boolean;
+      selectedJob: VideoAnalysisJob | null;
+    };
 
     vm.selectedJob = {
       id: 'job-reps',
@@ -263,63 +267,25 @@ describe('CoachProPlusVideoSessionsView', () => {
       error_message: null,
       sqs_message_id: null,
       deep_results: {
-        pose_summary: { total_frames: 120, sampled_frames: 30, frames_with_pose: 28, detection_rate_percent: 93, video_fps: 30 },
-        report: {
-          summary: 'Done',
-          v2_session_analysis: {
-            strengths: [
-              {
-                metric_id: 'bowling_release_height_ratio',
-                discipline: 'bowling',
-                severity: 'medium',
-                confidence_score: 0.84,
-                valid_sample_count: 3,
-                summary: 'Repeated strong release height evidence.',
-                supporting_repetition_ids: ['rep-1'],
-                limitations: [],
-              },
-            ],
-            recurring_concerns: [
-              {
-                metric_id: 'bowling_head_alignment_ratio',
-                discipline: 'bowling',
-                severity: 'low',
-                confidence_score: 0.71,
-                valid_sample_count: 3,
-                summary: 'Repeated needs-attention head alignment evidence.',
-                supporting_repetition_ids: ['rep-1'],
-                limitations: [],
-              },
-            ],
-            consistency_observations: [
-              {
-                metric_id: 'bowling_release_height_ratio',
-                discipline: 'bowling',
-                phase: 'release',
-                method: 'normalized_spread',
-                classification: 'high',
-                value: 0.03,
-                confidence_score: 0.84,
-                valid_sample_count: 3,
-                excluded_repetition_count: 0,
-                limitations: [],
-              },
-            ],
-            best_repetition: {
-              available: true,
-              repetition_id: 'rep-1',
-              rationale: 'Selected because this repetition had 2 strong metric signals and 0 needs-attention signals.',
-              confidence_score: 0.84,
-              supporting_metrics: ['bowling_release_height_ratio'],
-            },
-            needs_work_repetition: {
-              available: false,
-              reason: 'No repetition had enough negative metric evidence for needs-work selection.',
-              supporting_metrics: [],
-            },
-          },
+        pose_summary: {
+          total_frames: 120,
+          sampled_frames: 30,
+          frames_with_pose: 28,
+          detection_rate_percent: 93,
+          video_fps: 30,
         },
-        findings: { findings: [] },
+        report: { summary: 'Done' },
+        findings: {
+          findings: [
+            {
+              code: 'ELBOW_DROP',
+              title: 'Legacy High elbow issue',
+              severity: 'high',
+              why_it_matters: 'Unsupported injury-risk claim',
+              suggested_drills: ['Stop all match practice until technique improves'],
+            },
+          ],
+        },
         meta: {
           repetition_segmentation: {
             enabled: true,
@@ -363,24 +329,257 @@ describe('CoachProPlusVideoSessionsView', () => {
           ],
         },
       },
+      v2_coaching_report: {
+        report_version: 'coaching_analysis_report.v2',
+        source: 'persisted_video_analysis_v2',
+        player_presentation: {
+          presentation_version: 'coaching_analysis_presentation.v1',
+          discipline: 'pace_bowling',
+          discipline_label: 'Pace bowling',
+          usable_repetition_count: 1,
+          repetition_count: 1,
+          analysis_quality:
+            'The recording provided clear evidence for the available technique review.',
+          session_summary: 'We identified 1 usable delivery.',
+          insufficient_evidence: { active: false },
+          repetitions: [
+            {
+              repetition_id: 'rep-1',
+              label: 'Delivery 1',
+              confidence: 'High confidence',
+              validity: null,
+              start_ts: 0.5,
+              end_ts: 1.1,
+            },
+          ],
+          phases: [
+            {
+              phase_id: 'rep-1:phase:1',
+              label: 'Release estimate',
+              repetition_label: 'Delivery 1',
+              confidence: 'Low confidence',
+              validity: 'Estimate only',
+              proxy: 'Approximate movement phase',
+            },
+          ],
+          metrics: [
+            {
+              metric_id: 'pace_bowling_release_proxy_bowling_arm_angle_deg',
+              label: 'Bowling-arm angle near release',
+              phase: 'Release estimate',
+              value: '145.0°',
+              confidence: 'High confidence',
+              validity: null,
+              proxy: 'Approximate measurement',
+              classification: 'Needs attention',
+            },
+            {
+              metric_id: 'unavailable-test-metric',
+              label: 'Unavailable test measurement',
+              phase: 'Release estimate',
+              value: 'Unavailable',
+              confidence: 'Confidence unavailable',
+              validity: 'Could not measure clearly',
+              proxy: null,
+              classification: null,
+            },
+          ],
+          strengths: [],
+          priorities: [
+            {
+              metric_id: 'pace_bowling_release_proxy_bowling_arm_angle_deg',
+              title: 'Bowling-arm angle near release',
+              observation: 'This pattern appeared in the comparable deliveries.',
+              repetition_count: 3,
+              repetition_labels: ['Delivery 1'],
+              confidence: 'High confidence',
+              limitations: [],
+              why_it_matters: 'A repeatable release can improve control.',
+              proxy: 'Approximate measurement',
+            },
+          ],
+          governed_actions: [
+            {
+              linked_metric_id: 'pace_bowling_release_proxy_bowling_arm_angle_deg',
+              title: 'Release and follow-through',
+              observed_issue: 'Bowling-arm angle near release',
+              coaching_goal: 'Repeat the release shape.',
+              cue: 'Reach tall through release.',
+              drills: ['Walk-through delivery'],
+              coach_watches_for: 'A repeatable arm path.',
+              reassess: 'Compare the release estimate.',
+              requires_coach_approval: true,
+              review_status: 'approved_for_coach_review',
+            },
+          ],
+          consistency: [],
+          representative_repetitions: {
+            best: { available: false, label: null, rationale: null, confidence: null },
+            needs_work: { available: false, label: null, rationale: null, confidence: null },
+          },
+          progress: {
+            state: 'Not enough sessions yet',
+            summary: 'Complete another comparable session to start tracking progress.',
+            items: [],
+          },
+        },
+      },
       results: null,
       created_at: new Date().toISOString(),
       started_at: new Date().toISOString(),
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    } as unknown as VideoAnalysisJob
-    vm.showResultsModal = true
-    await flushAsync()
+    } as unknown as VideoAnalysisJob;
+    vm.showResultsModal = true;
+    await flushAsync();
 
-    expect(wrapper.text()).toContain('Repetitions')
-    expect(wrapper.text()).toContain('Rep 1 — Bowling Delivery')
-    expect(wrapper.text()).toContain('Valid')
-    expect(wrapper.text()).toContain('Contact Proxy Window')
-    expect(wrapper.text()).toContain('object evidence')
-    expect(wrapper.text()).toContain('Technical strengths')
-    expect(wrapper.text()).toContain('Repeated strong release height evidence.')
-    expect(wrapper.text()).toContain('Recurring concerns')
-    expect(wrapper.text()).toContain('Consistency & repeatability')
-    expect(wrapper.text()).toContain('Representative repetitions')
-  })
-})
+    const text = wrapper.text();
+    expect(text).toContain('How did I do?');
+    expect(text).toContain('Delivery 1');
+    expect(text).toContain('Release estimate');
+    expect(text).toContain('Estimate only');
+    expect(text).toContain('Approximate movement phase');
+    expect(text).toContain('Bowling-arm angle near release');
+    expect(text).toContain('145.0°');
+    const unavailableMetric = wrapper
+      .findAll('.phase-row')
+      .find((row) => row.text().includes('Unavailable test measurement'));
+    expect(unavailableMetric?.find('.status-text').text().replace(/\s+/g, ' ').trim()).toBe(
+      'Confidence unavailable • Could not measure clearly',
+    );
+    expect(text).toContain('Release and follow-through');
+    expect(wrapper.findAll('h3').map((heading) => heading.text())).not.toContain('Priorities');
+    expect(text).not.toContain('rep-1:phase:1');
+    expect(text).not.toContain('pace_bowling_release_proxy_bowling_arm_angle_deg');
+    expect(text).not.toContain('Legacy High elbow issue');
+    expect(text).not.toContain('Rating: High Risk');
+    expect(text).not.toContain('injury-risk');
+    expect(text).not.toContain('Stop all match practice');
+  });
+
+  it('shows one V2 insufficient-evidence summary without legacy findings or actions', async () => {
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachPro = true;
+    authStoreMock.role = 'coach_pro';
+    const wrapper = mountView();
+    await flushAsync();
+    const vm = wrapper.vm as unknown as {
+      showResultsModal: boolean;
+      selectedJob: VideoAnalysisJob | null;
+    };
+    const now = new Date().toISOString();
+    vm.selectedJob = {
+      id: 'job-insufficient',
+      session_id: 'session-1',
+      sample_fps: 10,
+      include_frames: false,
+      status: 'done',
+      error_message: null,
+      sqs_message_id: null,
+      results: null,
+      deep_results: {
+        v2: {
+          repetitions: [
+            {
+              repetition_id: 'raw-delivery-1',
+              discipline: 'pace_bowling',
+              validity_state: 'VALID',
+            },
+          ],
+        },
+        findings: {
+          findings: [
+            { code: 'HEAD_MOVEMENT', title: 'Legacy High hip-shoulder issue', severity: 'high' },
+          ],
+        },
+      },
+      v2_coaching_report: {
+        report_version: 'coaching_analysis_report.v2',
+        source: 'persisted_video_analysis_v2',
+        player_presentation: {
+          presentation_version: 'coaching_analysis_presentation.v1',
+          discipline: 'pace_bowling',
+          discipline_label: 'Pace bowling',
+          usable_repetition_count: 2,
+          repetition_count: 2,
+          analysis_quality: 'There was not enough clear evidence for reliable technique judgments.',
+          session_summary: 'We identified 2 usable deliveries.',
+          insufficient_evidence: {
+            active: true,
+            title: 'We detected 2 deliveries.',
+            summary:
+              'That is enough to review the movement phases, but not enough to make reliable technique judgments yet.',
+            recommendation: 'Record at least 3 comparable deliveries for a fuller analysis.',
+            minimum_repetitions: 3,
+          },
+          repetitions: [],
+          phases: [],
+          metrics: [],
+          strengths: [],
+          priorities: [],
+          governed_actions: [],
+          consistency: [],
+          representative_repetitions: {
+            best: { available: false, label: null, rationale: null, confidence: null },
+            needs_work: { available: false, label: null, rationale: null, confidence: null },
+          },
+          progress: {
+            state: 'Not enough sessions yet',
+            summary: 'Complete another comparable session to start tracking progress.',
+            items: [],
+          },
+        },
+      },
+      created_at: now,
+      started_at: now,
+      completed_at: now,
+      updated_at: now,
+    } as VideoAnalysisJob;
+    vm.showResultsModal = true;
+    await flushAsync();
+
+    const text = wrapper.text();
+    expect(text.match(/We detected 2 deliveries\./g)).toHaveLength(1);
+    expect(text).toContain('No governed training action is available');
+    expect(wrapper.findAll('h3').map((heading) => heading.text())).not.toContain('Priorities');
+    expect(text).not.toContain('Legacy High hip-shoulder issue');
+  });
+
+  it('retains the legacy Priorities block for historical non-V2 jobs', async () => {
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachPro = true;
+    authStoreMock.role = 'coach_pro';
+    const wrapper = mountView();
+    await flushAsync();
+    const vm = wrapper.vm as unknown as {
+      showResultsModal: boolean;
+      selectedJob: VideoAnalysisJob | null;
+    };
+    const now = new Date().toISOString();
+    vm.selectedJob = {
+      id: 'legacy-job',
+      session_id: 'legacy-session',
+      sample_fps: 10,
+      include_frames: false,
+      status: 'done',
+      error_message: null,
+      sqs_message_id: null,
+      results: {
+        findings: {
+          findings: [
+            { code: 'HEAD_MOVEMENT', title: 'Historical head movement', severity: 'medium' },
+          ],
+        },
+      },
+      created_at: now,
+      started_at: now,
+      completed_at: now,
+      updated_at: now,
+    } as VideoAnalysisJob;
+    vm.showResultsModal = true;
+    await flushAsync();
+
+    expect(wrapper.findAll('h3').map((heading) => heading.text())).toContain('Priorities');
+    expect(wrapper.text()).toContain('Historical head movement');
+  });
+});
