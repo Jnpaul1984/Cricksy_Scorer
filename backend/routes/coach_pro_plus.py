@@ -18,6 +18,11 @@ from backend import security
 from backend.config import settings
 from backend.domain.coach_analysis_v2_contract import PhaseRecordV2, RepetitionActionRecordV2
 from backend.services.coach_findings import generate_findings
+from backend.services.coach_report_v2 import (
+    build_coaching_analysis_report_v2,
+    has_persisted_v2_evidence,
+)
+from backend.services.coach_report_presentation import build_longitudinal_presentation
 from backend.services.coach_report_service import generate_report_text
 from backend.services.goal_intervention_evaluation import (
     evaluate_v2_goals_against_longitudinal,
@@ -362,6 +367,7 @@ class VideoAnalysisJobRead(BaseModel):
     quick_report: dict | None = None
     deep_findings: dict | None = None
     deep_report: dict | None = None
+    v2_coaching_report: dict | None = None
 
     # S3 keys for downloading full results
     quick_results_s3_key: str | None = None
@@ -733,6 +739,21 @@ def _extract_job_repetitions(
         if repetitions or summary:
             return (source, repetitions, summary)
     return ("none", [], None)
+
+
+def _build_job_v2_coaching_report(
+    job: VideoAnalysisJob, analysis_mode: str | None
+) -> dict[str, Any] | None:
+    """Build the shared UI/PDF presentation from already-persisted V2 evidence."""
+    results = job.deep_results or job.quick_results
+    if not has_persisted_v2_evidence(results):
+        return None
+    return build_coaching_analysis_report_v2(
+        results=results or {},
+        analysis_mode=analysis_mode,
+        coach_goals=job.coach_goals,
+        outcomes=job.outcomes,
+    )
 
 
 def _extract_job_phases(
@@ -1184,6 +1205,9 @@ async def list_analysis_jobs(
                 "analysis_context": session.analysis_context,
                 "camera_view": session.camera_view,
                 "retryable": is_retryable_video_job(job),
+                "v2_coaching_report": _build_job_v2_coaching_report(
+                    job, session.discipline or session.analysis_context
+                ),
                 **_build_job_artifact_metadata(job),
             }
         )
@@ -1250,6 +1274,9 @@ async def get_analysis_job(
         "analysis_context": session.analysis_context,
         "camera_view": session.camera_view,
         "retryable": is_retryable_video_job(job),
+        "v2_coaching_report": _build_job_v2_coaching_report(
+            job, session.discipline or session.analysis_context
+        ),
     }
     updates.update(_build_job_artifact_metadata(job))
     job_read = job_read.model_copy(update=updates)
@@ -1600,7 +1627,8 @@ async def export_analysis_pdf(
             deep_results=job.deep_results,
             created_at=job.created_at,
             completed_at=job.completed_at,
-            analysis_mode=job.analysis_mode,
+            analysis_mode=session.discipline or job.analysis_mode,
+            camera_view=session.camera_view,
             coach_goals=job.coach_goals,
             outcomes=job.outcomes,
             coach_suggestions=job.coach_suggestions,
@@ -2256,11 +2284,13 @@ async def get_player_longitudinal_progress(
 
     sessions = await _load_accessible_video_sessions_for_player(db, current_user, player_id)
 
-    return build_player_longitudinal_progress(
+    progress = build_player_longitudinal_progress(
         sessions,
         player_id=player_id,
         discipline_filter=discipline,
     )
+    progress["player_presentation"] = build_longitudinal_presentation(progress)
+    return progress
 
 
 # ============================================================================

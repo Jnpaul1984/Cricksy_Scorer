@@ -44,6 +44,7 @@ def generate_analysis_pdf(
     created_at: datetime,
     completed_at: datetime | None,
     analysis_mode: str | None = None,
+    camera_view: str | None = None,
     coach_goals: dict[str, Any] | None = None,
     outcomes: dict[str, Any] | None = None,
     coach_suggestions: dict[str, Any] | None = None,
@@ -94,21 +95,38 @@ def generate_analysis_pdf(
     # Get styles
     styles = get_styles()
 
-    # Session metadata header (before coach summary)
+    results_data = deep_results or quick_results
+    is_v2_report = has_persisted_v2_evidence(results_data)
+
+    # Session metadata header (before coach summary). Technical job IDs remain
+    # available in the V2 appendix rather than the player-facing header.
     elements.extend(
         _render_metadata_header(
-            session_title, job_id, status, created_at, completed_at, analysis_mode, styles
+            session_title,
+            job_id,
+            status,
+            created_at,
+            completed_at,
+            analysis_mode,
+            camera_view,
+            styles,
+            player_friendly=is_v2_report,
         )
     )
 
-    results_data = deep_results or quick_results
-    if has_persisted_v2_evidence(results_data):
+    if is_v2_report:
         report = build_coaching_analysis_report_v2(
             results=results_data or {},
             analysis_mode=analysis_mode,
             coach_goals=coach_goals,
             outcomes=outcomes,
         )
+        report["report_context"] = {
+            "job_id": job_id,
+            "session_title": session_title,
+            "camera_view": camera_view,
+            "status": status,
+        }
         elements.extend(render_coaching_analysis_report_v2(report))
     else:
         # Historical jobs remain on the legacy rendering path. V2 reports never
@@ -212,7 +230,10 @@ def _render_metadata_header(
     created_at: datetime,
     completed_at: datetime | None,
     analysis_mode: str | None,
+    camera_view: str | None,
     styles: dict,
+    *,
+    player_friendly: bool = False,
 ) -> list:
     """
     Render session metadata header (appears above coach summary).
@@ -232,12 +253,22 @@ def _render_metadata_header(
     elements = []
 
     # Metadata table
-    metadata_data = [
-        ["Session:", session_title],
-        ["Job ID:", job_id],
-        ["Status:", status.upper()],
-        ["Created:", created_at.strftime("%Y-%m-%d %H:%M:%S UTC")],
-    ]
+    metadata_data = [["Session:", session_title]]
+    if player_friendly:
+        metadata_data.extend(
+            [
+                ["Discipline:", (analysis_mode or "cricket").replace("_", " ").title()],
+                ["Camera:", (camera_view or "Not recorded").replace("_", " ").title()],
+            ]
+        )
+    else:
+        metadata_data.append(["Job ID:", job_id])
+    metadata_data.extend(
+        [
+            ["Status:", status.upper()],
+            ["Created:", created_at.strftime("%Y-%m-%d %H:%M:%S UTC")],
+        ]
+    )
     if completed_at:
         metadata_data.append(["Completed:", completed_at.strftime("%Y-%m-%d %H:%M:%S UTC")])
 

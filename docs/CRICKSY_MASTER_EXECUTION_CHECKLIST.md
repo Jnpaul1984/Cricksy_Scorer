@@ -4682,9 +4682,11 @@ Derived from the Phase 10J.0 repository audit/spec lock:
 * **10J.12 — Hardening, Performance, CI, and Rollout Controls** — **COMPLETE**
 * **10J.13 — Coach-Private Player Setup & Match Setup Decoupling** — **COMPLETE**
 * **10J.14 — Coaching Analysis Report V2 & Governed Cricket Coaching Actions** — **COMPLETE**
+* **10J.15 — Player-Friendly Coaching Report & V2 UI Simplification** — **COMPLETE**
 
 Phase 10J.13 was explicitly authorized by Issue #501 as a bounded decoupling follow-up.
 Phase 10J.14 was explicitly authorized by Issue #503 as a bounded reporting/governance follow-up.
+Phase 10J.15 was explicitly authorized by Issue #505 as a bounded player-presentation follow-up.
 
 ---
 
@@ -4737,7 +4739,7 @@ Phase 10J.0 is complete only when:
 * checklist validation passes
 * no runtime implementation occurred
 
-**Implementation status after Phase 10J.14:** 10J.1-10J.14 COMPLETE.
+**Implementation status after Phase 10J.15:** 10J.1-10J.15 COMPLETE.
 
 ---
 # Phase 11 — Organization Pro + League Operations

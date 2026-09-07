@@ -1,8 +1,8 @@
 # Cricksy Phase 10J Checklist (Spec-Locked)
 
-**Last Updated:** 2026-09-05
+**Last Updated:** 2026-09-06
 **Scope:** Phase 10J Coaching Analysis Engine V2
-**Implementation Status:** 10J.1-10J.14 COMPLETE
+**Implementation Status:** 10J.1-10J.15 COMPLETE
 
 ## Progress Summary
 
@@ -23,6 +23,7 @@
 | 10J.12 | Hardening, Performance, CI, and Rollout Controls | ✅ DONE |
 | 10J.13 | Coach-Private Player Setup & Match Setup Decoupling | ✅ DONE |
 | 10J.14 | Coaching Analysis Report V2 & Governed Cricket Coaching Actions | ✅ DONE |
+| 10J.15 | Player-Friendly Coaching Report & V2 UI Simplification | ✅ DONE |
 
 ## Notes
 
@@ -30,3 +31,4 @@
 - Issue #493 superseded the earlier draft 10J.9 label and completed the hardening phase under the updated 10J.9 scope.
 - Issue #501 authorized and completed the additive Phase 10J.13 decoupling follow-up.
 - Issue #503 authorized and completed the additive Phase 10J.14 reporting/governance follow-up.
+- Issue #505 authorized and completed the additive Phase 10J.15 presentation follow-up.

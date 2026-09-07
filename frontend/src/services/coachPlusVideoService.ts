@@ -81,6 +81,7 @@ export interface VideoAnalysisJob {
   deep_enabled?: boolean | null;
   quick_results?: VideoAnalysisResults | null;
   deep_results?: VideoAnalysisResults | null;
+  v2_coaching_report?: V2CoachingReport | null;
   // PDF export
   pdf_s3_key?: string | null;
   pdf_generated_at?: string | null;
@@ -97,6 +98,97 @@ export interface VideoAnalysisJob {
   started_at: string | null;
   completed_at: string | null;
   updated_at: string;
+}
+
+export interface V2PlayerSignalPresentation {
+  metric_id: string;
+  title: string;
+  observation: string;
+  repetition_count: number | null;
+  repetition_labels: string[];
+  confidence: string;
+  limitations: string[];
+  phase?: string;
+  proxy?: string | null;
+  why_it_matters?: string;
+}
+
+export interface V2PlayerPresentation {
+  presentation_version: string;
+  discipline: string | null;
+  discipline_label: string;
+  usable_repetition_count: number;
+  repetition_count: number;
+  analysis_quality: string;
+  session_summary: string;
+  insufficient_evidence: {
+    active: boolean;
+    title?: string;
+    summary?: string;
+    recommendation?: string;
+    minimum_repetitions?: number;
+  };
+  repetitions: Array<{
+    repetition_id: string;
+    label: string;
+    confidence: string;
+    validity: string | null;
+    start_ts: number | null;
+    end_ts: number | null;
+  }>;
+  phases: Array<{
+    phase_id: string;
+    label: string;
+    repetition_label: string;
+    confidence: string;
+    validity: string | null;
+    proxy: string | null;
+  }>;
+  metrics: Array<{
+    metric_id: string;
+    label: string;
+    phase: string;
+    value: string;
+    confidence: string;
+    validity: string | null;
+    proxy: string | null;
+    classification: string | null;
+  }>;
+  strengths: V2PlayerSignalPresentation[];
+  priorities: V2PlayerSignalPresentation[];
+  governed_actions: Array<{
+    linked_metric_id: string;
+    title: string;
+    observed_issue: string;
+    coaching_goal: string;
+    cue: string;
+    drills: string[];
+    coach_watches_for: string;
+    reassess: string;
+    requires_coach_approval: boolean;
+    review_status: string;
+  }>;
+  consistency: Array<{ title: string; state: string; repetition_count: number | null }>;
+  representative_repetitions: Record<
+    'best' | 'needs_work',
+    {
+      available: boolean;
+      label: string | null;
+      rationale: string | null;
+      confidence: string | null;
+    }
+  >;
+  progress: {
+    state: string;
+    summary: string;
+    items: Array<{ title: string; state: string; confidence: string }>;
+  };
+}
+
+export interface V2CoachingReport {
+  report_version: string;
+  source: string;
+  player_presentation: V2PlayerPresentation;
 }
 
 export interface VideoStreamUrl {
@@ -417,7 +509,7 @@ export async function listVideoSessions(
   const headers = {
     ...getAuthHeader(),
     'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
+    Pragma: 'no-cache',
   };
 
   const res = await fetch(url(`/api/coaches/plus/sessions?${params.toString()}`), {
@@ -739,7 +831,12 @@ export async function getAnalysisHistory(sessionId: string): Promise<VideoAnalys
     const detail = await res.json().catch(() => ({ detail: res.statusText }));
     const errorDetail = detail?.detail || res.statusText;
     const errorCode = detail?.code || undefined;
-    throw new ApiError(`Failed to get analysis history: ${res.status}`, res.status, errorDetail, errorCode);
+    throw new ApiError(
+      `Failed to get analysis history: ${res.status}`,
+      res.status,
+      errorDetail,
+      errorCode,
+    );
   }
 
   return res.json();
@@ -790,12 +887,7 @@ export async function exportAnalysisPdf(jobId: string): Promise<PdfExportRespons
     const detail = await res.json().catch(() => ({ detail: res.statusText }));
     const errorDetail = detail?.detail || res.statusText;
     const errorCode = detail?.code || undefined;
-    throw new ApiError(
-      `Failed to export PDF: ${res.status}`,
-      res.status,
-      errorDetail,
-      errorCode,
-    );
+    throw new ApiError(`Failed to export PDF: ${res.status}`, res.status, errorDetail, errorCode);
   }
 
   return res.json();
@@ -863,12 +955,7 @@ export async function setJobGoals(jobId: string, goals: SetGoalsRequest): Promis
     const detail = await res.json().catch(() => ({ detail: res.statusText }));
     const errorDetail = detail?.detail || res.statusText;
     const errorCode = detail?.code || undefined;
-    throw new ApiError(
-      `Failed to set goals: ${res.status}`,
-      res.status,
-      errorDetail,
-      errorCode,
-    );
+    throw new ApiError(`Failed to set goals: ${res.status}`, res.status, errorDetail, errorCode);
   }
 
   return res.json();
@@ -955,12 +1042,7 @@ export async function getJobOutcomes(jobId: string): Promise<OutcomesResponse> {
     const detail = await res.json().catch(() => ({ detail: res.statusText }));
     const errorDetail = detail?.detail || res.statusText;
     const errorCode = detail?.code || undefined;
-    throw new ApiError(
-      `Failed to get outcomes: ${res.status}`,
-      res.status,
-      errorDetail,
-      errorCode,
-    );
+    throw new ApiError(`Failed to get outcomes: ${res.status}`, res.status, errorDetail, errorCode);
   }
 
   return res.json();
@@ -1048,6 +1130,30 @@ export interface PlayerLongitudinalProgressResponse {
     insufficient_data: number;
     non_comparable: number;
   };
+  player_presentation: {
+    state:
+      | 'Improving'
+      | 'Stable'
+      | 'Needs attention'
+      | 'Not enough sessions yet'
+      | 'Cannot compare yet';
+    summary: string;
+    items: Array<{
+      metric_id: string;
+      title: string;
+      discipline: string;
+      state:
+        | 'Improving'
+        | 'Stable'
+        | 'Needs attention'
+        | 'Not enough sessions yet'
+        | 'Cannot compare yet';
+      baseline: string;
+      latest: string;
+      comparable_session_count: number;
+      limitations: string[];
+    }>;
+  };
   sessions_considered: Array<{
     session_id: string;
     session_title: string | null;
@@ -1077,7 +1183,13 @@ export interface PlayerLongitudinalProgressResponse {
     best: LongitudinalObservation | null;
     best_available: boolean;
     trend: {
-      state: 'improving' | 'regressing' | 'stable' | 'mixed' | 'insufficient_data' | 'non_comparable';
+      state:
+        | 'improving'
+        | 'regressing'
+        | 'stable'
+        | 'mixed'
+        | 'insufficient_data'
+        | 'non_comparable';
       method: string | null;
       comparable_session_count: number;
       time_span_days: number;
@@ -1150,12 +1262,7 @@ export async function compareJobs(
     const detail = await res.json().catch(() => ({ detail: res.statusText }));
     const errorDetail = detail?.detail || res.statusText;
     const errorCode = detail?.code || undefined;
-    throw new ApiError(
-      `Failed to compare jobs: ${res.status}`,
-      res.status,
-      errorDetail,
-      errorCode,
-    );
+    throw new ApiError(`Failed to compare jobs: ${res.status}`, res.status, errorDetail, errorCode);
   }
 
   return res.json();
