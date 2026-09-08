@@ -28,6 +28,7 @@ from backend.services.goal_intervention_evaluation import (
     evaluate_v2_goals_against_longitudinal,
 )
 from backend.services.phase_recognition import extract_phase_recognition
+from backend.services.performance_telemetry import instrument_coach_operation
 from backend.services.player_longitudinal_progress import build_player_longitudinal_progress
 from backend.services.pose_metrics import build_pose_metric_evidence, compute_pose_metrics
 from backend.services.repetition_segmentation import extract_repetition_segmentation
@@ -780,6 +781,7 @@ def _extract_job_phases(
 
 
 @router.get("/sessions", response_model=list[VideoSessionRead])
+@instrument_coach_operation("coach_plus.session_list")
 async def list_video_sessions(
     current_user: Annotated[User, Depends(security.get_current_active_user)],
     limit: int = Query(50, ge=1, le=100),
@@ -1219,6 +1221,7 @@ async def list_analysis_jobs(
 @router.get(
     "/video-sessions/{session_id}/analysis-history", response_model=list[VideoAnalysisJobRead]
 )
+@instrument_coach_operation("coach_plus.completed_session")
 async def get_analysis_history(
     session_id: str,
     current_user: Annotated[User, Depends(security.get_current_active_user)],
@@ -1565,6 +1568,7 @@ class PdfExportResponse(BaseModel):
 
 
 @router.post("/analysis-jobs/{job_id}/export-pdf", response_model=PdfExportResponse)
+@instrument_coach_operation("coach_plus.pdf_export")
 async def export_analysis_pdf(
     job_id: str,
     current_user: Annotated[User, Depends(security.get_current_active_user)],

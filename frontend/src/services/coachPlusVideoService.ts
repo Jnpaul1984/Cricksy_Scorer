@@ -2,6 +2,10 @@
 // API client for Coach Pro Plus video upload & analysis endpoints
 
 import { API_BASE, getStoredToken } from './api';
+import {
+  fetchWithCoachPerformance,
+  readCoachPerformanceJson,
+} from '@/utils/coachPerformanceTelemetry';
 
 export interface ApiErrorResponse {
   detail: string;
@@ -528,13 +532,19 @@ export async function listVideoSessions(
     Pragma: 'no-cache',
   };
 
-  const res = await fetch(url(`/api/coaches/plus/sessions?${params.toString()}`), {
-    method: 'GET',
-    headers,
-  });
+  const res = await fetchWithCoachPerformance(
+    'coach_plus.session_list',
+    url(`/api/coaches/plus/sessions?${params.toString()}`),
+    {
+      method: 'GET',
+      headers,
+    },
+  );
 
   if (!res.ok) {
-    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const detail = await readCoachPerformanceJson<any>(res).catch(() => ({
+      detail: res.statusText,
+    }));
     const errorDetail = detail?.detail || res.statusText;
     const errorCode = detail?.code || undefined;
     throw new ApiError(
@@ -545,7 +555,7 @@ export async function listVideoSessions(
     );
   }
 
-  return res.json();
+  return readCoachPerformanceJson<VideoSession[]>(res);
 }
 
 /**
@@ -838,13 +848,19 @@ export async function listAnalysisJobs(sessionId: string): Promise<VideoAnalysis
  * Get analysis history for a video session (ordered by created_at desc)
  */
 export async function getAnalysisHistory(sessionId: string): Promise<VideoAnalysisJob[]> {
-  const res = await fetch(url(`/api/coaches/plus/video-sessions/${sessionId}/analysis-history`), {
-    method: 'GET',
-    headers: getAuthHeader() || {},
-  });
+  const res = await fetchWithCoachPerformance(
+    'coach_plus.completed_session',
+    url(`/api/coaches/plus/video-sessions/${sessionId}/analysis-history`),
+    {
+      method: 'GET',
+      headers: getAuthHeader() || {},
+    },
+  );
 
   if (!res.ok) {
-    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const detail = await readCoachPerformanceJson<any>(res).catch(() => ({
+      detail: res.statusText,
+    }));
     const errorDetail = detail?.detail || res.statusText;
     const errorCode = detail?.code || undefined;
     throw new ApiError(
@@ -855,7 +871,7 @@ export async function getAnalysisHistory(sessionId: string): Promise<VideoAnalys
     );
   }
 
-  return res.json();
+  return readCoachPerformanceJson<VideoAnalysisJob[]>(res);
 }
 
 /**
@@ -894,19 +910,25 @@ export interface PdfExportResponse {
 }
 
 export async function exportAnalysisPdf(jobId: string): Promise<PdfExportResponse> {
-  const res = await fetch(url(`/api/coaches/plus/analysis-jobs/${jobId}/export-pdf`), {
-    method: 'POST',
-    headers: getAuthHeader() || {},
-  });
+  const res = await fetchWithCoachPerformance(
+    'coach_plus.pdf_export',
+    url(`/api/coaches/plus/analysis-jobs/${jobId}/export-pdf`),
+    {
+      method: 'POST',
+      headers: getAuthHeader() || {},
+    },
+  );
 
   if (!res.ok) {
-    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    const detail = await readCoachPerformanceJson<any>(res).catch(() => ({
+      detail: res.statusText,
+    }));
     const errorDetail = detail?.detail || res.statusText;
     const errorCode = detail?.code || undefined;
     throw new ApiError(`Failed to export PDF: ${res.status}`, res.status, errorDetail, errorCode);
   }
 
-  return res.json();
+  return readCoachPerformanceJson<PdfExportResponse>(res);
 }
 
 // ============================================================================

@@ -1014,7 +1014,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
 
 import GoalSetter from '@/components/GoalSetter.vue';
 import OutcomesViewer from '@/components/OutcomesViewer.vue';
@@ -1048,6 +1048,7 @@ import {
   type PlayerDevelopmentPlanReviewResponse,
   type PlayerDevelopmentReviewDecision,
 } from '@/services/playerDevelopmentApi';
+import { performanceNow, recordCoachPerformance } from '@/utils/coachPerformanceTelemetry';
 import { useAuthStore } from '@/stores/authStore';
 import { useCoachPlusVideoStore } from '@/stores/coachPlusVideoStore';
 import { buildCoachNarrative } from '@/utils/coachVideoAnalysisNarrative';
@@ -1352,6 +1353,7 @@ async function exportPdf() {
 
     // Download via blob or open in new tab
     // Option 1: Download as file
+    const handoffStartedAt = performanceNow();
     const link = document.createElement('a');
     link.href = response.pdf_url;
     link.download = `analysis-${jobId}.pdf`;
@@ -1359,6 +1361,14 @@ async function exportPdf() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    recordCoachPerformance({
+      operation: 'coach_plus.pdf_download',
+      layer: 'frontend',
+      phase: 'download_handoff',
+      duration_ms: Math.max(0, performanceNow() - handoffStartedAt),
+      outcome: 'success',
+      payload_size_bytes: response.pdf_size_bytes,
+    });
 
     // Optional: Also open in new tab for preview
     // window.open(response.pdf_url, '_blank');
@@ -1660,9 +1670,21 @@ async function fetchSessions() {
 
   try {
     const { listVideoSessions } = await import('@/services/coachPlusVideoService');
-    sessions.value = await listVideoSessions(limit.value, offset.value, {
+    const loadedSessions = await listVideoSessions(limit.value, offset.value, {
       excludeFailed: excludeFailed.value,
       statusFilter: statusFilter.value || undefined,
+    });
+    const renderStartedAt = performanceNow();
+    sessions.value = loadedSessions;
+    loading.value = false;
+    await nextTick();
+    recordCoachPerformance({
+      operation: 'coach_plus.session_list',
+      layer: 'frontend',
+      phase: 'render',
+      duration_ms: Math.max(0, performanceNow() - renderStartedAt),
+      outcome: 'success',
+      item_count: loadedSessions.length,
     });
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load sessions';
@@ -2112,9 +2134,20 @@ async function selectSession(sessionId: string) {
     showHistoryModal.value = true;
 
     const { getAnalysisHistory } = await import('@/services/coachPlusVideoService');
-    analysisHistory.value = await getAnalysisHistory(sessionId);
+    const loadedHistory = await getAnalysisHistory(sessionId);
+    analysisHistory.value = loadedHistory;
     await loadRecommendationLinks(session, analysisHistory.value);
+    const renderStartedAt = performanceNow();
     loadingHistory.value = false;
+    await nextTick();
+    recordCoachPerformance({
+      operation: 'coach_plus.completed_session',
+      layer: 'frontend',
+      phase: 'render',
+      duration_ms: Math.max(0, performanceNow() - renderStartedAt),
+      outcome: 'success',
+      item_count: loadedHistory.length,
+    });
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load session history';
     console.error('selectSession error:', err);
@@ -2406,7 +2439,8 @@ function closeHistoryModalAndUpload() {
   }
 }
 
-function viewJobResults(job: VideoAnalysisJob) {
+async function viewJobResults(job: VideoAnalysisJob) {
+  const renderStartedAt = performanceNow();
   selectedJob.value = job;
   showHistoryModal.value = false;
   showResultsModal.value = true;
@@ -2430,6 +2464,15 @@ function viewJobResults(job: VideoAnalysisJob) {
   if (!isJobCompleted(job)) {
     startUiPolling(job.id);
   }
+
+  await nextTick();
+  recordCoachPerformance({
+    operation: 'coach_plus.analysis_results',
+    layer: 'frontend',
+    phase: 'render',
+    duration_ms: Math.max(0, performanceNow() - renderStartedAt),
+    outcome: 'success',
+  });
 }
 
 async function exportJobPdf(jobId: string) {
@@ -2445,6 +2488,7 @@ async function exportJobPdf(jobId: string) {
     );
 
     // Download PDF
+    const handoffStartedAt = performanceNow();
     const link = document.createElement('a');
     link.href = response.pdf_url;
     link.download = `analysis-${jobId}.pdf`;
@@ -2452,6 +2496,14 @@ async function exportJobPdf(jobId: string) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    recordCoachPerformance({
+      operation: 'coach_plus.pdf_download',
+      layer: 'frontend',
+      phase: 'download_handoff',
+      duration_ms: Math.max(0, performanceNow() - handoffStartedAt),
+      outcome: 'success',
+      payload_size_bytes: response.pdf_size_bytes,
+    });
   } catch (err) {
     console.error('[ExportPDF] Failed:', err);
     error.value = err instanceof Error ? err.message : 'Failed to export PDF';

@@ -4,9 +4,11 @@ import { nextTick, reactive } from 'vue';
 
 import {
   createCoachPrivatePlayer,
+  getAnalysisHistory,
   listCoachPlayers,
   listVideoSessions,
   type VideoAnalysisJob,
+  type VideoSession,
 } from '@/services/coachPlusVideoService';
 import CoachProPlusVideoSessionsView from '@/views/CoachProPlusVideoSessionsView.vue';
 
@@ -44,6 +46,7 @@ vi.mock('@/services/coachPlusVideoService', () => ({
   listVideoSessions: vi.fn(),
   listCoachPlayers: vi.fn(),
   createCoachPrivatePlayer: vi.fn(),
+  getAnalysisHistory: vi.fn(),
   getVideoStreamUrl: vi.fn(),
   calculateCompliance: vi.fn(),
   getJobOutcomes: vi.fn(),
@@ -97,6 +100,7 @@ function mountView() {
 
 describe('CoachProPlusVideoSessionsView', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.resetAllMocks();
     authStoreMock.canCoach = false;
     authStoreMock.isCoach = false;
@@ -112,6 +116,7 @@ describe('CoachProPlusVideoSessionsView', () => {
     videoStoreMock.cleanup = videoStoreCleanup;
     videoStoreMock.createSession = videoStoreCreateSession;
     vi.mocked(listVideoSessions).mockResolvedValue([]);
+    vi.mocked(getAnalysisHistory).mockResolvedValue([]);
     vi.mocked(listCoachPlayers).mockResolvedValue([]);
   });
 
@@ -125,6 +130,93 @@ describe('CoachProPlusVideoSessionsView', () => {
 
     expect(wrapper.text()).toContain('Video Sessions');
     expect(wrapper.text()).not.toContain('Unlock Video Sessions');
+  });
+
+  it('records session-list render only after the visible loading gate clears', async () => {
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachProPlus = true;
+    authStoreMock.role = 'coach_pro_plus';
+    let finishSessionRequest!: (sessions: VideoSession[]) => void;
+    vi.mocked(listVideoSessions).mockImplementation(
+      () => new Promise((resolve) => (finishSessionRequest = resolve)),
+    );
+
+    let wrapper: ReturnType<typeof mountView> | undefined;
+    let listWasVisibleAtEvent = false;
+    vi.spyOn(console, 'info').mockImplementation((label, event) => {
+      if (
+        label === '[coach-performance]' &&
+        (event as { operation?: string; phase?: string }).operation === 'coach_plus.session_list' &&
+        (event as { phase?: string }).phase === 'render'
+      ) {
+        listWasVisibleAtEvent = Boolean(
+          wrapper?.find('.sessions-list').exists() && !wrapper.find('.loading').exists(),
+        );
+      }
+    });
+
+    wrapper = mountView();
+    await vi.waitFor(() => expect(listVideoSessions).toHaveBeenCalled());
+    finishSessionRequest([
+      {
+        id: 'session-visible',
+        title: 'Visible session',
+        status: 'ready',
+        player_ids: [],
+      } as VideoSession,
+    ]);
+    await flushAsync();
+
+    expect(listWasVisibleAtEvent).toBe(true);
+    expect(wrapper.find('.sessions-list').text()).toContain('Visible session');
+  });
+
+  it('records the visible Analysis Results modal render once', async () => {
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachPro = true;
+    authStoreMock.role = 'coach_pro';
+
+    let wrapper: ReturnType<typeof mountView> | undefined;
+    let resultsWereVisibleAtEvent = false;
+    const resultsEvents: unknown[] = [];
+    vi.spyOn(console, 'info').mockImplementation((label, event) => {
+      const telemetry = event as { operation?: string; phase?: string };
+      if (
+        label === '[coach-performance]' &&
+        telemetry.operation === 'coach_plus.analysis_results' &&
+        telemetry.phase === 'render'
+      ) {
+        resultsEvents.push(event);
+        resultsWereVisibleAtEvent = Boolean(
+          wrapper?.findAll('h2').some((heading) => heading.text() === 'Analysis Results'),
+        );
+      }
+    });
+
+    wrapper = mountView();
+    await flushAsync();
+    const now = new Date().toISOString();
+    const job = {
+      id: 'job-visible-results',
+      session_id: 'session-visible-results',
+      sample_fps: 10,
+      include_frames: false,
+      status: 'done',
+      error_message: null,
+      sqs_message_id: null,
+      results: null,
+      created_at: now,
+      started_at: now,
+      completed_at: now,
+      updated_at: now,
+    } as VideoAnalysisJob;
+
+    await (
+      wrapper.vm as unknown as { viewJobResults: (value: VideoAnalysisJob) => Promise<void> }
+    ).viewJobResults(job);
+
+    expect(resultsWereVisibleAtEvent).toBe(true);
+    expect(resultsEvents).toHaveLength(1);
   });
 
   it('uses player-centered create form fields instead of manual player ID textarea', async () => {

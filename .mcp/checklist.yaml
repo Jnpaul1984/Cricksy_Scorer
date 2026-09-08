@@ -505,3 +505,37 @@
   completed_by: "codex"
   completed_at: "2026-09-07"
   notes: "No migration; all detailed evidence remains in the persisted V2 report contract."
+
+- id: phase10j-18a-performance-baseline
+  week: 10
+  category: "Phase 10J"
+  title: "10J.18A Coach Pro Plus Performance Instrumentation & Latency Baseline"
+  description: "Add safe timing evidence for the five Coach Pro Plus deployed-test flows"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Frontend and backend timings cover session list, completed-session/results, review, and PDF flows"
+    - "Telemetry is non-sensitive and cannot break normal behavior"
+    - "A practical deployed-test runbook defines correlation and Phase 10J.18B capture fields"
+  verification_commands:
+    - "python -m pytest -q backend/tests/test_performance_telemetry.py"
+    - "cd frontend && npm run test:unit -- tests/unit/coachPerformanceTelemetry.spec.ts tests/unit/CoachProPlusVideoSessionsView.spec.ts"
+    - "cd frontend && npm run type-check"
+  files_touched:
+    - "backend/services/performance_telemetry.py"
+    - "backend/routes/coach_pro_plus.py"
+    - "backend/routes/player_development.py"
+    - "backend/tests/test_performance_telemetry.py"
+    - "frontend/src/utils/coachPerformanceTelemetry.ts"
+    - "frontend/src/services/coachPlusVideoService.ts"
+    - "frontend/src/services/playerDevelopmentApi.ts"
+    - "frontend/src/views/CoachProPlusVideoSessionsView.vue"
+    - "frontend/tests/unit/coachPerformanceTelemetry.spec.ts"
+    - "docs/PHASE_10J18A_PERFORMANCE_BASELINE_RUNBOOK.md"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "codex"
+  completed_at: "2026-09-08"
+  notes: "No migration and no optimization; telemetry reuses the existing request ID middleware."
