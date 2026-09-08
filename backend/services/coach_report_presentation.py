@@ -148,7 +148,7 @@ def phase_display_name(phase_id: str | None) -> str:
 
 
 def confidence_band(score: Any) -> str:
-    if not isinstance(score, (int, float)) or isinstance(score, bool):
+    if not isinstance(score, int | float) or isinstance(score, bool):
         return "Confidence unavailable"
     if score >= HIGH_CONFIDENCE_THRESHOLD:
         return "High confidence"
@@ -247,7 +247,7 @@ def build_longitudinal_presentation(progress: dict[str, Any]) -> dict[str, Any]:
 
 
 def format_metric_value(value: Any, unit: str | None) -> str:
-    if not isinstance(value, (int, float)) or isinstance(value, bool):
+    if not isinstance(value, int | float) or isinstance(value, bool):
         return "Unavailable"
     if unit == "degrees":
         return f"{value:.1f}°"
@@ -347,7 +347,7 @@ def build_player_presentation(report: dict[str, Any]) -> dict[str, Any]:
             _present_priority(item, action_by_metric.get(item.get("metric_id")), repetition_labels)
             for item in priorities
         ],
-        "governed_actions": [_present_action(item) for item in actions],
+        "governed_actions": _present_actions(actions),
         "consistency": [
             {
                 "title": metric_display_name(item.get("metric_id")),
@@ -394,7 +394,7 @@ def _present_signal(
         "metric_id": item.get("metric_id"),
         "title": metric_display_name(item.get("metric_id")),
         "observation": item.get("summary") or "A repeatable pattern was measured.",
-        "repetition_count": item.get("valid_sample_count") or len(labels),
+        "repetition_count": _comparable_repetition_count(item, labels),
         "repetition_labels": labels,
         "confidence": confidence_band(item.get("confidence_score")),
         "limitations": item.get("limitations", []),
@@ -428,8 +428,11 @@ def _present_priority(
 
 
 def _present_action(item: dict[str, Any]) -> dict[str, Any]:
+    linked_metric_id = item.get("linked_metric_id")
     return {
-        "linked_metric_id": item.get("linked_metric_id"),
+        "action_id": item.get("action_id"),
+        "linked_metric_id": linked_metric_id,
+        "linked_metric_ids": [linked_metric_id] if linked_metric_id else [],
         "title": item.get("technical_area"),
         "observed_issue": metric_display_name(item.get("linked_metric_id")),
         "coaching_goal": item.get("coaching_objective"),
@@ -440,6 +443,41 @@ def _present_action(item: dict[str, Any]) -> dict[str, Any]:
         "requires_coach_approval": item.get("requires_coach_approval"),
         "review_status": item.get("review_status"),
     }
+
+
+def _present_actions(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    presented: list[dict[str, Any]] = []
+    by_action_id: dict[str, dict[str, Any]] = {}
+    for item in items:
+        action = _present_action(item)
+        action_id = item.get("action_id")
+        if not isinstance(action_id, str) or not action_id:
+            presented.append(action)
+            continue
+
+        existing = by_action_id.get(action_id)
+        if existing is None:
+            by_action_id[action_id] = action
+            presented.append(action)
+            continue
+
+        for metric_id in action["linked_metric_ids"]:
+            if metric_id not in existing["linked_metric_ids"]:
+                existing["linked_metric_ids"].append(metric_id)
+    return presented
+
+
+def _comparable_repetition_count(item: dict[str, Any], labels: list[str]) -> int | None:
+    valid_sample_count = item.get("valid_sample_count")
+    if (
+        isinstance(valid_sample_count, int)
+        and not isinstance(valid_sample_count, bool)
+        and valid_sample_count > 0
+    ):
+        return valid_sample_count
+    if labels:
+        return len(set(labels))
+    return None
 
 
 def _present_selections(

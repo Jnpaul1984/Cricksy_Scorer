@@ -397,10 +397,23 @@ describe('CoachProPlusVideoSessionsView', () => {
               why_it_matters: 'A repeatable release can improve control.',
               proxy: 'Approximate measurement',
             },
+            {
+              metric_id: 'pace_bowling_release_proxy_trunk_lean_deg',
+              title: 'Body lean near release',
+              observation: 'Comparable evidence was not persisted for this pattern.',
+              repetition_count: null,
+              repetition_labels: [],
+              confidence: 'High confidence',
+              limitations: [],
+              why_it_matters: 'A repeatable release can improve control.',
+              proxy: 'Approximate measurement',
+            },
           ],
           governed_actions: [
             {
+              action_id: 'pace-release-follow-through',
               linked_metric_id: 'pace_bowling_release_proxy_bowling_arm_angle_deg',
+              linked_metric_ids: ['pace_bowling_release_proxy_bowling_arm_angle_deg'],
               title: 'Release and follow-through',
               observed_issue: 'Bowling-arm angle near release',
               coaching_goal: 'Repeat the release shape.',
@@ -448,6 +461,10 @@ describe('CoachProPlusVideoSessionsView', () => {
       'Confidence unavailable • Could not measure clearly',
     );
     expect(text).toContain('Release and follow-through');
+    expect(text).toContain('3 comparable repetitions');
+    expect(text).toContain('Comparable repetition count unavailable');
+    expect(text).not.toContain('null comparable repetitions');
+    expect(text).not.toContain('0 comparable repetitions');
     expect(wrapper.findAll('h3').map((heading) => heading.text())).not.toContain('Priorities');
     expect(text).not.toContain('rep-1:phase:1');
     expect(text).not.toContain('pace_bowling_release_proxy_bowling_arm_angle_deg');

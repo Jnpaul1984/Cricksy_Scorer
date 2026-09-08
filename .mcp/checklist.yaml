@@ -439,3 +439,34 @@
   completed_by: "codex"
   completed_at: "2026-09-06"
   notes: "No migration; presentation uses persisted V2 evidence only, with exact IDs retained in the technical appendix."
+
+- id: phase10j-16-report-correctness-dedup
+  week: 10
+  category: "Phase 10J"
+  title: "10J.16 V2 Report Correctness & Recommendation Deduplication"
+  description: "Report metric-specific comparable counts accurately and consolidate duplicate player-facing governed actions by stable action ID"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Persisted metric-specific comparable counts are shown when available; unsupported counts are unavailable rather than zero"
+    - "Player-facing governed actions deduplicate only by exact action_id and retain every linked metric ID"
+    - "Different action IDs remain separate and insufficient-evidence behavior is unchanged"
+  verification_commands:
+    - "python -m pytest -q backend/tests/test_coach_report_presentation.py backend/tests/test_coach_report_v2.py"
+    - "cd frontend && npm run test:unit -- tests/unit/CoachProPlusVideoSessionsView.spec.ts"
+    - "python -m ruff check backend/services/coach_report_presentation.py backend/tests/test_coach_report_presentation.py"
+    - "python -m ruff format --check backend/services/coach_report_presentation.py backend/tests/test_coach_report_presentation.py"
+  files_touched:
+    - "backend/services/coach_report_presentation.py"
+    - "backend/tests/test_coach_report_presentation.py"
+    - "frontend/src/services/coachPlusVideoService.ts"
+    - "frontend/src/views/CoachProPlusVideoSessionsView.vue"
+    - "frontend/tests/unit/CoachProPlusVideoSessionsView.spec.ts"
+    - "docs/PHASE_10J16_REPORT_CORRECTNESS_AND_RECOMMENDATION_DEDUPLICATION.md"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "codex"
+  completed_at: "2026-09-07"
+  notes: "No migration; the presentation layer uses only persisted counts, evidence links, and governed action IDs."
