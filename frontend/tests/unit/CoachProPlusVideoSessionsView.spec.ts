@@ -342,6 +342,11 @@ describe('CoachProPlusVideoSessionsView', () => {
             'The recording provided clear evidence for the available technique review.',
           session_summary: 'We identified 1 usable delivery.',
           insufficient_evidence: { active: false },
+          movement_summary: {
+            summary: '1 usable delivery identified.',
+            phase_confidence_summary:
+              '1 phase observation across 1 movement phase: 1 low confidence.',
+          },
           repetitions: [
             {
               repetition_id: 'rep-1',
@@ -382,6 +387,28 @@ describe('CoachProPlusVideoSessionsView', () => {
               validity: 'Could not measure clearly',
               proxy: null,
               classification: null,
+            },
+          ],
+          current_session_positives: [
+            {
+              metric_id: 'pace_bowling_approach_head_stability_score',
+              title: 'Head stability during the approach',
+              observation: 'This measurement looked good in this session.',
+              value: '82%',
+              phase: 'Approach',
+              confidence: 'High confidence',
+              validity: 'Estimate only',
+              proxy: 'Approximate measurement',
+            },
+            {
+              metric_id: 'pace_bowling_follow_through_balance_drift_ratio',
+              title: 'Balance through the follow through',
+              observation: 'This measurement looked good in this session.',
+              value: '75%',
+              phase: 'Follow through',
+              confidence: 'High confidence',
+              validity: null,
+              proxy: null,
             },
           ],
           strengths: [],
@@ -431,8 +458,9 @@ describe('CoachProPlusVideoSessionsView', () => {
             needs_work: { available: false, label: null, rationale: null, confidence: null },
           },
           progress: {
-            state: 'Not enough sessions yet',
-            summary: 'Complete another comparable session to start tracking progress.',
+            state: 'Baseline established',
+            summary:
+              "This is the player's first recorded assessment. Future comparable sessions will show what improved, stayed consistent, or needs more work.",
             items: [],
           },
         },
@@ -461,10 +489,28 @@ describe('CoachProPlusVideoSessionsView', () => {
       'Confidence unavailable • Could not measure clearly',
     );
     expect(text).toContain('Release and follow-through');
+    expect(text).toContain('What looked good in this session');
+    expect(text).toContain('Head stability during the approach');
+    expect(text).toContain('This measurement looked good in this session');
+    const positiveCards = wrapper.findAll('.finding-card');
+    const caveatedPositive = positiveCards.find((card) =>
+      card.text().includes('Head stability during the approach'),
+    );
+    expect(caveatedPositive?.find('.status-text').text().replace(/\s+/g, ' ').trim()).toBe(
+      '82% • Approach • High confidence • Approximate measurement • Estimate only',
+    );
+    const normalPositive = positiveCards.find((card) =>
+      card.text().includes('Balance through the follow through'),
+    );
+    expect(normalPositive?.find('.status-text').text().replace(/\s+/g, ' ').trim()).toBe(
+      '75% • Follow through • High confidence',
+    );
+    expect(text).not.toContain('No repeatable strengths could be confirmed');
     expect(text).toContain('3 comparable repetitions');
-    expect(text).toContain('Comparable repetition count unavailable');
+    expect(text).not.toContain('Comparable repetition count unavailable');
     expect(text).not.toContain('null comparable repetitions');
     expect(text).not.toContain('0 comparable repetitions');
+    expect(wrapper.find('details.movement-evidence').attributes('open')).toBeUndefined();
     expect(wrapper.findAll('h3').map((heading) => heading.text())).not.toContain('Priorities');
     expect(text).not.toContain('rep-1:phase:1');
     expect(text).not.toContain('pace_bowling_release_proxy_bowling_arm_angle_deg');
@@ -529,9 +575,14 @@ describe('CoachProPlusVideoSessionsView', () => {
             recommendation: 'Record at least 3 comparable deliveries for a fuller analysis.',
             minimum_repetitions: 3,
           },
+          movement_summary: {
+            summary: '2 usable deliveries identified.',
+            phase_confidence_summary: 'Phase evidence unavailable.',
+          },
           repetitions: [],
           phases: [],
           metrics: [],
+          current_session_positives: [],
           strengths: [],
           priorities: [],
           governed_actions: [],
@@ -541,8 +592,9 @@ describe('CoachProPlusVideoSessionsView', () => {
             needs_work: { available: false, label: null, rationale: null, confidence: null },
           },
           progress: {
-            state: 'Not enough sessions yet',
-            summary: 'Complete another comparable session to start tracking progress.',
+            state: 'Baseline established',
+            summary:
+              "This is the player's first recorded assessment. Future comparable sessions will show what improved, stayed consistent, or needs more work.",
             items: [],
           },
         },

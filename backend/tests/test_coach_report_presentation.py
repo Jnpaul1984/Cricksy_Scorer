@@ -297,13 +297,59 @@ def test_longitudinal_statuses_are_player_friendly(status: str, expected: str) -
     assert progress_wording(status) == expected
 
 
-def test_single_current_session_prompts_for_another_comparable_session() -> None:
+def test_single_current_session_establishes_a_baseline() -> None:
     progress = build_player_presentation(_technical_report())["progress"]
     assert progress == {
-        "state": "Not enough sessions yet",
-        "summary": "Complete another comparable session to start tracking progress.",
+        "state": "Baseline established",
+        "summary": (
+            "This is the player's first recorded assessment. Future comparable sessions will "
+            "show what improved, stayed consistent, or needs more work."
+        ),
         "items": [],
     }
+
+
+def test_one_session_longitudinal_response_establishes_a_baseline() -> None:
+    progress = build_longitudinal_presentation({"session_count": 1, "series": []})
+
+    assert progress["state"] == "Baseline established"
+    assert "first recorded assessment" in progress["summary"]
+
+
+def test_valid_strong_metric_is_presented_as_a_current_session_positive() -> None:
+    report = _technical_report(repetitions=3, metric_validity="VALID")
+    report["metrics"][0].update({"raw_value": 145.0, "classification_status": "STRONG"})
+
+    presentation = build_player_presentation(report)
+
+    assert presentation["current_session_positives"] == [
+        {
+            "metric_id": "pace_bowling_release_proxy_bowling_arm_angle_deg",
+            "title": "Bowling-arm angle near release",
+            "observation": "This measurement looked good in this session.",
+            "value": "145.0°",
+            "phase": "Release estimate",
+            "confidence": "Low confidence",
+            "validity": None,
+            "proxy": "Approximate measurement",
+        }
+    ]
+
+
+def test_large_session_uses_concise_movement_summary_without_losing_evidence() -> None:
+    report = _report_with_supported_concern(43)
+
+    presentation = build_player_presentation(report)
+
+    assert presentation["movement_summary"] == {
+        "summary": "43 usable deliveries identified.",
+        "phase_confidence_summary": (
+            "1 phase observation across 1 movement phase: 1 medium confidence. "
+            "Approximate movement phase evidence: 1 observation. Evidence note: Estimate only."
+        ),
+    }
+    assert len(presentation["repetitions"]) == 43
+    assert presentation["repetitions"][0]["repetition_id"] == "ba694e41-0000:rep:7"
 
 
 def test_longitudinal_presentation_uses_plain_states_and_labels() -> None:

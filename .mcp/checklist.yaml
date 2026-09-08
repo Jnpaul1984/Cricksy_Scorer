@@ -470,3 +470,38 @@
   completed_by: "codex"
   completed_at: "2026-09-07"
   notes: "No migration; the presentation layer uses only persisted counts, evidence links, and governed action IDs."
+
+- id: phase10j-17-first-session-report
+  week: 10
+  category: "Phase 10J"
+  title: "10J.17 First-Session Report Semantics & Player-Facing Information Hierarchy"
+  description: "Frame first assessments as baselines, surface current-session positives, and keep detailed movement evidence secondary"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "A single recorded session is presented as a baseline and explains future comparison"
+    - "Valid STRONG measurements surface as current-session positives without a repeatability claim"
+    - "Unavailable comparable counts are omitted and individual movement evidence is collapsed in the UI"
+    - "The normal PDF uses movement and technical summaries while persisted evidence remains unchanged"
+  verification_commands:
+    - "python -m pytest -q backend/tests/test_coach_report_presentation.py backend/tests/test_coach_report_v2.py"
+    - "cd frontend && npm run test:unit -- tests/unit/CoachProPlusVideoSessionsView.spec.ts tests/unit/PlayerLongitudinalProgress.spec.ts"
+    - "python -m ruff check backend/services/coach_report_presentation.py backend/services/reports/coach_report_template.py backend/tests/test_coach_report_presentation.py backend/tests/test_coach_report_v2.py"
+    - "python -m ruff format --check backend/services/coach_report_presentation.py backend/services/reports/coach_report_template.py backend/tests/test_coach_report_presentation.py backend/tests/test_coach_report_v2.py"
+  files_touched:
+    - "backend/services/coach_report_presentation.py"
+    - "backend/services/reports/coach_report_template.py"
+    - "backend/tests/test_coach_report_presentation.py"
+    - "backend/tests/test_coach_report_v2.py"
+    - "frontend/src/services/coachPlusVideoService.ts"
+    - "frontend/src/views/CoachProPlusVideoSessionsView.vue"
+    - "frontend/tests/unit/CoachProPlusVideoSessionsView.spec.ts"
+    - "frontend/tests/unit/PlayerLongitudinalProgress.spec.ts"
+    - "docs/PHASE_10J17_FIRST_SESSION_REPORT_SEMANTICS.md"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "codex"
+  completed_at: "2026-09-07"
+  notes: "No migration; all detailed evidence remains in the persisted V2 report contract."

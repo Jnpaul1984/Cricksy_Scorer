@@ -350,7 +350,7 @@ def _build_metrics_table(metrics: dict[str, Any]) -> Table | None:
     rows = [["Metric", "Score", "Status"]]
 
     for key, value in metrics.items():
-        if isinstance(value, (int, float)):
+        if isinstance(value, int | float):
             metric_name = key.replace("_", " ").title()
             score_str = f"{value:.2f}" if isinstance(value, float) else str(value)
 
@@ -894,11 +894,25 @@ def render_coaching_analysis_report_v2(report: dict[str, Any]) -> list:
                 styles,
             )
         )
-    elements.extend(_render_player_repetitions(presentation, styles))
+    elements.extend(_render_player_movement_summary(presentation, styles))
 
-    elements.append(Paragraph("2. What am I doing well?", styles["heading"]))
+    elements.append(Paragraph("2. What looked good in this session", styles["heading"]))
+    current_positives = presentation.get("current_session_positives", [])
     strengths = presentation.get("strengths", [])
-    if strengths:
+    if current_positives or strengths:
+        for positive in current_positives:
+            elements.extend(
+                _render_player_card(
+                    positive.get("title"),
+                    [
+                        positive.get("observation"),
+                        f"{positive.get('value')} — {positive.get('phase')}",
+                        positive.get("confidence"),
+                        positive.get("proxy"),
+                    ],
+                    styles,
+                )
+            )
         for strength in strengths:
             elements.extend(
                 _render_player_card(
@@ -914,7 +928,8 @@ def render_coaching_analysis_report_v2(report: dict[str, Any]) -> list:
     else:
         elements.append(
             Paragraph(
-                "No repeatable strengths could be confirmed from this session yet.", styles["body"]
+                "No current-session positive finding was confirmed from the available evidence.",
+                styles["body"],
             )
         )
 
@@ -990,26 +1005,13 @@ def render_coaching_analysis_report_v2(report: dict[str, Any]) -> list:
     return elements
 
 
-def _render_player_repetitions(presentation: dict[str, Any], styles: dict) -> list:
+def _render_player_movement_summary(presentation: dict[str, Any], styles: dict) -> list:
     elements: list[Any] = [Paragraph("Session movements", styles["subheading"])]
-    repetitions = presentation.get("repetitions", [])
-    if not repetitions:
-        elements.append(Paragraph("No usable repetitions were identified.", styles["body"]))
-        return elements
-    phases = presentation.get("phases", [])
-    for repetition in repetitions:
-        label = repetition.get("label")
-        repetition_phases = []
-        for item in phases:
-            if item.get("repetition_label") != label:
-                continue
-            notes = [item.get("proxy"), item.get("validity")]
-            note_text = ", ".join(str(note) for note in notes if note)
-            phase_label = str(item.get("label") or "Movement phase")
-            repetition_phases.append(f"{phase_label} ({note_text})" if note_text else phase_label)
-        phase_text = ", ".join(dict.fromkeys(repetition_phases)) or "Phases unavailable"
-        details = [phase_text, repetition.get("confidence"), repetition.get("validity")]
-        elements.extend(_render_player_card(label, details, styles))
+    movement = presentation.get("movement_summary", {})
+    elements.append(Paragraph(_safe_pdf_text(movement.get("summary")), styles["body"]))
+    elements.append(
+        Paragraph(_safe_pdf_text(movement.get("phase_confidence_summary")), styles["body"])
+    )
     return elements
 
 
@@ -1043,14 +1045,14 @@ def _render_player_card(
     return [table, Spacer(1, SPACE_ITEM)]
 
 
-def _support_text(item: dict[str, Any]) -> str:
+def _support_text(item: dict[str, Any]) -> str | None:
     count = item.get("repetition_count")
     labels = item.get("repetition_labels", [])
     if isinstance(count, int) and count > 0:
         suffix = f" ({', '.join(labels)})" if labels else ""
         noun = "repetition" if count == 1 else "repetitions"
         return f"This pattern appeared in {count} comparable {noun}{suffix}."
-    return "Comparable repetition count unavailable."
+    return None
 
 
 def _video_timestamp(value: Any) -> str | None:
@@ -1125,30 +1127,20 @@ def _render_v2_technical_appendix(report: dict[str, Any], styles: dict) -> list:
             styles["small"],
         )
     )
-    elements.append(Paragraph("Exact repetition and phase evidence", styles["subheading"]))
-    for repetition in report.get("repetitions", []):
-        elements.append(
-            Paragraph(
-                f"Repetition ID {_safe_pdf_text(repetition.get('repetition_id'))}; "
-                f"action {_safe_pdf_text(repetition.get('action_type'))}; "
-                f"confidence {_format_v2_number(repetition.get('segmentation_confidence'))}; "
-                f"validity {_safe_pdf_text(repetition.get('validity_state'))}.",
-                styles["small"],
-            )
+    repetitions = report.get("repetitions", [])
+    phases = report.get("phases", [])
+    metrics = report.get("metrics", [])
+    elements.append(Paragraph("Persisted technical evidence summary", styles["subheading"]))
+    elements.append(
+        Paragraph(
+            f"{len(repetitions)} repetition record(s); {len(phases)} phase record(s); "
+            f"{len(metrics)} metric record(s). Full repetition IDs, phase IDs, timestamps, "
+            "frame ranges, and evidence locators remain available in the persisted V2 report.",
+            styles["small"],
         )
-    for phase in report.get("phases", []):
-        elements.append(
-            Paragraph(
-                f"Phase ID {_safe_pdf_text(phase.get('phase_id'))}; "
-                f"repetition {_safe_pdf_text(phase.get('repetition_id'))}; "
-                f"phase name {_safe_pdf_text(phase.get('phase_name'))}; "
-                f"confidence {_format_v2_number(phase.get('confidence'))}; "
-                f"validity {_safe_pdf_text(phase.get('validity_state'))}.",
-                styles["small"],
-            )
-        )
+    )
     elements.append(Paragraph("Exact metric evidence", styles["subheading"]))
-    for metric in report.get("metrics", []):
+    for metric in metrics:
         reference_count = sum(
             len(metric.get(name, [])) for name in ("evidence_refs", "timestamp_refs", "frame_refs")
         )
@@ -1156,21 +1148,12 @@ def _render_v2_technical_appendix(report: dict[str, Any], styles: dict) -> list:
             Paragraph(
                 f"Metric ID {_safe_pdf_text(metric.get('metric_id'))}; "
                 f"version {_safe_pdf_text(metric.get('metric_version'))}; "
-                f"repetition {_safe_pdf_text(metric.get('repetition_id'))}; "
                 f"phase {_safe_pdf_text(metric.get('phase'))}; "
                 f"value {_format_v2_number(metric.get('raw_value'), metric.get('unit'))}; "
                 f"confidence {_format_v2_number(metric.get('confidence_score'))}; "
                 f"validity {_safe_pdf_text(metric.get('validity_state'))}; "
                 f"proxy state {_safe_pdf_text(metric.get('proxy_state'))}; "
                 f"{reference_count} evidence reference(s).",
-                styles["small"],
-            )
-        )
-        locators = _metric_evidence_locators(metric)
-        locator_text = "; ".join(locators) if locators else "None persisted"
-        elements.append(
-            Paragraph(
-                f"Evidence locators: {_safe_pdf_text(locator_text)}.",
                 styles["small"],
             )
         )

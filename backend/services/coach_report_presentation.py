@@ -205,6 +205,8 @@ def build_longitudinal_presentation(progress: dict[str, Any]) -> dict[str, Any]:
     """Translate persisted longitudinal results without changing their calculations."""
     series = progress.get("series", [])
     comparable = [item for item in series if item.get("comparable_session_count", 0) >= 2]
+    if progress.get("session_count") == 1:
+        return _baseline_progress()
     if not series:
         return {
             "state": "Cannot compare yet",
@@ -283,6 +285,22 @@ def build_player_presentation(report: dict[str, Any]) -> dict[str, Any]:
     metrics = report.get("metrics", [])
     measurable_metrics = [item for item in metrics if item.get("raw_value") is not None]
     discipline = _discipline(report, repetitions, metrics)
+    presented_metrics = [_present_metric(item, discipline) for item in measurable_metrics]
+    presented_phases = [
+        {
+            "phase_id": item.get("phase_id"),
+            "label": phase_display_name(item.get("phase_name")),
+            "repetition_label": repetition_labels.get(item.get("repetition_id"), "Repetition"),
+            "confidence": confidence_band(item.get("confidence")),
+            "validity": validity_wording(item.get("validity_state"), discipline),
+            "proxy": "Approximate movement phase" if item.get("requires_object_evidence") else None,
+        }
+        for item in report.get("phases", [])
+    ]
+    presented_strengths = [
+        _present_signal(item, repetition_labels) for item in report.get("strengths", [])
+    ]
+    strength_metric_ids = {item.get("metric_id") for item in presented_strengths}
     has_recurring_sample_minimum = len(usable_repetitions) >= MIN_RECURRING_SAMPLES
     priorities = (
         report.get("development_priorities", [])[:3] if has_recurring_sample_minimum else []
@@ -311,6 +329,9 @@ def build_player_presentation(report: dict[str, Any]) -> dict[str, Any]:
         "insufficient_evidence": _insufficient_evidence(
             discipline, len(usable_repetitions), bool(report.get("phases")), insufficient
         ),
+        "movement_summary": _movement_summary(
+            discipline, len(usable_repetitions), presented_phases
+        ),
         "repetitions": [
             {
                 "repetition_id": item.get("repetition_id"),
@@ -322,27 +343,16 @@ def build_player_presentation(report: dict[str, Any]) -> dict[str, Any]:
             }
             for item in repetitions
         ],
-        "phases": [
-            {
-                "phase_id": item.get("phase_id"),
-                "label": phase_display_name(item.get("phase_name")),
-                "repetition_label": repetition_labels.get(item.get("repetition_id"), "Repetition"),
-                "confidence": confidence_band(item.get("confidence")),
-                "validity": validity_wording(item.get("validity_state"), discipline),
-                "proxy": (
-                    "Approximate movement phase" if item.get("requires_object_evidence") else None
-                ),
-            }
-            for item in report.get("phases", [])
+        "phases": presented_phases,
+        "metrics": presented_metrics,
+        "current_session_positives": [
+            _present_current_positive(item, discipline)
+            for item in measurable_metrics
+            if item.get("classification_status") == "STRONG"
+            and item.get("validity_state") in {"VALID", "LOW_CONFIDENCE"}
+            and item.get("metric_id") not in strength_metric_ids
         ],
-        "metrics": [
-            _present_metric(item, discipline)
-            for item in metrics
-            if item.get("raw_value") is not None
-        ],
-        "strengths": [
-            _present_signal(item, repetition_labels) for item in report.get("strengths", [])
-        ],
+        "strengths": presented_strengths,
         "priorities": [
             _present_priority(item, action_by_metric.get(item.get("metric_id")), repetition_labels)
             for item in priorities
@@ -379,6 +389,19 @@ def _present_metric(item: dict[str, Any], discipline: str | None) -> dict[str, A
             if item.get("classification_status") == "STRONG"
             else None
         ),
+    }
+
+
+def _present_current_positive(item: dict[str, Any], discipline: str | None) -> dict[str, Any]:
+    return {
+        "metric_id": item.get("metric_id"),
+        "title": metric_display_name(item.get("metric_id")),
+        "observation": "This measurement looked good in this session.",
+        "value": format_metric_value(item.get("raw_value"), item.get("unit")),
+        "phase": phase_display_name(item.get("phase")),
+        "confidence": confidence_band(item.get("confidence_score")),
+        "validity": validity_wording(item.get("validity_state"), discipline),
+        "proxy": proxy_wording(item.get("metric_id"), item.get("phase")),
     }
 
 
@@ -497,11 +520,7 @@ def _present_selections(
 
 def _present_progress(items: list[dict[str, Any]]) -> dict[str, Any]:
     if not items:
-        return {
-            "state": "Not enough sessions yet",
-            "summary": "Complete another comparable session to start tracking progress.",
-            "items": [],
-        }
+        return _baseline_progress()
     states = [progress_wording(item.get("status")) for item in items]
     if "Cannot compare yet" in states:
         overall = "Cannot compare yet"
@@ -531,6 +550,56 @@ def _present_progress(items: list[dict[str, Any]]) -> dict[str, Any]:
             }
             for item in items
         ],
+    }
+
+
+def _baseline_progress() -> dict[str, Any]:
+    return {
+        "state": "Baseline established",
+        "summary": (
+            "This is the player's first recorded assessment. Future comparable sessions will "
+            "show what improved, stayed consistent, or needs more work."
+        ),
+        "items": [],
+    }
+
+
+def _movement_summary(
+    discipline: str | None, usable_count: int, phases: list[dict[str, Any]]
+) -> dict[str, str]:
+    noun = _repetition_noun(discipline, plural=usable_count != 1).lower()
+    summary = f"{usable_count} usable {noun} identified."
+    if not phases:
+        return {"summary": summary, "phase_confidence_summary": "Phase evidence unavailable."}
+
+    phase_names = list(dict.fromkeys(str(item["label"]) for item in phases if item.get("label")))
+    confidence_counts: dict[str, int] = {}
+    for item in phases:
+        confidence = str(item.get("confidence") or "Confidence unavailable")
+        confidence_counts[confidence] = confidence_counts.get(confidence, 0) + 1
+    confidence_text = ", ".join(
+        f"{count} {label.lower()}" for label, count in confidence_counts.items()
+    )
+    observation_noun = "observation" if len(phases) == 1 else "observations"
+    phase_noun = "phase" if len(phase_names) == 1 else "phases"
+    notes: list[str] = []
+    proxy_count = sum(1 for item in phases if item.get("proxy"))
+    if proxy_count:
+        proxy_noun = "observation" if proxy_count == 1 else "observations"
+        notes.append(f"Approximate movement phase evidence: {proxy_count} {proxy_noun}.")
+    validity_notes = list(
+        dict.fromkeys(str(item["validity"]) for item in phases if item.get("validity"))
+    )
+    if validity_notes:
+        notes.append(f"Evidence note: {', '.join(validity_notes)}.")
+    note_text = f" {' '.join(notes)}" if notes else ""
+    return {
+        "summary": summary,
+        "phase_confidence_summary": (
+            f"{len(phases)} phase {observation_noun} across {len(phase_names)} movement "
+            f"{phase_noun}: "
+            f"{confidence_text}.{note_text}"
+        ),
     }
 
 

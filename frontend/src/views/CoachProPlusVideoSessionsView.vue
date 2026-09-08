@@ -693,10 +693,16 @@
 
             <section class="results-section">
               <h3>Session movements</h3>
-              <p v-if="selectedJobV2Presentation.repetitions.length === 0" class="status-text">
-                No usable repetitions were identified.
+              <p>{{ selectedJobV2Presentation.movement_summary.summary }}</p>
+              <p class="status-text">
+                {{ selectedJobV2Presentation.movement_summary.phase_confidence_summary }}
               </p>
-              <ul v-else class="repetition-list">
+              <details
+                v-if="selectedJobV2Presentation.repetitions.length"
+                class="movement-evidence"
+              >
+                <summary>View individual movement evidence</summary>
+                <ul class="repetition-list">
                 <li
                   v-for="repetition in selectedJobV2Presentation.repetitions"
                   :key="repetition.repetition_id"
@@ -729,7 +735,8 @@
                     Jump to
                   </button>
                 </li>
-              </ul>
+                </ul>
+              </details>
           </section>
 
             <section
@@ -762,10 +769,29 @@
           </section>
 
           <section class="results-section">
-              <h3>What am I doing well?</h3>
-              <p v-if="selectedJobV2Presentation.strengths.length === 0" class="status-text">
-                No repeatable strengths could be confirmed from this session yet.
+              <h3>What looked good in this session</h3>
+              <p
+                v-if="
+                  selectedJobV2Presentation.current_session_positives.length === 0 &&
+                  selectedJobV2Presentation.strengths.length === 0
+                "
+                class="status-text"
+              >
+                No current-session positive finding was confirmed from the available evidence.
             </p>
+              <div
+                v-for="positive in selectedJobV2Presentation.current_session_positives"
+                :key="`current:${positive.metric_id}`"
+                class="finding-card"
+              >
+                <h4>{{ positive.title }}</h4>
+                <p>{{ positive.observation }}</p>
+                <p class="status-text">
+                  {{ positive.value }} • {{ positive.phase }} • {{ positive.confidence }}
+                  <span v-if="positive.proxy"> • {{ positive.proxy }}</span>
+                  <span v-if="positive.validity"> • {{ positive.validity }}</span>
+                </p>
+              </div>
               <div
                 v-for="strength in selectedJobV2Presentation.strengths"
                 :key="strength.metric_id"
@@ -777,7 +803,6 @@
                   <template v-if="strength.repetition_count !== null">
                     {{ strength.repetition_count }} comparable repetitions •
                   </template>
-                  <template v-else>Comparable repetition count unavailable •</template>
                   {{ strength.confidence }}
                 </p>
               </div>
@@ -799,7 +824,6 @@
                   <template v-if="priority.repetition_count !== null">
                     {{ priority.repetition_count }} comparable repetitions •
                   </template>
-                  <template v-else>Comparable repetition count unavailable •</template>
                   {{ priority.confidence }}
                 </p>
                 <p>{{ priority.why_it_matters }}</p>

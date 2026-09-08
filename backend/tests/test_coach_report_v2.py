@@ -369,8 +369,7 @@ def test_v2_pdf_bypasses_unsafe_legacy_findings_and_free_form_suggestions() -> N
     assert pdf_bytes.startswith(b"%PDF")
     assert len(pdf_bytes) > 1_000
     assert "1. How did I do?" in player_text
-    assert "Delivery 1" in player_text
-    assert "Release" in player_text
+    assert "3 usable deliveries identified" in player_text
     assert "Bowling-arm angle at release" in player_text
     assert "High confidence" in player_text
     assert "What should I do in training?" in player_text
@@ -379,13 +378,14 @@ def test_v2_pdf_bypasses_unsafe_legacy_findings_and_free_form_suggestions() -> N
     assert "pace_bowling_release_arm_angle_degrees" not in player_text
     assert "pace-release-follow-through" not in player_text
     assert "job-v2" not in player_text
-    assert "rep-1" in appendix_text
+    assert "rep-1" not in appendix_text
     assert "pace_bowling_release_arm_angle_degrees" in appendix_text
     assert "pace-release-follow-through" in appendix_text
     assert "job-v2" in appendix_text
-    assert "00:28.12\u201300:31.44" in appendix_text
-    assert "Frames 842\u2013943" in appendix_text
-    assert "repetition_phase / Release / rep-1:release" in appendix_text
+    assert "Full repetition IDs, phase IDs, timestamps, frame ranges" in appendix_text
+    assert "00:28.12\u201300:31.44" not in appendix_text
+    assert "Frames 842\u2013943" not in appendix_text
+    assert "rep-1:release" not in appendix_text
     assert "00:28.12\u201300:31.44" not in player_text
     assert "Frames 842\u2013943" not in player_text
     assert "Suspend intensive batting" not in text
@@ -430,6 +430,14 @@ def test_batting_pdf_preserves_proxy_and_unavailable_evidence_without_zero_fallb
         }
         for index in range(1, 5)
     ]
+    technical_report = build_coaching_analysis_report_v2(
+        results=results,
+        analysis_mode="batting",
+    )
+    assert len(technical_report["repetitions"]) == 4
+    assert technical_report["repetitions"][0]["repetition_id"].startswith("ba694e41-")
+    assert technical_report["metrics"][0]["timestamp_refs"]
+    assert technical_report["metrics"][0]["frame_refs"]
 
     pdf_bytes = generate_analysis_pdf(
         job_id="job-batting-v2",
@@ -454,8 +462,9 @@ def test_batting_pdf_preserves_proxy_and_unavailable_evidence_without_zero_fallb
     text = _pdf_text(pdf_bytes)
     player_text, appendix_text = _pdf_sections(pdf_bytes)
     normalized_player_text = " ".join(player_text.split())
+    assert "4 usable shots identified" in player_text
     for index in range(1, 5):
-        assert f"Shot {index}" in player_text
+        assert f"Shot {index}" not in player_text
     assert "Head alignment at setup" in player_text
     assert "Some measurements could not be made clearly" in normalized_player_text
     assert "ba694e41-" not in player_text
@@ -471,6 +480,35 @@ def test_batting_pdf_preserves_proxy_and_unavailable_evidence_without_zero_fallb
     assert "injury-risk" not in text
     assert "Pass" not in text
     assert "Fail" not in text
+
+
+def test_pdf_omits_unavailable_comparable_count_without_fabricating_a_number() -> None:
+    results = _results(
+        _metric(
+            "batting_setup_head_base_offset_ratio",
+            discipline="batting",
+            phase="setup",
+        )
+    )
+    results["findings"]["v2_session_analysis"]["recurring_concerns"] = []
+
+    pdf_bytes = generate_analysis_pdf(
+        job_id="job-count-unavailable",
+        session_title="Count unavailable",
+        status="completed",
+        quick_findings=None,
+        deep_findings=None,
+        quick_results=results,
+        deep_results=None,
+        created_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC),
+        analysis_mode="batting",
+    )
+
+    player_text, _ = _pdf_sections(pdf_bytes)
+    assert "Head position over the base at setup" in player_text
+    assert "Comparable repetition count unavailable" not in player_text
+    assert "0 comparable repetitions" not in player_text
 
 
 def test_bowling_pdf_summarizes_two_delivery_insufficient_evidence_once() -> None:
@@ -526,12 +564,13 @@ def test_bowling_pdf_summarizes_two_delivery_insufficient_evidence_once() -> Non
     )
 
     player_text, appendix_text = _pdf_sections(pdf_bytes)
-    assert "Delivery 1" in player_text
-    assert "Delivery 2" in player_text
-    assert "Release estimate" in player_text
-    assert "Approximate movement phase" in player_text
+    normalized_player_text = " ".join(player_text.split())
+    assert "2 usable deliveries identified" in player_text
+    assert "Delivery 1" not in player_text
+    assert "Delivery 2" not in player_text
+    assert "Approximate movement phase evidence" in normalized_player_text
     assert player_text.count("We detected 2 deliveries.") == 1
-    assert "Evidence locators: None persisted." in appendix_text
+    assert "Full repetition IDs, phase IDs, timestamps, frame ranges" in appendix_text
     assert "Record at least 3 comparable deliveries" in player_text
     assert "Not enough evidence was available to confirm a development priority" in player_text
     assert "No governed training action is available" in player_text
@@ -541,7 +580,7 @@ def test_bowling_pdf_summarizes_two_delivery_insufficient_evidence_once() -> Non
     assert "High hip-shoulder issue" not in player_text
     assert "pace_bowling_release_proxy_bowling_arm_angle_deg" in appendix_text
     assert "INSUFFICIENT_REPETITIONS" in appendix_text
-    assert "delivery-uuid-1" in appendix_text
+    assert "delivery-uuid-1" not in appendix_text
 
 
 def test_legacy_jobs_keep_historical_report_path() -> None:
