@@ -7,12 +7,22 @@
           Comparable V2 evidence across sessions for the selected player and discipline.
         </p>
       </div>
-      <button type="button" class="refresh-button" :disabled="loading" @click="loadProgress">
+      <button
+        v-if="!governedBaseline"
+        type="button"
+        class="refresh-button"
+        :disabled="loading"
+        @click="loadProgress"
+      >
         {{ loading ? 'Refreshing…' : 'Refresh' }}
       </button>
     </div>
 
-    <p v-if="error" class="error">{{ error }}</p>
+    <div v-if="governedBaseline" class="content">
+      <h4>{{ governedBaseline.state }}</h4>
+      <p class="status-text">{{ governedBaseline.summary }}</p>
+    </div>
+    <p v-else-if="error" class="error">{{ error }}</p>
     <p v-else-if="loading" class="status-text">Loading longitudinal progress…</p>
     <p v-else-if="!playerPresentation" class="status-text">Progress summary is unavailable.</p>
     <div v-else class="content">
@@ -60,18 +70,25 @@ import { computed, ref, watch } from 'vue';
 import {
   getPlayerLongitudinalProgress,
   type PlayerLongitudinalProgressResponse,
+  type V2PlayerPresentation,
 } from '@/services/coachPlusVideoService';
 
 const props = defineProps<{
   playerId: string | null | undefined;
   discipline?: string | null;
   visible?: boolean;
+  presentation?: V2PlayerPresentation['progress'] | null;
 }>();
 
 const loading = ref(false);
 const error = ref<string | null>(null);
 const progress = ref<PlayerLongitudinalProgressResponse | null>(null);
 
+const governedBaseline = computed(() =>
+  props.presentation?.state === 'Baseline established' && progress.value?.session_count === 1
+    ? props.presentation
+    : null,
+);
 const playerPresentation = computed(() => progress.value?.player_presentation ?? null);
 
 async function loadProgress() {
@@ -92,17 +109,19 @@ async function loadProgress() {
 }
 
 watch(
-  () => [props.playerId, props.discipline, props.visible] as const,
+  () => [props.playerId, props.discipline, props.visible, props.presentation] as const,
   (current, previous) => {
     const [playerId, _discipline, visible] = current;
     const previousPlayerId = previous?.[0];
     const previousDiscipline = previous?.[1];
     const previousVisible = previous?.[2];
+    const previousPresentation = previous?.[3];
     if (!playerId || !visible) return;
     if (
       playerId !== previousPlayerId ||
       props.discipline !== previousDiscipline ||
-      visible !== previousVisible
+      visible !== previousVisible ||
+      props.presentation !== previousPresentation
     ) {
       loadProgress();
     }

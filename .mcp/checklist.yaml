@@ -567,3 +567,32 @@
   completed_by: "codex"
   completed_at: "2026-09-08"
   notes: "No migration, backend authorization change, telemetry change, or speculative performance redesign."
+
+- id: phase10j-19-ui-correctness
+  week: 10
+  category: "Phase 10J"
+  title: "10J.19 V2 UI Correctness & Coach Review Access"
+  description: "Align V2 results with governed baseline presentation, suppress empty movement evidence, and clarify organization setup"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "First-session V2 results use the governed Baseline established presentation"
+    - "Dash-only individual movement evidence is not displayed"
+    - "Missing organization configuration is explained without weakening authorization"
+  verification_commands:
+    - "cd frontend && npm run test:unit -- tests/unit/CoachProPlusVideoSessionsView.spec.ts tests/unit/PlayerLongitudinalProgress.spec.ts"
+    - "python -m pytest -q backend/tests/test_player_development_routes.py::test_coach_cannot_list_other_coach_unscoped_plans_for_same_player backend/tests/test_player_development_routes.py::test_org_pro_can_list_org_scoped_plans_only backend/tests/test_player_development_routes.py::test_cross_org_plans_are_not_exposed_in_list_results"
+    - "cd frontend && npm run type-check"
+  files_touched:
+    - "frontend/src/components/PlayerLongitudinalProgress.vue"
+    - "frontend/src/views/CoachProPlusVideoSessionsView.vue"
+    - "frontend/tests/unit/PlayerLongitudinalProgress.spec.ts"
+    - "frontend/tests/unit/CoachProPlusVideoSessionsView.spec.ts"
+    - "docs/PHASE_10J19_V2_UI_CORRECTNESS.md"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "codex"
+  completed_at: "2026-09-08"
+  notes: "No migration or backend authorization change; existing organization and assignment configuration remains authoritative."
