@@ -1676,6 +1676,7 @@ async function fetchSessions() {
     });
     const renderStartedAt = performanceNow();
     sessions.value = loadedSessions;
+    loading.value = false;
     await nextTick();
     recordCoachPerformance({
       operation: 'coach_plus.session_list',
@@ -2134,19 +2135,19 @@ async function selectSession(sessionId: string) {
 
     const { getAnalysisHistory } = await import('@/services/coachPlusVideoService');
     const loadedHistory = await getAnalysisHistory(sessionId);
-    const renderStartedAt = performanceNow();
     analysisHistory.value = loadedHistory;
+    await loadRecommendationLinks(session, analysisHistory.value);
+    const renderStartedAt = performanceNow();
+    loadingHistory.value = false;
     await nextTick();
     recordCoachPerformance({
-      operation: 'coach_plus.analysis_results',
+      operation: 'coach_plus.completed_session',
       layer: 'frontend',
       phase: 'render',
       duration_ms: Math.max(0, performanceNow() - renderStartedAt),
       outcome: 'success',
       item_count: loadedHistory.length,
     });
-    await loadRecommendationLinks(session, analysisHistory.value);
-    loadingHistory.value = false;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load session history';
     console.error('selectSession error:', err);
@@ -2438,7 +2439,8 @@ function closeHistoryModalAndUpload() {
   }
 }
 
-function viewJobResults(job: VideoAnalysisJob) {
+async function viewJobResults(job: VideoAnalysisJob) {
+  const renderStartedAt = performanceNow();
   selectedJob.value = job;
   showHistoryModal.value = false;
   showResultsModal.value = true;
@@ -2462,6 +2464,15 @@ function viewJobResults(job: VideoAnalysisJob) {
   if (!isJobCompleted(job)) {
     startUiPolling(job.id);
   }
+
+  await nextTick();
+  recordCoachPerformance({
+    operation: 'coach_plus.analysis_results',
+    layer: 'frontend',
+    phase: 'render',
+    duration_ms: Math.max(0, performanceNow() - renderStartedAt),
+    outcome: 'success',
+  });
 }
 
 async function exportJobPdf(jobId: string) {

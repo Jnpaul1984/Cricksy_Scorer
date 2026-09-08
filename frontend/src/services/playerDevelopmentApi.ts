@@ -14,7 +14,11 @@
  */
 
 import { API_BASE, getStoredToken } from './api';
-import { fetchWithCoachPerformance } from '@/utils/coachPerformanceTelemetry';
+import {
+  fetchWithCoachPerformance,
+  finishCoachPerformanceRequest,
+  readCoachPerformanceJson,
+} from '@/utils/coachPerformanceTelemetry';
 
 // ---------------------------------------------------------------------------
 // Error class
@@ -86,9 +90,14 @@ async function fetchWithAuth<T>(
       })
     : await fetch(`${API_BASE}${path}`, { ...options, headers });
 
-  if (res.status === 204) return undefined as T;
+  if (res.status === 204) {
+    if (performanceOperation) finishCoachPerformanceRequest(res);
+    return undefined as T;
+  }
 
-  const data = await res.json().catch(() => ({}));
+  const data = performanceOperation
+    ? await readCoachPerformanceJson<any>(res).catch(() => ({}))
+    : await res.json().catch(() => ({}));
 
   if (!res.ok) {
     const detail =

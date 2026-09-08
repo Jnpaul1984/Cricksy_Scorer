@@ -1235,7 +1235,6 @@ async def get_analysis_history(
 
 
 @router.get("/analysis-jobs/{job_id}", response_model=VideoAnalysisJobRead)
-@instrument_coach_operation("coach_plus.analysis_results")
 async def get_analysis_job(
     job_id: str,
     current_user: Annotated[User, Depends(security.get_current_active_user)],

@@ -20,7 +20,8 @@ Perform each action once for a cold observation, then three times for warm obser
 1. Open the Coach Pro Plus video sessions landing page and wait for the session list to render.
 2. Open a completed session and wait for its analysis history to render.
 3. Open **Analysis Results** and wait for the V2 report to render. The completed-session history
-   response already carries the V2 report; job polling has its own `analysis_results` request timing.
+   response already carries the V2 report, so its request timing is shared and the modal emits one
+   separate `analysis_results` render timing.
 4. Submit one permitted coach review/approval action.
 5. Request the PDF and allow the browser to hand the returned URL to its download/open behavior.
 
