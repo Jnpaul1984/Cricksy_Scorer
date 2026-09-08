@@ -85,16 +85,13 @@ const error = ref<string | null>(null);
 const progress = ref<PlayerLongitudinalProgressResponse | null>(null);
 
 const governedBaseline = computed(() =>
-  props.presentation?.state === 'Baseline established' ? props.presentation : null,
+  props.presentation?.state === 'Baseline established' && progress.value?.session_count === 1
+    ? props.presentation
+    : null,
 );
 const playerPresentation = computed(() => progress.value?.player_presentation ?? null);
 
 async function loadProgress() {
-  if (governedBaseline.value) {
-    progress.value = null;
-    error.value = null;
-    return;
-  }
   if (!props.playerId) {
     progress.value = null;
     return;

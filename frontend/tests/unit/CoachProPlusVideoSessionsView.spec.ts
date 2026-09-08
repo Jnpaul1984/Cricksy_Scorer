@@ -7,6 +7,7 @@ import {
   createCoachPrivatePlayer,
   exportAnalysisPdf,
   getAnalysisHistory,
+  getPlayerLongitudinalProgress,
   listCoachPlayers,
   listVideoSessions,
   type VideoAnalysisJob,
@@ -61,6 +62,7 @@ vi.mock('@/services/coachPlusVideoService', () => ({
   listCoachPlayers: vi.fn(),
   createCoachPrivatePlayer: vi.fn(),
   getAnalysisHistory: vi.fn(),
+  getPlayerLongitudinalProgress: vi.fn(),
   exportAnalysisPdf: vi.fn(),
   getVideoStreamUrl: vi.fn(),
   calculateCompliance: vi.fn(),
@@ -139,6 +141,14 @@ describe('CoachProPlusVideoSessionsView', () => {
     videoStoreMock.createSession = videoStoreCreateSession;
     vi.mocked(listVideoSessions).mockResolvedValue([]);
     vi.mocked(getAnalysisHistory).mockResolvedValue([]);
+    vi.mocked(getPlayerLongitudinalProgress).mockResolvedValue({
+      session_count: 1,
+      player_presentation: {
+        state: 'Not enough sessions yet',
+        summary: 'Complete another comparable session to start tracking progress.',
+        items: [],
+      },
+    } as never);
     vi.mocked(listCoachPlayers).mockResolvedValue([]);
     vi.mocked(listPlayerDevelopmentPlans).mockResolvedValue([]);
   });
