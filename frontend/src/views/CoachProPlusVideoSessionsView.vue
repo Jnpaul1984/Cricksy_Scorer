@@ -788,6 +788,8 @@
                 <p>{{ positive.observation }}</p>
                 <p class="status-text">
                   {{ positive.value }} • {{ positive.phase }} • {{ positive.confidence }}
+                  <span v-if="positive.proxy"> • {{ positive.proxy }}</span>
+                  <span v-if="positive.validity"> • {{ positive.validity }}</span>
                 </p>
               </div>
               <div

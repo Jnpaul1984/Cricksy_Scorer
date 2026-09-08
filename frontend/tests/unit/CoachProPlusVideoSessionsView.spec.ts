@@ -397,6 +397,16 @@ describe('CoachProPlusVideoSessionsView', () => {
               value: '82%',
               phase: 'Approach',
               confidence: 'High confidence',
+              validity: 'Estimate only',
+              proxy: 'Approximate measurement',
+            },
+            {
+              metric_id: 'pace_bowling_follow_through_balance_drift_ratio',
+              title: 'Balance through the follow through',
+              observation: 'This measurement looked good in this session.',
+              value: '75%',
+              phase: 'Follow through',
+              confidence: 'High confidence',
               validity: null,
               proxy: null,
             },
@@ -482,6 +492,19 @@ describe('CoachProPlusVideoSessionsView', () => {
     expect(text).toContain('What looked good in this session');
     expect(text).toContain('Head stability during the approach');
     expect(text).toContain('This measurement looked good in this session');
+    const positiveCards = wrapper.findAll('.finding-card');
+    const caveatedPositive = positiveCards.find((card) =>
+      card.text().includes('Head stability during the approach'),
+    );
+    expect(caveatedPositive?.find('.status-text').text().replace(/\s+/g, ' ').trim()).toBe(
+      '82% • Approach • High confidence • Approximate measurement • Estimate only',
+    );
+    const normalPositive = positiveCards.find((card) =>
+      card.text().includes('Balance through the follow through'),
+    );
+    expect(normalPositive?.find('.status-text').text().replace(/\s+/g, ' ').trim()).toBe(
+      '75% • Follow through • High confidence',
+    );
     expect(text).not.toContain('No repeatable strengths could be confirmed');
     expect(text).toContain('3 comparable repetitions');
     expect(text).not.toContain('Comparable repetition count unavailable');
