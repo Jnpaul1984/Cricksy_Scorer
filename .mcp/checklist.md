@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-09-06
 **Scope:** Phase 10J Coaching Analysis Engine V2
-**Implementation Status:** 10J.1-10J.17 COMPLETE
+**Implementation Status:** 10J.1-10J.18A COMPLETE
 
 ## Progress Summary
 
@@ -26,6 +26,7 @@
 | 10J.15 | Player-Friendly Coaching Report & V2 UI Simplification | ✅ DONE |
 | 10J.16 | V2 Report Correctness & Recommendation Deduplication | ✅ DONE |
 | 10J.17 | First-Session Report Semantics & Player-Facing Hierarchy | ✅ DONE |
+| 10J.18A | Coach Pro Plus Performance Instrumentation & Latency Baseline | ✅ DONE |
 
 ## Notes
 
@@ -36,3 +37,4 @@
 - Issue #505 authorized and completed the additive Phase 10J.15 presentation follow-up.
 - Issue #507 authorized and completed the additive Phase 10J.16 correctness follow-up.
 - Issue #509 authorized and completed the additive Phase 10J.17 presentation-hierarchy follow-up.
+- Issue #511 authorized and completed the additive Phase 10J.18A performance-baseline follow-up.

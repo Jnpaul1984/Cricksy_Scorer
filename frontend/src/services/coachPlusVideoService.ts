@@ -2,6 +2,7 @@
 // API client for Coach Pro Plus video upload & analysis endpoints
 
 import { API_BASE, getStoredToken } from './api';
+import { fetchWithCoachPerformance } from '@/utils/coachPerformanceTelemetry';
 
 export interface ApiErrorResponse {
   detail: string;
@@ -528,10 +529,14 @@ export async function listVideoSessions(
     Pragma: 'no-cache',
   };
 
-  const res = await fetch(url(`/api/coaches/plus/sessions?${params.toString()}`), {
-    method: 'GET',
-    headers,
-  });
+  const res = await fetchWithCoachPerformance(
+    'coach_plus.session_list',
+    url(`/api/coaches/plus/sessions?${params.toString()}`),
+    {
+      method: 'GET',
+      headers,
+    },
+  );
 
   if (!res.ok) {
     const detail = await res.json().catch(() => ({ detail: res.statusText }));
@@ -795,10 +800,14 @@ export async function completeVideoUpload(jobId: string): Promise<UploadComplete
  * Get analysis job status (poll this for progress)
  */
 export async function getAnalysisJobStatus(jobId: string): Promise<VideoAnalysisJob> {
-  const res = await fetch(url(`/api/coaches/plus/analysis-jobs/${jobId}`), {
-    method: 'GET',
-    headers: getAuthHeader() || {},
-  });
+  const res = await fetchWithCoachPerformance(
+    'coach_plus.analysis_results',
+    url(`/api/coaches/plus/analysis-jobs/${jobId}`),
+    {
+      method: 'GET',
+      headers: getAuthHeader() || {},
+    },
+  );
 
   if (!res.ok) {
     const detail = await res.json().catch(() => ({ detail: res.statusText }));
@@ -838,10 +847,14 @@ export async function listAnalysisJobs(sessionId: string): Promise<VideoAnalysis
  * Get analysis history for a video session (ordered by created_at desc)
  */
 export async function getAnalysisHistory(sessionId: string): Promise<VideoAnalysisJob[]> {
-  const res = await fetch(url(`/api/coaches/plus/video-sessions/${sessionId}/analysis-history`), {
-    method: 'GET',
-    headers: getAuthHeader() || {},
-  });
+  const res = await fetchWithCoachPerformance(
+    'coach_plus.completed_session',
+    url(`/api/coaches/plus/video-sessions/${sessionId}/analysis-history`),
+    {
+      method: 'GET',
+      headers: getAuthHeader() || {},
+    },
+  );
 
   if (!res.ok) {
     const detail = await res.json().catch(() => ({ detail: res.statusText }));
@@ -894,10 +907,14 @@ export interface PdfExportResponse {
 }
 
 export async function exportAnalysisPdf(jobId: string): Promise<PdfExportResponse> {
-  const res = await fetch(url(`/api/coaches/plus/analysis-jobs/${jobId}/export-pdf`), {
-    method: 'POST',
-    headers: getAuthHeader() || {},
-  });
+  const res = await fetchWithCoachPerformance(
+    'coach_plus.pdf_export',
+    url(`/api/coaches/plus/analysis-jobs/${jobId}/export-pdf`),
+    {
+      method: 'POST',
+      headers: getAuthHeader() || {},
+    },
+  );
 
   if (!res.ok) {
     const detail = await res.json().catch(() => ({ detail: res.statusText }));

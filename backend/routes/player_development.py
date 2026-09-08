@@ -14,6 +14,7 @@ from backend.services.player_development_dashboard_service import (
 from backend.services.coaching_skill_audit_service import (
     write_player_development_review_audit_event,
 )
+from backend.services.performance_telemetry import instrument_coach_operation
 from backend.services.player_development_plan_service import (
     generate_draft_player_development_plan,
     get_draft_plan_by_id,
@@ -238,6 +239,7 @@ async def get_player_development_plan(
     "/plans/{plan_id}/review",
     response_model=schemas.PlayerDevelopmentPlanReviewResponse,
 )
+@instrument_coach_operation("coach_plus.plan_review")
 async def review_player_development_plan(
     plan_id: str,
     payload: schemas.PlayerDevelopmentPlanReviewRequest,

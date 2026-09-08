@@ -4685,12 +4685,14 @@ Derived from the Phase 10J.0 repository audit/spec lock:
 * **10J.15 — Player-Friendly Coaching Report & V2 UI Simplification** — **COMPLETE**
 * **10J.16 — V2 Report Correctness & Recommendation Deduplication** — **COMPLETE**
 * **10J.17 — First-Session Report Semantics & Player-Facing Information Hierarchy** — **COMPLETE**
+* **10J.18A — Coach Pro Plus Performance Instrumentation & Latency Baseline** — **COMPLETE**
 
 Phase 10J.13 was explicitly authorized by Issue #501 as a bounded decoupling follow-up.
 Phase 10J.14 was explicitly authorized by Issue #503 as a bounded reporting/governance follow-up.
 Phase 10J.15 was explicitly authorized by Issue #505 as a bounded player-presentation follow-up.
 Phase 10J.16 was explicitly authorized by Issue #507 as a bounded report-correctness follow-up.
 Phase 10J.17 was explicitly authorized by Issue #509 as a bounded presentation-hierarchy follow-up.
+Phase 10J.18A was explicitly authorized by Issue #511 as a bounded performance-baseline follow-up.
 
 ---
 
@@ -4743,7 +4745,7 @@ Phase 10J.0 is complete only when:
 * checklist validation passes
 * no runtime implementation occurred
 
-**Implementation status after Phase 10J.17:** 10J.1-10J.17 COMPLETE.
+**Implementation status after Phase 10J.18A:** 10J.1-10J.18A COMPLETE.
 
 ---
 # Phase 11 — Organization Pro + League Operations
