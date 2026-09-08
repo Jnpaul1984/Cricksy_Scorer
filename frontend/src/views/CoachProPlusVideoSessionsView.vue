@@ -698,13 +698,13 @@
                 {{ selectedJobV2Presentation.movement_summary.phase_confidence_summary }}
               </p>
               <details
-                v-if="selectedJobV2Presentation.repetitions.length"
+                v-if="presentedRepetitionsWithEvidence.length"
                 class="movement-evidence"
               >
                 <summary>View individual movement evidence</summary>
                 <ul class="repetition-list">
                 <li
-                  v-for="repetition in selectedJobV2Presentation.repetitions"
+                  v-for="repetition in presentedRepetitionsWithEvidence"
                   :key="repetition.repetition_id"
                   class="repetition-row"
                 >
@@ -856,6 +856,7 @@
             :visible="showResultsModal"
             :player-id="selectedSession.primary_player_id"
             :discipline="selectedSession.discipline"
+            :presentation="selectedJobV2Presentation?.progress"
           />
 
           <section v-if="!isV2Job && isFreeTier" class="results-section">
@@ -1192,6 +1193,22 @@ const coachNarrative = computed(() => buildCoachNarrative(selectedJob.value));
 const selectedJobRepetitions = computed(() => extractCoachVideoRepetitions(selectedJob.value));
 const selectedJobV2Presentation = computed<V2PlayerPresentation | null>(
   () => selectedJob.value?.v2_coaching_report?.player_presentation ?? null,
+);
+const presentedRepetitionsWithEvidence = computed(
+  () =>
+    selectedJobV2Presentation.value?.repetitions.filter(
+      (repetition) =>
+        hasMeaningfulPresentationText(repetition.label) ||
+        hasMeaningfulPresentationText(repetition.confidence) ||
+        hasMeaningfulPresentationText(repetition.validity) ||
+        phasesForPresentedRepetition(repetition.label).some(
+          (phase) =>
+            hasMeaningfulPresentationText(phase.label) ||
+            hasMeaningfulPresentationText(phase.confidence) ||
+            hasMeaningfulPresentationText(phase.validity) ||
+            hasMeaningfulPresentationText(phase.proxy),
+        ),
+    ) ?? [],
 );
 const isV2Job = computed(
   () =>
@@ -1593,6 +1610,17 @@ function formatReviewSubmissionError(error: unknown): string {
   return error instanceof Error ? error.message : 'Failed to submit review decision.';
 }
 
+function formatRecommendationLookupError(error: unknown): string {
+  if (
+    error instanceof PlayerDevelopmentApiError &&
+    error.isUnauthorized() &&
+    error.message === 'Organization access is not configured for this user'
+  ) {
+    return 'Recommendation review requires organization setup. Ask an administrator to link this Organization Pro account to an organization and ensure the player has an active coach assignment in that organization.';
+  }
+  return error instanceof Error ? error.message : 'Some recommendation links could not be loaded.';
+}
+
 // ============================================================================
 // Methods
 // ============================================================================
@@ -1756,10 +1784,7 @@ async function loadRecommendationLinks(
 
     const rejected = results.find((result) => result.status === 'rejected');
     if (rejected) {
-      recommendationLookupError.value =
-        rejected.reason instanceof Error
-          ? rejected.reason.message
-          : 'Some recommendation links could not be loaded.';
+      recommendationLookupError.value = formatRecommendationLookupError(rejected.reason);
     }
 
     recommendationBundlesByJobId.value = linkedByJobId;
@@ -2095,6 +2120,10 @@ function phasesForPresentedRepetition(repetitionLabel: string): V2PlayerPresenta
       (phase) => phase.repetition_label === repetitionLabel,
     ) ?? []
   );
+}
+
+function hasMeaningfulPresentationText(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() !== '' && value.trim() !== '-';
 }
 
 function canSeekToMoment(w: { frameNum: number; timeSeconds?: number }): boolean {

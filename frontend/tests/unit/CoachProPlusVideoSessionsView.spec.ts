@@ -14,6 +14,7 @@ import {
 } from '@/services/coachPlusVideoService';
 import {
   listPlayerDevelopmentPlans,
+  PlayerDevelopmentApiError,
   type PlayerDevelopmentPlanDraftBundle,
 } from '@/services/playerDevelopmentApi';
 import CoachProPlusVideoSessionsView from '@/views/CoachProPlusVideoSessionsView.vue';
@@ -70,8 +71,15 @@ vi.mock('@/services/coachPlusVideoService', () => ({
 
 vi.mock('@/services/playerDevelopmentApi', () => ({
   PlayerDevelopmentApiError: class PlayerDevelopmentApiError extends Error {
+    constructor(
+      message: string,
+      public status = 500,
+    ) {
+      super(message);
+    }
+
     isUnauthorized() {
-      return false;
+      return this.status === 403;
     }
 
     isNotFound() {
@@ -318,6 +326,52 @@ describe('CoachProPlusVideoSessionsView', () => {
 
     expect(listPlayerDevelopmentPlans).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(wrapper.find('.history-list').exists()).toBe(true));
+  });
+
+  it('explains the existing organization setup required for recommendation review', async () => {
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachProPlus = true;
+    authStoreMock.role = 'org_pro';
+    const now = new Date().toISOString();
+    const session = {
+      id: 'org-session',
+      title: 'Organization session',
+      status: 'ready',
+      player_ids: ['org-player'],
+    } as VideoSession;
+    vi.mocked(listVideoSessions).mockResolvedValue([session]);
+    vi.mocked(getAnalysisHistory).mockResolvedValue([
+      {
+        id: 'org-job',
+        session_id: session.id,
+        status: 'done',
+        created_at: now,
+        updated_at: now,
+      } as VideoAnalysisJob,
+    ]);
+    vi.mocked(listCoachPlayers).mockResolvedValue([
+      {
+        player_id: 'org-player',
+        player_name: 'Organization Player',
+        date_of_birth: null,
+        assignment_active: true,
+      },
+    ]);
+    vi.mocked(listPlayerDevelopmentPlans).mockRejectedValue(
+      new PlayerDevelopmentApiError('Organization access is not configured for this user', 403),
+    );
+
+    const wrapper = mountView();
+    await vi.waitFor(() => expect(wrapper.find('.sessions-list').exists()).toBe(true));
+    await (
+      wrapper.vm as unknown as { selectSession: (sessionId: string) => Promise<void> }
+    ).selectSession(session.id);
+
+    await vi.waitFor(() =>
+      expect(wrapper.text()).toContain('Recommendation review requires organization setup.'),
+    );
+    expect(wrapper.text()).toContain('active coach assignment in that organization');
+    expect(wrapper.text()).not.toContain('Organization access is not configured for this user');
   });
 
   it('discards a stale recommendation lookup after a newer session lookup completes', async () => {
@@ -588,7 +642,14 @@ describe('CoachProPlusVideoSessionsView', () => {
     const vm = wrapper.vm as unknown as {
       showResultsModal: boolean;
       selectedJob: VideoAnalysisJob | null;
+      selectedSession: VideoSession | null;
     };
+
+    vm.selectedSession = {
+      id: 'session-reps',
+      primary_player_id: 'player-1',
+      discipline: 'pace_bowling',
+    } as VideoSession;
 
     vm.selectedJob = {
       id: 'job-reps',
@@ -808,6 +869,9 @@ describe('CoachProPlusVideoSessionsView', () => {
 
     const text = wrapper.text();
     expect(text).toContain('How did I do?');
+    expect(text).toContain('Baseline established');
+    expect(text).toContain('first recorded assessment');
+    expect(text).not.toContain('Not enough sessions yet');
     expect(text).toContain('Delivery 1');
     expect(text).toContain('Release estimate');
     expect(text).toContain('Estimate only');
@@ -911,7 +975,14 @@ describe('CoachProPlusVideoSessionsView', () => {
             summary: '2 usable deliveries identified.',
             phase_confidence_summary: 'Phase evidence unavailable.',
           },
-          repetitions: [],
+          repetitions: Array.from({ length: 16 }, (_, index) => ({
+            repetition_id: `dash-only-${index + 1}`,
+            label: '-',
+            confidence: '',
+            validity: null,
+            start_ts: null,
+            end_ts: null,
+          })),
           phases: [],
           metrics: [],
           current_session_positives: [],
@@ -941,6 +1012,8 @@ describe('CoachProPlusVideoSessionsView', () => {
 
     const text = wrapper.text();
     expect(text.match(/We detected 2 deliveries\./g)).toHaveLength(1);
+    expect(wrapper.find('details.movement-evidence').exists()).toBe(false);
+    expect(text).not.toContain('View individual movement evidence');
     expect(text).toContain('No governed training action is available');
     expect(wrapper.findAll('h3').map((heading) => heading.text())).not.toContain('Priorities');
     expect(text).not.toContain('Legacy High hip-shoulder issue');

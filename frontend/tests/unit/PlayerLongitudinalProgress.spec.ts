@@ -49,22 +49,30 @@ describe('PlayerLongitudinalProgress', () => {
   it('shows the backend player wording instead of a technical table for one session', async () => {
     vi.mocked(getPlayerLongitudinalProgress).mockResolvedValue(
       response({
-        state: 'Baseline established',
-        summary:
-          "This is the player's first recorded assessment. Future comparable sessions will show what improved, stayed consistent, or needs more work.",
+        state: 'Not enough sessions yet',
+        summary: 'Complete another comparable session to start tracking progress.',
         items: [],
       }),
     );
 
+    const presentation = {
+      state: 'Baseline established',
+      summary:
+        "This is the player's first recorded assessment. Future comparable sessions will show what improved, stayed consistent, or needs more work.",
+      items: [],
+    };
+
     const wrapper = mount(PlayerLongitudinalProgress, {
-      props: { playerId: 'player-1', discipline: 'batting', visible: true },
+      props: { playerId: 'player-1', discipline: 'batting', visible: true, presentation },
     });
     await flushAsync();
 
     expect(wrapper.text()).toContain('Baseline established');
     expect(wrapper.text()).toContain('first recorded assessment');
+    expect(wrapper.text()).not.toContain('Not enough sessions yet');
     expect(wrapper.text()).not.toContain('History');
     expect(wrapper.find('table').exists()).toBe(false);
+    expect(getPlayerLongitudinalProgress).not.toHaveBeenCalled();
   });
 
   it('shows readable deterministic progress once two sessions are comparable', async () => {
