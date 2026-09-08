@@ -440,7 +440,7 @@
                   <button
                     v-if="canExport"
                     class="btn-small btn-secondary"
-                    :disabled="exportingPdf || !isJobCompleted(job)"
+                    :disabled="exportingPdf || !isPdfExportReady(job)"
                     @click="exportJobPdf(job.id)"
                   >
                     {{ exportingPdf ? '...' : 'Export PDF' }}
@@ -959,10 +959,17 @@
         </div>
 
         <div v-if="canExport" class="modal-actions">
+          <p
+            v-if="selectedJob && !isPdfExportReady(selectedJob)"
+            class="status-text"
+            data-testid="pdf-not-ready"
+          >
+            PDF export will be available when the full analysis is complete.
+          </p>
           <button
             type="button"
             class="btn-primary"
-            :disabled="exportingPdf || !selectedJob"
+            :disabled="exportingPdf || !selectedJob || !isPdfExportReady(selectedJob)"
             @click="exportPdf"
           >
             {{ exportingPdf ? 'Generating PDF...' : 'Export PDF' }}
@@ -1120,6 +1127,7 @@ const statusFilter = ref<string | null>(null);
 type AssignedPlayer = { id: string; name: string };
 
 const assignedPlayers = ref<AssignedPlayer[]>([]);
+const assignedPlayersLoaded = ref(false);
 const loadingPlayers = ref(false);
 const playerLoadError = ref<string | null>(null);
 const playerSearch = ref('');
@@ -1374,7 +1382,7 @@ async function exportPdf() {
     // window.open(response.pdf_url, '_blank');
   } catch (err) {
     console.error('[ExportPDF] Failed:', err);
-    error.value = err instanceof Error ? err.message : 'Failed to export PDF';
+    error.value = pdfExportErrorMessage(err);
   } finally {
     exportingPdf.value = false;
   }
@@ -1596,7 +1604,7 @@ function upsertAssignedPlayer(player: AssignedPlayer) {
   );
 }
 
-async function fetchAssignedPlayers(preservePlayer?: AssignedPlayer) {
+async function fetchAssignedPlayers(preservePlayer?: AssignedPlayer): Promise<boolean> {
   loadingPlayers.value = true;
   playerLoadError.value = null;
   try {
@@ -1612,9 +1620,11 @@ async function fetchAssignedPlayers(preservePlayer?: AssignedPlayer) {
     assignedPlayers.value = Array.from(uniqueById.values()).sort((a, b) =>
       a.name.localeCompare(b.name),
     );
+    assignedPlayersLoaded.value = true;
     if (preservePlayer) {
       upsertAssignedPlayer(preservePlayer);
     }
+    return true;
   } catch (err) {
     playerLoadError.value = err instanceof Error ? err.message : 'Failed to load assigned players';
     if (preservePlayer) {
@@ -1622,6 +1632,7 @@ async function fetchAssignedPlayers(preservePlayer?: AssignedPlayer) {
     } else {
       assignedPlayers.value = [];
     }
+    return false;
   } finally {
     loadingPlayers.value = false;
   }
@@ -1703,7 +1714,17 @@ async function loadRecommendationLinks(
   recommendationBundlesByJobId.value = {};
 
   try {
-    const playerIds = Array.isArray(session.player_ids) ? session.player_ids : [];
+    if (!canReviewRecommendations.value) return;
+
+    if (!assignedPlayersLoaded.value && !(await fetchAssignedPlayers())) {
+      recommendationLookupError.value = 'Recommendation access could not be verified.';
+      return;
+    }
+
+    const assignedPlayerIds = new Set(assignedPlayers.value.map((player) => player.id));
+    const playerIds = Array.isArray(session.player_ids)
+      ? session.player_ids.filter((playerId) => assignedPlayerIds.has(playerId))
+      : [];
     const eligibleJobs = jobs.filter(isRecommendationEligibleJob);
     if (playerIds.length === 0 || eligibleJobs.length === 0) {
       return;
@@ -2136,7 +2157,7 @@ async function selectSession(sessionId: string) {
     const { getAnalysisHistory } = await import('@/services/coachPlusVideoService');
     const loadedHistory = await getAnalysisHistory(sessionId);
     analysisHistory.value = loadedHistory;
-    await loadRecommendationLinks(session, analysisHistory.value);
+    void loadRecommendationLinks(session, analysisHistory.value);
     const renderStartedAt = performanceNow();
     loadingHistory.value = false;
     await nextTick();
@@ -2506,7 +2527,7 @@ async function exportJobPdf(jobId: string) {
     });
   } catch (err) {
     console.error('[ExportPDF] Failed:', err);
-    error.value = err instanceof Error ? err.message : 'Failed to export PDF';
+    error.value = pdfExportErrorMessage(err);
   } finally {
     exportingPdf.value = false;
   }
@@ -2514,6 +2535,17 @@ async function exportJobPdf(jobId: string) {
 
 function isJobCompleted(job: VideoAnalysisJob): boolean {
   return job.status === 'completed' || job.status === 'done' || job.status === 'failed';
+}
+
+function isPdfExportReady(job: VideoAnalysisJob): boolean {
+  return job.status === 'completed' || job.status === 'done';
+}
+
+function pdfExportErrorMessage(exportError: unknown): string {
+  if (exportError instanceof ApiError && exportError.status === 409) {
+    return 'PDF export is not ready yet. Wait for the full analysis to finish and try again.';
+  }
+  return exportError instanceof Error ? exportError.message : 'Failed to export PDF';
 }
 
 function previousPage() {

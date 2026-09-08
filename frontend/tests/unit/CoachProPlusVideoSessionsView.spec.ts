@@ -3,13 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick, reactive } from 'vue';
 
 import {
+  ApiError,
   createCoachPrivatePlayer,
+  exportAnalysisPdf,
   getAnalysisHistory,
   listCoachPlayers,
   listVideoSessions,
   type VideoAnalysisJob,
   type VideoSession,
 } from '@/services/coachPlusVideoService';
+import { listPlayerDevelopmentPlans } from '@/services/playerDevelopmentApi';
 import CoachProPlusVideoSessionsView from '@/views/CoachProPlusVideoSessionsView.vue';
 
 const authStoreMock = reactive({
@@ -42,11 +45,19 @@ vi.mock('@/stores/coachPlusVideoStore', () => ({
 }));
 
 vi.mock('@/services/coachPlusVideoService', () => ({
-  ApiError: class ApiError extends Error {},
+  ApiError: class ApiError extends Error {
+    constructor(
+      message: string,
+      public status = 500,
+    ) {
+      super(message);
+    }
+  },
   listVideoSessions: vi.fn(),
   listCoachPlayers: vi.fn(),
   createCoachPrivatePlayer: vi.fn(),
   getAnalysisHistory: vi.fn(),
+  exportAnalysisPdf: vi.fn(),
   getVideoStreamUrl: vi.fn(),
   calculateCompliance: vi.fn(),
   getJobOutcomes: vi.fn(),
@@ -118,6 +129,7 @@ describe('CoachProPlusVideoSessionsView', () => {
     vi.mocked(listVideoSessions).mockResolvedValue([]);
     vi.mocked(getAnalysisHistory).mockResolvedValue([]);
     vi.mocked(listCoachPlayers).mockResolvedValue([]);
+    vi.mocked(listPlayerDevelopmentPlans).mockResolvedValue([]);
   });
 
   it('shows the video sessions workspace for authorized org pro reviewers', async () => {
@@ -217,6 +229,132 @@ describe('CoachProPlusVideoSessionsView', () => {
 
     expect(resultsWereVisibleAtEvent).toBe(true);
     expect(resultsEvents).toHaveLength(1);
+  });
+
+  it('renders completed history without waiting for recommendation requests', async () => {
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachProPlus = true;
+    authStoreMock.role = 'coach_pro_plus';
+    const now = new Date().toISOString();
+    const session = {
+      id: 'session-latency',
+      title: 'Completed session',
+      status: 'ready',
+      player_ids: ['assigned-player'],
+    } as VideoSession;
+    const job = {
+      id: 'job-latency',
+      session_id: session.id,
+      status: 'done',
+      created_at: now,
+      updated_at: now,
+    } as VideoAnalysisJob;
+    vi.mocked(listVideoSessions).mockResolvedValue([session]);
+    vi.mocked(getAnalysisHistory).mockResolvedValue([job]);
+    vi.mocked(listCoachPlayers).mockResolvedValue([
+      {
+        player_id: 'assigned-player',
+        player_name: 'Assigned Player',
+        date_of_birth: null,
+        assignment_active: true,
+      },
+    ]);
+    let finishPlans!: (plans: never[]) => void;
+    vi.mocked(listPlayerDevelopmentPlans).mockImplementation(
+      () => new Promise((resolve) => (finishPlans = resolve)),
+    );
+
+    const wrapper = mountView();
+    await vi.waitFor(() => expect(wrapper.find('.sessions-list').exists()).toBe(true));
+    await (
+      wrapper.vm as unknown as { selectSession: (sessionId: string) => Promise<void> }
+    ).selectSession(session.id);
+
+    await vi.waitFor(() => expect(wrapper.find('.history-list').exists()).toBe(true));
+    await vi.waitFor(() => expect(listPlayerDevelopmentPlans).toHaveBeenCalledTimes(1));
+    finishPlans([]);
+    await flushAsync();
+  });
+
+  it('does not request plans for a player outside the authorized assignment list', async () => {
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachProPlus = true;
+    authStoreMock.role = 'coach_pro_plus';
+    const now = new Date().toISOString();
+    const session = {
+      id: 'legacy-session',
+      title: 'Legacy session',
+      status: 'ready',
+      player_ids: ['unassigned-player'],
+    } as VideoSession;
+    vi.mocked(listVideoSessions).mockResolvedValue([session]);
+    vi.mocked(getAnalysisHistory).mockResolvedValue([
+      {
+        id: 'legacy-job',
+        session_id: session.id,
+        status: 'done',
+        created_at: now,
+        updated_at: now,
+      } as VideoAnalysisJob,
+    ]);
+    vi.mocked(listCoachPlayers).mockResolvedValue([
+      {
+        player_id: 'assigned-player',
+        player_name: 'Assigned Player',
+        date_of_birth: null,
+        assignment_active: true,
+      },
+    ]);
+
+    const wrapper = mountView();
+    await vi.waitFor(() => expect(wrapper.find('.sessions-list').exists()).toBe(true));
+    await (
+      wrapper.vm as unknown as { selectSession: (sessionId: string) => Promise<void> }
+    ).selectSession(session.id);
+    await flushAsync();
+
+    expect(listPlayerDevelopmentPlans).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(wrapper.find('.history-list').exists()).toBe(true));
+  });
+
+  it('treats deep-running PDF export as not ready and handles a 409 race clearly', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachProPlus = true;
+    authStoreMock.role = 'coach_pro_plus';
+    const wrapper = mountView();
+    await flushAsync();
+    const now = new Date().toISOString();
+    const job = {
+      id: 'deep-running-job',
+      session_id: 'session-1',
+      status: 'deep_running',
+      created_at: now,
+      updated_at: now,
+    } as VideoAnalysisJob;
+    const vm = wrapper.vm as unknown as {
+      error: string | null;
+      exportPdf: () => Promise<void>;
+      selectedJob: VideoAnalysisJob | null;
+      showResultsModal: boolean;
+    };
+    vm.selectedJob = job;
+    vm.showResultsModal = true;
+    await flushAsync();
+
+    expect(wrapper.get('[data-testid="pdf-not-ready"]').text()).toContain(
+      'full analysis is complete',
+    );
+    const exportButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Export PDF');
+    expect(exportButton?.attributes('disabled')).toBeDefined();
+
+    vi.mocked(exportAnalysisPdf).mockRejectedValue(new ApiError('Cannot export PDF', 409));
+    await vm.exportPdf();
+    expect(vm.error).toBe(
+      'PDF export is not ready yet. Wait for the full analysis to finish and try again.',
+    );
   });
 
   it('uses player-centered create form fields instead of manual player ID textarea', async () => {

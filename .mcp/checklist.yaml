@@ -539,3 +539,31 @@
   completed_by: "codex"
   completed_at: "2026-09-08"
   notes: "No migration and no optimization; telemetry reuses the existing request ID middleware."
+
+- id: phase10j-18b-session-latency
+  week: 10
+  category: "Phase 10J"
+  title: "10J.18B Completed Session Latency & PDF Responsiveness"
+  description: "Remove optional plan enrichment from the completed-session critical path and clarify PDF readiness"
+  status: done
+  confidence: high
+  risk_level: low
+  acceptance_criteria:
+    - "Completed-session history becomes visible without waiting for recommendation-plan enrichment"
+    - "Plan lookups are limited to authorized active assignments without weakening backend authorization"
+    - "Deep-running PDF export is treated as not ready and an unavoidable 409 race is explained clearly"
+    - "Phase 10J.18A telemetry remains intact and non-blocking"
+  verification_commands:
+    - "python -m pytest -q --disable-warnings backend/tests/test_performance_telemetry.py backend/tests/test_pdf_export_restrictions.py::test_cannot_export_pdf_when_deep_running backend/tests/test_pdf_export_restrictions.py::test_cannot_export_pdf_when_quick_done backend/tests/test_player_development_routes.py::test_coach_cannot_list_other_coach_unscoped_plans_for_same_player backend/tests/test_player_development_routes.py::test_cross_org_plans_are_not_exposed_in_list_results"
+    - "cd frontend && npm run test:unit -- tests/unit/coachPerformanceTelemetry.spec.ts tests/unit/CoachProPlusVideoSessionsView.spec.ts"
+    - "cd frontend && npm run type-check"
+  files_touched:
+    - "frontend/src/views/CoachProPlusVideoSessionsView.vue"
+    - "frontend/tests/unit/CoachProPlusVideoSessionsView.spec.ts"
+    - "docs/PHASE_10J18B_COMPLETED_SESSION_LATENCY.md"
+    - "docs/CRICKSY_MASTER_EXECUTION_CHECKLIST.md"
+    - ".mcp/checklist.md"
+    - ".mcp/checklist.yaml"
+  completed_by: "codex"
+  completed_at: "2026-09-08"
+  notes: "No migration, backend authorization change, telemetry change, or speculative performance redesign."
