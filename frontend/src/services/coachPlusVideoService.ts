@@ -157,7 +157,9 @@ export interface V2PlayerPresentation {
   strengths: V2PlayerSignalPresentation[];
   priorities: V2PlayerSignalPresentation[];
   governed_actions: Array<{
+    action_id: string | null;
     linked_metric_id: string;
+    linked_metric_ids: string[];
     title: string;
     observed_issue: string;
     coaching_goal: string;

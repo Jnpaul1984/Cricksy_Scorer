@@ -86,6 +86,7 @@ def _report_with_supported_concern(repetitions: int) -> dict:
     ]
     report["governed_actions"] = [
         {
+            "action_id": "pace-release-follow-through",
             "linked_metric_id": "pace_bowling_release_proxy_bowling_arm_angle_deg",
             "technical_area": "Release and follow-through",
             "why_it_matters": "A repeatable release can improve control.",
@@ -215,6 +216,70 @@ def test_minimum_recurring_samples_allow_supported_priority_and_action() -> None
     ]
     assert [item["linked_metric_id"] for item in presentation["governed_actions"]] == [
         "pace_bowling_release_proxy_bowling_arm_angle_deg"
+    ]
+
+
+def test_priority_uses_persisted_metric_specific_comparable_count() -> None:
+    report = _report_with_supported_concern(43)
+    report["development_priorities"][0]["valid_sample_count"] = 43
+
+    presentation = build_player_presentation(report)
+
+    assert presentation["priorities"][0]["repetition_count"] == 43
+
+
+def test_priority_without_comparable_evidence_does_not_invent_zero() -> None:
+    report = _report_with_supported_concern(3)
+    priority = report["development_priorities"][0]
+    priority.pop("valid_sample_count")
+    priority["supporting_repetition_ids"] = []
+
+    presentation = build_player_presentation(report)
+
+    assert presentation["priorities"][0]["repetition_count"] is None
+
+
+def test_supporting_repetition_ids_supply_a_metric_specific_count() -> None:
+    report = _report_with_supported_concern(3)
+    report["development_priorities"][0].pop("valid_sample_count")
+
+    presentation = build_player_presentation(report)
+
+    assert presentation["priorities"][0]["repetition_count"] == 3
+
+
+def test_governed_actions_deduplicate_by_action_id_and_retain_metric_traceability() -> None:
+    report = _report_with_supported_concern(3)
+    duplicate = {
+        **report["governed_actions"][0],
+        "linked_metric_id": "pace_bowling_release_proxy_trunk_lean_deg",
+    }
+    report["governed_actions"].append(duplicate)
+
+    presentation = build_player_presentation(report)
+
+    assert len(presentation["governed_actions"]) == 1
+    assert presentation["governed_actions"][0]["action_id"] == "pace-release-follow-through"
+    assert presentation["governed_actions"][0]["linked_metric_ids"] == [
+        "pace_bowling_release_proxy_bowling_arm_angle_deg",
+        "pace_bowling_release_proxy_trunk_lean_deg",
+    ]
+
+
+def test_different_governed_action_ids_are_not_merged_when_wording_matches() -> None:
+    report = _report_with_supported_concern(3)
+    distinct = {
+        **report["governed_actions"][0],
+        "action_id": "pace-distinct-governed-action",
+        "linked_metric_id": "pace_bowling_release_proxy_trunk_lean_deg",
+    }
+    report["governed_actions"].append(distinct)
+
+    presentation = build_player_presentation(report)
+
+    assert [item["action_id"] for item in presentation["governed_actions"]] == [
+        "pace-release-follow-through",
+        "pace-distinct-governed-action",
     ]
 
 

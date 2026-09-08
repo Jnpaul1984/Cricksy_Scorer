@@ -774,7 +774,11 @@
                 <h4>{{ strength.title }}</h4>
                 <p>{{ strength.observation }}</p>
                 <p class="status-text">
-                  {{ strength.repetition_count }} comparable repetitions • {{ strength.confidence }}
+                  <template v-if="strength.repetition_count !== null">
+                    {{ strength.repetition_count }} comparable repetitions •
+                  </template>
+                  <template v-else>Comparable repetition count unavailable •</template>
+                  {{ strength.confidence }}
                 </p>
               </div>
           </section>
@@ -792,7 +796,11 @@
                 <h4>{{ priority.title }}</h4>
                 <p>{{ priority.observation }}</p>
                 <p class="status-text">
-                  {{ priority.repetition_count }} comparable repetitions • {{ priority.confidence }}
+                  <template v-if="priority.repetition_count !== null">
+                    {{ priority.repetition_count }} comparable repetitions •
+                  </template>
+                  <template v-else>Comparable repetition count unavailable •</template>
+                  {{ priority.confidence }}
                 </p>
                 <p>{{ priority.why_it_matters }}</p>
                 <p v-if="priority.proxy" class="status-text">{{ priority.proxy }}</p>
@@ -806,7 +814,7 @@
             </p>
               <div
                 v-for="action in selectedJobV2Presentation.governed_actions"
-                :key="`${action.linked_metric_id}:${action.title}`"
+                :key="action.action_id || `${action.linked_metric_id}:${action.title}`"
                 class="finding-card"
                   >
                 <h4>{{ action.title }}</h4>
