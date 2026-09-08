@@ -128,6 +128,10 @@ export interface V2PlayerPresentation {
     recommendation?: string;
     minimum_repetitions?: number;
   };
+  movement_summary: {
+    summary: string;
+    phase_confidence_summary: string;
+  };
   repetitions: Array<{
     repetition_id: string;
     label: string;
@@ -153,6 +157,16 @@ export interface V2PlayerPresentation {
     validity: string | null;
     proxy: string | null;
     classification: string | null;
+  }>;
+  current_session_positives: Array<{
+    metric_id: string;
+    title: string;
+    observation: string;
+    value: string;
+    phase: string;
+    confidence: string;
+    validity: string | null;
+    proxy: string | null;
   }>;
   strengths: V2PlayerSignalPresentation[];
   priorities: V2PlayerSignalPresentation[];

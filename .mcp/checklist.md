@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-09-06
 **Scope:** Phase 10J Coaching Analysis Engine V2
-**Implementation Status:** 10J.1-10J.16 COMPLETE
+**Implementation Status:** 10J.1-10J.17 COMPLETE
 
 ## Progress Summary
 
@@ -25,6 +25,7 @@
 | 10J.14 | Coaching Analysis Report V2 & Governed Cricket Coaching Actions | ✅ DONE |
 | 10J.15 | Player-Friendly Coaching Report & V2 UI Simplification | ✅ DONE |
 | 10J.16 | V2 Report Correctness & Recommendation Deduplication | ✅ DONE |
+| 10J.17 | First-Session Report Semantics & Player-Facing Hierarchy | ✅ DONE |
 
 ## Notes
 
@@ -34,3 +35,4 @@
 - Issue #503 authorized and completed the additive Phase 10J.14 reporting/governance follow-up.
 - Issue #505 authorized and completed the additive Phase 10J.15 presentation follow-up.
 - Issue #507 authorized and completed the additive Phase 10J.16 correctness follow-up.
+- Issue #509 authorized and completed the additive Phase 10J.17 presentation-hierarchy follow-up.

@@ -49,8 +49,9 @@ describe('PlayerLongitudinalProgress', () => {
   it('shows the backend player wording instead of a technical table for one session', async () => {
     vi.mocked(getPlayerLongitudinalProgress).mockResolvedValue(
       response({
-        state: 'Not enough sessions yet',
-        summary: 'Complete another comparable session to start tracking progress.',
+        state: 'Baseline established',
+        summary:
+          "This is the player's first recorded assessment. Future comparable sessions will show what improved, stayed consistent, or needs more work.",
         items: [],
       }),
     );
@@ -60,8 +61,8 @@ describe('PlayerLongitudinalProgress', () => {
     });
     await flushAsync();
 
-    expect(wrapper.text()).toContain('Not enough sessions yet');
-    expect(wrapper.text()).toContain('Complete another comparable session');
+    expect(wrapper.text()).toContain('Baseline established');
+    expect(wrapper.text()).toContain('first recorded assessment');
     expect(wrapper.text()).not.toContain('History');
     expect(wrapper.find('table').exists()).toBe(false);
   });
