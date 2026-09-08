@@ -12,7 +12,10 @@ import {
   type VideoAnalysisJob,
   type VideoSession,
 } from '@/services/coachPlusVideoService';
-import { listPlayerDevelopmentPlans } from '@/services/playerDevelopmentApi';
+import {
+  listPlayerDevelopmentPlans,
+  type PlayerDevelopmentPlanDraftBundle,
+} from '@/services/playerDevelopmentApi';
 import CoachProPlusVideoSessionsView from '@/views/CoachProPlusVideoSessionsView.vue';
 
 const authStoreMock = reactive({
@@ -315,6 +318,105 @@ describe('CoachProPlusVideoSessionsView', () => {
 
     expect(listPlayerDevelopmentPlans).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(wrapper.find('.history-list').exists()).toBe(true));
+  });
+
+  it('discards a stale recommendation lookup after a newer session lookup completes', async () => {
+    authStoreMock.canCoach = true;
+    authStoreMock.isCoachProPlus = true;
+    authStoreMock.role = 'coach_pro_plus';
+    const now = new Date().toISOString();
+    const sessionA = {
+      id: 'session-a',
+      title: 'Session A',
+      status: 'ready',
+      player_ids: ['player-a'],
+    } as VideoSession;
+    const sessionB = {
+      id: 'session-b',
+      title: 'Session B',
+      status: 'ready',
+      player_ids: ['player-b'],
+    } as VideoSession;
+    const jobA = {
+      id: 'job-a',
+      session_id: sessionA.id,
+      status: 'done',
+      created_at: now,
+      updated_at: now,
+    } as VideoAnalysisJob;
+    const jobB = {
+      id: 'job-b',
+      session_id: sessionB.id,
+      status: 'done',
+      created_at: now,
+      updated_at: now,
+    } as VideoAnalysisJob;
+    const bundleFor = (sessionId: string, jobId: string, planId: string) =>
+      ({
+        plan: {
+          id: planId,
+          ai_metadata: { video_analysis_job_id: jobId, video_session_id: sessionId },
+          evidence_refs: [],
+        },
+        goals: [],
+        weakness_tags: [],
+        strength_tags: [],
+        drill_assignments: [],
+        progress_checkpoints: [],
+      }) as unknown as PlayerDevelopmentPlanDraftBundle;
+    let finishA!: (plans: PlayerDevelopmentPlanDraftBundle[]) => void;
+    let finishB!: (plans: PlayerDevelopmentPlanDraftBundle[]) => void;
+
+    vi.mocked(listVideoSessions).mockResolvedValue([sessionA, sessionB]);
+    vi.mocked(getAnalysisHistory).mockImplementation(async (sessionId) =>
+      sessionId === sessionA.id ? [jobA] : [jobB],
+    );
+    vi.mocked(listCoachPlayers).mockResolvedValue([
+      {
+        player_id: 'player-a',
+        player_name: 'Player A',
+        date_of_birth: null,
+        assignment_active: true,
+      },
+      {
+        player_id: 'player-b',
+        player_name: 'Player B',
+        date_of_birth: null,
+        assignment_active: true,
+      },
+    ]);
+    vi.mocked(listPlayerDevelopmentPlans).mockImplementation(
+      (playerId) =>
+        new Promise((resolve) => {
+          if (playerId === 'player-a') finishA = resolve;
+          else finishB = resolve;
+        }),
+    );
+
+    const wrapper = mountView();
+    await vi.waitFor(() => expect(wrapper.find('.sessions-list').exists()).toBe(true));
+    const vm = wrapper.vm as unknown as {
+      closeHistoryModal: () => void;
+      recommendationBundlesByJobId: Record<string, PlayerDevelopmentPlanDraftBundle[]>;
+      recommendationLookupError: string | null;
+      selectSession: (sessionId: string) => Promise<void>;
+    };
+
+    await vm.selectSession(sessionA.id);
+    await vi.waitFor(() => expect(listPlayerDevelopmentPlans).toHaveBeenCalledWith('player-a'));
+    vm.closeHistoryModal();
+    await vm.selectSession(sessionB.id);
+    await vi.waitFor(() => expect(listPlayerDevelopmentPlans).toHaveBeenCalledWith('player-b'));
+
+    finishB([bundleFor(sessionB.id, jobB.id, 'plan-b')]);
+    await vi.waitFor(() => expect(Object.keys(vm.recommendationBundlesByJobId)).toEqual([jobB.id]));
+
+    finishA([bundleFor(sessionA.id, jobA.id, 'plan-a')]);
+    await flushAsync();
+
+    expect(Object.keys(vm.recommendationBundlesByJobId)).toEqual([jobB.id]);
+    expect(vm.recommendationBundlesByJobId[jobB.id][0].plan.id).toBe('plan-b');
+    expect(vm.recommendationLookupError).toBeNull();
   });
 
   it('treats deep-running PDF export as not ready and handles a 409 race clearly', async () => {

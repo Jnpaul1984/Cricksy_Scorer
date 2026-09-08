@@ -1108,6 +1108,7 @@ const loadingHistory = ref(false);
 const recommendationLookupLoading = ref(false);
 const recommendationLookupError = ref<string | null>(null);
 const recommendationBundlesByJobId = ref<Record<string, PlayerDevelopmentPlanDraftBundle[]>>({});
+let recommendationLookupRequestId = 0;
 const reviewLoadingByPlanId = ref<Record<string, boolean>>({});
 const reviewErrorByPlanId = ref<Record<string, string | null>>({});
 const reviewSuccessByPlanId = ref<Record<string, string | null>>({});
@@ -1709,6 +1710,10 @@ async function loadRecommendationLinks(
   session: { id: string; player_ids?: string[] },
   jobs: VideoAnalysisJob[],
 ) {
+  const requestId = ++recommendationLookupRequestId;
+  const isCurrentLookup = () =>
+    requestId === recommendationLookupRequestId && selectedSession.value?.id === session.id;
+
   recommendationLookupLoading.value = true;
   recommendationLookupError.value = null;
   recommendationBundlesByJobId.value = {};
@@ -1717,9 +1722,11 @@ async function loadRecommendationLinks(
     if (!canReviewRecommendations.value) return;
 
     if (!assignedPlayersLoaded.value && !(await fetchAssignedPlayers())) {
+      if (!isCurrentLookup()) return;
       recommendationLookupError.value = 'Recommendation access could not be verified.';
       return;
     }
+    if (!isCurrentLookup()) return;
 
     const assignedPlayerIds = new Set(assignedPlayers.value.map((player) => player.id));
     const playerIds = Array.isArray(session.player_ids)
@@ -1733,6 +1740,7 @@ async function loadRecommendationLinks(
     const results = await Promise.allSettled(
       playerIds.map((playerId) => listPlayerDevelopmentPlans(playerId)),
     );
+    if (!isCurrentLookup()) return;
 
     const bundles = results.flatMap((result) =>
       result.status === 'fulfilled' ? result.value : [],
@@ -1756,7 +1764,9 @@ async function loadRecommendationLinks(
 
     recommendationBundlesByJobId.value = linkedByJobId;
   } finally {
-    recommendationLookupLoading.value = false;
+    if (isCurrentLookup()) {
+      recommendationLookupLoading.value = false;
+    }
   }
 }
 
@@ -2139,6 +2149,8 @@ function timelineSegStyle(seg: {
 
 async function selectSession(sessionId: string) {
   try {
+    recommendationLookupRequestId += 1;
+    recommendationLookupLoading.value = false;
     recommendationLookupError.value = null;
     recommendationBundlesByJobId.value = {};
 
@@ -2307,6 +2319,7 @@ function closeModal() {
 }
 
 function closeHistoryModal() {
+  recommendationLookupRequestId += 1;
   showHistoryModal.value = false;
   selectedSession.value = null;
   analysisHistory.value = [];
