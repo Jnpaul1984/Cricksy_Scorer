@@ -5390,3 +5390,613 @@ deferred until real club/customer onboarding. Full closure details in
 ### Next Active Phase
 
 **Phase 8 — AI Analytics + Match Intelligence Enhancements** is now the next active phase.
+
+---
+
+# Phase 7 — Cricksy School Free Foundation
+
+This workstream is appended through checklist governance without renaming, renumbering, or
+deleting any existing roadmap phase. Its use of the Phase 7 label is limited to the School Free
+foundation workstream authorized here; existing historical-ingestion phase names remain intact.
+
+## School Free Governing Product Contract
+
+- A school is an organization; do not create a parallel school tenancy model.
+- Users retain independent Cricksy identities. Organization membership determines a user's
+  school role, and global roles such as `school_player` must not be created.
+- Existing `PlayerProfile` remains the canonical cricket player record. Students do not need a
+  Cricksy login to exist on a school roster.
+- One player may belong to multiple teams without duplicate player profiles. The school master
+  roster must be reusable across teams and matches.
+- School Free includes unlimited school matches, reusable teams and players, basic statistics,
+  fixtures and results, live scorecards, and school competitions.
+- Advanced AI, video, advanced analytics, and premium coaching capabilities remain outside
+  School Free unless separately approved through checklist governance.
+- No school workflow may permit cross-organization data leakage.
+- Existing scoring truth, DLS, result logic, historical import systems, analyst systems, and
+  video-analysis systems are protected and must not be changed by this governance workstream.
+- Any later schema migration must pass the checklist's real-Postgres Alembic validation gate,
+  including upgrade, downgrade, and clean re-upgrade evidence against real PostgreSQL.
+
+## Phase 7A — School Architecture Audit + Spec Lock
+
+### Purpose
+
+Audit the existing organization, identity, player, team, match, entitlement, and competition
+surfaces and lock the smallest compatible architecture for School Free before implementation.
+
+### Pre-Phase Audit Requirements
+
+- Map existing organization tenancy, membership roles, `PlayerProfile`, team/roster, match setup,
+  statistics, competition, and entitlement contracts with exact file and schema references.
+- Identify every organization boundary and authorization check that later School Free work must
+  preserve, plus migration requirements and the real-Postgres validation commands.
+
+### Strict Scope
+
+- Documentation, architecture decisions, dependency ordering, data-flow diagrams, risk register,
+  acceptance contracts, and implementation issue breakdown only.
+- Lock the rule that a school is an organization and that membership, not a global user role,
+  determines school authority.
+
+### Protected Files/Systems
+
+- All runtime code, database schema, migrations, deployed infrastructure, and production data.
+- Scoring truth, DLS, result logic, historical imports, analyst systems, video analysis, AI,
+  premium coaching, and existing identity behavior.
+
+### Gates
+
+- Repo-grounded audit approved with unresolved conflicts explicitly recorded.
+- Spec names exact ownership, tenancy, authorization, canonical-record, and entitlement boundaries.
+- No implementation phase may begin until the spec lock is approved.
+
+### Required Tests
+
+- Documentation link/path validation and checklist structure validation.
+- Recorded baseline test inventory for organization isolation, identity, players, teams, matches,
+  scoring, entitlements, and PostgreSQL migrations; no runtime test change is authorized here.
+
+### Rollout/Rollback Considerations
+
+- Rollout is approval of the spec and sequenced issues only; it has no deployment impact.
+- Rollback is revert of the governance/spec commit before downstream implementation begins.
+
+### What Must Not Be Done
+
+- Do not change runtime code, schema, migrations, roles, entitlements, or production configuration.
+- Do not invent a parallel school, player, scoring, statistics, or competition subsystem.
+
+### Completion Criteria
+
+- The approved spec proves compatibility with existing systems, locks all School Free invariants,
+  identifies protected surfaces, and gives each later subphase an independently testable scope.
+
+## Phase 7B — Organization + School Membership Foundation
+
+### Purpose
+
+Represent each school through the existing organization model and govern school administrators
+and other school access through organization membership while preserving independent user identity.
+
+### Pre-Phase Audit Requirements
+
+- Verify current organization ownership, membership, invitation, authorization, and tenant-filter
+  behavior, including how users participate in more than one organization.
+- Audit current role storage and confirm that school responsibilities can remain membership-scoped.
+
+### Strict Scope
+
+- Add only the minimum organization metadata and membership-scoped school roles approved by the
+  Phase 7A spec, with create/read/update administration bounded to the current organization.
+- Preserve the user's independent Cricksy account and identity outside every school organization.
+
+### Protected Files/Systems
+
+- Global identity and authentication semantics, unrelated organization types, and global role
+  definitions except for minimal approved compatibility work.
+- Scoring, DLS, results, imports, analyst, video-analysis, AI, and premium coaching systems.
+
+### Gates
+
+- Every school query and mutation is organization-scoped and authorization-denied by default.
+- No global `school_player` or equivalent role exists; school authority derives from membership.
+- Any schema migration passes the real-Postgres Alembic upgrade/downgrade/re-upgrade gate.
+
+### Required Tests
+
+- Organization creation, membership lifecycle, membership-role authorization, and independent-user
+  identity regression tests.
+- Cross-organization read/write denial tests at service and API layers plus real-Postgres migration
+  validation when a migration is introduced.
+
+### Rollout/Rollback Considerations
+
+- Use additive schema/API changes and an organization-scoped feature flag where appropriate.
+- Rollback must disable the feature first and safely reverse additive migrations without changing
+  existing identities or unrelated organization memberships.
+
+### What Must Not Be Done
+
+- Do not create a separate school tenant table when the organization model satisfies the spec.
+- Do not convert students into required login accounts or add global school-specific user roles.
+
+### Completion Criteria
+
+- An authorized user can create and administer a school organization; membership determines school
+  permissions, user identity remains independent, and isolation tests prove no tenant leakage.
+
+## Phase 7C — School Free Entitlement
+
+### Purpose
+
+Define and enforce the School Free product entitlement without weakening existing paid tiers or
+granting premium capabilities.
+
+### Pre-Phase Audit Requirements
+
+- Inventory entitlement, subscription, feature-gate, quota, billing, and organization-plan paths.
+- Map each included School Free capability and each excluded AI, video, advanced-analytics, and
+  premium-coaching capability to its current enforcement point.
+
+### Strict Scope
+
+- Add the School Free entitlement for unlimited school matches, reusable teams/players, basic
+  statistics, fixtures/results, live scorecards, and school competitions.
+- Enforce excluded capabilities through existing entitlement patterns, with deny-by-default behavior.
+
+### Protected Files/Systems
+
+- Paid-plan pricing and billing contracts, global subscription behavior, and premium feature logic.
+- Scoring truth, DLS, results, imports, analyst, and video-analysis runtime behavior.
+
+### Gates
+
+- Entitlement matrix is approved and exactly matches the governed School Free product contract.
+- Organization membership and entitlement are both checked where required; tenant isolation remains
+  mandatory regardless of plan.
+
+### Required Tests
+
+- Positive tests for every included capability and negative tests for AI, video, advanced analytics,
+  premium coaching, and cross-organization access.
+- Regression tests for existing free/paid entitlements and unlimited school-match behavior.
+
+### Rollout/Rollback Considerations
+
+- Roll out behind an organization entitlement flag with observable authorization failures.
+- Rollback disables School Free grants without deleting school data or changing paid subscriptions.
+
+### What Must Not Be Done
+
+- Do not grant premium features implicitly, alter pricing, or bypass existing feature gates.
+- Do not interpret "unlimited matches" as unlimited access to excluded compute-heavy capabilities.
+
+### Completion Criteria
+
+- School organizations receive exactly the included School Free experience, excluded capabilities
+  remain blocked, and existing tiers show no entitlement regressions.
+
+## Phase 7D — Persistent School Teams
+
+### Purpose
+
+Allow a school to create persistent, reusable teams owned by its organization rather than creating
+throwaway team records for each match.
+
+### Pre-Phase Audit Requirements
+
+- Audit current team, squad, competition, match-side, ownership, archive, and naming behavior.
+- Identify all locations where transient match teams are assumed and define compatibility rules.
+
+### Strict Scope
+
+- Add organization-owned school team lifecycle and stable team references approved by Phase 7A.
+- Permit multiple teams within one school and reuse of a saved team across later matches.
+
+### Protected Files/Systems
+
+- Existing historical team records, match scoring state, result computation, DLS, imports, analyst
+  views, and video-analysis associations.
+- Teams owned by other organizations and all cross-tenant identifiers.
+
+### Gates
+
+- Team ownership is immutable or safely governed and all access is organization-scoped.
+- Any migration is additive and passes the real-Postgres Alembic validation gate.
+
+### Required Tests
+
+- Team create/update/archive/reuse tests, duplicate-name policy tests, and multi-team-per-school tests.
+- Cross-organization isolation, existing-match compatibility, and migration tests when applicable.
+
+### Rollout/Rollback Considerations
+
+- Use additive persistence and retain compatibility with existing match-local team data.
+- Rollback hides new management paths without deleting teams referenced by matches.
+
+### What Must Not Be Done
+
+- Do not rewrite match history, merge teams automatically, or expose teams across organizations.
+- Do not couple a persistent team to one season, competition, or match unless explicitly specified.
+
+### Completion Criteria
+
+- A school administrator can manage multiple persistent teams and select the same saved team in
+  multiple matches without changing existing scoring or historical results.
+
+## Phase 7E — School Master Player Roster
+
+### Purpose
+
+Provide an organization-scoped master roster of canonical cricket players reusable across all of a
+school's teams and matches, including students without Cricksy login accounts.
+
+### Pre-Phase Audit Requirements
+
+- Audit `PlayerProfile`, user-to-player links, identity resolution, historical players, statistics
+  joins, soft-delete behavior, and organization ownership/access patterns.
+- Define deterministic duplicate candidates without assuming one account per player.
+
+### Strict Scope
+
+- Keep `PlayerProfile` as the canonical cricket player record and add only the minimum approved
+  organization roster association and metadata.
+- Support rostered students without logins and optional later linking to an independent Cricksy user.
+
+### Protected Files/Systems
+
+- Canonical `PlayerProfile` identity semantics, existing user accounts, historical player identity
+  resolution, imported statistics, analyst systems, and video-analysis player associations.
+- Player data belonging to other organizations.
+
+### Gates
+
+- One canonical player can be reused across multiple teams without profile duplication.
+- Tenant-filtered roster access and safe account-linking rules are approved and enforced.
+- Any migration passes real-Postgres Alembic validation.
+
+### Required Tests
+
+- Logged-in and no-login player creation, canonical reuse, account-linking, archival, duplicate
+  candidate, and multi-team reuse tests.
+- Cross-organization leakage tests and regression tests for historical statistics/player identity.
+
+### Rollout/Rollback Considerations
+
+- Introduce additive roster associations; never bulk-rewrite existing `PlayerProfile` identifiers.
+- Rollback disables roster management while retaining canonical profiles and referenced associations.
+
+### What Must Not Be Done
+
+- Do not create a second canonical school-player model or require students to register accounts.
+- Do not merge or delete player profiles automatically and do not expose another school's roster.
+
+### Completion Criteria
+
+- A school has a reusable master roster based on `PlayerProfile`; students may exist without logins,
+  and the same player can be safely assigned to several teams and matches.
+
+## Phase 7F — Team Roster Management
+
+### Purpose
+
+Manage team membership by selecting players from the school master roster without duplicating
+canonical player records.
+
+### Pre-Phase Audit Requirements
+
+- Audit existing team-player, squad, playing-XI, captain/wicketkeeper, season, and eligibility models.
+- Define membership lifecycle, effective dates if needed, and match-snapshot compatibility.
+
+### Strict Scope
+
+- Add/remove/reuse master-roster players on multiple organization-owned teams.
+- Preserve a distinct match playing-XI selection so team membership does not rewrite match history.
+
+### Protected Files/Systems
+
+- `PlayerProfile`, completed match lineups, scoring events, results, DLS, historical imports,
+  statistics truth, analyst, and video-analysis systems.
+- Rosters, teams, and players outside the active organization.
+
+### Gates
+
+- Team membership references canonical players and prevents duplicate membership rows.
+- Membership mutations require authorized organization membership and cannot alter historical XIs.
+
+### Required Tests
+
+- Add/remove/bulk-select, multi-team membership, duplicate prevention, archived-player handling, and
+  playing-XI independence tests.
+- Authorization and cross-organization read/write denial tests.
+
+### Rollout/Rollback Considerations
+
+- Use additive associations and preserve match snapshots when membership later changes.
+- Rollback hides editing while keeping associations required by scheduled or completed matches.
+
+### What Must Not Be Done
+
+- Do not clone a `PlayerProfile` per team or treat a team roster as the playing XI automatically.
+- Do not mutate completed-match participants when a current roster changes.
+
+### Completion Criteria
+
+- Administrators can build several teams from one master roster, share players across teams, and
+  update current membership without duplicates or historical-match corruption.
+
+## Phase 7G — Bulk Player Import
+
+### Purpose
+
+Provide a safe, explicit workflow for importing a school's player spreadsheet into its master roster.
+
+### Pre-Phase Audit Requirements
+
+- Audit existing upload, CSV/XLSX parsing, validation, job, object-storage, duplicate-resolution,
+  audit-log, and historical-import utilities for safe reuse without coupling the systems.
+- Define supported columns, size limits, normalization, error contracts, and retention/deletion rules.
+
+### Strict Scope
+
+- Support CSV and XLSX upload, preview, explicit column mapping, row validation, duplicate detection,
+  operator resolution, and a separate explicit apply action.
+- Scope every staged row and result to the school organization and reuse canonical `PlayerProfile`.
+
+### Protected Files/Systems
+
+- Historical match import pipelines and registries, scoring, DLS, results, analyst datasets, video
+  uploads/analysis, and unrelated object-storage workflows.
+- Existing player profiles until an authorized explicit apply succeeds.
+
+### Gates
+
+- Preview is non-mutating; apply is explicit, authorized, idempotent, and auditable.
+- Invalid or unresolved rows cannot be silently applied; duplicates require explicit resolution.
+- Any schema migration passes the real-Postgres Alembic validation gate.
+
+### Required Tests
+
+- CSV/XLSX parsing, mapping, normalization, validation, preview immutability, duplicate detection and
+  resolution, partial-error policy, explicit apply, idempotency, and audit tests.
+- Malformed/oversized file security tests and cross-organization staging/apply denial tests.
+
+### Rollout/Rollback Considerations
+
+- Use staged imports behind a feature flag with bounded file limits and operational telemetry.
+- Rollback disables new uploads/applies while retaining auditable results; applied canonical players
+  are not automatically deleted.
+
+### What Must Not Be Done
+
+- Do not auto-apply on upload, silently guess ambiguous mappings, or silently merge duplicates.
+- Do not modify or route through historical match, analyst, or video-analysis import systems.
+
+### Completion Criteria
+
+- An administrator can upload CSV/XLSX, preview mapped rows, correct validation problems, resolve
+  duplicates explicitly, apply once, and obtain an accurate organization-scoped master roster.
+
+## Phase 7H — School Administration UI
+
+### Purpose
+
+Expose a coherent, accessible school administration experience for organization settings,
+memberships, master roster, teams, imports, fixtures, results, and competitions.
+
+### Pre-Phase Audit Requirements
+
+- Audit existing navigation, organization context, design system, permissions, responsive behavior,
+  loading/error patterns, and feature-gate components.
+- Map each UI action to an authorized backend contract and tenant-safe empty/error state.
+
+### Strict Scope
+
+- Build only School Free administration surfaces approved in Phases 7B–7G and links to included
+  fixtures/results/competitions.
+- Make organization context and destructive/explicit actions clear, including import preview/apply.
+
+### Protected Files/Systems
+
+- Existing scorer, analyst, video-analysis, AI, premium coaching, billing, and unrelated admin UI.
+- Hidden data from other organizations and excluded premium actions.
+
+### Gates
+
+- UI authorization is backed by server enforcement and never relied upon as the security boundary.
+- Accessible, responsive flows have stable selectors and explicit organization context.
+
+### Required Tests
+
+- Component tests for permission, validation, loading, empty, error, and entitlement states.
+- Browser-level end-to-end tests for school setup, import preview/apply, duplicate resolution, master
+  roster, multi-team creation, and cross-organization access denial.
+
+### Rollout/Rollback Considerations
+
+- Release behind the School Free entitlement/feature flag and monitor authorization/import errors.
+- Rollback removes navigation and UI entry points without deleting school data.
+
+### What Must Not Be Done
+
+- Do not expose premium AI/video/analytics/coaching controls or imply they are School Free.
+- Do not rely on client-side filtering to prevent cross-organization access.
+
+### Completion Criteria
+
+- An authorized school administrator can complete all foundation administration workflows through
+  an accessible UI, while unauthorized and cross-organization users are denied.
+
+## Phase 7I — Match Setup Integration
+
+### Purpose
+
+Integrate saved school teams and the master roster into existing match creation and playing-XI
+selection without changing scoring truth.
+
+### Pre-Phase Audit Requirements
+
+- Audit match creation, side/team snapshots, player selection, toss, officials, fixture conversion,
+  scorer authorization, match resume, and downstream statistics behavior.
+- Record regression baselines for scoring truth, DLS, result logic, and existing match setup paths.
+
+### Strict Scope
+
+- Permit an authorized school user to select a saved organization-owned team, choose the playing XI
+  from eligible roster players, and create the match through existing contracts.
+- Persist stable references/snapshots needed for later statistics and team/player reuse.
+
+### Protected Files/Systems
+
+- Scoring truth, ball/event models, DLS, result logic, match-state transitions, historical imports,
+  analyst systems, video analysis, and non-school match creation behavior.
+- Teams and players outside the match's organization.
+
+### Gates
+
+- Saved-team selection is additive and falls back safely to existing setup behavior.
+- Playing-XI validation, organization ownership, scorer authorization, and historical snapshot rules
+  are enforced server-side.
+
+### Required Tests
+
+- Saved-team match creation, playing-XI selection, shared-player, fixture-to-match, resume, and
+  completed-match snapshot tests.
+- Full affected scoring, DLS, result, authorization, and cross-organization regression suites.
+
+### Rollout/Rollback Considerations
+
+- Feature-flag the saved-team selector while keeping the existing match setup path available.
+- Rollback disables selection of new saved teams but preserves matches already created and scored.
+
+### What Must Not Be Done
+
+- Do not rewrite scoring, DLS, result logic, or historical match records.
+- Do not auto-select an entire roster as the playing XI or allow foreign-organization players.
+
+### Completion Criteria
+
+- A school administrator can create a match from a saved team, select the playing XI, and complete
+  existing scoring flows with unchanged cricket truth and retained canonical player references.
+
+## Phase 7J — School Free Statistics + Competition Experience
+
+### Purpose
+
+Deliver the included basic statistics, fixtures/results, live scorecards, and school competition
+experience from existing governed match truth.
+
+### Pre-Phase Audit Requirements
+
+- Audit current statistics aggregation, fixtures, results, live scorecards, competitions, cache,
+  visibility, correction/replay, and entitlement behavior.
+- Define the exact basic-statistics set and verify it can be derived without advanced analytics.
+
+### Strict Scope
+
+- Expose organization-scoped basic player/team statistics, fixtures, results, live scorecards, and
+  school competitions included in School Free.
+- Reuse existing scoring/result truth and canonical player/team identifiers.
+
+### Protected Files/Systems
+
+- Advanced analytics, AI insight generation, analyst workspaces, video analysis, premium coaching,
+  scoring truth, DLS, result calculation, and historical import systems.
+- Private data belonging to other organizations.
+
+### Gates
+
+- Published statistics reconcile deterministically to official match results and corrections.
+- Public/live visibility follows existing policy; private administration remains organization-scoped.
+- School Free entitlement tests prove premium capabilities stay unavailable.
+
+### Required Tests
+
+- Basic player/team aggregation, fixture/result, live-scorecard, competition, correction/recompute,
+  cache invalidation, and entitlement tests.
+- Cross-organization leakage tests plus existing scoring/DLS/result regression suites.
+
+### Rollout/Rollback Considerations
+
+- Roll out read surfaces incrementally with reconciliation metrics and cache rollback controls.
+- Rollback hides School Free views without deleting official matches, results, or statistics inputs.
+
+### What Must Not Be Done
+
+- Do not redefine cricket truth or fork statistics from official scoring/results.
+- Do not include advanced AI, video, advanced analytics, or premium coaching without separate approval.
+
+### Completion Criteria
+
+- School Free users can manage competitions and see accurate fixtures, results, live scorecards, and
+  basic reusable player/team statistics with no premium leakage or tenant leakage.
+
+## Phase 7K — School Free End-to-End Hardening + Rollout Gate
+
+### Purpose
+
+Prove the complete School Free journey, security boundaries, operational readiness, reversibility,
+and preservation of existing systems before general rollout.
+
+### Pre-Phase Audit Requirements
+
+- Reconcile every Phase 7A–7J completion report, deferred item, migration, feature flag, test suite,
+  security finding, telemetry requirement, support procedure, and data-retention decision.
+- Establish production-like baselines for tenancy, imports, match setup, scoring, statistics, and load.
+
+### Strict Scope
+
+- Hardening, regression repair, end-to-end validation, documentation, observability, rollout runbook,
+  rollback rehearsal, and final go/no-go evidence only.
+- Fixes must remain within approved School Free surfaces; scope expansion requires new governance.
+
+### Protected Files/Systems
+
+- Existing scoring truth, DLS, result logic, historical imports, analyst systems, video analysis,
+  advanced AI/analytics, premium coaching, unrelated subscriptions, and unrelated organization data.
+- Production data except through separately approved rollout procedures.
+
+### Gates
+
+- Zero unresolved critical/high security, tenancy, data-integrity, migration, or cricket-truth defects.
+- All migrations pass the checklist's real-Postgres Alembic upgrade/downgrade/re-upgrade gate.
+- Rollback is rehearsed, observability is live, product/engineering approval is recorded, and every
+  protected-system regression suite is green before rollout.
+
+### Required Tests
+
+- Full browser end-to-end acceptance journey covering school creation, spreadsheet import, preview,
+  validation, duplicate resolution, explicit apply, teams, playing XI, scoring, statistics, and reuse.
+- API/service tenancy and authorization suites; CSV/XLSX and idempotency suites; real-Postgres
+  migration tests; scoring, DLS, result, historical-import, analyst, and video regression suites.
+- Performance, concurrency, accessibility, recovery, feature-flag, rollback, and no-data-leak tests.
+
+### Rollout/Rollback Considerations
+
+- Use staged cohorts, feature flags, audit logs, tenant/error/latency dashboards, support ownership,
+  and explicit go/no-go checkpoints; preserve all created match and player truth.
+- Rollback disables School Free entry points and writes in dependency order, preserves recoverable
+  data, and follows validated migration rollback procedures where applicable.
+
+### What Must Not Be Done
+
+- Do not launch with unresolved isolation or data-integrity failures, bypass required tests, or mutate
+  protected systems to make the acceptance flow pass.
+- Do not add excluded premium capabilities or broaden rollout beyond approved cohorts.
+
+### Completion Criteria
+
+- Every Phase 7A–7J gate is evidenced, protected regressions are green, tenant isolation is proven,
+  rollout and rollback are approved, and the final acceptance criterion below passes end to end.
+
+## Final Phase 7 Acceptance Criterion
+
+A school administrator can create a school, upload a player spreadsheet, resolve duplicates, create
+multiple teams from the master roster, create a match using a saved team, select the playing XI,
+score the match, retain player/team statistics, and reuse the same players in later matches without
+re-entering them.
+
+Phase 7 is not complete until this full journey passes in a production-like environment with no
+cross-organization data leakage, no unintended premium entitlement, and no regression to scoring
+truth, DLS, result logic, historical imports, analyst systems, or video-analysis systems.
