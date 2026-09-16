@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 @pytest_asyncio.fixture(scope="session")
 async def _setup_db():
-    """Use Alembic schema for explicit Phase 7B PostgreSQL validation."""
+    """Use Alembic schema for explicit Phase 7B/7C PostgreSQL validation."""
     from backend.sql_app.database import Base, get_engine
 
     engine = get_engine()
@@ -39,7 +39,7 @@ async def reset_db(_setup_db):
         if use_migrated_postgres:
             await connection.execute(
                 text(
-                    "TRUNCATE TABLE organization_memberships, organizations, users "
+                    "TRUNCATE TABLE organization_entitlements, organization_memberships, organizations, users "
                     "RESTART IDENTITY CASCADE"
                 )
             )

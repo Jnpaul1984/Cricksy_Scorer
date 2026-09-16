@@ -10,6 +10,7 @@ from backend.api.schemas.organizations import (
     OrganizationMembershipCreate,
     OrganizationMembershipUpdate,
 )
+from backend.services.organization_entitlement_service import ensure_school_free_entitlement
 from backend.sql_app.models import Organization, OrganizationMembership, User
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -63,6 +64,8 @@ async def create_organization(
     )
     db.add_all([organization, owner_membership])
     try:
+        await db.flush()
+        await ensure_school_free_entitlement(db, organization_id=organization.id)
         await db.commit()
     except Exception:
         await db.rollback()
