@@ -20,17 +20,19 @@ from sqlalchemy import (
     String,
     Text,
     TypeDecorator,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-# Import security logging models for DB discovery (import module to register models)
-from backend.sql_app import models_security  # noqa: F401
 from backend.services.player_development_state import (
     normalize_player_development_plan_governance,
 )
+
+# Import security logging models for DB discovery (import module to register models)
+from backend.sql_app import models_security  # noqa: F401
 
 from .database import Base
 
@@ -215,6 +217,103 @@ class User(Base):
     player_progress_checkpoints: Mapped[list[PlayerProgressCheckpoint]] = relationship(
         back_populates="coach_user", cascade="all, delete-orphan"
     )
+
+
+class Organization(Base):
+    """Authoritative tenant record for a school organization."""
+
+    __tablename__ = "organizations"
+    __table_args__ = (
+        CheckConstraint(
+            "organization_type IN ('school')",
+            name="ck_organizations_type",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'suspended', 'archived')",
+            name="ck_organizations_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    organization_type: Mapped[str] = mapped_column(
+        String(32), default="school", server_default="school", nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), default="active", server_default="active", nullable=False
+    )
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+    memberships: Mapped[list[OrganizationMembership]] = relationship(
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class OrganizationMembership(Base):
+    """A user's scoped role within one organization."""
+
+    __tablename__ = "organization_memberships"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "user_id",
+            name="uq_organization_memberships_organization_user",
+        ),
+        CheckConstraint(
+            "role IN ('owner', 'admin', 'coach', 'scorer', 'viewer')",
+            name="ck_organization_memberships_role",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'disabled')",
+            name="ck_organization_memberships_status",
+        ),
+        Index(
+            "ix_organization_memberships_user_status",
+            "user_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), default="active", server_default="active", nullable=False
+    )
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+    organization: Mapped[Organization] = relationship(back_populates="memberships")
 
 
 # -----------------------------
