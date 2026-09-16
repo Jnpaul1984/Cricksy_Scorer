@@ -1767,7 +1767,7 @@ class TeamRead(BaseModel):
     name: str
     home_ground: str | None = None
     season: str | None = None
-    owner_user_id: str
+    owner_user_id: str | None
     coach_user_id: str | None = None
     coach_name: str | None = None
     players: list[TeamPlayer] = Field(default_factory=list)

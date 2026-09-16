@@ -6,19 +6,17 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.security import get_current_user
-from backend.sql_app.database import get_db
-from backend.sql_app.models import Team, User
-from backend.sql_app.schemas import TeamCreate, TeamRead, TeamUpdate
 from backend.services.org_stats import (
     calculate_org_stats,
     get_org_teams_stats,
 )
-
+from backend.sql_app.database import get_db
+from backend.sql_app.models import Team, User
+from backend.sql_app.schemas import TeamCreate, TeamRead, TeamUpdate
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 
@@ -43,11 +41,14 @@ async def list_teams(
 
     if role == "superuser":
         # Superusers can see all teams
-        result = await db.execute(select(Team))
+        result = await db.execute(select(Team).where(Team.organization_id.is_(None)))
     elif role in ("org_pro", "coach_pro"):
         # See teams they own or coach
         result = await db.execute(
-            select(Team).where((Team.owner_user_id == user.id) | (Team.coach_user_id == user.id))
+            select(Team).where(
+                Team.organization_id.is_(None),
+                (Team.owner_user_id == user.id) | (Team.coach_user_id == user.id),
+            )
         )
     else:
         # Regular users - no teams
@@ -92,7 +93,9 @@ async def get_team(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Team:
     """Get a specific team by ID."""
-    result = await db.execute(select(Team).where(Team.id == team_id))
+    result = await db.execute(
+        select(Team).where(Team.id == team_id, Team.organization_id.is_(None))
+    )
     team = result.scalar_one_or_none()
 
     if not team:
@@ -126,7 +129,9 @@ async def update_team(
             detail="Team management requires org_pro, coach_pro, or superuser role",
         )
 
-    result = await db.execute(select(Team).where(Team.id == team_id))
+    result = await db.execute(
+        select(Team).where(Team.id == team_id, Team.organization_id.is_(None))
+    )
     team = result.scalar_one_or_none()
 
     if not team:
@@ -177,7 +182,9 @@ async def delete_team(
             detail="Team management requires org_pro, coach_pro, or superuser role",
         )
 
-    result = await db.execute(select(Team).where(Team.id == team_id))
+    result = await db.execute(
+        select(Team).where(Team.id == team_id, Team.organization_id.is_(None))
+    )
     team = result.scalar_one_or_none()
 
     if not team:

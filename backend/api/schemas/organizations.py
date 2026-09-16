@@ -98,3 +98,67 @@ class OrganizationEntitlementRecordResponse(BaseModel):
 class OrganizationEntitlementResponse(OrganizationEntitlementRecordResponse):
     capabilities: list[str]
     excluded_capabilities: list[str]
+
+
+class SchoolTeamCreate(BaseModel):
+    """Organization-scoped team creation input; tenancy comes only from the route."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    home_ground: str | None = Field(default=None, max_length=255)
+    season: str | None = Field(default=None, max_length=50)
+    coach_name: str | None = Field(default=None, max_length=255)
+    coach_id: str | None = None
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Team name must not be empty")
+        return normalized
+
+
+class SchoolTeamUpdate(BaseModel):
+    """Mutable School team metadata; ownership and lifecycle are server-governed."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    home_ground: str | None = Field(default=None, max_length=255)
+    season: str | None = Field(default=None, max_length=50)
+    coach_name: str | None = Field(default=None, max_length=255)
+    coach_id: str | None = None
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Team name must not be empty")
+        return normalized
+
+    @model_validator(mode="after")
+    def require_change(self) -> SchoolTeamUpdate:
+        if not self.model_fields_set:
+            raise ValueError("At least one team field must be supplied")
+        return self
+
+
+class SchoolTeamResponse(BaseModel):
+    id: str
+    organization_id: str
+    name: str
+    status: Literal["active", "archived"]
+    home_ground: str | None
+    season: str | None
+    owner_user_id: str | None
+    coach_user_id: str | None
+    coach_name: str | None
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = {"from_attributes": True}
