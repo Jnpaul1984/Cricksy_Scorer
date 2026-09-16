@@ -263,6 +263,24 @@ async def _get_scoped_membership(
     return membership
 
 
+async def _lock_organization_for_membership_mutation(
+    db: AsyncSession,
+    *,
+    organization_id: str,
+) -> None:
+    """Serialize membership mutations on the authoritative organization row."""
+    result = await db.execute(
+        select(Organization.id)
+        .where(
+            Organization.id == organization_id,
+            Organization.status == ACTIVE_ORGANIZATION_STATUS,
+        )
+        .with_for_update()
+    )
+    if result.scalar_one_or_none() is None:
+        raise _not_found()
+
+
 async def _ensure_another_active_owner(
     db: AsyncSession,
     *,
@@ -289,6 +307,10 @@ async def update_membership(
     payload: OrganizationMembershipUpdate,
     actor_user_id: str,
 ) -> OrganizationMembership:
+    await _lock_organization_for_membership_mutation(
+        db,
+        organization_id=organization_id,
+    )
     _, actor_membership = await require_membership_manager(
         db,
         organization_id=organization_id,

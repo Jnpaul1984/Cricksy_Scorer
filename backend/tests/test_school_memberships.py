@@ -6,12 +6,18 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from backend.api.schemas.organizations import OrganizationMembershipCreate
+from backend.api.schemas.organizations import (
+    OrganizationMembershipCreate,
+    OrganizationMembershipUpdate,
+)
 from backend.services.organization_service import (
     OrganizationServiceError,
 )
 from backend.services.organization_service import (
     add_membership as add_membership_service,
+)
+from backend.services.organization_service import (
+    update_membership as update_membership_service,
 )
 from backend.sql_app.database import get_engine, get_session_local
 from backend.sql_app.models import OrganizationMembership
@@ -179,6 +185,88 @@ def test_owner_can_transfer_authority_before_disabling_self(
     )
     assert denied.status_code == 404
     assert successor_access.status_code == 200
+
+
+@pytest.mark.skipif(
+    get_engine().dialect.name != "postgresql",
+    reason="Owner mutation serialization requires real PostgreSQL",
+)
+async def test_concurrent_owner_demotions_retain_an_active_owner(
+    school_client: TestClient,
+) -> None:
+    first_owner = register_user(school_client, "race-first-owner@example.com")
+    second_owner = register_user(school_client, "race-second-owner@example.com")
+    organization = create_school(school_client, first_owner, "Owner Race School")
+    first_membership_id = organization_owner_id(
+        school_client,
+        first_owner,
+        organization["id"],
+    )
+    second_membership = add_membership(
+        school_client,
+        first_owner,
+        organization["id"],
+        second_owner.id,
+        "admin",
+    )
+    promoted = school_client.patch(
+        f"/api/organizations/{organization['id']}/memberships/{second_membership['id']}",
+        json={"role": "owner"},
+        headers=first_owner.headers,
+    )
+    assert promoted.status_code == 200, promoted.text
+
+    session_maker = get_session_local()
+    start = asyncio.Event()
+    ready = 0
+    ready_lock = asyncio.Lock()
+
+    async def demote_self(membership_id: str, actor_user_id: str) -> object:
+        nonlocal ready
+        async with session_maker() as session:
+            async with ready_lock:
+                ready += 1
+                if ready == 2:
+                    start.set()
+            await start.wait()
+            try:
+                return await update_membership_service(
+                    session,
+                    organization_id=organization["id"],
+                    membership_id=membership_id,
+                    payload=OrganizationMembershipUpdate(role="admin"),
+                    actor_user_id=actor_user_id,
+                )
+            except OrganizationServiceError as exc:
+                return exc
+
+    outcomes = await asyncio.wait_for(
+        asyncio.gather(
+            demote_self(first_membership_id, first_owner.id),
+            demote_self(second_membership["id"], second_owner.id),
+        ),
+        timeout=10,
+    )
+    successes = [item for item in outcomes if isinstance(item, OrganizationMembership)]
+    conflicts = [
+        item
+        for item in outcomes
+        if isinstance(item, OrganizationServiceError)
+        and item.status_code == 409
+        and item.detail == "Organization must retain an active owner"
+    ]
+    assert len(successes) == 1
+    assert len(conflicts) == 1
+
+    async with session_maker() as session:
+        active_owner_count = await session.scalar(
+            select(func.count(OrganizationMembership.id)).where(
+                OrganizationMembership.organization_id == organization["id"],
+                OrganizationMembership.role == "owner",
+                OrganizationMembership.status == "active",
+            )
+        )
+        assert active_owner_count == 1
 
 
 def test_exact_user_membership_creation_has_no_directory_behavior(

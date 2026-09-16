@@ -2472,7 +2472,8 @@ class VideoSession(Base):
         String(32),
         nullable=True,
         comment=(
-            "V2 discipline context (batting, pace_bowling, spin_bowling, wicketkeeping, fielding)"
+            "V2 discipline context (batting, pace_bowling, spin_bowling, "
+            "wicketkeeping, fielding)"
         ),
     )
     coaching_focus: Mapped[str | None] = mapped_column(
