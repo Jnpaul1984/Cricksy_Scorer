@@ -261,6 +261,11 @@ class Organization(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    entitlements: Mapped[list[OrganizationEntitlement]] = relationship(
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class OrganizationMembership(Base):
@@ -314,6 +319,64 @@ class OrganizationMembership(Base):
         nullable=False,
     )
     organization: Mapped[Organization] = relationship(back_populates="memberships")
+
+
+class OrganizationEntitlement(Base):
+    """An organization-owned plan grant, separate from personal user plans."""
+
+    __tablename__ = "organization_entitlements"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "plan_key",
+            name="uq_organization_entitlements_organization_plan",
+        ),
+        CheckConstraint(
+            "plan_key IN ('school_free')",
+            name="ck_organization_entitlements_plan_key",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'disabled')",
+            name="ck_organization_entitlements_status",
+        ),
+        CheckConstraint(
+            "source IN ('system', 'admin', 'billing')",
+            name="ck_organization_entitlements_source",
+        ),
+        Index(
+            "ix_organization_entitlements_organization_status",
+            "organization_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    plan_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), default="active", server_default="active", nullable=False
+    )
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    effective_from: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    effective_until: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+    organization: Mapped[Organization] = relationship(back_populates="entitlements")
 
 
 # -----------------------------

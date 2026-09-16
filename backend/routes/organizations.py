@@ -6,6 +6,8 @@ from typing import Annotated, NoReturn
 
 from backend.api.schemas.organizations import (
     OrganizationCreate,
+    OrganizationEntitlementResponse,
+    OrganizationEntitlementRecordResponse,
     OrganizationMembershipCreate,
     OrganizationMembershipListResponse,
     OrganizationMembershipResponse,
@@ -15,6 +17,7 @@ from backend.api.schemas.organizations import (
 )
 from backend.security import get_current_active_user
 from backend.services import organization_service
+from backend.services import organization_entitlement_service
 from backend.sql_app.database import get_db
 from backend.sql_app.models import Organization, User
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -66,6 +69,46 @@ async def list_organizations(
         user_id=current_user.id,
     )
     return [_organization_with_role(organization, role) for organization, role in rows]
+
+
+@router.get(
+    "/{organization_id}/entitlements",
+    response_model=OrganizationEntitlementResponse,
+)
+async def get_organization_entitlements(
+    organization_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OrganizationEntitlementResponse:
+    try:
+        await organization_service.require_membership_manager(
+            db,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+        )
+    except organization_service.OrganizationServiceError as exc:
+        _service_error(exc)
+
+    entitlement = await organization_entitlement_service.get_effective_organization_entitlement(
+        db,
+        organization_id=organization_id,
+    )
+    if entitlement is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization entitlement not found"
+        )
+    entitlement_data = OrganizationEntitlementRecordResponse.model_validate(
+        entitlement
+    ).model_dump()
+    return OrganizationEntitlementResponse(
+        **entitlement_data,
+        capabilities=sorted(
+            organization_entitlement_service.capabilities_for_plan(entitlement.plan_key)
+        ),
+        excluded_capabilities=sorted(
+            organization_entitlement_service.SCHOOL_FREE_EXCLUDED_CAPABILITIES
+        ),
+    )
 
 
 @router.get("/{organization_id}", response_model=OrganizationWithMembershipResponse)

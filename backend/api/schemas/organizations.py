@@ -12,6 +12,8 @@ OrganizationStatus = Literal["active", "suspended", "archived"]
 MembershipRole = Literal["owner", "admin", "coach", "scorer", "viewer"]
 AssignableMembershipRole = Literal["admin", "coach", "scorer", "viewer"]
 MembershipStatus = Literal["active", "disabled"]
+OrganizationEntitlementPlanKey = Literal["school_free"]
+OrganizationEntitlementSource = Literal["system", "admin", "billing"]
 
 
 class OrganizationCreate(BaseModel):
@@ -77,3 +79,22 @@ class OrganizationMembershipListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class OrganizationEntitlementRecordResponse(BaseModel):
+    id: str
+    organization_id: str
+    plan_key: OrganizationEntitlementPlanKey
+    status: MembershipStatus
+    source: OrganizationEntitlementSource
+    effective_from: dt.datetime
+    effective_until: dt.datetime | None
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+    model_config = {"from_attributes": True}
+
+
+class OrganizationEntitlementResponse(OrganizationEntitlementRecordResponse):
+    capabilities: list[str]
+    excluded_capabilities: list[str]
