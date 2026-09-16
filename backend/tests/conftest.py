@@ -39,7 +39,7 @@ async def reset_db(_setup_db):
         if use_migrated_postgres:
             await connection.execute(
                 text(
-                    "TRUNCATE TABLE organization_entitlements, organization_memberships, organizations, users "
+                    "TRUNCATE TABLE teams, organization_entitlements, organization_memberships, organizations, users "
                     "RESTART IDENTITY CASCADE"
                 )
             )

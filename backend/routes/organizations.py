@@ -6,27 +6,48 @@ from typing import Annotated, NoReturn
 
 from backend.api.schemas.organizations import (
     OrganizationCreate,
-    OrganizationEntitlementResponse,
     OrganizationEntitlementRecordResponse,
+    OrganizationEntitlementResponse,
     OrganizationMembershipCreate,
     OrganizationMembershipListResponse,
     OrganizationMembershipResponse,
     OrganizationMembershipUpdate,
     OrganizationResponse,
     OrganizationWithMembershipResponse,
+    SchoolTeamCreate,
+    SchoolTeamResponse,
+    SchoolTeamUpdate,
 )
 from backend.security import get_current_active_user
-from backend.services import organization_service
-from backend.services import organization_entitlement_service
+from backend.services import (
+    organization_entitlement_service,
+    organization_service,
+    organization_team_service,
+)
 from backend.sql_app.database import get_db
 from backend.sql_app.models import Organization, User
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/organizations", tags=["organizations"])
 
 
 def _service_error(exc: organization_service.OrganizationServiceError) -> NoReturn:
+    raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+def _team_service_error(
+    exc: (
+        organization_service.OrganizationServiceError
+        | organization_entitlement_service.OrganizationCapabilityError
+        | organization_team_service.OrganizationTeamServiceError
+    ),
+) -> NoReturn:
+    if isinstance(exc, organization_entitlement_service.OrganizationCapabilityError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Organization capability not enabled: {exc.capability}",
+        ) from exc
     raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
@@ -109,6 +130,138 @@ async def get_organization_entitlements(
             organization_entitlement_service.SCHOOL_FREE_EXCLUDED_CAPABILITIES
         ),
     )
+
+
+@router.get(
+    "/{organization_id}/teams",
+    response_model=list[SchoolTeamResponse],
+)
+async def list_school_teams(
+    organization_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[SchoolTeamResponse]:
+    try:
+        teams = await organization_team_service.list_teams(
+            db,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+        )
+    except (
+        organization_service.OrganizationServiceError,
+        organization_entitlement_service.OrganizationCapabilityError,
+        organization_team_service.OrganizationTeamServiceError,
+    ) as exc:
+        _team_service_error(exc)
+    return [SchoolTeamResponse.model_validate(team) for team in teams]
+
+
+@router.post(
+    "/{organization_id}/teams",
+    response_model=SchoolTeamResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_school_team(
+    organization_id: str,
+    payload: SchoolTeamCreate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SchoolTeamResponse:
+    try:
+        team = await organization_team_service.create_team(
+            db,
+            organization_id=organization_id,
+            payload=payload,
+            actor_user_id=current_user.id,
+        )
+    except (
+        organization_service.OrganizationServiceError,
+        organization_entitlement_service.OrganizationCapabilityError,
+        organization_team_service.OrganizationTeamServiceError,
+    ) as exc:
+        _team_service_error(exc)
+    return SchoolTeamResponse.model_validate(team)
+
+
+@router.get(
+    "/{organization_id}/teams/{team_id}",
+    response_model=SchoolTeamResponse,
+)
+async def get_school_team(
+    organization_id: str,
+    team_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SchoolTeamResponse:
+    try:
+        team = await organization_team_service.get_team(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            actor_user_id=current_user.id,
+        )
+    except (
+        organization_service.OrganizationServiceError,
+        organization_entitlement_service.OrganizationCapabilityError,
+        organization_team_service.OrganizationTeamServiceError,
+    ) as exc:
+        _team_service_error(exc)
+    return SchoolTeamResponse.model_validate(team)
+
+
+@router.patch(
+    "/{organization_id}/teams/{team_id}",
+    response_model=SchoolTeamResponse,
+)
+async def update_school_team(
+    organization_id: str,
+    team_id: str,
+    payload: SchoolTeamUpdate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SchoolTeamResponse:
+    try:
+        team = await organization_team_service.update_team(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            payload=payload,
+            actor_user_id=current_user.id,
+        )
+    except (
+        organization_service.OrganizationServiceError,
+        organization_entitlement_service.OrganizationCapabilityError,
+        organization_team_service.OrganizationTeamServiceError,
+    ) as exc:
+        _team_service_error(exc)
+    return SchoolTeamResponse.model_validate(team)
+
+
+@router.delete(
+    "/{organization_id}/teams/{team_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def archive_school_team(
+    organization_id: str,
+    team_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    try:
+        await organization_team_service.archive_team(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            actor_user_id=current_user.id,
+        )
+    except (
+        organization_service.OrganizationServiceError,
+        organization_entitlement_service.OrganizationCapabilityError,
+        organization_team_service.OrganizationTeamServiceError,
+    ) as exc:
+        _team_service_error(exc)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{organization_id}", response_model=OrganizationWithMembershipResponse)

@@ -2028,6 +2028,15 @@ class Team(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     home_ground: Mapped[str | None] = mapped_column(String(255), nullable=True)
     season: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), default="active", server_default="active", nullable=False
+    )
     owner_user_id: Mapped[str] = mapped_column(
         String,
         ForeignKey("users.id", ondelete="CASCADE"),
@@ -2058,8 +2067,13 @@ class Team(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "status IN ('active', 'archived')",
+            name="ck_teams_status",
+        ),
         Index("ix_teams_name", "name"),
         Index("ix_teams_owner", "owner_user_id"),
+        Index("ix_teams_organization_status", "organization_id", "status"),
     )
 
 
