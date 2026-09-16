@@ -982,6 +982,63 @@ class PlayerProfile(Base):
         )
 
 
+class SchoolPlayerMembership(Base):
+    """An organization's roster association to one canonical PlayerProfile."""
+
+    __tablename__ = "school_player_memberships"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "player_profile_id",
+            name="uq_school_player_memberships_organization_player",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'inactive')",
+            name="ck_school_player_memberships_status",
+        ),
+        Index(
+            "ix_school_player_memberships_organization_status",
+            "organization_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    player_profile_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("player_profiles.player_id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), default="active", server_default="active", nullable=False
+    )
+    student_identifier: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    year_group: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 # ===== Player Achievements =====
 
 

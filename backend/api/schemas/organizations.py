@@ -162,3 +162,91 @@ class SchoolTeamResponse(BaseModel):
     updated_at: dt.datetime
 
     model_config = {"from_attributes": True}
+
+
+class SchoolRosterPlayerCreate(BaseModel):
+    """Create only the minimum canonical profile and School-local roster metadata."""
+
+    player_name: str = Field(..., min_length=1, max_length=255)
+    student_identifier: str | None = Field(default=None, max_length=128)
+    year_group: str | None = Field(default=None, max_length=64)
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("player_name")
+    @classmethod
+    def normalize_player_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Player name must not be empty")
+        return normalized
+
+    @field_validator("student_identifier", "year_group")
+    @classmethod
+    def normalize_optional_metadata(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split())
+        return normalized or None
+
+
+class SchoolRosterPlayerLink(BaseModel):
+    """Link one explicitly selected canonical PlayerProfile by exact ID."""
+
+    player_profile_id: str = Field(..., min_length=1, max_length=255)
+    student_identifier: str | None = Field(default=None, max_length=128)
+    year_group: str | None = Field(default=None, max_length=64)
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("player_profile_id")
+    @classmethod
+    def normalize_player_profile_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Player profile ID must not be empty")
+        return normalized
+
+    @field_validator("student_identifier", "year_group")
+    @classmethod
+    def normalize_optional_metadata(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split())
+        return normalized or None
+
+
+class SchoolRosterPlayerUpdate(BaseModel):
+    """Mutable School-local roster metadata; canonical identity is immutable here."""
+
+    student_identifier: str | None = Field(default=None, max_length=128)
+    year_group: str | None = Field(default=None, max_length=64)
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("student_identifier", "year_group")
+    @classmethod
+    def normalize_optional_metadata(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split())
+        return normalized or None
+
+    @model_validator(mode="after")
+    def require_change(self) -> SchoolRosterPlayerUpdate:
+        if not self.model_fields_set:
+            raise ValueError("At least one roster field must be supplied")
+        return self
+
+
+class SchoolRosterPlayerResponse(BaseModel):
+    id: str
+    organization_id: str
+    player_profile_id: str
+    player_name: str
+    status: Literal["active", "inactive"]
+    student_identifier: str | None
+    year_group: str | None
+    created_by_user_id: str | None
+    created_at: dt.datetime
+    updated_at: dt.datetime
