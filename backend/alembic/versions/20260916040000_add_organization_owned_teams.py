@@ -19,6 +19,25 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.drop_constraint(
+        "teams_owner_user_id_fkey",
+        "teams",
+        type_="foreignkey",
+    )
+    op.alter_column(
+        "teams",
+        "owner_user_id",
+        existing_type=sa.String(),
+        nullable=True,
+    )
+    op.create_foreign_key(
+        "fk_teams_owner_user_id_users",
+        "teams",
+        "users",
+        ["owner_user_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
     op.add_column("teams", sa.Column("organization_id", sa.String(), nullable=True))
     op.add_column(
         "teams",
@@ -57,6 +76,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    orphaned_owner_count = bind.scalar(
+        sa.text("SELECT count(*) FROM teams WHERE owner_user_id IS NULL")
+    )
+    if orphaned_owner_count:
+        raise RuntimeError(
+            "Cannot downgrade Phase 7D while teams have no owner_user_id; "
+            "reassign or explicitly remove those retained teams first"
+        )
+
     op.drop_index("ix_teams_organization_status", table_name="teams")
     op.drop_index("ix_teams_organization_id", table_name="teams")
     op.drop_constraint("ck_teams_status", "teams", type_="check")
@@ -67,3 +96,22 @@ def downgrade() -> None:
     )
     op.drop_column("teams", "status")
     op.drop_column("teams", "organization_id")
+    op.drop_constraint(
+        "fk_teams_owner_user_id_users",
+        "teams",
+        type_="foreignkey",
+    )
+    op.alter_column(
+        "teams",
+        "owner_user_id",
+        existing_type=sa.String(),
+        nullable=False,
+    )
+    op.create_foreign_key(
+        "teams_owner_user_id_fkey",
+        "teams",
+        "users",
+        ["owner_user_id"],
+        ["id"],
+        ondelete="CASCADE",
+    )

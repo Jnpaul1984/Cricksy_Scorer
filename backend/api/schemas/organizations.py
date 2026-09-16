@@ -155,7 +155,7 @@ class SchoolTeamResponse(BaseModel):
     status: Literal["active", "archived"]
     home_ground: str | None
     season: str | None
-    owner_user_id: str
+    owner_user_id: str | None
     coach_user_id: str | None
     coach_name: str | None
     created_at: dt.datetime

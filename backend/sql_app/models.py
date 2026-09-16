@@ -2037,10 +2037,10 @@ class Team(Base):
     status: Mapped[str] = mapped_column(
         String(16), default="active", server_default="active", nullable=False
     )
-    owner_user_id: Mapped[str] = mapped_column(
+    owner_user_id: Mapped[str | None] = mapped_column(
         String,
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     coach_user_id: Mapped[str | None] = mapped_column(

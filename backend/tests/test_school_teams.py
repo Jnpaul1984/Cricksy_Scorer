@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 
 from backend.sql_app.models import (
     Organization,
@@ -361,6 +361,133 @@ async def test_legacy_null_organization_team_remains_on_legacy_path_only(
         assert stored_team.status == "active"
 
 
+async def test_postgres_school_team_survives_creator_deletion(
+    school_client: TestClient,
+) -> None:
+    """The database retains an organization-owned Team when its creator is deleted."""
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        if session.bind is None or session.bind.dialect.name != "postgresql":
+            pytest.skip("School Team creator-retention contract requires real PostgreSQL")
+
+    creator = register_user(school_client, "retained-team-creator@example.com")
+    administrator = register_user(school_client, "retained-team-admin@example.com")
+    organization = create_school(school_client, creator, "Retained Team School")
+    add_membership(
+        school_client,
+        creator,
+        organization["id"],
+        administrator.id,
+        "admin",
+    )
+    team = _create_team(
+        school_client,
+        creator,
+        organization["id"],
+        "Historical First XI",
+    )
+
+    async with session_maker() as session:
+        constraints = {
+            row.conname: row.definition
+            for row in (
+                await session.execute(
+                    text(
+                        "SELECT conname, pg_get_constraintdef(oid) AS definition "
+                        "FROM pg_constraint WHERE conrelid = 'teams'::regclass "
+                        "AND conname IN "
+                        "('fk_teams_owner_user_id_users', "
+                        "'fk_teams_organization_id_organizations')"
+                    )
+                )
+            ).all()
+        }
+        assert "ON DELETE SET NULL" in constraints["fk_teams_owner_user_id_users"]
+        assert "ON DELETE SET NULL" in constraints["fk_teams_organization_id_organizations"]
+        owner_nullable = await session.scalar(
+            text(
+                "SELECT is_nullable FROM information_schema.columns "
+                "WHERE table_name = 'teams' AND column_name = 'owner_user_id'"
+            )
+        )
+        assert owner_nullable == "YES"
+
+        await session.execute(delete(User).where(User.id == creator.id))
+        await session.commit()
+
+    async with session_maker() as session:
+        retained_team = await session.get(Team, team["id"])
+        assert retained_team is not None
+        assert retained_team.organization_id == organization["id"]
+        assert retained_team.owner_user_id is None
+        assert retained_team.name == "Historical First XI"
+        assert retained_team.home_ground == "School Oval"
+        assert retained_team.season == "2026"
+        assert retained_team.status == "active"
+        assert retained_team.players == []
+        assert retained_team.competitions == []
+
+    authorized_read = school_client.get(
+        f"{_teams_url(organization['id'])}/{team['id']}",
+        headers=administrator.headers,
+    )
+    assert authorized_read.status_code == 200, authorized_read.text
+    assert authorized_read.json()["owner_user_id"] is None
+    assert authorized_read.json()["organization_id"] == organization["id"]
+
+
+async def test_postgres_legacy_team_survives_owner_deletion_as_orphaned_data(
+    school_client: TestClient,
+) -> None:
+    """Legacy personal Teams favor retention when their former owner is deleted."""
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        if session.bind is None or session.bind.dialect.name != "postgresql":
+            pytest.skip("Legacy Team owner-retention contract requires real PostgreSQL")
+
+    owner = register_user(school_client, "retained-legacy-owner@example.com")
+    coach = register_user(school_client, "retained-legacy-coach@example.com")
+    async with session_maker() as session:
+        stored_owner = await session.get(User, owner.id)
+        stored_coach = await session.get(User, coach.id)
+        assert stored_owner is not None and stored_coach is not None
+        stored_owner.role = RoleEnum.coach_pro
+        stored_coach.role = RoleEnum.coach_pro
+        await session.commit()
+
+    created = school_client.post(
+        "/api/teams",
+        json={
+            "name": "Retained Legacy XI",
+            "home_ground": "Legacy Oval",
+            "season": "2024",
+            "coach_id": coach.id,
+            "players": [],
+            "competitions": [],
+        },
+        headers=owner.headers,
+    )
+    assert created.status_code == 201, created.text
+    team = created.json()
+
+    async with session_maker() as session:
+        await session.execute(delete(User).where(User.id == owner.id))
+        await session.commit()
+
+    async with session_maker() as session:
+        retained_team = await session.get(Team, team["id"])
+        assert retained_team is not None
+        assert retained_team.organization_id is None
+        assert retained_team.owner_user_id is None
+        assert retained_team.name == "Retained Legacy XI"
+        assert retained_team.home_ground == "Legacy Oval"
+        assert retained_team.season == "2024"
+
+    legacy_read = school_client.get(f"/api/teams/{team['id']}", headers=coach.headers)
+    assert legacy_read.status_code == 200, legacy_read.text
+    assert legacy_read.json()["owner_user_id"] is None
+
+
 def test_school_team_names_are_not_globally_or_tenant_unique(
     school_client: TestClient,
 ) -> None:
@@ -444,9 +571,7 @@ async def test_phase7d_postgres_schema_and_organization_delete_contract(
                 )
             ).all()
         }
-        assert "ON DELETE SET NULL" in constraints[
-            "fk_teams_organization_id_organizations"
-        ]
+        assert "ON DELETE SET NULL" in constraints["fk_teams_organization_id_organizations"]
         assert "active" in constraints["ck_teams_status"]
         assert "archived" in constraints["ck_teams_status"]
 
