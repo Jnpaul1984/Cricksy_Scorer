@@ -188,6 +188,46 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'Profile — Cricksy' },
     },
 
+    // --- Route-scoped School Administration (Phase 7H) ---
+    {
+      path: '/schools',
+      name: 'school-directory',
+      component: () => import('@/views/school/SchoolDirectoryView.vue'),
+      meta: { requiresAuth: true, title: 'Your Schools — Cricksy' },
+    },
+    {
+      path: '/schools/:organizationId',
+      component: () => import('@/views/school/SchoolAdminShellView.vue'),
+      meta: { requiresAuth: true, title: 'School Administration — Cricksy' },
+      children: [
+        {
+          path: '',
+          name: 'school-overview',
+          component: () => import('@/views/school/SchoolOverviewView.vue'),
+        },
+        {
+          path: 'teams',
+          name: 'school-teams',
+          component: () => import('@/views/school/SchoolTeamsView.vue'),
+        },
+        {
+          path: 'teams/:teamId',
+          name: 'school-team-roster',
+          component: () => import('@/views/school/SchoolTeamRosterView.vue'),
+        },
+        {
+          path: 'players',
+          name: 'school-players',
+          component: () => import('@/views/school/SchoolPlayersView.vue'),
+        },
+        {
+          path: 'imports',
+          name: 'school-import',
+          component: () => import('@/views/school/SchoolImportView.vue'),
+        },
+      ],
+    },
+
     // --- Admin routes ---
     {
       path: '/admin/beta-users',
