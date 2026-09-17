@@ -273,7 +273,20 @@ async def update_roster_player(
         roster_membership_id=roster_membership_id,
         actor_user_id=actor_user_id,
     )
+    if (
+        "status" in payload.model_fields_set
+        and payload.status is not None
+        and payload.status != record.membership.status
+    ):
+        await _require_roster_role(
+            db,
+            organization_id=organization_id,
+            actor_user_id=actor_user_id,
+            allowed_roles=ROSTER_DEACTIVATE_ROLES,
+        )
     for field, value in payload.model_dump(exclude_unset=True).items():
+        if field == "status" and value is None:
+            continue
         setattr(record.membership, field, value)
     await db.commit()
     await db.refresh(record.membership)

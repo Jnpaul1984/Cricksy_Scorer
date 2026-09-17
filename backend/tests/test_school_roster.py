@@ -109,11 +109,28 @@ async def test_owner_and_admin_have_full_school_roster_lifecycle(
     assert updated.json()["student_identifier"] == "STU-002"
     assert updated.json()["year_group"] is None
 
-    removed = school_client.delete(
-        f"{_players_url(organization['id'])}/{created['id']}", headers=actor.headers
+    deactivated = school_client.patch(
+        f"{_players_url(organization['id'])}/{created['id']}",
+        json={"status": "inactive"},
+        headers=actor.headers,
     )
-    assert removed.status_code == 204
+    assert deactivated.status_code == 200, deactivated.text
+    assert deactivated.json()["status"] == "inactive"
     assert school_client.get(_players_url(organization["id"]), headers=actor.headers).json() == []
+
+    reactivated = school_client.patch(
+        f"{_players_url(organization['id'])}/{created['id']}",
+        json={"status": "active"},
+        headers=actor.headers,
+    )
+    assert reactivated.status_code == 200, reactivated.text
+    assert reactivated.json()["id"] == created["id"]
+    assert reactivated.json()["player_profile_id"] == created["player_profile_id"]
+    assert reactivated.json()["student_identifier"] == "STU-002"
+    assert reactivated.json()["year_group"] is None
+    active_list = school_client.get(_players_url(organization["id"]), headers=actor.headers)
+    assert active_list.status_code == 200
+    assert [item["id"] for item in active_list.json()] == [created["id"]]
 
     session_maker = school_client.session_maker  # type: ignore[attr-defined]
     async with session_maker() as session:
@@ -122,7 +139,18 @@ async def test_owner_and_admin_have_full_school_roster_lifecycle(
         assert profile is not None and membership is not None
         assert profile.player_name == "Maya Singh"
         assert profile.total_matches == 0
-        assert membership.status == "inactive"
+        assert membership.status == "active"
+        assert membership.student_identifier == "STU-002"
+        assert (
+            await session.scalar(
+                select(func.count(SchoolPlayerMembership.id)).where(
+                    SchoolPlayerMembership.organization_id == organization["id"],
+                    SchoolPlayerMembership.player_profile_id == created["player_profile_id"],
+                )
+            )
+            == 1
+        )
+        assert await session.scalar(select(func.count(PlayerProfile.player_id))) == 1
         assert await session.scalar(select(func.count(User.id))) == (1 if role == "owner" else 2)
 
 
@@ -145,19 +173,40 @@ async def test_coach_can_create_link_read_and_update_but_not_deactivate(
         ).status_code
         == 200
     )
-    assert (
-        school_client.patch(
-            f"{_players_url(organization['id'])}/{created['id']}",
-            json={"year_group": "Year 10"},
-            headers=coach.headers,
-        ).status_code
-        == 200
+    metadata_update = school_client.patch(
+        f"{_players_url(organization['id'])}/{created['id']}",
+        json={"student_identifier": "COACH-002", "year_group": "Year 10"},
+        headers=coach.headers,
     )
-    denied = school_client.delete(
+    assert metadata_update.status_code == 200
+    assert metadata_update.json()["student_identifier"] == "COACH-002"
+    assert metadata_update.json()["year_group"] == "Year 10"
+
+    denied_deactivation = school_client.patch(
+        f"{_players_url(organization['id'])}/{created['id']}",
+        json={"status": "inactive"},
+        headers=coach.headers,
+    )
+    assert denied_deactivation.status_code == 403
+    assert denied_deactivation.json() == {"detail": "Insufficient organization role"}
+
+    owner_deactivation = school_client.delete(
+        f"{_players_url(organization['id'])}/{created['id']}", headers=owner.headers
+    )
+    assert owner_deactivation.status_code == 204
+    denied_reactivation = school_client.patch(
+        f"{_players_url(organization['id'])}/{created['id']}",
+        json={"status": "active"},
+        headers=coach.headers,
+    )
+    assert denied_reactivation.status_code == 403
+    assert denied_reactivation.json() == {"detail": "Insufficient organization role"}
+
+    denied_delete = school_client.delete(
         f"{_players_url(organization['id'])}/{created['id']}", headers=coach.headers
     )
-    assert denied.status_code == 403
-    assert denied.json() == {"detail": "Insufficient organization role"}
+    assert denied_delete.status_code == 403
+    assert denied_delete.json() == {"detail": "Insufficient organization role"}
 
 
 @pytest.mark.parametrize("role", ["scorer", "viewer"])
@@ -191,15 +240,21 @@ def test_scorer_and_viewer_have_read_only_school_roster_access(
         json={"player_profile_id": player["player_profile_id"]},
         headers=reader.headers,
     )
-    update = school_client.patch(
+    metadata_update = school_client.patch(
         f"{_players_url(organization['id'])}/{player['id']}",
         json={"year_group": "Denied"},
+        headers=reader.headers,
+    )
+    status_update = school_client.patch(
+        f"{_players_url(organization['id'])}/{player['id']}",
+        json={"status": "inactive"},
         headers=reader.headers,
     )
     remove = school_client.delete(
         f"{_players_url(organization['id'])}/{player['id']}", headers=reader.headers
     )
-    assert create.status_code == link.status_code == update.status_code == 403
+    assert create.status_code == link.status_code == metadata_update.status_code == 403
+    assert status_update.status_code == 403
     assert remove.status_code == 403
 
 
@@ -220,7 +275,7 @@ def test_nonmember_and_cross_tenant_exact_ids_leak_no_roster_metadata(
 
     for method, kwargs in (
         ("get", {}),
-        ("patch", {"json": {"year_group": "Spoofed"}}),
+        ("patch", {"json": {"status": "inactive"}}),
         ("delete", {}),
     ):
         response = getattr(school_client, method)(
@@ -351,6 +406,26 @@ async def test_exact_link_duplicate_same_name_and_request_spoof_contracts(
     assert duplicate.json() == {"detail": "Player is already on this school roster"}
     assert missing.status_code == 404
     assert same_name["player_profile_id"] != linked["player_profile_id"]
+
+    deactivated = school_client.patch(
+        f"{_players_url(organization['id'])}/{linked['id']}",
+        json={"status": "inactive"},
+        headers=owner.headers,
+    )
+    assert deactivated.status_code == 200
+    inactive_duplicate = school_client.post(
+        f"{_players_url(organization['id'])}/link",
+        json={"player_profile_id": "exact-profile"},
+        headers=owner.headers,
+    )
+    assert inactive_duplicate.status_code == 409
+    assert inactive_duplicate.json() == {"detail": "Player is already on this school roster"}
+    reactivated = school_client.patch(
+        f"{_players_url(organization['id'])}/{linked['id']}",
+        json={"status": "active"},
+        headers=owner.headers,
+    )
+    assert reactivated.status_code == 200
 
     spoof_create = school_client.post(
         _players_url(organization["id"]),

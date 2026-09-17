@@ -221,6 +221,7 @@ class SchoolRosterPlayerUpdate(BaseModel):
 
     student_identifier: str | None = Field(default=None, max_length=128)
     year_group: str | None = Field(default=None, max_length=64)
+    status: Literal["active", "inactive"] | None = None
 
     model_config = {"extra": "forbid"}
 
