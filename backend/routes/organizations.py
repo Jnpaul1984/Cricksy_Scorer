@@ -25,6 +25,11 @@ from backend.api.schemas.organizations import (
     SchoolTeamRosterPlayerUpdate,
     SchoolTeamUpdate,
 )
+from backend.api.schemas.player_imports import (
+    PlayerImportApplyRequest,
+    PlayerImportApplyResponse,
+    PlayerImportPreviewResponse,
+)
 from backend.security import get_current_active_user
 from backend.services import (
     organization_entitlement_service,
@@ -32,10 +37,21 @@ from backend.services import (
     organization_service,
     organization_team_roster_service,
     organization_team_service,
+    school_player_import_service,
 )
 from backend.sql_app.database import get_db
 from backend.sql_app.models import Organization, User
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/organizations", tags=["organizations"])
@@ -80,6 +96,21 @@ def _team_roster_service_error(
         organization_service.OrganizationServiceError
         | organization_entitlement_service.OrganizationCapabilityError
         | organization_team_roster_service.OrganizationTeamRosterServiceError
+    ),
+) -> NoReturn:
+    if isinstance(exc, organization_entitlement_service.OrganizationCapabilityError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Organization capability not enabled: {exc.capability}",
+        ) from exc
+    raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+def _player_import_service_error(
+    exc: (
+        organization_service.OrganizationServiceError
+        | organization_entitlement_service.OrganizationCapabilityError
+        | school_player_import_service.SchoolPlayerImportServiceError
     ),
 ) -> NoReturn:
     if isinstance(exc, organization_entitlement_service.OrganizationCapabilityError):
@@ -642,6 +673,61 @@ async def deactivate_school_roster_player(
     ) as exc:
         _roster_service_error(exc)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{organization_id}/player-imports/preview",
+    response_model=PlayerImportPreviewResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def preview_school_player_import(
+    organization_id: str,
+    file: Annotated[UploadFile, File(...)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    column_mapping: Annotated[str | None, Form()] = None,
+) -> PlayerImportPreviewResponse:
+    try:
+        return await school_player_import_service.create_preview(
+            db,
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+            upload=file,
+            column_mapping_json=column_mapping,
+        )
+    except (
+        organization_service.OrganizationServiceError,
+        organization_entitlement_service.OrganizationCapabilityError,
+        school_player_import_service.SchoolPlayerImportServiceError,
+    ) as exc:
+        _player_import_service_error(exc)
+
+
+@router.post(
+    "/{organization_id}/player-imports/{import_id}/apply",
+    response_model=PlayerImportApplyResponse,
+)
+async def apply_school_player_import(
+    organization_id: str,
+    import_id: str,
+    payload: PlayerImportApplyRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PlayerImportApplyResponse:
+    try:
+        return await school_player_import_service.apply_import(
+            db,
+            organization_id=organization_id,
+            import_id=import_id,
+            actor_user_id=current_user.id,
+            payload=payload,
+        )
+    except (
+        organization_service.OrganizationServiceError,
+        organization_entitlement_service.OrganizationCapabilityError,
+        school_player_import_service.SchoolPlayerImportServiceError,
+    ) as exc:
+        _player_import_service_error(exc)
 
 
 @router.get("/{organization_id}", response_model=OrganizationWithMembershipResponse)
