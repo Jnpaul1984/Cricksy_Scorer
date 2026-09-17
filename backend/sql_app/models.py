@@ -1101,6 +1101,59 @@ class SchoolTeamPlayerMembership(Base):
     )
 
 
+class SchoolPlayerImport(Base):
+    """Immutable, short-lived School roster-import preview and apply ledger."""
+
+    __tablename__ = "school_player_imports"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('previewed', 'applied')",
+            name="ck_school_player_imports_status",
+        ),
+        CheckConstraint(
+            "file_type IN ('csv', 'xlsx')",
+            name="ck_school_player_imports_file_type",
+        ),
+        Index(
+            "ix_school_player_imports_organization_actor_status",
+            "organization_id",
+            "actor_user_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4()), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    actor_user_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), default="previewed", server_default="previewed", nullable=False
+    )
+    file_type: Mapped[str] = mapped_column(String(8), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    column_mapping: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False)
+    preview_rows: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    applied_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 # ===== Player Achievements =====
 
 
