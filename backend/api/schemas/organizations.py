@@ -251,3 +251,43 @@ class SchoolRosterPlayerResponse(BaseModel):
     created_by_user_id: str | None
     created_at: dt.datetime
     updated_at: dt.datetime
+
+
+class SchoolTeamRosterPlayerCreate(BaseModel):
+    """Assign one exact School master-roster membership to a School Team."""
+
+    school_player_membership_id: str = Field(..., min_length=1, max_length=255)
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("school_player_membership_id")
+    @classmethod
+    def normalize_school_player_membership_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("School player membership ID must not be empty")
+        return normalized
+
+
+class SchoolTeamRosterPlayerUpdate(BaseModel):
+    """The only mutable Team-roster field is its retained lifecycle status."""
+
+    status: Literal["active", "inactive"]
+
+    model_config = {"extra": "forbid"}
+
+
+class SchoolTeamRosterPlayerResponse(BaseModel):
+    id: str
+    organization_id: str
+    team_id: str
+    school_player_membership_id: str
+    player_profile_id: str
+    player_name: str
+    status: Literal["active", "inactive"]
+    school_player_status: Literal["active", "inactive"]
+    team_status: Literal["active", "archived"]
+    operationally_available: bool
+    created_by_user_id: str | None
+    created_at: dt.datetime
+    updated_at: dt.datetime
