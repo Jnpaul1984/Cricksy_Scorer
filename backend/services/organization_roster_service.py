@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from typing import Literal
 
 import structlog
 from backend.api.schemas.organizations import (
@@ -130,6 +131,7 @@ async def list_roster_players(
     *,
     organization_id: str,
     actor_user_id: str,
+    status_filter: Literal["active", "inactive", "all"] = "active",
 ) -> list[SchoolRosterRecord]:
     await _require_roster_role(
         db,
@@ -137,18 +139,18 @@ async def list_roster_players(
         actor_user_id=actor_user_id,
         allowed_roles=ROSTER_READ_ROLES,
     )
-    result = await db.execute(
+    query = (
         select(SchoolPlayerMembership, PlayerProfile)
         .join(
             PlayerProfile,
             PlayerProfile.player_id == SchoolPlayerMembership.player_profile_id,
         )
-        .where(
-            SchoolPlayerMembership.organization_id == organization_id,
-            SchoolPlayerMembership.status == "active",
-        )
+        .where(SchoolPlayerMembership.organization_id == organization_id)
         .order_by(PlayerProfile.player_name, SchoolPlayerMembership.id)
     )
+    if status_filter != "all":
+        query = query.where(SchoolPlayerMembership.status == status_filter)
+    result = await db.execute(query)
     return [_record(row) for row in result.tuples().all()]
 
 

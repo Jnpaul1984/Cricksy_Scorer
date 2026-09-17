@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, NoReturn
+from typing import Annotated, Literal, NoReturn
 
 from backend.api.schemas.organizations import (
     OrganizationCreate,
@@ -212,10 +212,10 @@ async def get_organization_entitlements(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OrganizationEntitlementResponse:
     try:
-        await organization_service.require_membership_manager(
+        await organization_service.get_organization_for_member(
             db,
             organization_id=organization_id,
-            actor_user_id=current_user.id,
+            user_id=current_user.id,
         )
     except organization_service.OrganizationServiceError as exc:
         _service_error(exc)
@@ -524,12 +524,16 @@ async def list_school_roster_players(
     organization_id: str,
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    roster_status: Annotated[
+        Literal["active", "inactive", "all"], Query(alias="status")
+    ] = "active",
 ) -> list[SchoolRosterPlayerResponse]:
     try:
         records = await organization_roster_service.list_roster_players(
             db,
             organization_id=organization_id,
             actor_user_id=current_user.id,
+            status_filter=roster_status,
         )
     except (
         organization_service.OrganizationServiceError,
