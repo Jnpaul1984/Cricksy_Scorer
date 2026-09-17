@@ -118,8 +118,17 @@ async def test_owner_and_admin_have_full_school_roster_lifecycle(
     assert deactivated.json()["status"] == "inactive"
     assert school_client.get(_players_url(organization["id"]), headers=actor.headers).json() == []
 
+    discovered = school_client.get(
+        _players_url(organization["id"]),
+        params={"status": "inactive"},
+        headers=actor.headers,
+    )
+    assert discovered.status_code == 200
+    assert [item["id"] for item in discovered.json()] == [created["id"]]
+    assert discovered.json()[0]["player_profile_id"] == created["player_profile_id"]
+
     reactivated = school_client.patch(
-        f"{_players_url(organization['id'])}/{created['id']}",
+        f"{_players_url(organization['id'])}/{discovered.json()[0]['id']}",
         json={"status": "active"},
         headers=actor.headers,
     )
@@ -152,6 +161,47 @@ async def test_owner_and_admin_have_full_school_roster_lifecycle(
         )
         assert await session.scalar(select(func.count(PlayerProfile.player_id))) == 1
         assert await session.scalar(select(func.count(User.id))) == (1 if role == "owner" else 2)
+
+
+def test_roster_status_filter_defaults_active_and_rejects_invalid_values(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "roster-status-filter-owner@example.com")
+    organization = create_school(school_client, owner, "Roster Status Filter School")
+    active = _create_player(school_client, owner, organization["id"], name="Active Student")
+    inactive = _create_player(school_client, owner, organization["id"], name="Inactive Student")
+    deactivated = school_client.delete(
+        f"{_players_url(organization['id'])}/{inactive['id']}", headers=owner.headers
+    )
+    assert deactivated.status_code == 204
+
+    default_list = school_client.get(_players_url(organization["id"]), headers=owner.headers)
+    explicit_active = school_client.get(
+        _players_url(organization["id"]),
+        params={"status": "active"},
+        headers=owner.headers,
+    )
+    inactive_list = school_client.get(
+        _players_url(organization["id"]),
+        params={"status": "inactive"},
+        headers=owner.headers,
+    )
+    all_list = school_client.get(
+        _players_url(organization["id"]),
+        params={"status": "all"},
+        headers=owner.headers,
+    )
+    invalid = school_client.get(
+        _players_url(organization["id"]),
+        params={"status": "deleted"},
+        headers=owner.headers,
+    )
+
+    assert [item["id"] for item in default_list.json()] == [active["id"]]
+    assert explicit_active.json() == default_list.json()
+    assert [item["id"] for item in inactive_list.json()] == [inactive["id"]]
+    assert {item["id"] for item in all_list.json()} == {active["id"], inactive["id"]}
+    assert invalid.status_code == 422
 
 
 async def test_coach_can_create_link_read_and_update_but_not_deactivate(
@@ -194,6 +244,13 @@ async def test_coach_can_create_link_read_and_update_but_not_deactivate(
         f"{_players_url(organization['id'])}/{created['id']}", headers=owner.headers
     )
     assert owner_deactivation.status_code == 204
+    inactive_read = school_client.get(
+        _players_url(organization["id"]),
+        params={"status": "inactive"},
+        headers=coach.headers,
+    )
+    assert inactive_read.status_code == 200
+    assert [item["id"] for item in inactive_read.json()] == [created["id"]]
     denied_reactivation = school_client.patch(
         f"{_players_url(organization['id'])}/{created['id']}",
         json={"status": "active"},
@@ -257,6 +314,24 @@ def test_scorer_and_viewer_have_read_only_school_roster_access(
     assert status_update.status_code == 403
     assert remove.status_code == 403
 
+    owner_deactivation = school_client.delete(
+        f"{_players_url(organization['id'])}/{player['id']}", headers=owner.headers
+    )
+    assert owner_deactivation.status_code == 204
+    inactive_read = school_client.get(
+        _players_url(organization["id"]),
+        params={"status": "inactive"},
+        headers=reader.headers,
+    )
+    assert inactive_read.status_code == 200
+    assert [item["id"] for item in inactive_read.json()] == [player["id"]]
+    denied_reactivation = school_client.patch(
+        f"{_players_url(organization['id'])}/{player['id']}",
+        json={"status": "active"},
+        headers=reader.headers,
+    )
+    assert denied_reactivation.status_code == 403
+
 
 def test_nonmember_and_cross_tenant_exact_ids_leak_no_roster_metadata(
     school_client: TestClient,
@@ -268,10 +343,27 @@ def test_nonmember_and_cross_tenant_exact_ids_leak_no_roster_metadata(
     school_b = create_school(school_client, owner_b, "Roster Tenant B")
     add_membership(school_client, owner_b, school_b["id"], owner_a.id, "admin")
     player_a = _create_player(school_client, owner_a, school_a["id"], name="Secret Student")
+    school_client.delete(
+        f"{_players_url(school_a['id'])}/{player_a['id']}", headers=owner_a.headers
+    )
 
-    nonmember = school_client.get(_players_url(school_a["id"]), headers=outsider.headers)
-    assert nonmember.status_code == 404
-    assert nonmember.json() == {"detail": "Organization not found"}
+    for status_filter in ("inactive", "all"):
+        nonmember = school_client.get(
+            _players_url(school_a["id"]),
+            params={"status": status_filter},
+            headers=outsider.headers,
+        )
+        assert nonmember.status_code == 404
+        assert nonmember.json() == {"detail": "Organization not found"}
+
+        cross_tenant_list = school_client.get(
+            _players_url(school_b["id"]),
+            params={"status": status_filter},
+            headers=owner_a.headers,
+        )
+        assert cross_tenant_list.status_code == 200
+        assert cross_tenant_list.json() == []
+        assert "secret" not in cross_tenant_list.text.lower()
 
     for method, kwargs in (
         ("get", {}),

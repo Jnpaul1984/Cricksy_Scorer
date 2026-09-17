@@ -259,27 +259,28 @@ async def test_capability_requirement_requires_membership_and_never_uses_global_
             )
 
 
-def test_entitlement_reads_are_tenant_safe_and_owner_admin_only(
+def test_entitlement_reads_are_available_to_all_active_members_and_tenant_safe(
     school_client: TestClient,
 ) -> None:
     owner_a = register_user(school_client, "entitlement-owner-a@example.com")
-    admin_a = register_user(school_client, "entitlement-admin-a@example.com")
-    viewer_a = register_user(school_client, "entitlement-viewer-a@example.com")
     owner_b = register_user(school_client, "entitlement-owner-b@example.com")
     school_a = create_school(school_client, owner_a, "Entitlement A")
     school_b = create_school(school_client, owner_b, "Entitlement B")
-    add_membership(school_client, owner_a, school_a["id"], admin_a.id, "admin")
-    add_membership(school_client, owner_a, school_a["id"], viewer_a.id, "viewer")
+    members = {"owner": owner_a}
+    for role in ("admin", "coach", "scorer", "viewer"):
+        member = register_user(school_client, f"entitlement-{role}-a@example.com")
+        add_membership(school_client, owner_a, school_a["id"], member.id, role)
+        members[role] = member
 
-    owner_read = school_client.get(_entitlements_url(school_a["id"]), headers=owner_a.headers)
-    admin_read = school_client.get(_entitlements_url(school_a["id"]), headers=admin_a.headers)
-    viewer_read = school_client.get(_entitlements_url(school_a["id"]), headers=viewer_a.headers)
-    cross_tenant = school_client.get(_entitlements_url(school_b["id"]), headers=admin_a.headers)
+    for role, member in members.items():
+        response = school_client.get(_entitlements_url(school_a["id"]), headers=member.headers)
+        assert response.status_code == 200, (role, response.text)
+        assert response.json()["organization_id"] == school_a["id"]
+        assert response.json()["plan_key"] == "school_free"
 
-    assert owner_read.status_code == 200
-    assert admin_read.status_code == 200
-    assert viewer_read.status_code == 403
-    assert viewer_read.json() == {"detail": "Insufficient organization role"}
+    cross_tenant = school_client.get(
+        _entitlements_url(school_b["id"]), headers=members["viewer"].headers
+    )
     assert cross_tenant.status_code == 404
     assert cross_tenant.json() == {"detail": "Organization not found"}
     assert "entitlement b" not in cross_tenant.text.lower()
