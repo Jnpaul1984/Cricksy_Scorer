@@ -20,6 +20,9 @@ from backend.api.schemas.organizations import (
     SchoolRosterPlayerUpdate,
     SchoolTeamCreate,
     SchoolTeamResponse,
+    SchoolTeamRosterPlayerCreate,
+    SchoolTeamRosterPlayerResponse,
+    SchoolTeamRosterPlayerUpdate,
     SchoolTeamUpdate,
 )
 from backend.security import get_current_active_user
@@ -27,6 +30,7 @@ from backend.services import (
     organization_entitlement_service,
     organization_roster_service,
     organization_service,
+    organization_team_roster_service,
     organization_team_service,
 )
 from backend.sql_app.database import get_db
@@ -71,6 +75,21 @@ def _roster_service_error(
     raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
+def _team_roster_service_error(
+    exc: (
+        organization_service.OrganizationServiceError
+        | organization_entitlement_service.OrganizationCapabilityError
+        | organization_team_roster_service.OrganizationTeamRosterServiceError
+    ),
+) -> NoReturn:
+    if isinstance(exc, organization_entitlement_service.OrganizationCapabilityError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Organization capability not enabled: {exc.capability}",
+        ) from exc
+    raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
 def _organization_with_role(
     organization: Organization,
     membership_role: str,
@@ -94,6 +113,28 @@ def _roster_response(
         status=membership.status,
         student_identifier=membership.student_identifier,
         year_group=membership.year_group,
+        created_by_user_id=membership.created_by_user_id,
+        created_at=membership.created_at,
+        updated_at=membership.updated_at,
+    )
+
+
+def _team_roster_response(
+    record: organization_team_roster_service.SchoolTeamRosterRecord,
+) -> SchoolTeamRosterPlayerResponse:
+    membership = record.membership
+    school_player = record.school_player_membership
+    return SchoolTeamRosterPlayerResponse(
+        id=membership.id,
+        organization_id=membership.organization_id,
+        team_id=membership.team_id,
+        school_player_membership_id=membership.school_player_membership_id,
+        player_profile_id=school_player.player_profile_id,
+        player_name=record.player_profile.player_name,
+        status=membership.status,
+        school_player_status=school_player.status,
+        team_status=record.team.status,
+        operationally_available=record.operationally_available,
         created_by_user_id=membership.created_by_user_id,
         created_at=membership.created_at,
         updated_at=membership.updated_at,
@@ -299,6 +340,148 @@ async def archive_school_team(
         organization_team_service.OrganizationTeamServiceError,
     ) as exc:
         _team_service_error(exc)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/{organization_id}/teams/{team_id}/players",
+    response_model=list[SchoolTeamRosterPlayerResponse],
+)
+async def list_school_team_roster_players(
+    organization_id: str,
+    team_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[SchoolTeamRosterPlayerResponse]:
+    try:
+        records = await organization_team_roster_service.list_team_roster_players(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            actor_user_id=current_user.id,
+        )
+    except (
+        organization_service.OrganizationServiceError,
+        organization_entitlement_service.OrganizationCapabilityError,
+        organization_team_roster_service.OrganizationTeamRosterServiceError,
+    ) as exc:
+        _team_roster_service_error(exc)
+    return [_team_roster_response(record) for record in records]
+
+
+@router.post(
+    "/{organization_id}/teams/{team_id}/players",
+    response_model=SchoolTeamRosterPlayerResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_school_team_roster_player(
+    organization_id: str,
+    team_id: str,
+    payload: SchoolTeamRosterPlayerCreate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SchoolTeamRosterPlayerResponse:
+    try:
+        record = await organization_team_roster_service.create_team_roster_player(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            payload=payload,
+            actor_user_id=current_user.id,
+        )
+    except (
+        organization_service.OrganizationServiceError,
+        organization_entitlement_service.OrganizationCapabilityError,
+        organization_team_roster_service.OrganizationTeamRosterServiceError,
+    ) as exc:
+        _team_roster_service_error(exc)
+    return _team_roster_response(record)
+
+
+@router.get(
+    "/{organization_id}/teams/{team_id}/players/{team_roster_membership_id}",
+    response_model=SchoolTeamRosterPlayerResponse,
+)
+async def get_school_team_roster_player(
+    organization_id: str,
+    team_id: str,
+    team_roster_membership_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SchoolTeamRosterPlayerResponse:
+    try:
+        record = await organization_team_roster_service.get_team_roster_player(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            team_roster_membership_id=team_roster_membership_id,
+            actor_user_id=current_user.id,
+        )
+    except (
+        organization_service.OrganizationServiceError,
+        organization_entitlement_service.OrganizationCapabilityError,
+        organization_team_roster_service.OrganizationTeamRosterServiceError,
+    ) as exc:
+        _team_roster_service_error(exc)
+    return _team_roster_response(record)
+
+
+@router.patch(
+    "/{organization_id}/teams/{team_id}/players/{team_roster_membership_id}",
+    response_model=SchoolTeamRosterPlayerResponse,
+)
+async def update_school_team_roster_player(
+    organization_id: str,
+    team_id: str,
+    team_roster_membership_id: str,
+    payload: SchoolTeamRosterPlayerUpdate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SchoolTeamRosterPlayerResponse:
+    try:
+        record = await organization_team_roster_service.update_team_roster_player(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            team_roster_membership_id=team_roster_membership_id,
+            payload=payload,
+            actor_user_id=current_user.id,
+        )
+    except (
+        organization_service.OrganizationServiceError,
+        organization_entitlement_service.OrganizationCapabilityError,
+        organization_team_roster_service.OrganizationTeamRosterServiceError,
+    ) as exc:
+        _team_roster_service_error(exc)
+    return _team_roster_response(record)
+
+
+@router.delete(
+    "/{organization_id}/teams/{team_id}/players/{team_roster_membership_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def deactivate_school_team_roster_player(
+    organization_id: str,
+    team_id: str,
+    team_roster_membership_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    try:
+        await organization_team_roster_service.deactivate_team_roster_player(
+            db,
+            organization_id=organization_id,
+            team_id=team_id,
+            team_roster_membership_id=team_roster_membership_id,
+            actor_user_id=current_user.id,
+        )
+    except (
+        organization_service.OrganizationServiceError,
+        organization_entitlement_service.OrganizationCapabilityError,
+        organization_team_roster_service.OrganizationTeamRosterServiceError,
+    ) as exc:
+        _team_roster_service_error(exc)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
