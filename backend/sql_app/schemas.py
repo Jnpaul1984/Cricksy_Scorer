@@ -503,6 +503,7 @@ class Game(BaseModel):
 
     # --- State ---
     status: MatchStatus
+    publication_state: str | None = None
     current_inning: int
     total_runs: int
     total_wickets: int

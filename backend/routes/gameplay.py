@@ -8,7 +8,9 @@ from typing import Annotated, Any, Literal, cast
 from backend import dls as dlsmod
 from backend.domain.constants import as_extra_code as norm_extra
 from backend.routes import games as _games_impl
+from backend.security import get_current_user_optional
 from backend.services import game_helpers as gh
+from backend.services import school_competition_service
 from backend.services import validation as validation_helpers
 from backend.services.historical_import_delivery_service import coerce_delivery_ledger
 from backend.services.live_bus import emit_state_update
@@ -784,11 +786,19 @@ async def finalize_game(
 
 @router.get("/{game_id}/snapshot")
 async def get_snapshot(
-    game_id: str, db: Annotated[AsyncSession, Depends(get_db)]
+    game_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
 ) -> dict[str, Any]:
     game = await crud.get_game(db, game_id=game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
+    try:
+        await school_competition_service.require_school_game_member(
+            db, game=game, user=current_user
+        )
+    except school_competition_service.SchoolCompetitionServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     g = cast(Any, game)
     # Ensure runtime fields exist (legacy safety)

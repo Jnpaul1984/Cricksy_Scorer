@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+from typing import Annotated, Any, Literal, cast
 
+from backend.routes import games as _games_impl  # contains create_game_impl
+from backend.security import get_current_user_optional
+from backend.services import school_competition_service
+from backend.sql_app import crud, models, schemas
+from backend.sql_app.database import get_db
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from backend.routes import games as _games_impl  # contains create_game_impl
-from backend.sql_app import crud, schemas
-from backend.sql_app.database import get_db
 
 router = APIRouter(tags=["games:core"])
 
@@ -35,7 +36,7 @@ class CreateGameRequest(BaseModel):
 
 @router.post("/games", response_model=schemas.Game)
 async def create_game(
-    payload: CreateGameRequest, db: AsyncSession = Depends(get_db)
+    payload: CreateGameRequest, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> schemas.Game:
     # Delegate to the existing implementation to avoid duplication
     db_game = await _games_impl.create_game_impl(payload, db)
@@ -43,8 +44,18 @@ async def create_game(
 
 
 @router.get("/games/{game_id}", response_model=schemas.Game)
-async def get_game(game_id: str, db: AsyncSession = Depends(get_db)) -> schemas.Game:
+async def get_game(
+    game_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[models.User | None, Depends(get_current_user_optional)],
+) -> schemas.Game:
     db_game = await crud.get_game(db, game_id=game_id)
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
+    try:
+        await school_competition_service.require_school_game_member(
+            db, game=db_game, user=current_user
+        )
+    except school_competition_service.SchoolCompetitionServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return cast(schemas.Game, db_game)

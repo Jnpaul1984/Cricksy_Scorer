@@ -170,6 +170,7 @@ async def test_contextual_school_roles_create_match_from_explicit_eligible_xi(
     async with session_maker() as session:
         game = await session.get(Game, body["game_id"])
         assert game is not None
+        assert game.publication_state == "private"
         assert game.created_by_user_id == actor.id
         assert game.team_a["school_source"] == {
             "organization_id": organization["id"],
@@ -461,8 +462,8 @@ async def test_match_snapshot_and_canonical_identity_survive_roster_lifecycle_ch
     if not is_postgres:
         return
 
-    resumed = school_client.get(f"/games/{first_id}")
-    snapshot = school_client.get(f"/games/{first_id}/snapshot")
+    resumed = school_client.get(f"/games/{first_id}", headers=actor.headers)
+    snapshot = school_client.get(f"/games/{first_id}/snapshot", headers=actor.headers)
     assert resumed.status_code == snapshot.status_code == 200
     assert [player["id"] for player in resumed.json()["team_a"]["players"]] == list(
         team_a.profile_ids
