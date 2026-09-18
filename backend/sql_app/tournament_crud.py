@@ -28,6 +28,7 @@ async def create_tournament(
         tournament_type=tournament_in.tournament_type,
         start_date=tournament_in.start_date,
         end_date=tournament_in.end_date,
+        organization_id=None,
     )
     await _maybe_await(db.add(tournament))
     await db.commit()
@@ -36,11 +37,17 @@ async def create_tournament(
 
 
 async def get_tournament(db: AsyncSession, tournament_id: str) -> models.Tournament | None:
-    """Get a tournament by ID"""
+    """Get a legacy tournament by ID.
+
+    Organization-owned tournaments are available only through the School APIs.
+    """
     result = await db.execute(
         select(models.Tournament)
         .options(selectinload(models.Tournament.teams))
-        .where(models.Tournament.id == tournament_id)
+        .where(
+            models.Tournament.id == tournament_id,
+            models.Tournament.organization_id.is_(None),
+        )
     )
     return result.scalar_one_or_none()
 
@@ -48,10 +55,11 @@ async def get_tournament(db: AsyncSession, tournament_id: str) -> models.Tournam
 async def get_tournaments(
     db: AsyncSession, skip: int = 0, limit: int = 100
 ) -> list[models.Tournament]:
-    """Get all tournaments"""
+    """Get legacy tournaments, excluding organization-owned School competitions."""
     result = await db.execute(
         select(models.Tournament)
         .options(selectinload(models.Tournament.teams))
+        .where(models.Tournament.organization_id.is_(None))
         .offset(skip)
         .limit(limit)
         .order_by(models.Tournament.created_at.desc())
@@ -110,10 +118,17 @@ async def add_team_to_tournament(
 
 
 async def get_tournament_teams(db: AsyncSession, tournament_id: str) -> list[models.TournamentTeam]:
-    """Get all teams in a tournament"""
+    """Get teams only when their parent tournament is legacy/unscoped."""
     result = await db.execute(
         select(models.TournamentTeam)
-        .where(models.TournamentTeam.tournament_id == tournament_id)
+        .join(
+            models.Tournament,
+            models.Tournament.id == models.TournamentTeam.tournament_id,
+        )
+        .where(
+            models.TournamentTeam.tournament_id == tournament_id,
+            models.Tournament.organization_id.is_(None),
+        )
         .order_by(
             models.TournamentTeam.points.desc(),
             models.TournamentTeam.net_run_rate.desc(),
@@ -136,9 +151,15 @@ async def update_team_stats(
 ) -> models.TournamentTeam | None:
     """Update team statistics after a match"""
     result = await db.execute(
-        select(models.TournamentTeam).where(
+        select(models.TournamentTeam)
+        .join(
+            models.Tournament,
+            models.Tournament.id == models.TournamentTeam.tournament_id,
+        )
+        .where(
             models.TournamentTeam.tournament_id == tournament_id,
             models.TournamentTeam.team_name == team_name,
+            models.Tournament.organization_id.is_(None),
         )
     )
     team = result.scalar_one_or_none()
@@ -169,8 +190,13 @@ async def update_team_stats(
 # Fixture management
 
 
-async def create_fixture(db: AsyncSession, fixture_in: schemas.FixtureCreate) -> models.Fixture:
-    """Create a new fixture"""
+async def create_fixture(
+    db: AsyncSession, fixture_in: schemas.FixtureCreate
+) -> models.Fixture | None:
+    """Create a fixture only within a legacy/unscoped tournament."""
+    if await get_tournament(db, fixture_in.tournament_id) is None:
+        return None
+
     fixture = models.Fixture(
         tournament_id=fixture_in.tournament_id,
         match_number=fixture_in.match_number,
@@ -186,16 +212,27 @@ async def create_fixture(db: AsyncSession, fixture_in: schemas.FixtureCreate) ->
 
 
 async def get_fixture(db: AsyncSession, fixture_id: str) -> models.Fixture | None:
-    """Get a fixture by ID"""
-    result = await db.execute(select(models.Fixture).where(models.Fixture.id == fixture_id))
+    """Get a fixture only when its parent tournament is legacy/unscoped."""
+    result = await db.execute(
+        select(models.Fixture)
+        .join(models.Tournament, models.Tournament.id == models.Fixture.tournament_id)
+        .where(
+            models.Fixture.id == fixture_id,
+            models.Tournament.organization_id.is_(None),
+        )
+    )
     return result.scalar_one_or_none()
 
 
 async def get_tournament_fixtures(db: AsyncSession, tournament_id: str) -> list[models.Fixture]:
-    """Get all fixtures for a tournament"""
+    """Get fixtures only when their parent tournament is legacy/unscoped."""
     result = await db.execute(
         select(models.Fixture)
-        .where(models.Fixture.tournament_id == tournament_id)
+        .join(models.Tournament, models.Tournament.id == models.Fixture.tournament_id)
+        .where(
+            models.Fixture.tournament_id == tournament_id,
+            models.Tournament.organization_id.is_(None),
+        )
         .order_by(models.Fixture.scheduled_date, models.Fixture.match_number)
     )
     return list(result.scalars().all())

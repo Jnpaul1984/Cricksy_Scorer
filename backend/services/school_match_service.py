@@ -274,6 +274,7 @@ async def create_school_match(
         bowling_scorecard=_bowling_scorecard(bowling_team),
         current_inning=0,
         status=models.GameStatus.innings_break,
+        publication_state="private",
         created_by_user_id=actor_user_id,
         team_a_captain_id=side_a.captain_profile_id,
         team_a_keeper_id=side_a.wicketkeeper_profile_id,

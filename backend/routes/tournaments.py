@@ -4,16 +4,22 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
+from backend import security
+from backend.services.org_stats import get_tournament_leaderboards
+from backend.sql_app import models, schemas, tournament_crud
+from backend.sql_app.database import get_db
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend import security
-from backend.sql_app import schemas, tournament_crud
-from backend.sql_app.database import get_db
-from backend.services.org_stats import get_tournament_leaderboards
-
-
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
+
+
+async def _require_legacy_tournament(db: AsyncSession, tournament_id: str) -> models.Tournament:
+    """Resolve only NULL-organization tournaments for the legacy API surface."""
+    tournament = await tournament_crud.get_tournament(db, tournament_id)
+    if not tournament:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    return tournament
 
 
 @router.post(
@@ -46,10 +52,7 @@ async def get_tournament(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Get a specific tournament"""
-    tournament = await tournament_crud.get_tournament(db, tournament_id)
-    if not tournament:
-        raise HTTPException(status_code=404, detail="Tournament not found")
-    return tournament
+    return await _require_legacy_tournament(db, tournament_id)
 
 
 @router.patch("/{tournament_id}", response_model=schemas.TournamentResponse)
@@ -103,6 +106,7 @@ async def get_teams(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Get all teams in a tournament"""
+    await _require_legacy_tournament(db, tournament_id)
     return await tournament_crud.get_tournament_teams(db, tournament_id)
 
 
@@ -112,6 +116,7 @@ async def get_points_table(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Get the points table for a tournament"""
+    await _require_legacy_tournament(db, tournament_id)
     return await tournament_crud.get_points_table(db, tournament_id)
 
 
@@ -129,7 +134,10 @@ async def create_fixture(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Create a new fixture"""
-    return await tournament_crud.create_fixture(db, fixture)
+    created = await tournament_crud.create_fixture(db, fixture)
+    if not created:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    return created
 
 
 @router.get("/fixtures/{fixture_id}", response_model=schemas.FixtureResponse)
@@ -150,6 +158,7 @@ async def get_fixtures(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Any:
     """Get all fixtures for a tournament"""
+    await _require_legacy_tournament(db, tournament_id)
     return await tournament_crud.get_tournament_fixtures(db, tournament_id)
 
 
@@ -199,5 +208,6 @@ async def get_tournament_leaderboards_endpoint(
 
     Returns batting and/or bowling statistics ranked by performance.
     """
+    await _require_legacy_tournament(db, tournament_id)
     leaderboards = await get_tournament_leaderboards(db, tournament_id, leaderboard_type, limit)
     return leaderboards

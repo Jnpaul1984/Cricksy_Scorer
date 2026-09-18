@@ -8,10 +8,9 @@ Calculates organization-level aggregates:
 - Phase-based net run rates vs par
 """
 
+from backend.sql_app import models
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from backend.sql_app import models
 
 
 async def calculate_org_stats(db: AsyncSession, org_id: str) -> dict:
@@ -268,7 +267,14 @@ async def get_tournament_leaderboards(
     """
 
     # Get all fixtures for this tournament
-    stmt = select(models.Fixture).where(models.Fixture.tournament_id == tournament_id)
+    stmt = (
+        select(models.Fixture)
+        .join(models.Tournament, models.Tournament.id == models.Fixture.tournament_id)
+        .where(
+            models.Fixture.tournament_id == tournament_id,
+            models.Tournament.organization_id.is_(None),
+        )
+    )
     result = await db.execute(stmt)
     fixtures = result.scalars().all()
 

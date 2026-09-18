@@ -22,6 +22,7 @@ from sqlalchemy import (
     TypeDecorator,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects import postgresql
@@ -529,6 +530,7 @@ class Game(Base):
     current_inning: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     first_inning_summary: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     result: Mapped[str | None] = mapped_column(String, nullable=True)
+    publication_state: Mapped[str | None] = mapped_column(String(24), nullable=True)
     created_by_user_id: Mapped[str | None] = mapped_column(
         String,
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -571,7 +573,15 @@ class Game(Base):
         back_populates="game", cascade="all, delete-orphan"
     )
 
-    __table_args__ = (Index("ix_games_is_fan_match", "is_fan_match"),)
+    __table_args__ = (
+        CheckConstraint(
+            "publication_state IS NULL OR publication_state IN "
+            "('private', 'published_live', 'published_final')",
+            name="ck_games_publication_state",
+        ),
+        Index("ix_games_is_fan_match", "is_fan_match"),
+        Index("ix_games_publication_state", "publication_state"),
+    )
 
     def get_winner(self):
         """
@@ -2062,6 +2072,12 @@ class Tournament(Base):
     status: Mapped[str] = mapped_column(
         String, nullable=False, default="upcoming"
     )  # upcoming, ongoing, completed
+    organization_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
 
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -2081,7 +2097,10 @@ class Tournament(Base):
         back_populates="tournament", cascade="all, delete-orphan"
     )
 
-    __table_args__ = (Index("ix_tournaments_status", "status"),)
+    __table_args__ = (
+        Index("ix_tournaments_status", "status"),
+        Index("ix_tournaments_organization_status", "organization_id", "status"),
+    )
 
 
 class TournamentTeam(Base):
@@ -2095,6 +2114,12 @@ class TournamentTeam(Base):
         index=True,
     )
     team_name: Mapped[str] = mapped_column(String, nullable=False)
+    team_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("teams.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     team_data: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=_empty_dict, nullable=False
     )  # Store team info like players
@@ -2110,7 +2135,10 @@ class TournamentTeam(Base):
     # Relationships
     tournament: Mapped[Tournament] = relationship(back_populates="teams")
 
-    __table_args__ = (Index("ix_tournament_teams_points", "points"),)
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "team_id", name="uq_tournament_teams_tournament_team"),
+        Index("ix_tournament_teams_points", "points"),
+    )
 
 
 class Fixture(Base):
@@ -2126,6 +2154,18 @@ class Fixture(Base):
     match_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     team_a_name: Mapped[str] = mapped_column(String, nullable=False)
     team_b_name: Mapped[str] = mapped_column(String, nullable=False)
+    team_a_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("teams.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    team_b_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("teams.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     venue: Mapped[str | None] = mapped_column(String, nullable=True)
     scheduled_date: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -2157,6 +2197,17 @@ class Fixture(Base):
     __table_args__ = (
         Index("ix_fixtures_status", "status"),
         Index("ix_fixtures_scheduled_date", "scheduled_date"),
+        Index(
+            "uq_school_fixtures_game_id",
+            "game_id",
+            unique=True,
+            postgresql_where=text(
+                "game_id IS NOT NULL AND team_a_id IS NOT NULL AND team_b_id IS NOT NULL"
+            ),
+            sqlite_where=text(
+                "game_id IS NOT NULL AND team_a_id IS NOT NULL AND team_b_id IS NOT NULL"
+            ),
+        ),
     )
 
 
