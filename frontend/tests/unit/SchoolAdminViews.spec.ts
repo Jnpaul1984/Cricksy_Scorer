@@ -37,7 +37,12 @@ const entitlement = {
   source: 'system' as const,
   effective_from: '',
   effective_until: null,
-  capabilities: ['school_master_roster', 'school_persistent_teams'],
+  capabilities: [
+    'school_master_roster',
+    'school_persistent_teams',
+    'school_team_rosters',
+    'school_match_playing_xi',
+  ],
   excluded_capabilities: ['advanced_ai'],
   created_at: '',
   updated_at: '',
@@ -64,6 +69,7 @@ function context(role: SchoolMembershipRole, organizationId = ref('school-a')): 
     canManageRosterLifecycle: computed(() => ['owner', 'admin'].includes(role)),
     canManageTeamRoster: writes,
     canImport: writes,
+    canCreateSchoolMatch: computed(() => ['owner', 'admin', 'coach', 'scorer'].includes(role)),
   };
 }
 

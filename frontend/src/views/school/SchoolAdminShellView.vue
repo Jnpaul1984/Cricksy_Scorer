@@ -24,6 +24,15 @@ const canManageRosterMetadata = computed(() =>
 const canManageRosterLifecycle = computed(() => ['owner', 'admin'].includes(role.value || ''));
 const canManageTeamRoster = computed(() => ['owner', 'admin', 'coach'].includes(role.value || ''));
 const canImport = computed(() => ['owner', 'admin', 'coach'].includes(role.value || ''));
+const canCreateSchoolMatch = computed(() => {
+  const capabilities = new Set(entitlement.value?.capabilities || []);
+  return (
+    ['owner', 'admin', 'coach', 'scorer'].includes(role.value || '') &&
+    ['school_match_playing_xi', 'school_persistent_teams', 'school_team_rosters'].every(
+      (capability) => capabilities.has(capability),
+    )
+  );
+});
 
 provide(schoolContextKey, {
   organizationId,
@@ -35,6 +44,7 @@ provide(schoolContextKey, {
   canManageRosterLifecycle,
   canManageTeamRoster,
   canImport,
+  canCreateSchoolMatch,
 });
 
 async function loadContext() {
@@ -96,6 +106,9 @@ watch(organizationId, loadContext, { immediate: true });
         <RouterLink :to="`/schools/${organizationId}/teams`">Teams</RouterLink>
         <RouterLink :to="`/schools/${organizationId}/players`">Players</RouterLink>
         <RouterLink v-if="canImport" :to="`/schools/${organizationId}/imports`">Import</RouterLink>
+        <RouterLink v-if="canCreateSchoolMatch" :to="`/schools/${organizationId}/matches/new`"
+          >Create match</RouterLink
+        >
       </nav>
       <RouterView :key="routeViewKey" />
     </template>

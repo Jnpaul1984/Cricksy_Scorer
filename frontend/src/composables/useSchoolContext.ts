@@ -13,6 +13,7 @@ export interface SchoolContext {
   canManageRosterLifecycle: ComputedRef<boolean>;
   canManageTeamRoster: ComputedRef<boolean>;
   canImport: ComputedRef<boolean>;
+  canCreateSchoolMatch: ComputedRef<boolean>;
 }
 
 export const schoolContextKey: InjectionKey<SchoolContext> = Symbol('school-context');
