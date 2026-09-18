@@ -14,6 +14,13 @@ export interface SchoolContext {
   canManageTeamRoster: ComputedRef<boolean>;
   canImport: ComputedRef<boolean>;
   canCreateSchoolMatch: ComputedRef<boolean>;
+  canViewStatistics: ComputedRef<boolean>;
+  canViewFixturesResults: ComputedRef<boolean>;
+  canViewCompetitions: ComputedRef<boolean>;
+  canManageCompetitions: ComputedRef<boolean>;
+  canDeleteCompetitions: ComputedRef<boolean>;
+  canLinkFixtures: ComputedRef<boolean>;
+  canPublishScorecards: ComputedRef<boolean>;
 }
 
 export const schoolContextKey: InjectionKey<SchoolContext> = Symbol('school-context');

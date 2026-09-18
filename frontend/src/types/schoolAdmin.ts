@@ -117,6 +117,172 @@ export interface SchoolMatchCreateResult {
   team_b_player_profile_ids: string[];
 }
 
+export interface SchoolPlayerStatistics {
+  player_profile_id: string;
+  player_name: string;
+  roster_status: SchoolRosterStatus;
+  matches: number;
+  innings: number;
+  runs: number;
+  highest_score: number;
+  batting_average: number | null;
+  balls_faced: number;
+  strike_rate: number;
+  fours: number;
+  sixes: number;
+  bowling_innings: number;
+  balls_bowled: number;
+  overs: string;
+  runs_conceded: number;
+  wickets: number;
+  bowling_average: number | null;
+  economy: number | null;
+  best_bowling: string | null;
+}
+
+export interface SchoolTeamStatistics {
+  team_id: string;
+  team_name: string;
+  team_status: 'active' | 'archived';
+  matches: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  draws: number;
+  no_results: number;
+  runs_scored: number;
+  runs_conceded: number;
+  wickets_taken: number;
+  wickets_lost: number;
+}
+
+export type SchoolPublicationState = 'private' | 'published_live' | 'published_final';
+
+export interface SchoolMatchResult {
+  game_id: string;
+  team_a_id: string;
+  team_a_name: string;
+  team_b_id: string;
+  team_b_name: string;
+  status: string;
+  result: string | null;
+  publication_state: SchoolPublicationState;
+  current_inning: number;
+  team_a_runs: number;
+  team_a_wickets: number;
+  team_b_runs: number;
+  team_b_wickets: number;
+  public_scorecard_available: boolean;
+}
+
+export interface SchoolCompetition {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  tournament_type: 'league' | 'knockout' | 'round-robin';
+  start_date: string | null;
+  end_date: string | null;
+  status: 'upcoming' | 'ongoing' | 'completed';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SchoolCompetitionTeam {
+  id: number;
+  tournament_id: string;
+  team_id: string;
+  team_name: string;
+}
+
+export interface SchoolFixture {
+  id: string;
+  tournament_id: string;
+  team_a_id: string;
+  team_b_id: string;
+  team_a_name: string;
+  team_b_name: string;
+  match_number: number | null;
+  venue: string | null;
+  scheduled_date: string | null;
+  game_id: string | null;
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SchoolFixtureSummary {
+  fixture_id: string;
+  competition_id: string;
+  competition_name: string;
+  team_a_id: string;
+  team_a_name: string;
+  team_b_id: string;
+  team_b_name: string;
+  match_number: number | null;
+  venue: string | null;
+  scheduled_date: string | null;
+  fixture_status: string;
+  game_id: string | null;
+  game_status: string | null;
+  result: string | null;
+  publication_state: SchoolPublicationState | null;
+  public_scorecard_available: boolean;
+}
+
+export interface SchoolStandingEntry {
+  team_id: string;
+  team_name: string;
+  matches_played: number;
+  matches_won: number;
+  matches_lost: number;
+  matches_drawn: number;
+  points: number;
+}
+
+export interface SchoolStandings {
+  competition_id: string;
+  entries: SchoolStandingEntry[];
+  unresolved_completed_games: number;
+}
+
+export interface PublicSchoolScorecard {
+  game_id: string;
+  publication_state: Exclude<SchoolPublicationState, 'private'>;
+  status: string;
+  team_a: { name: string; players: Array<{ name: string }> };
+  team_b: { name: string; players: Array<{ name: string }> };
+  match_type: string;
+  overs_limit: number | null;
+  days_limit: number | null;
+  overs_per_day: number | null;
+  toss_winner_team: string | null;
+  decision: string | null;
+  batting_team_name: string | null;
+  bowling_team_name: string | null;
+  total_runs: number;
+  total_wickets: number;
+  overs_completed: number;
+  balls_this_over: number;
+  current_inning: number;
+  result: string | null;
+  batting_scorecard: PublicScorecardEntry[];
+  bowling_scorecard: PublicScorecardEntry[];
+}
+
+export interface PublicScorecardEntry {
+  player_name: string;
+  runs?: number | null;
+  balls_faced?: number | null;
+  fours?: number | null;
+  sixes?: number | null;
+  is_out?: boolean | null;
+  how_out?: string | null;
+  overs_bowled?: number | null;
+  runs_conceded?: number | null;
+  wickets_taken?: number | null;
+}
+
 export type ImportClassification =
   | 'create_new'
   | 'duplicate_existing_school_membership'

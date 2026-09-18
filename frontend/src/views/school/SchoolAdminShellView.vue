@@ -33,6 +33,25 @@ const canCreateSchoolMatch = computed(() => {
     )
   );
 });
+const capabilities = computed(() => new Set(entitlement.value?.capabilities || []));
+const canViewStatistics = computed(() => capabilities.value.has('school_basic_statistics'));
+const canViewFixturesResults = computed(() => capabilities.value.has('school_fixtures_results'));
+const canViewCompetitions = computed(() => capabilities.value.has('school_competitions'));
+const canManageCompetitions = computed(
+  () => canViewCompetitions.value && ['owner', 'admin', 'coach'].includes(role.value || ''),
+);
+const canDeleteCompetitions = computed(
+  () => canViewCompetitions.value && ['owner', 'admin'].includes(role.value || ''),
+);
+const canLinkFixtures = computed(
+  () => canViewCompetitions.value && ['owner', 'admin', 'coach', 'scorer'].includes(role.value || ''),
+);
+const canPublishScorecards = computed(
+  () =>
+    canViewFixturesResults.value &&
+    capabilities.value.has('school_live_scorecards') &&
+    ['owner', 'admin', 'coach', 'scorer'].includes(role.value || ''),
+);
 
 provide(schoolContextKey, {
   organizationId,
@@ -45,6 +64,13 @@ provide(schoolContextKey, {
   canManageTeamRoster,
   canImport,
   canCreateSchoolMatch,
+  canViewStatistics,
+  canViewFixturesResults,
+  canViewCompetitions,
+  canManageCompetitions,
+  canDeleteCompetitions,
+  canLinkFixtures,
+  canPublishScorecards,
 });
 
 async function loadContext() {
@@ -108,6 +134,17 @@ watch(organizationId, loadContext, { immediate: true });
         <RouterLink v-if="canImport" :to="`/schools/${organizationId}/imports`">Import</RouterLink>
         <RouterLink v-if="canCreateSchoolMatch" :to="`/schools/${organizationId}/matches/new`"
           >Create match</RouterLink
+        >
+        <RouterLink v-if="canViewStatistics" :to="`/schools/${organizationId}/statistics`"
+          >Statistics</RouterLink
+        >
+        <RouterLink
+          v-if="canViewFixturesResults"
+          :to="`/schools/${organizationId}/fixtures-results`"
+          >Fixtures / Results</RouterLink
+        >
+        <RouterLink v-if="canViewCompetitions" :to="`/schools/${organizationId}/competitions`"
+          >Competitions</RouterLink
         >
       </nav>
       <RouterView :key="routeViewKey" />
