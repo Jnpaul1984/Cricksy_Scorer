@@ -28,7 +28,7 @@ def upgrade() -> None:
         "organizations",
         ["organization_id"],
         ["id"],
-        ondelete="SET NULL",
+        ondelete="RESTRICT",
     )
     op.create_index(
         "ix_tournaments_organization_id", "tournaments", ["organization_id"], unique=False
@@ -109,9 +109,7 @@ def downgrade() -> None:
     op.drop_column("fixtures", "team_b_id")
     op.drop_column("fixtures", "team_a_id")
 
-    op.drop_constraint(
-        "uq_tournament_teams_tournament_team", "tournament_teams", type_="unique"
-    )
+    op.drop_constraint("uq_tournament_teams_tournament_team", "tournament_teams", type_="unique")
     op.drop_index("ix_tournament_teams_team_id", table_name="tournament_teams")
     op.drop_constraint("fk_tournament_teams_team", "tournament_teams", type_="foreignkey")
     op.drop_column("tournament_teams", "team_id")

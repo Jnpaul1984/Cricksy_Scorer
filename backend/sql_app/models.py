@@ -2074,7 +2074,7 @@ class Tournament(Base):
     )  # upcoming, ongoing, completed
     organization_id: Mapped[str | None] = mapped_column(
         String,
-        ForeignKey("organizations.id", ondelete="SET NULL"),
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
         nullable=True,
         index=True,
     )

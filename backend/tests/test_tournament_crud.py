@@ -144,6 +144,15 @@ async def test_create_fixture(mock_session):
     )
 
     with (
+        patch.object(
+            tournament_crud,
+            "get_tournament",
+            return_value=models.Tournament(
+                id="test-tournament-id",
+                name="Test League",
+                organization_id=None,
+            ),
+        ),
         patch.object(mock_session, "add") as mock_add,
         patch.object(mock_session, "commit") as mock_commit,
         patch.object(mock_session, "refresh") as mock_refresh,

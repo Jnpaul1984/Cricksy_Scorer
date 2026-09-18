@@ -145,6 +145,7 @@ class InMemoryCrudRepository:
             start_date=tournament.start_date,
             end_date=tournament.end_date,
             status="upcoming",
+            organization_id=None,
             created_at=dt.datetime.now(dt.UTC),
             updated_at=dt.datetime.now(dt.UTC),
             teams=[],
@@ -156,15 +157,23 @@ class InMemoryCrudRepository:
     async def get_tournaments(
         self, db: object, skip: int = 0, limit: int = 100
     ) -> list[models.Tournament]:
-        return list(self._tournaments.values())[skip : skip + limit]
+        legacy = [
+            tournament
+            for tournament in self._tournaments.values()
+            if tournament.organization_id is None
+        ]
+        return legacy[skip : skip + limit]
 
     async def get_tournament(self, db: object, tournament_id: str) -> models.Tournament | None:
-        return self._tournaments.get(tournament_id)
+        tournament = self._tournaments.get(tournament_id)
+        if tournament is None or tournament.organization_id is not None:
+            return None
+        return tournament
 
     async def add_team_to_tournament(
         self, db: object, tournament_id: str, team_data: schemas.TeamAdd
     ) -> models.TournamentTeam | None:
-        t = self._tournaments.get(tournament_id)
+        t = await self.get_tournament(db, tournament_id)
         if not t:
             return None
 
@@ -189,9 +198,15 @@ class InMemoryCrudRepository:
     async def get_tournament_teams(
         self, db: object, tournament_id: str
     ) -> list[models.TournamentTeam]:
+        if await self.get_tournament(db, tournament_id) is None:
+            return []
         return [t for t in self._tournament_teams.values() if t.tournament_id == tournament_id]
 
-    async def create_fixture(self, db: object, fixture_in: schemas.FixtureCreate) -> models.Fixture:
+    async def create_fixture(
+        self, db: object, fixture_in: schemas.FixtureCreate
+    ) -> models.Fixture | None:
+        if await self.get_tournament(db, fixture_in.tournament_id) is None:
+            return None
         f_id = str(uuid.uuid4())
         fixture = models.Fixture(
             id=f_id,
@@ -209,9 +224,14 @@ class InMemoryCrudRepository:
         return fixture
 
     async def get_fixture(self, db: object, fixture_id: str) -> models.Fixture | None:
-        return self._fixtures.get(fixture_id)
+        fixture = self._fixtures.get(fixture_id)
+        if fixture is None or await self.get_tournament(db, fixture.tournament_id) is None:
+            return None
+        return fixture
 
     async def get_tournament_fixtures(self, db: object, tournament_id: str) -> list[models.Fixture]:
+        if await self.get_tournament(db, tournament_id) is None:
+            return []
         return [f for f in self._fixtures.values() if f.tournament_id == tournament_id]
 
     async def get_points_table(
