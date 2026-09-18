@@ -3,7 +3,14 @@ import { RouterLink } from 'vue-router';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
 
-const { organizationId, organization, membership, entitlement, canImport } = useSchoolContext();
+const {
+  organizationId,
+  organization,
+  membership,
+  entitlement,
+  canImport,
+  canCreateSchoolMatch,
+} = useSchoolContext();
 </script>
 
 <template>
@@ -44,6 +51,9 @@ const { organizationId, organization, membership, entitlement, canImport } = use
       <RouterLink :to="`/schools/${organizationId}/players`">View master roster</RouterLink>
       <RouterLink v-if="canImport" :to="`/schools/${organizationId}/imports`"
         >Import players</RouterLink
+      >
+      <RouterLink v-if="canCreateSchoolMatch" :to="`/schools/${organizationId}/matches/new`"
+        >Create School match</RouterLink
       >
     </nav>
     <p class="boundary-note">

@@ -225,6 +225,11 @@ const router = createRouter({
           name: 'school-import',
           component: () => import('@/views/school/SchoolImportView.vue'),
         },
+        {
+          path: 'matches/new',
+          name: 'school-match-setup',
+          component: () => import('@/views/school/SchoolMatchSetupView.vue'),
+        },
       ],
     },
 

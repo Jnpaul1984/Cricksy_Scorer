@@ -5,6 +5,8 @@ import type {
   PlayerImportResult,
   SchoolEntitlement,
   SchoolMembership,
+  SchoolMatchCreate,
+  SchoolMatchCreateResult,
   SchoolOrganization,
   SchoolRosterPlayer,
   SchoolTeam,
@@ -120,6 +122,12 @@ export const deactivateTeamRosterPlayer = (
     ),
     { method: 'DELETE' },
   );
+
+export const createSchoolMatch = (organizationId: string, payload: SchoolMatchCreate) =>
+  apiRequest<SchoolMatchCreateResult>(orgPath(organizationId, '/matches'), {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 
 export const previewPlayerImport = (
   organizationId: string,

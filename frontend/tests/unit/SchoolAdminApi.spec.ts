@@ -4,6 +4,7 @@ import { apiRequest } from '@/services/api';
 import {
   addTeamRosterPlayer,
   applyPlayerImport,
+  createSchoolMatch,
   listSchoolPlayers,
   previewPlayerImport,
 } from '@/services/schoolAdminApi';
@@ -61,5 +62,37 @@ describe('schoolAdminApi', () => {
     const [path, options] = vi.mocked(apiRequest).mock.calls[0];
     expect(path).toBe('/api/organizations/school-a/player-imports/import-a/apply');
     expect(JSON.parse(String(options?.body))).toEqual({ resolutions });
+  });
+
+  it('creates a match through the organization-scoped School contract', async () => {
+    vi.mocked(apiRequest).mockResolvedValue({ game_id: 'game-a' });
+    const payload = {
+      team_a: {
+        team_id: 'team-a',
+        playing_xi_membership_ids: Array.from({ length: 11 }, (_, index) => `a-${index}`),
+        captain_membership_id: 'a-0',
+        wicketkeeper_membership_id: 'a-1',
+      },
+      team_b: {
+        team_id: 'team-b',
+        playing_xi_membership_ids: Array.from({ length: 11 }, (_, index) => `b-${index}`),
+        captain_membership_id: 'b-0',
+        wicketkeeper_membership_id: 'b-1',
+      },
+      match_type: 'limited' as const,
+      overs_limit: 20,
+      days_limit: null,
+      overs_per_day: null,
+      dls_enabled: false,
+      toss_winner_side: 'team_a' as const,
+      decision: 'bat' as const,
+    };
+
+    await createSchoolMatch('school A/1', payload);
+
+    expect(apiRequest).toHaveBeenCalledWith('/api/organizations/school%20A%2F1/matches', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   });
 });

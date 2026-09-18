@@ -49,6 +49,7 @@ from backend.routes.billing import router as billing_router
 from backend.routes.coach_notes import router as coach_notes_router
 from backend.routes.moment_markers import router as moment_markers_router
 from backend.routes.organizations import router as organizations_router
+from backend.routes.school_matches import router as school_matches_router
 from backend.routes.pricing import router as pricing_router
 
 # Routers
@@ -498,6 +499,7 @@ def create_app(
     fastapi_app.include_router(coach_notes_router)
     fastapi_app.include_router(moment_markers_router)
     fastapi_app.include_router(organizations_router)
+    fastapi_app.include_router(school_matches_router)
     fastapi_app.include_router(admin_agents.router)  # Added admin_agents router
     fastapi_app.include_router(ai_insight_review_router)  # Phase 8C
 
