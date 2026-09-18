@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import uuid
 
 import pytest
@@ -167,6 +168,9 @@ async def test_legacy_routes_cannot_reach_school_competition_or_fixture(
 async def test_null_org_legacy_tournament_operations_remain_compatible(
     school_client: TestClient,
 ) -> None:
+    if os.getenv("CRICKSY_IN_MEMORY_DB") == "1":
+        pytest.skip("Legacy SQL CRUD compatibility requires the real persistence adapter")
+
     actor = register_user(school_client, f"legacy-actor-{uuid.uuid4().hex}@example.com")
     await _set_global_role(school_client, actor.id, RoleEnum.org_pro)
     created = school_client.post(

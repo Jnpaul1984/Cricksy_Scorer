@@ -7,6 +7,26 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4
 
+from backend.sql_app import models
+
+
+def _allow_synthetic_legacy_tournament(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep response-shape tests focused while the route enforces resource existence."""
+
+    async def _require_legacy_tournament(
+        _db: AsyncSession, tournament_id: str
+    ) -> models.Tournament:
+        return models.Tournament(
+            id=tournament_id,
+            name="Legacy leaderboard tournament",
+            organization_id=None,
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.tournaments._require_legacy_tournament",
+        _require_legacy_tournament,
+    )
+
 
 @pytest.fixture
 async def test_game(async_client: AsyncClient):
@@ -186,9 +206,13 @@ class TestTournamentLeaderboardsEndpoint:
 
     @pytest.mark.asyncio
     async def test_get_tournament_leaderboards_success(
-        self, async_client: AsyncClient, db_session: AsyncSession
+        self,
+        async_client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         """Test successful retrieval of tournament leaderboards."""
+        _allow_synthetic_legacy_tournament(monkeypatch)
         tournament_id = str(uuid4())
 
         response = await async_client.get(
@@ -204,8 +228,11 @@ class TestTournamentLeaderboardsEndpoint:
         assert isinstance(data["bowling"], list)
 
     @pytest.mark.asyncio
-    async def test_get_batting_leaderboard_only(self, async_client: AsyncClient):
+    async def test_get_batting_leaderboard_only(
+        self, async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    ):
         """Test filtering by batting leaderboard only."""
+        _allow_synthetic_legacy_tournament(monkeypatch)
         tournament_id = str(uuid4())
 
         response = await async_client.get(
@@ -221,8 +248,11 @@ class TestTournamentLeaderboardsEndpoint:
         assert len(data["bowling"]) == 0
 
     @pytest.mark.asyncio
-    async def test_get_bowling_leaderboard_only(self, async_client: AsyncClient):
+    async def test_get_bowling_leaderboard_only(
+        self, async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    ):
         """Test filtering by bowling leaderboard only."""
+        _allow_synthetic_legacy_tournament(monkeypatch)
         tournament_id = str(uuid4())
 
         response = await async_client.get(
