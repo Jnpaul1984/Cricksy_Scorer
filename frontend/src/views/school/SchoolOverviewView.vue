@@ -10,6 +10,9 @@ const {
   entitlement,
   canImport,
   canCreateSchoolMatch,
+  canViewStatistics,
+  canViewFixturesResults,
+  canViewCompetitions,
 } = useSchoolContext();
 </script>
 
@@ -54,6 +57,17 @@ const {
       >
       <RouterLink v-if="canCreateSchoolMatch" :to="`/schools/${organizationId}/matches/new`"
         >Create School match</RouterLink
+      >
+      <RouterLink v-if="canViewStatistics" :to="`/schools/${organizationId}/statistics`"
+        >View statistics</RouterLink
+      >
+      <RouterLink
+        v-if="canViewFixturesResults"
+        :to="`/schools/${organizationId}/fixtures-results`"
+        >View fixtures and results</RouterLink
+      >
+      <RouterLink v-if="canViewCompetitions" :to="`/schools/${organizationId}/competitions`"
+        >Manage competitions</RouterLink
       >
     </nav>
     <p class="boundary-note">

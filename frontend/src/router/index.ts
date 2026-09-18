@@ -127,6 +127,12 @@ const router = createRouter({
       // pass query params (theme/title/logo...) through as props too
       props: route => ({ gameId: String(route.params.gameId), ...route.query }),
     },
+    {
+      path: '/school-scorecards/:gameId',
+      name: 'school-public-scorecard',
+      component: () => import('@/views/school/SchoolPublicScorecardView.vue'),
+      props: true,
+    },
 
     // --- Help route ---
     {
@@ -230,6 +236,21 @@ const router = createRouter({
           name: 'school-match-setup',
           component: () => import('@/views/school/SchoolMatchSetupView.vue'),
         },
+        {
+          path: 'statistics',
+          name: 'school-statistics',
+          component: () => import('@/views/school/SchoolStatisticsView.vue'),
+        },
+        {
+          path: 'fixtures-results',
+          name: 'school-fixtures-results',
+          component: () => import('@/views/school/SchoolFixturesResultsView.vue'),
+        },
+        {
+          path: 'competitions',
+          name: 'school-competitions',
+          component: () => import('@/views/school/SchoolCompetitionsView.vue'),
+        },
       ],
     },
 
@@ -308,7 +329,13 @@ router.beforeEach(async (to, _from, next) => {
   // --- General auth guard -------------------------------------------------
   // Public: /login, /landing, /pricing and viewer/embed routes
   const publicPaths = ['/login', '/landing', '/pricing']
-  const publicNames = ['landing', 'pricing', 'viewer-scoreboard', 'embed-scoreboard']
+  const publicNames = [
+    'landing',
+    'pricing',
+    'viewer-scoreboard',
+    'embed-scoreboard',
+    'school-public-scorecard',
+  ]
 
   const isPublic = publicPaths.includes(to.path) || (to.name != null && publicNames.includes(String(to.name)))
 

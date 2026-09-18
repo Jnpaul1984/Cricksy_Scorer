@@ -4,14 +4,24 @@ import type {
   PlayerImportResolution,
   PlayerImportResult,
   SchoolEntitlement,
+  SchoolCompetition,
+  SchoolCompetitionTeam,
+  SchoolFixture,
+  SchoolFixtureSummary,
   SchoolMembership,
   SchoolMatchCreate,
   SchoolMatchCreateResult,
   SchoolOrganization,
   SchoolRosterPlayer,
+  SchoolMatchResult,
+  SchoolPlayerStatistics,
+  SchoolPublicationState,
+  SchoolStandings,
   SchoolTeam,
   SchoolTeamInput,
   SchoolTeamRosterPlayer,
+  SchoolTeamStatistics,
+  PublicSchoolScorecard,
 } from '@/types/schoolAdmin';
 
 const orgPath = (organizationId: string, suffix = '') =>
@@ -128,6 +138,151 @@ export const createSchoolMatch = (organizationId: string, payload: SchoolMatchCr
     method: 'POST',
     body: JSON.stringify(payload),
   });
+
+export const listSchoolPlayerStatistics = (organizationId: string) =>
+  apiRequest<SchoolPlayerStatistics[]>(orgPath(organizationId, '/statistics/players'));
+export const getSchoolPlayerStatistics = (organizationId: string, playerProfileId: string) =>
+  apiRequest<SchoolPlayerStatistics>(
+    orgPath(organizationId, `/statistics/players/${encodeURIComponent(playerProfileId)}`),
+  );
+export const listSchoolTeamStatistics = (organizationId: string) =>
+  apiRequest<SchoolTeamStatistics[]>(orgPath(organizationId, '/statistics/teams'));
+export const getSchoolTeamStatistics = (organizationId: string, teamId: string) =>
+  apiRequest<SchoolTeamStatistics>(
+    orgPath(organizationId, `/statistics/teams/${encodeURIComponent(teamId)}`),
+  );
+export const listSchoolResults = (organizationId: string) =>
+  apiRequest<SchoolMatchResult[]>(orgPath(organizationId, '/results'));
+export const listSchoolFixtures = (organizationId: string) =>
+  apiRequest<SchoolFixtureSummary[]>(orgPath(organizationId, '/fixtures'));
+
+export const listSchoolCompetitions = (organizationId: string) =>
+  apiRequest<SchoolCompetition[]>(orgPath(organizationId, '/competitions'));
+export const createSchoolCompetition = (
+  organizationId: string,
+  payload: Pick<SchoolCompetition, 'name' | 'tournament_type' | 'status'> &
+    Partial<Pick<SchoolCompetition, 'description' | 'start_date' | 'end_date'>>,
+) =>
+  apiRequest<SchoolCompetition>(orgPath(organizationId, '/competitions'), {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+export const updateSchoolCompetition = (
+  organizationId: string,
+  competitionId: string,
+  payload: Partial<
+    Pick<
+      SchoolCompetition,
+      'name' | 'description' | 'tournament_type' | 'start_date' | 'end_date' | 'status'
+    >
+  >,
+) =>
+  apiRequest<SchoolCompetition>(
+    orgPath(organizationId, `/competitions/${encodeURIComponent(competitionId)}`),
+    { method: 'PATCH', body: JSON.stringify(payload) },
+  );
+export const deleteSchoolCompetition = (organizationId: string, competitionId: string) =>
+  apiRequest<void>(orgPath(organizationId, `/competitions/${encodeURIComponent(competitionId)}`), {
+    method: 'DELETE',
+  });
+export const listSchoolCompetitionTeams = (organizationId: string, competitionId: string) =>
+  apiRequest<SchoolCompetitionTeam[]>(
+    orgPath(organizationId, `/competitions/${encodeURIComponent(competitionId)}/teams`),
+  );
+export const addSchoolCompetitionTeam = (
+  organizationId: string,
+  competitionId: string,
+  teamId: string,
+) =>
+  apiRequest<SchoolCompetitionTeam>(
+    orgPath(organizationId, `/competitions/${encodeURIComponent(competitionId)}/teams`),
+    { method: 'POST', body: JSON.stringify({ team_id: teamId }) },
+  );
+export const removeSchoolCompetitionTeam = (
+  organizationId: string,
+  competitionId: string,
+  entrantId: number,
+) =>
+  apiRequest<void>(
+    orgPath(
+      organizationId,
+      `/competitions/${encodeURIComponent(competitionId)}/teams/${entrantId}`,
+    ),
+    { method: 'DELETE' },
+  );
+export const listSchoolCompetitionFixtures = (organizationId: string, competitionId: string) =>
+  apiRequest<SchoolFixture[]>(
+    orgPath(organizationId, `/competitions/${encodeURIComponent(competitionId)}/fixtures`),
+  );
+export const createSchoolFixture = (
+  organizationId: string,
+  competitionId: string,
+  payload: {
+    team_a_id: string;
+    team_b_id: string;
+    match_number?: number | null;
+    venue?: string | null;
+    scheduled_date?: string | null;
+    status?: SchoolFixture['status'];
+  },
+) =>
+  apiRequest<SchoolFixture>(
+    orgPath(organizationId, `/competitions/${encodeURIComponent(competitionId)}/fixtures`),
+    { method: 'POST', body: JSON.stringify(payload) },
+  );
+export const updateSchoolFixture = (
+  organizationId: string,
+  competitionId: string,
+  fixtureId: string,
+  payload: Partial<Pick<SchoolFixture, 'match_number' | 'venue' | 'scheduled_date' | 'status'>>,
+) =>
+  apiRequest<SchoolFixture>(
+    orgPath(
+      organizationId,
+      `/competitions/${encodeURIComponent(competitionId)}/fixtures/${encodeURIComponent(fixtureId)}`,
+    ),
+    { method: 'PATCH', body: JSON.stringify(payload) },
+  );
+export const deleteSchoolFixture = (
+  organizationId: string,
+  competitionId: string,
+  fixtureId: string,
+) =>
+  apiRequest<void>(
+    orgPath(
+      organizationId,
+      `/competitions/${encodeURIComponent(competitionId)}/fixtures/${encodeURIComponent(fixtureId)}`,
+    ),
+    { method: 'DELETE' },
+  );
+export const linkSchoolFixtureGame = (
+  organizationId: string,
+  competitionId: string,
+  fixtureId: string,
+  gameId: string,
+) =>
+  apiRequest<SchoolFixture>(
+    orgPath(
+      organizationId,
+      `/competitions/${encodeURIComponent(competitionId)}/fixtures/${encodeURIComponent(fixtureId)}/game`,
+    ),
+    { method: 'PUT', body: JSON.stringify({ game_id: gameId }) },
+  );
+export const getSchoolStandings = (organizationId: string, competitionId: string) =>
+  apiRequest<SchoolStandings>(
+    orgPath(organizationId, `/competitions/${encodeURIComponent(competitionId)}/standings`),
+  );
+export const updateSchoolMatchPublication = (
+  organizationId: string,
+  gameId: string,
+  publicationState: SchoolPublicationState,
+) =>
+  apiRequest<{ game_id: string; organization_id: string; publication_state: SchoolPublicationState }>(
+    orgPath(organizationId, `/matches/${encodeURIComponent(gameId)}/publication`),
+    { method: 'PATCH', body: JSON.stringify({ publication_state: publicationState }) },
+  );
+export const getPublicSchoolScorecard = (gameId: string) =>
+  apiRequest<PublicSchoolScorecard>(`/public/school-scorecards/${encodeURIComponent(gameId)}`);
 
 export const previewPlayerImport = (
   organizationId: string,

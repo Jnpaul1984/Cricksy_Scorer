@@ -42,6 +42,10 @@ const entitlement = {
     'school_persistent_teams',
     'school_team_rosters',
     'school_match_playing_xi',
+    'school_basic_statistics',
+    'school_fixtures_results',
+    'school_live_scorecards',
+    'school_competitions',
   ],
   excluded_capabilities: ['advanced_ai'],
   created_at: '',
@@ -70,6 +74,13 @@ function context(role: SchoolMembershipRole, organizationId = ref('school-a')): 
     canManageTeamRoster: writes,
     canImport: writes,
     canCreateSchoolMatch: computed(() => ['owner', 'admin', 'coach', 'scorer'].includes(role)),
+    canViewStatistics: computed(() => true),
+    canViewFixturesResults: computed(() => true),
+    canViewCompetitions: computed(() => true),
+    canManageCompetitions: writes,
+    canDeleteCompetitions: computed(() => ['owner', 'admin'].includes(role)),
+    canLinkFixtures: computed(() => ['owner', 'admin', 'coach', 'scorer'].includes(role)),
+    canPublishScorecards: computed(() => ['owner', 'admin', 'coach', 'scorer'].includes(role)),
   };
 }
 
@@ -159,6 +170,9 @@ describe('Phase 7H School administration views', () => {
     expect(schoolApi.getSchool).toHaveBeenCalledWith('school-a');
     expect(schoolApi.getMySchoolMembership).toHaveBeenCalledWith('school-a');
     expect(schoolApi.getSchoolEntitlement).toHaveBeenCalledWith('school-a');
+    expect(wrapper.text()).toContain('Statistics');
+    expect(wrapper.text()).toContain('Fixtures / Results');
+    expect(wrapper.text()).toContain('Competitions');
   });
 
   it('denies a nonmember or cross-tenant School route without metadata leakage', async () => {

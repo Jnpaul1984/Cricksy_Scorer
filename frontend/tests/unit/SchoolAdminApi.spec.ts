@@ -5,6 +5,9 @@ import {
   addTeamRosterPlayer,
   applyPlayerImport,
   createSchoolMatch,
+  getPublicSchoolScorecard,
+  linkSchoolFixtureGame,
+  listSchoolPlayerStatistics,
   listSchoolPlayers,
   previewPlayerImport,
 } from '@/services/schoolAdminApi';
@@ -94,5 +97,24 @@ describe('schoolAdminApi', () => {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  });
+
+  it('uses organization-scoped statistics and explicit fixture linkage contracts', async () => {
+    vi.mocked(apiRequest).mockResolvedValue({});
+    await listSchoolPlayerStatistics('school A/1');
+    expect(apiRequest).toHaveBeenLastCalledWith(
+      '/api/organizations/school%20A%2F1/statistics/players',
+    );
+    await linkSchoolFixtureGame('school-a', 'cup-a', 'fixture-a', 'game-a');
+    expect(apiRequest).toHaveBeenLastCalledWith(
+      '/api/organizations/school-a/competitions/cup-a/fixtures/fixture-a/game',
+      { method: 'PUT', body: JSON.stringify({ game_id: 'game-a' }) },
+    );
+  });
+
+  it('uses the unauthenticated sanitized School scorecard endpoint', async () => {
+    vi.mocked(apiRequest).mockResolvedValue({});
+    await getPublicSchoolScorecard('game A/1');
+    expect(apiRequest).toHaveBeenCalledWith('/public/school-scorecards/game%20A%2F1');
   });
 });
