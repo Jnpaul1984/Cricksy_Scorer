@@ -18,6 +18,11 @@ const SUITES = {
   coach: 'cypress/e2e/coach_workspace_smoke.cy.ts',
   smoke: 'cypress/e2e/analyst_workspace_data_library.cy.ts,cypress/e2e/coach_workspace_smoke.cy.ts',
   import: 'cypress/e2e/historical_import_review_flow.cy.ts',
+  school: [
+    'cypress/e2e/school_admin_flow.cy.ts',
+    'cypress/e2e/school_match_setup_flow.cy.ts',
+    'cypress/e2e/school_phase7j_flow.cy.ts',
+  ].join(','),
   scoring: [
     'cypress/e2e/scoring_gate_smoke.cy.ts',
     'cypress/e2e/match_creation_flow.cy.ts',
