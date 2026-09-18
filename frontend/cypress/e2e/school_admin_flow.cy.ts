@@ -161,4 +161,33 @@ describe('Phase 7H School administration flow', () => {
     cy.contains('button', 'Deactivate').should('not.exist')
     cy.contains('a', 'Import').should('not.exist')
   })
+
+  it('keeps labeled actions keyboard-operable and confirms destructive Team archival', () => {
+    cy.viewport(1024, 768)
+    stubSchool('owner')
+    cy.intercept('POST', '**/api/organizations/school-a/teams', {
+      statusCode: 201,
+      body: { ...team, id: 'team-keyboard', name: 'Keyboard XI' },
+    }).as('keyboardCreate')
+    cy.intercept('DELETE', '**/api/organizations/school-a/teams/team-a', {
+      statusCode: 204,
+    }).as('archiveTeam')
+
+    cy.visitWithAuth('/schools/school-a/teams')
+    cy.get('nav[aria-label="School administration"]').should('be.visible')
+    cy.get('section[aria-labelledby="teams-heading"]').should('be.visible')
+    cy.contains('label', 'Team name').find('input').should('have.attr', 'required')
+    cy.contains('label', 'Team name').find('input').focus().type('Keyboard XI{enter}')
+    cy.wait('@keyboardCreate')
+    cy.get('[role="status"]').should('contain.text', 'Team created.')
+
+    cy.window().then(win => {
+      cy.stub(win, 'confirm').onFirstCall().returns(false).onSecondCall().returns(true)
+    })
+    cy.contains('tr', 'First XI').contains('button', 'Archive').focus().type('{enter}')
+    cy.get('@archiveTeam.all').should('have.length', 0)
+    cy.contains('tr', 'First XI').contains('button', 'Archive').focus().type('{enter}')
+    cy.wait('@archiveTeam')
+    cy.get('[role="status"]').should('contain.text', 'Team archived.')
+  })
 })

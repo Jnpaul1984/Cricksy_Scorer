@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -106,6 +107,24 @@ def _safe_int(value: Any) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _result_text(value: str | None) -> str | None:
+    """Normalize legacy text and the scorer's persisted structured result."""
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    try:
+        decoded = json.loads(normalized)
+    except (json.JSONDecodeError, TypeError):
+        return normalized
+    if isinstance(decoded, dict):
+        result_text = decoded.get("result_text")
+        if isinstance(result_text, str) and result_text.strip():
+            return result_text.strip()
+    return normalized
 
 
 def _overs_from_balls(balls: int) -> str:
@@ -342,7 +361,7 @@ def _apply_result(
         return
     if game.status != models.GameStatus.completed:
         return
-    result = (game.result or "").strip()
+    result = _result_text(game.result) or ""
     lowered = result.lower()
     if lowered == "match tied":
         totals[team_a_id]["ties"] += 1
@@ -439,7 +458,7 @@ def _match_result(game: models.Game) -> SchoolMatchResult | None:
         team_b_id=team_b_id,
         team_b_name=str(game.team_b.get("name", "")),
         status=game.status.value,
-        result=game.result,
+        result=_result_text(game.result),
         publication_state=publication,
         current_inning=game.current_inning,
         team_a_runs=totals["a"]["runs"],
@@ -518,7 +537,7 @@ async def fixture_summaries(
                 fixture_status=fixture.status,
                 game_id=fixture.game_id,
                 game_status=game.status.value if game is not None else None,
-                result=game.result if game is not None else None,
+                result=_result_text(game.result) if game is not None else None,
                 publication_state=publication,
                 public_scorecard_available=publication in {"published_live", "published_final"},
             )

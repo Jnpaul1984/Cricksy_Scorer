@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Literal
 
+import structlog
 from backend.api.schemas.school_competitions import (
     PublicSchoolScorecard,
     SchoolCompetitionCreate,
@@ -24,6 +26,8 @@ from backend.sql_app import models
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = structlog.get_logger(__name__)
 
 READ_ROLES = frozenset({"owner", "admin", "coach", "scorer", "viewer"})
 EDIT_ROLES = frozenset({"owner", "admin", "coach"})
@@ -64,6 +68,13 @@ async def _authorize(
         db, organization_id=organization_id, user_id=actor_user_id
     )
     if organization.organization_type != "school" or membership.role not in allowed_roles:
+        logger.warning(
+            "organization.school_competition_authorization_denied",
+            organization_id=organization_id,
+            actor_user_id=actor_user_id,
+            membership_role=membership.role,
+            capability=capability,
+        )
         raise _forbidden()
     return membership
 
@@ -539,11 +550,12 @@ async def link_fixture_game(
 
 
 def _winner_team_id(game: models.Game, fixture: models.Fixture) -> str | Literal["draw"] | None:
-    if game.result == "Match tied":
+    result = _result_text(game.result)
+    if result == "Match tied":
         return "draw"
-    if not game.result or " won by " not in game.result:
+    if not result or " won by " not in result:
         return None
-    winner_name = game.result.split(" won by ", 1)[0]
+    winner_name = result.split(" won by ", 1)[0]
     team_a_name = str(game.team_a.get("name", ""))
     team_b_name = str(game.team_b.get("name", ""))
     if team_a_name == team_b_name:
@@ -553,6 +565,24 @@ def _winner_team_id(game: models.Game, fixture: models.Fixture) -> str | Literal
     if winner_name == team_b_name:
         return fixture.team_b_id
     return None
+
+
+def _result_text(value: str | None) -> str | None:
+    """Normalize legacy text and the scorer's persisted structured result."""
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    try:
+        decoded = json.loads(normalized)
+    except (json.JSONDecodeError, TypeError):
+        return normalized
+    if isinstance(decoded, dict):
+        result_text = decoded.get("result_text")
+        if isinstance(result_text, str) and result_text.strip():
+            return result_text.strip()
+    return normalized
 
 
 async def standings(
@@ -680,9 +710,18 @@ async def publication(
             and game.status != models.GameStatus.completed
         ):
             raise SchoolCompetitionServiceError(409, "Only a completed Game can be final-published")
+        previous_state = game.publication_state or "private"
         game.publication_state = payload.publication_state
         await db.commit()
         await db.refresh(game)
+        logger.info(
+            "organization.school_match_publication_changed",
+            organization_id=organization_id,
+            game_id=game_id,
+            actor_user_id=actor_user_id,
+            previous_state=previous_state,
+            publication_state=payload.publication_state,
+        )
     return game, game.publication_state or "private"
 
 
@@ -752,7 +791,7 @@ async def public_scorecard(db: AsyncSession, *, game_id: str) -> PublicSchoolSco
         overs_completed=game.overs_completed,
         balls_this_over=game.balls_this_over,
         current_inning=game.current_inning,
-        result=game.result,
+        result=_result_text(game.result),
         batting_scorecard=_public_card(game.batting_scorecard),
         bowling_scorecard=_public_card(game.bowling_scorecard),
     )

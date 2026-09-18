@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import uuid
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
+from structlog.testing import capture_logs
 
+from backend.services import school_competition_service
 from backend.sql_app.models import (
     Fixture,
     Game,
@@ -441,6 +444,51 @@ async def test_private_guard_publication_roles_and_sanitized_projection(
     assert school_client.get(public_url).status_code == 404
 
 
+async def test_publication_changes_and_role_denials_emit_safe_operational_events(
+    school_client: TestClient,
+) -> None:
+    owner = register_user(school_client, "publish-audit-owner@example.com")
+    organization = create_school(school_client, owner, "Publication Audit School")
+    viewer = register_user(school_client, "publish-audit-viewer@example.com")
+    add_membership(school_client, owner, organization["id"], viewer.id, "viewer")
+    team_a = await _team(school_client, organization["id"], owner.id, "Audit A")
+    team_b = await _team(school_client, organization["id"], owner.id, "Audit B")
+    game = await _game(school_client, organization["id"], owner.id, team_a, team_b)
+    url = f"/api/organizations/{organization['id']}/matches/{game.id}/publication"
+
+    with capture_logs() as logs:
+        denied = school_client.patch(
+            url,
+            json={"publication_state": "published_live"},
+            headers=viewer.headers,
+        )
+        changed = school_client.patch(
+            url,
+            json={"publication_state": "published_live"},
+            headers=owner.headers,
+        )
+
+    assert denied.status_code == 403
+    assert changed.status_code == 200
+    assert {
+        "event": "organization.school_competition_authorization_denied",
+        "organization_id": organization["id"],
+        "actor_user_id": viewer.id,
+        "membership_role": "viewer",
+        "capability": "school_live_scorecards",
+        "log_level": "warning",
+    } in logs
+    assert {
+        "event": "organization.school_match_publication_changed",
+        "organization_id": organization["id"],
+        "game_id": game.id,
+        "actor_user_id": owner.id,
+        "previous_state": "private",
+        "publication_state": "published_live",
+        "log_level": "info",
+    } in logs
+
+
 async def test_publication_role_matrix_and_final_requires_completed_game(
     school_client: TestClient,
 ) -> None:
@@ -546,6 +594,63 @@ async def test_one_game_cannot_back_two_authoritative_fixtures(
     )
     assert duplicate.status_code == 409
     session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        assert (
+            await session.scalar(select(func.count(Fixture.id)).where(Fixture.game_id == game.id))
+            == 1
+        )
+
+
+async def test_concurrent_fixture_game_links_have_one_controlled_loser_on_postgresql(
+    school_client: TestClient,
+) -> None:
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        if session.bind is None or session.bind.dialect.name != "postgresql":
+            pytest.skip("Fixture linkage concurrency requires real PostgreSQL")
+
+    owner = register_user(school_client, "concurrent-link-owner@example.com")
+    organization = create_school(school_client, owner, "Concurrent Link School")
+    a = await _team(school_client, organization["id"], owner.id, "Concurrent A")
+    b = await _team(school_client, organization["id"], owner.id, "Concurrent B")
+    competition, first = await _competition_with_fixture(
+        school_client, owner, organization["id"], a, b
+    )
+    second_response = school_client.post(
+        f"/api/organizations/{organization['id']}/competitions/{competition['id']}/fixtures",
+        json={"team_a_id": a.id, "team_b_id": b.id, "match_number": 2},
+        headers=owner.headers,
+    )
+    assert second_response.status_code == 201
+    second = second_response.json()
+    game = await _game(school_client, organization["id"], owner.id, a, b)
+
+    async def link(fixture_id: str) -> Fixture | Exception:
+        async with session_maker() as session:
+            try:
+                return await school_competition_service.link_fixture_game(
+                    session,
+                    organization_id=organization["id"],
+                    actor_user_id=owner.id,
+                    competition_id=competition["id"],
+                    fixture_id=fixture_id,
+                    game_id=game.id,
+                )
+            except Exception as exc:
+                return exc
+
+    outcomes = await asyncio.gather(link(first["id"]), link(second["id"]))
+    winners = [outcome for outcome in outcomes if isinstance(outcome, Fixture)]
+    losers = [
+        outcome
+        for outcome in outcomes
+        if isinstance(outcome, school_competition_service.SchoolCompetitionServiceError)
+    ]
+    assert len(winners) == 1
+    assert len(losers) == 1
+    assert losers[0].status_code == 409
+    assert losers[0].detail == "Game is already linked to a fixture"
+
     async with session_maker() as session:
         assert (
             await session.scalar(select(func.count(Fixture.id)).where(Fixture.game_id == game.id))

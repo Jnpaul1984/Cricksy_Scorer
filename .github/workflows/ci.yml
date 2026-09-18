@@ -375,6 +375,54 @@ jobs:
         run: |
           pytest tests/test_dls_calculations.py -v --tb=short
 
+  backend-school-postgres:
+    name: Backend (School Free PostgreSQL gate)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: cricksy
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U test -d cricksy"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12.12
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+          cache: 'pip'
+          cache-dependency-path: 'backend/requirements.txt'
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Upgrade migrated PostgreSQL and run the complete School gate
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/cricksy
+          PHASE7B_POSTGRES_MIGRATED_TESTS: "1"
+          APP_SECRET_KEY: school-ci-test-secret-not-for-production
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python scripts/check_alembic_single_head.py
+          alembic -c alembic.ini upgrade head
+          pytest -q tests/test_school_*.py
+
   frontend-build:
     name: Frontend (build + type-check)
     needs: [changes]
@@ -483,3 +531,35 @@ jobs:
       - name: Run Coach Workspace E2E gate
         working-directory: frontend
         run: npm run test:e2e:coach
+
+  frontend-school-e2e:
+    name: Frontend (School Free E2E gate)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Cache Cypress binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+
+      - name: Install
+        working-directory: frontend
+        env:
+          CYPRESS_INSTALL_BINARY: 0
+        run: npm ci
+
+      - name: Run School Free E2E gate
+        working-directory: frontend
+        run: npm run test:e2e:school
