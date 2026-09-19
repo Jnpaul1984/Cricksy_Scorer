@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { safeInternalRedirect } from '@/utils/safeRedirect';
+import { authEntryRedirect, safeInternalRedirect } from '@/utils/safeRedirect';
 
 describe('safeInternalRedirect', () => {
   it('retains internal routes including query strings', () => {
@@ -11,4 +11,12 @@ describe('safeInternalRedirect', () => {
     'rejects unsafe target %s',
     (target) => expect(safeInternalRedirect(target)).toBe('/setup'),
   );
+});
+
+describe('authEntryRedirect', () => {
+  it.each(['/login', '/register'])('preserves School continuation from %s', () => {
+    expect(authEntryRedirect('/schools/create')).toBe('/schools/create');
+  });
+  it('falls back for unsafe continuation', () => expect(authEntryRedirect('https://evil.example')).toBe('/setup'));
+  it('falls back without continuation', () => expect(authEntryRedirect(undefined)).toBe('/setup'));
 });

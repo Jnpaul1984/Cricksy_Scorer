@@ -10,3 +10,7 @@ export function safeInternalRedirect(value: LocationQueryValue | LocationQueryVa
     return fallback
   }
 }
+
+export function authEntryRedirect(value: LocationQueryValue | LocationQueryValue[] | undefined): string {
+  return safeInternalRedirect(value, '/setup')
+}

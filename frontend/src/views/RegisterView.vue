@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+
 import { getErrorMessage } from '@/services/api'
 import { register } from '@/services/auth'
 import { useAuthStore } from '@/stores/authStore'
-import { safeInternalRedirect } from '@/utils/safeRedirect'
+import { authEntryRedirect } from '@/utils/safeRedirect'
 
 const route = useRoute(); const router = useRouter(); const auth = useAuthStore()
 const email = ref(''); const password = ref(''); const confirmPassword = ref(''); const error = ref(''); const loading = ref(false)
@@ -13,7 +14,7 @@ async function submit() {
   if (password.value !== confirmPassword.value) { error.value = 'Passwords do not match.'; return }
   if (password.value.length < 8) { error.value = 'Password must be at least 8 characters.'; return }
   loading.value = true
-  try { const result = await register(email.value.trim(), password.value); auth.token = result.token; auth.user = result.user; await router.push(safeInternalRedirect(route.query.redirect, '/setup')) }
+  try { const result = await register(email.value.trim(), password.value); auth.token = result.token; auth.user = result.user; await router.push(authEntryRedirect(route.query.redirect)) }
   catch (reason) { error.value = getErrorMessage(reason) } finally { loading.value = false }
 }
 </script>

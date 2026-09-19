@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router
 
 import { getStoredToken } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
+import { authEntryRedirect } from '@/utils/safeRedirect'
 
 // Choose routing strategy at build/deploy time
 // - history (default): clean URLs like /game/123/scoring (needs server fallback to index.html)
@@ -349,7 +350,7 @@ router.beforeEach(async (to, _from, next) => {
 
   // If logged in and trying to reach login, send to setup
   if ((to.path === '/login' || to.path === '/register') && auth.isLoggedIn) {
-    return next('/setup')
+    return next(authEntryRedirect(to.query.redirect))
   }
 
   const orgProtected = ['/tournaments', '/analytics']
