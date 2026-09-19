@@ -87,6 +87,7 @@ const steps = [
         </p>
         <div class="hero-actions">
           <RouterLink to="/login" class="btn btn-primary">Start Scoring</RouterLink>
+          <RouterLink to="/schools/free" class="btn btn-secondary">Schools</RouterLink>
           <RouterLink to="/fan" class="btn btn-secondary">View Demo</RouterLink>
         </div>
       </div>

@@ -12,6 +12,7 @@ import type {
   SchoolMatchCreate,
   SchoolMatchCreateResult,
   SchoolOrganization,
+  SchoolCreateInput,
   SchoolRosterPlayer,
   SchoolMatchResult,
   SchoolPlayerStatistics,
@@ -28,6 +29,8 @@ const orgPath = (organizationId: string, suffix = '') =>
   `/api/organizations/${encodeURIComponent(organizationId)}${suffix}`;
 
 export const listSchools = () => apiRequest<SchoolOrganization[]>('/api/organizations');
+export const createSchool = (payload: SchoolCreateInput) =>
+  apiRequest<SchoolOrganization>('/api/organizations', { method: 'POST', body: JSON.stringify({ name: payload.name, organization_type: 'school' }) });
 export const getSchool = (organizationId: string) =>
   apiRequest<SchoolOrganization>(orgPath(organizationId));
 export const getMySchoolMembership = (organizationId: string) =>

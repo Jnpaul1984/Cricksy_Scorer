@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router
 
 import { getStoredToken } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
+import { authEntryRedirect } from '@/utils/safeRedirect'
 
 // Choose routing strategy at build/deploy time
 // - history (default): clean URLs like /game/123/scoring (needs server fallback to index.html)
@@ -43,6 +44,8 @@ const router = createRouter({
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
     },
+    { path: '/register', name: 'register', component: () => import('@/views/RegisterView.vue') },
+    { path: '/schools/free', name: 'school-free', component: () => import('@/views/school/SchoolFreeView.vue') },
     {
       path: '/player/:playerId',
       name: 'PlayerProfile',
@@ -201,6 +204,7 @@ const router = createRouter({
       component: () => import('@/views/school/SchoolDirectoryView.vue'),
       meta: { requiresAuth: true, title: 'Your Schools — Cricksy' },
     },
+    { path: '/schools/create', name: 'school-create', component: () => import('@/views/school/SchoolCreateView.vue'), meta: { requiresAuth: true, title: 'Create School — Cricksy' } },
     {
       path: '/schools/:organizationId',
       component: () => import('@/views/school/SchoolAdminShellView.vue'),
@@ -328,13 +332,13 @@ router.beforeEach(async (to, _from, next) => {
 
   // --- General auth guard -------------------------------------------------
   // Public: /login, /landing, /pricing and viewer/embed routes
-  const publicPaths = ['/login', '/landing', '/pricing']
+  const publicPaths = ['/login', '/register', '/landing', '/pricing', '/schools/free']
   const publicNames = [
     'landing',
     'pricing',
     'viewer-scoreboard',
     'embed-scoreboard',
-    'school-public-scorecard',
+    'school-public-scorecard', 'register', 'school-free',
   ]
 
   const isPublic = publicPaths.includes(to.path) || (to.name != null && publicNames.includes(String(to.name)))
@@ -345,8 +349,8 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // If logged in and trying to reach login, send to setup
-  if (to.path === '/login' && auth.isLoggedIn) {
-    return next('/setup')
+  if ((to.path === '/login' || to.path === '/register') && auth.isLoggedIn) {
+    return next(authEntryRedirect(to.query.redirect))
   }
 
   const orgProtected = ['/tournaments', '/analytics']

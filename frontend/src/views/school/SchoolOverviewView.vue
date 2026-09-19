@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router';
+import { onMounted, ref } from 'vue';
 
 import { useSchoolContext } from '@/composables/useSchoolContext';
+import { listSchoolPlayers, listSchoolTeams } from '@/services/schoolAdminApi';
 
 const {
   organizationId,
@@ -14,6 +15,8 @@ const {
   canViewFixturesResults,
   canViewCompetitions,
 } = useSchoolContext();
+const hasSetup = ref(true);
+onMounted(async () => { try { const [players, teams] = await Promise.all([listSchoolPlayers(organizationId.value, 'active'), listSchoolTeams(organizationId.value)]); hasSetup.value = players.length > 0 || teams.length > 0 } catch { hasSetup.value = true } });
 </script>
 
 <template>
@@ -70,6 +73,7 @@ const {
         >Manage competitions</RouterLink
       >
     </nav>
+    <section v-if="!hasSetup" class="onboarding" aria-labelledby="onboarding-heading"><h3 id="onboarding-heading">Start your School workspace</h3><ol><li><RouterLink v-if="canImport" :to="`/schools/${organizationId}/imports`">Upload Players</RouterLink></li><li><RouterLink :to="`/schools/${organizationId}/teams`">Create Teams</RouterLink></li><li><RouterLink :to="`/schools/${organizationId}/teams`">Assign Players</RouterLink></li><li><RouterLink v-if="canCreateSchoolMatch" :to="`/schools/${organizationId}/matches/new`">Create First Match</RouterLink></li></ol></section>
     <p class="boundary-note">
       Advanced AI, video, advanced analytics, and premium coaching are not included in School Free.
     </p>
@@ -142,4 +146,5 @@ dd {
   border-left: 4px solid #f2bb5f;
   background: #292536;
 }
+.onboarding{margin-top:1.4rem;padding:1rem;border:1px solid #70d7b0;border-radius:10px;background:#20283d}.onboarding a{color:#70d7b0;font-weight:700}
 </style>
