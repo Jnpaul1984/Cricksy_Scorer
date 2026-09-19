@@ -11,6 +11,7 @@ export interface SchoolOrganization {
   created_at: string;
   updated_at: string;
 }
+export interface SchoolCreateInput { name: string; organization_type?: 'school' }
 
 export interface SchoolMembership {
   id: string;

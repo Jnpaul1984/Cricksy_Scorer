@@ -31,7 +31,8 @@ onMounted(async () => {
     <p v-if="loading" role="status">Loading your schools…</p>
     <div v-else-if="error" class="notice error" role="alert">{{ error }}</div>
     <div v-else-if="!schools.length" class="notice">
-      You do not have an active School membership.
+      <p>You do not have an active School membership. If you are joining an existing School, ask its administrator for access.</p>
+      <RouterLink to="/schools/create" class="action-link">Create School Free</RouterLink>
     </div>
     <ul v-else class="school-grid" aria-label="Available schools">
       <li v-for="school in schools" :key="school.id" class="school-card">
@@ -43,6 +44,7 @@ onMounted(async () => {
         <RouterLink :to="`/schools/${school.id}`" class="action-link">Open School</RouterLink>
       </li>
     </ul>
+    <RouterLink v-if="schools.length" to="/schools/create" class="action-link create-school">Create School</RouterLink>
   </main>
 </template>
 
@@ -97,4 +99,5 @@ onMounted(async () => {
 .error {
   border-color: #e17979;
 }
+.create-school{margin-top:1rem}
 </style>
