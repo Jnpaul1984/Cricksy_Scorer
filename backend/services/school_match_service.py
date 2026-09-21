@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from typing import Any
 
 import structlog
-from backend.api.schemas.school_matches import SchoolMatchCreate, SchoolMatchSideSelection
+from backend.api.schemas.school_matches import (
+    ExternalOpponentSelection,
+    SchoolMatchCreate,
+    SchoolMatchSideSelection,
+)
 from backend.services import organization_service
 from backend.services.organization_entitlement_service import require_organization_capability
 from backend.sql_app import models
@@ -189,6 +193,20 @@ def _team_snapshot(organization_id: str, side: EligibleSide) -> dict[str, Any]:
     }
 
 
+def _external_snapshot(selection: ExternalOpponentSelection) -> tuple[dict[str, Any], str, str]:
+    players = [{"id": f"external:{uuid.uuid4()}", "name": name} for name in selection.player_names]
+    snapshot = {
+        "name": selection.team_name,
+        "players": players,
+        "playing_xi": [player["id"] for player in players],
+    }
+    return (
+        snapshot,
+        players[selection.captain_index]["id"],
+        players[selection.wicketkeeper_index]["id"],
+    )
+
+
 def _batting_scorecard(team: dict[str, Any]) -> dict[str, Any]:
     return {
         player["id"]: {
@@ -231,26 +249,57 @@ async def create_school_match(
         organization_id=organization_id,
         actor_user_id=actor_user_id,
     )
-    if payload.team_a.team_id == payload.team_b.team_id:
-        raise _invalid("A match requires two different saved Teams")
-
-    side_a = await _eligible_side(
-        db,
-        organization_id=organization_id,
-        selection=payload.team_a,
-    )
-    side_b = await _eligible_side(
-        db,
-        organization_id=organization_id,
-        selection=payload.team_b,
-    )
-    profile_ids_a = {player.profile.player_id for player in side_a.players}
-    profile_ids_b = {player.profile.player_id for player in side_b.players}
-    if profile_ids_a & profile_ids_b:
-        raise _invalid("A canonical player cannot appear for both sides in one match")
-
-    team_a = _team_snapshot(organization_id, side_a)
-    team_b = _team_snapshot(organization_id, side_b)
+    side_a: EligibleSide | None = None
+    side_b: EligibleSide | None = None
+    if payload.mode == "school_vs_school":
+        assert payload.team_a is not None and payload.team_b is not None
+        if payload.team_a.team_id == payload.team_b.team_id:
+            raise _invalid("A match requires two different saved Teams")
+        side_a = await _eligible_side(
+            db,
+            organization_id=organization_id,
+            selection=payload.team_a,
+        )
+        side_b = await _eligible_side(
+            db,
+            organization_id=organization_id,
+            selection=payload.team_b,
+        )
+        profile_ids_a = {player.profile.player_id for player in side_a.players}
+        profile_ids_b = {player.profile.player_id for player in side_b.players}
+        if profile_ids_a & profile_ids_b:
+            raise _invalid("A canonical player cannot appear for both sides in one match")
+        team_a = _team_snapshot(organization_id, side_a)
+        team_b = _team_snapshot(organization_id, side_b)
+        captain_a = side_a.captain_profile_id
+        keeper_a = side_a.wicketkeeper_profile_id
+        captain_b = side_b.captain_profile_id
+        keeper_b = side_b.wicketkeeper_profile_id
+    else:
+        assert payload.school_side is not None and payload.external_opponent is not None
+        school_selection = payload.team_a if payload.school_side == "team_a" else payload.team_b
+        assert school_selection is not None
+        school = await _eligible_side(
+            db,
+            organization_id=organization_id,
+            selection=school_selection,
+        )
+        school_snapshot = _team_snapshot(organization_id, school)
+        external_snapshot, external_captain, external_keeper = _external_snapshot(
+            payload.external_opponent
+        )
+        if school_snapshot["name"].casefold() == external_snapshot["name"].casefold():
+            raise _invalid("School and external opponent Team names must be different")
+        if payload.school_side == "team_a":
+            side_a = school
+            team_a, team_b = school_snapshot, external_snapshot
+            captain_a, keeper_a = school.captain_profile_id, school.wicketkeeper_profile_id
+            captain_b, keeper_b = external_captain, external_keeper
+        else:
+            side_b = school
+            team_a, team_b = external_snapshot, school_snapshot
+            captain_a, keeper_a = external_captain, external_keeper
+            captain_b, keeper_b = school.captain_profile_id, school.wicketkeeper_profile_id
     toss_team = team_a if payload.toss_winner_side == "team_a" else team_b
     other_team = team_b if payload.toss_winner_side == "team_a" else team_a
     batting_team = toss_team if payload.decision == "bat" else other_team
@@ -276,10 +325,10 @@ async def create_school_match(
         status=models.GameStatus.innings_break,
         publication_state="private",
         created_by_user_id=actor_user_id,
-        team_a_captain_id=side_a.captain_profile_id,
-        team_a_keeper_id=side_a.wicketkeeper_profile_id,
-        team_b_captain_id=side_b.captain_profile_id,
-        team_b_keeper_id=side_b.wicketkeeper_profile_id,
+        team_a_captain_id=captain_a,
+        team_a_keeper_id=keeper_a,
+        team_b_captain_id=captain_b,
+        team_b_keeper_id=keeper_b,
     )
     db.add(game)
     try:
@@ -297,8 +346,8 @@ async def create_school_match(
         "organization.school_match_created",
         organization_id=organization_id,
         game_id=game.id,
-        team_a_id=side_a.team.id,
-        team_b_id=side_b.team.id,
+        team_a_id=side_a.team.id if side_a is not None else None,
+        team_b_id=side_b.team.id if side_b is not None else None,
         actor_user_id=actor_user_id,
     )
     return game

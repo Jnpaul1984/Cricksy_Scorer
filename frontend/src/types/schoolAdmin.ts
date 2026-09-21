@@ -11,7 +11,10 @@ export interface SchoolOrganization {
   created_at: string;
   updated_at: string;
 }
-export interface SchoolCreateInput { name: string; organization_type?: 'school' }
+export interface SchoolCreateInput {
+  name: string;
+  organization_type?: 'school';
+}
 
 export interface SchoolMembership {
   id: string;
@@ -96,8 +99,16 @@ export interface SchoolMatchSideSelection {
 }
 
 export interface SchoolMatchCreate {
-  team_a: SchoolMatchSideSelection;
-  team_b: SchoolMatchSideSelection;
+  mode: 'school_vs_school' | 'school_vs_external';
+  school_side: 'team_a' | 'team_b' | null;
+  team_a: SchoolMatchSideSelection | null;
+  team_b: SchoolMatchSideSelection | null;
+  external_opponent: {
+    team_name: string;
+    player_names: string[];
+    captain_index: number;
+    wicketkeeper_index: number;
+  } | null;
   match_type: 'limited' | 'multi_day' | 'custom';
   overs_limit: number | null;
   days_limit: number | null;
@@ -110,8 +121,8 @@ export interface SchoolMatchCreate {
 export interface SchoolMatchCreateResult {
   game_id: string;
   organization_id: string;
-  team_a_id: string;
-  team_b_id: string;
+  team_a_id: string | null;
+  team_b_id: string | null;
   team_a_name: string;
   team_b_name: string;
   team_a_player_profile_ids: string[];
@@ -161,9 +172,9 @@ export type SchoolPublicationState = 'private' | 'published_live' | 'published_f
 
 export interface SchoolMatchResult {
   game_id: string;
-  team_a_id: string;
+  team_a_id: string | null;
   team_a_name: string;
-  team_b_id: string;
+  team_b_id: string | null;
   team_b_name: string;
   status: string;
   result: string | null;

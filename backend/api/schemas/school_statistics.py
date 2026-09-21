@@ -49,9 +49,9 @@ class SchoolTeamStatistics(BaseModel):
 
 class SchoolMatchResult(BaseModel):
     game_id: str
-    team_a_id: str
+    team_a_id: str | None
     team_a_name: str
-    team_b_id: str
+    team_b_id: str | None
     team_b_name: str
     status: str
     result: str | None

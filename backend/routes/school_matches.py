@@ -62,10 +62,26 @@ async def create_school_match(
     return SchoolMatchCreateResponse(
         game_id=game.id,
         organization_id=organization_id,
-        team_a_id=str(game.team_a["school_source"]["team_id"]),
-        team_b_id=str(game.team_b["school_source"]["team_id"]),
+        team_a_id=(
+            str(game.team_a["school_source"]["team_id"])
+            if isinstance(game.team_a.get("school_source"), dict)
+            else None
+        ),
+        team_b_id=(
+            str(game.team_b["school_source"]["team_id"])
+            if isinstance(game.team_b.get("school_source"), dict)
+            else None
+        ),
         team_a_name=str(game.team_a["name"]),
         team_b_name=str(game.team_b["name"]),
-        team_a_player_profile_ids=[str(player["id"]) for player in game.team_a["players"]],
-        team_b_player_profile_ids=[str(player["id"]) for player in game.team_b["players"]],
+        team_a_player_profile_ids=[
+            str(player["id"])
+            for player in game.team_a["players"]
+            if player.get("player_profile_id") == player.get("id")
+        ],
+        team_b_player_profile_ids=[
+            str(player["id"])
+            for player in game.team_b["players"]
+            if player.get("player_profile_id") == player.get("id")
+        ],
     )

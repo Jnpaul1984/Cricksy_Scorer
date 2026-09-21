@@ -121,4 +121,51 @@ describe('Phase 7I School match setup flow', () => {
     cy.wait('@createSchoolMatch')
     cy.url().should('include', '/game/game-school/scoring')
   })
+
+  it('creates a saved School Team match against an external opponent', () => {
+    cy.viewport(1440, 1200)
+    cy.intercept('GET', '**/api/organizations/school-a/me', membership)
+    cy.intercept('GET', '**/api/organizations/school-a/entitlements', entitlement)
+    cy.intercept('GET', '**/api/organizations/school-a', organization)
+    cy.intercept('GET', '**/api/organizations/school-a/teams', teams)
+    cy.intercept('GET', '**/api/organizations/school-a/teams/team-a/players', roster('team-a'))
+    cy.intercept('POST', '**/api/organizations/school-a/matches', req => {
+      expect(req.body.mode).to.equal('school_vs_external')
+      expect(req.body.school_side).to.equal('team_a')
+      expect(req.body.team_a.team_id).to.equal('team-a')
+      expect(req.body.team_b).to.equal(null)
+      expect(req.body.external_opponent.team_name).to.equal('Westhaven College First XI')
+      expect(req.body.external_opponent.player_names).to.deep.equal(
+        Array.from({ length: 11 }, (_, index) => `Westhaven Player ${index + 1}`),
+      )
+      req.reply({
+        game_id: 'game-external',
+        organization_id: 'school-a',
+        team_a_id: 'team-a',
+        team_b_id: null,
+        team_a_name: 'Team A',
+        team_b_name: 'Westhaven College First XI',
+        team_a_player_profile_ids: roster('team-a')
+          .slice(0, 11)
+          .map(player => player.player_profile_id),
+        team_b_player_profile_ids: [],
+      })
+    }).as('createExternalMatch')
+
+    cy.visitWithAuth('/schools/school-a/matches/new')
+    cy.get('[data-testid="mode-school-vs-external"]').click()
+    cy.get('[data-testid="school-team-a"]').select('team-a')
+    cy.get('ul[aria-label="Team A roster"] input[type=checkbox]:not(:disabled)').each(input => {
+      cy.wrap(input).check()
+    })
+    cy.get('#captain-a').select('team-a-membership-0')
+    cy.get('#keeper-a').select('team-a-membership-1')
+    cy.get('[data-testid="external-team-name"]').type('Westhaven College First XI')
+    for (let index = 0; index < 11; index += 1) {
+      cy.get(`[data-testid="external-player-${index}"]`).type(`Westhaven Player ${index + 1}`)
+    }
+    cy.get('[data-testid="create-school-match"]').click()
+    cy.wait('@createExternalMatch')
+    cy.url().should('include', '/game/game-external/scoring')
+  })
 })

@@ -489,7 +489,9 @@ def _school_source(team: dict[str, Any]) -> tuple[str | None, str | None]:
 def school_game_organization_id(game: models.Game) -> str | None:
     org_a, _ = _school_source(game.team_a)
     org_b, _ = _school_source(game.team_b)
-    return org_a if org_a is not None and org_a == org_b else None
+    if org_a is not None and org_b is not None:
+        return org_a if org_a == org_b else None
+    return org_a or org_b
 
 
 async def link_fixture_game(

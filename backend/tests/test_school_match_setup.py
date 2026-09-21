@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import uuid
 from dataclasses import dataclass
 
@@ -10,6 +11,7 @@ from sqlalchemy import func, select
 from backend.services import organization_entitlement_service
 from backend.sql_app.models import (
     Game,
+    GameStatus,
     OrganizationEntitlement,
     PlayerProfile,
     RoleEnum,
@@ -115,6 +117,31 @@ def _payload(team_a: SeededTeam, team_b: SeededTeam) -> dict:
         "toss_winner_side": "team_a",
         "decision": "bat",
     }
+
+
+def _external_payload(
+    school_team: SeededTeam, *, school_side: str = "team_a", team_name: str = "Westhaven First XI"
+) -> dict:
+    payload = {
+        "mode": "school_vs_external",
+        "school_side": school_side,
+        "team_a": _side(school_team) if school_side == "team_a" else None,
+        "team_b": _side(school_team) if school_side == "team_b" else None,
+        "external_opponent": {
+            "team_name": team_name,
+            "player_names": [f"Westhaven Player {index}" for index in range(1, 12)],
+            "captain_index": 0,
+            "wicketkeeper_index": 1,
+        },
+        "match_type": "limited",
+        "overs_limit": 20,
+        "days_limit": None,
+        "overs_per_day": None,
+        "dls_enabled": False,
+        "toss_winner_side": "team_a",
+        "decision": "bat",
+    }
+    return payload
 
 
 async def _match_environment(
@@ -582,3 +609,364 @@ def test_generic_match_creation_contract_remains_available(school_client: TestCl
     assert response.status_code == 200, response.text
     assert response.json()["team_a"]["name"] == "Generic A"
     assert len(response.json()["team_a"]["players"]) == 2
+
+
+@pytest.mark.parametrize("role", ["owner", "admin", "coach", "scorer"])
+@pytest.mark.parametrize("school_side", ["team_a", "team_b"])
+async def test_authorized_roles_create_external_match_with_school_on_either_side(
+    school_client: TestClient,
+    role: str,
+    school_side: str,
+) -> None:
+    _, actor, organization, school_team, _ = await _match_environment(
+        school_client,
+        suffix=f"external-{role}-{school_side}",
+        role=role,
+    )
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        before = {
+            "teams": await session.scalar(select(func.count(Team.id))),
+            "profiles": await session.scalar(select(func.count(PlayerProfile.player_id))),
+            "school_memberships": await session.scalar(
+                select(func.count(SchoolPlayerMembership.id))
+            ),
+            "team_memberships": await session.scalar(
+                select(func.count(SchoolTeamPlayerMembership.id))
+            ),
+        }
+
+    response = school_client.post(
+        f"/api/organizations/{organization['id']}/matches",
+        json=_external_payload(school_team, school_side=school_side),
+        headers=actor.headers,
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    school_key = school_side
+    external_key = "team_b" if school_side == "team_a" else "team_a"
+    assert body[f"{school_key}_id"] == school_team.id
+    assert body[f"{external_key}_id"] is None
+    assert body[f"{school_key}_player_profile_ids"] == list(school_team.profile_ids)
+    assert body[f"{external_key}_player_profile_ids"] == []
+
+    async with session_maker() as session:
+        game = await session.get(Game, body["game_id"])
+        assert game is not None
+        school_snapshot = getattr(game, school_key)
+        external_snapshot = getattr(game, external_key)
+        assert school_snapshot["school_source"] == {
+            "organization_id": organization["id"],
+            "team_id": school_team.id,
+        }
+        assert school_snapshot["playing_xi"] == list(school_team.profile_ids)
+        assert "school_source" not in external_snapshot
+        assert len(external_snapshot["players"]) == 11
+        external_ids = [player["id"] for player in external_snapshot["players"]]
+        assert len(set(external_ids)) == 11
+        assert all(player_id.startswith("external:") for player_id in external_ids)
+        assert all("player_profile_id" not in player for player in external_snapshot["players"])
+        assert set(external_snapshot["playing_xi"]) == set(external_ids)
+        assert game.publication_state == "private"
+        assert game.created_by_user_id == actor.id
+        assert before == {
+            "teams": await session.scalar(select(func.count(Team.id))),
+            "profiles": await session.scalar(select(func.count(PlayerProfile.player_id))),
+            "school_memberships": await session.scalar(
+                select(func.count(SchoolPlayerMembership.id))
+            ),
+            "team_memberships": await session.scalar(
+                select(func.count(SchoolTeamPlayerMembership.id))
+            ),
+        }
+
+
+async def test_external_match_preserves_contextual_authorization_and_tenant_safety(
+    school_client: TestClient,
+) -> None:
+    owner, viewer, organization, school_team, _ = await _match_environment(
+        school_client,
+        suffix="external-auth",
+        role="viewer",
+    )
+    url = f"/api/organizations/{organization['id']}/matches"
+    denied = school_client.post(
+        url,
+        json=_external_payload(school_team),
+        headers=viewer.headers,
+    )
+    assert denied.status_code == 403
+
+    outsider = register_user(school_client, "external-match-outsider@example.com")
+    hidden = school_client.post(
+        url,
+        json=_external_payload(school_team),
+        headers=outsider.headers,
+    )
+    assert hidden.status_code == 404
+    assert organization["name"].lower() not in hidden.text.lower()
+
+    _, actor_b, school_b, foreign_team, _ = await _match_environment(
+        school_client,
+        suffix="external-foreign",
+    )
+    foreign = school_client.post(
+        url,
+        json=_external_payload(foreign_team),
+        headers=owner.headers,
+    )
+    assert foreign.status_code == 404
+    assert foreign.json() == {"detail": "Team not found"}
+    assert school_b["name"].lower() not in foreign.text.lower()
+    assert actor_b.email not in foreign.text
+
+
+async def test_external_match_reuses_school_eligibility_and_validates_manual_xi(
+    school_client: TestClient,
+) -> None:
+    _, actor, organization, school_team, _ = await _match_environment(
+        school_client,
+        suffix="external-validation",
+    )
+    url = f"/api/organizations/{organization['id']}/matches"
+
+    too_few = _external_payload(school_team)
+    too_few["external_opponent"]["player_names"].pop()
+    assert school_client.post(url, json=too_few, headers=actor.headers).status_code == 422
+
+    too_few_school = _external_payload(school_team)
+    too_few_school["team_a"]["playing_xi_membership_ids"].pop()
+    assert school_client.post(url, json=too_few_school, headers=actor.headers).status_code == 422
+
+    duplicate_school = _external_payload(school_team)
+    duplicate_school["team_a"]["playing_xi_membership_ids"][-1] = school_team.membership_ids[0]
+    assert school_client.post(url, json=duplicate_school, headers=actor.headers).status_code == 422
+
+    duplicate = _external_payload(school_team)
+    duplicate["external_opponent"]["player_names"][-1] = "WESTHAVEN PLAYER 1"
+    assert school_client.post(url, json=duplicate, headers=actor.headers).status_code == 422
+
+    injected = _external_payload(school_team)
+    injected["external_opponent"]["player_names"][0] = {
+        "id": school_team.profile_ids[0],
+        "name": "Injected canonical player",
+    }
+    assert school_client.post(url, json=injected, headers=actor.headers).status_code == 422
+
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        team_membership = await session.get(
+            SchoolTeamPlayerMembership, school_team.membership_ids[0]
+        )
+        assert team_membership is not None
+        team_membership.status = "inactive"
+        await session.commit()
+    ineligible = school_client.post(
+        url,
+        json=_external_payload(school_team),
+        headers=actor.headers,
+    )
+    assert ineligible.status_code == 422
+
+    async with session_maker() as session:
+        team_membership = await session.get(
+            SchoolTeamPlayerMembership, school_team.membership_ids[0]
+        )
+        assert team_membership is not None
+        team_membership.status = "active"
+        school_membership = await session.get(
+            SchoolPlayerMembership, team_membership.school_player_membership_id
+        )
+        assert school_membership is not None
+        school_membership.status = "inactive"
+        await session.commit()
+    inactive_school = school_client.post(
+        url,
+        json=_external_payload(school_team),
+        headers=actor.headers,
+    )
+    assert inactive_school.status_code == 422
+
+    async with session_maker() as session:
+        team_membership = await session.get(
+            SchoolTeamPlayerMembership, school_team.membership_ids[0]
+        )
+        assert team_membership is not None
+        school_membership = await session.get(
+            SchoolPlayerMembership, team_membership.school_player_membership_id
+        )
+        assert school_membership is not None
+        school_membership.status = "active"
+        team = await session.get(Team, school_team.id)
+        assert team is not None
+        team.status = "archived"
+        await session.commit()
+    archived = school_client.post(
+        url,
+        json=_external_payload(school_team),
+        headers=actor.headers,
+    )
+    assert archived.status_code == 409
+
+
+@pytest.mark.parametrize("school_side", ["team_a", "team_b"])
+async def test_mixed_match_statistics_publication_and_snapshot_are_school_attributed_only(
+    school_client: TestClient,
+    school_side: str,
+) -> None:
+    _, owner, organization, school_team, _ = await _match_environment(
+        school_client,
+        suffix="external-attribution",
+    )
+    create = school_client.post(
+        f"/api/organizations/{organization['id']}/matches",
+        json=_external_payload(school_team, school_side=school_side),
+        headers=owner.headers,
+    )
+    assert create.status_code == 201, create.text
+    game_id = create.json()["game_id"]
+    session_maker = school_client.session_maker  # type: ignore[attr-defined]
+    async with session_maker() as session:
+        game = await session.get(Game, game_id)
+        assert game is not None
+        is_postgres = session.bind is not None and session.bind.dialect.name == "postgresql"
+        school_snapshot = game.team_a if school_side == "team_a" else game.team_b
+        external_snapshot = game.team_b if school_side == "team_a" else game.team_a
+        frozen_team_a = copy.deepcopy(game.team_a)
+        frozen_team_b = copy.deepcopy(game.team_b)
+        external_ids = external_snapshot["playing_xi"]
+        batting_snapshot = (
+            game.team_a if game.batting_team_name == game.team_a["name"] else game.team_b
+        )
+        bowling_snapshot = (
+            game.team_a if game.bowling_team_name == game.team_a["name"] else game.team_b
+        )
+
+    if is_postgres:
+        scored = school_client.post(
+            f"/games/{game_id}/deliveries",
+            json={
+                "striker_id": batting_snapshot["playing_xi"][0],
+                "non_striker_id": batting_snapshot["playing_xi"][1],
+                "bowler_id": bowling_snapshot["playing_xi"][0],
+                "runs_scored": 1,
+                "runs_off_bat": 0,
+                "is_wicket": False,
+            },
+        )
+        assert scored.status_code == 200, scored.text
+
+    async with session_maker() as session:
+        game = await session.get(Game, game_id)
+        assert game is not None
+        game.deliveries = [
+            {
+                "over_number": 1,
+                "ball_number": 1,
+                "inning": 1,
+                "striker_id": school_team.profile_ids[0],
+                "non_striker_id": school_team.profile_ids[1],
+                "bowler_id": external_ids[0],
+                "runs_off_bat": 4,
+                "runs_scored": 4,
+                "is_extra": False,
+                "is_wicket": False,
+            },
+            {
+                "over_number": 1,
+                "ball_number": 1,
+                "inning": 2,
+                "striker_id": external_ids[0],
+                "non_striker_id": external_ids[1],
+                "bowler_id": school_team.profile_ids[1],
+                "runs_off_bat": 2,
+                "runs_scored": 2,
+                "is_extra": False,
+                "is_wicket": False,
+            },
+        ]
+        game.status = GameStatus.completed
+        game.result = f"{school_snapshot['name']} won by 2 runs"
+        current_team = await session.get(Team, school_team.id)
+        assert current_team is not None
+        current_team.name = "Renamed after match"
+        await session.commit()
+
+    players = school_client.get(
+        f"/api/organizations/{organization['id']}/statistics/players",
+        headers=owner.headers,
+    )
+    teams = school_client.get(
+        f"/api/organizations/{organization['id']}/statistics/teams",
+        headers=owner.headers,
+    )
+    results = school_client.get(
+        f"/api/organizations/{organization['id']}/results",
+        headers=owner.headers,
+    )
+    assert players.status_code == teams.status_code == results.status_code == 200
+    player_rows = {row["player_profile_id"]: row for row in players.json()}
+    assert player_rows[school_team.profile_ids[0]]["runs"] == 4
+    assert player_rows[school_team.profile_ids[0]]["matches"] == 1
+    assert player_rows[school_team.profile_ids[1]]["runs_conceded"] == 2
+    team_row = next(row for row in teams.json() if row["team_id"] == school_team.id)
+    assert team_row["matches"] == 1
+    assert team_row["wins"] == 1
+    assert team_row["runs_scored"] == 4
+    assert team_row["runs_conceded"] == 2
+    assert all(row["team_name"] != "Westhaven First XI" for row in teams.json())
+    mixed_result = next(row for row in results.json() if row["game_id"] == game_id)
+    expected_a_id = school_team.id if school_side == "team_a" else None
+    expected_b_id = school_team.id if school_side == "team_b" else None
+    assert mixed_result["team_a_id"] == expected_a_id
+    assert mixed_result["team_b_id"] == expected_b_id
+    external_name_key = "team_b_name" if school_side == "team_a" else "team_a_name"
+    assert mixed_result[external_name_key] == "Westhaven First XI"
+
+    publication_url = f"/api/organizations/{organization['id']}/matches/{game_id}/publication"
+    published_live = school_client.patch(
+        publication_url,
+        json={"publication_state": "published_live"},
+        headers=owner.headers,
+    )
+    assert published_live.status_code == 200, published_live.text
+    assert school_client.get(f"/public/school-scorecards/{game_id}").status_code == 200
+    published = school_client.patch(
+        publication_url,
+        json={"publication_state": "published_final"},
+        headers=owner.headers,
+    )
+    assert published.status_code == 200, published.text
+    public = school_client.get(f"/public/school-scorecards/{game_id}")
+    assert public.status_code == 200, public.text
+    assert public.json()["team_a"]["name"] == frozen_team_a["name"]
+    assert public.json()["team_b"]["name"] == frozen_team_b["name"]
+    serialized = public.text
+    assert "school_source" not in serialized
+    assert school_team.id not in serialized
+    assert all(player_id not in serialized for player_id in external_ids)
+    private = school_client.patch(
+        publication_url,
+        json={"publication_state": "private"},
+        headers=owner.headers,
+    )
+    assert private.status_code == 200
+    assert school_client.get(f"/public/school-scorecards/{game_id}").status_code == 404
+
+    if is_postgres:
+        resumed = school_client.get(f"/games/{game_id}", headers=owner.headers)
+        assert resumed.status_code == 200, resumed.text
+        resumed_school = resumed.json()[school_side]
+        frozen_school_name = (
+            frozen_team_a["name"] if school_side == "team_a" else frozen_team_b["name"]
+        )
+        assert resumed_school["name"] == frozen_school_name
+        assert [player["id"] for player in resumed_school["players"]] == list(
+            school_team.profile_ids
+        )
+
+    async with session_maker() as session:
+        game = await session.get(Game, game_id)
+        assert game is not None
+        assert game.team_a == frozen_team_a
+        assert game.team_b == frozen_team_b
